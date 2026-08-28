@@ -1,0 +1,1 @@
+"""Rozhraní příkazové řádky."""

@@ -11,14 +11,27 @@ requires-python = ">=3.11"
 dependencies = [
     "panphon>=0.20.0",
     "lingpy>=2.6.11",
+    "networkx>=3.0",
     "typer>=0.12.0",
     "pydantic>=2.7.0",
     "pyyaml>=6.0.1",
-    "networkx>=3.0",
+]
+
+[project.optional-dependencies]
+# `cee ui` spouští lokální FastAPI server; jádro enginu tyhle balíčky nepotřebuje.
+ui = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+dev = [
+    "pytest>=8.0",
 ]
 
 [project.scripts]
 cee = "cee.cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cee"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

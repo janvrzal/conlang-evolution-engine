@@ -17,9 +17,9 @@ Projekt je rozdělen do několika logických bloků (uvnitř `src/cee`):
   * `State`: Historický uzel jazyka v čase. Obsahuje `Inventory` (aktivní fonémy).
 * **`engine/`**: Logika simulace.
   * `phonology.py`: Zajišťuje překlad IPA stringů do rysových matic a zpět pomocí knihovny **Panphon**.
-  * `rules.py`: Třída `RuleEvaluator`. Aplikuje historická hlásková pravidla na segmenty.
+  * `rules.py`: Třída `Rule`. Aplikuje historická hlásková pravidla na segmenty (dvoufázově, viz 3.2).
   * `fold.py`: `DerivationFold` spouští série pravidel nad celým lexikonem a aktualizuje stavový `Inventory`.
-  * `simulator.py`: Globální "lockstep" simulátor větvení a kontaktů.
+  * `simulator.py`: Globální "lockstep" simulátor větvení a kontaktů. Zvládá strom libovolné hloubky — každý uzel se odštěpí od rodiče v roce svého prvního pravidla.
   * `generator.py` a `schemas.py`: Plug-and-Play generátor náhodných pravidel s podporou presetů.
   * `topology.py`: Třídy pro síťový graf vývoje (hrany dědičnosti a kontaktů).
   * `semantics.py`: `SemanticEvaluator` spouští pravděpodobnostní Markovovy řetězce nad `SemanticGraph` a posouvá významy.
@@ -35,11 +35,45 @@ Nejčastější chyba LLM! Knihovna `panphon` používá zkrácené názvy rysů
 * **SPRÁVNĚ:** `voi`, `cor`, `ant`, `syl`, `cons`
 * Před psaním testů nebo YAML pravidel si *vždy* ověř přesný název rysu (např. `hi`, `lo`, `back`, `round`, `tense`, `cont`, `delrel`, `lat`, `nas`, `strid`).
 
+### 3.1b Pasti rysových matic (ověř, než napíšeš `action`)
+Správný název rysu nestačí. `action` musí vyrobit matici, která **přesně** odpovídá nějaké reálné hlásce — jinak `segment_to_ipa` sáhne po přibližné shodě a tiše vloží do výstupu cizí znak (např. tónovou značku `˧` místo `/b/`). Konkrétní past, na kterou už engine doplatil:
+
+| Změna | Nestačí | Je potřeba | Proč |
+|---|---|---|---|
+| `o` → `u` | `{hi: +}` | `{hi: +, lab: +}` | panphon má `o` jako `[lab: -]`, ale `u` jako `[lab: +]` |
+| `e` → `i` | — | `{hi: +}` | přední řada se liší jen v `[hi]`, je symetrická |
+| `v` → `b`, `z` → `d` | `{cont: -}` | `{cont: -, strid: -}` | `v`/`z` jsou `[+strid]`, `b`/`d` jsou `[-strid]` |
+| `ɣ` → `ɡ` | `{cont: -}` | `{cont: -}` | velára `[-strid]` už je, funguje samo |
+
+Postup: rozdíl dvou hlásek si nech vypsat, nehádej ho.
+```python
+fa, fb = mapper.parse_word('x','v').segments[0].features, mapper.parse_word('x','b').segments[0].features
+print({k: (fa[k], fb[k]) for k in fa if fa[k] != fb[k]})
+```
+K ověření slouží `FeatureMapper.is_exact_segment(segment)` → `False` znamená, že matice žádné hlásce neodpovídá. Hlídá to test `tests/test_schemas.py::test_vysledek_odpovida_realne_hlasce` nad každým schématem v `SCHEMA_REGISTRY`.
+
+**Prostředí musí být splnitelné.** Segment je buď vokál `[syl: +, cons: -]`, nebo konsonant `[syl: -, cons: +]` — nikdy obojí. `env` typu `{"syl": "+", "cons": "+"}` proto nikdy nesedne a schéma je trvale mrtvé, aniž by cokoli spadlo. Kontrolu dělá `test_schema_realne_zasahne`.
+
 ### 3.2 Aplikátor Pravidel (Dvoufázovost)
 Aplikace pravidel (`rules.py`) probíhá **dvoufázově**, aby se zamezilo artefaktům (self-feeding).
 1. Fáze identifikace: Projde PŮVODNÍ segmenty a najde indexy, které splňují `target`, `env_before` a `env_after`.
 2. Fáze mutace: Aplikuje změny z `action` simultánně pouze na nalezené indexy.
 *Nikdy nemutuj segmenty během iterace, pokud zároveň kontroluješ jejich okolí!*
+
+### 3.2b Kompozita a další per-uzel chování
+Morfologické operace **nepatří natvrdo do `simulator.py`**. Složeniny předepisuje topologie u konkrétního uzlu:
+
+```yaml
+nodes:
+  - id: north
+    map:
+      compound_head: initial   # nebo final
+    compounds:
+      - head: "město"
+        modifier: "zlatý"
+        id: "zlaté_město"
+```
+Chybějící `head`/`modifier` v lexikonu se ohlásí varováním, simulace nespadne.
 
 ### 3.3 Sémantika a Polysemie
 * Sémantická data se generují z repozitářů Concepticon a DatSemShift do lokální cache `~/.cee/semantics/graph.graphml`. Tato data se **NIKDY necommitují do Gitu**.
@@ -48,7 +82,8 @@ Aplikace pravidel (`rules.py`) probíhá **dvoufázově**, aby se zamezilo artef
 
 ### 3.4 Změny a Hygiena
 * Všechny konfigurační YAML, CSV datasetů a high-level dokumentace (`CEE_master.md`, `CEE_GDD.md`) jsou ignorovány v `.gitignore` (respektive by neměly být commitovány pokud to není explicitně potřeba). Držíme repozitář čistý pouze se zdrojovými kódy CEE samotného.
-* CLI je stavěné přes `Typer` v `src/cee/cli/main.py`.
+* CLI je stavěné přes `Typer` v `src/cee/cli/main.py`. Varování z enginu (`warnings.warn`) se uživateli zobrazují jako `⚠️` hlášky — používej je všude, kde by engine jinak tiše nic neudělal.
+* Vstupy, bez kterých projekt nejde ověřit (fixtures `tests/fixtures/`, data balíčku `src/cee/data/`, ukázkové scénáře `scenario_*.yaml`), jsou z ignorování **výslovně vyjmuté** v `.gitignore`. Negace musí zůstat před závěrečným blokem `__pycache__/`, protože pozdější pravidlo přebíjí dřívější.
 
 ## 4. Workflow
 Předtím, než začnete psát kód:

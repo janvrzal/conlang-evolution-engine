@@ -1,25 +1,38 @@
-.idea/
-__pycache__/
-*.pyc
+# Prostředí a build
 .venv/
+*.egg-info/
+dist/
+build/
 
-# Data a konfigurace
+# Editor / nástroje
+.idea/
+.vscode/
+.gemini/
+.DS_Store
+
+# Výstupy simulací (generovaná data do gitu nepatří — AGENT.md §1.3)
+runs/
+output_test/
 *.csv
 *.yaml
-data/
-semantics/
+
+# ...s výjimkou vstupů, bez kterých projekt nejde spustit ani ověřit.
+!src/cee/data/**
+!tests/**
+!scenario_*.yaml
+!fantasy_v1.csv
+!latin_v1.csv
+!latin_rules.yaml
 
 # Dokumentace a designové nákresy
 *.docx
 *.md
 !README.md
 !AGENT.md
+!docs/**
 
-# Gemini Artifacts a data
-.gemini/
-
-# Vystupy ze simulaci
-runs/
-output_test/
-*.csv
-!latin_v1.csv
+# Musí zůstat na konci: pozdější pravidlo přebíjí dřívější negace výše,
+# jinak by `!tests/**` vtáhlo do repa i tests/__pycache__.
+__pycache__/
+*.pyc
+.pytest_cache/
