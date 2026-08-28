@@ -1,6 +1,10 @@
 import csv
 import typer
 import datetime
+import threading
+import time
+import warnings
+import webbrowser
 from pathlib import Path
 from cee.engine.phonology import FeatureMapper
 from cee.engine.parser import YamlParser
@@ -12,6 +16,13 @@ from cee.engine.semantics import SemanticEvaluator
 from cee.engine.simulator import EvolutionSimulator
 
 app = typer.Typer(help="Conlang Evolution Engine CLI", no_args_is_help=True)
+
+
+@app.callback()
+def _main() -> None:
+    """Varování z enginu vypisujeme jako čitelnou hlášku, ne jako Python traceback."""
+    warnings.simplefilter("always")
+    warnings.showwarning = lambda message, *_args, **_kwargs: typer.echo(f"⚠️  {message}", err=True)
 
 def load_csv_lexicon(proto_csv: str, mapper: FeatureMapper) -> Lexicon:
     lexicon = Lexicon()
@@ -46,8 +57,11 @@ def apply(
     typer.echo(f"   Načteno {len(rules)} pravidel.")
     
     typer.echo("🚀 Spouštím derivační fold (fonologie)...")
+    state = State(node_id="derived", year=0, inventory=Inventory(), lexicon=lexicon)
     fold = DerivationFold(rules)
-    fold.apply_to_lexicon(lexicon, mapper)
+    fold.apply_to_lexicon(lexicon, mapper, state)
+    typer.echo(f"   Inventář po derivaci ({len(state.inventory.segments)}): "
+               f"{' '.join(sorted(state.inventory.segments))}")
     
     if apply_semantics:
         graph_path = Path.home() / ".cee" / "semantics" / "graph.graphml"
@@ -93,7 +107,8 @@ def simulate(
     proto_csv: Path = typer.Option(..., help="Cesta k počátečnímu proto-lexikonu"),
     out_dir: Path = typer.Option(None, help="Cílová složka (defaultně: runs/run_YYYYMMDD_HHMMSS)"),
     preset_yaml: Path = typer.Option(None, help="Volitelná cesta k presetu pro generátor zvukových změn"),
-    semantics_yaml: Path = typer.Option(None, help="Volitelná cesta k YAML sémantickému grafu pro posuny významů")
+    semantics_yaml: Path = typer.Option(None, help="Volitelná cesta k YAML sémantickému grafu pro posuny významů"),
+    seed: int = typer.Option(42, help="Seed pro deterministický běh (výpůjčky, generátor, sémantika)")
 ):
     """
     Spustí globální lockstep simulaci celé rodiny na základě topologie a výpůjček.
@@ -126,10 +141,11 @@ def simulate(
         typer.echo(f"🧠 Načítám sémantický graf z {semantics_yaml}...")
         graph_sem = SemanticGraph(str(semantics_yaml))
         # Použijeme vysokou shift_prob, ať to v malém testovacím vzorku vynikne (např. 0.3)
-        semantic_evaluator = SemanticEvaluator(graph_sem, shift_prob=0.3, forget_prob=0.05)
+        semantic_evaluator = SemanticEvaluator(graph_sem, shift_prob=0.3, forget_prob=0.05, seed=seed)
         
     typer.echo("🚀 Spouštím evoluční simulátor v globálním lockstepu...")
-    simulator = EvolutionSimulator(graph, mapper, preset=preset_data, semantic_evaluator=semantic_evaluator)
+    simulator = EvolutionSimulator(graph, mapper, preset=preset_data, seed=seed,
+                                   semantic_evaluator=semantic_evaluator)
     final_states = simulator.simulate(root_state)
     
     if not out_dir:
@@ -154,6 +170,67 @@ def simulate(
         typer.echo(f"   -> Vygenerován jazyk '{branch_id}' (rok {state.year}) uložen do {branch_csv}")
         
     typer.echo("✅ Hotovo! Síť je vygenerována.")
+
+@app.command()
+def ui(
+    port: int = typer.Option(None, help="Pevný port. Bez něj se vybere první volný od 8000 nahoru."),
+    open_browser_flag: bool = typer.Option(True, "--open-browser/--no-open-browser",
+                                           help="Otevřít po startu prohlížeč."),
+):
+    """
+    Spustí backend pro grafické rozhraní (lokální FastAPI server).
+
+    Port se volí automaticky, aby si CEE nekolidovalo s jinou aplikací běžící
+    na 8000. Zvolená adresa se zapíše do `ui/.env.local`, odkud si ji vezme
+    Vite; frontend si ji navíc umí za běhu najít sám.
+    """
+    from cee.api.ports import DEFAULT_PORT, find_free_port, is_port_free
+    from cee.api.server import start_server
+
+    if port is None:
+        port = find_free_port(DEFAULT_PORT)
+        if port != DEFAULT_PORT:
+            typer.echo(f"⚠️  Port {DEFAULT_PORT} je obsazený, používám {port}.", err=True)
+    elif not is_port_free(port):
+        typer.echo(f"❌ Port {port} je obsazený. Spusť příkaz bez --port pro automatickou volbu.",
+                   err=True)
+        raise typer.Exit(code=1)
+
+    api_url = f"http://127.0.0.1:{port}"
+    _write_api_url(api_url)
+
+    typer.echo(f"🌐 CEE API běží na {api_url}")
+    typer.echo(f"   Frontend spusť zvlášť: cd ui && npm run dev")
+
+    if open_browser_flag:
+        def open_browser():
+            time.sleep(1)  # Počkáme sekundu na náběh uvicornu
+            webbrowser.open(api_url)
+
+        threading.Thread(target=open_browser, daemon=True).start()
+
+    # Blokující volání uvicornu
+    start_server(port=port)
+
+
+def _write_api_url(api_url: str) -> None:
+    """
+    Zapíše adresu API do `ui/.env.local`, aby ji Vite předal frontendu jako
+    `VITE_CEE_API_URL`. Soubor je generovaný a patří do .gitignore.
+    """
+    ui_dir = Path(__file__).resolve().parents[3] / "ui"
+    if not ui_dir.is_dir():
+        return
+
+    env_file = ui_dir / ".env.local"
+    try:
+        env_file.write_text(
+            "# Generováno příkazem `cee ui` — needituj ručně.\n"
+            f"VITE_CEE_API_URL={api_url}\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        typer.echo(f"⚠️  Nepodařilo se zapsat {env_file}: {exc}", err=True)
 
 if __name__ == "__main__":
     app()
