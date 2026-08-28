@@ -203,3 +203,30 @@ export async function listProjects() {
 	if (!res.ok) throw new Error(`Výpis projektů selhal: ${res.status}`);
 	return (await res.json()).projects as { id: string; name: string; updated_at: string }[];
 }
+
+export async function deleteProject(id: string) {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/projects/${encodeURIComponent(id)}`, {
+		method: 'DELETE'
+	});
+	if (!res.ok) throw new Error(`Smazání projektu selhalo: ${res.status} ${res.statusText}`);
+}
+
+/**
+ * Převede název projektu na ID, které projde sítem na backendu
+ * (písmena včetně diakritiky, číslice, pomlčka, podtržítko; nejvýše 64 znaků).
+ */
+export function slugify(name: string): string {
+	const slug = name
+		.trim()
+		.toLowerCase()
+		.replace(/\s+/g, '-')
+		// Vše ostatní (tečky, lomítka, interpunkce) pryč — jinak backend
+		// odpoví 400 a projekt nevznikne.
+		.replace(/[^\p{L}\p{N}_-]/gu, '')
+		.replace(/-{2,}/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.slice(0, 64);
+
+	return slug;
+}
