@@ -1,0 +1,35 @@
+# Příklad topologie pro CEE
+nodes:
+  - id: proto
+  - id: north
+    map:
+      compound_head: initial
+  - id: south
+    map:
+      compound_head: final
+
+vertical_edges:
+  - parent: proto
+    child: north
+    rules:
+      - name: "Lenice ptk -> bdg"
+        year: 200
+        target: {"cons": "+", "cont": "-", "voi": "-"}
+        env_before: {"syl": "+"}
+        env_after: {"syl": "+"}
+        action: {"voi": "+"}
+  - parent: proto
+    child: south
+    rules:
+      - name: "Ztráta koncového t a m"
+        year: 300
+        target: {"cons": "+"}
+        env_after: {"_boundary": "+"}
+        action: {"delete": "+"}
+
+contact_edges:
+  # V roce 400 Jih přejme od Severu několik slov
+  - year: 400
+    source: north
+    target: south
+    volume: 5

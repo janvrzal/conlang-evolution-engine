@@ -8,6 +8,7 @@ from cee.engine.topology import EvolutionGraph
 from cee.engine.rules import Rule
 from cee.engine.phonology import FeatureMapper
 from cee.engine.generator import SoundChangeGenerator
+from cee.engine.morphology import MorphologyEvaluator
 
 @dataclass
 class PhonologyEvent:
@@ -60,9 +61,9 @@ class EvolutionSimulator:
                 year=root_state.year, # Startují v čase rodiče
                 inventory=copy.deepcopy(root_state.inventory),
                 lexicon=new_lexicon,
-                parent_id=root_state.node_id
+                parent_id=root_state.node_id,
+                map=node_map
             )
-            state.map = node_map
             active_branches[child_id] = state
             
         # 2. Posbírání všech událostí a jejich seřazení v čase (globální lockstep)
@@ -118,6 +119,12 @@ class EvolutionSimulator:
             # 4. Sémantické posuny na konci větve
             if self.semantic_evaluator:
                 self.semantic_evaluator.evaluate(state.lexicon)
+            
+        # 5. Morfologické skládání (ukázka pro Fázi 4b)
+        morph_eval = MorphologyEvaluator()
+        for branch_id, state in active_branches.items():
+            morph_eval.compound(state, "město", "zlatý", "zlatý_město")
+            morph_eval.compound(state, "vlk", "velký", "velký_vlk")
             
         return active_branches
         

@@ -67,3 +67,14 @@ class State:
     parent_id: Optional[str] = None
     hash: Optional[str] = None
     map: Dict[str, Any] = field(default_factory=dict)
+    
+    # Morfologické / Typologické parametry
+    affixation_strategy: str = "suffix" # "prefix" nebo "suffix"
+    compound_head: str = "final"        # "initial" nebo "final"
+    def __post_init__(self):
+        if self.map is None:
+            self.map = {}
+        if "compound_head" in self.map:
+            self.compound_head = self.map["compound_head"]
+        if "affixation_strategy" in self.map:
+            self.affixation_strategy = self.map["affixation_strategy"]
