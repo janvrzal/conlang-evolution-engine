@@ -90,7 +90,8 @@ def apply(
 def simulate(
     topology_yaml: Path = typer.Option(..., help="Cesta k YAML definici evoluční sítě"),
     proto_csv: Path = typer.Option(..., help="Cesta k počátečnímu proto-lexikonu"),
-    out_dir: Path = typer.Option(..., help="Složka, kam se uloží CSV soubory pro jednotlivé jazyky")
+    out_dir: Path = typer.Option(..., help="Složka, kam se uloží CSV soubory pro jednotlivé jazyky"),
+    preset_yaml: Path = typer.Option(None, help="Volitelná cesta k presetu pro generátor zvukových změn")
 ):
     """
     Spustí globální lockstep simulaci celé rodiny na základě topologie a výpůjček.
@@ -106,6 +107,12 @@ def simulate(
     typer.echo(f"📜 Načítám topologii z {topology_yaml}...")
     graph = YamlParser.parse_topology(str(topology_yaml))
     
+    preset_data = None
+    if preset_yaml:
+        typer.echo(f"🎨 Načítám preset z {preset_yaml}...")
+        preset_data = YamlParser.parse_preset(str(preset_yaml))
+        typer.echo(f"   -> Používá se preset: {preset_data.get('name')}")
+    
     # Výchozí state pro protojazyk
     root_state = State(
         node_id="proto",
@@ -115,7 +122,7 @@ def simulate(
     )
     
     typer.echo("🚀 Spouštím evoluční simulátor v globálním lockstepu...")
-    simulator = EvolutionSimulator(graph, mapper)
+    simulator = EvolutionSimulator(graph, mapper, preset=preset_data)
     final_states = simulator.simulate(root_state)
     
     typer.echo(f"💾 Zapisuji výsledky do složky {out_dir}...")

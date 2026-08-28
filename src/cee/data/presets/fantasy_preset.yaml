@@ -1,0 +1,39 @@
+name: "Fantasy World Preset"
+description: "Příkladový preset pro fantasy světy se specifickými biomy (hory, prales, temnota)."
+
+schemas:
+  lenition:
+    base_weight: 100
+  fortition:
+    base_weight: 20
+  syncope:
+    base_weight: 50
+  coda_loss:
+    base_weight: 40
+  vowel_shift:
+    base_weight: 60
+
+biomes:
+  hory:
+    modifiers:
+      lenition: 0.5     # V horách se tolik neměkčí
+      fortition: 2.0    # Vznikají tvrdé, rázné souhlásky
+      syncope: 1.5      # Ztráta nepřízvučných samohlásek (ostré shluky)
+      coda_loss: 0.2    # Koncové souhlásky zůstávají
+      vowel_shift: 1.0
+
+  prales:
+    modifiers:
+      lenition: 1.5     # Měkké a zvonivé zvuky
+      fortition: 0.2
+      syncope: 0.1      # Samohlásky nevypadávají, aby nesly zvuk
+      coda_loss: 2.5    # Rychlá ztráta koncových souhlásek (slabiky typu CV)
+      vowel_shift: 1.5
+
+  temnota:
+    modifiers:
+      lenition: 0.1
+      fortition: 3.0    # Velmi agresivní fortice (chraplavé, temné)
+      syncope: 2.0      # Záměrně nepřirozené shluky souhlásek
+      coda_loss: 0.5
+      vowel_shift: 0.5

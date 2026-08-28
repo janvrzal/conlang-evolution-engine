@@ -29,6 +29,10 @@ class YamlParser:
             
         graph = EvolutionGraph()
         
+        # Parsování node_configs (např. map, biome)
+        for n_data in data.get('nodes', []):
+            graph.node_configs[n_data['id']] = n_data
+            
         # Parsování vertical edges (a jejich vnořených pravidel)
         for v_edge in data.get('vertical_edges', []):
             rules = []
@@ -58,3 +62,16 @@ class YamlParser:
             ))
             
         return graph
+
+    @staticmethod
+    def parse_preset(file_path: str) -> Dict[str, Any]:
+        """Načte YAML konfiguraci presetu (šablony a biomové modifikátory)."""
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+            
+        return {
+            'name': data.get('name', 'Unknown Preset'),
+            'description': data.get('description', ''),
+            'schemas': data.get('schemas', {}),
+            'biomes': data.get('biomes', {})
+        }

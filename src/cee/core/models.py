@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Any
 
 @dataclass
 class Segment:
@@ -59,12 +59,11 @@ class Inventory:
 
 @dataclass
 class State:
-    """
-    Represents a language node at an absolute year.
-    """
+    """Stav jazyka v určitém čase/uzlu."""
     node_id: str
-    year: int
     inventory: Inventory
     lexicon: Lexicon
+    year: int = 0
     parent_id: Optional[str] = None
-    hash: str = ""
+    hash: Optional[str] = None
+    map: Dict[str, Any] = field(default_factory=dict)
