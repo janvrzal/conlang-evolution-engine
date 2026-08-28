@@ -17,3 +17,9 @@ semantics/
 
 # Gemini Artifacts a data
 .gemini/
+
+# Vystupy ze simulaci
+runs/
+output_test/
+*.csv
+!latin_v1.csv

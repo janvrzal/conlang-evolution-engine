@@ -1,5 +1,6 @@
 import csv
 import typer
+import datetime
 from pathlib import Path
 from cee.engine.phonology import FeatureMapper
 from cee.engine.parser import YamlParser
@@ -90,14 +91,12 @@ def apply(
 def simulate(
     topology_yaml: Path = typer.Option(..., help="Cesta k YAML definici evoluční sítě"),
     proto_csv: Path = typer.Option(..., help="Cesta k počátečnímu proto-lexikonu"),
-    out_dir: Path = typer.Option(..., help="Složka, kam se uloží CSV soubory pro jednotlivé jazyky"),
+    out_dir: Path = typer.Option(None, help="Cílová složka (defaultně: runs/run_YYYYMMDD_HHMMSS)"),
     preset_yaml: Path = typer.Option(None, help="Volitelná cesta k presetu pro generátor zvukových změn")
 ):
     """
     Spustí globální lockstep simulaci celé rodiny na základě topologie a výpůjček.
     """
-    out_dir.mkdir(parents=True, exist_ok=True)
-    
     typer.echo("⚙️  Inicializuji FeatureMapper (toto může chvíli trvat)...")
     mapper = FeatureMapper()
     
@@ -125,6 +124,11 @@ def simulate(
     simulator = EvolutionSimulator(graph, mapper, preset=preset_data)
     final_states = simulator.simulate(root_state)
     
+    if not out_dir:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_dir = Path(f"runs/run_{timestamp}")
+    
+    out_dir.mkdir(parents=True, exist_ok=True)
     typer.echo(f"💾 Zapisuji výsledky do složky {out_dir}...")
     for branch_id, state in final_states.items():
         branch_csv = out_dir / f"{branch_id}.csv"
