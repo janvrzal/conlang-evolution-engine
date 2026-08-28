@@ -103,3 +103,40 @@ def test_razitko_zmeny_se_aktualizuje():
     p.updated_at = "2020-01-01T00:00:00+00:00"
     projects.save(p)
     assert projects.load("demo").updated_at >= prvni
+
+
+@pytest.mark.parametrize(
+    "project_id",
+    ["indoevropský-fantasy-jazyk", "český", "muj-svet", "日本語", "a-1_b"],
+)
+def test_id_smi_mit_diakritiku(project_id):
+    """
+    Projekt se jmenuje podle toho, co uživatel napíše. Odmítat diakritiku
+    znamená, že "indoevropský-fantasy-jazyk" nejde uložit vůbec.
+    """
+    projects.save(projects.Project(id=project_id, data={"x": 1}))
+    assert projects.load(project_id).data == {"x": 1}
+
+
+def test_id_se_normalizuje_na_nfc():
+    """
+    "ý" jde zapsat jedním znakem i jako "y" + háček. Bez sjednocení by se
+    projekt uložil pod jedním zápisem a hledal pod druhým.
+    """
+    import unicodedata
+
+    nfc = unicodedata.normalize("NFC", "ý-projekt")
+    nfd = unicodedata.normalize("NFD", "ý-projekt")
+    assert nfc != nfd
+
+    projects.save(projects.Project(id=nfc, name="Původní"))
+    assert projects.load(nfd).name == "Původní"
+    assert len(projects.list_projects()) == 1
+
+
+def test_docasny_soubor_neni_videt_jako_projekt(izolovana_slozka):
+    """Rozepsaný zápis se nesmí objevit ve výpisu projektů."""
+    projects.save(projects.Project(id="hotovy"))
+    (izolovana_slozka / ".tmp-abc.json.tmp").write_text("{}", encoding="utf-8")
+
+    assert [p["id"] for p in projects.list_projects()] == ["hotovy"]

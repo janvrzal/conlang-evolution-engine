@@ -13,14 +13,21 @@ import json
 import os
 import re
 import tempfile
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# ID projektu se stává jménem souboru, takže musí projít přísným sítem —
-# jinak by `../../` v URL ukázalo kamkoli po disku.
-SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# ID projektu se stává jménem souboru, takže musí projít sítem — jinak by
+# `../../` v URL ukázalo kamkoli po disku.
+#
+# `\w` v Pythonu 3 zahrnuje i písmena s diakritikou, takže projde
+# "indoevropský-fantasy-jazyk". Naopak neprojde lomítko, tečka, dvojtečka ani
+# mezera, což jsou přesně znaky, kterými by se dalo utéct ze složky projektů.
+SAFE_ID = re.compile(r"^[\w-]{1,64}$", re.UNICODE)
+
+MAX_ID_LENGTH = 64
 
 SCHEMA_VERSION = 1
 
@@ -46,16 +53,29 @@ def projects_dir() -> Path:
 
 
 def validate_id(project_id: str) -> str:
-    if not isinstance(project_id, str) or not SAFE_ID.match(project_id):
+    """
+    Ověří ID a vrátí ho v normalizované podobě.
+
+    Normalizace na NFC je podstatná: "ý" lze zapsat jako jeden znak i jako
+    "y" + háček. Bez sjednocení by se projekt uložil pod jedním zápisem
+    a hledal pod druhým.
+    """
+    if not isinstance(project_id, str):
+        raise InvalidProjectId(f"ID projektu musí být řetězec, ne {type(project_id).__name__}.")
+
+    normalized = unicodedata.normalize("NFC", project_id)
+
+    if not SAFE_ID.match(normalized):
         raise InvalidProjectId(
-            f"Neplatné ID projektu {project_id!r}. Povolena jsou písmena, číslice, "
-            f"pomlčka a podtržítko, nejvýše 64 znaků."
+            f"Neplatné ID projektu {project_id!r}. Povolena jsou písmena (i s diakritikou), "
+            f"číslice, pomlčka a podtržítko, nejvýše {MAX_ID_LENGTH} znaků."
         )
-    return project_id
+    return normalized
 
 
 def _path_for(project_id: str) -> Path:
     path = (projects_dir() / f"{validate_id(project_id)}.json").resolve()
+
 
     # Pás navíc ke šlím: i kdyby síto výše někdo obešel, cesta musí zůstat uvnitř.
     if path.parent != projects_dir().resolve():
@@ -110,12 +130,13 @@ def save(project: Project) -> Project:
     Zápis jde nejdřív do dočasného souboru a teprve pak se přejmenuje. Kdyby
     aplikace spadla uprostřed, na disku zůstane předchozí verze, ne půlka nové.
     """
+    project.id = validate_id(project.id)
     path = _path_for(project.id)
     project.updated_at = _now()
     payload = json.dumps(project.as_dict(), ensure_ascii=False, indent=2)
 
     with tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", dir=path.parent, prefix=f".{project.id}.", suffix=".tmp",
+        "w", encoding="utf-8", dir=path.parent, prefix=".tmp-", suffix=".json.tmp",
         delete=False,
     ) as tmp:
         tmp.write(payload)
@@ -137,7 +158,7 @@ def load(project_id: str) -> Project:
     except json.JSONDecodeError as exc:
         raise ProjectError(f"Projekt {project_id!r} je poškozený: {exc}") from exc
 
-    payload.setdefault("id", project_id)
+    payload["id"] = validate_id(project_id)
     return Project.from_dict(payload)
 
 

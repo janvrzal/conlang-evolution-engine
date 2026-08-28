@@ -9,6 +9,16 @@ SCAN_RANGE = 20
 # jiná lokální aplikace, která taky odpovídá na /api/health.
 ENGINE_SIGNATURE = "Conlang Evolution Engine"
 
+# Revize HTTP rozhraní. Zvyš při každé změně, kterou frontend potřebuje —
+# nový endpoint, jiný tvar odpovědi. Klient podle ní pozná, že mluví se
+# zastaralým serverem, a řekne uživateli, ať ho restartuje, místo aby ho
+# nechal hádat nad holým 404.
+#
+# 1: /api/simulate, /api/simulate_dynamic, /api/protolang/generate
+# 2: + /api/evolve (vývoj jedné linie s historií)
+# 3: + /api/projects (persistence), ID projektu smí mít diakritiku
+API_REVISION = 3
+
 
 def is_port_free(port: int, host: str = "127.0.0.1") -> bool:
     """True, pokud na daném portu nikdo neposlouchá a lze se na něj navázat."""

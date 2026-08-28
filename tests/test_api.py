@@ -88,3 +88,25 @@ def test_dynamicka_topologie_respektuje_map_i_primo():
     kanonicky = spustit({"proto": {}, "hory": {"map": {"biome": "hory"}}})
 
     assert [w["ipa"] for w in plochy] == [w["ipa"] for w in kanonicky]
+
+
+def test_health_hlasi_revizi_rozhrani():
+    """
+    Podle revize klient pozná, že mluví se zastaralým serverem. Bez ní by
+    chybějící endpoint vypadal jako holý 404 kdesi v aplikaci.
+    """
+    from cee.api.ports import API_REVISION
+
+    zdravi = health_check()
+    assert zdravi["api_revision"] == API_REVISION
+    assert zdravi["version"]
+
+
+def test_revize_pokryva_soucasne_endpointy():
+    """Přidal-li někdo endpoint, musí zvýšit i revizi."""
+    from cee.api.ports import API_REVISION
+    from cee.api.server import app
+
+    cesty = {r.path for r in app.routes if hasattr(r, "path")}
+    assert {"/api/evolve", "/api/projects", "/api/projects/{project_id}"} <= cesty
+    assert API_REVISION >= 3

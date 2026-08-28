@@ -10,7 +10,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from cee.api.ports import DEFAULT_PORT, ENGINE_SIGNATURE
+from cee import __version__
+from cee.api.ports import API_REVISION, DEFAULT_PORT, ENGINE_SIGNATURE
 from cee.engine.parser import YamlParser
 from cee.engine.phonology import FeatureMapper
 from cee.engine.topology import EvolutionGraph, VerticalEdge
@@ -46,7 +47,12 @@ app.add_middleware(
 def health_check():
     # `engine` je podpis, podle kterého frontend při hledání portu pozná CEE
     # od jiné lokální aplikace, která taky odpovídá na /api/health.
-    return {"status": "ok", "engine": ENGINE_SIGNATURE}
+    return {
+        "status": "ok",
+        "engine": ENGINE_SIGNATURE,
+        "version": __version__,
+        "api_revision": API_REVISION,
+    }
 
 
 @app.get("/")

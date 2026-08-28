@@ -13,11 +13,37 @@
  */
 
 const ENGINE_SIGNATURE = 'Conlang Evolution Engine';
+
+/**
+ * Revize backendu, kterou tenhle frontend potřebuje (viz cee/api/ports.py).
+ * Běží-li starší, chybí mu endpointy a odpovídal by holým 404 — což vypadá
+ * jako chyba aplikace, přestože stačí restartovat `cee ui`.
+ */
+const REQUIRED_API_REVISION = 3;
 const DEFAULT_PORT = 8000;
 const SCAN_RANGE = 20;
 const PROBE_TIMEOUT_MS = 700;
 
 let cachedBase: string | null = null;
+let foundRevision = 0;
+
+class StaleBackendError extends Error {
+	constructor(revision: number) {
+		super(
+			`Backend běží ve starší verzi (rev ${revision}, potřeba ${REQUIRED_API_REVISION}). ` +
+				`Ukonči běžící 'cee ui' a spusť ho znovu.`
+		);
+		this.name = 'StaleBackendError';
+	}
+}
+
+/** Ověří, že nalezený backend umí, co frontend potřebuje. */
+function assertFreshEnough(): void {
+	if (foundRevision < REQUIRED_API_REVISION) {
+		cachedBase = null;
+		throw new StaleBackendError(foundRevision);
+	}
+}
 
 async function isCeeApi(base: string): Promise<boolean> {
 	const controller = new AbortController();
@@ -26,7 +52,10 @@ async function isCeeApi(base: string): Promise<boolean> {
 		const res = await fetch(`${base}/api/health`, { signal: controller.signal });
 		if (!res.ok) return false;
 		const data = await res.json();
-		return data?.engine === ENGINE_SIGNATURE;
+		if (data?.engine !== ENGINE_SIGNATURE) return false;
+
+		foundRevision = typeof data.api_revision === 'number' ? data.api_revision : 0;
+		return true;
 	} catch {
 		// Odmítnuté spojení, timeout, chybějící CORS hlavičky nebo jiný obsah —
 		// všechno znamená „tady CEE neběží".
@@ -42,6 +71,7 @@ export async function resolveApiBase(): Promise<string> {
 
 	const configured = import.meta.env.VITE_CEE_API_URL;
 	if (configured && (await isCeeApi(configured))) {
+		assertFreshEnough();
 		cachedBase = configured;
 		return configured;
 	}
@@ -64,13 +94,17 @@ export async function resolveApiBase(): Promise<string> {
 		);
 	}
 
+	assertFreshEnough();
 	cachedBase = match;
 	return match;
 }
 
 /** Zapomene nalezenou adresu — použij po restartu backendu na jiném portu. */
+export { StaleBackendError };
+
 export function resetApiBase(): void {
 	cachedBase = null;
+	foundRevision = 0;
 }
 
 export async function simulate(payload: Record<string, unknown>) {
