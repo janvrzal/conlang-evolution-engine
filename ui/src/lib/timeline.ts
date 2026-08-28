@@ -234,3 +234,69 @@ export function propagateSnapshots(
 		nextSnapshot.edges = advanced.edges;
 	}
 }
+
+// --- Kreslení hrany v editoru ------------------------------------------------
+
+/**
+ * Najde index hrany mezi danou dvojicí uzlů v aktuálním roce, pokud existuje.
+ *
+ * xyflow rozezná duplicitní spojení jen podle `source`/`target` (a handlů),
+ * na `type` se vůbec nedívá — `addEdge()` z knihovny by tedy pokus nakreslit
+ * kontakt tam, kde už je dědičnost, tiše zahodil, a vypadalo by to, že se
+ * "kontakt nepřepnul". Volající proto musí existující hranu zjistit sám
+ * a případně ji přetypovat, místo aby spoléhal na `addEdge()`.
+ */
+export function findEdgeBetween(edges: TLEdge[], source: string, target: string): number {
+	return edges.findIndex((e) => e.source === source && e.target === target);
+}
+
+/**
+ * Přepíše existující hranu na typ odpovídající právě zvolenému nástroji.
+ *
+ * Vlastní data kontaktu (typ vztahu, intenzita, směr) se při přepnutí TAM
+ * i ZPÁTKY zachovávají, pokud už tam nějaká byla — přepnutí z kontaktu na
+ * dědičnost a zase zpět nesmí vygumovat, jak byl kontakt nastavený.
+ */
+export function retypeEdge(edge: TLEdge, wantsContact: boolean, year: number): TLEdge {
+	if (wantsContact) {
+		return {
+			...edge,
+			type: 'contact',
+			animated: false,
+			data: {
+				...edge.data,
+				contactType: edge.data?.contactType ?? 'neighborhood',
+				intensity: edge.data?.intensity ?? 50,
+				direction: edge.data?.direction ?? 'ab',
+				year: edge.data?.year ?? year
+			}
+		};
+	}
+
+	return {
+		...edge,
+		type: undefined,
+		animated: undefined,
+		// contactType/intensity/direction se NEMAŽOU, jen přestanou být
+		// aktivní — dokud je type undefined, ContactEdge se nevykresluje
+		// a na tahle pole se nikde nesahá. Kdyby se tu `data` nahradilo jen
+		// `{ year }`, přepnutí zpět na kontakt by je muselo znovu dohádat
+		// z výchozích hodnot.
+		data: { ...edge.data, year: edge.data?.year ?? year }
+	};
+}
+
+/**
+ * Data pro zbrusu novou hranu odpovídající právě zvolenému nástroji.
+ *
+ * Vrací jen `type`/`data` (bez `id`/`source`/`target`) — to už doplní
+ * `addEdge()` z xyflow při spojení s objektem `Connection`.
+ */
+export function newEdgeFields(
+	wantsContact: boolean,
+	year: number
+): Pick<TLEdge, 'type' | 'data'> {
+	return wantsContact
+		? { type: 'contact', data: { contactType: 'neighborhood', intensity: 50, direction: 'ab', year } }
+		: { type: undefined, data: { year } };
+}

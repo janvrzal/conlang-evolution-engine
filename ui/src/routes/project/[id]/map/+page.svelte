@@ -31,7 +31,8 @@
 	
 	import { simulateDynamic, resetApiBase } from '$lib/api';
 	import { projectState, loadProject, scheduleSave, flushSave } from '$lib/state.svelte';
-	import { propagateSnapshots } from '$lib/timeline';
+	import { propagateSnapshots, findEdgeBetween, retypeEdge, newEdgeFields } from '$lib/timeline';
+	import type { TLEdge } from '$lib/timeline';
 	import { onMount, untrack } from 'svelte';
 
 	const nodeTypes = {
@@ -209,19 +210,37 @@
 	// a propojené jazyky na sebe nikdy nepůsobily.
 	let activeTool = $state<'move' | 'connect' | 'contact'>('connect');
 
-	/** Nová hrana dostane druh podle právě zvoleného nástroje. */
+	/**
+	 * Nová hrana dostane druh podle právě zvoleného nástroje.
+	 *
+	 * `addEdge()` z xyflow tiše zahodí spojení, pokud mezi stejnou dvojicí
+	 * uzlů (na stejných handlech) už nějaká hrana existuje — kontroluje jen
+	 * `source`/`target`, na `type` se vůbec nedívá. Bez ošetření tak
+	 * přetažení "Kontaktu" nad uzly, které už spojuje dědičnost, nedělalo
+	 * vůbec nic: stará dědičnost tam prostě zůstala ležet a vypadalo to,
+	 * že se kontakt "nepřepnul". Zdroj a cíl v jednom roce mají smysl jen
+	 * jako jeden vztah, takže existující hranu rovnou přetypujeme.
+	 */
 	function onConnect(connection: { source: string; target: string }) {
 		const year = timeSteps[currentTimeIndex];
-		
-		let newEdge: any = { ...connection };
-		if (activeTool === 'contact') {
-			newEdge.type = 'contact';
-			newEdge.data = { contactType: 'neighborhood', intensity: 50, direction: 'ab', year };
-		} else {
-			newEdge.data = { year };
+		const wantsContact = activeTool === 'contact';
+
+		const existingIdx = findEdgeBetween(edges as unknown as TLEdge[], connection.source, connection.target);
+		if (existingIdx !== -1) {
+			edges = edges.map((e, i) =>
+				i === existingIdx ? (retypeEdge(e as unknown as TLEdge, wantsContact, year) as unknown as Edge) : e
+			);
+			return;
 		}
-		
-		edges = addEdge(newEdge, edges);
+
+		// Explicitní `id` ve stejném formátu jako generuje `addEdge()` samo —
+		// bez něj TS spojuje objekt s "Edge" větví typu Connection | Edge
+		// a stěžuje si na chybějící povinné `id`, i když by šlo o platné
+		// nové spojení (addEdge() by si id doplnil sám).
+		edges = addEdge(
+			{ id: `xy-edge__${connection.source}-${connection.target}`, ...connection, ...newEdgeFields(wantsContact, year) },
+			edges
+		);
 	}
 
 	/**

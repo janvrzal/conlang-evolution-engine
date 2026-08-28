@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { advanceSnapshot, propagateSnapshots, stampBornYears } from './timeline';
+import {
+	advanceSnapshot,
+	findEdgeBetween,
+	newEdgeFields,
+	propagateSnapshots,
+	retypeEdge,
+	stampBornYears
+} from './timeline';
 import type { SnapshotsByYear, TLEdge, TLNode } from './timeline';
 
 function node(id: string, year: number, extra: Partial<TLNode['data']> = {}): TLNode {
@@ -325,5 +332,64 @@ describe('stampBornYears', () => {
 		stampBornYears(snapshots, [0, 100]);
 
 		expect(snapshots[100].nodes[0].data?.year).toBe(50);
+	});
+});
+
+describe('kreslení hrany: tlačítko Kontakt musí opravdu přepnout typ', () => {
+	// xyflow rozezná duplicitní spojení jen podle source/target (ne podle
+	// type), takže addEdge() z knihovny tiše zahodí pokus nakreslit kontakt
+	// tam, kde už dědičnost existuje. Uživatel nahlásil přesně tohle: hrana
+	// vypadá (a je) pořád jako dědičnost, i po přepnutí na nástroj Kontakt.
+
+	it('findEdgeBetween najde existující hranu mezi dvojicí uzlů', () => {
+		const edges = [edge('e1', 'a', 'b', 0)];
+		expect(findEdgeBetween(edges, 'a', 'b')).toBe(0);
+		expect(findEdgeBetween(edges, 'b', 'a')).toBe(-1); // směr se počítá
+		expect(findEdgeBetween(edges, 'a', 'c')).toBe(-1);
+	});
+
+	it('přetažení Kontaktu nad existující dědičností ji PŘETYPUJE, ne ignoruje', () => {
+		const dedicnost = edge('e1', 'a', 'b', 0); // type: undefined
+		const vysledek = retypeEdge(dedicnost, true, 100);
+
+		expect(vysledek.type).toBe('contact');
+		expect(vysledek.id).toBe('e1'); // stejná hrana, jen jiný typ — ne nová
+		expect(vysledek.data).toMatchObject({ contactType: 'neighborhood', intensity: 50, direction: 'ab' });
+	});
+
+	it('přetažení Dědičnosti nad existujícím kontaktem ji vrátí zpět na dědičnost', () => {
+		const kontakt = edge('e1', 'a', 'b', 0, 'contact');
+		const vysledek = retypeEdge(kontakt, false, 100);
+
+		expect(vysledek.type).toBeUndefined();
+		expect(vysledek.animated).toBeUndefined();
+	});
+
+	it('přepnutí tam a zpátky zachová vlastní data kontaktu (typ vztahu, intenzitu)', () => {
+		const puvodni: TLEdge = {
+			id: 'e1',
+			source: 'a',
+			target: 'b',
+			type: 'contact',
+			data: { year: 0, contactType: 'war', intensity: 90, direction: 'ba' }
+		};
+
+		const naDedicnost = retypeEdge(puvodni, false, 100);
+		const zpatkyNaKontakt = retypeEdge(naDedicnost, true, 200);
+
+		expect(zpatkyNaKontakt.data).toMatchObject({ contactType: 'war', intensity: 90, direction: 'ba' });
+	});
+
+	it('newEdgeFields pro Kontakt dá type: contact a výchozí data', () => {
+		expect(newEdgeFields(true, 100)).toMatchObject({
+			type: 'contact',
+			data: { contactType: 'neighborhood', intensity: 50, direction: 'ab', year: 100 }
+		});
+	});
+
+	it('newEdgeFields pro Dědičnost nedá type vůbec', () => {
+		const fields = newEdgeFields(false, 100);
+		expect(fields.type).toBeUndefined();
+		expect(fields.data).toEqual({ year: 100 });
 	});
 });
