@@ -22,6 +22,15 @@ export type ProjectData = {
 	snapshots: Record<number, { nodes: any[]; edges: any[] }>;
 	/** Nastavení protojazyků z Metaeditace. */
 	protoLanguages: any[];
+	/**
+	 * Poslední vygenerované jazyky.
+	 *
+	 * Přepočitatelné to sice je, ale je to hlavní výstup aplikace — po F5 by
+	 * jinak zmizely vygenerované jazyky i tlačítko na jejich zobrazení.
+	 */
+	simulationResult: any | null;
+	/** Kdy simulace proběhla, ať je poznat, jak je výsledek starý. */
+	simulationRunAt: string | null;
 };
 
 /** Uzel, kterým každý nový projekt začíná. */
@@ -42,7 +51,9 @@ function emptyData(): ProjectData {
 		generatedProtoLexicon: [],
 		timeSteps: [0, 500, 1000, 1500],
 		snapshots: { 0: { nodes: [protoNode(0)], edges: [] } },
-		protoLanguages: []
+		protoLanguages: [],
+		simulationResult: null,
+		simulationRunAt: null
 	};
 }
 
@@ -53,8 +64,8 @@ export const projectState = $state<{
 	status: SaveStatus;
 	error: string | null;
 	lastSavedAt: string | null;
-	/** Výsledek poslední simulace — přepočitatelný, na disk nepatří. */
 	simulationResult: any | null;
+	simulationRunAt: string | null;
 	generatedProtoLexicon: any[];
 	timeSteps: number[];
 	snapshots: Record<number, { nodes: any[]; edges: any[] }>;
@@ -66,7 +77,6 @@ export const projectState = $state<{
 	status: 'idle',
 	error: null,
 	lastSavedAt: null,
-	simulationResult: null,
 	...emptyData()
 });
 
@@ -80,7 +90,9 @@ function snapshotData(): ProjectData {
 		generatedProtoLexicon: $state.snapshot(projectState.generatedProtoLexicon) as any[],
 		timeSteps: $state.snapshot(projectState.timeSteps) as number[],
 		snapshots: $state.snapshot(projectState.snapshots) as ProjectData['snapshots'],
-		protoLanguages: $state.snapshot(projectState.protoLanguages) as any[]
+		protoLanguages: $state.snapshot(projectState.protoLanguages) as any[],
+		simulationResult: $state.snapshot(projectState.simulationResult),
+		simulationRunAt: projectState.simulationRunAt
 	};
 }
 
@@ -111,7 +123,6 @@ export async function loadProject(id: string): Promise<void> {
 	// Přepnutí na jiný projekt nesmí do nového nasypat data z předchozího.
 	if (projectState.id !== id) {
 		Object.assign(projectState, emptyData());
-		projectState.simulationResult = null;
 		projectState.loaded = false;
 	}
 
@@ -127,6 +138,8 @@ export async function loadProject(id: string): Promise<void> {
 			projectState.timeSteps = data.timeSteps;
 			projectState.snapshots = ensureSeed(data.snapshots, data.timeSteps);
 			projectState.protoLanguages = data.protoLanguages;
+			projectState.simulationResult = data.simulationResult ?? null;
+			projectState.simulationRunAt = data.simulationRunAt ?? null;
 			projectState.lastSavedAt = project.updated_at;
 			projectState.status = 'saved';
 		} else {

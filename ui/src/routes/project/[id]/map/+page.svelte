@@ -127,35 +127,45 @@
 	let nodes = $state<Node[]>([]);
 	let edges = $state<Edge[]>([]);
 
-	// Sync current step to view
+	// Rok, ke kterému patří lokální `nodes` / `edges`.
+	//
+	// Bez téhle stopy byly oba efekty níž kruhové: první četl snapshoty a psal
+	// do nodes, druhý četl nodes a psal do snapshotů. Při přepnutí roku se
+	// stihl spustit ten druhý dřív — a zapsal uzly starého roku do nového,
+	// čímž přepsal jeho obsah.
+	let loadedYear = $state<number | null>(null);
+
+	// 1) Načtení snapshotu — jen když se rok skutečně změnil.
 	$effect(() => {
 		if (!projectState.loaded) return;
 		const year = timeSteps[currentTimeIndex];
-		if (!snapshots[year]) {
-			// Copy from the previous available snapshot
+		if (year === undefined || year === loadedYear) return;
+
+		if (!projectState.snapshots[year]) {
+			// Nový bod na ose navazuje na předchozí stav, ne na prázdno.
 			const prevYear = timeSteps[currentTimeIndex - 1];
-			if (prevYear !== undefined && snapshots[prevYear]) {
-				projectState.snapshots[year] = {
-					nodes: JSON.parse(JSON.stringify(snapshots[prevYear].nodes)),
-					edges: JSON.parse(JSON.stringify(snapshots[prevYear].edges))
-				};
-			} else {
-				projectState.snapshots[year] = { nodes: [], edges: [] };
-			}
+			const zdroj = prevYear !== undefined ? projectState.snapshots[prevYear] : undefined;
+			projectState.snapshots[year] = zdroj
+				? {
+						nodes: JSON.parse(JSON.stringify(zdroj.nodes)),
+						edges: JSON.parse(JSON.stringify(zdroj.edges))
+					}
+				: { nodes: [], edges: [] };
 		}
-		
-		nodes = snapshots[year].nodes;
-		edges = snapshots[year].edges;
+
+		nodes = projectState.snapshots[year].nodes;
+		edges = projectState.snapshots[year].edges;
+		loadedYear = year;
 	});
 
-	// Save back to snapshot
+	// 2) Zápis zpět — jen do roku, ke kterému lokální stav opravdu patří.
 	$effect(() => {
-		if (!projectState.loaded) return;
-		const year = timeSteps[currentTimeIndex];
-		if (projectState.snapshots[year]) {
-			projectState.snapshots[year].nodes = nodes;
-			projectState.snapshots[year].edges = edges;
-		}
+		if (!projectState.loaded || loadedYear === null) return;
+		const snapshot = projectState.snapshots[loadedYear];
+		if (!snapshot) return;
+
+		snapshot.nodes = nodes;
+		snapshot.edges = edges;
 	});
 
 	// --- Interaction Logic (Toolbar) ---
@@ -263,6 +273,9 @@
 
 			if (data.status === 'success') {
 				projectState.simulationResult = data;
+				projectState.simulationRunAt = new Date().toISOString();
+				// Výsledek je hlavní výstup — ať přežije reload, uložíme hned.
+				void flushSave();
 				showResultsModal = true;
 			} else {
 				errorMessage = `Engine vrátil stav '${data.status}'.`;
