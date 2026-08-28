@@ -14,7 +14,7 @@ co jí předchozí připravila.
 """
 import random
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from cee.core.models import State
 from cee.engine.inventory import InventoryView
@@ -22,7 +22,7 @@ from cee.engine.rules import Rule
 from cee.engine.schemas import SCHEMA_REGISTRY
 
 # Kolikrát se pro jeden slot v chronologii zkusí jiné schéma, než to vzdáme.
-MAX_ATTEMPTS_PER_SLOT = 8
+MAX_ATTEMPTS_PER_SLOT = 24
 
 
 def _changed_features(rule: Rule) -> Dict[str, str]:
@@ -125,19 +125,48 @@ class SoundChangeGenerator:
 
         for i in range(num_rules):
             year = start_year + time_step * (i + 1)
+            candidate = self.generate_one(state, year, inventory, previous=previous)
+            if candidate is None:
+                continue
 
-            for _ in range(MAX_ATTEMPTS_PER_SLOT):
-                schema = self.random.choices(choices, weights=weights, k=1)[0]
-                candidate = schema.generate_rule(inventory, year, rng=self.random)
-
-                if candidate is None:
-                    continue  # třída je prázdná, zkusíme jiné schéma
-                if _reverses(previous, candidate) or _is_duplicate(previous, candidate):
-                    continue
-
-                rules.append(candidate)
-                previous = candidate
-                inventory = inventory.apply(candidate)
-                break
+            rules.append(candidate)
+            previous = candidate
+            inventory = inventory.apply(candidate)
 
         return rules
+
+    def generate_one(
+        self,
+        state: State,
+        year: int,
+        inventory: InventoryView,
+        previous: Optional[Rule] = None,
+        accepts: Optional[Callable[[Rule], bool]] = None,
+    ) -> Optional[Rule]:
+        """
+        Vylosuje jedno pravidlo pro daný rok, nebo vrátí None.
+
+        `accepts` je poslední síto — dostane hotové pravidlo a může ho odmítnout.
+        Volající tak může ověřit, že změna na aktuálním lexikonu opravdu něco
+        udělá; inventář sám o sobě pozici ve slově nezná, takže třeba fortici
+        na začátku slova z něj vyčíst nelze.
+        """
+        biome = (state.map or {}).get("biome")
+        choices, weights = self._weighted_schemas(biome)
+        if not choices or not inventory:
+            return None
+
+        for _ in range(MAX_ATTEMPTS_PER_SLOT):
+            schema = self.random.choices(choices, weights=weights, k=1)[0]
+            candidate = schema.generate_rule(inventory, year, rng=self.random)
+
+            if candidate is None:
+                continue  # třída je v inventáři prázdná
+            if _reverses(previous, candidate) or _is_duplicate(previous, candidate):
+                continue
+            if accepts is not None and not accepts(candidate):
+                continue
+
+            return candidate
+
+        return None

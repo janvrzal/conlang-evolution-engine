@@ -6,6 +6,8 @@ HTTP požadavky na volání služby a zpátky na JSON.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
+
 from pydantic import BaseModel
 
 from cee.api.ports import DEFAULT_PORT, ENGINE_SIGNATURE
@@ -15,7 +17,10 @@ from cee.engine.topology import EvolutionGraph, VerticalEdge
 from cee.metrics.retention import LexicalRetention
 from cee.pipeline import (
     DEFAULT_SEED,
+    LineageConfig,
     SimulationConfig,
+    evolve_lineage,
+    lineage_payload,
     build_branch_views,
     load_lexicon_from_csv,
     load_lexicon_from_records,
@@ -97,6 +102,43 @@ def generate_protolang(req: ProtolangRequest):
     generator = ProtolangGenerator()
     words = generator.generate_lexicon(req.consonants, req.vowels, req.syllable_structure)
     return {"status": "success", "words": words}
+
+
+class EvolveRequest(BaseModel):
+    """Vývoj jednoho jazyka v čase — bez větvení a bez kontaktu."""
+
+    proto_lexicon: list
+    years: int = 1000
+    epochs: int = 5
+    rules_per_epoch: int = 2
+    biome: Optional[str] = None
+    preset: str = "src/cee/data/presets/fantasy_preset.yaml"
+    seed: int = DEFAULT_SEED
+    node_id: str = "proto"
+
+
+@app.post("/api/evolve")
+def evolve(req: EvolveRequest):
+    """
+    Nechá protojazyk vyvíjet se sám a vrátí celý průběh: epochy, seznam
+    zvukových změn i derivaci každého slova.
+    """
+    mapper = FeatureMapper()
+    lexicon = load_lexicon_from_records(req.proto_lexicon, mapper)
+    diagnostic = LexicalRetention.diagnostic_from(lexicon)
+
+    config = LineageConfig(
+        years=req.years,
+        epochs=req.epochs,
+        rules_per_epoch=req.rules_per_epoch,
+        node_id=req.node_id,
+        seed=req.seed,
+        preset=YamlParser.parse_preset(req.preset) if req.preset else None,
+        biome=req.biome,
+    )
+
+    state, history = evolve_lineage(lexicon, mapper, config)
+    return lineage_payload(state, history, mapper, diagnostic)
 
 
 @app.post("/api/simulate")

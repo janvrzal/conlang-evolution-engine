@@ -3,10 +3,17 @@ import heapq
 import random
 import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from cee.core.models import Inventory, Lexicon, State
 from cee.engine.generator import SoundChangeGenerator
+from cee.engine.history import (
+    BorrowingEvent,
+    RuleApplication,
+    SimulationHistory,
+    SplitEvent,
+    WordChange,
+)
 from cee.engine.inventory import InventoryView
 from cee.engine.morphology import MorphologyEvaluator
 from cee.engine.phonology import FeatureMapper
@@ -52,9 +59,13 @@ class EvolutionSimulator:
     """
 
     def __init__(self, graph: EvolutionGraph, mapper: FeatureMapper, preset: Dict[str, Any] = None,
-                 seed: int = 42, semantic_evaluator=None):
+                 seed: int = 42, semantic_evaluator=None,
+                 history: Optional[SimulationHistory] = None):
         self.graph = graph
         self.mapper = mapper
+        # Historie je volitelná: bez ní simulátor běží jako dřív, s ní zaznamená
+        # průběh pro drill-down v UI.
+        self.history = history
         self.preset = preset
         self.random = random.Random(seed)
         self.semantic_evaluator = semantic_evaluator
@@ -128,6 +139,11 @@ class EvolutionSimulator:
 
                 child_state = self._fork(parent_state, event.child_id, year)
                 states[event.child_id] = child_state
+                if self.history:
+                    self.history.record(
+                        SplitEvent(year=year, parent_id=event.parent_id,
+                                   child_id=event.child_id)
+                    )
 
                 # Pravidla se generují až tady — čerstvě odštěpený uzel už zná
                 # svůj inventář i biom, takže generátor má z čeho vycházet.
@@ -138,8 +154,33 @@ class EvolutionSimulator:
                 branch_state = states.get(event.branch_id)
                 if branch_state is None:
                     continue
+
+                application = None
+                if self.history:
+                    rule = event.rule
+                    application = RuleApplication(
+                        year=event.year,
+                        node_id=event.branch_id,
+                        rule_name=rule.name,
+                        target=dict(rule.target),
+                        action=dict(rule.action),
+                        env_before=dict(rule.env_before) if rule.env_before else None,
+                        env_after=dict(rule.env_after) if rule.env_after else None,
+                    )
+
                 for word in branch_state.lexicon.words:
-                    event.rule.apply_to_word(word)
+                    before = self.mapper.render_word(word) if application else None
+                    if event.rule.apply_to_word(word) and application is not None:
+                        after = self.mapper.render_word(word)
+                        if after != before:
+                            application.changes.append(
+                                WordChange(concept_id=word.concept_id,
+                                           before=before, after=after)
+                            )
+
+                if application is not None:
+                    self.history.record(application)
+
                 branch_state.inventory = Inventory(
                     segments=self._inventory_of(branch_state.lexicon)
                 )
@@ -299,6 +340,16 @@ class EvolutionSimulator:
 
         num_borrow = min(volume, len(source.lexicon.words))
         words_to_borrow = self.random.sample(source.lexicon.words, num_borrow)
+
+        if self.history:
+            self.history.record(
+                BorrowingEvent(
+                    year=year,
+                    source_id=source.node_id,
+                    target_id=target.node_id,
+                    concepts=sorted(w.concept_id for w in words_to_borrow),
+                )
+            )
 
         for w in words_to_borrow:
             new_word = copy.deepcopy(w)

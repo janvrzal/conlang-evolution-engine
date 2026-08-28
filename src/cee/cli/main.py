@@ -15,7 +15,9 @@ from cee.semantics.graph import SemanticGraph
 from cee.engine.semantics import SemanticEvaluator
 from cee.metrics.retention import LexicalRetention
 from cee.pipeline import (
+    LineageConfig,
     SimulationConfig,
+    evolve_lineage,
     build_branch_views,
     load_lexicon_from_csv,
     run_simulation,
@@ -99,6 +101,63 @@ def apply(
         typer.echo(f"   Porovnáno slov: {metrics['comparisons']}")
         typer.echo(f"   Přesná shoda: {metrics['exact_match_ratio'] * 100:.1f}%")
         typer.echo(f"   Průměrná fonetická editační vzdálenost (LingPy): {metrics['avg_edit_distance']:.3f} (blíže k 0.0 je lepší)")
+
+
+@app.command()
+def evolve(
+    proto_csv: Path = typer.Option(..., help="Cesta k CSV s proto-lexikonem"),
+    preset_yaml: Path = typer.Option("src/cee/data/presets/fantasy_preset.yaml",
+                                     help="Preset pro generátor zvukových změn"),
+    years: int = typer.Option(1000, help="Délka vývoje v letech"),
+    epochs: int = typer.Option(5, help="Počet epoch, ve kterých se ukládá snapshot"),
+    biome: str = typer.Option(None, help="Biom uzlu (mění váhy schémat)"),
+    seed: int = typer.Option(42, help="Seed pro deterministický běh"),
+    trace: str = typer.Option(None, help="Vypsat derivaci jednoho konceptu")
+):
+    """
+    Nechá jeden protojazyk vyvíjet se v čase — bez větvení a bez kontaktu.
+
+    Ukáže, čím jazyk prošel: epochy, zvukové změny a jejich dopad.
+    """
+    typer.echo("⚙️  Inicializuji FeatureMapper (toto může chvíli trvat)...")
+    mapper = FeatureMapper()
+    lexicon = load_lexicon_from_csv(str(proto_csv), mapper)
+
+    config = LineageConfig(
+        years=years,
+        epochs=epochs,
+        seed=seed,
+        biome=biome,
+        preset=YamlParser.parse_preset(str(preset_yaml)) if preset_yaml else None,
+    )
+
+    typer.echo(f"🚀 Vyvíjím jazyk po dobu {years} let...\n")
+    state, history = evolve_lineage(lexicon, mapper, config)
+
+    applications = history.rule_applications()
+    typer.echo(f"📜 Zvukové změny ({len(applications)}):")
+    for app_ in applications:
+        typer.echo(f"   {app_.year:>5}  {app_.rule_name:<52} zasáhlo {app_.hit_count} slov")
+
+    typer.echo(f"\n🕰️  Epochy ({len(history.snapshots)}):")
+    ukazky = sorted({w.concept_id for w in state.lexicon.words})[:4]
+    hlavicka = "   " + f"{'rok':>6}  {'epocha':<12}" + "".join(f"{c[:11]:<13}" for c in ukazky)
+    typer.echo(hlavicka)
+    for snap in history.snapshots:
+        radek = "   " + f"{snap.year:>6}  {(snap.label or ''):<12}"
+        radek += "".join(f"{snap.words.get(c, '—'):<13}" for c in ukazky)
+        typer.echo(radek)
+
+    if trace:
+        typer.echo(f"\n🔍 Derivace konceptu '{trace}':")
+        steps = history.trace(state.node_id, trace)
+        if not steps:
+            typer.echo("   (tvar se nikdy nezměnil)")
+        for step in steps:
+            popis = step.rule_name or step.note or ""
+            typer.echo(f"   {step.year:>5}  {step.form:<14} {popis}")
+
+    typer.echo("\n✅ Hotovo.")
 
 
 @app.command()

@@ -8,12 +8,20 @@ rozhraní chovají stejně — dřív existovala ve třech kopiích, které se l
 """
 from __future__ import annotations
 
+import copy
 import csv
 import warnings
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from cee.core.models import Inventory, Lexicon, State
+from cee.engine.generator import SoundChangeGenerator
+from cee.engine.history import (
+    RuleApplication,
+    SimulationHistory,
+    Snapshot,
+    WordChange,
+)
 from cee.engine.inventory import InventoryView
 from cee.engine.phonology import FeatureMapper
 from cee.engine.semantics import SemanticEvaluator
@@ -254,4 +262,180 @@ def topology_payload(graph: EvolutionGraph) -> Dict[str, Any]:
             {"source": edge.parent_id, "target": edge.child_id}
             for edge in graph.vertical_edges
         ],
+    }
+
+
+# --- Vývoj jedné linie (bez větvení) ------------------------------------------
+
+
+@dataclass
+class LineageConfig:
+    """
+    Nastavení vývoje jednoho jazyka v čase.
+
+    Tohle je nejjednodušší smysluplný běh CEE: žádné větvení, žádný kontakt —
+    jen protojazyk, který se sám mění, a záznam toho, čím prošel.
+    """
+
+    years: int = 1000
+    epochs: int = 5
+    rules_per_epoch: int = 2
+    node_id: str = "proto"
+    seed: int = DEFAULT_SEED
+    preset: Optional[Dict[str, Any]] = None
+    biome: Optional[str] = None
+
+    @property
+    def epoch_length(self) -> int:
+        return max(1, self.years // max(1, self.epochs))
+
+
+def _snapshot(state: State, mapper: FeatureMapper, year: int, label: str) -> Snapshot:
+    return Snapshot(
+        year=year,
+        node_id=state.node_id,
+        label=label,
+        words={w.concept_id: mapper.render_word(w) for w in state.lexicon.words},
+        inventory=sorted(InventoryView.from_lexicon(state.lexicon, mapper)),
+    )
+
+
+def evolve_lineage(
+    lexicon: Lexicon,
+    mapper: FeatureMapper,
+    config: Optional[LineageConfig] = None,
+) -> tuple[State, SimulationHistory]:
+    """
+    Nechá jeden jazyk vyvíjet se v čase a zaznamená celý průběh.
+
+    Vrací konečný stav a historii se snapshoty po epochách i se seznamem
+    zvukových změn včetně toho, která slova každá z nich zasáhla.
+    """
+    config = config or LineageConfig()
+    history = SimulationHistory()
+
+    state = State(
+        node_id=config.node_id,
+        year=0,
+        inventory=Inventory(),
+        lexicon=lexicon,
+        map={"biome": config.biome} if config.biome else {},
+    )
+
+    inventory = InventoryView.from_lexicon(lexicon, mapper)
+    state.inventory = inventory.to_inventory()
+    history.snapshot(_snapshot(state, mapper, 0, "Protojazyk"))
+
+    generator = SoundChangeGenerator(config.preset, seed=config.seed) if config.preset else None
+    if generator is None:
+        warnings.warn(
+            "Bez presetu se jazyk nemá podle čeho měnit — vývoj bude prázdný.",
+            stacklevel=2,
+        )
+
+    total_slots = config.epochs * config.rules_per_epoch
+    time_step = max(1, config.years // (total_slots + 1))
+
+    def _would_change(rule) -> bool:
+        """
+        Poslední síto: má pravidlo na aktuálním lexikonu vůbec dopad?
+
+        Inventář nezná pozici hlásky ve slově, takže z něj nelze vyčíst, že
+        třeba fortice na začátku slova nemá co dělat. Zkusíme ji proto nanečisto
+        na kopii — je to levné a ušetří to prázdné kroky v chronologii.
+        """
+        return any(rule.apply_to_word(copy.deepcopy(w)) for w in state.lexicon.words)
+
+    previous_rule = None
+    next_epoch = config.epoch_length
+    epoch_index = 1
+
+    for slot in range(total_slots):
+        year = time_step * (slot + 1)
+
+        while year > next_epoch <= config.years:
+            state.year = next_epoch
+            history.snapshot(_snapshot(state, mapper, next_epoch, f"Epocha {epoch_index}"))
+            next_epoch += config.epoch_length
+            epoch_index += 1
+
+        if generator is None:
+            continue
+
+        # Inventář se čte ze skutečného lexikonu po každé změně — generátor tak
+        # vidí přesně to, co v jazyce v daném okamžiku je (stavový fold, 4.3).
+        inventory = InventoryView.from_lexicon(state.lexicon, mapper)
+        rule = generator.generate_one(
+            state, year, inventory, previous=previous_rule, accepts=_would_change
+        )
+        if rule is None:
+            continue
+
+        application = RuleApplication(
+            year=year,
+            node_id=state.node_id,
+            rule_name=rule.name,
+            target=dict(rule.target),
+            action=dict(rule.action),
+            env_before=dict(rule.env_before) if rule.env_before else None,
+            env_after=dict(rule.env_after) if rule.env_after else None,
+            generated=True,
+        )
+
+        for word in state.lexicon.words:
+            before = mapper.render_word(word)
+            if rule.apply_to_word(word):
+                after = mapper.render_word(word)
+                if after != before:
+                    application.changes.append(
+                        WordChange(concept_id=word.concept_id, before=before, after=after)
+                    )
+
+        history.record(application)
+        previous_rule = rule
+        state.inventory = InventoryView.from_lexicon(state.lexicon, mapper).to_inventory()
+
+    # Doplnění zbylých epoch až do konce zadaného období.
+    while next_epoch <= config.years:
+        state.year = next_epoch
+        history.snapshot(_snapshot(state, mapper, next_epoch, f"Epocha {epoch_index}"))
+        next_epoch += config.epoch_length
+        epoch_index += 1
+
+    state.year = config.years
+    if not history.snapshots or history.snapshots[-1].year != config.years:
+        history.snapshot(_snapshot(state, mapper, config.years, "Současnost"))
+    else:
+        history.snapshots[-1].label = "Současnost"
+
+    return state, history
+
+
+def lineage_payload(
+    state: State,
+    history: SimulationHistory,
+    mapper: FeatureMapper,
+    diagnostic: Optional[Sequence[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Serializuje vývoj jedné linie pro drill-down v UI.
+
+    Kromě epoch a seznamu změn nese i derivaci každého slova — tedy odpověď na
+    otázku "čím tenhle tvar prošel a kdy".
+    """
+    node_id = state.node_id
+    branch = build_branch_view(state, mapper, diagnostic)
+
+    traces = {
+        concept: [step.as_dict() for step in history.trace(node_id, concept)]
+        for concept in sorted({w.concept_id for w in state.lexicon.words})
+    }
+
+    return {
+        "status": "success",
+        "node_id": node_id,
+        "branch": branch.as_dict(),
+        "epochs": [snap.as_dict() for snap in history.snapshots_for(node_id)],
+        "events": [event.as_dict() for event in history.events],
+        "traces": traces,
     }

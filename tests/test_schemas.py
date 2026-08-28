@@ -98,11 +98,34 @@ def test_fortice_nesahne_na_likvidy(mapper, bohaty_inventar):
         assert mapper.render_word(word) == ocekavano
 
 
-def test_synkopa_maze_vokal_mezi_souhlaskami(mapper, bohaty_inventar):
-    rule = SCHEMA_REGISTRY["syncope"].generate_rule(bohaty_inventar, year=100)
-    word = mapper.parse_word("x", "petrako")
-    assert rule.apply_to_word(word) is True
-    assert mapper.render_word(word) == "ptrko"
+def test_synkopa_maze_jen_vokal_sve_kvality(mapper, bohaty_inventar):
+    """
+    Synkopa nezasáhne celý vokalismus naráz — cílí na kvalitu vokálu.
+    Jedno pravidlo dřív vygumovalo všechny vnitřní vokály a jazyk se pak
+    neměl jak dál vyvíjet.
+    """
+    # peritoka má ve vnitřní pozici přední (e), vysoký (i) i zadní (o) vokál,
+    # takže na ni dosáhne každá varianta.
+    vysledky = {}
+    for seed in range(24):
+        rule = SCHEMA_REGISTRY["syncope"].generate_rule(
+            bohaty_inventar, year=100, rng=random.Random(seed)
+        )
+        word = mapper.parse_word("x", "peritoka")
+        rule.apply_to_word(word)
+        vysledky[rule.name] = mapper.render_word(word)
+
+    assert len(vysledky) >= 3, f"Losují se jen varianty {list(vysledky)}."
+
+    for name, vysledek in vysledky.items():
+        assert vysledek != "prtka", f"'{name}' vygumovala celý vokalismus."
+        assert vysledek != "peritoka", f"'{name}' nezasáhla nic."
+
+    # Výchozí varianta (bez rng) cílí na vysoké vokály — zmizí jen /i/.
+    vysoke = SCHEMA_REGISTRY["syncope"].generate_rule(bohaty_inventar, year=100)
+    word = mapper.parse_word("x", "peritoka")
+    vysoke.apply_to_word(word)
+    assert mapper.render_word(word) == "pertoka"
 
 
 def test_vowel_shift_zvysuje_obe_rady(mapper, bohaty_inventar):

@@ -86,13 +86,24 @@ class SyncopeSchema(Schema):
     def __init__(self):
         super().__init__("syncope")
 
+    # Synkopa nezasahuje všechny vokály naráz. Bez modelu přízvuku aspoň
+    # rozlišíme kvalitu: nejdřív mizí krátké vysoké vokály, teprve pak ostatní.
+    # Bez tohohle rozlišení jedno pravidlo vygumovalo skoro celý vokalismus
+    # a jazyk se dál neměl jak vyvíjet.
+    _VARIANTS = (
+        ({"syl": "+", "hi": "+"}, "vysokých"),
+        ({"syl": "+", "hi": "-", "lo": "-"}, "středových"),
+        ({"syl": "+", "back": "-"}, "předních"),
+        ({"syl": "+", "back": "+"}, "zadních"),
+    )
+
     def build(self, year: int, rng=None) -> Optional[Rule]:
-        # Samohláska mezi dvěma souhláskami (kontext C_C). Nemáme model
-        # přízvuku, takže cílíme na každý vokál v C_C, nikoli jen nepřízvučný.
-        # Okrajové pozice vypadnou samy — env vyžaduje skutečný soused.
+        # Samohláska mezi dvěma souhláskami (kontext C_C). Okrajové pozice
+        # vypadnou samy — env vyžaduje skutečného souseda.
+        target, popis = self._VARIANTS[0] if rng is None else rng.choice(self._VARIANTS)
         return Rule(
-            name=f"Synkopa (gen. v {year})",
-            target={"syl": "+"},
+            name=f"Synkopa {popis} vokálů (gen. v {year})",
+            target=dict(target),
             action={"delete": "+"},
             env_before={"cons": "+"},
             env_after={"cons": "+"},
