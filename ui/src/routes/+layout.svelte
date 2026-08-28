@@ -9,16 +9,6 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<div class="app-container">
+<div class="flex flex-col min-h-screen">
 	{@render children()}
 </div>
-
-<style>
-	.app-container {
-		display: flex;
-		flex-direction: column;
-		height: 100vh;
-		width: 100vw;
-		overflow: hidden;
-	}
-</style>

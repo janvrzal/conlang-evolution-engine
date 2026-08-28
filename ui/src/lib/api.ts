@@ -114,3 +114,18 @@ export async function generateProtolangApi(payload: Record<string, unknown>) {
 	}
 	return res.json();
 }
+
+/** Vývoj jednoho jazyka v čase — epochy, zvukové změny a derivace slov. */
+export async function evolveLanguage(payload: Record<string, unknown>) {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/evolve`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload)
+	});
+
+	if (!res.ok) {
+		throw new Error(`API vrátilo ${res.status} ${res.statusText}`);
+	}
+	return res.json();
+}
