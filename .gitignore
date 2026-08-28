@@ -1,0 +1,19 @@
+.idea/
+__pycache__/
+*.pyc
+.venv/
+
+# Data a konfigurace
+*.csv
+*.yaml
+data/
+semantics/
+
+# Dokumentace a designové nákresy
+*.docx
+*.md
+!README.md
+!AGENT.md
+
+# Gemini Artifacts a data
+.gemini/

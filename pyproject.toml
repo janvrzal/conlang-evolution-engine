@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cee"
+version = "0.1.0"
+description = "Conlang Evolution Engine - A generative simulator for language change"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "panphon>=0.20.0",
+    "lingpy>=2.6.11",
+    "typer>=0.12.0",
+    "pydantic>=2.7.0",
+    "pyyaml>=6.0.1",
+    "networkx>=3.0",
+]
+
+[project.scripts]
+cee = "cee.cli.main:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
