@@ -27,6 +27,8 @@ class Word:
     concept_id: str
     segments: List[Segment]
     polysemy: Set[str] = field(default_factory=set) # Dodatečné významy (sémantické posuny)
+    origin_year: int = 0
+    source_id: Optional[str] = None # ID zdrojového uzlu v případě výpůjčky
 
 
 @dataclass
@@ -64,3 +66,5 @@ class State:
     year: int
     inventory: Inventory
     lexicon: Lexicon
+    parent_id: Optional[str] = None
+    hash: str = ""

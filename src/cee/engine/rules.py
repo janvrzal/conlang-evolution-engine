@@ -14,12 +14,17 @@ class Rule:
     action: Dict[str, str]
     env_before: Optional[Dict[str, str]] = None
     env_after: Optional[Dict[str, str]] = None
+    year: Optional[int] = None
 
     def apply_to_word(self, word: Word) -> bool:
         """
         Aplikuje pravidlo na slovo in-place. Vrací True, pokud došlo ke změně.
         Provedeno ve dvou fázích (identifikace -> mutace) pro zamezení self-feeding artefaktů.
         """
+        # 0. Kontrola časové stopy (výpůjčky přejaté po pravidle jím neprojdou)
+        if self.year is not None and self.year < word.origin_year:
+            return False
+            
         # Fáze 1: Identifikace terčů
         targets_to_modify = []
         for i, segment in enumerate(word.segments):
