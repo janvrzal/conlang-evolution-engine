@@ -6,12 +6,15 @@
 		Background,
 		BackgroundVariant,
 		ConnectionLineType,
-		ConnectionMode
+		ConnectionMode,
+		addEdge,
+		type Node,
+		type Edge
 	} from '@xyflow/svelte';
-	import type { Node, Edge } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	
 	import LanguageNode from '$lib/LanguageNode.svelte';
+	import ContactEdge from '$lib/ContactEdge.svelte';
 	import LanguageDetail from '$lib/LanguageDetail.svelte';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
@@ -28,14 +31,27 @@
 	
 	import { simulateDynamic, resetApiBase } from '$lib/api';
 	import { projectState, loadProject, scheduleSave, flushSave } from '$lib/state.svelte';
-	import { onMount } from 'svelte';
+	import { propagateSnapshots } from '$lib/timeline';
+	import { onMount, untrack } from 'svelte';
 
 	const nodeTypes = {
 		language: LanguageNode
 	};
 
+	const edgeTypes = {
+		contact: ContactEdge
+	};
+
 	// Obsidian kreslí spoje jako rovné čáry. Výchozí bezier se u uzlů nad sebou
 	// zamotává do smyček, které nic neznamenají.
+	//
+	// `data.year` tu dřív odkazoval na `timeSteps`/`currentTimeIndex`, které
+	// jsou v tomhle souboru deklarované až o desítky řádků níž (`let ... =
+	// $state(...)`). V Svelte 5 runes se top-level `let` vyhodnocuje v pořadí
+	// zápisu jako běžný JS blok, takže čtení proměnné před její deklarací
+	// (temporal dead zone) shazovalo celou stránku hned při načtení.
+	// `onConnect` navíc `data` pro každou novou hranu stejně nastavuje sám,
+	// takže tenhle výchozí `year` byl navíc mrtvý kód.
 	const defaultEdgeOptions = {
 		type: 'straight',
 		style: 'stroke: var(--edge-stroke, #6b6f76); stroke-width: 1.2; opacity: 0.55'
@@ -142,15 +158,9 @@
 		if (year === undefined || year === loadedYear) return;
 
 		if (!projectState.snapshots[year]) {
-			// Nový bod na ose navazuje na předchozí stav, ne na prázdno.
-			const prevYear = timeSteps[currentTimeIndex - 1];
-			const zdroj = prevYear !== undefined ? projectState.snapshots[prevYear] : undefined;
-			projectState.snapshots[year] = zdroj
-				? {
-						nodes: JSON.parse(JSON.stringify(zdroj.nodes)),
-						edges: JSON.parse(JSON.stringify(zdroj.edges))
-					}
-				: { nodes: [], edges: [] };
+			// Kaskáda zařídí naplnění
+			projectState.snapshots[year] = { nodes: [], edges: [] };
+			propagateTimeline();
 		}
 
 		nodes = projectState.snapshots[year].nodes;
@@ -164,9 +174,34 @@
 		const snapshot = projectState.snapshots[loadedYear];
 		if (!snapshot) return;
 
-		snapshot.nodes = nodes;
-		snapshot.edges = edges;
+		snapshot.nodes = $state.snapshot(nodes);
+		snapshot.edges = $state.snapshot(edges);
+
+		// Zpropagovat změny do budoucnosti — jen z právě editovaného roku dál.
+		// `propagateTimeline()` bez argumentu by přepočítal celou osu od nuly,
+		// a "vezmi uzel ze staršího roku a přepiš jím stejné ID v novějším"
+		// nerozlišuje "beze změny zděděné" od "právě ručně upraveného" —
+		// jakákoli editace v pozdějším roce (přejmenování, tombstone, smazání
+		// hrany) by se tou stejnou cascade, kterou zrovna spouští, vzápětí
+		// vrátila zpět na starší hodnotu.
+		propagateTimeline(loadedYear);
 	});
+
+	function propagateTimeline(fromYear?: number) {
+		untrack(() => {
+			const steps = projectState.timeSteps;
+			if (steps.length < 2) return;
+
+			// Logika kaskády (konverze dědičnost -> kontakt, mazání i tombstone
+			// se promítají dopředu) žije v $lib/timeline.ts, aby šla otestovat
+			// nezávisle na Svelte reaktivitě. Mutuje `projectState.snapshots`
+			// na místě — nikdy nepřepisuje objekt roku, odkud se propaguje, jen
+			// zapisuje do let PO něm. Kdyby se sem místo toho přiřazoval celý
+			// nový strom, referenční změna u toho roku by znovu spustila
+			// ukládací efekt výš, ten by znovu zavolal kaskádu — nekonečná smyčka.
+			propagateSnapshots(projectState.snapshots, steps, fromYear ?? undefined);
+		});
+	}
 
 	// --- Interaction Logic (Toolbar) ---
 	// Hrana je buď dědičnost (rodič -> potomek), nebo kontakt (sousedé, kteří
@@ -176,12 +211,33 @@
 
 	/** Nová hrana dostane druh podle právě zvoleného nástroje. */
 	function onConnect(connection: { source: string; target: string }) {
-		if (activeTool !== 'contact') return;
-		edges = edges.map((e) =>
-			e.source === connection.source && e.target === connection.target && !e.data?.kind
-				? { ...e, data: { ...e.data, kind: 'contact' }, animated: true }
-				: e
-		);
+		const year = timeSteps[currentTimeIndex];
+		
+		let newEdge: any = { ...connection };
+		if (activeTool === 'contact') {
+			newEdge.type = 'contact';
+			newEdge.data = { contactType: 'neighborhood', intensity: 50, direction: 'ab', year };
+		} else {
+			newEdge.data = { year };
+		}
+		
+		edges = addEdge(newEdge, edges);
+	}
+
+	/**
+	 * Tombstone: mrtvý jazyk už nikoho neovlivňuje.
+	 *
+	 * `propagateTimeline()` se stará jen o roky PO tomhle — kdykoli přepíše
+	 * jen `nextSnapshot`, nikdy zpětně to, co právě editujeme. Zapnutí
+	 * tombstone proto musí hrany aktuálního roku smazat rovnou tady, jinak
+	 * by "odstraní všechny jeho edges" platilo až od dalšího roku a v
+	 * aktuálním by uzel dál vypadal propojený.
+	 */
+	function setDead(nodeId: string, isDead: boolean) {
+		nodes = nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, isDead } } : n));
+		if (isDead) {
+			edges = edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
+		}
 	}
 
 	// Selection
@@ -242,26 +298,30 @@
 		errorMessage = '';
 		try {
 			// Sestavení topologie pro backend
-			const topologyNodes: Record<string, { biome: string }> = {};
+			const topologyNodes: Record<string, { biome: string, society: string }> = {};
 			for (const n of nodes) {
-				topologyNodes[n.id] = { biome: (n.data as any).biome ?? 'none' };
+				topologyNodes[n.id] = { 
+					biome: (n.data as any).biome ?? 'none',
+					society: (n.data as any).society ?? 'none'
+				};
 			}
 
 			const topology_data = {
 				nodes: topologyNodes,
 				edges: edges.map((e) => {
-					const kind = (e.data as any)?.kind === 'contact' ? 'contact' : 'inheritance';
-					return kind === 'contact'
+					return e.type === 'contact'
 						? {
 								source: e.source,
 								target: e.target,
-								kind,
-								// Kontakt bez zadaného roku klademe doprostřed osy.
+								kind: 'contact',
+								contactType: (e.data as any)?.contactType ?? 'neighborhood',
+								intensity: (e.data as any)?.intensity ?? 50,
+								direction: (e.data as any)?.direction ?? 'ab',
 								year: (e.data as any)?.year ?? Math.round(maxYear / 2),
 								volume: (e.data as any)?.volume ?? 5,
 								mutual: (e.data as any)?.mutual ?? true
 							}
-						: { source: e.source, target: e.target };
+						: { source: e.source, target: e.target, kind: 'inheritance' };
 				})
 			};
 
@@ -326,6 +386,7 @@
 			bind:nodes 
 			bind:edges
 			{nodeTypes}
+			{edgeTypes}
 			onedgeclick={onEdgeClick}
 			onedgecontextmenu={onEdgeContextMenu}
 			{defaultEdgeOptions}
@@ -466,6 +527,19 @@
 						<Label class="text-xs text-muted-foreground">Vznik v roce</Label>
 						<Input disabled value={selectedNodeData.data.year} />
 					</div>
+					<div class="flex items-center gap-2 mt-4 p-2 rounded-md border {(selectedNodeData.data as any).isDead ? 'bg-muted border-border' : 'bg-background'}">
+						<input
+							type="checkbox"
+							id="isDead"
+							class="accent-primary"
+							checked={(selectedNodeData.data as any).isDead || false}
+							onchange={(e) => setDead(selectedNodeId!, e.currentTarget.checked)}
+						/>
+						<Label for="isDead" class="text-sm font-medium cursor-pointer">Jazyk je mrtvý (tombstone)</Label>
+					</div>
+					<p class="text-[11px] text-muted-foreground -mt-2">
+						Zruší všechna jeho spojení od tohoto roku dál — v dřívějších letech zůstávají.
+					</p>
 					<Button class="w-full mt-2" size="sm">Editovat pravidla</Button>
 				</CardContent>
 			</Card>
