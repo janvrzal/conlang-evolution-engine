@@ -1,6 +1,6 @@
 import copy
 import hashlib
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 
 from cee.core.models import State, Lexicon, Word, Inventory
@@ -31,6 +31,7 @@ class EvolutionGraph:
     """
     Kompletní definice stromu/grafu rodiny.
     """
+    node_configs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     nodes: Dict[str, State] = field(default_factory=dict)
     vertical_edges: List[VerticalEdge] = field(default_factory=list)
     contact_edges: List[ContactEdge] = field(default_factory=list)

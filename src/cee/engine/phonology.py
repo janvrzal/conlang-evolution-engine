@@ -29,6 +29,11 @@ class FeatureMapper:
         # Seřadíme podle délky IPA řetězce, abychom při shodě preferovali nejjednodušší znak (např. 'o' před 'ö')
         self._known_segments.sort(key=lambda x: len(x[0]))
 
+        # Memoizace zpětného překladu. Bez ní se pro každý segment lineárně
+        # prochází celá panphon tabulka (tisíce položek), a to po každém pravidle
+        # při aktualizaci inventáře.
+        self._ipa_cache: Dict[tuple, str] = {}
+
     def parse_word(self, concept_id: str, ipa_string: str) -> Word:
         """
         Převod IPA textu na objekt Word složený z rysových matic.
@@ -41,13 +46,25 @@ class FeatureMapper:
     def segment_to_ipa(self, segment: Segment) -> str:
         """
         Najde nejlepší odpovídající IPA znak pro danou rysovou matici.
+        Výsledek je memoizovaný podle obsahu rysové matice.
         """
         if not segment.features:
             return "?"
 
+        cache_key = tuple(sorted(segment.features.items()))
+        cached = self._ipa_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        result = self._resolve_ipa(segment.features)
+        self._ipa_cache[cache_key] = result
+        return result
+
+    def _resolve_ipa(self, features: Dict[str, str]) -> str:
+        """Vlastní vyhledání nejlepšího IPA znaku (bez cache)."""
         # 1. Pokus o exaktní shodu (nejrychlejší)
         for ipa, fd in self._known_segments:
-            if fd == segment.features:
+            if fd == features:
                 return ipa
                 
         # 2. Hledání nejbližší shody (např. pokud pravidlo vytvořilo nevyváženou matici)
@@ -58,7 +75,7 @@ class FeatureMapper:
         for ipa, fd in self._known_segments:
             score = 0
             possible = True
-            for feature, target_val in segment.features.items():
+            for feature, target_val in features.items():
                 actual_val = fd.get(feature, '0')
                 if actual_val == target_val:
                     score += 1
@@ -72,6 +89,18 @@ class FeatureMapper:
                 best_match = ipa
                 
         return best_match
+
+    def is_exact_segment(self, segment: Segment) -> bool:
+        """
+        True, pokud rysová matice přesně odpovídá některé známé IPA hlásce.
+
+        False znamená, že pravidlo vyrobilo kombinaci rysů, která v panphon
+        tabulce neexistuje, a `segment_to_ipa` musel sáhnout po přibližné
+        shodě — tichý zdroj zkomolených výstupů.
+        """
+        if not segment.features:
+            return False
+        return any(fd == segment.features for _ipa, fd in self._known_segments)
 
     def render_word(self, word: Word) -> str:
         """

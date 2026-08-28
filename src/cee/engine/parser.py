@@ -1,6 +1,9 @@
+import warnings
+
 import yaml
 from typing import List, Dict, Any
 from cee.engine.rules import Rule
+from cee.engine.schemas import SCHEMA_REGISTRY
 from cee.engine.topology import EvolutionGraph, VerticalEdge, ContactEdge
 
 class YamlParser:
@@ -16,7 +19,8 @@ class YamlParser:
                 target=r_dict['target'],
                 action=r_dict['action'],
                 env_before=r_dict.get('env_before'),
-                env_after=r_dict.get('env_after')
+                env_after=r_dict.get('env_after'),
+                year=r_dict.get('year')
             )
             rules.append(rule)
         return rules
@@ -69,9 +73,28 @@ class YamlParser:
         with open(file_path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
             
-        return {
+        preset = {
             'name': data.get('name', 'Unknown Preset'),
             'description': data.get('description', ''),
             'schemas': data.get('schemas', {}),
             'biomes': data.get('biomes', {})
         }
+
+        # Bez schémat generátor tiše nevyrobí jediné pravidlo — typicky když se
+        # jako preset omylem předá soubor s topologií.
+        if not preset['schemas']:
+            warnings.warn(
+                f"Preset '{file_path}' nedeklaruje žádná schémata ('schemas'). "
+                f"Generátor zvukových změn nevygeneruje žádná pravidla.",
+                stacklevel=2,
+            )
+
+        unknown = [s for s in preset['schemas'] if s not in SCHEMA_REGISTRY]
+        if unknown:
+            warnings.warn(
+                f"Preset '{file_path}' odkazuje na neznámá schémata {unknown}; "
+                f"budou ignorována. Známá schémata: {sorted(SCHEMA_REGISTRY)}.",
+                stacklevel=2,
+            )
+
+        return preset

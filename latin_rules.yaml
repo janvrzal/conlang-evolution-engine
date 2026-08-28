@@ -1,0 +1,27 @@
+rules:
+  - name: "Ztráta koncového -m"
+    target: {"cons": "+", "nas": "+", "lab": "+"}
+    env_after: {"_boundary": "+"}
+    action: {"delete": "+"}
+
+  - name: "Ztráta koncového -t"
+    target: {"cons": "+", "cor": "+", "ant": "+", "cont": "-", "voi": "-"}
+    env_after: {"_boundary": "+"}
+    action: {"delete": "+"}
+
+  - name: "Intervokalická lenice (p, t, k -> b, d, g)"
+    # Cílem jsou neznělé explozivy (p, t, k)
+    target: {"cons": "+", "cont": "-", "voi": "-", "son": "-"}
+    # Předchází vokál (syl: +)
+    env_before: {"syl": "+"}
+    # Následuje sonoranta (syl: + pro vokály, cons: +, son: + pro likvidy r, l)
+    # Rys son: + pokrývá obojí!
+    env_after: {"son": "+"}
+    action: {"voi": "+"}
+
+  - name: "Úžení koncového -u na -o"
+    # Cílem je vysoký zadní zaokrouhlený vokál (u)
+    target: {"syl": "+", "hi": "+", "back": "+", "round": "+"}
+    env_after: {"_boundary": "+"}
+    # Akce: snížení na střední (hi: -) a zrušení labializace (lab: -) pro panphon
+    action: {"hi": "-", "lab": "-"}

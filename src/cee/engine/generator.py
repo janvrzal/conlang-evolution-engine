@@ -53,7 +53,7 @@ class SoundChangeGenerator:
             selected_schema = self.random.choices(choices, weights=weights, k=1)[0]
             
             # Grounding: pokusíme se vytvořit pravidlo
-            rule = selected_schema.generate_rule(state.inventory, year)
+            rule = selected_schema.generate_rule(state.inventory, year, rng=self.random)
             if rule:
                 rules.append(rule)
                 
