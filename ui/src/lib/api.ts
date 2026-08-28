@@ -43,7 +43,7 @@ export async function resolveApiBase(): Promise<string> {
 	const configured = import.meta.env.VITE_CEE_API_URL;
 	if (configured && (await isCeeApi(configured))) {
 		cachedBase = configured;
-		return cachedBase;
+		return configured;
 	}
 
 	const candidates = Array.from(
@@ -65,7 +65,7 @@ export async function resolveApiBase(): Promise<string> {
 	}
 
 	cachedBase = match;
-	return cachedBase;
+	return match;
 }
 
 /** Zapomene nalezenou adresu — použij po restartu backendu na jiném portu. */
@@ -76,6 +76,34 @@ export function resetApiBase(): void {
 export async function simulate(payload: Record<string, unknown>) {
 	const base = await resolveApiBase();
 	const res = await fetch(`${base}/api/simulate`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload)
+	});
+
+	if (!res.ok) {
+		throw new Error(`API vrátilo ${res.status} ${res.statusText}`);
+	}
+	return res.json();
+}
+
+export async function simulateDynamic(payload: Record<string, unknown>) {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/simulate_dynamic`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload)
+	});
+
+	if (!res.ok) {
+		throw new Error(`API vrátilo ${res.status} ${res.statusText}`);
+	}
+	return res.json();
+}
+
+export async function generateProtolangApi(payload: Record<string, unknown>) {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/protolang/generate`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(payload)

@@ -1,19 +1,109 @@
 <script lang="ts">
-	import { resetApiBase, simulate } from '$lib/api';
+	import { resetApiBase, simulateDynamic, generateProtolangApi } from '$lib/api';
+	import { SvelteFlow, Controls, Background, BackgroundVariant } from '@xyflow/svelte';
+	import type { Edge, Node } from '@xyflow/svelte';
+	import LanguageNode from '$lib/LanguageNode.svelte';
+	import '@xyflow/svelte/dist/style.css';
 
-	let simulationResult = $state<any>(null);
+	/** Data, která si k uzlu drží LanguageNode a odesílá se z nich topologie. */
+	type LanguageNodeData = {
+		label: string;
+		isProto?: boolean;
+		biome?: string;
+	};
+
+	type BranchData = {
+		year: number;
+		words: { id: string; ipa: string; polysemy: string[] }[];
+		grammar_md: string;
+	};
+
+	type SimulationResult = {
+		status: string;
+		branches: Record<string, BranchData>;
+		topology: { nodes: { id: string }[]; edges: { source: string; target: string }[] };
+	};
+
+	let simulationResult = $state<SimulationResult | null>(null);
 	let isLoading = $state(false);
 	let errorMessage = $state<string | null>(null);
 
+	// Protolang Forge State
+	let consonants = $state('p t k m n s l');
+	let vowels = $state('a i u');
+	let syllableStructure = $state('(C)V(C)');
+	let generatedProtoLexicon = $state<any[]>([]);
+	
+	// Graph State
+	const nodeTypes = {
+		language: LanguageNode
+	};
+
+	// @xyflow/svelte v1 předává nodes/edges jako $bindable pole, ne jako stores.
+	let nodes = $state.raw<Node<LanguageNodeData>[]>([
+		{
+			id: 'proto',
+			type: 'language',
+			position: { x: 250, y: 50 },
+			data: { label: 'z (Proto-Jazyk)', isProto: true }
+		}
+	]);
+
+	let edges = $state.raw<Edge[]>([]);
+	let nodeCounter = 1;
+
+	function addNode() {
+		nodes = [
+			...nodes,
+			{
+				id: `lang_${nodeCounter}`,
+				type: 'language',
+				position: { x: Math.random() * 400, y: Math.random() * 400 + 100 },
+				data: { label: `z${nodeCounter}`, isProto: false }
+			}
+		];
+		nodeCounter++;
+	}
+
+	async function generateProtolang() {
+		errorMessage = null;
+		try {
+			const data = await generateProtolangApi({ consonants, vowels, syllable_structure: syllableStructure });
+			if (data.status === 'success') {
+				generatedProtoLexicon = data.words;
+			} else {
+				errorMessage = `Generátor vrátil stav '${data.status}'.`;
+			}
+		} catch (e) {
+			resetApiBase();
+			errorMessage = e instanceof Error ? e.message : String(e);
+			console.error("Chyba při generování Protolangu", e);
+		}
+	}
+
 	async function runSimulation() {
+		if (generatedProtoLexicon.length === 0) {
+			alert("Nejprve vygeneruj Protolang slovník!");
+			return;
+		}
+		
 		isLoading = true;
 		errorMessage = null;
 		try {
-			const data = await simulate({
-				topology: 'scenario_split.yaml',
-				proto_csv: 'fantasy_v1.csv',
-				preset: 'src/cee/data/presets/fantasy_preset.yaml',
-				semantics: 'src/cee/data/semantics_mock.yaml'
+			// Sestavení topologie pro backend
+			const topologyNodes: Record<string, { biome: string }> = {};
+			for (const n of nodes) {
+				topologyNodes[n.id] = { biome: n.data.biome ?? 'none' };
+			}
+
+			const topology_data = {
+				nodes: topologyNodes,
+				edges: edges.map((e) => ({ source: e.source, target: e.target }))
+			};
+
+			const data = await simulateDynamic({
+				topology_data,
+				proto_lexicon: generatedProtoLexicon
 			});
 
 			if (data.status === 'success') {
@@ -22,10 +112,9 @@
 				errorMessage = `Engine vrátil stav '${data.status}'.`;
 			}
 		} catch (e) {
-			// Adresu zahodíme, ať se příští pokus zkusí připojit znovu — backend
-			// mohl mezitím naskočit na jiném portu.
 			resetApiBase();
 			errorMessage = e instanceof Error ? e.message : String(e);
+			console.error("Chyba při volání API", e);
 		} finally {
 			isLoading = false;
 		}
@@ -67,28 +156,45 @@
 	<aside class="glass-panel sidebar">
 		<header>
 			<h1>CEE</h1>
-			<p>Conlang Evolution Engine</p>
+			<p>Protolang Forge</p>
 		</header>
 		
 		<div class="controls scroll-y">
 			<section class="control-group">
-				<h3>Simulace</h3>
-				<button class="btn-primary" onclick={runSimulation} disabled={isLoading}>
-					{isLoading ? 'Simuluji vesmír...' : 'Spustit Vývoj'}
-				</button>
-
-				{#if errorMessage}
-					<p class="error-box">{errorMessage}</p>
+				<h3>Tvorba Protojazyka</h3>
+				<div class="input-group">
+					<label for="input-consonants" title="Které souhlásky může jazyk používat?">Souhlásky (C)</label>
+					<input id="input-consonants" type="text" bind:value={consonants} />
+				</div>
+				<div class="input-group">
+					<label for="input-vowels" title="Které samohlásky může jazyk používat?">Samohlásky (V)</label>
+					<input id="input-vowels" type="text" bind:value={vowels} />
+				</div>
+				<div class="input-group">
+					<label for="input-syllable" title="Tvar jedné slabiky. Např. CVC, (C)V. (C) znamená volitelnou hlásku.">Struktura slabiky</label>
+					<input id="input-syllable" type="text" bind:value={syllableStructure} />
+				</div>
+				<button class="btn-primary" onclick={generateProtolang}>Vygenerovat Slovník</button>
+				
+				{#if generatedProtoLexicon.length > 0}
+					<p class="success-text">Vygenerováno {generatedProtoLexicon.length} slov!</p>
 				{/if}
 			</section>
 			
 			<section class="control-group">
-				<h3>Jazyky</h3>
-				<div class="language-list">
-					<div class="lang-item active">Proto-jazyk</div>
-					<div class="lang-item">Severní větev</div>
-					<div class="lang-item">Jižní větev</div>
-				</div>
+				<h3>Topologie</h3>
+				<button class="btn-secondary" onclick={addNode}>+ Přidat Jazyk</button>
+			</section>
+
+			<section class="control-group">
+				<h3>Simulace</h3>
+				<button class="btn-primary" onclick={runSimulation} disabled={isLoading || generatedProtoLexicon.length === 0}>
+					{isLoading ? 'Simuluji vesmír...' : 'Spustit Vývoj'}
+				</button>
+
+				{#if errorMessage}
+					<div class="error-box">{errorMessage}</div>
+				{/if}
 			</section>
 		</div>
 		
@@ -100,16 +206,23 @@
 	<!-- Hlavní plátno: Mapa / Strom -->
 	<main class="canvas scroll-y" style="align-items: flex-start; justify-content: flex-start; padding: 2rem;">
 		{#if !simulationResult && !isLoading}
+			<div style="width: 100%; height: 500px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 2rem; border: 1px solid rgba(255,255,255,0.1);">
+				<SvelteFlow bind:nodes bind:edges {nodeTypes} fitView>
+					<Background variant={BackgroundVariant.Dots} bgColor="transparent" />
+					<Controls />
+				</SvelteFlow>
+			</div>
+			
 			<div class="placeholder-map" style="margin: auto;">
-				<h2>Evoluční Mapa</h2>
-				<p>Zde bude interaktivní zobrazení stromu jazyků a vizuální mapa světa.</p>
+				<h2>Sestav Topologii</h2>
+				<p>Propoj uzly pomocí myši. Jakmile máš strom i proto-slovník, klikni na Spustit Vývoj.</p>
 			</div>
 		{:else if isLoading}
 			<div class="placeholder-map" style="margin: auto;">
 				<h2 class="pulsing">Evoluce probíhá...</h2>
 				<p>Kalkuluji fonologické pravidla a sémantické posuny</p>
 			</div>
-		{:else}
+		{:else if simulationResult}
 			<div class="results-container">
 				<!-- Vizuální graf (Topologie) -->
 				<div class="topology-map glass-panel">
@@ -127,7 +240,7 @@
 				</div>
 
 				<div class="results-grid">
-					{#each Object.entries(simulationResult.branches) as [branchId, branchData]}
+					{#each Object.entries(simulationResult.branches) as [branchId, branchData] (branchId)}
 						<div class="glass-panel branch-card">
 							<h3>Jazyk: {branchId}</h3>
 							<p class="year">Rok: {branchData.year}</p>
@@ -198,6 +311,7 @@
 		font-size: 2.5rem;
 		background: linear-gradient(135deg, var(--color-text-main), var(--color-primary));
 		-webkit-background-clip: text;
+		background-clip: text;
 		-webkit-text-fill-color: transparent;
 		margin-bottom: 0.25rem;
 	}
@@ -228,30 +342,6 @@
 	.btn-primary {
 		width: 100%;
 		font-size: 1.1rem;
-	}
-
-	.language-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.lang-item {
-		padding: 0.75rem 1rem;
-		background: rgba(0, 0, 0, 0.2);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.lang-item:hover {
-		background: rgba(255, 255, 255, 0.05);
-	}
-
-	.lang-item.active {
-		border-color: var(--color-primary);
-		box-shadow: 0 0 10px var(--color-primary-glow);
 	}
 
 	.btn-export {
@@ -298,6 +388,49 @@
 	.pulsing {
 		animation: pulse 2s infinite ease-in-out;
 		color: var(--color-primary) !important;
+	}
+	
+	.input-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		margin-bottom: 1rem;
+	}
+
+	.input-group label {
+		font-size: 0.85rem;
+		color: var(--color-text-muted);
+		cursor: help;
+	}
+
+	.input-group input {
+		background: rgba(0, 0, 0, 0.3);
+		border: 1px solid var(--color-border);
+		color: var(--color-text-main);
+		padding: 0.5rem;
+		border-radius: var(--radius-sm);
+		font-family: monospace;
+	}
+
+	.success-text {
+		color: #10b981;
+		font-size: 0.85rem;
+		margin-top: 0.5rem;
+		text-align: center;
+	}
+
+	.btn-secondary {
+		width: 100%;
+		background: rgba(255, 255, 255, 0.1);
+		color: white;
+		padding: 0.75rem 1.5rem;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
+		transition: all 0.2s ease;
+	}
+
+	.btn-secondary:hover {
+		background: rgba(255, 255, 255, 0.2);
 	}
 	
 	@keyframes pulse {
