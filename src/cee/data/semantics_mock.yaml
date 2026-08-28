@@ -1,0 +1,37 @@
+shifts:
+  - source: "slunce"
+    target: "den"
+    weight: 0.8
+    fields: ["Time"]
+  - source: "slunce"
+    target: "bůh"
+    weight: 0.4
+    fields: ["Religion"]
+  - source: "voda"
+    target: "řeka"
+    weight: 0.7
+    fields: ["Nature"]
+  - source: "voda"
+    target: "život"
+    weight: 0.3
+    fields: ["Abstract"]
+  - source: "vlk"
+    target: "pes"
+    weight: 0.5
+    fields: ["Animals"]
+  - source: "vlk"
+    target: "nebezpečí"
+    weight: 0.6
+    fields: ["Emotions"]
+  - source: "kámen"
+    target: "hora"
+    weight: 0.8
+    fields: ["Nature"]
+  - source: "strom"
+    target: "les"
+    weight: 0.9
+    fields: ["Nature"]
+  - source: "strom"
+    target: "dřevo"
+    weight: 0.9
+    fields: ["Materials"]

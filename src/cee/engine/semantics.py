@@ -36,7 +36,8 @@ class SemanticEvaluator:
                 # Zde musíme graph upravit nebo si udělat vlastní random choice, 
                 # ale graph.random_shift používá globální random. 
                 # V dalším kroku upravíme i graph.py, teď používáme aspoň lokální pravděpodobnost.
-                new_concept = self.graph.random_shift(origin, self.random)
+                # new_concept může být None, pokud uzel nemá žádné následníky
+                new_concept = self.graph.random_shift(origin, random_gen=self.random)
                 if new_concept and new_concept != word.concept_id and new_concept not in word.polysemy:
                     # Slovo získalo nový význam!
                     word.polysemy.add(new_concept)

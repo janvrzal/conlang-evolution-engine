@@ -92,7 +92,8 @@ def simulate(
     topology_yaml: Path = typer.Option(..., help="Cesta k YAML definici evoluční sítě"),
     proto_csv: Path = typer.Option(..., help="Cesta k počátečnímu proto-lexikonu"),
     out_dir: Path = typer.Option(None, help="Cílová složka (defaultně: runs/run_YYYYMMDD_HHMMSS)"),
-    preset_yaml: Path = typer.Option(None, help="Volitelná cesta k presetu pro generátor zvukových změn")
+    preset_yaml: Path = typer.Option(None, help="Volitelná cesta k presetu pro generátor zvukových změn"),
+    semantics_yaml: Path = typer.Option(None, help="Volitelná cesta k YAML sémantickému grafu pro posuny významů")
 ):
     """
     Spustí globální lockstep simulaci celé rodiny na základě topologie a výpůjček.
@@ -120,8 +121,15 @@ def simulate(
         lexicon=lexicon
     )
     
+    semantic_evaluator = None
+    if semantics_yaml:
+        typer.echo(f"🧠 Načítám sémantický graf z {semantics_yaml}...")
+        graph_sem = SemanticGraph(str(semantics_yaml))
+        # Použijeme vysokou shift_prob, ať to v malém testovacím vzorku vynikne (např. 0.3)
+        semantic_evaluator = SemanticEvaluator(graph_sem, shift_prob=0.3, forget_prob=0.05)
+        
     typer.echo("🚀 Spouštím evoluční simulátor v globálním lockstepu...")
-    simulator = EvolutionSimulator(graph, mapper, preset=preset_data)
+    simulator = EvolutionSimulator(graph, mapper, preset=preset_data, semantic_evaluator=semantic_evaluator)
     final_states = simulator.simulate(root_state)
     
     if not out_dir:

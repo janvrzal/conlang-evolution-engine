@@ -26,11 +26,12 @@ class EvolutionSimulator:
     """
     Řídí globální lockstep simulaci evoluční sítě.
     """
-    def __init__(self, graph: EvolutionGraph, mapper: FeatureMapper, preset: Dict[str, Any] = None, seed: int = 42):
+    def __init__(self, graph: EvolutionGraph, mapper: FeatureMapper, preset: Dict[str, Any] = None, seed: int = 42, semantic_evaluator = None):
         self.graph = graph
         self.mapper = mapper
         self.preset = preset
         self.random = random.Random(seed)
+        self.semantic_evaluator = semantic_evaluator
         if self.preset:
             self.generator = SoundChangeGenerator(self.preset, seed)
         else:
@@ -113,6 +114,10 @@ class EvolutionSimulator:
         last_year = events[-1].year if events else root_state.year
         for branch_id, state in active_branches.items():
             state.year = last_year
+            
+            # 4. Sémantické posuny na konci větve
+            if self.semantic_evaluator:
+                self.semantic_evaluator.evaluate(state.lexicon)
             
         return active_branches
         
