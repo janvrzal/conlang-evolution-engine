@@ -9,7 +9,13 @@
 
 	import { ipaManners, ipaPlaces, ipaConsonants, ipaVowelsFrontness, ipaVowelsOpenness, ipaVowels, languagePresets, type LanguagePreset } from '$lib/data/languagePresets';
 	import { generateProtolangApi, resetApiBase } from '$lib/api';
-	import { projectState } from '$lib/state.svelte';
+	import { projectState, loadProject, scheduleSave } from '$lib/state.svelte';
+	import { onMount } from 'svelte';
+
+	// Načtení projektu i tady — na Metaeditaci se dá přijít přímo odkazem.
+	onMount(() => {
+		void loadProject($page.params.id ?? 'default');
+	});
 
 	// State
 	let protoLanguages = $state<{ id: string; name: string; presetId: string; consonants: Set<string>; vowels: Set<string>; syllable: string }[]>([
@@ -120,6 +126,7 @@
 			
 			if (data.status === 'success') {
 				projectState.generatedProtoLexicon = data.words;
+				scheduleSave();
 			} else {
 				generateError = `Generátor vrátil chybový stav '${data.status}'.`;
 			}

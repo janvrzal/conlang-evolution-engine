@@ -4,7 +4,7 @@ Lokální HTTP API pro grafické rozhraní.
 Vlastní logika simulace žije v `cee.pipeline` — tenhle modul jen překládá
 HTTP požadavky na volání služby a zpátky na JSON.
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 
@@ -14,6 +14,7 @@ from cee.api.ports import DEFAULT_PORT, ENGINE_SIGNATURE
 from cee.engine.parser import YamlParser
 from cee.engine.phonology import FeatureMapper
 from cee.engine.topology import EvolutionGraph, VerticalEdge
+from cee import projects
 from cee.metrics.retention import LexicalRetention
 from cee.pipeline import (
     DEFAULT_SEED,
@@ -102,6 +103,56 @@ def generate_protolang(req: ProtolangRequest):
     generator = ProtolangGenerator()
     words = generator.generate_lexicon(req.consonants, req.vowels, req.syllable_structure)
     return {"status": "success", "words": words}
+
+
+# --- Projekty (persistence rozdělané práce) ----------------------------------
+
+
+class ProjectPayload(BaseModel):
+    name: str = "Nový projekt"
+    data: dict = {}
+
+
+def _project_or_404(project_id: str):
+    try:
+        return projects.load(project_id)
+    except projects.InvalidProjectId as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except projects.ProjectNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except projects.ProjectError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/projects")
+def list_projects():
+    return {"status": "success", "projects": projects.list_projects()}
+
+
+@app.get("/api/projects/{project_id}")
+def get_project(project_id: str):
+    return {"status": "success", "project": _project_or_404(project_id).as_dict()}
+
+
+@app.put("/api/projects/{project_id}")
+def put_project(project_id: str, payload: ProjectPayload):
+    """Uloží (nebo založí) projekt. Frontend sem posílá celý svůj stav."""
+    try:
+        project = projects.load_or_create(project_id, payload.name)
+    except projects.InvalidProjectId as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    project.name = payload.name
+    project.data = payload.data
+    projects.save(project)
+    return {"status": "success", "project": project.as_dict()}
+
+
+@app.delete("/api/projects/{project_id}")
+def delete_project(project_id: str):
+    _project_or_404(project_id)
+    projects.delete(project_id)
+    return {"status": "success"}
 
 
 class EvolveRequest(BaseModel):

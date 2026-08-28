@@ -17,10 +17,11 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { MousePointer2, GitCommitHorizontal, X, Download } from 'lucide-svelte';
+	import { MousePointer2, GitCommitHorizontal, X, Download, Trash2 } from 'lucide-svelte';
 	
 	import { simulateDynamic, resetApiBase } from '$lib/api';
-	import { projectState } from '$lib/state.svelte';
+	import { projectState, loadProject, scheduleSave, flushSave } from '$lib/state.svelte';
+	import { onMount } from 'svelte';
 
 	const nodeTypes = {
 		language: LanguageNode
@@ -36,6 +37,44 @@
 	// Drill-down panel se otevírá vedle plátna, ne přes něj.
 	let detailOpen = $state(false);
 
+	// xyflow v1 nemá vestavěné mazání klávesou, takže si výběr hrany držíme sami.
+	let selectedEdgeId = $state<string | null>(null);
+
+	// Zvýraznění vybrané hrany řeší CSS přes třídu .selected, kterou přidává
+	// sám xyflow. Přepisovat kvůli tomu pole hran by rozbilo bind:edges.
+	function onEdgeClick({ edge }: { edge: Edge }) {
+		selectedEdgeId = edge.id;
+		selectedNodeId = null;
+		detailOpen = false;
+	}
+
+	function deleteSelectedEdge() {
+		if (!selectedEdgeId) return;
+		edges = edges.filter((e) => e.id !== selectedEdgeId);
+		selectedEdgeId = null;
+	}
+
+	/** Pravý klik smaže hranu rovnou — bez oklik přes výběr. */
+	function onEdgeContextMenu({ edge, event }: { edge: Edge; event: MouseEvent }) {
+		event.preventDefault();
+		edges = edges.filter((e) => e.id !== edge.id);
+		if (selectedEdgeId === edge.id) selectedEdgeId = null;
+	}
+
+	function onKeyDown(event: KeyboardEvent) {
+		if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+
+		// Ať se hrana nemaže, když uživatel píše do pole.
+		const cil = event.target as HTMLElement | null;
+		if (cil && ['INPUT', 'TEXTAREA'].includes(cil.tagName)) return;
+		if (cil?.isContentEditable) return;
+
+		if (selectedEdgeId) {
+			event.preventDefault();
+			deleteSelectedEdge();
+		}
+	}
+
 	type BranchData = {
 		year: number;
 		words: { id: string; ipa: string; polysemy: string[] }[];
@@ -50,14 +89,32 @@
 	);
 
 	// --- Time Snapshot Logic ---
-	let timeSteps = $state([0, 500, 1000, 1500]);
+	// Osa i snapshoty žijí v projectState, protože se ukládají na disk.
+	// Dokud byly lokální v komponentě, mizely při přechodu na Metaeditaci i po F5.
 	let currentTimeIndex = $state(0);
-	
-	let snapshots = $state<Record<number, { nodes: Node[], edges: Edge[] }>>({
-		0: {
-			nodes: [{ id: 'lang-1', type: 'language', position: { x: 400, y: 100 }, data: { label: 'Protojazyk', isProto: true, year: 0 } }],
-			edges: []
-		}
+
+	let timeSteps = $derived(projectState.timeSteps);
+	let snapshots = $derived(projectState.snapshots);
+
+	onMount(() => {
+		// Protojazyk zakládá store, ne tenhle callback — jinak ho stihne přebít
+		// synchronizační efekt níž a do projektu se uloží prázdný snapshot.
+		void loadProject($page.params.id ?? 'default');
+
+		const flush = () => void flushSave();
+		window.addEventListener('beforeunload', flush);
+		window.addEventListener('keydown', onKeyDown);
+		return () => {
+			window.removeEventListener('beforeunload', flush);
+			window.removeEventListener('keydown', onKeyDown);
+		};
+	});
+
+	// Každá změna uzlů, hran nebo osy naplánuje uložení.
+	$effect(() => {
+		JSON.stringify(projectState.snapshots);
+		JSON.stringify(projectState.timeSteps);
+		if (projectState.loaded) scheduleSave();
 	});
 
 	let nodes = $state<Node[]>([]);
@@ -65,17 +122,18 @@
 
 	// Sync current step to view
 	$effect(() => {
+		if (!projectState.loaded) return;
 		const year = timeSteps[currentTimeIndex];
 		if (!snapshots[year]) {
 			// Copy from the previous available snapshot
 			const prevYear = timeSteps[currentTimeIndex - 1];
 			if (prevYear !== undefined && snapshots[prevYear]) {
-				snapshots[year] = {
+				projectState.snapshots[year] = {
 					nodes: JSON.parse(JSON.stringify(snapshots[prevYear].nodes)),
 					edges: JSON.parse(JSON.stringify(snapshots[prevYear].edges))
 				};
 			} else {
-				snapshots[year] = { nodes: [], edges: [] };
+				projectState.snapshots[year] = { nodes: [], edges: [] };
 			}
 		}
 		
@@ -85,10 +143,11 @@
 
 	// Save back to snapshot
 	$effect(() => {
+		if (!projectState.loaded) return;
 		const year = timeSteps[currentTimeIndex];
-		if (snapshots[year]) {
-			snapshots[year].nodes = nodes;
-			snapshots[year].edges = edges;
+		if (projectState.snapshots[year]) {
+			projectState.snapshots[year].nodes = nodes;
+			projectState.snapshots[year].edges = edges;
 		}
 	});
 
@@ -108,6 +167,7 @@
 
 	function onPaneClick() {
 		selectedNodeId = null;
+		selectedEdgeId = null;
 		detailOpen = false;
 	}
 
@@ -127,8 +187,8 @@
 		if (input === null) return;
 		const year = parseInt(input, 10);
 		if (!isNaN(year) && !timeSteps.includes(year)) {
-			timeSteps = [...timeSteps, year].sort((a, b) => a - b);
-			currentTimeIndex = timeSteps.indexOf(year);
+			projectState.timeSteps = [...timeSteps, year].sort((a, b) => a - b);
+			currentTimeIndex = projectState.timeSteps.indexOf(year);
 		}
 	}
 
@@ -217,8 +277,10 @@
 	<div class="absolute inset-0">
 		<SvelteFlow 
 			bind:nodes 
-			bind:edges 
+			bind:edges
 			{nodeTypes}
+			onedgeclick={onEdgeClick}
+			onedgecontextmenu={onEdgeContextMenu}
 			{defaultEdgeOptions}
 			connectionLineType={ConnectionLineType.Straight}
 			connectionMode={ConnectionMode.Loose}
@@ -256,6 +318,19 @@
 			<GitCommitHorizontal class="w-4 h-4 mr-2" />
 			Spojení
 		</Button>
+		{#if selectedEdgeId}
+			<div class="w-px bg-border mx-1"></div>
+			<Button
+				variant="ghost"
+				size="sm"
+				class="px-3 text-destructive hover:text-destructive"
+				onclick={deleteSelectedEdge}
+				title="Smazat vybrané spojení (Delete)"
+			>
+				<Trash2 class="w-4 h-4 mr-2" />
+				Smazat spojení
+			</Button>
+		{/if}
 	</div>
 
 	<!-- Left Panel: Project Settings -->
@@ -279,8 +354,23 @@
 						Zobrazit výsledky simulace
 					</Button>
 				{/if}
-				<div class="text-xs text-muted-foreground">
+				<div class="text-xs text-muted-foreground space-y-1">
 					<p>Aktuální krok: <strong>Rok {timeSteps[currentTimeIndex]}</strong></p>
+					<p class="flex items-center gap-1.5">
+						{#if projectState.status === 'saving'}
+							<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Ukládám…
+						{:else if projectState.status === 'dirty'}
+							<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Neuloženo
+						{:else if projectState.status === 'error'}
+							<span class="w-1.5 h-1.5 rounded-full bg-destructive"></span>
+							<span class="text-destructive">Uložení selhalo</span>
+						{:else if projectState.status === 'saved'}
+							<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Uloženo
+						{/if}
+					</p>
+					{#if projectState.error}
+						<p class="text-destructive">{projectState.error}</p>
+					{/if}
 				</div>
 			</CardContent>
 		</Card>
@@ -419,6 +509,21 @@
 </div>
 
 <style>
+	/* Hrany reagují na kurzor, ať je vůbec možné je vybrat a smazat. */
+	:global(.svelte-flow__edge) {
+		cursor: pointer;
+	}
+
+	:global(.svelte-flow__edge .svelte-flow__edge-interaction) {
+		stroke-width: 18;
+	}
+
+	:global(.svelte-flow__edge.selected .svelte-flow__edge-path) {
+		stroke: #ef4444;
+		stroke-width: 2.4;
+		opacity: 1;
+	}
+
 	/* Skrýt handles v režimu posunu (move), aby uživatel neomylem nevykreslil hranu */
 	:global(.tool-move .svelte-flow__handle) {
 		display: none !important;

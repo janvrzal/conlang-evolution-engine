@@ -43,7 +43,9 @@
 		width: var(--size);
 		height: var(--size);
 		border-radius: 50%;
-		background: var(--node-fill, #8a8f98);
+		/* Odvozeno z motivu aplikace — natvrdo zapsané tmavé barvy byly na
+		   světlém pozadí prakticky nečitelné. */
+		background: hsl(var(--muted-foreground, 0 0% 45%) / 0.55);
 		transition:
 			transform 0.15s ease,
 			background 0.15s ease,
@@ -51,17 +53,17 @@
 	}
 
 	.node.proto .dot {
-		background: var(--node-fill-proto, #6b7cff);
+		background: hsl(var(--primary, 0 0% 9%) / 0.85);
 	}
 
 	.node:hover .dot {
 		transform: scale(1.18);
-		box-shadow: 0 0 0 6px color-mix(in srgb, var(--node-fill, #8a8f98) 22%, transparent);
+		box-shadow: 0 0 0 6px hsl(var(--muted-foreground, 0 0% 45%) / 0.18);
 	}
 
 	.node.selected .dot {
-		background: var(--node-fill-active, #6b7cff);
-		box-shadow: 0 0 0 5px color-mix(in srgb, var(--node-fill-active, #6b7cff) 30%, transparent);
+		background: hsl(var(--primary, 0 0% 9%));
+		box-shadow: 0 0 0 5px hsl(var(--primary, 0 0% 9%) / 0.22);
 	}
 
 	.label {
@@ -71,15 +73,17 @@
 		font-size: 12px;
 		font-weight: 500;
 		letter-spacing: 0.01em;
-		color: var(--node-label, #b9bec7);
+		color: hsl(var(--foreground, 0 0% 4%) / 0.75);
 		white-space: nowrap;
-		/* Obsidian nechává popisky čitelné nad hranami i nad plátnem. */
-		text-shadow: 0 1px 3px var(--node-label-shadow, rgba(0, 0, 0, 0.55));
+		/* Obrys v barvě pozadí drží popisek čitelný i tam, kde vede hrana.
+		   Stín fungoval jen na tmavém podkladu. */
+		paint-order: stroke fill;
+		-webkit-text-stroke: 3px hsl(var(--background, 0 0% 100%));
 	}
 
 	.node:hover .label,
 	.node.selected .label {
-		color: var(--node-label-active, #f2f4f8);
+		color: hsl(var(--foreground, 0 0% 4%));
 	}
 
 	.year {

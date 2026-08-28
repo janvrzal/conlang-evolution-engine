@@ -129,3 +129,43 @@ export async function evolveLanguage(payload: Record<string, unknown>) {
 	}
 	return res.json();
 }
+
+// --- Projekty (persistence rozdělané práce) ----------------------------------
+
+export type ProjectPayload = { name: string; data: Record<string, unknown> };
+
+export async function fetchProject(id: string) {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/projects/${encodeURIComponent(id)}`);
+
+	// 404 není chyba — projekt se prostě ještě nezaložil.
+	if (res.status === 404) return null;
+	if (!res.ok) throw new Error(`Načtení projektu selhalo: ${res.status} ${res.statusText}`);
+
+	const body = await res.json();
+	return body.project as {
+		id: string;
+		name: string;
+		updated_at: string;
+		data: Record<string, unknown>;
+	};
+}
+
+export async function saveProject(id: string, payload: ProjectPayload) {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/projects/${encodeURIComponent(id)}`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload)
+	});
+
+	if (!res.ok) throw new Error(`Uložení projektu selhalo: ${res.status} ${res.statusText}`);
+	return (await res.json()).project;
+}
+
+export async function listProjects() {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/projects`);
+	if (!res.ok) throw new Error(`Výpis projektů selhal: ${res.status}`);
+	return (await res.json()).projects as { id: string; name: string; updated_at: string }[];
+}
