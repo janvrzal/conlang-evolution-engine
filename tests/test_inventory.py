@@ -40,7 +40,7 @@ def test_prazdna_trida(mapper):
 def test_lenice_prida_znele_okluzivy(mapper):
     """Feeding: po lenici je v jazyce b/d/ɡ, které tam předtím nebyly."""
     inv = InventoryView(mapper, set("ptkaiu"))
-    po = inv.apply(SCHEMA_REGISTRY["lenition"].build(100))
+    po = inv.apply(SCHEMA_REGISTRY["lenition"].build(inv, 100))
     assert {"b", "d", "ɡ"} <= set(po)
     # Pravidlo má prostředí, takže původní neznělé okluzivy jinde ve slově zůstávají.
     assert {"p", "t", "k"} <= set(po)
@@ -60,7 +60,7 @@ def test_bezpodminecne_pravidlo_puvodni_hlasku_odebere(mapper):
 
 def test_mazaci_pravidlo_inventar_nemeni(mapper, inv):
     """Zda foném zanikne, závisí na pozicích ve slovech — inventář je nezná."""
-    po = inv.apply(SCHEMA_REGISTRY["coda_loss"].build(100))
+    po = inv.apply(SCHEMA_REGISTRY["coda_loss"].build(inv, 100))
     assert set(po) == set(inv)
 
 

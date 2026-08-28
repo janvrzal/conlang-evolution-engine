@@ -17,7 +17,14 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { MousePointer2, GitCommitHorizontal, X, Download, Trash2 } from 'lucide-svelte';
+	import {
+		MousePointer2,
+		GitCommitHorizontal,
+		ArrowLeftRight,
+		X,
+		Download,
+		Trash2
+	} from 'lucide-svelte';
 	
 	import { simulateDynamic, resetApiBase } from '$lib/api';
 	import { projectState, loadProject, scheduleSave, flushSave } from '$lib/state.svelte';
@@ -152,7 +159,20 @@
 	});
 
 	// --- Interaction Logic (Toolbar) ---
-	let activeTool = $state<'move' | 'connect'>('connect');
+	// Hrana je buď dědičnost (rodič -> potomek), nebo kontakt (sousedé, kteří
+	// se navzájem ovlivňují). Bez rozlišení se všechno bralo jako dědičnost
+	// a propojené jazyky na sebe nikdy nepůsobily.
+	let activeTool = $state<'move' | 'connect' | 'contact'>('connect');
+
+	/** Nová hrana dostane druh podle právě zvoleného nástroje. */
+	function onConnect(connection: { source: string; target: string }) {
+		if (activeTool !== 'contact') return;
+		edges = edges.map((e) =>
+			e.source === connection.source && e.target === connection.target && !e.data?.kind
+				? { ...e, data: { ...e.data, kind: 'contact' }, animated: true }
+				: e
+		);
+	}
 
 	// Selection
 	let selectedNodeId = $state<string | null>(null);
@@ -219,12 +239,26 @@
 
 			const topology_data = {
 				nodes: topologyNodes,
-				edges: edges.map((e) => ({ source: e.source, target: e.target }))
+				edges: edges.map((e) => {
+					const kind = (e.data as any)?.kind === 'contact' ? 'contact' : 'inheritance';
+					return kind === 'contact'
+						? {
+								source: e.source,
+								target: e.target,
+								kind,
+								// Kontakt bez zadaného roku klademe doprostřed osy.
+								year: (e.data as any)?.year ?? Math.round(maxYear / 2),
+								volume: (e.data as any)?.volume ?? 5,
+								mutual: (e.data as any)?.mutual ?? true
+							}
+						: { source: e.source, target: e.target };
+				})
 			};
 
 			const data = await simulateDynamic({
 				topology_data,
-				proto_lexicon: projectState.generatedProtoLexicon
+				proto_lexicon: projectState.generatedProtoLexicon,
+				years: maxYear
 			});
 
 			if (data.status === 'success') {
@@ -285,7 +319,8 @@
 			connectionLineType={ConnectionLineType.Straight}
 			connectionMode={ConnectionMode.Loose}
 			nodesDraggable={activeTool === 'move'}
-			nodesConnectable={activeTool === 'connect'}
+			nodesConnectable={activeTool === 'connect' || activeTool === 'contact'}
+			onconnect={onConnect}
 			elementsSelectable={true}
 			onnodeclick={onNodeClick}
 			onpaneclick={onPaneClick}
@@ -316,7 +351,17 @@
 			title="Nástroj pro spojení (Connect)"
 		>
 			<GitCommitHorizontal class="w-4 h-4 mr-2" />
-			Spojení
+			Dědičnost
+		</Button>
+		<Button
+			variant={activeTool === 'contact' ? 'default' : 'ghost'}
+			size="sm"
+			class="px-3"
+			onclick={() => (activeTool = 'contact')}
+			title="Kontakt — sousedé, kteří se navzájem ovlivňují (výpůjčky)"
+		>
+			<ArrowLeftRight class="w-4 h-4 mr-2" />
+			Kontakt
 		</Button>
 		{#if selectedEdgeId}
 			<div class="w-px bg-border mx-1"></div>
@@ -516,6 +561,11 @@
 
 	:global(.svelte-flow__edge .svelte-flow__edge-interaction) {
 		stroke-width: 18;
+	}
+
+	/* Kontakt se kreslí přerušovaně, aby šel odlišit od dědičnosti. */
+	:global(.svelte-flow__edge.animated .svelte-flow__edge-path) {
+		stroke-dasharray: 6 5;
 	}
 
 	:global(.svelte-flow__edge.selected .svelte-flow__edge-path) {

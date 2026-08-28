@@ -140,3 +140,55 @@ def test_vowel_shift_zvysuje_obe_rady(mapper, bohaty_inventar):
         vysledky.add(mapper.render_word(word))
 
     assert vysledky == {"pito", "petu"}
+
+
+# --- schémata, která slova prodlužují ---------------------------------------
+
+
+def test_epenteze_rozbiji_souhlaskovy_shluk(mapper, bohaty_inventar):
+    """
+    Bez vkládacích schémat umí engine jen ubírat, takže se lexikon nutně
+    scvrkne do shluků souhlásek.
+    """
+    rule = SCHEMA_REGISTRY["epenthesis"].generate_rule(bohaty_inventar, year=100)
+    word = mapper.parse_word("x", "ptra")
+
+    assert rule.apply_to_word(word) is True
+    vysledek = mapper.render_word(word)
+    assert len(vysledek) > len("ptra")
+    assert all(mapper.is_exact_segment(s) for s in word.segments)
+
+
+def test_epenteze_vklada_hlasku_z_inventare(mapper):
+    """Epentetický vokál cizí celému jazyku by byl nepravděpodobný."""
+    jen_u = InventoryView(mapper, set("ptkru"))
+    rule = SCHEMA_REGISTRY["epenthesis"].generate_rule(jen_u, year=100)
+
+    assert rule.insert_label in set(jen_u)
+
+
+def test_epenteze_odmitne_jazyk_bez_vokalu(mapper):
+    bez_vokalu = InventoryView(mapper, set("ptk"))
+    assert SCHEMA_REGISTRY["epenthesis"].generate_rule(bez_vokalu, year=100) is None
+
+
+def test_diftongizace_prodlouzi_vokalismus(mapper, bohaty_inventar):
+    rule = SCHEMA_REGISTRY["diphthongization"].generate_rule(bohaty_inventar, year=100)
+    word = mapper.parse_word("x", "petra")
+
+    assert rule.apply_to_word(word) is True
+    assert len(mapper.render_word(word)) > len("petra")
+
+
+def test_registr_obsahuje_i_prodluzujici_schemata():
+    """
+    Kdyby v registru zůstala jen schémata, která ubírají, slova by mohla
+    pouze krátnout — což se v reálných jazycích neděje.
+    """
+    from cee.engine.schemas import DiphthongizationSchema, EpenthesisSchema
+
+    prodluzujici = [
+        s for s in SCHEMA_REGISTRY.values()
+        if isinstance(s, (EpenthesisSchema, DiphthongizationSchema))
+    ]
+    assert len(prodluzujici) >= 2

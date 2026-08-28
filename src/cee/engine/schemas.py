@@ -21,8 +21,13 @@ class Schema:
     def __init__(self, name: str):
         self.name = name
 
-    def build(self, year: int, rng=None) -> Optional[Rule]:
-        """Popíše tvar změny bez ohledu na inventář. Implementují potomci."""
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        """
+        Popíše tvar změny. Implementují potomci.
+
+        Inventář dostávají i sem, protože vkládací schémata (epenteze,
+        diftongizace) musí vybrat konkrétní hlásku, která v jazyce existuje.
+        """
         raise NotImplementedError()
 
     def generate_rule(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
@@ -33,7 +38,7 @@ class Schema:
         takové pravidlo by se stejně nikdy nespustilo a jen by promarnilo
         místo v chronologii.
         """
-        rule = self.build(year, rng)
+        rule = self.build(inventory, year, rng)
         if rule is None:
             return None
 
@@ -49,7 +54,7 @@ class LenitionSchema(Schema):
     def __init__(self):
         super().__init__("lenition")
 
-    def build(self, year: int, rng=None) -> Optional[Rule]:
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
             name=f"Lenice (gen. v {year})",
             target={"cons": "+", "son": "-", "cont": "-", "voi": "-"},  # neznělé okluzivy
@@ -66,7 +71,7 @@ class FortitionSchema(Schema):
     def __init__(self):
         super().__init__("fortition")
 
-    def build(self, year: int, rng=None) -> Optional[Rule]:
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         # [son: -] je nutné: bez něj terč pohltí i likvidy /l/ a /r/, které
         # jsou taky [cons +, voi +, cont +], a fortice z nich udělá nesmysl.
         # [strid: -] v akci proto, že panphon má /v/ a /z/ jako [+strid],
@@ -97,7 +102,7 @@ class SyncopeSchema(Schema):
         ({"syl": "+", "back": "+"}, "zadních"),
     )
 
-    def build(self, year: int, rng=None) -> Optional[Rule]:
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         # Samohláska mezi dvěma souhláskami (kontext C_C). Okrajové pozice
         # vypadnou samy — env vyžaduje skutečného souseda.
         target, popis = self._VARIANTS[0] if rng is None else rng.choice(self._VARIANTS)
@@ -117,7 +122,7 @@ class CodaLossSchema(Schema):
     def __init__(self):
         super().__init__("coda_loss")
 
-    def build(self, year: int, rng=None) -> Optional[Rule]:
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
             name=f"Ztráta kody (gen. v {year})",
             target={"cons": "+"},
@@ -140,7 +145,7 @@ class VowelShiftSchema(Schema):
     def __init__(self):
         super().__init__("vowel_shift")
 
-    def build(self, year: int, rng=None) -> Optional[Rule]:
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         front = True if rng is None else rng.random() < 0.5
 
         if front:
@@ -158,10 +163,78 @@ class VowelShiftSchema(Schema):
         )
 
 
+class EpenthesisSchema(Schema):
+    """
+    Vkládání vokálu do souhláskového shluku (CC -> CVC).
+
+    Protiváha erozi: bez schémat, která slovo prodlužují, se lexikon nutně
+    scvrkává do shluků souhlásek, protože synkopa a ztráta kody umí jen ubírat.
+    """
+
+    def __init__(self):
+        super().__init__("epenthesis")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        # Vkládá se hláska, kterou jazyk skutečně má — epentetický vokál
+        # cizí celému inventáři by byl nepravděpodobný.
+        vokal = inventory.pick({"syl": "+", "hi": "+"}, rng) or inventory.pick({"syl": "+"}, rng)
+        if not vokal:
+            return None
+
+        features = inventory.features_of(vokal)
+        if not features:
+            return None
+
+        return Rule(
+            name=f"Epenteze /{vokal}/ v souhláskovém shluku (gen. v {year})",
+            target={"cons": "+"},
+            action={},
+            env_after={"cons": "+"},
+            insert="after",
+            insert_features=features,
+            insert_label=vokal,
+            year=year,
+        )
+
+
+class DiphthongizationSchema(Schema):
+    """
+    Rozpad dlouhého/středového vokálu na dvojhlásku (V -> Vj, Vw).
+
+    Druhá protiváha erozi, tentokrát ve vokalismu.
+    """
+
+    def __init__(self):
+        super().__init__("diphthongization")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        # Za středový vokál se přidá vysoký — tak vznikají dvojhlásky typu ai, au.
+        klouzavy = inventory.pick({"syl": "+", "hi": "+"}, rng)
+        if not klouzavy:
+            return None
+
+        features = inventory.features_of(klouzavy)
+        if not features:
+            return None
+
+        return Rule(
+            name=f"Diftongizace středových vokálů na /{klouzavy}/ (gen. v {year})",
+            target={"syl": "+", "hi": "-", "lo": "-"},
+            action={},
+            env_after={"cons": "+"},
+            insert="after",
+            insert_features=features,
+            insert_label=klouzavy,
+            year=year,
+        )
+
+
 SCHEMA_REGISTRY = {
     "lenition": LenitionSchema(),
     "fortition": FortitionSchema(),
     "syncope": SyncopeSchema(),
     "coda_loss": CodaLossSchema(),
     "vowel_shift": VowelShiftSchema(),
+    "epenthesis": EpenthesisSchema(),
+    "diphthongization": DiphthongizationSchema(),
 }

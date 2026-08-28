@@ -15,7 +15,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from cee.core.models import Inventory, Lexicon, State
-from cee.engine.generator import SoundChangeGenerator
+from cee.engine.generator import MacroParams, SoundChangeGenerator
+from cee.engine.rng import derive_seed
 from cee.engine.history import (
     RuleApplication,
     SimulationHistory,
@@ -46,6 +47,9 @@ class SimulationConfig:
     forget_prob: float = DEFAULT_FORGET_PROB
     root_id: str = "proto"
     root_year: int = 0
+
+    #: Časová hloubka simulace. Bez ní se generují pravidla jen na 200 let.
+    years: Optional[int] = None
 
 
 @dataclass
@@ -160,6 +164,7 @@ def run_simulation(
         preset=config.preset,
         seed=config.seed,
         semantic_evaluator=build_semantic_evaluator(config),
+        end_year=config.years,
     )
     return simulator.simulate(root_state)
 
@@ -285,6 +290,9 @@ class LineageConfig:
     preset: Optional[Dict[str, Any]] = None
     biome: Optional[str] = None
 
+    #: Makro-parametry generátoru (rychlost změny, konzervativnost, eroze konců).
+    macro: Optional[Dict[str, Any]] = None
+
     @property
     def epoch_length(self) -> int:
         return max(1, self.years // max(1, self.epochs))
@@ -326,15 +334,25 @@ def evolve_lineage(
     state.inventory = inventory.to_inventory()
     history.snapshot(_snapshot(state, mapper, 0, "Protojazyk"))
 
-    generator = SoundChangeGenerator(config.preset, seed=config.seed) if config.preset else None
+    # Seed se odvozuje z ID uzlu, aby dva jazyky se stejným nastavením
+    # nedostaly identickou chronologii (CEE_master.md 5.5).
+    generator = (
+        SoundChangeGenerator(
+            config.preset,
+            seed=derive_seed(config.seed, config.node_id),
+            macro=MacroParams.from_config(config.preset.get("macro"), config.macro),
+        )
+        if config.preset
+        else None
+    )
     if generator is None:
         warnings.warn(
             "Bez presetu se jazyk nemá podle čeho měnit — vývoj bude prázdný.",
             stacklevel=2,
         )
 
-    total_slots = config.epochs * config.rules_per_epoch
-    time_step = max(1, config.years // (total_slots + 1))
+    base_slots = config.epochs * config.rules_per_epoch
+    total_slots = generator.macro.slots_for(base_slots) if generator else base_slots
 
     def _would_change(rule) -> bool:
         """
@@ -351,7 +369,11 @@ def evolve_lineage(
     epoch_index = 1
 
     for slot in range(total_slots):
-        year = time_step * (slot + 1)
+        year = (
+            generator.year_for_slot(0, config.years, slot, total_slots)
+            if generator
+            else int(config.years * (slot + 1) / (total_slots + 1))
+        )
 
         while year > next_epoch <= config.years:
             state.year = next_epoch

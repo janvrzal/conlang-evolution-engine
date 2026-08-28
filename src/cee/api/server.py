@@ -14,7 +14,7 @@ from cee import __version__
 from cee.api.ports import API_REVISION, DEFAULT_PORT, ENGINE_SIGNATURE
 from cee.engine.parser import YamlParser
 from cee.engine.phonology import FeatureMapper
-from cee.engine.topology import EvolutionGraph, VerticalEdge
+from cee.engine.topology import ContactEdge, EvolutionGraph, VerticalEdge
 from cee import projects
 from cee.metrics.retention import LexicalRetention
 from cee.pipeline import (
@@ -82,6 +82,8 @@ class DynamicSimulateRequest(BaseModel):
     preset: str = "src/cee/data/presets/fantasy_preset.yaml"
     semantics: str = "src/cee/data/semantics_mock.yaml"
     seed: int = DEFAULT_SEED
+    #: Časová hloubka; slouží i jako výchozí rok kontaktu bez zadaného roku.
+    years: int = 1000
 
 
 def _config(req, preset_path: str) -> SimulationConfig:
@@ -90,6 +92,7 @@ def _config(req, preset_path: str) -> SimulationConfig:
         preset=preset,
         semantics_path=req.semantics or None,
         seed=req.seed,
+        years=getattr(req, "years", None),
     )
 
 
@@ -227,10 +230,24 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
         for node_id, cfg in req.topology_data.get("nodes", {}).items()
     }
 
+    # Hrana z editoru je buď dědičnost (rodič -> potomek), nebo kontakt
+    # (sousedé, kteří se navzájem ovlivňují). Bez rozlišení se všechno bralo
+    # jako dědičnost a propojené jazyky na sebe nikdy nepůsobily.
     for edge in req.topology_data.get("edges", []):
-        graph.vertical_edges.append(
-            VerticalEdge(parent_id=edge["source"], child_id=edge["target"], rules=[])
-        )
+        if edge.get("kind") == "contact":
+            graph.contact_edges.append(
+                ContactEdge(
+                    year=int(edge.get("year", req.years // 2)),
+                    source_id=edge["source"],
+                    target_id=edge["target"],
+                    volume=int(edge.get("volume", 5)),
+                    mutual=bool(edge.get("mutual", True)),
+                )
+            )
+        else:
+            graph.vertical_edges.append(
+                VerticalEdge(parent_id=edge["source"], child_id=edge["target"], rules=[])
+            )
 
     diagnostic = LexicalRetention.diagnostic_from(lexicon)
     states = run_simulation(lexicon, graph, mapper, _config(req, req.preset))

@@ -62,7 +62,8 @@ class YamlParser:
                 year=c_edge['year'],
                 source_id=c_edge['source'],
                 target_id=c_edge['target'],
-                volume=c_edge.get('volume', 10)
+                volume=c_edge.get('volume', 10),
+                mutual=bool(c_edge.get('mutual', False)),
             ))
             
         return graph

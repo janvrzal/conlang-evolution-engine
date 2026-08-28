@@ -12,6 +12,12 @@ schemas:
     base_weight: 40
   vowel_shift:
     base_weight: 60
+  # Protiváha erozi — bez schémat, která slova prodlužují, se lexikon
+  # nutně scvrkne do shluků souhlásek.
+  epenthesis:
+    base_weight: 45
+  diphthongization:
+    base_weight: 35
 
 biomes:
   hory:
@@ -21,6 +27,8 @@ biomes:
       syncope: 1.5      # Ztráta nepřízvučných samohlásek (ostré shluky)
       coda_loss: 0.2    # Koncové souhlásky zůstávají
       vowel_shift: 1.0
+      epenthesis: 0.4   # Shluky se v horách nerozpouštějí
+      diphthongization: 0.8
 
   prales:
     modifiers:
@@ -29,6 +37,8 @@ biomes:
       syncope: 0.1      # Samohlásky nevypadávají, aby nesly zvuk
       coda_loss: 2.5    # Rychlá ztráta koncových souhlásek (slabiky typu CV)
       vowel_shift: 1.5
+      epenthesis: 2.0   # Shluky se rozpadají, převládá otevřená slabika
+      diphthongization: 1.6
 
   temnota:
     modifiers:
@@ -37,3 +47,5 @@ biomes:
       syncope: 2.0      # Záměrně nepřirozené shluky souhlásek
       coda_loss: 0.5
       vowel_shift: 0.5
+      epenthesis: 0.2
+      diphthongization: 0.4

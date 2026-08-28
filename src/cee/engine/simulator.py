@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from cee.core.models import Inventory, Lexicon, State
-from cee.engine.generator import SoundChangeGenerator
+from cee.engine.generator import MacroParams, SoundChangeGenerator
 from cee.engine.history import (
     BorrowingEvent,
     RuleApplication,
@@ -15,6 +15,7 @@ from cee.engine.history import (
     WordChange,
 )
 from cee.engine.inventory import InventoryView
+from cee.engine.rng import derive_seed
 from cee.engine.morphology import MorphologyEvaluator
 from cee.engine.phonology import FeatureMapper
 from cee.engine.rules import Rule
@@ -25,6 +26,11 @@ from cee.engine.topology import EvolutionGraph
 _PRIO_FORK = 0
 _PRIO_PHONOLOGY = 1
 _PRIO_CONTACT = 2
+
+# Kolik let v průměru připadá na jednu zvukovou změnu, než se do toho promítnou
+# makro-parametry uzlu. Řádově odpovídá tempu doloženému v historických
+# gramatikách; přesné ladění je práce pro validaci V2a.
+YEARS_PER_RULE_SLOT = 125
 
 
 @dataclass
@@ -60,7 +66,8 @@ class EvolutionSimulator:
 
     def __init__(self, graph: EvolutionGraph, mapper: FeatureMapper, preset: Dict[str, Any] = None,
                  seed: int = 42, semantic_evaluator=None,
-                 history: Optional[SimulationHistory] = None):
+                 history: Optional[SimulationHistory] = None,
+                 end_year: Optional[int] = None):
         self.graph = graph
         self.mapper = mapper
         # Historie je volitelná: bez ní simulátor běží jako dřív, s ní zaznamená
@@ -69,10 +76,38 @@ class EvolutionSimulator:
         self.preset = preset
         self.random = random.Random(seed)
         self.semantic_evaluator = semantic_evaluator
-        if self.preset:
-            self.generator = SoundChangeGenerator(self.preset, seed)
-        else:
-            self.generator = None
+        self.seed = seed
+        # Časová hloubka simulace. Dokud tu nebyla, generátor měl natvrdo
+        # horizont 200 let a dvě pravidla — jazyky ztuhly hned na začátku
+        # a pozdější kontakt už zastihl nehybný stav.
+        self.end_year = end_year
+        # Generátor se staví pro každý uzel zvlášť, aby měl vlastní seed
+        # i vlastní makro-parametry (viz _generator_for).
+        self._generators: Dict[str, SoundChangeGenerator] = {}
+
+    def _generator_for(self, node_id: str) -> Optional[SoundChangeGenerator]:
+        """
+        Generátor pro konkrétní uzel.
+
+        Seed se odvozuje z globálního seedu a ID uzlu (CEE_master.md 5.5:
+        „seed je součástí hashe uzlu"). Jeden sdílený seed znamenal, že tři
+        jazyky se stejným biomem dostaly identickou chronologii — což je
+        vlastnost losování, ne jazykové skutečnosti.
+        """
+        if not self.preset:
+            return None
+
+        if node_id not in self._generators:
+            node_cfg = self.graph.node_configs.get(node_id, {})
+            macro = MacroParams.from_config(
+                self.preset.get("macro"),
+                node_cfg.get("macro"),
+                node_cfg.get("map", {}).get("macro"),
+            )
+            self._generators[node_id] = SoundChangeGenerator(
+                self.preset, seed=derive_seed(self.seed, node_id), macro=macro
+            )
+        return self._generators[node_id]
 
     def simulate(self, root_state: State) -> Dict[str, State]:
         """
@@ -118,8 +153,11 @@ class EvolutionSimulator:
                     push(rule.year, _PRIO_PHONOLOGY, PhonologyEvent(rule.year, edge.child_id, rule))
 
         for contact in self.graph.contact_edges:
-            push(contact.year, _PRIO_CONTACT,
-                 ContactEvent(contact.year, contact.source_id, contact.target_id, contact.volume))
+            # Oboustranný kontakt se rozpadne na dvě události, aby si každý
+            # směr nesl vlastní stopu ve výpůjčkách i v historii.
+            for source_id, target_id in contact.directions():
+                push(contact.year, _PRIO_CONTACT,
+                     ContactEvent(contact.year, source_id, target_id, contact.volume))
 
         last_year = root_state.year
 
@@ -198,9 +236,10 @@ class EvolutionSimulator:
                 self._apply_contact(source_state, target_state, event.year, event.volume)
 
         result = {node_id: state for node_id, state in states.items() if node_id in parent_of}
+        final_year = max(last_year, self.end_year or last_year)
 
         for state in result.values():
-            state.year = last_year
+            state.year = final_year
 
             if self.semantic_evaluator:
                 self.semantic_evaluator.evaluate(state.lexicon)
@@ -275,13 +314,31 @@ class EvolutionSimulator:
             map=node_cfg.get('map', {}),
         )
 
+    def _horizon_for(self, start_year: int, child_id: str) -> int:
+        """
+        Dokdy se pro danou hranu generují pravidla.
+
+        Sahá až k zadané hloubce simulace, nejméně však k poslední události,
+        která se uzlu týká — jinak by jazyk ztuhl dřív, než na něj někdo naváže.
+        """
+        candidates = [self.end_year] if self.end_year else []
+
+        candidates += [c.year for c in self.graph.contact_edges
+                       if child_id in (c.source_id, c.target_id)]
+        candidates += [r.year for e in self.graph.vertical_edges if e.parent_id == child_id
+                       for r in e.rules if r.year is not None]
+
+        horizon = max([c for c in candidates if c is not None], default=start_year + 200)
+        return max(horizon, start_year + 1)
+
     def _generated_rules_for(self, child_id: str, state: State, start_year: int) -> List[Rule]:
         """
         Dogeneruje pravidla pro hranu, která žádná nemá. Výsledek se nezapisuje
         zpět do topologie — graf zůstává neměnný, takže opakované volání
         `simulate()` dá stejný výsledek.
         """
-        if not self.generator:
+        generator = self._generator_for(child_id)
+        if not generator:
             return []
 
         edge_rules = self.graph.get_rules_for_edge(state.parent_id, child_id)
@@ -291,8 +348,14 @@ class EvolutionSimulator:
         view = InventoryView.from_lexicon(state.lexicon, self.mapper)
         state.inventory = view.to_inventory()
 
-        return self.generator.generate_rules_for_edge(
-            state, start_year, start_year + 200, num_rules=2, inventory=view
+        end_year = self._horizon_for(start_year, child_id)
+
+        # Počet pokusů roste s délkou období, ne s pevným číslem — jinak by
+        # tisíciletý vývoj měl stejně změn jako dvě století.
+        slots = max(1, round((end_year - start_year) / YEARS_PER_RULE_SLOT))
+
+        return generator.generate_rules_for_edge(
+            state, start_year, end_year, num_rules=slots, inventory=view
         )
 
     def _inventory_of(self, lexicon: Lexicon) -> set:
@@ -339,7 +402,9 @@ class EvolutionSimulator:
             return
 
         num_borrow = min(volume, len(source.lexicon.words))
-        words_to_borrow = self.random.sample(source.lexicon.words, num_borrow)
+        rng = random.Random(derive_seed(self.seed, "contact", source.node_id,
+                                        target.node_id, str(year)))
+        words_to_borrow = rng.sample(source.lexicon.words, num_borrow)
 
         if self.history:
             self.history.record(

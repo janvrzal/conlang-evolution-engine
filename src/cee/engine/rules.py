@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from typing import Dict, Optional
-from cee.core.models import Word
+from typing import Dict, List, Optional
+from cee.core.models import Segment, Word
 
 @dataclass
 class Rule:
@@ -15,6 +15,14 @@ class Rule:
     env_before: Optional[Dict[str, str]] = None
     env_after: Optional[Dict[str, str]] = None
     year: Optional[int] = None
+
+    #: "before" / "after" — vloží nový segment vedle terče. Bez toho uměl
+    #: engine jen měnit rysy a mazat, takže slova mohla pouze krátnout.
+    insert: Optional[str] = None
+    #: Úplná rysová matice vkládaného segmentu (musí odpovídat reálné hlásce).
+    insert_features: Optional[Dict[str, str]] = None
+    #: IPA vkládané hlásky, jen pro čitelnost názvů a záznamu.
+    insert_label: Optional[str] = None
 
     def apply_to_word(self, word: Word) -> bool:
         """
@@ -55,7 +63,11 @@ class Rule:
         # Fáze 2: Simultánní mutace
         if not targets_to_modify:
             return False
-            
+
+        if self.insert and self.insert_features:
+            word.segments = self._with_insertions(word, targets_to_modify)
+            return True
+
         for i in targets_to_modify:
             segment = word.segments[i]
             if self.action.get("delete") == "+":
@@ -63,9 +75,30 @@ class Rule:
             else:
                 for feature, new_value in self.action.items():
                     segment.features[feature] = new_value
-                    
+
         # Odstraníme segmenty označené ke smazání
         if self.action.get("delete") == "+":
             word.segments = [s for s in word.segments if s.features.get("delete") != "+"]
-            
+
         return True
+
+    def _with_insertions(self, word: Word, targets: List[int]) -> List[Segment]:
+        """
+        Poskládá slovo znovu i s vloženými segmenty.
+
+        Staví se nový seznam, protože vkládání do stávajícího by posunulo
+        indexy, které fáze 1 našla nad původním tvarem.
+        """
+        pozice = set(targets)
+        vysledek: List[Segment] = []
+
+        for i, segment in enumerate(word.segments):
+            if i in pozice and self.insert == "before":
+                vysledek.append(Segment(features=dict(self.insert_features)))
+
+            vysledek.append(segment)
+
+            if i in pozice and self.insert == "after":
+                vysledek.append(Segment(features=dict(self.insert_features)))
+
+        return vysledek

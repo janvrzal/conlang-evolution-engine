@@ -8,7 +8,7 @@ nestačí; tahle třída k nim přidává rysové matice z panphonu.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Iterable, List
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional
 
 from cee.core.models import Inventory, Lexicon, Segment
 
@@ -65,6 +65,23 @@ class InventoryView:
             if probe.matches(bundle):
                 found.append(ipa)
         return sorted(found)
+
+    def features_of(self, ipa: str) -> Optional[Dict[str, str]]:
+        """Úplná rysová matice fonému, nebo None, když v inventáři není."""
+        features = self._features.get(ipa)
+        return dict(features) if features else None
+
+    def pick(self, target: Dict[str, str], rng=None) -> Optional[str]:
+        """
+        Vybere jeden foném z dané třídy — pro pravidla, která hlásku vkládají.
+
+        Vkládá se vždy něco, co v jazyce už existuje; epentetický vokál cizí
+        celému inventáři by byl nepravděpodobný.
+        """
+        kandidati = self.matching(target)
+        if not kandidati:
+            return None
+        return kandidati[0] if rng is None else rng.choice(kandidati)
 
     def has(self, target: Dict[str, str]) -> bool:
         """True, pokud je třída v inventáři neprázdná."""

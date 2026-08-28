@@ -14,6 +14,7 @@ co jí předchozí připravila.
 """
 import random
 import warnings
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from cee.core.models import State
@@ -23,6 +24,62 @@ from cee.engine.schemas import SCHEMA_REGISTRY
 
 # Kolikrát se pro jeden slot v chronologii zkusí jiné schéma, než to vzdáme.
 MAX_ATTEMPTS_PER_SLOT = 24
+
+# Schémata, která ukrajují konce slov — na ně sahá makro-parametr eroze.
+CODA_SCHEMAS = ("coda_loss", "syncope")
+
+
+@dataclass
+class MacroParams:
+    """
+    Uživatelské makro-parametry generátoru (CEE_master.md 4.4).
+
+    Tohle je ta „black-box" vrstva pro worldbuildera: místo vah schémat se
+    nastavuje několik srozumitelných čísel, která se do vah propíšou.
+    """
+
+    #: Násobí počet zvukových změn za období. 2.0 = dvakrát bouřlivější vývoj.
+    change_rate: float = 1.0
+
+    #: 0.0 až 1.0. Konzervativní jazyk mění méně, i když je rychlost vysoká.
+    conservatism: float = 0.0
+
+    #: Násobí váhu schémat ukrajujících konce slov (coda_loss, syncope).
+    coda_erosion: float = 1.0
+
+    #: Rozptyl roku uvnitř slotu. 0 = pravidelný takt, 0.5 = pořádně rozházené.
+    timing_jitter: float = 0.35
+
+    @classmethod
+    def from_config(cls, *sources: Optional[Dict[str, Any]]) -> "MacroParams":
+        """
+        Poskládá parametry z několika zdrojů; pozdější přebíjí dřívější.
+        Typicky: výchozí hodnoty -> preset -> nastavení uzlu.
+        """
+        values: Dict[str, Any] = {}
+        for source in sources:
+            if not source:
+                continue
+            for field_name in ("change_rate", "conservatism", "coda_erosion", "timing_jitter"):
+                if field_name in source:
+                    values[field_name] = float(source[field_name])
+
+        params = cls(**values)
+        # Konzervativnost je podíl, mimo 0–1 nedává smysl.
+        params.conservatism = max(0.0, min(1.0, params.conservatism))
+        params.change_rate = max(0.0, params.change_rate)
+        params.coda_erosion = max(0.0, params.coda_erosion)
+        params.timing_jitter = max(0.0, min(1.0, params.timing_jitter))
+        return params
+
+    @property
+    def activity(self) -> float:
+        """Výsledná míra změny po započtení konzervativnosti."""
+        return self.change_rate * (1.0 - self.conservatism)
+
+    def slots_for(self, base_slots: int) -> int:
+        """Kolik pokusů o změnu se v daném období vůbec udělá."""
+        return max(0, round(base_slots * self.activity))
 
 
 def _changed_features(rule: Rule) -> Dict[str, str]:
@@ -56,6 +113,33 @@ def _reverses(previous: Optional[Rule], candidate: Rule) -> bool:
     )
 
 
+def _undoes_insertion(previous: Optional[Rule], candidate: Rule) -> bool:
+    """
+    True, když kandidát maže právě to, co předchozí pravidlo vložilo
+    (nebo naopak vkládá to, co se právě smazalo).
+
+    Epenteze následovaná synkopou téže třídy je kmitání, ne dějiny — po dvojici
+    nezbude ve slově žádná stopa.
+    """
+    if previous is None:
+        return False
+
+    def _maze(rule: Rule) -> bool:
+        return rule.action.get("delete") == "+"
+
+    if previous.insert and _maze(candidate):
+        vlozene = previous.insert_features or {}
+        return all(vlozene.get(f) == v for f, v in candidate.target.items()
+                   if not f.startswith("_"))
+
+    if _maze(previous) and candidate.insert:
+        vlozene = candidate.insert_features or {}
+        return all(vlozene.get(f) == v for f, v in previous.target.items()
+                   if not f.startswith("_"))
+
+    return False
+
+
 def _is_duplicate(previous: Optional[Rule], candidate: Rule) -> bool:
     """Totožné pravidlo hned po sobě nepřináší nic nového."""
     if previous is None:
@@ -71,12 +155,17 @@ def _is_duplicate(previous: Optional[Rule], candidate: Rule) -> bool:
 class SoundChangeGenerator:
     """Vážený generátor zvukových změn na základě šablon, priorů a biomů."""
 
-    def __init__(self, preset: Dict[str, Any], seed: int = 42):
+    def __init__(self, preset: Dict[str, Any], seed: int = 42,
+                 macro: Optional[MacroParams] = None):
         self.preset = preset
         self.random = random.Random(seed)
+        self.macro = macro or MacroParams.from_config(preset.get("macro"))
 
     def _weighted_schemas(self, biome: Optional[str]):
-        """Váhy schémat pro daný biom; schémata mimo registr se přeskočí."""
+        """
+        Váhy schémat pro daný biom, upravené makro-parametry.
+        Schémata mimo registr se přeskočí.
+        """
         schemas = self.preset.get("schemas", {})
         modifiers = self.preset.get("biomes", {}).get(biome, {}).get("modifiers", {})
 
@@ -84,12 +173,34 @@ class SoundChangeGenerator:
         for schema_id, schema_cfg in schemas.items():
             if schema_id not in SCHEMA_REGISTRY:
                 continue
+
             weight = schema_cfg.get("base_weight", 0) * modifiers.get(schema_id, 1.0)
+            if schema_id in CODA_SCHEMAS:
+                weight *= self.macro.coda_erosion
+
             if weight > 0:
                 choices.append(SCHEMA_REGISTRY[schema_id])
                 weights.append(weight)
 
         return choices, weights
+
+    def year_for_slot(self, start_year: int, end_year: int, slot: int, total: int) -> int:
+        """
+        Rok pro daný slot, rozptýlený kolem pravidelného taktu.
+
+        Bez rozptylu padají změny v přesných intervalech, což na časové ose
+        vypadá jako strojový takt, ne jako dějiny.
+        """
+        span = max(1, end_year - start_year)
+        step = span / (total + 1)
+        center = start_year + step * (slot + 1)
+
+        if self.macro.timing_jitter <= 0:
+            return int(round(center))
+
+        wobble = step * self.macro.timing_jitter
+        year = center + self.random.uniform(-wobble, wobble)
+        return int(round(min(max(year, start_year + 1), end_year)))
 
     def generate_rules_for_edge(
         self,
@@ -121,10 +232,10 @@ class SoundChangeGenerator:
 
         rules: List[Rule] = []
         previous: Optional[Rule] = None
-        time_step = max(1, (end_year - start_year) // (num_rules + 1))
+        slots = self.macro.slots_for(num_rules)
 
-        for i in range(num_rules):
-            year = start_year + time_step * (i + 1)
+        for i in range(slots):
+            year = self.year_for_slot(start_year, end_year, i, slots)
             candidate = self.generate_one(state, year, inventory, previous=previous)
             if candidate is None:
                 continue
@@ -162,7 +273,11 @@ class SoundChangeGenerator:
 
             if candidate is None:
                 continue  # třída je v inventáři prázdná
-            if _reverses(previous, candidate) or _is_duplicate(previous, candidate):
+            if (
+                _reverses(previous, candidate)
+                or _undoes_insertion(previous, candidate)
+                or _is_duplicate(previous, candidate)
+            ):
                 continue
             if accepts is not None and not accepts(candidate):
                 continue

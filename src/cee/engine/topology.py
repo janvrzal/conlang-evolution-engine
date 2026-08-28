@@ -23,7 +23,18 @@ class ContactEdge:
     year: int
     source_id: str
     target_id: str
-    volume: int = 10  # Kolik slov se průměrně přejímá (může být řízeno pravděpodobností)
+    volume: int = 10  # Kolik slov se průměrně přejímá
+
+    #: Sousedící jazyky se obvykle ovlivňují navzájem, ne jen jedním směrem.
+    #: Jednosměrný kontakt odpovídá výrazně nesymetrické prestiži.
+    mutual: bool = False
+
+    def directions(self):
+        """Dvojice (zdroj, cíl) pro každý směr, kterým kontakt působí."""
+        pairs = [(self.source_id, self.target_id)]
+        if self.mutual:
+            pairs.append((self.target_id, self.source_id))
+        return pairs
 
 @dataclass
 class EvolutionGraph:
