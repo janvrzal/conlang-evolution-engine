@@ -1,5 +1,5 @@
 from typing import Optional
-from cee.core.models import Lexicon, Word, State
+from cee.core.models import State, Word
 import copy
 
 class MorphologyEvaluator:

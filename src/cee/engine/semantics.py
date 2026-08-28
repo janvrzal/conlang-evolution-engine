@@ -1,5 +1,4 @@
 import random
-from typing import Optional
 from cee.core.models import Lexicon
 from cee.semantics.graph import SemanticGraph
 

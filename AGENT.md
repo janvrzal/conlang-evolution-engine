@@ -19,12 +19,17 @@ Projekt je rozdělen do několika logických bloků (uvnitř `src/cee`):
   * `phonology.py`: Zajišťuje překlad IPA stringů do rysových matic a zpět pomocí knihovny **Panphon**.
   * `rules.py`: Třída `Rule`. Aplikuje historická hlásková pravidla na segmenty (dvoufázově, viz 3.2).
   * `fold.py`: `DerivationFold` spouští série pravidel nad celým lexikonem a aktualizuje stavový `Inventory`.
+  * `inventory.py`: `InventoryView` — inventář jako **dotazovatelná** množina přirozených tříd (`.has()`, `.matching()`, `.apply(rule)`). `Inventory` v `core/models` drží jen IPA řetězce a na rysové dotazy nestačí.
   * `simulator.py`: Globální "lockstep" simulátor větvení a kontaktů. Zvládá strom libovolné hloubky — každý uzel se odštěpí od rodiče v roce svého prvního pravidla.
   * `generator.py` a `schemas.py`: Plug-and-Play generátor náhodných pravidel s podporou presetů.
   * `topology.py`: Třídy pro síťový graf vývoje (hrany dědičnosti a kontaktů).
   * `semantics.py`: `SemanticEvaluator` spouští pravděpodobnostní Markovovy řetězce nad `SemanticGraph` a posouvá významy.
 * **`semantics/`**: Abstrakce pro graf sémantických posunů z CLICS a DatSemShift.
-* **`metrics/`**: Vyhodnocování úspěšnosti (např. pomocí **LingPy** na editační vzdálenosti).
+* **`metrics/`**: Dvojí metrika dle `docs/CEE_master.md` 5.1. **Jedna nestačí** — měří dvě nezávislé osy a nesmí se míchat:
+  * `validation.py`: **(B) fonetická vzdálenost** kognátů = *eroze* tvaru (LingPy).
+  * `retention.py`: **(A) lexikální retence** = *náhrada* kořene. Diagnostický seznam je měřicí přístroj, ne vlastnost jazyka — musí být pro všechny porovnávané uzly **identický a fixní**, jinak jsou hodnoty nesrovnatelné.
+* **`pipeline.py`**: Servisní vrstva mezi enginem a rozhraními. CLI i HTTP API volají `run_simulation()` a `build_branch_views()` odsud — logika simulace **nepatří** do `cli/` ani do `api/`.
+* **`api/`**: FastAPI server. Jen překlad HTTP <-> volání `pipeline`. `ports.py` hledá volný port.
 * **`cli/`**: Typer command-line interface.
 
 ## 3. Kritická Pravidla a Znalosti pro LLM
@@ -74,6 +79,16 @@ nodes:
         id: "zlaté_město"
 ```
 Chybějící `head`/`modifier` v lexikonu se ohlásí varováním, simulace nespadne.
+
+### 3.2c Generátor se ptá inventáře (NEJDŮLEŽITĚJŠÍ)
+Tohle je ústřední tvrzení projektu (`docs/CEE_master.md` 4.3): **cílová třída pravidla je dotaz do aktuálního inventáře. Pravidlo mířící na prázdnou třídu se nemá vygenerovat.**
+
+* `Schema.build()` popisuje jen *tvar* změny. Kontrolu obsazenosti tříd dělá `Schema.generate_rule()` na jednom místě — potomci ji **nepřepisují**.
+* Vrátí-li schéma `None`, generátor losuje jiné; slot v chronologii se neztratí (`MAX_ATTEMPTS_PER_SLOT`).
+* Inventář se mezi pravidly aktualizuje přes `InventoryView.apply()`, takže pozdější změna vidí, co jí ta předchozí připravila (feeding).
+* Filtr věrohodnosti navíc zakazuje **okamžité zvrácení** předchozí změny (`generator._reverses`) — lenice hned následovaná ztrátou znělosti týchž hlásek je v reálných dějinách krajně vzácná.
+
+Nové schéma proto vždy: (1) přidej třídu do `SCHEMA_REGISTRY`, (2) ověř, že `tests/test_schemas.py` projde — parametrizované testy hlídají, že schéma někde zasáhne, že nevyrobí neexistující hlásku a že odmítne prázdný inventář.
 
 ### 3.3 Sémantika a Polysemie
 * Sémantická data se generují z repozitářů Concepticon a DatSemShift do lokální cache `~/.cee/semantics/graph.graphml`. Tato data se **NIKDY necommitují do Gitu**.

@@ -1,112 +1,135 @@
-import random
+"""
+Šablony zvukových změn (CEE_master.md 4.4, vrstva 1).
+
+Schéma není konkrétní pravidlo, ale parametrizovaná třída změny. Zda z něj
+pravidlo vůbec vznikne, rozhoduje **aktuální inventář**: podle 4.3 se pravidlo
+mířící na prázdnou přirozenou třídu nemá vygenerovat. Tuhle kontrolu dělá
+`Schema.generate_rule` na jednom místě, potomci jen popisují tvar změny.
+
+Pozor na rysové matice — viz AGENT.md 3.1b. Akce musí vyrobit kombinaci rysů,
+která odpovídá reálné hlásce, jinak ji mapper tiše nahradí nejbližším odhadem.
+"""
 from typing import Optional
-from dataclasses import dataclass
-from cee.core.models import Inventory
+
+from cee.engine.inventory import InventoryView
 from cee.engine.rules import Rule
+
 
 class Schema:
     """Základní třída pro šablony zvukových změn."""
+
     def __init__(self, name: str):
         self.name = name
 
-    def generate_rule(self, inventory: Inventory, year: int, rng=None) -> Optional[Rule]:
-        """
-        Pokusí se vytvořit konkrétní pravidlo z této šablony pro daný inventář.
-        Pokud to není možné (např. chybí cílové hlásky), vrátí None.
-
-        :param rng: seedovaný random.Random pro schémata s více variantami.
-                    None = deterministicky první varianta.
-        """
+    def build(self, year: int, rng=None) -> Optional[Rule]:
+        """Popíše tvar změny bez ohledu na inventář. Implementují potomci."""
         raise NotImplementedError()
+
+    def generate_rule(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        """
+        Vytvoří pravidlo, pokud pro něj je v inventáři opora.
+
+        Vrací None, když je cílová třída nebo některé z prostředí prázdné —
+        takové pravidlo by se stejně nikdy nespustilo a jen by promarnilo
+        místo v chronologii.
+        """
+        rule = self.build(year, rng)
+        if rule is None:
+            return None
+
+        if not inventory.has_all(rule.target, rule.env_before, rule.env_after):
+            return None
+
+        return rule
 
 
 class LenitionSchema(Schema):
     """Změkčování souhlásek, např. ptk -> bdg mezi samohláskami."""
+
     def __init__(self):
         super().__init__("lenition")
-        
-    def generate_rule(self, inventory: Inventory, year: int, rng=None) -> Optional[Rule]:
-        # Pro zjednodušení V1 vytvoříme fixní pravidlo, později by zde probíhala 
-        # analýza inventáře (zda v něm je vůbec co lenitovat).
+
+    def build(self, year: int, rng=None) -> Optional[Rule]:
         return Rule(
             name=f"Lenice (gen. v {year})",
-            target={"cons": "+", "cont": "-", "voi": "-"},  # Neznělé okluzivy
-            action={"voi": "+"},                           # Znělost
-            env_before={"syl": "+"},                       # Mezi samohláskami
+            target={"cons": "+", "son": "-", "cont": "-", "voi": "-"},  # neznělé okluzivy
+            action={"voi": "+"},
+            env_before={"syl": "+"},  # mezi samohláskami
             env_after={"syl": "+"},
-            year=year
+            year=year,
         )
 
+
 class FortitionSchema(Schema):
-    """Zpevňování souhlásek, např. na začátku slov."""
+    """Zpevňování znělých frikativ na okluzivy na začátku slova."""
+
     def __init__(self):
         super().__init__("fortition")
-        
-    def generate_rule(self, inventory: Inventory, year: int, rng=None) -> Optional[Rule]:
-        # Kromě [cont] je nutné shodit i [strid]: panphon má /v/ a /z/ jako
-        # [+strid], zatímco /b/ a /d/ jsou [-strid]. Bez toho vznikne matice,
-        # kterou mapper nedokáže přeložit a tiše ji nahradí nesmyslem.
+
+    def build(self, year: int, rng=None) -> Optional[Rule]:
+        # [son: -] je nutné: bez něj terč pohltí i likvidy /l/ a /r/, které
+        # jsou taky [cons +, voi +, cont +], a fortice z nich udělá nesmysl.
+        # [strid: -] v akci proto, že panphon má /v/ a /z/ jako [+strid],
+        # kdežto /b/ a /d/ jako [-strid].
         return Rule(
             name=f"Fortice (gen. v {year})",
-            target={"cons": "+", "voi": "+", "cont": "+"},  # Znělé frikativy
-            action={"cont": "-", "strid": "-"},            # Stanou se okluzivami
-            env_before={"_boundary": "+"},                 # Na začátku slova
-            year=year
+            target={"cons": "+", "son": "-", "voi": "+", "cont": "+"},
+            action={"cont": "-", "strid": "-"},
+            env_before={"_boundary": "+"},
+            year=year,
         )
+
 
 class SyncopeSchema(Schema):
     """Ztráta nepřízvučných samohlásek uvnitř slova (zkracování slov)."""
+
     def __init__(self):
         super().__init__("syncope")
-        
-    def generate_rule(self, inventory: Inventory, year: int, rng=None) -> Optional[Rule]:
-        # Samohláska mezi dvěma souhláskami (kontext C_C).
-        #
-        # POZOR na rysy: segment nemůže být zároveň [syl: +] a [cons: +] —
-        # vokál je [syl: +, cons: -], konsonant [syl: -, cons: +]. Dřívější
-        # verze zde měla env {"syl": "+", "cons": "+"}, což je nesplnitelná
-        # podmínka, takže schéma nikdy nevygenerovalo funkční pravidlo.
-        #
-        # Zjednodušení: nemáme model přízvuku, takže cílíme na každý vokál
-        # v C_C, nikoli jen na nepřízvučný. Okrajové pozice jsou vyloučené
-        # samy — env_before/env_after vyžadují skutečný sousední segment.
+
+    def build(self, year: int, rng=None) -> Optional[Rule]:
+        # Samohláska mezi dvěma souhláskami (kontext C_C). Nemáme model
+        # přízvuku, takže cílíme na každý vokál v C_C, nikoli jen nepřízvučný.
+        # Okrajové pozice vypadnou samy — env vyžaduje skutečný soused.
         return Rule(
             name=f"Synkopa (gen. v {year})",
             target={"syl": "+"},
             action={"delete": "+"},
             env_before={"cons": "+"},
             env_after={"cons": "+"},
-            year=year
+            year=year,
         )
+
 
 class CodaLossSchema(Schema):
     """Ztráta koncových souhlásek."""
+
     def __init__(self):
         super().__init__("coda_loss")
-        
-    def generate_rule(self, inventory: Inventory, year: int, rng=None) -> Optional[Rule]:
+
+    def build(self, year: int, rng=None) -> Optional[Rule]:
         return Rule(
             name=f"Ztráta kody (gen. v {year})",
             target={"cons": "+"},
             action={"delete": "+"},
             env_after={"_boundary": "+"},
-            year=year
+            year=year,
         )
+
 
 class VowelShiftSchema(Schema):
     """
     Posun samohlásek — zvýšení (zavření) středových vokálů.
 
-    Přední a zadní řada se musí generovat zvlášť. Panphon totiž kóduje
-    zadní vokály nesymetricky: /o/ je [lab: -], ale /u/ je [lab: +], zatímco
-    /e/ a /i/ se liší jen v [hi]. Jedna společná akce {"hi": "+"} proto
-    přední řadu posune správně (e -> i), ale u zadní vyrobí nekonzistentní
-    matici, kterou mapper nedokáže přeložit na /u/.
+    Přední a zadní řada se generují zvlášť. Panphon kóduje zadní vokály
+    nesymetricky: /o/ je [lab: -], ale /u/ je [lab: +], zatímco /e/ a /i/ se
+    liší jen v [hi]. Jedna společná akce {"hi": "+"} by u zadní řady vyrobila
+    matici, kterou mapper nepřeloží na /u/.
     """
+
     def __init__(self):
         super().__init__("vowel_shift")
 
-    def generate_rule(self, inventory: Inventory, year: int, rng=None) -> Optional[Rule]:
+    def build(self, year: int, rng=None) -> Optional[Rule]:
         front = True if rng is None else rng.random() < 0.5
 
         if front:
@@ -114,13 +137,13 @@ class VowelShiftSchema(Schema):
                 name=f"Zvýšení předních středových vokálů e -> i (gen. v {year})",
                 target={"syl": "+", "hi": "-", "lo": "-", "back": "-"},
                 action={"hi": "+"},
-                year=year
+                year=year,
             )
         return Rule(
             name=f"Zvýšení zadních středových vokálů o -> u (gen. v {year})",
             target={"syl": "+", "hi": "-", "lo": "-", "back": "+"},
             action={"hi": "+", "lab": "+"},
-            year=year
+            year=year,
         )
 
 

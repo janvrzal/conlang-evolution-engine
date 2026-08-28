@@ -1,10 +1,27 @@
-import warnings
+"""
+Lokální HTTP API pro grafické rozhraní.
 
+Vlastní logika simulace žije v `cee.pipeline` — tenhle modul jen překládá
+HTTP požadavky na volání služby a zpátky na JSON.
+"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from cee.api.ports import DEFAULT_PORT, ENGINE_SIGNATURE
+from cee.engine.parser import YamlParser
+from cee.engine.phonology import FeatureMapper
+from cee.engine.topology import EvolutionGraph, VerticalEdge
+from cee.metrics.retention import LexicalRetention
+from cee.pipeline import (
+    DEFAULT_SEED,
+    SimulationConfig,
+    build_branch_views,
+    load_lexicon_from_csv,
+    load_lexicon_from_records,
+    run_simulation,
+    topology_payload,
+)
 
 app = FastAPI(title="CEE Engine API")
 
@@ -18,8 +35,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pokud by existovala složka build ze SvelteKitu, můžeme ji mountnout
-# app.mount("/_app", StaticFiles(directory="ui/build/_app"), name="svelte_app")
 
 @app.get("/api/health")
 def health_check():
@@ -27,127 +42,81 @@ def health_check():
     # od jiné lokální aplikace, která taky odpovídá na /api/health.
     return {"status": "ok", "engine": ENGINE_SIGNATURE}
 
+
 @app.get("/")
 def read_root():
     return {"message": "API běží. Frontend spusťte přes 'npm run dev' ve složce 'ui'."}
+
 
 class SimulateRequest(BaseModel):
     topology: str = "scenario_split.yaml"
     proto_csv: str = "fantasy_v1.csv"
     preset: str = "src/cee/data/presets/fantasy_preset.yaml"
     semantics: str = "src/cee/data/semantics_mock.yaml"
+    seed: int = DEFAULT_SEED
+
 
 class ProtolangRequest(BaseModel):
     consonants: str = "p t k m n s l r"
     vowels: str = "a e i o u"
     syllable_structure: str = "(C)V(C)"
 
+
 class DynamicSimulateRequest(BaseModel):
-    # Očekává slovník s uzly a hranami
+    """Topologie sestavená v UI: uzly jako mapa id -> konfigurace, hrany jako seznam."""
+
     topology_data: dict
     proto_lexicon: list
     preset: str = "src/cee/data/presets/fantasy_preset.yaml"
     semantics: str = "src/cee/data/semantics_mock.yaml"
+    seed: int = DEFAULT_SEED
+
+
+def _config(req, preset_path: str) -> SimulationConfig:
+    preset = YamlParser.parse_preset(preset_path) if preset_path else None
+    return SimulationConfig(
+        preset=preset,
+        semantics_path=req.semantics or None,
+        seed=req.seed,
+    )
+
+
+def _respond(states, graph, mapper, diagnostic):
+    branches = build_branch_views(states, mapper, diagnostic)
+    return {
+        "status": "success",
+        "branches": {node_id: view.as_dict() for node_id, view in branches.items()},
+        "topology": topology_payload(graph),
+    }
+
 
 @app.post("/api/protolang/generate")
 def generate_protolang(req: ProtolangRequest):
     from cee.engine.protolang import ProtolangGenerator
+
     generator = ProtolangGenerator()
     words = generator.generate_lexicon(req.consonants, req.vowels, req.syllable_structure)
     return {"status": "success", "words": words}
 
+
 @app.post("/api/simulate")
-def run_simulation(req: SimulateRequest):
-    """
-    Spustí evoluční engine s danou topologií a vrátí výsledek jako JSON.
-    V reálné aplikaci by cesty byly nahrávané soubory nebo JSON stringy z FE, 
-    ale prozatím natvrdo použijeme existující ukázkové soubory na disku.
-    """
-    from cee.engine.phonology import FeatureMapper
-    from cee.engine.parser import YamlParser
-    from cee.core.models import State, Inventory
-    from cee.engine.semantics import SemanticEvaluator
-    from cee.semantics.graph import SemanticGraph
-    from cee.engine.simulator import EvolutionSimulator
-    
-    # 1. Načtení dat
+def run_file_simulation(req: SimulateRequest):
+    """Spustí simulaci nad topologií a lexikonem ze souborů na disku."""
     mapper = FeatureMapper()
-    
-    # Načtení proto lexikonu 
-    from cee.cli.main import load_csv_lexicon
-    lexicon = load_csv_lexicon(req.proto_csv, mapper)
-    
-    # Načtení topologie a presetu
+    lexicon = load_lexicon_from_csv(req.proto_csv, mapper)
     graph = YamlParser.parse_topology(req.topology)
-    preset_data = YamlParser.parse_preset(req.preset) if req.preset else None
-    
-    # 2. Inicializace sémantiky
-    semantic_evaluator = None
-    if req.semantics:
-        graph_sem = SemanticGraph(req.semantics)
-        semantic_evaluator = SemanticEvaluator(graph_sem, shift_prob=0.3, forget_prob=0.05)
-        
-    # 3. Spuštění simulace
-    root_state = State(node_id="proto", year=0, inventory=Inventory(), lexicon=lexicon)
-    simulator = EvolutionSimulator(graph, mapper, preset=preset_data, semantic_evaluator=semantic_evaluator)
-    
-    final_states = simulator.simulate(root_state)
-    
-    # 4. Formátování výsledku pro frontend
-    result_data = {}
-    for branch_id, state in final_states.items():
-        words = []
-        for word in state.lexicon.words:
-            words.append({
-                "id": word.concept_id,
-                "ipa": mapper.render_word(word),
-                "polysemy": list(word.polysemy)
-            })
-            
-        grammar_md = f"# Gramatika jazyka {branch_id}\n\n"
-        grammar_md += f"## Fonologie\nInventář hlásek: {', '.join(sorted(list(state.inventory.segments)))}\n\n"
-        grammar_md += f"## Morfologie\n- Strategie odvozování: {state.affixation_strategy}\n"
-        grammar_md += f"- Tvorba složenin: head-{state.compound_head}\n"
-        
-        result_data[branch_id] = {
-            "year": state.year,
-            "words": words,
-            "grammar_md": grammar_md
-        }
-        
-    topology_data = {
-        "nodes": [{"id": node_id} for node_id in graph.node_configs.keys()],
-        "edges": [{"source": edge.parent_id, "target": edge.child_id} for edge in graph.vertical_edges]
-    }
-        
-    return {
-        "status": "success",
-        "branches": result_data,
-        "topology": topology_data
-    }
+
+    diagnostic = LexicalRetention.diagnostic_from(lexicon)
+    states = run_simulation(lexicon, graph, mapper, _config(req, req.preset))
+    return _respond(states, graph, mapper, diagnostic)
+
 
 @app.post("/api/simulate_dynamic")
 def run_dynamic_simulation(req: DynamicSimulateRequest):
-    """
-    Spustí evoluční engine s topologií zadanou z UI builderu jako JSON.
-    """
-    from cee.engine.phonology import FeatureMapper
-    from cee.engine.parser import YamlParser
-    from cee.core.models import State, Inventory, Lexicon
-    from cee.engine.semantics import SemanticEvaluator
-    from cee.semantics.graph import SemanticGraph
-    from cee.engine.simulator import EvolutionSimulator
-    from cee.engine.topology import EvolutionGraph, VerticalEdge
-    
+    """Spustí simulaci nad topologií, kterou uživatel sestavil v grafovém editoru."""
     mapper = FeatureMapper()
-    
-    # Sestavení lexikonu
-    lexicon = Lexicon()
-    for w in req.proto_lexicon:
-        word = mapper.parse_word(concept_id=w["id"], ipa_string=w["ipa"])
-        lexicon.words.append(word)
-        
-    # Sestavení grafu z JSON
+    lexicon = load_lexicon_from_records(req.proto_lexicon, mapper)
+
     graph = EvolutionGraph()
 
     # UI posílá konfiguraci uzlu naplocho ({"biome": "hory"}), zatímco topologie
@@ -158,58 +127,16 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
         node_id: cfg if "map" in cfg else {**cfg, "map": cfg}
         for node_id, cfg in req.topology_data.get("nodes", {}).items()
     }
-    
-    edges_data = req.topology_data.get("edges", [])
-    for e in edges_data:
-        edge = VerticalEdge(parent_id=e["source"], child_id=e["target"], rules=[])
-        graph.vertical_edges.append(edge)
-        
-    preset_data = YamlParser.parse_preset(req.preset) if req.preset else None
-    
-    semantic_evaluator = None
-    if req.semantics:
-        try:
-            graph_sem = SemanticGraph(req.semantics)
-            semantic_evaluator = SemanticEvaluator(graph_sem, shift_prob=0.3, forget_prob=0.05)
-        except (OSError, ValueError) as exc:
-            # Chybějící nebo vadný graf simulaci nezastaví, ale nesmí zmizet potichu.
-            warnings.warn(f"Sémantický graf '{req.semantics}' se nepodařilo načíst: {exc}",
-                          stacklevel=2)
-            
-    root_state = State(node_id="proto", year=0, inventory=Inventory(), lexicon=lexicon)
-    simulator = EvolutionSimulator(graph, mapper, preset=preset_data, semantic_evaluator=semantic_evaluator)
-    
-    final_states = simulator.simulate(root_state)
-    
-    result_data = {}
-    for branch_id, state in final_states.items():
-        words = []
-        for word in state.lexicon.words:
-            words.append({
-                "id": word.concept_id,
-                "ipa": mapper.render_word(word),
-                "polysemy": list(word.polysemy)
-            })
-            
-        grammar_md = f"# Gramatika jazyka {branch_id}\n\n"
-        grammar_md += f"## Fonologie\nInventář hlásek: {', '.join(sorted(list(state.inventory.segments)))}\n\n"
-        grammar_md += f"## Morfologie\n- Strategie odvozování: {state.affixation_strategy}\n"
-        grammar_md += f"- Tvorba složenin: head-{state.compound_head}\n"
-        
-        result_data[branch_id] = {
-            "year": state.year,
-            "words": words,
-            "grammar_md": grammar_md
-        }
-        
-    return {
-        "status": "success",
-        "branches": result_data,
-        "topology": {
-            "nodes": [{"id": node_id} for node_id in graph.node_configs.keys()],
-            "edges": edges_data
-        }
-    }
+
+    for edge in req.topology_data.get("edges", []):
+        graph.vertical_edges.append(
+            VerticalEdge(parent_id=edge["source"], child_id=edge["target"], rules=[])
+        )
+
+    diagnostic = LexicalRetention.diagnostic_from(lexicon)
+    states = run_simulation(lexicon, graph, mapper, _config(req, req.preset))
+    return _respond(states, graph, mapper, diagnostic)
+
 
 def start_server(port: int = DEFAULT_PORT, reload: bool = False):
     import uvicorn

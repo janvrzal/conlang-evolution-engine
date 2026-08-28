@@ -13,7 +13,13 @@ from cee.core.models import Lexicon, State, Inventory
 from cee.metrics.validation import ValidationMetric
 from cee.semantics.graph import SemanticGraph
 from cee.engine.semantics import SemanticEvaluator
-from cee.engine.simulator import EvolutionSimulator
+from cee.metrics.retention import LexicalRetention
+from cee.pipeline import (
+    SimulationConfig,
+    build_branch_views,
+    load_lexicon_from_csv,
+    run_simulation,
+)
 
 app = typer.Typer(help="Conlang Evolution Engine CLI", no_args_is_help=True)
 
@@ -25,14 +31,8 @@ def _main() -> None:
     warnings.showwarning = lambda message, *_args, **_kwargs: typer.echo(f"⚠️  {message}", err=True)
 
 def load_csv_lexicon(proto_csv: str, mapper: FeatureMapper) -> Lexicon:
-    lexicon = Lexicon()
-    with open(proto_csv, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            ipa_val = row.get('ipa_proto', row.get('ipa'))
-            word = mapper.parse_word(concept_id=row['id'], ipa_string=ipa_val)
-            lexicon.words.append(word)
-    return lexicon
+    """Zpětně kompatibilní alias, kanonická implementace je v cee.pipeline."""
+    return load_lexicon_from_csv(proto_csv, mapper)
 
 @app.command("apply")
 def apply(
@@ -128,48 +128,66 @@ def simulate(
         preset_data = YamlParser.parse_preset(str(preset_yaml))
         typer.echo(f"   -> Používá se preset: {preset_data.get('name')}")
     
-    # Výchozí state pro protojazyk
-    root_state = State(
-        node_id="proto",
-        year=0,
-        inventory=Inventory(),
-        lexicon=lexicon
-    )
-    
-    semantic_evaluator = None
     if semantics_yaml:
         typer.echo(f"🧠 Načítám sémantický graf z {semantics_yaml}...")
-        graph_sem = SemanticGraph(str(semantics_yaml))
-        # Použijeme vysokou shift_prob, ať to v malém testovacím vzorku vynikne (např. 0.3)
-        semantic_evaluator = SemanticEvaluator(graph_sem, shift_prob=0.3, forget_prob=0.05, seed=seed)
-        
+
+    config = SimulationConfig(
+        preset=preset_data,
+        semantics_path=str(semantics_yaml) if semantics_yaml else None,
+        seed=seed,
+    )
+
+    # Diagnostický seznam se bere z protojazyka PŘED simulací a je pro všechny
+    # větve stejný — je to měřicí přístroj, ne vlastnost jazyka (5.1).
+    diagnostic = LexicalRetention.diagnostic_from(lexicon)
+
     typer.echo("🚀 Spouštím evoluční simulátor v globálním lockstepu...")
-    simulator = EvolutionSimulator(graph, mapper, preset=preset_data, seed=seed,
-                                   semantic_evaluator=semantic_evaluator)
-    final_states = simulator.simulate(root_state)
-    
+    final_states = run_simulation(lexicon, graph, mapper, config)
+    branches = build_branch_views(final_states, mapper, diagnostic)
+
     if not out_dir:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         out_dir = Path(f"runs/run_{timestamp}")
     
     out_dir.mkdir(parents=True, exist_ok=True)
     typer.echo(f"💾 Zapisuji výsledky do složky {out_dir}...")
-    for branch_id, state in final_states.items():
+    for branch_id, branch in branches.items():
         branch_csv = out_dir / f"{branch_id}.csv"
         with open(branch_csv, 'w', encoding='utf-8', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['id', 'ipa', 'polysemy', 'origin_year', 'source_id'])
+            writer = csv.DictWriter(
+                f, fieldnames=['id', 'ipa', 'polysemy', 'origin_year', 'source_id']
+            )
             writer.writeheader()
-            for word in state.lexicon.words:
+            for word in branch.words:
                 writer.writerow({
-                    'id': word.concept_id,
-                    'ipa': mapper.render_word(word),
+                    'id': word.id,
+                    'ipa': word.ipa,
                     'polysemy': '|'.join(word.polysemy),
                     'origin_year': word.origin_year,
                     'source_id': word.source_id or ''
                 })
-        typer.echo(f"   -> Vygenerován jazyk '{branch_id}' (rok {state.year}) uložen do {branch_csv}")
-        
-    typer.echo("✅ Hotovo! Síť je vygenerována.")
+
+        # Gramatický náčrt je podle 4.x součástí exportu, ne jen věc UI.
+        (out_dir / f"{branch_id}.md").write_text(branch.grammar_md, encoding='utf-8')
+
+        typer.echo(
+            f"   -> '{branch_id}' (rok {branch.year}, {len(branch.inventory)} fonémů) "
+            f"-> {branch_csv.name} + {branch_id}.md"
+        )
+
+    typer.echo("\n📊 Lexikální retence proti protojazyku "
+               f"({len(diagnostic)} konceptů, metrika A dle 5.1):")
+    for branch_id, branch in branches.items():
+        r = branch.retention
+        band = r.in_plausible_band(branch.year)
+        znacka = {True: "v pásmu", False: "MIMO pásmo 75–95 %/tis. let", None: ""}[band]
+        typer.echo(
+            f"   {branch_id:16} {r.ratio:6.1%}  "
+            f"(drží {len(r.retained)}, výpůjčka {len(r.borrowed)}, ztraceno {len(r.lost)})"
+            + (f"  {znacka}" if znacka else "")
+        )
+
+    typer.echo("\n✅ Hotovo! Síť je vygenerována.")
 
 @app.command()
 def ui(

@@ -1,5 +1,5 @@
 import panphon
-from typing import List, Dict
+from typing import Dict
 from cee.core.models import Segment, Word
 
 class FeatureMapper:

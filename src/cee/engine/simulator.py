@@ -3,10 +3,11 @@ import heapq
 import random
 import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from cee.core.models import Inventory, Lexicon, State, Word
+from cee.core.models import Inventory, Lexicon, State
 from cee.engine.generator import SoundChangeGenerator
+from cee.engine.inventory import InventoryView
 from cee.engine.morphology import MorphologyEvaluator
 from cee.engine.phonology import FeatureMapper
 from cee.engine.rules import Rule
@@ -246,21 +247,15 @@ class EvolutionSimulator:
         if edge_rules:
             return []
 
-        if not state.inventory.segments:
-            state.inventory = Inventory(segments=self._inventory_of(state.lexicon))
+        view = InventoryView.from_lexicon(state.lexicon, self.mapper)
+        state.inventory = view.to_inventory()
 
         return self.generator.generate_rules_for_edge(
-            state, start_year, start_year + 200, num_rules=2
+            state, start_year, start_year + 200, num_rules=2, inventory=view
         )
 
     def _inventory_of(self, lexicon: Lexicon) -> set:
-        inventory = set()
-        for word in lexicon.words:
-            for segment in word.segments:
-                ipa = self.mapper.segment_to_ipa(segment)
-                if ipa and ipa != "?":
-                    inventory.add(ipa)
-        return inventory
+        return set(InventoryView.from_lexicon(lexicon, self.mapper))
 
     def _apply_compounds(self, state: State) -> None:
         """

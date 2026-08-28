@@ -1,9 +1,8 @@
-import copy
 import hashlib
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 
-from cee.core.models import State, Lexicon, Word, Inventory
+from cee.core.models import State
 from cee.engine.rules import Rule
 
 @dataclass
