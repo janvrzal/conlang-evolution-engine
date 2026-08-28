@@ -6,6 +6,8 @@ from cee.engine.parser import YamlParser
 from cee.engine.fold import DerivationFold
 from cee.core.models import Lexicon
 from cee.metrics.validation import ValidationMetric
+from cee.semantics.graph import SemanticGraph
+from cee.engine.semantics import SemanticEvaluator
 
 app = typer.Typer(help="Conlang Evolution Engine CLI", no_args_is_help=True)
 
@@ -14,7 +16,9 @@ def apply(
     proto_csv: Path = typer.Option(..., help="Cesta k CSV s proto-lexikonem (sloupce 'id', 'ipa')"),
     rules_yaml: Path = typer.Option(..., help="Cesta k YAML s pravidly"),
     out_csv: Path = typer.Option(..., help="Cesta, kam se uloží vygenerovaný lexikon"),
-    ground_truth_csv: str = typer.Option(None, help="Volitelné: Cesta k Ground Truth CSV (pro V1 validaci)")
+    ground_truth_csv: str = typer.Option(None, help="Volitelné: Cesta k Ground Truth CSV (pro V1 validaci)"),
+    apply_semantics: bool = typer.Option(False, "--apply-semantics", help="Zapnout sémantické posuny"),
+    semantic_seed: int = typer.Option(42, help="Seed pro deterministické sémantické posuny")
 ):
     """
     Vygeneruje nový jazyk aplikací pravidel na proto-lexikon.
@@ -35,18 +39,36 @@ def apply(
     rules = YamlParser.parse_rules(str(rules_yaml))
     typer.echo(f"   Načteno {len(rules)} pravidel.")
     
-    typer.echo("🚀 Spouštím derivační fold...")
+    typer.echo("🚀 Spouštím derivační fold (fonologie)...")
     fold = DerivationFold(rules)
     fold.apply_to_lexicon(lexicon, mapper)
     
+    if apply_semantics:
+        graph_path = Path.home() / ".cee" / "semantics" / "graph.graphml"
+        if not graph_path.exists():
+            typer.echo(f"❌ Sémantický graf nebyl nalezen na {graph_path}. Spusťte builder.py.", err=True)
+            raise typer.Exit(code=1)
+            
+        typer.echo("🧠 Načítám sémantický graf a spouštím sémantické posuny...")
+        graph = SemanticGraph(str(graph_path))
+        # Pro demonstraci použijeme vysokou pravděpodobnost 100% posunu, pokud to chceme vidět
+        # v reálu by to bylo např. 0.05
+        evaluator = SemanticEvaluator(graph, shift_prob=0.15, forget_prob=0.05, seed=semantic_seed)
+        evaluator.evaluate(lexicon)
+        
+        # Výpis posunů
+        shifted_count = sum(1 for w in lexicon.words if len(w.polysemy) > 0)
+        typer.echo(f"   Sémantickým posunem (nový význam) prošlo {shifted_count} slov.")
+    
     typer.echo(f"💾 Zapisuji výsledek do {out_csv}...")
     with open(out_csv, 'w', encoding='utf-8', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=['id', 'ipa'])
+        writer = csv.DictWriter(f, fieldnames=['id', 'ipa', 'polysemy'])
         writer.writeheader()
         for word in lexicon.words:
             writer.writerow({
                 'id': word.concept_id,
-                'ipa': mapper.render_word(word)
+                'ipa': mapper.render_word(word),
+                'polysemy': '|'.join(word.polysemy) if hasattr(word, 'polysemy') else ''
             })
             
     typer.echo("✅ Hotovo! CEE dokončilo derivaci.")
