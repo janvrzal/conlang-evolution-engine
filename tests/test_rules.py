@@ -126,3 +126,74 @@ def test_vkladaci_pravidlo_bez_zasahu_nic_nepridá(mapper):
     word = mapper.parse_word("x", "aka")  # žádný shluk
     assert rule.apply_to_word(word) is False
     assert mapper.render_word(word) == "aka"
+
+
+def test_mazani_neponici_slovo_uplne(mapper):
+    """
+    'Information carrying capacity': jednosegmentové slovo se mazacím
+    pravidlem nesmí smrsknout na nic. Segment-count kontrola (< 2 hlásky)
+    tohle nechytí, protože se aktivuje jen když slovo mělo aspoň 2 hlásky
+    před mazáním — jednosegmentové slovo skrz ni propadne beze změny.
+    """
+    rule = Rule(
+        name="ztráta koncové souhlásky",
+        target={"cons": "+"},
+        action={"delete": "+"},
+        env_after={"_boundary": "+"},
+    )
+    word = mapper.parse_word("x", "n")
+    assert rule.apply_to_word(word) is False
+    assert mapper.render_word(word) == "n"
+
+
+def test_mazani_nesmi_odebrat_posledni_jadro_slabiky(mapper):
+    """
+    Segment-count kontrola sama nestačí: 'spir' má po synkopě 3 hlásky
+    (nad libovolnou pevnou hranicí), ale žádnou samohlásku — tedy žádné
+    slabičné jádro. Takové slovo je nevyslovitelné a splývá s jakýmkoliv
+    jiným souhláskovým shlukem, což je přesně ztráta informační kapacity.
+    """
+    rule = Rule(
+        name="synkopa vysokých vokálů",
+        target={"syl": "+", "hi": "+"},
+        action={"delete": "+"},
+        env_before={"cons": "+"},
+        env_after={"cons": "+"},
+    )
+    word = mapper.parse_word("x", "spir")
+    assert rule.apply_to_word(word) is False
+    assert mapper.render_word(word) == "spir"
+
+
+def test_mazani_projde_kdyz_jine_jadro_zbyva(mapper):
+    """Minimalita nesmí blokovat mazání, dokud slovo má jinou samohlásku."""
+    rule = Rule(
+        name="ztráta koncové souhlásky",
+        target={"cons": "+"},
+        action={"delete": "+"},
+        env_after={"_boundary": "+"},
+    )
+    word = mapper.parse_word("x", "amat")
+    assert rule.apply_to_word(word) is True
+    assert mapper.render_word(word) == "ama"
+
+
+def test_minimalita_neresi_slovo_bez_samohlasky_od_pocatku(mapper):
+    """
+    Umělé slovo bez jediné samohlásky nemá co ztratit navíc — minimalita
+    ho nesmí zaseknout na věčné mazání ničeho.
+    """
+    from cee.core.models import Segment, Word as WordModel
+
+    p = Segment(features=dict(mapper.parse_word("x", "p").segments[0].features))
+    t = Segment(features=dict(mapper.parse_word("x", "t").segments[0].features))
+    word = WordModel(concept_id="x", segments=[p, t])
+
+    rule = Rule(
+        name="ztráta koncové souhlásky",
+        target={"cons": "+"},
+        action={"delete": "+"},
+        env_after={"_boundary": "+"},
+    )
+    assert rule.apply_to_word(word) is True
+    assert mapper.render_word(word) == "p"

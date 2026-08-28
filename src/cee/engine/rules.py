@@ -68,19 +68,46 @@ class Rule:
             word.segments = self._with_insertions(word, targets_to_modify)
             return True
 
+        if self.action.get("delete") == "+":
+            zbyvajici = [s for i, s in enumerate(word.segments) if i not in set(targets_to_modify)]
+
+            # Prosodická minimalita ("information carrying capacity"): slovo
+            # nesmí přijít o jediné jádro slabiky, jinak přestává být
+            # vyslovitelné a splývá s libovolným jiným shlukem souhlásek.
+            # Segment-count kontrola (< 2 hlásky) tohle nechytí — "spir" má
+            # po synkopě 3 hlásky, ale žádnou samohlásku.
+            if not self._passes_minimality(word.segments, zbyvajici):
+                return False
+
+            word.segments = zbyvajici
+            return True
+
         for i in targets_to_modify:
             segment = word.segments[i]
-            if self.action.get("delete") == "+":
-                segment.features["delete"] = "+"
-            else:
-                for feature, new_value in self.action.items():
-                    segment.features[feature] = new_value
-
-        # Odstraníme segmenty označené ke smazání
-        if self.action.get("delete") == "+":
-            word.segments = [s for s in word.segments if s.features.get("delete") != "+"]
+            for feature, new_value in self.action.items():
+                segment.features[feature] = new_value
 
         return True
+
+    @staticmethod
+    def _passes_minimality(original: List[Segment], zbyvajici: List[Segment]) -> bool:
+        """
+        Kontrola prosodické minimality po mazacím pravidle.
+
+        Blokuje dvě věci, ne jednu společnou hranici segmentů:
+        - slovo by úplně zaniklo (`zbyvajici` prázdné),
+        - slovo by přišlo o poslední slabičné jádro, i když by hlásek
+          formálně zbylo dost (typicky souhláskový shluk bez samohlásky).
+
+        Pokud protojazykové slovo samo o sobě žádnou samohlásku nemá, dál se
+        to nekontroluje — není co chránit.
+        """
+        if not zbyvajici:
+            return False
+
+        melo_jadro = any(s.features.get("syl") == "+" for s in original)
+        ma_jadro = any(s.features.get("syl") == "+" for s in zbyvajici)
+        return ma_jadro or not melo_jadro
 
     def _with_insertions(self, word: Word, targets: List[int]) -> List[Segment]:
         """
