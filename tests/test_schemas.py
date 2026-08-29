@@ -21,7 +21,12 @@ from cee.engine.schemas import SCHEMA_REGISTRY
 # Sondy pokrývají vokály, neznělé i znělé okluzivy, znělé frikativy na
 # začátku slova, likvidy a koncovou souhlásku — tedy terče všech schémat
 # v registru.
-SONDY = ["petrakofis", "vata", "zata", "bata", "data", "ɡata", "pitu", "amat", "lata", "rata"]
+SONDY = [
+    "petrakofis", "vata", "zata", "bata", "data", "ɡata", "pitu", "amat", "lata", "rata",
+    # Kontrakty podmíněných strukturálních změn: obstruentní hranice,
+    # dvojhláska a počáteční shluk.
+    "atd", "paj", "sta",
+]
 
 SEEDS = range(6)
 
@@ -29,7 +34,7 @@ SEEDS = range(6)
 @pytest.fixture(scope="module")
 def bohaty_inventar(mapper):
     """Inventář, ve kterém má oporu každé schéma."""
-    return InventoryView(mapper, set("aeiouptkbdɡfvszlrmn"))
+    return InventoryView(mapper, set("aeioujwptkbdɡfvszlrmn"))
 
 
 def _rules(schema_id, inventory):

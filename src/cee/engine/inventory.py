@@ -71,6 +71,15 @@ class InventoryView:
         features = self._features.get(ipa)
         return dict(features) if features else None
 
+    def features_for_ipa(self, ipa: str) -> Optional[Dict[str, str]]:
+        """Rysy platné IPA hlásky, i když ji inventář zatím neobsahuje.
+
+        Používají to změny, které mohou vytvořit nový foném (např.
+        palatalizace); nenarušuje to samotnou množinu dostupných fonémů.
+        """
+        parsed = self._mapper.parse_word("_", ipa).segments
+        return dict(parsed[0].features) if len(parsed) == 1 else None
+
     def pick(self, target: Dict[str, str], rng=None) -> Optional[str]:
         """
         Vybere jeden foném z dané třídy — pro pravidla, která hlásku vkládají.

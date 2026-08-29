@@ -333,15 +333,18 @@ class NasalizationSchema(Schema):
 
 
 class MonophthongizationSchema(Schema):
-    """Ztráta druhé části jednoduché dvojhlásky Vj/Vw."""
+    """Ztráta druhé, neslabičné části dvojhlásky Vj/Vw."""
     def __init__(self):
         super().__init__("monophthongization")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
             name=f"Monoftongizace (gen. v {year})",
-            target={"syl": "+", "hi": "+"}, action={"delete": "+"},
-            env_before={"cons": "+"}, prosody="unstressed", year=year,
+            # Jádro dvojhlásky je samohláska následovaná neslabičným
+            # vysokým aproximantem /j/ nebo /w/; samotné /i, u/ proto není
+            # nikdy terčem monoftongizace.
+            target={"syl": "-", "son": "+", "cons": "-", "hi": "+"},
+            action={"delete": "+"}, env_before={"syl": "+"}, year=year,
         )
 
 
@@ -365,23 +368,30 @@ class AssimilationSchema(Schema):
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
-            name=f"Asimilace znělosti před sonantou (gen. v {year})",
+            name=f"Asimilace znělosti před obstruentou (gen. v {year})",
             target={"cons": "+", "son": "-"}, action={"voi": "$after:voi"},
-            env_after={"syl": "+"}, year=year,
+            env_after={"cons": "+", "son": "-"}, year=year,
         )
 
 
 class PalatalizationSchema(Schema):
-    """Fronting okluzivy před /i/; vybírá jen dvojici existující v inventáři."""
+    """Palatalizace okluzivy před /i/; výsledek může rozšířit inventář."""
     def __init__(self):
         super().__init__("palatalization")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
-        source, target = next(((a, b) for a, b in (("t", "s"), ("k", "t"), ("ɡ", "d")) if a in inventory and b in inventory), (None, None))
-        if not source or not target:
+        # Cílový foném se záměrně nemusí v inventáři už vyskytovat: právě
+        # palatalizace je běžný zdroj nových afrikát a palatál.
+        source, target = next(
+            ((a, b) for a, b in (("t", "t͡ʃ"), ("d", "d͡ʒ"), ("k", "c"), ("ɡ", "ɟ")) if a in inventory),
+            (None, None),
+        )
+        if source is None or target is None:
             return None
         source_features = inventory.features_of(source)
-        target_features = inventory.features_of(target)
+        # Target načteme přes FeatureMapper inventáře, ale nepřidáváme ho do
+        # inventáře ani ho nevyžadujeme v `generate_rule`.
+        target_features = inventory.features_for_ipa(target)
         assert source_features and target_features
         action = {feature: value for feature, value in target_features.items() if source_features.get(feature) != value}
         return Rule(
@@ -416,7 +426,9 @@ class ProthesisSchema(Schema):
             return None
         return Rule(
             name=f"Protéze /{vowel}/ (gen. v {year})", target={"cons": "+"}, action={},
-            env_before={"_boundary": "+"}, insert="before", insert_features=features, insert_label=vowel, year=year,
+            # Jen počáteční shluk CC, ne libovolný jednoduchý onset.
+            env_before={"_boundary": "+"}, env_after={"cons": "+"},
+            insert="before", insert_features=features, insert_label=vowel, year=year,
         )
 
 
@@ -467,8 +479,9 @@ class CompensatoryLengtheningSchema(Schema):
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
-            name=f"Kompenzační dloužení (gen. v {year})", target={"syl": "+"}, action={},
-            env_after={"cons": "+"}, operation="lengthen", year=year,
+            name=f"Kompenzační dloužení se ztrátou kody (gen. v {year})",
+            target={"syl": "+"}, action={},
+            env_after={"cons": "+", "son": "-"}, operation="compensatory_lengthening", year=year,
         )
 
 

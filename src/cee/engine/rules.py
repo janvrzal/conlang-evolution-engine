@@ -29,7 +29,7 @@ class Rule:
     syllable_part: Optional[str] = None
     #: Strukturální operace, které nelze vyjádřit prostým přepsáním rysu.
     #: Podporované: swap_next, geminate, degeminate, lengthen, shorten,
-    #: stress_initial, stress_penult a stress_final.
+    #: compensatory_lengthening, stress_initial, stress_penult a stress_final.
     operation: Optional[str] = None
 
     def apply_to_word(self, word: Word) -> bool:
@@ -129,6 +129,40 @@ class Rule:
                 word.long_nuclei.update(i for i in targets_to_modify if word.segments[i].features.get("syl") == "+")
             else:
                 word.long_nuclei.difference_update(targets_to_modify)
+            word.ensure_stress()
+            return True
+
+        if self.operation == "compensatory_lengthening":
+            # Jedna historická událost: ztráta obstruenty v kodě a délka
+            # předcházejícího vokálu. Samotné prodloužení před onsetem by
+            # nebylo kompenzační dloužení, proto ho sem nepouštíme.
+            lost: set[int] = set()
+            lengthened: set[int] = set()
+            for i in targets_to_modify:
+                following = i + 1
+                if following >= len(word.segments):
+                    continue
+                coda = following == len(word.segments) - 1 or (
+                    following + 1 < len(word.segments)
+                    and word.segments[following + 1].features.get("cons") == "+"
+                )
+                if coda:
+                    lost.add(following)
+                    lengthened.add(i)
+            if not lost:
+                return False
+
+            remaining = [segment for i, segment in enumerate(word.segments) if i not in lost]
+            if not self._passes_minimality(word, word.segments, remaining):
+                return False
+            # Přepočet indexů zachová i délky, které ve slově byly předtím.
+            def new_index(index: int) -> int:
+                return index - sum(1 for removed in lost if removed < index)
+
+            word.segments = remaining
+            word.long_nuclei = {
+                new_index(index) for index in word.long_nuclei | lengthened if index not in lost
+            }
             word.ensure_stress()
             return True
 

@@ -105,6 +105,9 @@ class FeatureMapper:
 
     def render_word(self, word: Word) -> str:
         """
-        Převede celý objekt Word zpět na IPA text.
+        Převede celý objekt Word zpět na IPA text včetně kontrastivní délky.
         """
-        return "".join(self.segment_to_ipa(seg) for seg in word.segments)
+        return "".join(
+            self.segment_to_ipa(segment) + ("ː" if index in word.long_nuclei else "")
+            for index, segment in enumerate(word.segments)
+        )
