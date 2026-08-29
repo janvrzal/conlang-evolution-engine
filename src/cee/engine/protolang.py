@@ -18,7 +18,7 @@ class ProtolangGenerator:
         else:
             self.concepts = [{"id": "sun"}, {"id": "moon"}, {"id": "water"}]
 
-    def generate_word(self, consonants: List[str], vowels: List[str], syllable_structure: str, min_syl: int = 1, max_syl: int = 2) -> str:
+    def generate_word(self, consonants: List[str], vowels: List[str], syllable_structure: str, min_syl: int = 1, max_syl: int = 2, is_grammatical: bool = False) -> str:
         """
         Vygeneruje jedno slovo podle zadaných pravidel.
         syllable_structure: např. "CV", "CVC", "(C)V"
@@ -26,37 +26,49 @@ class ProtolangGenerator:
         C = náhodná souhláska
         V = náhodná samohláska
         """
-        syl_count = self.rng.randint(min_syl, max_syl)
-        word = ""
-        
-        for _ in range(syl_count):
-            i = 0
-            while i < len(syllable_structure):
-                char = syllable_structure[i]
-                optional = False
-                
-                if char == '(':
-                    optional = True
-                    i += 1
+        # Pojistka: dokud je slovo kratší než 2 hlásky (a není to gramatické slovo), 
+        # generujeme ho znovu. Tím se vyhneme tomu, aby slovník byl plný 
+        # izolovaných samohlásek ("a", "i").
+        while True:
+            syl_count = self.rng.randint(min_syl, max_syl)
+            word = ""
+            
+            for _ in range(syl_count):
+                i = 0
+                while i < len(syllable_structure):
                     char = syllable_structure[i]
-                    i += 1 # přeskočíme znak
-                    if i < len(syllable_structure) and syllable_structure[i] == ')':
-                        pass # přeskočíme zavírací závorku
-                
-                # U volitelných prvků hodíme mincí (50% šance)
-                if optional and self.rng.random() < 0.5:
+                    optional = False
+                    
+                    if char == '(':
+                        optional = True
+                        i += 1
+                        char = syllable_structure[i]
+                        i += 1 # přeskočíme znak
+                        if i < len(syllable_structure) and syllable_structure[i] == ')':
+                            pass # přeskočíme zavírací závorku
+                    
+                    # U volitelných prvků hodíme mincí (50% šance)
+                    if optional and self.rng.random() < 0.5:
+                        i += 1
+                        continue
+                        
+                    if char == 'C':
+                        word += self.rng.choice(consonants)
+                    elif char == 'V':
+                        word += self.rng.choice(vowels)
+                        
                     i += 1
-                    continue
                     
-                if char == 'C':
-                    word += self.rng.choice(consonants)
-                elif char == 'V':
-                    word += self.rng.choice(vowels)
-                    
-                i += 1
-        return word
+            if is_grammatical or len(word) >= 2:
+                return word
 
-    def generate_lexicon(self, consonants: str, vowels: str, syllable_structure: str) -> List[Dict[str, Any]]:
+    def generate_lexicon(
+        self,
+        consonants: str,
+        vowels: str,
+        syllable_structure: str,
+        concepts: List[Dict[str, Any]] | None = None,
+    ) -> List[Dict[str, Any]]:
         """
         Vygeneruje slovník pro všechny koncepty.
         Očekává stringy oddělené mezerou, např. "p t k s m n", "a i u"
@@ -65,12 +77,18 @@ class ProtolangGenerator:
         vow_list = vowels.split()
         
         words = []
-        for concept in self.concepts:
-            ipa = self.generate_word(cons_list, vow_list, syllable_structure)
+        for concept in concepts if concepts is not None else self.concepts:
+            pos = concept.get("pos", "noun")
+            is_grammatical = pos in ("pronoun", "particle", "conjunction", "preposition", "demonstrative")
+            
+            ipa = self.generate_word(cons_list, vow_list, syllable_structure, is_grammatical=is_grammatical)
+            
             words.append({
                 "id": concept["id"],
                 "ipa": ipa,
-                "polysemy": []
+                "polysemy": concept.get("polysemy", []),
+                "pos": pos,
+                "is_grammatical": is_grammatical
             })
             
         return words

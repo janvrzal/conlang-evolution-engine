@@ -18,6 +18,12 @@ schemas:
     base_weight: 45
   diphthongization:
     base_weight: 35
+  unconditional_fricatization:
+    base_weight: 30
+  unconditional_devoicing:
+    base_weight: 30
+  unconditional_vowel_lowering:
+    base_weight: 40
 
 biomes:
   hory:
@@ -29,6 +35,9 @@ biomes:
       vowel_shift: 1.0
       epenthesis: 0.4   # Shluky se v horách nerozpouštějí
       diphthongization: 0.8
+      unconditional_fricatization: 1.2
+      unconditional_devoicing: 1.5
+      unconditional_vowel_lowering: 0.8
 
   prales:
     modifiers:
@@ -39,6 +48,9 @@ biomes:
       vowel_shift: 1.5
       epenthesis: 2.0   # Shluky se rozpadají, převládá otevřená slabika
       diphthongization: 1.6
+      unconditional_fricatization: 1.5
+      unconditional_devoicing: 0.2
+      unconditional_vowel_lowering: 1.5
 
   temnota:
     modifiers:
@@ -49,3 +61,6 @@ biomes:
       vowel_shift: 0.5
       epenthesis: 0.2
       diphthongization: 0.4
+      unconditional_fricatization: 0.5
+      unconditional_devoicing: 3.0   # Zlověstně ztrácí znělost plošně
+      unconditional_vowel_lowering: 2.0

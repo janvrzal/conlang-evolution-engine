@@ -76,7 +76,7 @@ class Rule:
             # vyslovitelné a splývá s libovolným jiným shlukem souhlásek.
             # Segment-count kontrola (< 2 hlásky) tohle nechytí — "spir" má
             # po synkopě 3 hlásky, ale žádnou samohlásku.
-            if not self._passes_minimality(word.segments, zbyvajici):
+            if not self._passes_minimality(word, word.segments, zbyvajici):
                 return False
 
             word.segments = zbyvajici
@@ -90,7 +90,7 @@ class Rule:
         return True
 
     @staticmethod
-    def _passes_minimality(original: List[Segment], zbyvajici: List[Segment]) -> bool:
+    def _passes_minimality(word: Word, original: List[Segment], zbyvajici: List[Segment]) -> bool:
         """
         Kontrola prosodické minimality po mazacím pravidle.
 
@@ -105,8 +105,15 @@ class Rule:
         if not zbyvajici:
             return False
 
+        if getattr(word, "is_grammatical", False):
+            return True
+
         melo_jadro = any(s.features.get("syl") == "+" for s in original)
         ma_jadro = any(s.features.get("syl") == "+" for s in zbyvajici)
+
+        # Forma bez jádra už v protojazyce žádné jádro chránit nemá. Její
+        # další zkrácení proto smí projít (dokud nezmizí úplně); viz test
+        # `minimalita_neresi_slovo_bez_samohlasky_od_pocatku`.
         return ma_jadro or not melo_jadro
 
     def _with_insertions(self, word: Word, targets: List[int]) -> List[Segment]:

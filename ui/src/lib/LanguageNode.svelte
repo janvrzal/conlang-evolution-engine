@@ -10,6 +10,7 @@
 			biome?: string;
 			society?: string;
 			isDead?: boolean;
+			isoglossValue?: string;
 		};
 		isConnectable: boolean;
 	}>();
@@ -53,6 +54,11 @@
 </script>
 
 <div class="w-12 h-12 rounded-full border-2 flex items-center justify-center {data.isDead ? 'border-muted-foreground bg-muted opacity-80 shadow-none' : data.isProto ? 'border-primary bg-primary/20 shadow-sm group-hover:border-foreground' : 'border-border bg-background shadow-sm group-hover:border-foreground'} transition-colors relative z-20 group">
+	{#if data.isoglossValue !== undefined}
+		<span class="font-bold text-[13px] tracking-tight leading-none px-1 {data.isoglossValue === '-' ? 'text-muted-foreground/30' : 'text-foreground drop-shadow-sm'}">
+			{data.isoglossValue}
+		</span>
+	{/if}
 	
 	<!-- Skryté Handles pro spojení přesně do středu. Jsou umístěné bezpečně uprostřed standardním stylem. 
 		     Pomocí ::after pseudo-elementu zvětšujeme neviditelný hitbox, aby se daly snáze trefit myší. -->

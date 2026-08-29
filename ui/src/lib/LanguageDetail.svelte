@@ -1,76 +1,84 @@
 <script lang="ts">
-	import { evolveLanguage, resetApiBase } from '$lib/api';
-	import { X, Loader2, ArrowRight, Import } from 'lucide-svelte';
+	import { fetchLanguage, fetchWordTrace, resetApiBase } from '$lib/api';
+	import { X, Loader2, ArrowRight, Map } from 'lucide-svelte';
 
-	type TraceStep = { year: number; form: string; rule_name: string | null; note: string | null };
-	type Epoch = { year: number; label: string | null; words: Record<string, string>; inventory: string[] };
-	type SoundChange = {
-		kind: 'sound_change';
-		year: number;
-		rule_name: string;
-		hit_count: number;
-		changes: { concept_id: string; before: string; after: string }[];
-	};
-	type Borrowing = { kind: 'borrowing'; year: number; source_id: string; concepts: string[] };
-	type Event = SoundChange | Borrowing | { kind: string; year: number };
+	type TraceStep = { year: number; form: string; rule_name: string | null; type: string | null; note: string | null };
+	type WordNode = { id: string, concept_id: string, from: string, to: string, polysemy: string[] };
 
 	let {
+		runId = null,
 		nodeId,
 		label,
 		biome = null,
 		years = 1000,
-		lexicon = [],
-		onclose
+		currentYear,
+		embedded = false,
+		onclose,
+		onIsogloss
 	} = $props<{
+		runId?: string | null;
 		nodeId: string;
 		label: string;
 		biome?: string | null;
 		years?: number;
-		lexicon?: { id: string; ipa: string }[];
+		currentYear: number;
+		embedded?: boolean;
 		onclose: () => void;
+		onIsogloss?: (conceptId: string) => void;
 	}>();
 
 	let loading = $state(false);
 	let error = $state<string | null>(null);
-	let epochs = $state<Epoch[]>([]);
-	let events = $state<Event[]>([]);
+	let words = $state<WordNode[]>([]);
 	let traces = $state<Record<string, TraceStep[]>>({});
-	let openConcept = $state<string | null>(null);
+	let openWordId = $state<string | null>(null);
 
-	let soundChanges = $derived(events.filter((e): e is SoundChange => e.kind === 'sound_change'));
-	let borrowings = $derived(events.filter((e): e is Borrowing => e.kind === 'borrowing'));
-	let concepts = $derived(Object.keys(traces).sort());
-	let firstEpoch = $derived(epochs[0]);
-	let lastEpoch = $derived(epochs[epochs.length - 1]);
+	let searchQuery = $state('');
 
-	// Znovu načteme pokaždé, když se změní uzel nebo parametry vývoje.
+	let filteredWords = $derived(
+		words.filter(w => {
+			if (!searchQuery) return true;
+			const q = searchQuery.toLowerCase();
+			return w.to.toLowerCase().includes(q) 
+				|| w.concept_id.toLowerCase().includes(q)
+				|| w.polysemy.some(p => p.toLowerCase().includes(q));
+		})
+	);
+
+	// Znovu načteme pokaždé, když se změní uzel nebo aktuální rok na ose.
 	$effect(() => {
-		const payload = {
-			proto_lexicon: lexicon,
-			years,
-			biome,
-			node_id: nodeId
-		};
-		void load(payload);
+		if (runId) void load(runId, nodeId, currentYear);
+		else {
+			words = [];
+			traces = {};
+			error = null;
+		}
 	});
 
-	async function load(payload: Record<string, unknown>) {
-		if (!lexicon.length) {
-			error = 'Nejprve vygeneruj proto-slovník v sekci Metaeditace.';
-			epochs = [];
-			events = [];
-			traces = {};
-			return;
-		}
-
+	async function load(simulationRunId: string, id: string, year?: number) {
 		loading = true;
 		error = null;
 		try {
-			const data = await evolveLanguage(payload);
-			epochs = data.epochs ?? [];
-			events = data.events ?? [];
-			traces = data.traces ?? {};
+			const fetched = await fetchLanguage(simulationRunId, id, year);
+			console.log(`Načteno slov pro ${id}:`, fetched.length);
+			
+			// Skryjeme vizuální duplicity (slova se stejným konceptem a stejným finálním zněním),
+			// aby se uživateli nezapleveloval slovník.
+			const uniqueWords = [];
+			const seen = new Set();
+			for (const w of fetched) {
+				const key = w.concept_id + '|' + w.to;
+				if (!seen.has(key)) {
+					seen.add(key);
+					uniqueWords.push(w);
+				}
+			}
+			
+			words = uniqueWords;
+			traces = {};
+			openWordId = null;
 		} catch (e) {
+			console.error("Chyba při načítání:", e);
 			resetApiBase();
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -78,23 +86,29 @@
 		}
 	}
 
-	function toggle(concept: string) {
-		openConcept = openConcept === concept ? null : concept;
-	}
-
-	/** Podíl slovníku, který dané pravidlo zasáhlo — pro sílu proužku. */
-	function share(change: SoundChange): number {
-		const total = Object.keys(firstEpoch?.words ?? {}).length || 1;
-		return Math.min(1, change.hit_count / total);
+	async function toggle(wordId: string) {
+		if (openWordId === wordId) {
+			openWordId = null;
+			return;
+		}
+		openWordId = wordId;
+		if (!traces[wordId]) {
+			try {
+				if (runId) traces[wordId] = await fetchWordTrace(runId, wordId);
+			} catch (e) {
+				console.error(e);
+			}
+		}
 	}
 </script>
 
-<aside class="detail">
+<aside class:embedded class="detail">
 	<header>
 		<div>
 			<h2>{label}</h2>
 			<p class="sub">
 				{#if biome}<span class="tag">{biome}</span>{/if}
+				<span>stav v roce {currentYear}</span>
 				<span>{years} let vývoje</span>
 			</p>
 		</div>
@@ -102,103 +116,100 @@
 	</header>
 
 	{#if loading}
-		<div class="state"><Loader2 size={18} class="spin" /> Počítám vývoj…</div>
+		<div class="state"><Loader2 size={18} class="spin" /> Načítám z databáze…</div>
 	{:else if error}
 		<div class="state error">{error}</div>
-	{:else if !epochs.length}
-		<div class="state">Zatím není co ukázat.</div>
+	{:else if !runId}
+		<div class="state text-center text-muted-foreground p-8">Spusť simulaci; pak zde uvidíš slovník v aktuálním roce.</div>
+	{:else if !words.length}
+		<div class="state text-center text-muted-foreground p-8">V tomto roce jazyk ještě nemá žádná slova.</div>
 	{:else}
-		<section>
-			<h3>Epochy</h3>
-			<div class="epochs">
-				{#each epochs as epoch (epoch.year)}
-					<div class="epoch">
-						<span class="year">{epoch.year}</span>
-						<span class="name">{epoch.label ?? ''}</span>
-						<span class="inv">{epoch.inventory.length} fonémů</span>
-					</div>
-				{/each}
-			</div>
-		</section>
-
-		<section>
-			<h3>Zvukové změny <span class="count">{soundChanges.length}</span></h3>
-			{#if !soundChanges.length}
-				<p class="empty">Jazyk zůstal beze změny.</p>
-			{:else}
-				<ol class="changes">
-					{#each soundChanges as change (change.year + change.rule_name)}
-						<li>
-							<div class="change-head">
-								<span class="year">{change.year}</span>
-								<span class="rule">{change.rule_name.replace(/\s*\(gen\. v \d+\)/, '')}</span>
-								<span class="hits">{change.hit_count}×</span>
-							</div>
-							<div class="bar"><i style="width: {share(change) * 100}%"></i></div>
-							<div class="examples">
-								{#each change.changes.slice(0, 3) as ex (ex.concept_id)}
-									<span class="ex">
-										<b>{ex.before}</b><ArrowRight size={11} /><b>{ex.after || '∅'}</b>
-									</span>
-								{/each}
-								{#if change.changes.length > 3}
-									<span class="more">+{change.changes.length - 3} dalších</span>
-								{/if}
-							</div>
-						</li>
-					{/each}
-				</ol>
-			{/if}
-		</section>
-
-		{#if borrowings.length}
-			<section>
-				<h3>Výpůjčky <span class="count">{borrowings.length}</span></h3>
-				<ul class="loans">
-					{#each borrowings as loan (loan.year + loan.source_id)}
-						<li>
-							<span class="year">{loan.year}</span>
-							<Import size={12} />
-							<span class="from">z <b>{loan.source_id}</b></span>
-							<span class="what">{loan.concepts.join(', ')}</span>
-						</li>
-					{/each}
-				</ul>
-			</section>
-		{/if}
-
-		<section>
-			<h3>Slovník <span class="count">{concepts.length}</span></h3>
-			<p class="hint">Klikni na slovo a uvidíš, čím prošlo.</p>
-			<ul class="words">
-				{#each concepts as concept (concept)}
-					{@const from = firstEpoch?.words?.[concept] ?? '—'}
-					{@const to = lastEpoch?.words?.[concept] ?? '—'}
-					<li class:changed={from !== to}>
-						<button class="word" onclick={() => toggle(concept)}>
-							<span class="concept">{concept}</span>
-							<span class="forms">
-								<b>{from}</b>
-								{#if from !== to}<ArrowRight size={11} /><b class="now">{to}</b>{/if}
-							</span>
+		<section class="flex-1 flex flex-col min-h-0">
+			<div class="px-4 pb-3 pt-1 sticky top-0 bg-card z-10 border-b border-border/40">
+				<div class="flex items-center justify-between mb-3">
+					<h3 class="m-0 text-xs font-semibold tracking-wider uppercase opacity-60">Slovník <span class="ml-1 opacity-70 font-normal">{filteredWords.length} / {words.length}</span></h3>
+				</div>
+				<div class="relative">
+					<input 
+						type="text" 
+						class="w-full h-8 px-3 text-sm bg-muted/50 border border-border/50 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:bg-background transition-all placeholder:text-muted-foreground" 
+						placeholder="Hledat slovo, význam..." 
+						bind:value={searchQuery}
+					/>
+					{#if searchQuery}
+						<button class="absolute right-2 top-1.5 text-muted-foreground hover:text-foreground" onclick={() => searchQuery = ''}>
+							<X size={14} />
 						</button>
-						{#if openConcept === concept}
-							<ol class="trace">
-								{#each traces[concept] as step, i (i)}
-									<li>
-										<span class="year">{step.year}</span>
-										<span class="form">{step.form || '—'}</span>
-										<span class="why">
-											{step.rule_name?.replace(/\s*\(gen\. v \d+\)/, '') ?? step.note ?? ''}
+					{/if}
+				</div>
+			</div>
+			
+			<ul class="words flex-1 overflow-y-auto">
+				{#each [...filteredWords].sort((a, b) => a.to.localeCompare(b.to)) as word (word.id)}
+					<li class="border-b border-border/40 last:border-0 {word.from !== word.to ? 'changed' : ''}">
+						<div class="word-container flex justify-between items-start p-3 hover:bg-muted/30 transition-colors">
+							<button class="flex-1 text-left" onclick={() => toggle(word.id)}>
+								<div class="flex items-baseline gap-2 mb-1">
+									<strong class="text-base font-medium">{word.to}</strong>
+									{#if word.from !== word.to}
+										<span class="text-xs text-muted-foreground flex items-center gap-1">
+											(z <i class="opacity-80">{word.from}</i>)
 										</span>
-									</li>
-								{:else}
-									<li class="empty-step">Tvar se nikdy nezměnil.</li>
-								{/each}
-							</ol>
+									{/if}
+								</div>
+								
+								<div class="text-sm text-muted-foreground mb-1 font-serif italic">
+									"{word.concept_id}"
+								</div>
+								
+								{#if word.polysemy?.length}
+									<div class="polysemy-tags flex flex-wrap gap-1 mt-1.5">
+										{#each word.polysemy as meaning}
+											<span class="poly-tag px-1.5 py-0.5 text-[10px] rounded bg-primary/10 text-primary font-medium">{meaning}</span>
+										{/each}
+									</div>
+								{/if}
+							</button>
+							
+							{#if onIsogloss}
+								<button 
+									class="p-1.5 mt-1 text-muted-foreground hover:text-primary hover:bg-muted rounded-md transition-colors shrink-0"
+									title="Zobrazit izoglosu na mapě"
+									onclick={(e) => { e.stopPropagation(); onIsogloss(word.concept_id); }}>
+									<Map size={15} />
+								</button>
+							{/if}
+						</div>
+						
+						{#if openWordId === word.id && traces[word.id]}
+							<div class="px-3 pb-3 pt-1">
+								<ol class="trace">
+									{#each traces[word.id] as step, i (i)}
+										<li>
+											<span class="year w-10 shrink-0 text-xs text-muted-foreground">{step.year}</span>
+											<div class="step-info flex-1">
+												{#if step.type === 'borrowed'}
+													<span class="rule text-amber-600 font-medium">Výpůjčka</span>
+												{:else if step.rule_name}
+													<span class="rule font-medium">{step.rule_name}</span>
+												{:else if step.note}
+													<span class="rule italic text-muted-foreground">{step.note}</span>
+												{/if}
+											</div>
+											<b class="form font-medium shrink-0">{step.form}</b>
+										</li>
+										<li class="empty-step text-muted-foreground italic text-xs py-1">Tvar se nezměnil.</li>
+									{/each}
+								</ol>
+							</div>
 						{/if}
 					</li>
 				{/each}
+				{#if filteredWords.length === 0}
+					<div class="text-center p-8 text-muted-foreground text-sm">
+						Nic nenalezeno.
+					</div>
+				{/if}
 			</ul>
 		</section>
 	{/if}
@@ -215,6 +226,13 @@
 		background: hsl(var(--card, 0 0% 100%));
 		border-left: 1px solid hsl(var(--border, 0 0% 90%));
 		font-size: 13px;
+	}
+
+	.detail.embedded {
+		width: 100%;
+		height: min(56vh, 560px);
+		border: 1px solid hsl(var(--border, 0 0% 90%));
+		border-radius: 0.5rem;
 	}
 
 	header {
@@ -268,26 +286,6 @@
 		background: hsl(var(--muted, 0 0% 96%));
 	}
 
-	section {
-		padding: 14px 16px;
-		border-bottom: 1px solid hsl(var(--border, 0 0% 90%) / 0.6);
-	}
-
-	h3 {
-		margin: 0 0 10px;
-		font-size: 11px;
-		font-weight: 600;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		opacity: 0.55;
-	}
-
-	.count {
-		margin-left: 4px;
-		opacity: 0.7;
-		font-weight: 400;
-	}
-
 	.state {
 		display: flex;
 		align-items: center;
@@ -311,189 +309,6 @@
 		}
 	}
 
-	.year {
-		font-variant-numeric: tabular-nums;
-		opacity: 0.5;
-		font-size: 11px;
-		min-width: 34px;
-	}
-
-	/* Epochy */
-	.epochs {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.epoch {
-		display: grid;
-		grid-template-columns: 40px 1fr auto;
-		align-items: center;
-		gap: 8px;
-		padding: 4px 6px;
-		border-radius: 5px;
-	}
-
-	.epoch:nth-child(odd) {
-		background: hsl(var(--muted, 0 0% 96%) / 0.5);
-	}
-
-	.epoch .name {
-		font-weight: 500;
-	}
-
-	.epoch .inv {
-		font-size: 11px;
-		opacity: 0.55;
-	}
-
-	/* Zvukové změny */
-	.changes {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-	}
-
-	.change-head {
-		display: flex;
-		align-items: baseline;
-		gap: 8px;
-	}
-
-	.rule {
-		flex: 1;
-		font-weight: 500;
-	}
-
-	.hits {
-		font-size: 11px;
-		opacity: 0.55;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.bar {
-		height: 3px;
-		margin: 5px 0;
-		border-radius: 999px;
-		background: hsl(var(--muted, 0 0% 96%));
-		overflow: hidden;
-	}
-
-	.bar i {
-		display: block;
-		height: 100%;
-		background: #6b7cff;
-	}
-
-	.examples {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px 10px;
-		font-size: 11px;
-	}
-
-	.ex {
-		display: inline-flex;
-		align-items: center;
-		gap: 3px;
-		opacity: 0.75;
-	}
-
-	.ex b {
-		font-weight: 500;
-	}
-
-	.more {
-		opacity: 0.45;
-	}
-
-	/* Výpůjčky */
-	.loans {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-
-	.loans li {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 5px 7px;
-		border-radius: 5px;
-		background: #6b7cff14;
-		border-left: 2px solid #6b7cff;
-	}
-
-	.loans .what {
-		font-size: 11px;
-		opacity: 0.7;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	/* Slovník */
-	.hint {
-		margin: -4px 0 8px;
-		font-size: 11px;
-		opacity: 0.5;
-	}
-
-	.words {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-	}
-
-	.word {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 10px;
-		width: 100%;
-		padding: 5px 6px;
-		border: none;
-		border-radius: 5px;
-		background: transparent;
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.word:hover {
-		background: hsl(var(--muted, 0 0% 96%));
-	}
-
-	.concept {
-		opacity: 0.7;
-	}
-
-	.forms {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.forms b {
-		font-weight: 500;
-		opacity: 0.55;
-	}
-
-	.forms b.now {
-		opacity: 1;
-	}
-
-	.words li:not(.changed) .forms b {
-		opacity: 0.75;
-	}
-
 	.trace {
 		list-style: none;
 		margin: 2px 0 10px;
@@ -512,20 +327,5 @@
 		grid-template-columns: 38px 70px 1fr;
 		gap: 8px;
 		align-items: baseline;
-	}
-
-	.trace .form {
-		font-weight: 600;
-	}
-
-	.trace .why {
-		opacity: 0.6;
-	}
-
-	.empty,
-	.empty-step {
-		margin: 0;
-		opacity: 0.5;
-		font-size: 11px;
 	}
 </style>

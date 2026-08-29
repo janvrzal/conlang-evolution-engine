@@ -10,25 +10,24 @@ from __future__ import annotations
 
 import copy
 import csv
+import os
 import warnings
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from cee.core.models import Inventory, Lexicon, State
 from cee.engine.generator import MacroParams, SoundChangeGenerator
+from cee.engine.graph_builder import GraphBuilder
 from cee.engine.rng import derive_seed
-from cee.engine.history import (
-    RuleApplication,
-    SimulationHistory,
-    Snapshot,
-    WordChange,
-)
+
 from cee.engine.inventory import InventoryView
 from cee.engine.phonology import FeatureMapper
 from cee.engine.semantics import SemanticEvaluator
 from cee.engine.simulator import EvolutionSimulator
 from cee.engine.topology import EvolutionGraph
 from cee.metrics.retention import LexicalRetention, RetentionResult
+from cee.semantics.builder import default_paths as default_semantics_paths
 from cee.semantics.graph import SemanticGraph
 
 DEFAULT_SEED = 42
@@ -50,6 +49,8 @@ class SimulationConfig:
 
     #: Časová hloubka simulace. Bez ní se generují pravidla jen na 200 let.
     years: Optional[int] = None
+    #: UI může chtít sledovat i proměnu kořenového protojazyka, nejen větví.
+    evolve_root: bool = False
 
 
 @dataclass
@@ -112,9 +113,55 @@ def load_lexicon_from_records(records: Iterable[Dict[str, str]], mapper: Feature
     lexicon = Lexicon()
     for record in records:
         lexicon.words.append(
-            mapper.parse_word(concept_id=record["id"], ipa_string=record["ipa"])
+            mapper.parse_word(
+                concept_id=record["id"],
+                ipa_string=record["ipa"],
+                is_grammatical=record.get("is_grammatical", False)
+            )
         )
+        lexicon.words[-1].polysemy = set(record.get("polysemy", []))
     return lexicon
+
+
+def resolve_semantics_path(preferred: Optional[str]) -> Optional[str]:
+    """
+    Rozhodne, který sémantický graf se má použít.
+
+    - Je-li `preferred` zadané a existuje, použije se přímo (explicitní volba
+      volajícího má přednost).
+    - Jinak zkusí skutečný graf sestavený z CLICS4 + DatSemShift
+      (`~/.cee/semantics/graph.graphml` — viz `cee/semantics/builder.py`).
+      Podle AGENT.md se tahle data NIKDY necommitují, takže na čerstvém
+      klonu / v CI nemusí existovat.
+    - Bez něj spadne na malý YAML mock zabalený v repu, aby simulace vůbec
+      měla s čím pracovat — vždycky dostupný, ale jen 14 dvojic pojmů.
+    """
+    if preferred and os.path.exists(preferred):
+        return preferred
+
+    real_graph = default_semantics_paths()["out_path"]
+    if os.path.exists(real_graph):
+        return real_graph
+
+    mock = Path(__file__).resolve().parent / "data" / "semantics_mock.yaml"
+    return str(mock) if mock.exists() else None
+
+
+# Cache klíčovaná cestou ke grafu, ne jediná globální proměnná — jinak by po
+# prvním načtení `semantics_mock.yaml` zůstal navěky použitý i pro požadavky,
+# které výslovně chtěly jiný (třeba skutečný CLICS4/DatSemShift) graf.
+_semantic_graph_cache: Dict[str, SemanticGraph] = {}
+
+# Načítání FeatureMapper (PanPhon tabulek) trvá 1.25s, chceme to jen jednou.
+_global_feature_mapper: Optional[FeatureMapper] = None
+
+
+def get_feature_mapper() -> FeatureMapper:
+    """Vrátí globální instanci FeatureMapperu (vytvoří, pokud neexistuje)."""
+    global _global_feature_mapper
+    if _global_feature_mapper is None:
+        _global_feature_mapper = FeatureMapper()
+    return _global_feature_mapper
 
 
 def build_semantic_evaluator(config: SimulationConfig) -> Optional[SemanticEvaluator]:
@@ -122,20 +169,31 @@ def build_semantic_evaluator(config: SimulationConfig) -> Optional[SemanticEvalu
     Sestaví sémantický evaluátor, nebo vrátí None. Chybějící graf běh nezastaví,
     ale nesmí zmizet potichu.
     """
-    if not config.semantics_path:
+    path = resolve_semantics_path(config.semantics_path)
+    if not path:
         return None
 
-    try:
-        graph = SemanticGraph(config.semantics_path)
-    except (OSError, ValueError) as exc:
-        warnings.warn(
-            f"Sémantický graf '{config.semantics_path}' se nepodařilo načíst: {exc}",
-            stacklevel=2,
-        )
-        return None
+    if path not in _semantic_graph_cache:
+        try:
+            _semantic_graph_cache[path] = SemanticGraph(path)
+        except Exception as exc:  # noqa: BLE001 — viz komentář níže
+            # Záměrně široký záchyt. Soubor je externí (stažená/sestavená
+            # cache mimo repo, viz AGENT.md), takže poškozený obsah selže
+            # jiným výjimkovým typem podle formátu:
+            # `xml.etree.ElementTree.ParseError` (dědí ze SyntaxError, ne
+            # z OSError/ValueError) pro poškozený GraphML, `yaml.YAMLError`
+            # pro poškozený YAML mock. Užší výčet by je propustil jako
+            # tvrdý pád místo hlášky a pádu zpět na jiný zdroj — a to je
+            # přesně to, co má tahle funkce podle jména dělat.
+            warnings.warn(
+                f"Sémantický graf '{path}' se nepodařilo načíst "
+                f"({type(exc).__name__}): {exc}",
+                stacklevel=2,
+            )
+            return None
 
     return SemanticEvaluator(
-        graph,
+        _semantic_graph_cache[path],
         shift_prob=config.shift_prob,
         forget_prob=config.forget_prob,
         seed=config.seed,
@@ -147,6 +205,7 @@ def run_simulation(
     graph: EvolutionGraph,
     mapper: FeatureMapper,
     config: Optional[SimulationConfig] = None,
+    graph_builder: Optional[GraphBuilder] = None,
 ) -> Dict[str, State]:
     """Spustí lockstep simulaci nad daným grafem a vrátí finální stavy uzlů."""
     config = config or SimulationConfig()
@@ -165,6 +224,8 @@ def run_simulation(
         seed=config.seed,
         semantic_evaluator=build_semantic_evaluator(config),
         end_year=config.years,
+        graph_builder=graph_builder,
+        evolve_root=config.evolve_root,
     )
     return simulator.simulate(root_state)
 
@@ -297,167 +358,3 @@ class LineageConfig:
     def epoch_length(self) -> int:
         return max(1, self.years // max(1, self.epochs))
 
-
-def _snapshot(state: State, mapper: FeatureMapper, year: int, label: str) -> Snapshot:
-    return Snapshot(
-        year=year,
-        node_id=state.node_id,
-        label=label,
-        words={w.concept_id: mapper.render_word(w) for w in state.lexicon.words},
-        inventory=sorted(InventoryView.from_lexicon(state.lexicon, mapper)),
-    )
-
-
-def evolve_lineage(
-    lexicon: Lexicon,
-    mapper: FeatureMapper,
-    config: Optional[LineageConfig] = None,
-) -> tuple[State, SimulationHistory]:
-    """
-    Nechá jeden jazyk vyvíjet se v čase a zaznamená celý průběh.
-
-    Vrací konečný stav a historii se snapshoty po epochách i se seznamem
-    zvukových změn včetně toho, která slova každá z nich zasáhla.
-    """
-    config = config or LineageConfig()
-    history = SimulationHistory()
-
-    state = State(
-        node_id=config.node_id,
-        year=0,
-        inventory=Inventory(),
-        lexicon=lexicon,
-        map={"biome": config.biome} if config.biome else {},
-    )
-
-    inventory = InventoryView.from_lexicon(lexicon, mapper)
-    state.inventory = inventory.to_inventory()
-    history.snapshot(_snapshot(state, mapper, 0, "Protojazyk"))
-
-    # Seed se odvozuje z ID uzlu, aby dva jazyky se stejným nastavením
-    # nedostaly identickou chronologii (CEE_master.md 5.5).
-    generator = (
-        SoundChangeGenerator(
-            config.preset,
-            seed=derive_seed(config.seed, config.node_id),
-            macro=MacroParams.from_config(config.preset.get("macro"), config.macro),
-        )
-        if config.preset
-        else None
-    )
-    if generator is None:
-        warnings.warn(
-            "Bez presetu se jazyk nemá podle čeho měnit — vývoj bude prázdný.",
-            stacklevel=2,
-        )
-
-    base_slots = config.epochs * config.rules_per_epoch
-    total_slots = generator.macro.slots_for(base_slots) if generator else base_slots
-
-    def _would_change(rule) -> bool:
-        """
-        Poslední síto: má pravidlo na aktuálním lexikonu vůbec dopad?
-
-        Inventář nezná pozici hlásky ve slově, takže z něj nelze vyčíst, že
-        třeba fortice na začátku slova nemá co dělat. Zkusíme ji proto nanečisto
-        na kopii — je to levné a ušetří to prázdné kroky v chronologii.
-        """
-        return any(rule.apply_to_word(copy.deepcopy(w)) for w in state.lexicon.words)
-
-    previous_rule = None
-    next_epoch = config.epoch_length
-    epoch_index = 1
-
-    for slot in range(total_slots):
-        year = (
-            generator.year_for_slot(0, config.years, slot, total_slots)
-            if generator
-            else int(config.years * (slot + 1) / (total_slots + 1))
-        )
-
-        while year > next_epoch <= config.years:
-            state.year = next_epoch
-            history.snapshot(_snapshot(state, mapper, next_epoch, f"Epocha {epoch_index}"))
-            next_epoch += config.epoch_length
-            epoch_index += 1
-
-        if generator is None:
-            continue
-
-        # Inventář se čte ze skutečného lexikonu po každé změně — generátor tak
-        # vidí přesně to, co v jazyce v daném okamžiku je (stavový fold, 4.3).
-        inventory = InventoryView.from_lexicon(state.lexicon, mapper)
-        rule = generator.generate_one(
-            state, year, inventory, previous=previous_rule, accepts=_would_change
-        )
-        if rule is None:
-            continue
-
-        application = RuleApplication(
-            year=year,
-            node_id=state.node_id,
-            rule_name=rule.name,
-            target=dict(rule.target),
-            action=dict(rule.action),
-            env_before=dict(rule.env_before) if rule.env_before else None,
-            env_after=dict(rule.env_after) if rule.env_after else None,
-            generated=True,
-        )
-
-        for word in state.lexicon.words:
-            before = mapper.render_word(word)
-            if rule.apply_to_word(word):
-                after = mapper.render_word(word)
-                if after != before:
-                    application.changes.append(
-                        WordChange(concept_id=word.concept_id, before=before, after=after)
-                    )
-
-        history.record(application)
-        previous_rule = rule
-        state.inventory = InventoryView.from_lexicon(state.lexicon, mapper).to_inventory()
-
-    # Doplnění zbylých epoch až do konce zadaného období.
-    while next_epoch <= config.years:
-        state.year = next_epoch
-        history.snapshot(_snapshot(state, mapper, next_epoch, f"Epocha {epoch_index}"))
-        next_epoch += config.epoch_length
-        epoch_index += 1
-
-    state.year = config.years
-    if not history.snapshots or history.snapshots[-1].year != config.years:
-        history.snapshot(_snapshot(state, mapper, config.years, "Současnost"))
-    else:
-        history.snapshots[-1].label = "Současnost"
-
-    return state, history
-
-
-def lineage_payload(
-    state: State,
-    history: SimulationHistory,
-    mapper: FeatureMapper,
-    diagnostic: Optional[Sequence[str]] = None,
-) -> Dict[str, Any]:
-    """
-    Serializuje vývoj jedné linie pro drill-down v UI.
-
-    Kromě epoch a seznamu změn nese i derivaci každého slova — tedy odpověď na
-    otázku "čím tenhle tvar prošel a kdy".
-    """
-    node_id = state.node_id
-    branch = build_branch_view(state, mapper, diagnostic)
-
-    traces = {
-        concept: [step.as_dict() for step in history.trace(node_id, concept)]
-        for concept in sorted({w.concept_id for w in state.lexicon.words})
-    }
-
-    return {
-        "status": "success",
-        "node_id": node_id,
-        "branch": branch.as_dict(),
-        "epochs": [snap.as_dict() for snap in history.snapshots_for(node_id)],
-        "events": [event.as_dict() for event in history.events],
-        "traces": traces,
-    }

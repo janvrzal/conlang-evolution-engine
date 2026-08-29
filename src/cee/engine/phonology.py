@@ -34,14 +34,15 @@ class FeatureMapper:
         # při aktualizaci inventáře.
         self._ipa_cache: Dict[tuple, str] = {}
 
-    def parse_word(self, concept_id: str, ipa_string: str) -> Word:
+    def parse_word(self, concept_id: str, ipa_string: str, is_grammatical: bool = False) -> Word:
         """
-        Převod IPA textu na objekt Word složený z rysových matic.
+        Převod řetězce IPA znaků na instanci třídy Word.
+        Neznámé znaky přeskočí s varováním.
         """
         mapping = {1: '+', -1: '-', 0: '0'}
         panphon_segs = self.ft.word_fts(ipa_string)
         segments = [Segment(features={k: mapping.get(v, str(v)) for k, v in seg.data.items()}) for seg in panphon_segs]
-        return Word(concept_id=concept_id, segments=segments)
+        return Word(concept_id=concept_id, segments=segments, is_grammatical=is_grammatical)
 
     def segment_to_ipa(self, segment: Segment) -> str:
         """

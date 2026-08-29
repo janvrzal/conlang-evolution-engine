@@ -23,6 +23,9 @@ ui = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
 ]
+neo4j = [
+    "neo4j>=5.14.0",
+]
 dev = [
     "pytest>=8.0",
 ]

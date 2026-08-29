@@ -5,6 +5,7 @@ import yaml
 from cee.core.models import Inventory, Lexicon, State
 from cee.engine.parser import YamlParser
 from cee.engine.simulator import EvolutionSimulator
+from cee.engine.topology import EvolutionGraph
 
 LENICE = {
     "name": "Lenice ptk -> bdg",
@@ -152,3 +153,28 @@ def test_simulace_je_deterministicka_a_neprepisuje_topologii(mapper, tmp_path):
     prvni = bez()
     assert bez() == prvni, "Opakovaný běh dal jiný výsledek (graf se nesmí mutovat)."
     assert prvni != ["lupu", "laku"], "Generátor nevyrobil žádnou změnu."
+
+
+def test_volitelne_se_vyviji_i_korenovy_protojazyk(mapper):
+    """UI sleduje kořen na mapě, proto nesmí zůstat mimo výsledky simulace."""
+    root = _root(mapper, [("vlk", "lupu")])
+    graph = EvolutionGraph()
+    preset = YamlParser.parse_preset("src/cee/data/presets/fantasy_preset.yaml")
+
+    states = EvolutionSimulator(
+        graph, mapper, preset=preset, seed=42, end_year=1000, evolve_root=True
+    ).simulate(root)
+
+    assert "proto" in states
+    assert mapper.render_word(states["proto"].lexicon.words[0]) != "lupu"
+
+
+def test_uzel_bez_vlastniho_pravidla_vznika_v_roce_z_konfigurace(mapper):
+    graph = EvolutionGraph()
+    graph.node_configs = {"proto": {}, "daughter": {"year": 500}}
+    graph.vertical_edges.append(
+        __import__("cee.engine.topology", fromlist=["VerticalEdge"]).VerticalEdge("proto", "daughter", [])
+    )
+
+    states = EvolutionSimulator(graph, mapper).simulate(_root(mapper, [("vlk", "lupu")]))
+    assert states["daughter"].year == 500

@@ -25,23 +25,32 @@ class SemanticEvaluator:
         Modifikuje in-place, ale vrací pro pohodlí řetězení.
         """
         for word in lexicon.words:
-            # 1. Získání nového významu (Rozšíření)
+            # 1. Získání nového významu přes Kolexifikaci (Rozšíření CLICS)
             if self.random.random() < self.shift_prob:
                 # Rozhodneme se, z jakého aktuálního významu se slovo odrazí.
-                # Většinou z hlavního, ale může i z těch, které už získalo.
                 available_origins = [word.concept_id] + list(word.polysemy)
                 origin = self.random.choice(available_origins)
                 
-                # Zde musíme graph upravit nebo si udělat vlastní random choice, 
-                # ale graph.random_shift používá globální random. 
-                # V dalším kroku upravíme i graph.py, teď používáme aspoň lokální pravděpodobnost.
-                # new_concept může být None, pokud uzel nemá žádné následníky
-                new_concept = self.graph.random_shift(origin, random_gen=self.random)
+                # Zkusíme najít kolexifikaci
+                new_concept = self.graph.random_shift(origin, random_gen=self.random, edge_type='colexification')
                 if new_concept and new_concept != word.concept_id and new_concept not in word.polysemy:
-                    # Slovo získalo nový význam!
+                    # Slovo získalo nový význam! (Polysémie)
                     word.polysemy.add(new_concept)
+
+            # 2. Úplný sémantický posun (DatSemShift)
+            # Děje se s menší pravděpodobností
+            if self.random.random() < (self.shift_prob * 0.5):
+                # Slovo ztratí starý kořenový význam a přesune se
+                new_concept = self.graph.random_shift(word.concept_id, random_gen=self.random, edge_type='shift')
+                if new_concept and new_concept != word.concept_id:
+                    # Přesuneme starý concept_id do polysémie, kdyby ho jazyk ještě chvíli používal, 
+                    # a posuneme hlavní kořen na new_concept
+                    word.polysemy.add(word.concept_id)
+                    word.concept_id = new_concept
+                    if new_concept in word.polysemy:
+                        word.polysemy.remove(new_concept)
                     
-            # 2. Ztráta starého významu (Zúžení / Shift)
+            # 3. Ztráta starého významu (Zúžení)
             # Pokud má slovo více významů, může jeden ztratit.
             if len(word.polysemy) > 0 and self.random.random() < self.forget_prob:
                 all_meanings = [word.concept_id] + list(word.polysemy)

@@ -44,6 +44,21 @@ def test_normalize_gloss():
     assert normalize_gloss("  Fan (Object) ") == "FAN (OBJECT)"
 
 
+def test_lexikalni_zakladna_pokryje_vsechny_koncepty_a_uzije_kolexifikaci():
+    graph = SemanticGraph.__new__(SemanticGraph)
+    graph.G = nx.DiGraph()
+    graph.G.add_edge("SUN", "DAY", type="colexification", weight=5)
+    graph.G.add_edge("DAY", "SUN", type="colexification", weight=5)
+    graph.G.add_node("MOON")
+
+    entries = graph.lexical_entries()
+    covered = {entry["id"] for entry in entries}
+    covered.update(meaning for entry in entries for meaning in entry["polysemy"])
+
+    assert covered == {"sun", "day", "moon"}
+    assert any(entry["id"] == "day" and entry["polysemy"] == ["sun"] for entry in entries)
+
+
 class TestLoadClics4:
     def test_vaha_je_pocet_jazyku_ne_pocet_rodin_deleny_dvema(self):
         """

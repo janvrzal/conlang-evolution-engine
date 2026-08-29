@@ -19,7 +19,7 @@ const ENGINE_SIGNATURE = 'Conlang Evolution Engine';
  * Běží-li starší, chybí mu endpointy a odpovídal by holým 404 — což vypadá
  * jako chyba aplikace, přestože stačí restartovat `cee ui`.
  */
-const REQUIRED_API_REVISION = 3;
+const REQUIRED_API_REVISION = 4;
 const DEFAULT_PORT = 8000;
 const SCAN_RANGE = 20;
 const PROBE_TIMEOUT_MS = 700;
@@ -229,4 +229,45 @@ export function slugify(name: string): string {
 		.slice(0, 64);
 
 	return slug;
+}
+
+export async function fetchLanguage(runId: string, nodeId: string, year?: number) {
+	const base = await resolveApiBase();
+	let url = `${base}/api/runs/${encodeURIComponent(runId)}/languages/${encodeURIComponent(nodeId)}`;
+	if (year !== undefined) {
+		url += `?year=${year}`;
+	}
+	const res = await fetch(url);
+	if (!res.ok) throw new Error(`Načtení jazyka selhalo: ${res.status}`);
+	const body = await res.json();
+	if (body.status === 'error') throw new Error(body.error);
+	return body.words;
+}
+
+export async function fetchWordTrace(runId: string, wordId: string) {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}/words/${encodeURIComponent(wordId)}/trace`);
+	if (!res.ok) throw new Error(`Načtení historie slova selhalo: ${res.status}`);
+	const body = await res.json();
+	if (body.status === 'error') throw new Error(body.error);
+	return body.trace;
+}
+
+export async function fetchIsogloss(runId: string, conceptId: string, year?: number) {
+	const base = await resolveApiBase();
+	let url = `${base}/api/runs/${encodeURIComponent(runId)}/isogloss/${encodeURIComponent(conceptId)}`;
+	if (year !== undefined) url += `?year=${year}`;
+	const res = await fetch(url);
+	if (!res.ok) throw new Error(`Načtení izoglosy selhalo: ${res.status}`);
+	const body = await res.json();
+	if (body.status === 'error') throw new Error(body.error);
+	return body.isogloss;
+}
+
+/** Stáhne auditovatelný JSON export jedné simulace. */
+export async function fetchRunExport(runId: string) {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}/export`);
+	if (!res.ok) throw new Error(`Export selhal: ${res.status} ${res.statusText}`);
+	return res.json();
 }

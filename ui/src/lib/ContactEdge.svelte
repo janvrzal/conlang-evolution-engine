@@ -93,7 +93,9 @@
 							{#each contactTypes as c}
 								{@const Icon = c.icon}
 								<button class="flex items-center gap-1.5 text-xs p-1.5 hover:bg-muted rounded text-left border border-transparent transition-colors {contactType === c.id ? 'bg-primary/10 text-primary border-primary/30 font-medium' : ''}" onclick={() => setType(c.id)}>
-									<Icon size={14} weight={contactType === c.id ? 'fill' : 'regular'} />
+									<div class="shrink-0 flex items-center justify-center w-[14px]">
+										<Icon size={14} weight={contactType === c.id ? 'fill' : 'regular'} />
+									</div>
 									<span class="truncate">{c.name}</span>
 								</button>
 							{/each}

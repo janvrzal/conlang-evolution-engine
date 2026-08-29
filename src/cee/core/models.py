@@ -19,6 +19,8 @@ class Segment:
                 return False
         return True
 
+import uuid
+
 @dataclass
 class Word:
     """
@@ -29,6 +31,11 @@ class Word:
     polysemy: Set[str] = field(default_factory=set) # Dodatečné významy (sémantické posuny)
     origin_year: int = 0
     source_id: Optional[str] = None # ID zdrojového uzlu v případě výpůjčky
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    parent_word_id: Optional[str] = None
+    origin_type: str = "inherited" # inherited, mutated, borrowed
+    origin_rule: Optional[str] = None # if mutated, rule name
+    is_grammatical: bool = False
 
 
 @dataclass

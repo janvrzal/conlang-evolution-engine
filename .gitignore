@@ -13,6 +13,23 @@ build/
 # Výstupy simulací (generovaná data do gitu nepatří — AGENT.md §1.3)
 runs/
 output_test/
+profile.stats
+response.json
+
+# Jednorázové diagnostické a profilovací skripty v kořeni repozitáře.
+# Nejsou součástí produktu ani testovací sady; ponecháváme je lokálně pro
+# případné další zkoumání místo toho, aby znečišťovaly pracovní strom.
+/debug_neo4j*.py
+/parse_clics_test.py
+/profile*.py
+/test_clics.py
+/test_drift.py
+/test_dups.py
+/test_neo4j*.py
+/test_query*.py
+/test_rules*.py
+/archive/scratch*.py
+/archive/simulate_test.py
 *.csv
 *.yaml
 
@@ -20,9 +37,9 @@ output_test/
 !src/cee/data/**
 !tests/**
 !scenario_*.yaml
-!fantasy_v1.csv
-!latin_v1.csv
-!latin_rules.yaml
+!archive/fantasy_v1.csv
+!archive/latin_v1.csv
+!archive/latin_rules.yaml
 
 # Dokumentace a designové nákresy
 *.docx

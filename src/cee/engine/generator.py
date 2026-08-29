@@ -6,8 +6,8 @@ Skládá chronologii pravidel ze tří vrstev:
 1. **Inventář schémat** — `schemas.SCHEMA_REGISTRY`.
 2. **Priory** — váhy z presetu, modifikované biomem uzlu.
 3. **Filtr věrohodnosti** — prostředí musí být v aktuálním inventáři neprázdné
-   (řeší `Schema.generate_rule`) a sekvence nesmí obsahovat okamžité zvrácení
-   předchozí změny (řeší `_reverses` níže).
+(řeší `Schema.generate_rule`) a sekvence nesmí obsahovat zvrácení už proběhlé
+změny (řeší `_reverses` níže).
 
 Inventář se mezi pravidly průběžně aktualizuje, takže pozdější změna vidí to,
 co jí předchozí připravila.
@@ -23,7 +23,7 @@ from cee.engine.rules import Rule
 from cee.engine.schemas import SCHEMA_REGISTRY
 
 # Kolikrát se pro jeden slot v chronologii zkusí jiné schéma, než to vzdáme.
-MAX_ATTEMPTS_PER_SLOT = 24
+MAX_ATTEMPTS_PER_SLOT = 25
 
 # Schémata, která ukrajují konce slov — na ně sahá makro-parametr eroze.
 CODA_SCHEMAS = ("coda_loss", "syncope")
@@ -236,7 +236,7 @@ class SoundChangeGenerator:
 
         for i in range(slots):
             year = self.year_for_slot(start_year, end_year, i, slots)
-            candidate = self.generate_one(state, year, inventory, previous=previous)
+            candidate = self.generate_one(state, year, inventory, previous=previous, history=rules)
             if candidate is None:
                 continue
 
@@ -252,6 +252,7 @@ class SoundChangeGenerator:
         year: int,
         inventory: InventoryView,
         previous: Optional[Rule] = None,
+        history: Optional[List[Rule]] = None,
         accepts: Optional[Callable[[Rule], bool]] = None,
     ) -> Optional[Rule]:
         """
@@ -274,7 +275,7 @@ class SoundChangeGenerator:
             if candidate is None:
                 continue  # třída je v inventáři prázdná
             if (
-                _reverses(previous, candidate)
+                any(_reverses(earlier, candidate) for earlier in (history or []))
                 or _undoes_insertion(previous, candidate)
                 or _is_duplicate(previous, candidate)
             ):

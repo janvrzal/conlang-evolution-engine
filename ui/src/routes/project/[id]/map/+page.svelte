@@ -16,6 +16,7 @@
 	import LanguageNode from '$lib/LanguageNode.svelte';
 	import ContactEdge from '$lib/ContactEdge.svelte';
 	import LanguageDetail from '$lib/LanguageDetail.svelte';
+	import TimelineControl from '$lib/TimelineControl.svelte';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -26,10 +27,11 @@
 		ArrowLeftRight,
 		X,
 		Download,
-		Trash2
+		Trash2,
+		Map
 	} from 'lucide-svelte';
 	
-	import { simulateDynamic, resetApiBase } from '$lib/api';
+	import { simulateDynamic, resetApiBase, fetchIsogloss, fetchRunExport } from '$lib/api';
 	import { projectState, loadProject, scheduleSave, flushSave } from '$lib/state.svelte';
 	import { propagateSnapshots, findEdgeBetween, retypeEdge, newEdgeFields } from '$lib/timeline';
 	import type { TLEdge } from '$lib/timeline';
@@ -63,6 +65,8 @@
 
 	// xyflow v1 nemá vestavěné mazání klávesou, takže si výběr hrany držíme sami.
 	let selectedEdgeId = $state<string | null>(null);
+	
+	let activeIsogloss = $state<{ conceptId: string, data: Record<string, string> } | null>(null);
 
 	// Zvýraznění vybrané hrany řeší CSS přes třídu .selected, kterou přidává
 	// sám xyflow. Přepisovat kvůli tomu pole hran by rozbilo bind:edges.
@@ -98,19 +102,6 @@
 			deleteSelectedEdge();
 		}
 	}
-
-	type BranchData = {
-		year: number;
-		words: { id: string; ipa: string; polysemy: string[] }[];
-		inventory: string[];
-		grammar_md: string;
-	};
-
-	let branches = $derived(
-		Object.entries(
-			(projectState.simulationResult?.branches ?? {}) as Record<string, BranchData>
-		)
-	);
 
 	// --- Time Snapshot Logic ---
 	// Osa i snapshoty žijí v projectState, protože se ukládají na disk.
@@ -278,13 +269,23 @@
 
 	function addLanguage() {
 		const year = timeSteps[currentTimeIndex];
+		const id = `lang-${Date.now()}`;
 		const newNode = {
-			id: `lang-${Date.now()}`,
+			id,
 			type: 'language',
 			position: { x: Math.random() * 300 + 200, y: Math.random() * 300 + 200 },
-			data: { label: `Nový jazyk`, year }
+			data: { label: generateLanguageName(id), year }
 		};
 		nodes = [...nodes, newNode];
+	}
+
+	const nameStarts = ['Aru', 'Bela', 'Daro', 'Eli', 'Kara', 'Luma', 'Mori', 'Nava', 'Sora', 'Tavi'];
+	const nameEnds = ['n', 'ra', 'li', 'ma', 'ta', 'vek', 'rin', 'sa', 'dor', 'ya'];
+
+	function generateLanguageName(seed: string): string {
+		let value = 0;
+		for (let i = 0; i < seed.length; i += 1) value = (value * 31 + seed.charCodeAt(i)) >>> 0;
+		return `${nameStarts[value % nameStarts.length]}${nameEnds[(value >>> 8) % nameEnds.length]}`;
 	}
 
 	function addTimeStep() {
@@ -298,14 +299,55 @@
 	}
 
 	// Calculate proportional position for timeline points
-	let minYear = $derived(Math.min(...timeSteps));
-	let maxYear = $derived(Math.max(...timeSteps, minYear + 1)); // prevent division by zero
-	let timeSpan = $derived(maxYear - minYear || 1);
+	let maxYear = $derived(Math.max(...timeSteps, 1));
 
 	// --- Simulation Logic ---
 	let isLoading = $state(false);
 	let errorMessage = $state('');
 	let showResultsModal = $state(false);
+
+	async function handleIsogloss(conceptId: string) {
+		if (!projectState.simulationRunId) return;
+		try {
+			const data = await fetchIsogloss(projectState.simulationRunId, conceptId, timeSteps[currentTimeIndex]);
+			activeIsogloss = { conceptId, data };
+			updateNodesIsogloss();
+		} catch (e) {
+			console.error("Izoglosa failed", e);
+		}
+	}
+	
+	function clearIsogloss() {
+		activeIsogloss = null;
+		updateNodesIsogloss();
+	}
+	
+	function updateNodesIsogloss() {
+		nodes = nodes.map(n => {
+			if (activeIsogloss) {
+				return { ...n, data: { ...n.data, isoglossValue: activeIsogloss.data[n.id] || '-' } };
+			} else {
+				const { isoglossValue, ...rest } = n.data as any;
+				return { ...n, data: rest };
+			}
+		});
+	}
+
+	async function exportSimulation() {
+		if (!projectState.simulationRunId) return;
+		try {
+			const payload = await fetchRunExport(projectState.simulationRunId);
+			const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `${$page.params.id}-${projectState.simulationRunId}.json`;
+			link.click();
+			URL.revokeObjectURL(url);
+		} catch (e) {
+			errorMessage = e instanceof Error ? e.message : String(e);
+		}
+	}
 
 	async function runSimulation() {
 		if (projectState.generatedProtoLexicon.length === 0) {
@@ -315,82 +357,48 @@
 		
 		isLoading = true;
 		errorMessage = '';
+		// Artificial minimum wait to show the progress bar if the API is too fast
+		const minWait = new Promise(resolve => setTimeout(resolve, 800));
+		
 		try {
-			// Sestavení topologie pro backend
-			const topologyNodes: Record<string, { biome: string, society: string }> = {};
-			for (const n of nodes) {
-				topologyNodes[n.id] = { 
-					biome: (n.data as any).biome ?? 'none',
-					society: (n.data as any).society ?? 'none'
-				};
-			}
-
+			// Backend musí dostat celou historii mapy. Dědičnost žije jen v
+			// okamžiku odštěpení; v dalších snímcích se správně mění na kontakt.
+			// Poslat jen aktuálně zobrazený snímek by proto genealogii zahodilo.
 			const topology_data = {
-				nodes: topologyNodes,
-				edges: edges.map((e) => {
-					return e.type === 'contact'
-						? {
-								source: e.source,
-								target: e.target,
-								kind: 'contact',
-								contactType: (e.data as any)?.contactType ?? 'neighborhood',
-								intensity: (e.data as any)?.intensity ?? 50,
-								direction: (e.data as any)?.direction ?? 'ab',
-								year: (e.data as any)?.year ?? Math.round(maxYear / 2),
-								volume: (e.data as any)?.volume ?? 5,
-								mutual: (e.data as any)?.mutual ?? true
-							}
-						: { source: e.source, target: e.target, kind: 'inheritance' };
-				})
+				snapshots: timeSteps.map((year) => ({
+					year,
+					nodes: projectState.snapshots[year]?.nodes ?? [],
+					edges: projectState.snapshots[year]?.edges ?? []
+				}))
 			};
 
 			const data = await simulateDynamic({
 				topology_data,
 				proto_lexicon: projectState.generatedProtoLexicon,
-				years: maxYear
+				years: maxYear,
+				run_id: projectState.simulationRunId
 			});
 
+			await minWait;
+
 			if (data.status === 'success') {
-				projectState.simulationResult = data;
 				projectState.simulationRunAt = new Date().toISOString();
-				// Výsledek je hlavní výstup — ať přežije reload, uložíme hned.
+				projectState.simulationRunId = data.run_id;
+				// Uložení je lokální ve výchozím stavu; Neo4j je jen volitelný adaptér.
 				void flushSave();
-				showResultsModal = true;
+				
+				// Úspěšně nahráno do DB. Tady bychom případně mohli zobrazit toast notifikaci.
 			} else {
 				errorMessage = `Engine vrátil stav '${data.status}'.`;
 			}
 		} catch (e) {
+			await minWait;
 			resetApiBase();
 			errorMessage = e instanceof Error ? e.message : String(e);
 			console.error("Chyba při volání API", e);
 		} finally {
 			isLoading = false;
 		}
-	}
-	
-	function downloadCSV(branchId: string, branchData: any) {
-		const header = 'id,ipa,polysemy\n';
-		const rows = branchData.words.map((w: any) => `${w.id},${w.ipa},${w.polysemy.join('|')}`).join('\n');
-		const csvContent = "data:text/csv;charset=utf-8," + header + rows;
-		
-		const encodedUri = encodeURI(csvContent);
-		const link = document.createElement("a");
-		link.setAttribute("href", encodedUri);
-		link.setAttribute("download", `${branchId}_lexicon.csv`);
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-	}
-
-	function downloadMarkdown(branchId: string, branchData: any) {
-		const mdContent = "data:text/markdown;charset=utf-8," + encodeURIComponent(branchData.grammar_md);
-		
-		const link = document.createElement("a");
-		link.setAttribute("href", mdContent);
-		link.setAttribute("download", `${branchId}_grammar.md`);
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
 	}
 </script>
 
@@ -471,8 +479,19 @@
 		{/if}
 	</div>
 
+	<!-- Izoglosa Banner -->
+	{#if activeIsogloss}
+		<div class="absolute top-4 left-1/2 ml-[220px] z-10 flex bg-primary text-primary-foreground rounded-md shadow-lg p-1.5 px-3 items-center gap-2 animate-in slide-in-from-top-4">
+			<Map class="w-4 h-4" />
+			<span class="text-sm font-semibold tracking-tight">Izoglosa: {activeIsogloss.conceptId}</span>
+			<button class="ml-2 hover:bg-primary-foreground/20 p-0.5 rounded transition-colors" onclick={clearIsogloss}>
+				<X size={16} />
+			</button>
+		</div>
+	{/if}
+
 	<!-- Left Panel: Project Settings -->
-	<div class="absolute top-4 left-4 z-10 w-64 flex flex-col gap-4">
+	<div class="absolute top-4 left-4 z-10 w-80 flex flex-col gap-4">
 		<Card class="shadow-sm">
 			<CardHeader class="pb-3">
 				<CardTitle class="text-lg">Projekt: {$page.params.id}</CardTitle>
@@ -481,17 +500,21 @@
 				<Button class="w-full" variant="outline" size="sm" onclick={addLanguage}>
 					+ Přidat uzel
 				</Button>
-				<Button class="w-full" variant="default" size="sm" onclick={runSimulation} disabled={isLoading}>
-					{isLoading ? 'Simuluji...' : 'Spustit Vývoj (Simulovat)'}
+				<Button class="w-full relative overflow-hidden" variant="default" size="sm" onclick={runSimulation} disabled={isLoading}>
+					<span class="relative z-10">{isLoading ? 'Simuluji...' : 'Spustit Vývoj (Simulovat)'}</span>
+					{#if isLoading}
+						<div class="absolute bottom-0 left-0 h-1 bg-white/40 animate-pulse transition-all duration-[800ms] ease-out w-full" style="animation: fillProgress 800ms ease-out forwards;"></div>
+					{/if}
 				</Button>
+				{#if projectState.simulationRunId}
+					<Button class="w-full" variant="outline" size="sm" onclick={exportSimulation}>
+						<Download class="w-4 h-4 mr-2" /> Exportovat simulaci
+					</Button>
+				{/if}
 				{#if errorMessage}
 					<p class="text-xs text-destructive">{errorMessage}</p>
 				{/if}
-				{#if projectState.simulationResult}
-					<Button class="w-full" variant="secondary" size="sm" onclick={() => showResultsModal = true}>
-						Zobrazit výsledky simulace
-					</Button>
-				{/if}
+
 				<div class="text-xs text-muted-foreground space-y-1">
 					<p>Aktuální krok: <strong>Rok {timeSteps[currentTimeIndex]}</strong></p>
 					<p class="flex items-center gap-1.5">
@@ -512,25 +535,8 @@
 				</div>
 			</CardContent>
 		</Card>
-	</div>
 
-	<!-- Right Panel: drill-down vývoje jazyka -->
-	{#if detailOpen && selectedNodeId && selectedNodeData}
-		<div class="absolute top-0 right-0 bottom-0 z-20">
-			<LanguageDetail
-				nodeId={selectedNodeId}
-				label={String(selectedNodeData.data.label ?? selectedNodeId)}
-				biome={(selectedNodeData.data as any).biome ?? null}
-				years={timeSteps[timeSteps.length - 1] ?? 1000}
-				lexicon={projectState.generatedProtoLexicon}
-				onclose={() => (detailOpen = false)}
-			/>
-		</div>
-	{/if}
-
-	<!-- Rychlá editace uzlu -->
-	{#if selectedNodeId && selectedNodeData && !detailOpen}
-		<div class="absolute top-4 right-4 z-10 w-72">
+		{#if selectedNodeId && selectedNodeData}
 			<Card class="shadow-sm border-primary">
 				<CardHeader class="pb-3">
 					<CardTitle class="text-base">Detail uzlu</CardTitle>
@@ -546,117 +552,40 @@
 						<Label class="text-xs text-muted-foreground">Vznik v roce</Label>
 						<Input disabled value={selectedNodeData.data.year} />
 					</div>
-					<div class="flex items-center gap-2 mt-4 p-2 rounded-md border {(selectedNodeData.data as any).isDead ? 'bg-muted border-border' : 'bg-background'}">
-						<input
-							type="checkbox"
-							id="isDead"
-							class="accent-primary"
-							checked={(selectedNodeData.data as any).isDead || false}
-							onchange={(e) => setDead(selectedNodeId!, e.currentTarget.checked)}
-						/>
-						<Label for="isDead" class="text-sm font-medium cursor-pointer">Jazyk je mrtvý (tombstone)</Label>
+					<div class="flex items-center gap-2 p-2 rounded-md border {(selectedNodeData.data as any).isDead ? 'bg-muted border-border' : 'bg-background'}">
+						<input type="checkbox" id="isDead" class="accent-primary" checked={(selectedNodeData.data as any).isDead || false} onchange={(e) => setDead(selectedNodeId!, e.currentTarget.checked)} />
+						<Label for="isDead" class="text-sm font-medium cursor-pointer">Jazyk je mrtvý</Label>
 					</div>
-					<p class="text-[11px] text-muted-foreground -mt-2">
-						Zruší všechna jeho spojení od tohoto roku dál — v dřívějších letech zůstávají.
-					</p>
-					<Button class="w-full mt-2" size="sm">Editovat pravidla</Button>
 				</CardContent>
 			</Card>
-		</div>
-	{/if}
 
-	<!-- Minimalist Proportional Timeline -->
-	<div class="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 w-full max-w-2xl">
-		<div class="bg-card/80 backdrop-blur-md rounded-full border shadow-sm px-8 py-3 flex items-center justify-between gap-4">
-			<div class="text-sm font-medium w-16 text-right whitespace-nowrap">Rok {timeSteps[currentTimeIndex]}</div>
-			
-			<div class="relative flex-1 h-2 bg-muted rounded-full">
-				<!-- Current time indicator (progress bar) -->
-				<div 
-					class="absolute top-0 left-0 h-full bg-primary rounded-full transition-all duration-300"
-					style="width: {((timeSteps[currentTimeIndex] - minYear) / timeSpan) * 100}%"
-				></div>
-				
-				<!-- Timeline points -->
-				{#each timeSteps as year, i}
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div 
-						class="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 cursor-pointer transition-all hover:scale-125 {i === currentTimeIndex ? 'bg-primary border-background shadow-sm scale-110' : 'bg-background border-primary/50'}"
-						style="left: calc({((year - minYear) / timeSpan) * 100}% - 8px)"
-						onclick={() => currentTimeIndex = i}
-						title="Rok {year}"
-					></div>
-				{/each}
-			</div>
-
-			<Button variant="ghost" size="sm" class="h-8 w-8 p-0 rounded-full shrink-0" onclick={addTimeStep} title="Přidat bod na osu">
-				+
-			</Button>
-		</div>
+		{/if}
 	</div>
 
-	<!-- Results Modal Overlay -->
-	{#if showResultsModal && projectState.simulationResult}
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4" onclick={(e) => { if (e.target === e.currentTarget) showResultsModal = false; }}>
-			<div class="bg-card w-full max-w-6xl max-h-[90vh] rounded-xl border shadow-xl flex flex-col overflow-hidden">
-				<div class="p-4 border-b flex justify-between items-center bg-muted/30">
-					<h2 class="text-xl font-bold">Výsledky Evoluce</h2>
-					<Button variant="ghost" size="icon" onclick={() => showResultsModal = false}>
-						<X class="w-5 h-5" />
-					</Button>
-				</div>
-				<div class="p-6 overflow-y-auto flex-1 bg-muted/10">
-					<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-						{#each branches as [branchId, branchData] (branchId)}
-							<Card>
-								<CardHeader class="pb-3 border-b bg-card">
-									<div class="flex justify-between items-start">
-										<div>
-											<CardTitle class="text-lg">Jazyk: {branchId}</CardTitle>
-											<CardDescription>Rok: {branchData.year}</CardDescription>
-										</div>
-										<div class="flex gap-2">
-											<Button variant="outline" size="sm" onclick={() => downloadCSV(branchId, branchData)} title="Stáhnout slovník (CSV)">
-												<Download class="w-4 h-4 mr-1" /> CSV
-											</Button>
-											<Button variant="outline" size="sm" onclick={() => downloadMarkdown(branchId, branchData)} title="Stáhnout gramatiku (Markdown)">
-												<Download class="w-4 h-4 mr-1" /> MD
-											</Button>
-										</div>
-									</div>
-								</CardHeader>
-								<CardContent class="p-0">
-									<div class="max-h-80 overflow-y-auto">
-										<table class="w-full text-sm">
-											<thead class="bg-muted/50 sticky top-0 backdrop-blur-md">
-												<tr>
-													<th class="p-2 text-left font-medium">Koncept</th>
-													<th class="p-2 text-left font-medium">Slovo (IPA)</th>
-													<th class="p-2 text-left font-medium">Významy</th>
-												</tr>
-											</thead>
-											<tbody class="divide-y">
-												{#each branchData.words as word}
-													<tr class="hover:bg-muted/20">
-														<td class="p-2 text-muted-foreground">{word.id}</td>
-														<td class="p-2 font-mono font-bold text-primary">{word.ipa}</td>
-														<td class="p-2 text-xs italic opacity-75">{word.polysemy.join(', ')}</td>
-													</tr>
-												{/each}
-											</tbody>
-										</table>
-									</div>
-								</CardContent>
-							</Card>
-						{/each}
-					</div>
-				</div>
-			</div>
+	<!-- Right Panel: Language Detail Sidebar -->
+	{#if selectedNodeId && selectedNodeData && detailOpen}
+		<div class="absolute top-0 right-0 bottom-0 z-20 shadow-2xl animate-in slide-in-from-right">
+			<LanguageDetail
+				runId={projectState.simulationRunId}
+				nodeId={selectedNodeId}
+				label={String(selectedNodeData.data.label ?? selectedNodeId)}
+				biome={(selectedNodeData.data as any).biome ?? null}
+				years={Math.max(0, timeSteps[currentTimeIndex] - Number(selectedNodeData.data.year || 0))}
+				currentYear={timeSteps[currentTimeIndex]}
+				embedded={false}
+				onclose={() => (detailOpen = false)}
+				onIsogloss={handleIsogloss}
+			/>
 		</div>
 	{/if}
+
+	<TimelineControl
+		{timeSteps}
+		currentIndex={currentTimeIndex}
+		onChange={(index) => (currentTimeIndex = index)}
+		onAdd={addTimeStep}
+	/>
+
 </div>
 
 <style>
@@ -686,5 +615,10 @@
 	}
 	:global(.tool-connect .svelte-flow__handle) {
 		display: block !important;
+	}
+
+	@keyframes fillProgress {
+		0% { width: 0%; opacity: 0.8; }
+		100% { width: 100%; opacity: 0; }
 	}
 </style>

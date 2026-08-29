@@ -95,6 +95,40 @@ class SemanticGraph:
         chosen = gen.choices(targets, weights=weights, k=1)[0]
         return chosen
 
+    def lexical_entries(self) -> list[dict[str, object]]:
+        """Vrátí deterministický výchozí slovník pokrývající celý graf.
+
+        Každý význam v CLICS4/DatSemShiftu dostane pokrytí. Kde je doložená
+        kolexifikace, spojíme dvojici významů do jednoho lexému — protojazyk
+        tak nezačíná mechanicky jedním slovem pro každý koncept, ale stále
+        neztrácí žádný sémantický uzel.
+        """
+        uncovered = set(str(node) for node in self.G.nodes)
+        entries: list[dict[str, object]] = []
+
+        while uncovered:
+            concept = min(uncovered)
+            neighbors = []
+            for target in self.G.successors(concept):
+                data = self.G.get_edge_data(concept, target) or {}
+                if target in uncovered and data.get("type") == "colexification":
+                    neighbors.append((float(data.get("weight", 1)), str(target)))
+
+            partner = max(neighbors, default=None, key=lambda item: (item[0], item[1]))
+            meanings = [concept]
+            if partner:
+                meanings.append(partner[1])
+
+            uncovered.difference_update(meanings)
+            entries.append(
+                {
+                    "id": concept.lower(),
+                    "polysemy": [meaning.lower() for meaning in meanings[1:]],
+                }
+            )
+
+        return entries
+
 
 if __name__ == "__main__":
     # Rychlý test pro ukázku

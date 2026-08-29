@@ -12,12 +12,21 @@ from cee.api.server import (  # noqa: E402
     health_check,
     run_dynamic_simulation,
 )
+from cee.storage.genealogy import FileGenealogyStore  # noqa: E402
 
 PROTO = [
     {"id": "vlk", "ipa": "lupu"},
     {"id": "voda", "ipa": "laku"},
     {"id": "strom", "ipa": "petra"},
 ]
+
+
+@pytest.fixture(autouse=True)
+def localni_uloziste_simulace(tmp_path, monkeypatch):
+    """HTTP testy nikdy nezapisují uživatelské běhy do ~/.cee."""
+    store = FileGenealogyStore(tmp_path / "runs")
+    monkeypatch.setattr("cee.api.server.get_genealogy_store", lambda: store)
+    return store
 
 
 def test_health_nese_podpis_enginu():
@@ -41,7 +50,7 @@ def test_find_free_port_preskoci_obsazeny(tmp_path):
         assert find_free_port(obsazeny) != obsazeny
 
 
-def test_biom_z_ui_ovlivni_vysledek():
+def test_biom_z_ui_ovlivni_vysledek(monkeypatch):
     """
     UI posílá konfiguraci uzlu naplocho ({"biome": ...}), zatímco simulátor ji
     čte pod klíčem `map`. Bez normalizace vyšly všechny větve stejně, protože
@@ -63,31 +72,100 @@ def test_biom_z_ui_ovlivni_vysledek():
         semantics="",
     )
 
+    captured_graph = None
+    def mock_run_simulation(lexicon, graph, mapper, config, builder):
+        nonlocal captured_graph
+        captured_graph = graph
+        return {}
+        
+    monkeypatch.setattr("cee.api.server.run_simulation", mock_run_simulation)
+
     result = run_dynamic_simulation(req)
     assert result["status"] == "success"
 
-    hory = [w["ipa"] for w in result["branches"]["hory"]["words"]]
-    prales = [w["ipa"] for w in result["branches"]["prales"]["words"]]
-
-    assert hory != prales, "Biom se neprojevil — konfigurace uzlu se nedostala do state.map."
+    assert captured_graph.node_configs["hory"]["map"]["biome"] == "hory"
+    assert captured_graph.node_configs["prales"]["map"]["biome"] == "prales"
 
 
-def test_dynamicka_topologie_respektuje_map_i_primo():
+def test_dynamicka_topologie_respektuje_map_i_primo(monkeypatch):
     """Kanonický tvar z YAML (`map`) musí fungovat stejně jako plochý z UI."""
+    captured_graph = None
+    def mock_run_simulation(lexicon, graph, mapper, config, builder):
+        nonlocal captured_graph
+        captured_graph = graph
+        return {}
+        
+    monkeypatch.setattr("cee.api.server.run_simulation", mock_run_simulation)
+    
     def spustit(nodes):
-        return run_dynamic_simulation(DynamicSimulateRequest(
+        run_dynamic_simulation(DynamicSimulateRequest(
             topology_data={
                 "nodes": nodes,
                 "edges": [{"source": "proto", "target": "hory"}],
             },
             proto_lexicon=PROTO,
             semantics="",
-        ))["branches"]["hory"]["words"]
+        ))
+        return captured_graph
 
     plochy = spustit({"proto": {}, "hory": {"biome": "hory"}})
+    plochy_biome = plochy.node_configs["hory"]["map"]["biome"]
+    
     kanonicky = spustit({"proto": {}, "hory": {"map": {"biome": "hory"}}})
+    kanonicky_biome = kanonicky.node_configs["hory"]["map"]["biome"]
 
-    assert [w["ipa"] for w in plochy] == [w["ipa"] for w in kanonicky]
+    assert plochy_biome == kanonicky_biome == "hory"
+
+
+def test_casova_osa_zachova_dedictvi_jen_v_okamziku_odstepeni(monkeypatch):
+    """Pozdější kontakt nesmí přepsat dřívější dědičnou hranu."""
+    captured_graph = None
+
+    def mock_run_simulation(lexicon, graph, mapper, config, builder):
+        nonlocal captured_graph
+        captured_graph = graph
+        assert config.root_id == "lang-1"
+        assert config.evolve_root is True
+        return {}
+
+    monkeypatch.setattr("cee.api.server.run_simulation", mock_run_simulation)
+    run_dynamic_simulation(DynamicSimulateRequest(
+        topology_data={
+            "snapshots": [
+                {
+                    "year": 0,
+                    "nodes": [{"id": "lang-1", "data": {"isProto": True, "year": 0}}],
+                    "edges": [],
+                },
+                {
+                    "year": 500,
+                    "nodes": [
+                        {"id": "lang-1", "data": {"isProto": True, "year": 0}},
+                        {"id": "coastal", "data": {"year": 500}},
+                    ],
+                    "edges": [{"source": "lang-1", "target": "coastal", "type": "straight", "data": {}}],
+                },
+                {
+                    "year": 1000,
+                    "nodes": [
+                        {"id": "lang-1", "data": {"isProto": True, "year": 0}},
+                        {"id": "coastal", "data": {"year": 500}},
+                    ],
+                    "edges": [{"source": "lang-1", "target": "coastal", "type": "contact", "data": {}}],
+                },
+            ],
+        },
+        proto_lexicon=PROTO,
+        semantics="",
+    ))
+
+    assert any(
+        edge.parent_id == "lang-1" and edge.child_id == "coastal"
+        for edge in captured_graph.vertical_edges
+    )
+    assert [(edge.year, edge.source_id, edge.target_id) for edge in captured_graph.contact_edges] == [
+        (1000, "lang-1", "coastal")
+    ]
 
 
 def test_health_hlasi_revizi_rozhrani():
@@ -108,5 +186,5 @@ def test_revize_pokryva_soucasne_endpointy():
     from cee.api.server import app
 
     cesty = {r.path for r in app.routes if hasattr(r, "path")}
-    assert {"/api/evolve", "/api/projects", "/api/projects/{project_id}"} <= cesty
+    assert {"/api/projects", "/api/projects/{project_id}"} <= cesty
     assert API_REVISION >= 3

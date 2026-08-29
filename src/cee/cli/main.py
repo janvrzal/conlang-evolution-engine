@@ -17,7 +17,7 @@ from cee.metrics.retention import LexicalRetention
 from cee.pipeline import (
     LineageConfig,
     SimulationConfig,
-    evolve_lineage,
+    
     build_branch_views,
     load_lexicon_from_csv,
     run_simulation,
@@ -72,7 +72,15 @@ def apply(
             raise typer.Exit(code=1)
             
         typer.echo("🧠 Načítám sémantický graf a spouštím sémantické posuny...")
-        graph = SemanticGraph(str(graph_path))
+        try:
+            graph = SemanticGraph(str(graph_path))
+        except Exception as exc:
+            # Externí soubor (viz builder.py) — poškozený obsah selže různým
+            # typem výjimky podle formátu (ElementTree.ParseError pro
+            # GraphML, yaml.YAMLError pro YAML mock), ne jen OSError/ValueError.
+            typer.echo(f"❌ Sémantický graf na {graph_path} se nepodařilo načíst "
+                       f"({type(exc).__name__}): {exc}", err=True)
+            raise typer.Exit(code=1)
         # Pro demonstraci použijeme vysokou pravděpodobnost 100% posunu, pokud to chceme vidět
         # v reálu by to bylo např. 0.05
         evaluator = SemanticEvaluator(graph, shift_prob=0.15, forget_prob=0.05, seed=semantic_seed)
@@ -104,62 +112,6 @@ def apply(
 
 
 @app.command()
-def evolve(
-    proto_csv: Path = typer.Option(..., help="Cesta k CSV s proto-lexikonem"),
-    preset_yaml: Path = typer.Option("src/cee/data/presets/fantasy_preset.yaml",
-                                     help="Preset pro generátor zvukových změn"),
-    years: int = typer.Option(1000, help="Délka vývoje v letech"),
-    epochs: int = typer.Option(5, help="Počet epoch, ve kterých se ukládá snapshot"),
-    biome: str = typer.Option(None, help="Biom uzlu (mění váhy schémat)"),
-    seed: int = typer.Option(42, help="Seed pro deterministický běh"),
-    trace: str = typer.Option(None, help="Vypsat derivaci jednoho konceptu")
-):
-    """
-    Nechá jeden protojazyk vyvíjet se v čase — bez větvení a bez kontaktu.
-
-    Ukáže, čím jazyk prošel: epochy, zvukové změny a jejich dopad.
-    """
-    typer.echo("⚙️  Inicializuji FeatureMapper (toto může chvíli trvat)...")
-    mapper = FeatureMapper()
-    lexicon = load_lexicon_from_csv(str(proto_csv), mapper)
-
-    config = LineageConfig(
-        years=years,
-        epochs=epochs,
-        seed=seed,
-        biome=biome,
-        preset=YamlParser.parse_preset(str(preset_yaml)) if preset_yaml else None,
-    )
-
-    typer.echo(f"🚀 Vyvíjím jazyk po dobu {years} let...\n")
-    state, history = evolve_lineage(lexicon, mapper, config)
-
-    applications = history.rule_applications()
-    typer.echo(f"📜 Zvukové změny ({len(applications)}):")
-    for app_ in applications:
-        typer.echo(f"   {app_.year:>5}  {app_.rule_name:<52} zasáhlo {app_.hit_count} slov")
-
-    typer.echo(f"\n🕰️  Epochy ({len(history.snapshots)}):")
-    ukazky = sorted({w.concept_id for w in state.lexicon.words})[:4]
-    hlavicka = "   " + f"{'rok':>6}  {'epocha':<12}" + "".join(f"{c[:11]:<13}" for c in ukazky)
-    typer.echo(hlavicka)
-    for snap in history.snapshots:
-        radek = "   " + f"{snap.year:>6}  {(snap.label or ''):<12}"
-        radek += "".join(f"{snap.words.get(c, '—'):<13}" for c in ukazky)
-        typer.echo(radek)
-
-    if trace:
-        typer.echo(f"\n🔍 Derivace konceptu '{trace}':")
-        steps = history.trace(state.node_id, trace)
-        if not steps:
-            typer.echo("   (tvar se nikdy nezměnil)")
-        for step in steps:
-            popis = step.rule_name or step.note or ""
-            typer.echo(f"   {step.year:>5}  {step.form:<14} {popis}")
-
-    typer.echo("\n✅ Hotovo.")
-
-
 @app.command()
 def simulate(
     topology_yaml: Path = typer.Option(..., help="Cesta k YAML definici evoluční sítě"),
@@ -253,6 +205,7 @@ def ui(
     port: int = typer.Option(None, help="Pevný port. Bez něj se vybere první volný od 8000 nahoru."),
     open_browser_flag: bool = typer.Option(True, "--open-browser/--no-open-browser",
                                            help="Otevřít po startu prohlížeč."),
+    reload: bool = typer.Option(False, "--reload", help="Automaticky reloadovat server při změně kódu."),
 ):
     """
     Spustí backend pro grafické rozhraní (lokální FastAPI server).
@@ -287,7 +240,7 @@ def ui(
         threading.Thread(target=open_browser, daemon=True).start()
 
     # Blokující volání uvicornu
-    start_server(port=port)
+    start_server(port=port, reload=reload)
 
 
 def _write_api_url(api_url: str) -> None:

@@ -19,7 +19,14 @@
 
 	// State
 	let protoLanguages = $state<{ id: string; name: string; presetId: string; consonants: Set<string>; vowels: Set<string>; syllable: string }[]>([
-		{ id: 'proto-1', name: 'Proto-Jazyk 1', presetId: 'empty', consonants: new Set(), vowels: new Set(), syllable: '(C)V' }
+		{
+			id: 'proto-1',
+			name: 'Protojazyk',
+			presetId: 'pie',
+			consonants: new Set(languagePresets.find((preset) => preset.id === 'pie')!.consonants),
+			vowels: new Set(languagePresets.find((preset) => preset.id === 'pie')!.vowels),
+			syllable: languagePresets.find((preset) => preset.id === 'pie')!.syllable
+		}
 	]);
 	let activeProtoId = $state('proto-1');
 	
@@ -105,6 +112,8 @@
 
 	let isGenerating = $state(false);
 	let generateError = $state('');
+	let generatedSource = $state('');
+	let generatedConceptCount = $state(0);
 
 	async function generateLexicon() {
 		if (activeProto.consonants.size === 0 || activeProto.vowels.size === 0) {
@@ -126,6 +135,8 @@
 			
 			if (data.status === 'success') {
 				projectState.generatedProtoLexicon = data.words;
+				generatedSource = data.source ?? '';
+				generatedConceptCount = data.concept_count ?? data.words.length;
 				scheduleSave();
 			} else {
 				generateError = `Generátor vrátil chybový stav '${data.status}'.`;
@@ -147,17 +158,18 @@
 	<header class="flex items-center justify-between border-b pb-4">
 		<div>
 			<h1 class="text-3xl font-bold tracking-tight">Metaeditace: {$page.params.id}</h1>
-			<p class="text-muted-foreground">Příprava protojazyků a časové osy.</p>
+			<p class="text-muted-foreground">1. nastav protojazyk a slovník, 2. pokračuj na mapu, 3. spusť simulaci.</p>
 		</div>
 		<Button variant="outline" onclick={() => goto('/')}>Zpět do menu</Button>
 	</header>
 
 	<div class="grid lg:grid-cols-4 gap-6 items-start">
-		<!-- Sidebar for multiple proto languages -->
+		<!-- Vedlejší nástroje jsou záměrně označené: hlavní cesta pracuje s jedním protojazykem. -->
 		<aside class="lg:col-span-1 space-y-4">
 			<Card>
 				<CardHeader class="pb-3">
-					<CardTitle>Proto-Jazyky</CardTitle>
+					<CardTitle>Protojazyky <span class="ml-1 text-xs font-normal text-muted-foreground">experimentální</span></CardTitle>
+					<CardDescription>Plně podporovaná cesta nyní používá první protojazyk.</CardDescription>
 				</CardHeader>
 				<CardContent class="space-y-2">
 					{#each protoLanguages as lang}
@@ -174,7 +186,8 @@
 			
 			<Card>
 				<CardHeader class="pb-3">
-					<CardTitle>Časová osa</CardTitle>
+					<CardTitle>Časová osa <span class="ml-1 text-xs font-normal text-muted-foreground">experimentální</span></CardTitle>
+					<CardDescription>Hlavní časová osa se upravuje přímo na mapě.</CardDescription>
 				</CardHeader>
 				<CardContent class="space-y-4">
 					<form onsubmit={addTimeStep} class="space-y-2">
@@ -325,8 +338,8 @@
 									<p class="mt-2">Aktivní samohlásky: <strong class="text-foreground">{Array.from(activeProto.vowels).join(', ') || 'Žádné'}</strong></p>
 								</div>
 								
-								<Button variant="secondary" class="w-full" onclick={generateLexicon} disabled={isGenerating}>
-									{isGenerating ? 'Generuji...' : 'Vygenerovat testovací slovník'}
+				<Button variant="secondary" class="w-full" onclick={generateLexicon} disabled={isGenerating}>
+					{isGenerating ? 'Generuji...' : 'Vygenerovat slovník z CLICS4'}
 								</Button>
 								
 								{#if generateError}
@@ -334,7 +347,7 @@
 								{/if}
 								
 								{#if projectState.generatedProtoLexicon.length > 0}
-									<p class="text-green-600 text-sm font-medium">Úspěšně vygenerováno {projectState.generatedProtoLexicon.length} slov.</p>
+					<p class="text-green-600 text-sm font-medium">Úspěšně vygenerováno {projectState.generatedProtoLexicon.length} lexémů pro {generatedConceptCount} významů{generatedSource ? ` (${generatedSource})` : ''}.</p>
 								{/if}
 							</div>
 						</div>

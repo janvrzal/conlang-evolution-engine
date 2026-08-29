@@ -28,9 +28,10 @@ export type ProjectData = {
 	 * Přepočitatelné to sice je, ale je to hlavní výstup aplikace — po F5 by
 	 * jinak zmizely vygenerované jazyky i tlačítko na jejich zobrazení.
 	 */
-	simulationResult: any | null;
 	/** Kdy simulace proběhla, ať je poznat, jak je výsledek starý. */
 	simulationRunAt: string | null;
+	/** Identifikátor uložené genealogie; stabilní mezi otevřeními projektu. */
+	simulationRunId: string | null;
 };
 
 /** Uzel, kterým každý nový projekt začíná. */
@@ -52,8 +53,8 @@ function emptyData(): ProjectData {
 		timeSteps: [0, 500, 1000, 1500],
 		snapshots: { 0: { nodes: [protoNode(0)], edges: [] } },
 		protoLanguages: [],
-		simulationResult: null,
-		simulationRunAt: null
+		simulationRunAt: null,
+		simulationRunId: null
 	};
 }
 
@@ -64,8 +65,8 @@ export const projectState = $state<{
 	status: SaveStatus;
 	error: string | null;
 	lastSavedAt: string | null;
-	simulationResult: any | null;
 	simulationRunAt: string | null;
+	simulationRunId: string | null;
 	generatedProtoLexicon: any[];
 	timeSteps: number[];
 	snapshots: Record<number, { nodes: any[]; edges: any[] }>;
@@ -91,8 +92,8 @@ function snapshotData(): ProjectData {
 		timeSteps: $state.snapshot(projectState.timeSteps) as number[],
 		snapshots: $state.snapshot(projectState.snapshots) as ProjectData['snapshots'],
 		protoLanguages: $state.snapshot(projectState.protoLanguages) as any[],
-		simulationResult: $state.snapshot(projectState.simulationResult),
-		simulationRunAt: projectState.simulationRunAt
+		simulationRunAt: projectState.simulationRunAt,
+		simulationRunId: projectState.simulationRunId
 	};
 }
 
@@ -138,8 +139,9 @@ export async function loadProject(id: string): Promise<void> {
 			projectState.timeSteps = data.timeSteps;
 			projectState.snapshots = ensureSeed(data.snapshots, data.timeSteps);
 			projectState.protoLanguages = data.protoLanguages;
-			projectState.simulationResult = data.simulationResult ?? null;
+
 			projectState.simulationRunAt = data.simulationRunAt ?? null;
+			projectState.simulationRunId = data.simulationRunId ?? null;
 			projectState.lastSavedAt = project.updated_at;
 			projectState.status = 'saved';
 		} else {

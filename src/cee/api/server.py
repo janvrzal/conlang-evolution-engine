@@ -4,6 +4,8 @@ Lokální HTTP API pro grafické rozhraní.
 Vlastní logika simulace žije v `cee.pipeline` — tenhle modul jen překládá
 HTTP požadavky na volání služby a zpátky na JSON.
 """
+import uuid
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
@@ -13,24 +15,21 @@ from pydantic import BaseModel
 from cee import __version__
 from cee.api.ports import API_REVISION, DEFAULT_PORT, ENGINE_SIGNATURE
 from cee.engine.parser import YamlParser
-from cee.engine.phonology import FeatureMapper
 from cee.engine.topology import ContactEdge, EvolutionGraph, VerticalEdge
 from cee import projects
-from cee.metrics.retention import LexicalRetention
 from cee.pipeline import (
     DEFAULT_SEED,
-    LineageConfig,
     SimulationConfig,
-    evolve_lineage,
-    lineage_payload,
-    build_branch_views,
-    load_lexicon_from_csv,
     load_lexicon_from_records,
+    resolve_semantics_path,
     run_simulation,
-    topology_payload,
 )
+from cee.semantics.graph import SemanticGraph
+from cee.storage.genealogy import get_genealogy_store
+from cee.api.runs import router as run_router
 
 app = FastAPI(title="CEE Engine API")
+app.include_router(run_router)
 
 # Vite dev server si při obsazeném 5173 vezme 5174, 5175, ... — proto povolujeme
 # jakýkoli lokální origin, ne pevný seznam. Server je určený jen pro localhost.
@@ -64,7 +63,10 @@ class SimulateRequest(BaseModel):
     topology: str = "scenario_split.yaml"
     proto_csv: str = "fantasy_v1.csv"
     preset: str = "src/cee/data/presets/fantasy_preset.yaml"
-    semantics: str = "src/cee/data/semantics_mock.yaml"
+    #: Prázdné = engine sám zkusí skutečný CLICS4+DatSemShift graf, a když
+    #: chybí (čerstvý klon, CI), spadne na zabalený YAML mock — viz
+    #: `cee.pipeline.resolve_semantics_path`.
+    semantics: Optional[str] = None
     seed: int = DEFAULT_SEED
 
 
@@ -80,10 +82,15 @@ class DynamicSimulateRequest(BaseModel):
     topology_data: dict
     proto_lexicon: list
     preset: str = "src/cee/data/presets/fantasy_preset.yaml"
-    semantics: str = "src/cee/data/semantics_mock.yaml"
+    #: Prázdné = engine sám zkusí skutečný CLICS4+DatSemShift graf, a když
+    #: chybí (čerstvý klon, CI), spadne na zabalený YAML mock — viz
+    #: `cee.pipeline.resolve_semantics_path`.
+    semantics: Optional[str] = None
     seed: int = DEFAULT_SEED
     #: Časová hloubka; slouží i jako výchozí rok kontaktu bez zadaného roku.
     years: int = 1000
+    #: Prázdné ID založí nový běh; opakování se stejným ID nahradí jen jeho data.
+    run_id: Optional[str] = None
 
 
 def _config(req, preset_path: str) -> SimulationConfig:
@@ -96,22 +103,21 @@ def _config(req, preset_path: str) -> SimulationConfig:
     )
 
 
-def _respond(states, graph, mapper, diagnostic):
-    branches = build_branch_views(states, mapper, diagnostic)
-    return {
-        "status": "success",
-        "branches": {node_id: view.as_dict() for node_id, view in branches.items()},
-        "topology": topology_payload(graph),
-    }
-
-
 @app.post("/api/protolang/generate")
 def generate_protolang(req: ProtolangRequest):
     from cee.engine.protolang import ProtolangGenerator
 
     generator = ProtolangGenerator()
-    words = generator.generate_lexicon(req.consonants, req.vowels, req.syllable_structure)
-    return {"status": "success", "words": words}
+    graph_path = resolve_semantics_path(None)
+    graph = SemanticGraph(graph_path) if graph_path else None
+    concepts = graph.lexical_entries() if graph else None
+    words = generator.generate_lexicon(req.consonants, req.vowels, req.syllable_structure, concepts)
+    return {
+        "status": "success",
+        "words": words,
+        "concept_count": sum(1 + len(word["polysemy"]) for word in words),
+        "source": "CLICS4 + DatSemShift" if graph_path and graph_path.endswith(".graphml") else "zabalený sémantický mock",
+    }
 
 
 # --- Projekty (persistence rozdělané práce) ----------------------------------
@@ -159,99 +165,96 @@ def put_project(project_id: str, payload: ProjectPayload):
 
 @app.delete("/api/projects/{project_id}")
 def delete_project(project_id: str):
-    _project_or_404(project_id)
+    project = _project_or_404(project_id)
+    run_id = project.data.get("simulationRunId")
+    if isinstance(run_id, str):
+        get_genealogy_store().delete(run_id)
     projects.delete(project_id)
     return {"status": "success"}
 
 
-class EvolveRequest(BaseModel):
-    """Vývoj jednoho jazyka v čase — bez větvení a bez kontaktu."""
-
-    proto_lexicon: list
-    years: int = 1000
-    epochs: int = 5
-    rules_per_epoch: int = 2
-    biome: Optional[str] = None
-    preset: str = "src/cee/data/presets/fantasy_preset.yaml"
-    seed: int = DEFAULT_SEED
-    node_id: str = "proto"
-
-
-@app.post("/api/evolve")
-def evolve(req: EvolveRequest):
-    """
-    Nechá protojazyk vyvíjet se sám a vrátí celý průběh: epochy, seznam
-    zvukových změn i derivaci každého slova.
-    """
-    mapper = FeatureMapper()
-    lexicon = load_lexicon_from_records(req.proto_lexicon, mapper)
-    diagnostic = LexicalRetention.diagnostic_from(lexicon)
-
-    config = LineageConfig(
-        years=req.years,
-        epochs=req.epochs,
-        rules_per_epoch=req.rules_per_epoch,
-        node_id=req.node_id,
-        seed=req.seed,
-        preset=YamlParser.parse_preset(req.preset) if req.preset else None,
-        biome=req.biome,
-    )
-
-    state, history = evolve_lineage(lexicon, mapper, config)
-    return lineage_payload(state, history, mapper, diagnostic)
-
-
-@app.post("/api/simulate")
-def run_file_simulation(req: SimulateRequest):
-    """Spustí simulaci nad topologií a lexikonem ze souborů na disku."""
-    mapper = FeatureMapper()
-    lexicon = load_lexicon_from_csv(req.proto_csv, mapper)
-    graph = YamlParser.parse_topology(req.topology)
-
-    diagnostic = LexicalRetention.diagnostic_from(lexicon)
-    states = run_simulation(lexicon, graph, mapper, _config(req, req.preset))
-    return _respond(states, graph, mapper, diagnostic)
-
-
 @app.post("/api/simulate_dynamic")
 def run_dynamic_simulation(req: DynamicSimulateRequest):
-    """Spustí simulaci nad topologií, kterou uživatel sestavil v grafovém editoru."""
-    mapper = FeatureMapper()
+    """Spustí simulaci nad celou časovou osou sestavenou v grafovém editoru."""
+    from cee.pipeline import get_feature_mapper
+    mapper = get_feature_mapper()
     lexicon = load_lexicon_from_records(req.proto_lexicon, mapper)
 
     graph = EvolutionGraph()
 
-    # UI posílá konfiguraci uzlu naplocho ({"biome": "hory"}), zatímco topologie
-    # z YAML má tytéž hodnoty pod klíčem `map` — a odtud je čte simulátor.
-    # Bez normalizace by se biom nikdy nedostal ke generátoru a všechny větve
-    # by vyšly stejně.
-    graph.node_configs = {
-        node_id: cfg if "map" in cfg else {**cfg, "map": cfg}
-        for node_id, cfg in req.topology_data.get("nodes", {}).items()
-    }
+    snapshots = req.topology_data.get("snapshots")
+    if snapshots:
+        # Snímky jsou seřazené podle času. Nejde o čtyři alternativní grafy:
+        # každý je stav světa po předchozí epoše. Dědičnost proto bereme jen
+        # z okamžiku, kdy je hrana ještě přímá, zatímco kontakt provádíme v
+        # každé epoše, v níž je na mapě vidět.
+        vertical_pairs = set()
+        for snapshot in sorted(snapshots, key=lambda item: int(item["year"])):
+            epoch_year = int(snapshot["year"])
+            for node in snapshot.get("nodes", []):
+                node_id = node["id"]
+                data = node.get("data", {})
+                if node_id not in graph.node_configs:
+                    graph.node_configs[node_id] = {**data, "map": data}
 
-    # Hrana z editoru je buď dědičnost (rodič -> potomek), nebo kontakt
-    # (sousedé, kteří se navzájem ovlivňují). Bez rozlišení se všechno bralo
-    # jako dědičnost a propojené jazyky na sebe nikdy nepůsobily.
-    for edge in req.topology_data.get("edges", []):
-        if edge.get("kind") == "contact":
-            graph.contact_edges.append(
-                ContactEdge(
+            for edge in snapshot.get("edges", []):
+                if edge.get("type") == "contact":
+                    data = edge.get("data", {})
+                    graph.contact_edges.append(ContactEdge(
+                        year=epoch_year,
+                        source_id=edge["source"],
+                        target_id=edge["target"],
+                        volume=int(data.get("volume", 5)),
+                        mutual=bool(data.get("mutual", True)),
+                    ))
+                else:
+                    pair = (edge["source"], edge["target"])
+                    if pair not in vertical_pairs:
+                        vertical_pairs.add(pair)
+                        graph.vertical_edges.append(VerticalEdge(
+                            parent_id=edge["source"], child_id=edge["target"], rules=[]
+                        ))
+    else:
+        # Zpětná kompatibilita se starším klientem, který ještě posílal jen
+        # jeden statický snímek.
+        graph.node_configs = {
+            node_id: cfg if "map" in cfg else {**cfg, "map": cfg}
+            for node_id, cfg in req.topology_data.get("nodes", {}).items()
+        }
+        for edge in req.topology_data.get("edges", []):
+            if edge.get("kind") == "contact":
+                graph.contact_edges.append(ContactEdge(
                     year=int(edge.get("year", req.years // 2)),
-                    source_id=edge["source"],
-                    target_id=edge["target"],
-                    volume=int(edge.get("volume", 5)),
-                    mutual=bool(edge.get("mutual", True)),
-                )
-            )
-        else:
-            graph.vertical_edges.append(
-                VerticalEdge(parent_id=edge["source"], child_id=edge["target"], rules=[])
-            )
+                    source_id=edge["source"], target_id=edge["target"],
+                    volume=int(edge.get("volume", 5)), mutual=bool(edge.get("mutual", True)),
+                ))
+            else:
+                graph.vertical_edges.append(VerticalEdge(
+                    parent_id=edge["source"], child_id=edge["target"], rules=[]
+                ))
 
-    diagnostic = LexicalRetention.diagnostic_from(lexicon)
-    states = run_simulation(lexicon, graph, mapper, _config(req, req.preset))
-    return _respond(states, graph, mapper, diagnostic)
+    root_candidates = [node_id for node_id, cfg in graph.node_configs.items() if cfg.get("isProto")]
+    root_id = root_candidates[0] if root_candidates else "lang-1" if "lang-1" in graph.node_configs else "proto"
+
+    from cee.engine.graph_builder import GraphBuilder
+    builder = GraphBuilder()
+
+    cfg = _config(req, req.preset)
+    cfg.root_id = root_id
+    # Kořenový uzel je v UI skutečný jazyk na časové ose, ne jen statický
+    # zdroj pro větvení. Musí tedy dostat vlastní historii zvukových změn.
+    cfg.evolve_root = True
+
+    run_simulation(lexicon, graph, mapper, cfg, builder)
+    run_id = req.run_id or uuid.uuid4().hex
+    store = get_genealogy_store()
+    store.save(run_id, builder)
+    return {
+        "status": "success",
+        "message": "Simulace byla uložena.",
+        "run_id": run_id,
+        "storage": store.backend_name,
+    }
 
 
 def start_server(port: int = DEFAULT_PORT, reload: bool = False):

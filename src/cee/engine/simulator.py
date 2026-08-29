@@ -1,3 +1,5 @@
+import uuid
+
 import copy
 import heapq
 import random
@@ -7,13 +9,8 @@ from typing import Any, Dict, List, Optional
 
 from cee.core.models import Inventory, Lexicon, State
 from cee.engine.generator import MacroParams, SoundChangeGenerator
-from cee.engine.history import (
-    BorrowingEvent,
-    RuleApplication,
-    SimulationHistory,
-    SplitEvent,
-    WordChange,
-)
+
+from cee.engine.graph_builder import GraphBuilder
 from cee.engine.inventory import InventoryView
 from cee.engine.rng import derive_seed
 from cee.engine.morphology import MorphologyEvaluator
@@ -30,7 +27,7 @@ _PRIO_CONTACT = 2
 # Kolik let v průměru připadá na jednu zvukovou změnu, než se do toho promítnou
 # makro-parametry uzlu. Řádově odpovídá tempu doloženému v historických
 # gramatikách; přesné ladění je práce pro validaci V2a.
-YEARS_PER_RULE_SLOT = 125
+YEARS_PER_RULE_SLOT = 25
 
 
 @dataclass
@@ -64,19 +61,18 @@ class EvolutionSimulator:
     všechny větve sdílejí tutéž časovou osu.
     """
 
-    def __init__(self, graph: EvolutionGraph, mapper: FeatureMapper, preset: Dict[str, Any] = None,
+    def __init__(self, graph_topo: EvolutionGraph, mapper: FeatureMapper, preset: Dict[str, Any] = None,
                  seed: int = 42, semantic_evaluator=None,
-                 history: Optional[SimulationHistory] = None,
-                 end_year: Optional[int] = None):
-        self.graph = graph
+                 graph_builder: Optional[GraphBuilder] = None,
+                 end_year: Optional[int] = None, evolve_root: bool = False):
+        self.graph = graph_topo
         self.mapper = mapper
-        # Historie je volitelná: bez ní simulátor běží jako dřív, s ní zaznamená
-        # průběh pro drill-down v UI.
-        self.history = history
+        self.graph_builder = graph_builder
         self.preset = preset
         self.random = random.Random(seed)
         self.semantic_evaluator = semantic_evaluator
         self.seed = seed
+        self.evolve_root = evolve_root
         # Časová hloubka simulace. Dokud tu nebyla, generátor měl natvrdo
         # horizont 200 let a dvě pravidla — jazyky ztuhly hned na začátku
         # a pozdější kontakt už zastihl nehybný stav.
@@ -117,7 +113,15 @@ class EvolutionSimulator:
         rodiče v roce prvního pravidla na příslušné hraně.
         """
         parent_of = self._collect_tree(root_state.node_id)
-        if not parent_of:
+        
+        if self.graph_builder:
+            for w in root_state.lexicon.words:
+                self.graph_builder.add_word(
+                    w.id, w.concept_id, self.mapper.render_word(w),
+                    root_state.year, root_state.node_id, list(w.polysemy)
+                )
+
+        if not parent_of and not self.evolve_root:
             return {root_state.node_id: root_state}
 
         # Rodič musí existovat dřív než dítě, proto řadíme podle hloubky.
@@ -136,6 +140,10 @@ class EvolutionSimulator:
 
         for child_id, parent_id in parent_of.items():
             push(fork_years[child_id], _PRIO_FORK, ForkEvent(fork_years[child_id], parent_id, child_id))
+
+        if self.evolve_root:
+            for rule in self._generated_rules_for_root(root_state):
+                push(rule.year, _PRIO_PHONOLOGY, PhonologyEvent(rule.year, root_state.node_id, rule))
 
         for edge in self.graph.vertical_edges:
             bez_roku = [r.name for r in edge.rules if r.year is None]
@@ -177,12 +185,6 @@ class EvolutionSimulator:
 
                 child_state = self._fork(parent_state, event.child_id, year)
                 states[event.child_id] = child_state
-                if self.history:
-                    self.history.record(
-                        SplitEvent(year=year, parent_id=event.parent_id,
-                                   child_id=event.child_id)
-                    )
-
                 # Pravidla se generují až tady — čerstvě odštěpený uzel už zná
                 # svůj inventář i biom, takže generátor má z čeho vycházet.
                 for rule in self._generated_rules_for(event.child_id, child_state, year):
@@ -193,31 +195,27 @@ class EvolutionSimulator:
                 if branch_state is None:
                     continue
 
-                application = None
-                if self.history:
-                    rule = event.rule
-                    application = RuleApplication(
-                        year=event.year,
-                        node_id=event.branch_id,
-                        rule_name=rule.name,
-                        target=dict(rule.target),
-                        action=dict(rule.action),
-                        env_before=dict(rule.env_before) if rule.env_before else None,
-                        env_after=dict(rule.env_after) if rule.env_after else None,
-                    )
-
                 for word in branch_state.lexicon.words:
-                    before = self.mapper.render_word(word) if application else None
-                    if event.rule.apply_to_word(word) and application is not None:
-                        after = self.mapper.render_word(word)
-                        if after != before:
-                            application.changes.append(
-                                WordChange(concept_id=word.concept_id,
-                                           before=before, after=after)
-                            )
-
-                if application is not None:
-                    self.history.record(application)
+                    before_ipa = self.mapper.render_word(word)
+                    old_id = word.id
+                    
+                    if event.rule.apply_to_word(word):
+                        after_ipa = self.mapper.render_word(word)
+                        if after_ipa != before_ipa:
+                            word.parent_word_id = old_id
+                            word.id = str(uuid.uuid4())
+                            word.origin_type = "mutated"
+                            word.origin_rule = event.rule.name
+                            word.origin_year = event.year
+                            
+                            if self.graph_builder:
+                                self.graph_builder.add_word(
+                                    word.id, word.concept_id, after_ipa,
+                                    event.year, event.branch_id, list(word.polysemy)
+                                )
+                                self.graph_builder.add_origin_edge(
+                                    word.id, old_id, "mutated", event.rule.name
+                                )
 
                 branch_state.inventory = Inventory(
                     segments=self._inventory_of(branch_state.lexicon)
@@ -235,14 +233,22 @@ class EvolutionSimulator:
                     continue
                 self._apply_contact(source_state, target_state, event.year, event.volume)
 
-        result = {node_id: state for node_id, state in states.items() if node_id in parent_of}
+        result = {
+            node_id: state
+            for node_id, state in states.items()
+            if node_id in parent_of or (self.evolve_root and node_id == root_state.node_id)
+        }
         final_year = max(last_year, self.end_year or last_year)
 
         for state in result.values():
+            start_year = state.year
             state.year = final_year
 
             if self.semantic_evaluator:
-                self.semantic_evaluator.evaluate(state.lexicon)
+                # Sémantický posun nyní škáluje s časem (jednou za 100 let)
+                centuries = max(1, round((final_year - start_year) / 100))
+                for _ in range(centuries):
+                    self.semantic_evaluator.evaluate(state.lexicon)
 
             self._apply_compounds(state)
 
@@ -293,7 +299,11 @@ class EvolutionSimulator:
             rules = self.graph.get_rules_for_edge(parent_id, child_id)
             years = [r.year for r in rules if r.year is not None]
             parent_year = fork_years.get(parent_id, root_state.year)
-            fork_years[child_id] = min(years) if years else parent_year
+            # Dynamické UI hrany nemají vlastní pravidla, ale uzel zná svůj
+            # rok vzniku. Bez něj by se jazyk odštěpil hned v roce 0 a
+            # kontakty na časové ose nedávaly smysl.
+            configured_year = self.graph.node_configs.get(child_id, {}).get("year", parent_year)
+            fork_years[child_id] = min(years) if years else int(configured_year)
 
             # Dítě nikdy nesmí vzniknout dřív než rodič.
             fork_years[child_id] = max(fork_years[child_id], parent_year)
@@ -303,7 +313,25 @@ class EvolutionSimulator:
     def _fork(self, parent_state: State, child_id: str, year: int) -> State:
         """Odštěpí nový uzel jako nezávislou kopii rodiče v daném roce."""
         node_cfg = self.graph.node_configs.get(child_id, {})
-        new_lexicon = Lexicon(words=[copy.deepcopy(w) for w in parent_state.lexicon.words])
+        new_lexicon = Lexicon(words=[])
+        
+        for parent_word in parent_state.lexicon.words:
+            new_word = copy.deepcopy(parent_word)
+            new_word.parent_word_id = parent_word.id
+            new_word.id = str(uuid.uuid4())
+            new_word.origin_type = "inherited"
+            new_word.origin_rule = None
+            new_word.origin_year = year
+            new_lexicon.words.append(new_word)
+            
+            if self.graph_builder:
+                self.graph_builder.add_word(
+                    new_word.id, new_word.concept_id, self.mapper.render_word(new_word),
+                    year, child_id, list(new_word.polysemy)
+                )
+                self.graph_builder.add_origin_edge(
+                    new_word.id, parent_word.id, "inherited"
+                )
 
         return State(
             node_id=child_id,
@@ -358,6 +386,20 @@ class EvolutionSimulator:
             state, start_year, end_year, num_rules=slots, inventory=view
         )
 
+    def _generated_rules_for_root(self, state: State) -> List[Rule]:
+        """Vygeneruje historii i pro kořenový protojazyk zobrazený v UI."""
+        generator = self._generator_for(state.node_id)
+        if not generator:
+            return []
+
+        view = InventoryView.from_lexicon(state.lexicon, self.mapper)
+        state.inventory = view.to_inventory()
+        end_year = self.end_year or state.year + 200
+        slots = max(1, round((end_year - state.year) / YEARS_PER_RULE_SLOT))
+        return generator.generate_rules_for_edge(
+            state, state.year, end_year, num_rules=slots, inventory=view
+        )
+
     def _inventory_of(self, lexicon: Lexicon) -> set:
         return set(InventoryView.from_lexicon(lexicon, self.mapper))
 
@@ -406,23 +448,29 @@ class EvolutionSimulator:
                                         target.node_id, str(year)))
         words_to_borrow = rng.sample(source.lexicon.words, num_borrow)
 
-        if self.history:
-            self.history.record(
-                BorrowingEvent(
-                    year=year,
-                    source_id=source.node_id,
-                    target_id=target.node_id,
-                    concepts=sorted(w.concept_id for w in words_to_borrow),
-                )
-            )
 
         for w in words_to_borrow:
+            # Zabráníme zbytečným duplicitám: Pokud už cílový jazyk má pro tento koncept 
+            # slovo, které zní úplně stejně, výpůjčku přeskočíme.
+            existing_words = [x for x in target.lexicon.words if x.concept_id == w.concept_id]
+            if any(x.segments == w.segments for x in existing_words):
+                continue
+                
             new_word = copy.deepcopy(w)
-            # Nastavíme stopu výpůjčky — díky origin_year slovo unikne starším
-            # zvukovým změnám (viz Rule.apply_to_word).
+            new_word.parent_word_id = w.id
+            new_word.id = str(uuid.uuid4())
+            new_word.origin_type = "borrowed"
+            new_word.origin_rule = None
             new_word.origin_year = year
             new_word.source_id = source.node_id
 
-            # Pokud už tam slovo se stejným concept_id je, budeme mít obě formy
-            # (např. domácí 'brother' a cizí 'frater' jako synonyma).
             target.lexicon.words.append(new_word)
+            
+            if self.graph_builder:
+                self.graph_builder.add_word(
+                    new_word.id, new_word.concept_id, self.mapper.render_word(new_word),
+                    year, target.node_id, list(new_word.polysemy)
+                )
+                self.graph_builder.add_origin_edge(
+                    new_word.id, w.id, "borrowed"
+                )

@@ -13,6 +13,10 @@ python3.11 -m venv .venv && .venv/bin/pip install -e '.[dev,ui]'
 ```
 
 Extra `ui` doinstaluje FastAPI a uvicorn pro `cee ui`; jádro enginu je nepotřebuje.
+Výchozí ukládání výsledků je lokální (`~/.cee/runs`), takže Neo4j není pro
+běžný běh potřeba. Pro volitelný Neo4j adaptér nainstalujte `.[neo4j]` a
+nastavte `CEE_GENEALOGY_STORE=neo4j` spolu s `CEE_NEO4J_URI`,
+`CEE_NEO4J_USERNAME` a `CEE_NEO4J_PASSWORD`.
 
 ## Použití
 

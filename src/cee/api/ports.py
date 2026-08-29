@@ -17,7 +17,8 @@ ENGINE_SIGNATURE = "Conlang Evolution Engine"
 # 1: /api/simulate, /api/simulate_dynamic, /api/protolang/generate
 # 2: + /api/evolve (vývoj jedné linie s historií)
 # 3: + /api/projects (persistence), ID projektu smí mít diakritiku
-API_REVISION = 3
+# 4: běhy simulace adresované vlastním ID, lokální souborové úložiště a export
+API_REVISION = 4
 
 
 def is_port_free(port: int, host: str = "127.0.0.1") -> bool:
