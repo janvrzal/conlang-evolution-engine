@@ -1,4 +1,5 @@
 import csv
+import subprocess
 import typer
 import datetime
 import threading
@@ -22,8 +23,14 @@ from cee.pipeline import (
     load_lexicon_from_csv,
     run_simulation,
 )
+from cee.engine.empirical import build_empirical_cache, default_paths as default_empirical_paths
 
 app = typer.Typer(help="Conlang Evolution Engine CLI", no_args_is_help=True)
+phonology_app = typer.Typer(help="Správa volitelných empirických fonologických dat.")
+app.add_typer(phonology_app, name="phonology")
+
+INDEX_DIACHRONICA_REDUX_URL = "https://github.com/bradrn/index-diachronica-redux.git"
+PHOIBLE_REPOSITORY_URL = "https://github.com/phoible/dev.git"
 
 
 @app.callback()
@@ -31,6 +38,46 @@ def _main() -> None:
     """Varování z enginu vypisujeme jako čitelnou hlášku, ne jako Python traceback."""
     warnings.simplefilter("always")
     warnings.showwarning = lambda message, *_args, **_kwargs: typer.echo(f"⚠️  {message}", err=True)
+
+
+@phonology_app.command("update-data")
+def update_phonology_data(
+    cache_dir: Path = typer.Option(None, help="Lokální cache (default: ~/.cee/phonology)."),
+):
+    """Stáhne Index Diachronica Redux a PHOIBLE a zafixuje jejich offline cache.
+
+    Tento příkaz je jediná síťová cesta empirické vrstvy. Simulace samotná
+    používá jen hotové JSON cache soubory, takže je reprodukovatelná offline.
+    """
+    paths = default_empirical_paths(cache_dir)
+    paths["root"].mkdir(parents=True, exist_ok=True)
+    repository = paths["diachronica_raw"]
+    if (repository / ".git").is_dir():
+        typer.echo("Aktualizuji lokální kopii Index Diachronica Redux…")
+        subprocess.run(["git", "-C", str(repository), "pull", "--ff-only"], check=True)
+    else:
+        typer.echo("Stahuji Index Diachronica Redux…")
+        subprocess.run(["git", "clone", "--depth", "1", INDEX_DIACHRONICA_REDUX_URL, str(repository)], check=True)
+
+    phoible_repository = paths["phoible_repository"]
+    if (phoible_repository / ".git").is_dir():
+        typer.echo("Aktualizuji lokální kopii PHOIBLE…")
+        subprocess.run(["git", "-C", str(phoible_repository), "pull", "--ff-only"], check=True)
+    else:
+        # Git v desktopovém runtime používá systémový trust store správně i
+        # tam, kde Python urllib nemá k dispozici CA bundle. Zároveň získáme
+        # přesný zdrojový commit, z nějž lokální cache vznikla.
+        typer.echo("Stahuji aktuální PHOIBLE…")
+        subprocess.run(["git", "clone", "--depth", "1", PHOIBLE_REPOSITORY_URL, str(phoible_repository)], check=True)
+    report = build_empirical_cache(paths["root"])
+    typer.echo(
+        "Hotovo: "
+        f"{report['observations']} změn Indexu, {report['inventories']} inventářů PHOIBLE.\n"
+        f"Index commit: {report['diachronica_revision']}\n"
+        f"PHOIBLE commit: {report['phoible_revision']}\n"
+        f"Index SHA-256: {report['diachronica_sha256']}\n"
+        f"PHOIBLE SHA-256: {report['phoible_sha256']}"
+    )
 
 def load_csv_lexicon(proto_csv: str, mapper: FeatureMapper) -> Lexicon:
     """Zpětně kompatibilní alias, kanonická implementace je v cee.pipeline."""
@@ -119,7 +166,12 @@ def simulate(
     out_dir: Path = typer.Option(None, help="Cílová složka (defaultně: runs/run_YYYYMMDD_HHMMSS)"),
     preset_yaml: Path = typer.Option(None, help="Volitelná cesta k presetu pro generátor zvukových změn"),
     semantics_yaml: Path = typer.Option(None, help="Volitelná cesta k YAML sémantickému grafu pro posuny významů"),
-    seed: int = typer.Option(42, help="Seed pro deterministický běh (výpůjčky, generátor, sémantika)")
+    seed: int = typer.Option(42, help="Seed pro deterministický běh (výpůjčky, generátor, sémantika)"),
+    empirical_phonology: bool = typer.Option(
+        False,
+        "--empirical-phonology",
+        help="Použít lokální Index Diachronica/PHOIBLE cache (nejdřív cee phonology update-data).",
+    ),
 ):
     """
     Spustí globální lockstep simulaci celé rodiny na základě topologie a výpůjček.
@@ -146,6 +198,7 @@ def simulate(
         preset=preset_data,
         semantics_path=str(semantics_yaml) if semantics_yaml else None,
         seed=seed,
+        use_empirical_phonology=empirical_phonology,
     )
 
     # Diagnostický seznam se bere z protojazyka PŘED simulací a je pro všechny

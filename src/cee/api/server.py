@@ -91,6 +91,8 @@ class DynamicSimulateRequest(BaseModel):
     seed: int = DEFAULT_SEED
     #: Časová hloubka; slouží i jako výchozí rok kontaktu bez zadaného roku.
     years: int = 1000
+    #: UI používá existující lokální cache; její absence je bezpečný fallback.
+    empirical_phonology: bool = True
     #: Prázdné ID založí nový běh; opakování se stejným ID nahradí jen jeho data.
     run_id: Optional[str] = None
 
@@ -102,6 +104,7 @@ def _config(req, preset_path: str) -> SimulationConfig:
         semantics_path=req.semantics or None,
         seed=req.seed,
         years=getattr(req, "years", None),
+        use_empirical_phonology=getattr(req, "empirical_phonology", False),
     )
 
 

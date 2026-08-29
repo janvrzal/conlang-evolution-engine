@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import csv
+import json
 import os
 import warnings
 from dataclasses import dataclass, field
@@ -18,6 +19,13 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from cee.core.models import Inventory, Lexicon, State
 from cee.engine.generator import MacroParams, SoundChangeGenerator
+from cee.engine.empirical import (
+    DiachronicaPriors,
+    PhoibleInventoryModel,
+    default_paths as default_empirical_paths,
+    load_diachronic_priors,
+    load_phoible_model,
+)
 from cee.engine.graph_builder import GraphBuilder
 from cee.engine.rng import derive_seed
 
@@ -51,6 +59,10 @@ class SimulationConfig:
     years: Optional[int] = None
     #: UI může chtít sledovat i proměnu kořenového protojazyka, nejen větví.
     evolve_root: bool = False
+    #: Empirické zdroje jsou opt-in cache: síť se při simulaci nikdy nepoužívá.
+    use_empirical_phonology: bool = False
+    diachronica_priors_path: Optional[str] = None
+    phoible_model_path: Optional[str] = None
 
 
 @dataclass
@@ -206,6 +218,36 @@ def build_semantic_evaluator(config: SimulationConfig) -> Optional[SemanticEvalu
     )
 
 
+def build_empirical_phonology(
+    config: SimulationConfig,
+) -> tuple[Optional[DiachronicaPriors], Optional[PhoibleInventoryModel]]:
+    """Načte volitelné lokální priory a validátor, nikdy nic nestahuje.
+
+    Neúplná cache není chyba běhu: autorův preset zůstává platný fallback.
+    Zároveň ale poškozený cache soubor nezamlčíme, aby byl výsledek dohledatelný.
+    """
+    if not config.use_empirical_phonology:
+        return None, None
+
+    locations = default_empirical_paths()
+    priors_path = Path(config.diachronica_priors_path) if config.diachronica_priors_path else locations["diachronica_priors"]
+    model_path = Path(config.phoible_model_path) if config.phoible_model_path else locations["phoible_model"]
+
+    priors: Optional[DiachronicaPriors] = None
+    model: Optional[PhoibleInventoryModel] = None
+    if priors_path.exists():
+        try:
+            priors = load_diachronic_priors(priors_path)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            warnings.warn(f"Index Diachronica priory '{priors_path}' nelze načíst: {exc}", stacklevel=2)
+    if model_path.exists():
+        try:
+            model = load_phoible_model(model_path)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            warnings.warn(f"PHOIBLE model '{model_path}' nelze načíst: {exc}", stacklevel=2)
+    return priors, model
+
+
 def run_simulation(
     lexicon: Lexicon,
     graph: EvolutionGraph,
@@ -222,6 +264,7 @@ def run_simulation(
         inventory=Inventory(),
         lexicon=lexicon,
     )
+    empirical_priors, inventory_validator = build_empirical_phonology(config)
 
     simulator = EvolutionSimulator(
         graph,
@@ -232,6 +275,8 @@ def run_simulation(
         end_year=config.years,
         graph_builder=graph_builder,
         evolve_root=config.evolve_root,
+        empirical_priors=empirical_priors,
+        inventory_validator=inventory_validator,
     )
     return simulator.simulate(root_state)
 
