@@ -5,6 +5,7 @@ import {
 	newEdgeFields,
 	propagateSnapshots,
 	retypeEdge,
+	snapshotForCanvas,
 	stampBornYears
 } from './timeline';
 import type { SnapshotsByYear, TLEdge, TLNode } from './timeline';
@@ -349,7 +350,7 @@ describe('kreslení hrany: tlačítko Kontakt musí opravdu přepnout typ', () =
 	});
 
 	it('přetažení Kontaktu nad existující dědičností ji PŘETYPUJE, ne ignoruje', () => {
-		const dedicnost = edge('e1', 'a', 'b', 0); // type: undefined
+		const dedicnost = edge('e1', 'a', 'b', 0); // starší projekt: type undefined
 		const vysledek = retypeEdge(dedicnost, true, 100);
 
 		expect(vysledek.type).toBe('contact');
@@ -361,7 +362,7 @@ describe('kreslení hrany: tlačítko Kontakt musí opravdu přepnout typ', () =
 		const kontakt = edge('e1', 'a', 'b', 0, 'contact');
 		const vysledek = retypeEdge(kontakt, false, 100);
 
-		expect(vysledek.type).toBeUndefined();
+		expect(vysledek.type).toBe('straight');
 		expect(vysledek.animated).toBeUndefined();
 	});
 
@@ -387,9 +388,20 @@ describe('kreslení hrany: tlačítko Kontakt musí opravdu přepnout typ', () =
 		});
 	});
 
-	it('newEdgeFields pro Dědičnost nedá type vůbec', () => {
+	it('newEdgeFields pro Dědičnost dá explicitní přímý renderer', () => {
 		const fields = newEdgeFields(false, 100);
-		expect(fields.type).toBeUndefined();
+		expect(fields.type).toBe('straight');
 		expect(fields.data).toEqual({ year: 100 });
+	});
+
+	it('snapshot pro plátno normalizuje starou dědičnost a nevrací zdrojové reference', () => {
+		const snapshot = { nodes: [node('a', 0)], edges: [edge('e1', 'a', 'b', 0)] };
+		const canvas = snapshotForCanvas(snapshot, 100);
+
+		expect(canvas.edges[0].type).toBe('straight');
+		canvas.nodes[0].data!.label = 'jen plátno';
+		canvas.edges[0].data!.year = 999;
+		expect(snapshot.nodes[0].data?.label).toBe('a');
+		expect(snapshot.edges[0].data?.year).toBe(0);
 	});
 });

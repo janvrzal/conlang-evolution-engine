@@ -60,6 +60,9 @@ class WordView:
     polysemy: List[str] = field(default_factory=list)
     origin_year: int = 0
     source_id: Optional[str] = None
+    frequency: float = 0.5
+    active: bool = True
+    origin_type: str = "inherited"
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -68,6 +71,9 @@ class WordView:
             "polysemy": self.polysemy,
             "origin_year": self.origin_year,
             "source_id": self.source_id,
+            "frequency": self.frequency,
+            "active": self.active,
+            "origin_type": self.origin_type,
         }
 
 
@@ -255,6 +261,14 @@ def grammar_sketch(
     if loans:
         lines += ["", "## Kontakt", "", f"- Výpůjčky z: {', '.join(loans)}"]
 
+    if state.social:
+        labels = {
+            "prestige": "prestiž", "mobility": "mobilita", "literacy": "gramotnost",
+            "standardization": "standardizace", "population": "populace",
+        }
+        social = ", ".join(f"{labels.get(key, key)} {value:.0%}" for key, value in sorted(state.social.items()))
+        lines += ["", "## Společnost", "", f"- {social}"]
+
     if retention is not None and retention.total:
         lines += [
             "",
@@ -290,6 +304,9 @@ def build_branch_view(
             polysemy=sorted(word.polysemy),
             origin_year=word.origin_year,
             source_id=word.source_id,
+            frequency=word.frequency,
+            active=word.active,
+            origin_type=word.origin_type,
         )
         for word in state.lexicon.words
     ]
@@ -357,4 +374,3 @@ class LineageConfig:
     @property
     def epoch_length(self) -> int:
         return max(1, self.years // max(1, self.epochs))
-

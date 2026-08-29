@@ -28,6 +28,15 @@ class ContactEdge:
     #: Sousedící jazyky se obvykle ovlivňují navzájem, ne jen jedním směrem.
     #: Jednosměrný kontakt odpovídá výrazně nesymetrické prestiži.
     mutual: bool = False
+    #: Sociální typ kontaktu (obchod, válka, náboženství, sousedství).
+    domain: str = "neighborhood"
+    #: Poměr prestiže zdroje vůči cíli; 1.0 je vyrovnaný kontakt.
+    prestige: float = 1.0
+    #: Podíl významových kalků místo přímého převzetí tvaru.
+    calque_rate: float = 0.0
+    #: Starší scénáře zachovávají přesný tvar výpůjčky; nový editor může
+    #: explicitně zapnout adaptaci do inventáře cílového jazyka.
+    adapt: bool = False
 
     def directions(self):
         """Dvojice (zdroj, cíl) pro každý směr, kterým kontakt působí."""

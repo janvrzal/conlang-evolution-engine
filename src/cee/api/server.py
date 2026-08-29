@@ -5,6 +5,7 @@ Vlastní logika simulace žije v `cee.pipeline` — tenhle modul jen překládá
 HTTP požadavky na volání služby a zpátky na JSON.
 """
 import uuid
+import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +27,7 @@ from cee.pipeline import (
 )
 from cee.semantics.graph import SemanticGraph
 from cee.storage.genealogy import get_genealogy_store
+from cee.storage.legacy_neo4j import import_legacy_graph
 from cee.api.runs import router as run_router
 
 app = FastAPI(title="CEE Engine API")
@@ -173,6 +175,24 @@ def delete_project(project_id: str):
     return {"status": "success"}
 
 
+@app.post("/api/projects/{project_id}/import-legacy-neo4j")
+def import_legacy_neo4j(project_id: str):
+    """Výslovně přenese poslední starý globální graf do nového běhu projektu."""
+    project = _project_or_404(project_id)
+    run_id = uuid.uuid4().hex
+    builder = import_legacy_graph(
+        os.environ.get("CEE_LEGACY_NEO4J_URI", "bolt://localhost:7687"),
+        os.environ.get("CEE_LEGACY_NEO4J_USERNAME", "neo4j"),
+        os.environ.get("CEE_LEGACY_NEO4J_PASSWORD", "password"),
+    )
+    store = get_genealogy_store()
+    store.save(run_id, builder)
+    project.data["simulationRunId"] = run_id
+    project.data["simulationRunAt"] = project.updated_at
+    projects.save(project)
+    return {"status": "success", "run_id": run_id, "words": len(builder.nodes)}
+
+
 @app.post("/api/simulate_dynamic")
 def run_dynamic_simulation(req: DynamicSimulateRequest):
     """Spustí simulaci nad celou časovou osou sestavenou v grafovém editoru."""
@@ -200,12 +220,20 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
             for edge in snapshot.get("edges", []):
                 if edge.get("type") == "contact":
                     data = edge.get("data", {})
+                    direction = data.get("direction", "both")
+                    source_id, target_id = edge["source"], edge["target"]
+                    if direction == "ba":
+                        source_id, target_id = target_id, source_id
                     graph.contact_edges.append(ContactEdge(
                         year=epoch_year,
-                        source_id=edge["source"],
-                        target_id=edge["target"],
-                        volume=int(data.get("volume", 5)),
-                        mutual=bool(data.get("mutual", True)),
+                        source_id=source_id,
+                        target_id=target_id,
+                        volume=max(1, round(int(data.get("volume", 5)) * float(data.get("intensity", 50)) / 50)),
+                        mutual=direction == "both" or bool(data.get("mutual", False)),
+                        domain=data.get("contactType", "neighborhood"),
+                        prestige=float(data.get("prestige", 1.0)),
+                        calque_rate=float(data.get("calqueRate", 0.0)),
+                        adapt=bool(data.get("adapt", True)),
                     ))
                 else:
                     pair = (edge["source"], edge["target"])
@@ -227,6 +255,10 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
                     year=int(edge.get("year", req.years // 2)),
                     source_id=edge["source"], target_id=edge["target"],
                     volume=int(edge.get("volume", 5)), mutual=bool(edge.get("mutual", True)),
+                    domain=edge.get("domain", "neighborhood"),
+                    prestige=float(edge.get("prestige", 1.0)),
+                    calque_rate=float(edge.get("calque_rate", 0.0)),
+                    adapt=bool(edge.get("adapt", False)),
                 ))
             else:
                 graph.vertical_edges.append(VerticalEdge(

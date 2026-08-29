@@ -36,6 +36,38 @@ class Word:
     origin_type: str = "inherited" # inherited, mutated, borrowed
     origin_rule: Optional[str] = None # if mutated, rule name
     is_grammatical: bool = False
+    # Index přízvučného slabičného jádra v `segments`. Nejde o ortografii,
+    # ale o prosodickou informaci, kterou mohou používat zvuková pravidla.
+    stress_index: Optional[int] = None
+    #: Relativní užívání (0–1). Historické procesy typicky chrání frekventní
+    #: základní slova a naopak rychleji obměňují okrajový lexikon.
+    frequency: float = 0.5
+    #: Slot může zůstat v lexikonu jako historická stopa, aniž by byl živým
+    #: kandidátem pro výpůjčku nebo analogii.
+    active: bool = True
+    #: Hranice mezi segmenty (index prvního segmentu následujícího morfému).
+    #: Prázdná množina znamená jednoduchý kořen.
+    morpheme_boundaries: Set[int] = field(default_factory=set)
+    #: Jádra slabik nesoucí kontrastivní délku. Délka se drží mimo PanPhonovy
+    #: segmentové rysy, protože IPA ː není samostatný segment.
+    long_nuclei: Set[int] = field(default_factory=set)
+
+    def ensure_stress(self) -> None:
+        """Dá slovu deterministický výchozí přízvuk na první samohlásce."""
+        nuclei = [i for i, segment in enumerate(self.segments) if segment.features.get("syl") == "+"]
+        if not nuclei:
+            self.stress_index = None
+        elif self.stress_index not in nuclei:
+            self.stress_index = nuclei[0]
+        self.long_nuclei.intersection_update(nuclei)
+        self.morpheme_boundaries = {
+            boundary for boundary in self.morpheme_boundaries
+            if 0 < boundary < len(self.segments)
+        }
+
+    def syllable_nuclei(self) -> List[int]:
+        """Indexy samohlásek, které tvoří jádra slabik."""
+        return [i for i, segment in enumerate(self.segments) if segment.features.get("syl") == "+"]
 
 
 @dataclass
@@ -78,6 +110,9 @@ class State:
     # Morfologické / Typologické parametry
     affixation_strategy: str = "suffix" # "prefix" nebo "suffix"
     compound_head: str = "final"        # "initial" nebo "final"
+    #: Malý, vysvětlitelný sociolingvistický profil. Nejde o simulaci každého
+    #: mluvčího, ale o parametry, které mění rychlost šíření inovací a kontakt.
+    social: Dict[str, float] = field(default_factory=dict)
     def __post_init__(self):
         if self.map is None:
             self.map = {}
@@ -85,3 +120,10 @@ class State:
             self.compound_head = self.map["compound_head"]
         if "affixation_strategy" in self.map:
             self.affixation_strategy = self.map["affixation_strategy"]
+        raw_social = self.map.get("social", self.map.get("society", {}))
+        if isinstance(raw_social, dict):
+            self.social = {
+                key: max(0.0, min(1.0, float(value)))
+                for key, value in raw_social.items()
+                if key in {"prestige", "mobility", "literacy", "standardization", "population"}
+            }

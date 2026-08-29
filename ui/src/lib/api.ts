@@ -212,6 +212,14 @@ export async function deleteProject(id: string) {
 	if (!res.ok) throw new Error(`Smazání projektu selhalo: ${res.status} ${res.statusText}`);
 }
 
+/** Přenese výslovně zvolený výsledek ze starší lokální Neo4j instalace. */
+export async function importLegacyNeo4j(id: string) {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/import-legacy-neo4j`, { method: 'POST' });
+	if (!res.ok) throw new Error(`Import starší simulace selhal: ${res.status}`);
+	return res.json() as Promise<{ status: string; run_id: string; words: number }>;
+}
+
 /**
  * Převede název projektu na ID, které projde sítem na backendu
  * (písmena včetně diakritiky, číslice, pomlčka, podtržítko; nejvýše 64 znaků).

@@ -16,7 +16,7 @@
 		sourceY,
 		targetX,
 		targetY,
-		style,
+		style = '',
 		markerEnd,
 		markerStart,
 		data = {}
@@ -62,13 +62,13 @@
 	rozdíl by byl malý odznáček uprostřed, snadno přehlédnutelný.
 	Kontakt proto dostává vlastní barvu a přerušovanou čáru navrch.
 -->
-<BaseEdge path={path[0]} style="{style}; stroke: var(--contact-edge-stroke, #6366f1); stroke-width: 1.8; stroke-dasharray: 6 4; opacity: 0.85;" {markerEnd} {markerStart} />
+<BaseEdge path={path[0]} style="{style ? style + ';' : ''} stroke: var(--contact-edge-stroke, #6366f1); stroke-width: 1.8; stroke-dasharray: 6 4; opacity: 0.85;" {markerEnd} {markerStart} />
 
 <foreignObject
-	width={250}
-	height={250}
-	x={labelX - 125}
-	y={labelY - 125}
+	width={44}
+	height={44}
+	x={labelX - 22}
+	y={labelY - 22}
 	class="edgebutton-foreignobject overflow-visible pointer-events-none z-50"
 	requiredExtensions="http://www.w3.org/1999/xhtml"
 >

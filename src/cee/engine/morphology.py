@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Iterable, Optional
 from cee.core.models import State, Word
 import copy
 
@@ -24,6 +24,9 @@ class MorphologyEvaluator:
         
         if not w1 or not w2:
             return None
+        existing = state.lexicon.get_word(new_concept_id)
+        if existing:
+            return existing
             
         head_order = state.compound_head
         
@@ -35,9 +38,72 @@ class MorphologyEvaluator:
         new_word = Word(
             concept_id=new_concept_id,
             segments=new_segments,
-            origin_year=state.year
+            origin_year=state.year,
+            frequency=min(w1.frequency, w2.frequency) * 0.6,
+            morpheme_boundaries={len(w1.segments) if head_order == "initial" else len(w2.segments)},
+            parent_word_id=w1.id,
+            origin_type="compound",
+            origin_rule="compounding",
         )
         
         # Přidáme do lexikonu
         state.lexicon.words.append(new_word)
         return new_word
+
+    def derive(
+        self,
+        state: State,
+        root_id: str,
+        affix_id: str,
+        new_concept_id: str,
+        *,
+        prefix: Optional[bool] = None,
+    ) -> Optional[Word]:
+        """Lexikalizuje afix z existujícího slova a zaznamená hranici morfémů."""
+        root = state.lexicon.get_word(root_id)
+        affix = state.lexicon.get_word(affix_id)
+        if not root or not affix:
+            return None
+        if state.lexicon.get_word(new_concept_id):
+            return state.lexicon.get_word(new_concept_id)
+
+        use_prefix = state.affixation_strategy == "prefix" if prefix is None else prefix
+        left, right = (affix, root) if use_prefix else (root, affix)
+        word = Word(
+            concept_id=new_concept_id,
+            segments=copy.deepcopy(left.segments) + copy.deepcopy(right.segments),
+            origin_year=state.year,
+            frequency=root.frequency * 0.5,
+            morpheme_boundaries={len(left.segments)},
+            parent_word_id=root.id,
+            origin_type="derived",
+            origin_rule="affixation",
+        )
+        state.lexicon.words.append(word)
+        return word
+
+    def level_analogies(self, state: State, threshold: float = 0.75) -> int:
+        """Vyrovná nejisté afixální alternace podle nejčastějšího paradigmatu.
+
+        Není to generativní morfologie celé přirozené řeči: jde o konzervativní
+        krok, který kopíruje afix z nejfrekventovanějšího členěného slova do
+        méně frekventních členů stejné orientace. Tím opravuje část
+        nepravidelností vytvořených předchozí fonologií, aniž by mazal kořen.
+        """
+        candidates = [w for w in state.lexicon.words if w.active and w.morpheme_boundaries]
+        if len(candidates) < 2:
+            return 0
+        model = max(candidates, key=lambda w: w.frequency)
+        boundary = min(model.morpheme_boundaries)
+        model_affix = model.segments[:boundary] if state.affixation_strategy == "prefix" else model.segments[boundary:]
+        changed = 0
+        for word in candidates:
+            if word is model or word.frequency >= threshold or not word.morpheme_boundaries:
+                continue
+            split = min(word.morpheme_boundaries)
+            root = word.segments[split:] if state.affixation_strategy == "prefix" else word.segments[:split]
+            word.segments = copy.deepcopy(model_affix) + root if state.affixation_strategy == "prefix" else root + copy.deepcopy(model_affix)
+            word.morpheme_boundaries = {len(model_affix) if state.affixation_strategy == "prefix" else len(root)}
+            word.ensure_stress()
+            changed += 1
+        return changed

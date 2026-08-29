@@ -23,6 +23,10 @@ class Rule:
     insert_features: Optional[Dict[str, str]] = None
     #: IPA vkládané hlásky, jen pro čitelnost názvů a záznamu.
     insert_label: Optional[str] = None
+    #: Volitelná prosodická podmínka: ``unstressed`` nebo ``stressed``.
+    prosody: Optional[str] = None
+    #: Pozice v explicitně vypočtené slabice: onset, nucleus nebo coda.
+    syllable_part: Optional[str] = None
 
     def apply_to_word(self, word: Word) -> bool:
         """
@@ -33,12 +37,23 @@ class Rule:
         if self.year is not None and self.year < word.origin_year:
             return False
             
+        word.ensure_stress()
         # Fáze 1: Identifikace terčů
         targets_to_modify = []
         for i, segment in enumerate(word.segments):
             # 1. Odpovídá segment terči pravidla?
             if not segment.matches(self.target):
                 continue
+
+            if self.prosody == "unstressed" and i == word.stress_index:
+                continue
+            if self.prosody == "stressed" and i != word.stress_index:
+                continue
+
+            if self.syllable_part:
+                from cee.engine.prosody import syllable_position
+                if syllable_position(word, i) != self.syllable_part:
+                    continue
                 
             # 2. Odpovídá předchozí segment prostředí 'env_before'?
             if self.env_before:
@@ -54,6 +69,18 @@ class Rule:
                 if self.env_after.get("_boundary") == "+":
                     if i != len(word.segments) - 1:
                         continue
+                elif self.env_after.get("_lookahead_vowel") == "+":
+                    environment = {
+                        key: value for key, value in self.env_after.items()
+                        if not key.startswith("_")
+                    }
+                    following_vowel = next(
+                        (candidate for candidate in word.segments[i + 1:]
+                         if candidate.features.get("syl") == "+"),
+                        None,
+                    )
+                    if following_vowel is None or not following_vowel.matches(environment):
+                        continue
                 else:
                     if i == len(word.segments) - 1 or not word.segments[i+1].matches(self.env_after):
                         continue
@@ -66,6 +93,7 @@ class Rule:
 
         if self.insert and self.insert_features:
             word.segments = self._with_insertions(word, targets_to_modify)
+            word.ensure_stress()
             return True
 
         if self.action.get("delete") == "+":
@@ -80,12 +108,15 @@ class Rule:
                 return False
 
             word.segments = zbyvajici
+            word.ensure_stress()
             return True
 
         for i in targets_to_modify:
             segment = word.segments[i]
             for feature, new_value in self.action.items():
                 segment.features[feature] = new_value
+
+        word.ensure_stress()
 
         return True
 

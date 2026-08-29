@@ -178,3 +178,23 @@ def test_uzel_bez_vlastniho_pravidla_vznika_v_roce_z_konfigurace(mapper):
 
     states = EvolutionSimulator(graph, mapper).simulate(_root(mapper, [("vlk", "lupu")]))
     assert states["daughter"].year == 500
+
+
+def test_semantika_bezi_v_casove_fronte_pred_pozdejsim_odstepeni(mapper):
+    """Dítě musí dědit významy, které rodič získal ještě před svým vznikem."""
+    class RecordingSemantics:
+        def evaluate(self, lexicon):
+            lexicon.words[0].polysemy.add("WOOD")
+            return lexicon
+
+    graph = EvolutionGraph()
+    graph.node_configs = {"proto": {}, "daughter": {"year": 200}}
+    graph.vertical_edges.append(
+        __import__("cee.engine.topology", fromlist=["VerticalEdge"]).VerticalEdge("proto", "daughter", [])
+    )
+
+    states = EvolutionSimulator(
+        graph, mapper, semantic_evaluator=RecordingSemantics(), end_year=300, evolve_root=True
+    ).simulate(_root(mapper, [("tree", "tara")]))
+
+    assert "WOOD" in states["daughter"].lexicon.words[0].polysemy

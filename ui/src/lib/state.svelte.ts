@@ -129,6 +129,9 @@ export async function loadProject(id: string): Promise<void> {
 
 	projectState.id = id;
 	projectState.error = null;
+	// Dokud odpověď opravdu nepřijde, nesmí žádný reaktivní efekt uložit
+	// výchozí hodnoty přes existující projekt (typicky právě po restartu API).
+	projectState.loaded = false;
 
 	try {
 		const project = await fetchProject(id);
@@ -152,8 +155,14 @@ export async function loadProject(id: string): Promise<void> {
 	} catch (e) {
 		projectState.status = 'error';
 		projectState.error = e instanceof Error ? e.message : String(e);
+		return;
 	} finally {
+		// Jen úspěšné načtení (nebo úspěšné založení nového projektu) odemkne
+		// autosave. V catch se returnem se finally provede také, proto stav
+		// nastavujeme podmíněně podle chybového statusu.
+		if (projectState.status !== 'error') {
 		projectState.loaded = true;
+		}
 	}
 }
 

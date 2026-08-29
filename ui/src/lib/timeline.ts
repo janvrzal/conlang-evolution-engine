@@ -62,6 +62,31 @@ function clone<T>(value: T): T {
 }
 
 /**
+ * Připraví uložený snapshot pro xyflow.
+ *
+ * Snapshoty jsou zdroj pravdy projektu; editor ale při tažení a při
+ * připojování uzlů upravuje objekty, které dostane přes `bind:nodes` a
+ * `bind:edges`. Vrácení kopií proto není jen kosmetika: bez něj šlo při
+ * přepnutí času současně upravit i jiný, právě uložený rok.
+ *
+ * Staré projekty ukládaly dědičnost jako `type: undefined`. XYFlow pak typ
+ * jen domýšlel přes výchozí nastavení, což vedlo k odlišnému vykreslení po
+ * načtení a bezprostředně po vytvoření. Dědičnost má odteď explicitní
+ * renderer `straight`; pro simulátor to stále znamená dědičnost, protože
+ * jediný typ kontaktu je `contact`.
+ */
+export function snapshotForCanvas(snapshot: YearSnapshot, year: number): YearSnapshot {
+	return {
+		nodes: clone(snapshot.nodes),
+		edges: snapshot.edges.map((edge) => ({
+			...clone(edge),
+			type: edge.type === 'contact' ? 'contact' : 'straight',
+			data: { ...clone(edge.data ?? {}), year: edge.data?.year ?? year }
+		}))
+	};
+}
+
+/**
  * Zafixuje "rok narození" (`data.year`) uzlů a hran podle jejich prvního
  * výskytu na ose. Migrace pro projekty založené předtím, než se `year`
  * začal používat jako kotva pro kaskádu — bez ní by se starší hrany při
@@ -275,10 +300,10 @@ export function retypeEdge(edge: TLEdge, wantsContact: boolean, year: number): T
 
 	return {
 		...edge,
-		type: undefined,
+		type: 'straight',
 		animated: undefined,
 		// contactType/intensity/direction se NEMAŽOU, jen přestanou být
-		// aktivní — dokud je type undefined, ContactEdge se nevykresluje
+		// aktivní — dokud typ není `contact`, ContactEdge se nevykresluje
 		// a na tahle pole se nikde nesahá. Kdyby se tu `data` nahradilo jen
 		// `{ year }`, přepnutí zpět na kontakt by je muselo znovu dohádat
 		// z výchozích hodnot.
@@ -298,5 +323,5 @@ export function newEdgeFields(
 ): Pick<TLEdge, 'type' | 'data'> {
 	return wantsContact
 		? { type: 'contact', data: { contactType: 'neighborhood', intensity: 50, direction: 'ab', year } }
-		: { type: undefined, data: { year } };
+		: { type: 'straight', data: { year } };
 }

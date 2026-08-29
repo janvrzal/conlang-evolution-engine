@@ -20,6 +20,8 @@ class YamlParser:
                 action=r_dict['action'],
                 env_before=r_dict.get('env_before'),
                 env_after=r_dict.get('env_after'),
+                prosody=r_dict.get('prosody'),
+                syllable_part=r_dict.get('syllable_part'),
                 year=r_dict.get('year')
             )
             rules.append(rule)
@@ -47,6 +49,8 @@ class YamlParser:
                     action=r_data['action'],
                     env_before=r_data.get('env_before'),
                     env_after=r_data.get('env_after'),
+                    prosody=r_data.get('prosody'),
+                    syllable_part=r_data.get('syllable_part'),
                     year=r_data.get('year')
                 )
                 rules.append(rule)
@@ -64,6 +68,10 @@ class YamlParser:
                 target_id=c_edge['target'],
                 volume=c_edge.get('volume', 10),
                 mutual=bool(c_edge.get('mutual', False)),
+                domain=c_edge.get('domain', c_edge.get('contact_type', 'neighborhood')),
+                prestige=float(c_edge.get('prestige', 1.0)),
+                calque_rate=float(c_edge.get('calque_rate', 0.0)),
+                adapt=bool(c_edge.get('adapt', False)),
             ))
             
         return graph

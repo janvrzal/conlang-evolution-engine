@@ -1,0 +1,73 @@
+"""Regrese pro společné diachronní jádro etapy 2."""
+from cee.core.models import Inventory, Lexicon, State
+from cee.engine.prosody import syllabify
+from cee.engine.rules import Rule
+from cee.engine.simulator import EvolutionSimulator
+from cee.engine.topology import ContactEdge, EvolutionGraph, VerticalEdge
+
+
+def _root(mapper, words):
+    return State(
+        node_id="proto", year=0, inventory=Inventory(),
+        lexicon=Lexicon([mapper.parse_word(concept, ipa) for concept, ipa in words]),
+    )
+
+
+def test_slabiky_rozlisuji_kodu_a_pravidlo_na_ni_miri(mapper):
+    word = mapper.parse_word("word", "anta")
+    syllables = syllabify(word)
+    assert len(syllables) == 2
+    assert not syllables[0].is_open
+
+    rule = Rule(
+        name="ztráta kody", year=1, target={"cons": "+"}, action={"delete": "+"},
+        syllable_part="coda",
+    )
+    assert rule.apply_to_word(word)
+    assert mapper.render_word(word) == "ata"
+
+
+def test_slozenina_vznikne_pred_pozdejsi_fonologii(mapper):
+    graph = EvolutionGraph(
+        node_configs={
+            "proto": {},
+            "child": {
+                "year": 0,
+                "compounds": [{"head": "town", "modifier": "gold", "id": "gold_town"}],
+            },
+        },
+        vertical_edges=[VerticalEdge("proto", "child", [
+            Rule("finální apokopa", {"syl": "+"}, {"delete": "+"}, env_after={"_boundary": "+"}, year=50),
+        ])],
+    )
+    states = EvolutionSimulator(graph, mapper).simulate(_root(mapper, [("town", "viku"), ("gold", "auru")]))
+    compound = states["child"].lexicon.get_word("gold_town")
+    assert compound is not None
+    assert mapper.render_word(compound).endswith("vik")
+
+
+def test_lexikalni_nahrada_je_volitelna_a_casovana(mapper):
+    graph = EvolutionGraph(
+        node_configs={"proto": {}, "child": {"year": 0, "lexical": {"enabled": True, "replacement_rate": 1.0}}},
+        vertical_edges=[VerticalEdge("proto", "child", [])],
+    )
+    state = EvolutionSimulator(graph, mapper, end_year=100).simulate(
+        _root(mapper, [("one", "pata"), ("two", "kumi")])
+    )["child"]
+    replacements = [word for word in state.lexicon.words if word.origin_type == "lexical_replacement"]
+    assert replacements
+    assert all(word.origin_year == 100 for word in replacements)
+
+
+def test_adaptovana_vypujcka_respektuje_cilovy_inventar(mapper):
+    graph = EvolutionGraph(
+        node_configs={"proto": {}, "a": {"year": 0}, "b": {"year": 0}},
+        vertical_edges=[VerticalEdge("proto", "a", [
+            Rule("znělá labiala", {"cons": "+", "lab": "+", "cont": "-", "voi": "-"}, {"voi": "+"}, year=1),
+        ]), VerticalEdge("proto", "b", [])],
+        contact_edges=[ContactEdge(10, "a", "b", volume=1, adapt=True)],
+    )
+    states = EvolutionSimulator(graph, mapper).simulate(_root(mapper, [("one", "pata")]))
+    loan = next(word for word in states["b"].lexicon.words if word.source_id == "a")
+    target_inventory = {mapper.segment_to_ipa(segment) for word in states["b"].lexicon.words if word.source_id is None for segment in word.segments}
+    assert all(mapper.segment_to_ipa(segment) in target_inventory for segment in loan.segments)

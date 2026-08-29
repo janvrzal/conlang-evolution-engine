@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import {
 		SvelteFlow,
 		Controls,
@@ -20,6 +21,8 @@
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Select } from '$lib/components/ui/select';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
 	import {
 		MousePointer2,
@@ -31,11 +34,12 @@
 		Map
 	} from 'lucide-svelte';
 	
-	import { simulateDynamic, resetApiBase, fetchIsogloss, fetchRunExport } from '$lib/api';
+	import { simulateDynamic, resetApiBase, fetchIsogloss, fetchRunExport, importLegacyNeo4j } from '$lib/api';
 	import { projectState, loadProject, scheduleSave, flushSave } from '$lib/state.svelte';
-	import { propagateSnapshots, findEdgeBetween, retypeEdge, newEdgeFields } from '$lib/timeline';
+	import { propagateSnapshots, findEdgeBetween, retypeEdge, newEdgeFields, snapshotForCanvas } from '$lib/timeline';
 	import type { TLEdge } from '$lib/timeline';
 	import { onMount, untrack } from 'svelte';
+	import { t } from '$lib/i18n.svelte';
 
 	const nodeTypes = {
 		language: LanguageNode
@@ -155,8 +159,11 @@
 			propagateTimeline();
 		}
 
-		nodes = projectState.snapshots[year].nodes;
-		edges = projectState.snapshots[year].edges;
+		// XYFlow dostává izolovanou kopii. Jeho interní bindování tak nemůže
+		// při načítání jednoho roku omylem zmutovat perzistentní snapshot jiného.
+		const canvasSnapshot = snapshotForCanvas(projectState.snapshots[year], year);
+		nodes = canvasSnapshot.nodes as Node[];
+		edges = canvasSnapshot.edges as Edge[];
 		loadedYear = year;
 	});
 
@@ -199,7 +206,8 @@
 	// Hrana je buď dědičnost (rodič -> potomek), nebo kontakt (sousedé, kteří
 	// se navzájem ovlivňují). Bez rozlišení se všechno bralo jako dědičnost
 	// a propojené jazyky na sebe nikdy nepůsobily.
-	let activeTool = $state<'move' | 'connect' | 'contact'>('connect');
+	let activeTool = $state<'interact' | 'relationship'>('interact');
+	let relationshipType = $state<'inheritance' | 'contact'>('inheritance');
 
 	/**
 	 * Nová hrana dostane druh podle právě zvoleného nástroje.
@@ -214,7 +222,7 @@
 	 */
 	function onConnect(connection: { source: string; target: string }) {
 		const year = timeSteps[currentTimeIndex];
-		const wantsContact = activeTool === 'contact';
+		const wantsContact = relationshipType === 'contact';
 
 		const existingIdx = findEdgeBetween(edges as unknown as TLEdge[], connection.source, connection.target);
 		if (existingIdx !== -1) {
@@ -274,7 +282,7 @@
 			id,
 			type: 'language',
 			position: { x: Math.random() * 300 + 200, y: Math.random() * 300 + 200 },
-			data: { label: generateLanguageName(id), year }
+					data: { label: generateLanguageName(id), year }
 		};
 		nodes = [...nodes, newNode];
 	}
@@ -349,6 +357,21 @@
 		}
 	}
 
+	async function importPreviousSimulation() {
+		isLoading = true;
+		errorMessage = '';
+		try {
+			const result = await importLegacyNeo4j($page.params.id ?? 'default');
+			projectState.simulationRunId = result.run_id;
+			projectState.simulationRunAt = new Date().toISOString();
+			await flushSave();
+		} catch (e) {
+			errorMessage = e instanceof Error ? e.message : String(e);
+		} finally {
+			isLoading = false;
+		}
+	}
+
 	async function runSimulation() {
 		if (projectState.generatedProtoLexicon.length === 0) {
 			alert("Nejprve vygeneruj testovací slovník v sekci Metaeditace!");
@@ -409,61 +432,67 @@
 <div class="relative w-full h-screen bg-background overflow-hidden flex tool-{activeTool}">
 	<!-- Canvas -->
 	<div class="absolute inset-0">
-		<SvelteFlow 
-			bind:nodes 
-			bind:edges
-			{nodeTypes}
-			{edgeTypes}
-			onedgeclick={onEdgeClick}
-			onedgecontextmenu={onEdgeContextMenu}
-			{defaultEdgeOptions}
-			connectionLineType={ConnectionLineType.Straight}
-			connectionMode={ConnectionMode.Loose}
-			nodesDraggable={activeTool === 'move'}
-			nodesConnectable={activeTool === 'connect' || activeTool === 'contact'}
-			onconnect={onConnect}
-			elementsSelectable={true}
-			onnodeclick={onNodeClick}
-			onpaneclick={onPaneClick}
-			fitView
-		>
-			<Background variant={BackgroundVariant.Dots} gap={28} size={1} class="opacity-30" />
-			<Controls class="bg-card border-border fill-foreground" />
-		</SvelteFlow>
+		<!--
+			XYFlow si ke každému ID uzlu ukládá interní změřenou pozici. ID jsou
+			záměrně stejná ve všech časových snímcích, ale jejich `position` se
+			mění. Bez nového mountu si knihovna občas nechala staré kotvy hran:
+			uzel už byl napravo, zatímco čára končila v jeho pozici z minulého
+			roku. Klíč podle načteného roku proto obnoví jen interní geometrii;
+			data nadále zůstávají v `projectState.snapshots`.
+		-->
+		{#key loadedYear}
+			<SvelteFlow
+				bind:nodes
+				bind:edges
+				{nodeTypes}
+				{edgeTypes}
+				onedgeclick={onEdgeClick}
+				onedgecontextmenu={onEdgeContextMenu}
+				{defaultEdgeOptions}
+				connectionLineType={ConnectionLineType.Straight}
+				connectionMode={ConnectionMode.Loose}
+				nodesDraggable={activeTool === 'interact'}
+				nodesConnectable={activeTool === 'relationship'}
+				onconnect={onConnect}
+				elementsSelectable={true}
+				onnodeclick={onNodeClick}
+				onpaneclick={onPaneClick}
+				fitView
+			>
+				<Background variant={BackgroundVariant.Dots} gap={28} size={1} class="opacity-30" />
+				<Controls class="bg-card border-border fill-foreground" />
+			</SvelteFlow>
+		{/key}
 	</div>
 
 	<!-- Toolbar Panel -->
 	<div class="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex bg-card rounded-md border shadow-sm p-1 gap-1">
 		<Button 
-			variant={activeTool === 'move' ? 'default' : 'ghost'} 
+			variant={activeTool === 'interact' ? 'default' : 'ghost'}
 			size="sm" 
 			class="px-3"
-			onclick={() => activeTool = 'move'}
-			title="Nástroj pro posun (Move)"
+			onclick={() => activeTool = 'interact'}
+			title={t('moveHint')}
 		>
 			<MousePointer2 class="w-4 h-4 mr-2" />
-			Posun
+			{t('interaction')}
 		</Button>
 		<Button 
-			variant={activeTool === 'connect' ? 'default' : 'ghost'} 
+			variant={activeTool === 'relationship' ? 'default' : 'ghost'}
 			size="sm" 
 			class="px-3"
-			onclick={() => activeTool = 'connect'}
-			title="Nástroj pro spojení (Connect)"
+			onclick={() => activeTool = 'relationship'}
+			title={t('relationshipHint')}
 		>
 			<GitCommitHorizontal class="w-4 h-4 mr-2" />
-			Dědičnost
+			{t('relationship')}
 		</Button>
-		<Button
-			variant={activeTool === 'contact' ? 'default' : 'ghost'}
-			size="sm"
-			class="px-3"
-			onclick={() => (activeTool = 'contact')}
-			title="Kontakt — sousedé, kteří se navzájem ovlivňují (výpůjčky)"
-		>
-			<ArrowLeftRight class="w-4 h-4 mr-2" />
-			Kontakt
-		</Button>
+		{#if activeTool === 'relationship'}
+			<Select class="h-8 w-36" bind:value={relationshipType} title={t('relationship')}>
+				<option value="inheritance">{t('inheritance')}</option>
+				<option value="contact">{t('contact')}</option>
+			</Select>
+		{/if}
 		{#if selectedEdgeId}
 			<div class="w-px bg-border mx-1"></div>
 			<Button
@@ -494,14 +523,17 @@
 	<div class="absolute top-4 left-4 z-10 w-80 flex flex-col gap-4">
 		<Card class="shadow-sm">
 			<CardHeader class="pb-3">
-				<CardTitle class="text-lg">Projekt: {$page.params.id}</CardTitle>
+				<CardTitle class="text-lg">Projekt: {projectState.name}</CardTitle>
 			</CardHeader>
 			<CardContent class="space-y-4">
 				<Button class="w-full" variant="outline" size="sm" onclick={addLanguage}>
-					+ Přidat uzel
+					+ {t('addNode')}
+				</Button>
+				<Button class="w-full" variant="outline" size="sm" onclick={() => goto(`/project/${$page.params.id}/meta`)}>
+					{t('projectSettings')}
 				</Button>
 				<Button class="w-full relative overflow-hidden" variant="default" size="sm" onclick={runSimulation} disabled={isLoading}>
-					<span class="relative z-10">{isLoading ? 'Simuluji...' : 'Spustit Vývoj (Simulovat)'}</span>
+					<span class="relative z-10">{isLoading ? '…' : t('simulate')}</span>
 					{#if isLoading}
 						<div class="absolute bottom-0 left-0 h-1 bg-white/40 animate-pulse transition-all duration-[800ms] ease-out w-full" style="animation: fillProgress 800ms ease-out forwards;"></div>
 					{/if}
@@ -510,13 +542,17 @@
 					<Button class="w-full" variant="outline" size="sm" onclick={exportSimulation}>
 						<Download class="w-4 h-4 mr-2" /> Exportovat simulaci
 					</Button>
+				{:else}
+					<Button class="w-full" variant="outline" size="sm" onclick={importPreviousSimulation} disabled={isLoading}>
+						{t('importLegacy')}
+					</Button>
 				{/if}
 				{#if errorMessage}
 					<p class="text-xs text-destructive">{errorMessage}</p>
 				{/if}
 
 				<div class="text-xs text-muted-foreground space-y-1">
-					<p>Aktuální krok: <strong>Rok {timeSteps[currentTimeIndex]}</strong></p>
+					<p>{t('currentStep')}: <strong>{t('year')} {timeSteps[currentTimeIndex]}</strong></p>
 					<p class="flex items-center gap-1.5">
 						{#if projectState.status === 'saving'}
 							<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Ukládám…
@@ -526,7 +562,7 @@
 							<span class="w-1.5 h-1.5 rounded-full bg-destructive"></span>
 							<span class="text-destructive">Uložení selhalo</span>
 						{:else if projectState.status === 'saved'}
-							<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Uloženo
+							<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> {t('saved')}
 						{/if}
 					</p>
 					{#if projectState.error}
@@ -539,22 +575,22 @@
 		{#if selectedNodeId && selectedNodeData}
 			<Card class="shadow-sm border-primary">
 				<CardHeader class="pb-3">
-					<CardTitle class="text-base">Detail uzlu</CardTitle>
+					<CardTitle class="text-base">{t('nodeDetail')}</CardTitle>
 				</CardHeader>
 				<CardContent class="space-y-4">
 					<div class="space-y-1.5">
-						<Label class="text-xs text-muted-foreground">Název jazyka</Label>
+						<Label class="text-xs text-muted-foreground">{t('languageName')}</Label>
 						<Input value={selectedNodeData.data.label} oninput={(e) => {
 							nodes = nodes.map(n => n.id === selectedNodeId ? { ...n, data: { ...n.data, label: e.currentTarget.value } } : n);
 						}} />
 					</div>
 					<div class="space-y-1.5">
-						<Label class="text-xs text-muted-foreground">Vznik v roce</Label>
+						<Label class="text-xs text-muted-foreground">{t('bornYear')}</Label>
 						<Input disabled value={selectedNodeData.data.year} />
 					</div>
 					<div class="flex items-center gap-2 p-2 rounded-md border {(selectedNodeData.data as any).isDead ? 'bg-muted border-border' : 'bg-background'}">
-						<input type="checkbox" id="isDead" class="accent-primary" checked={(selectedNodeData.data as any).isDead || false} onchange={(e) => setDead(selectedNodeId!, e.currentTarget.checked)} />
-						<Label for="isDead" class="text-sm font-medium cursor-pointer">Jazyk je mrtvý</Label>
+						<Checkbox id="isDead" checked={(selectedNodeData.data as any).isDead || false} onchange={(e: Event & { currentTarget: HTMLInputElement }) => setDead(selectedNodeId!, e.currentTarget.checked)} />
+						<Label for="isDead" class="text-sm font-medium cursor-pointer">{t('deadLanguage')}</Label>
 					</div>
 				</CardContent>
 			</Card>
@@ -610,11 +646,11 @@
 	}
 
 	/* Skrýt handles v režimu posunu (move), aby uživatel neomylem nevykreslil hranu */
-	:global(.tool-move .svelte-flow__handle) {
-		display: none !important;
+	:global(.tool-interact .svelte-flow__handle) {
+		pointer-events: none !important;
 	}
-	:global(.tool-connect .svelte-flow__handle) {
-		display: block !important;
+	:global(.tool-relationship .svelte-flow__handle) {
+		pointer-events: auto !important;
 	}
 
 	@keyframes fillProgress {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { fetchLanguage, fetchWordTrace, resetApiBase } from '$lib/api';
 	import { X, Loader2, ArrowRight, Map } from 'lucide-svelte';
+	import { t } from '$lib/i18n.svelte';
 
 	type TraceStep = { year: number; form: string; rule_name: string | null; type: string | null; note: string | null };
 	type WordNode = { id: string, concept_id: string, from: string, to: string, polysemy: string[] };
@@ -108,7 +109,7 @@
 			<h2>{label}</h2>
 			<p class="sub">
 				{#if biome}<span class="tag">{biome}</span>{/if}
-				<span>stav v roce {currentYear}</span>
+				<span>{t('stateInYear')} {currentYear}</span>
 				<span>{years} let vývoje</span>
 			</p>
 		</div>
@@ -116,24 +117,24 @@
 	</header>
 
 	{#if loading}
-		<div class="state"><Loader2 size={18} class="spin" /> Načítám z databáze…</div>
+		<div class="state"><Loader2 size={18} class="spin" /> {t('loading')}</div>
 	{:else if error}
 		<div class="state error">{error}</div>
 	{:else if !runId}
-		<div class="state text-center text-muted-foreground p-8">Spusť simulaci; pak zde uvidíš slovník v aktuálním roce.</div>
+		<div class="state text-center text-muted-foreground p-8">{t('lexiconUnavailable')}</div>
 	{:else if !words.length}
 		<div class="state text-center text-muted-foreground p-8">V tomto roce jazyk ještě nemá žádná slova.</div>
 	{:else}
 		<section class="flex-1 flex flex-col min-h-0">
 			<div class="px-4 pb-3 pt-1 sticky top-0 bg-card z-10 border-b border-border/40">
 				<div class="flex items-center justify-between mb-3">
-					<h3 class="m-0 text-xs font-semibold tracking-wider uppercase opacity-60">Slovník <span class="ml-1 opacity-70 font-normal">{filteredWords.length} / {words.length}</span></h3>
+					<h3 class="m-0 text-xs font-semibold tracking-wider uppercase opacity-60">{t('lexicon')} <span class="ml-1 opacity-70 font-normal">{filteredWords.length} / {words.length}</span></h3>
 				</div>
 				<div class="relative">
 					<input 
 						type="text" 
 						class="w-full h-8 px-3 text-sm bg-muted/50 border border-border/50 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:bg-background transition-all placeholder:text-muted-foreground" 
-						placeholder="Hledat slovo, význam..." 
+						placeholder={t('searchWord')}
 						bind:value={searchQuery}
 					/>
 					{#if searchQuery}

@@ -4,6 +4,7 @@
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Select } from '$lib/components/ui/select';
 	import { Label } from '$lib/components/ui/label';
 	import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '$lib/components/ui/table';
 
@@ -12,23 +13,55 @@
 	import { projectState, loadProject, scheduleSave } from '$lib/state.svelte';
 	import { onMount } from 'svelte';
 
+	type ProtoLanguage = { id: string; name: string; presetId: string; consonants: Set<string>; vowels: Set<string>; syllable: string };
+	type StoredProtoLanguage = Omit<ProtoLanguage, 'consonants' | 'vowels'> & { consonants: string[]; vowels: string[] };
+
+	function defaultProto(): ProtoLanguage {
+		const preset = languagePresets.find((item) => item.id === 'pie')!;
+		return { id: 'proto-1', name: 'Protojazyk', presetId: preset.id, consonants: new Set(preset.consonants), vowels: new Set(preset.vowels), syllable: preset.syllable };
+	}
+
+	function hydrateProto(value: unknown): ProtoLanguage[] {
+		if (!Array.isArray(value) || value.length === 0) return [defaultProto()];
+		return value.map((raw, index) => {
+			const item = raw as Partial<StoredProtoLanguage>;
+			return {
+				id: item.id ?? `proto-${index + 1}`,
+				name: item.name ?? `Protojazyk ${index + 1}`,
+				presetId: item.presetId ?? 'empty',
+				consonants: new Set(item.consonants ?? []),
+				vowels: new Set(item.vowels ?? []),
+				syllable: item.syllable ?? '(C)V'
+			};
+		});
+	}
+
+	function serializeProto(languages: ProtoLanguage[]): StoredProtoLanguage[] {
+		return languages.map((language) => ({ ...language, consonants: [...language.consonants], vowels: [...language.vowels] }));
+	}
+
+	let protoLanguages = $state<ProtoLanguage[]>([defaultProto()]);
+	let activeProtoId = $state('proto-1');
+	let metaReady = $state(false);
+
 	// Načtení projektu i tady — na Metaeditaci se dá přijít přímo odkazem.
 	onMount(() => {
-		void loadProject($page.params.id ?? 'default');
+		void (async () => {
+			await loadProject($page.params.id ?? 'default');
+			if (!projectState.loaded) return;
+			protoLanguages = hydrateProto(projectState.protoLanguages);
+			activeProtoId = protoLanguages[0].id;
+			metaReady = true;
+		})();
 	});
 
-	// State
-	let protoLanguages = $state<{ id: string; name: string; presetId: string; consonants: Set<string>; vowels: Set<string>; syllable: string }[]>([
-		{
-			id: 'proto-1',
-			name: 'Protojazyk',
-			presetId: 'pie',
-			consonants: new Set(languagePresets.find((preset) => preset.id === 'pie')!.consonants),
-			vowels: new Set(languagePresets.find((preset) => preset.id === 'pie')!.vowels),
-			syllable: languagePresets.find((preset) => preset.id === 'pie')!.syllable
-		}
-	]);
-	let activeProtoId = $state('proto-1');
+	// Sety nejsou JSON-serializovatelné. Do společného projektu proto ukládáme
+	// vždy obyčejná pole, ze kterých se při návratu na stránku znovu vytvoří.
+	$effect(() => {
+		if (!metaReady || !projectState.loaded) return;
+		projectState.protoLanguages = serializeProto(protoLanguages);
+		scheduleSave();
+	});
 	
 	let activeProto = $derived(protoLanguages.find(p => p.id === activeProtoId)!);
 
@@ -107,6 +140,7 @@
 	}
 
 	function proceedToMap() {
+		if (metaReady) projectState.protoLanguages = serializeProto(protoLanguages);
 		goto(`/project/${$page.params.id}/map`);
 	}
 
@@ -157,11 +191,21 @@
 <div class="min-h-screen bg-background flex flex-col p-6 max-w-7xl mx-auto gap-8">
 	<header class="flex items-center justify-between border-b pb-4">
 		<div>
-			<h1 class="text-3xl font-bold tracking-tight">Metaeditace: {$page.params.id}</h1>
+			<h1 class="text-3xl font-bold tracking-tight">Metaeditace: {projectState.name}</h1>
 			<p class="text-muted-foreground">1. nastav protojazyk a slovník, 2. pokračuj na mapu, 3. spusť simulaci.</p>
 		</div>
-		<Button variant="outline" onclick={() => goto('/')}>Zpět do menu</Button>
+		<div class="flex gap-2">
+			<Button variant="outline" onclick={() => goto(`/project/${$page.params.id}/map`)}>Na mapu</Button>
+			<Button variant="outline" onclick={() => goto('/')}>Zpět do menu</Button>
+		</div>
 	</header>
+
+	<Card>
+		<CardContent class="pt-5 flex items-center gap-3">
+			<Label for="project-name" class="shrink-0">Název projektu</Label>
+			<Input id="project-name" bind:value={projectState.name} oninput={() => scheduleSave()} />
+		</CardContent>
+	</Card>
 
 	<div class="grid lg:grid-cols-4 gap-6 items-start">
 		<!-- Vedlejší nástroje jsou záměrně označené: hlavní cesta pracuje s jedním protojazykem. -->
@@ -224,11 +268,11 @@
 					
 					<div class="flex items-center gap-2">
 						<Label for="preset">Předvolba:</Label>
-						<select id="preset" class="border rounded px-3 py-1.5 text-sm bg-background" value={activeProto.presetId} onchange={handlePresetChange}>
+						<Select id="preset" value={activeProto.presetId} onchange={handlePresetChange}>
 							{#each languagePresets as preset}
 								<option value={preset.id}>{preset.name}</option>
 							{/each}
-						</select>
+						</Select>
 					</div>
 				</CardHeader>
 

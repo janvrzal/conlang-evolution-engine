@@ -112,6 +112,7 @@ class SyncopeSchema(Schema):
             action={"delete": "+"},
             env_before={"cons": "+"},
             env_after={"cons": "+"},
+            prosody="unstressed",
             year=year,
         )
 
@@ -292,6 +293,71 @@ class UnconditionalVowelLoweringSchema(Schema):
         )
 
 
+class FinalDevoicingSchema(Schema):
+    """Finální ztráta znělosti u obstruentů."""
+    def __init__(self):
+        super().__init__("final_devoicing")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Finální odznělení (gen. v {year})",
+            target={"cons": "+", "son": "-"},
+            action={"voi": "-"}, env_after={"_boundary": "+"}, year=year,
+        )
+
+
+class UmlautSchema(Schema):
+    """Přední vokál táhne předcházející samohlásku dopředu (umlaut)."""
+    def __init__(self):
+        super().__init__("umlaut")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Umlaut před vysokým předním vokálem (gen. v {year})",
+            target={"syl": "+", "back": "+"}, action={"back": "-", "lab": "-"},
+            env_after={"_lookahead_vowel": "+", "syl": "+", "hi": "+", "back": "-"}, year=year,
+        )
+
+
+class NasalizationSchema(Schema):
+    """Nazalizace vokálu před nosovkou."""
+    def __init__(self):
+        super().__init__("nasalization")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Nazalizace před nosovkou (gen. v {year})",
+            target={"syl": "+"}, action={"nas": "+"},
+            env_after={"cons": "+", "nas": "+"}, year=year,
+        )
+
+
+class MonophthongizationSchema(Schema):
+    """Ztráta druhé části jednoduché dvojhlásky Vj/Vw."""
+    def __init__(self):
+        super().__init__("monophthongization")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Monoftongizace (gen. v {year})",
+            target={"syl": "+", "hi": "+"}, action={"delete": "+"},
+            env_before={"cons": "+"}, prosody="unstressed", year=year,
+        )
+
+
+class ApocopeSchema(Schema):
+    """Samostatná ztráta nepřízvučné koncové samohlásky."""
+    def __init__(self):
+        super().__init__("apocope")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Apokopa nepřízvučného vokálu (gen. v {year})",
+            target={"syl": "+"}, action={"delete": "+"}, prosody="unstressed",
+            env_after={"_boundary": "+"}, year=year,
+        )
+
+
 SCHEMA_REGISTRY = {
     "lenition": LenitionSchema(),
     "fortition": FortitionSchema(),
@@ -303,4 +369,9 @@ SCHEMA_REGISTRY = {
     "unconditional_fricatization": UnconditionalFricatizationSchema(),
     "unconditional_devoicing": UnconditionalDevoicingSchema(),
     "unconditional_vowel_lowering": UnconditionalVowelLoweringSchema(),
+    "final_devoicing": FinalDevoicingSchema(),
+    "umlaut": UmlautSchema(),
+    "nasalization": NasalizationSchema(),
+    "monophthongization": MonophthongizationSchema(),
+    "apocope": ApocopeSchema(),
 }
