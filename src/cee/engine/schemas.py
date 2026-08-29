@@ -229,6 +229,69 @@ class DiphthongizationSchema(Schema):
         )
 
 
+class UnconditionalFricatizationSchema(Schema):
+    """Nepodmíněná frikativizace jedné řady okluziv (typ Grimmova zákona)."""
+
+    # Jediná akce nemůže beze zbytku převést všechny řady okluziv: /p/ a /t/
+    # potřebují navíc [+strid] (/f/, /s/), velární /k/ ne (/x/). Volíme proto
+    # jeden konkrétní, ale v celém lexikonu nepodmíněný historický zákon.
+    _VARIANTS = (
+        ("p", "f", {"cont": "+", "strid": "+"}),
+        ("t", "s", {"cont": "+", "strid": "+"}),
+        ("k", "x", {"cont": "+"}),
+    )
+
+    def __init__(self):
+        super().__init__("unconditional_fricatization")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        variants = [variant for variant in self._VARIANTS if variant[0] in inventory]
+        if not variants:
+            return None
+        source, target, action = variants[0] if rng is None else rng.choice(variants)
+        source_features = inventory.features_of(source)
+        assert source_features is not None  # platí díky filtru `source in inventory`
+        return Rule(
+            name=f"Plošná frikativizace /{source}/ → /{target}/ (gen. v {year})",
+            # Kompletní matice zdroje brání tomu, aby /p/ → /f/ omylem změnilo
+            # také /k/ na neexistující nebo nechtěnou frikativu.
+            target=source_features,
+            action=action,
+            year=year,
+        )
+
+class UnconditionalDevoicingSchema(Schema):
+    """Plošná ztráta znělosti u okluziv."""
+
+    def __init__(self):
+        super().__init__("unconditional_devoicing")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Plošná ztráta znělosti (gen. v {year})",
+            target={"cons": "+", "son": "-", "cont": "-", "voi": "+"},
+            action={"voi": "-"},
+            year=year,
+        )
+
+class UnconditionalVowelLoweringSchema(Schema):
+    """Plošné snížení vysokých samohlásek (i, u) na středové (e, o)."""
+
+    def __init__(self):
+        super().__init__("unconditional_vowel_lowering")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Plošné snížení vysokých vokálů (gen. v {year})",
+            target={"syl": "+", "hi": "+"},
+            # Panphon rozlišuje /u/ a /o/ i rysovou hodnotou [lab]. Bez
+            # tohoto přepnutí vznikla neplatná matice, kterou mapper vykreslil
+            # jako tónovou značku místo samohlásky.
+            action={"hi": "-", "lo": "-", "lab": "-"},
+            year=year,
+        )
+
+
 SCHEMA_REGISTRY = {
     "lenition": LenitionSchema(),
     "fortition": FortitionSchema(),
@@ -237,4 +300,7 @@ SCHEMA_REGISTRY = {
     "vowel_shift": VowelShiftSchema(),
     "epenthesis": EpenthesisSchema(),
     "diphthongization": DiphthongizationSchema(),
+    "unconditional_fricatization": UnconditionalFricatizationSchema(),
+    "unconditional_devoicing": UnconditionalDevoicingSchema(),
+    "unconditional_vowel_lowering": UnconditionalVowelLoweringSchema(),
 }

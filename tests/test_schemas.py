@@ -18,9 +18,10 @@ import pytest
 from cee.engine.inventory import InventoryView
 from cee.engine.schemas import SCHEMA_REGISTRY
 
-# Sondy pokrývají vokály, neznělé okluzivy, znělé frikativy na začátku slova,
-# likvidy a koncovou souhlásku — tedy prostředí všech schémat v registru.
-SONDY = ["petrakofis", "vata", "zata", "amat", "peto", "lata", "rata"]
+# Sondy pokrývají vokály, neznělé i znělé okluzivy, znělé frikativy na
+# začátku slova, likvidy a koncovou souhlásku — tedy terče všech schémat
+# v registru.
+SONDY = ["petrakofis", "vata", "zata", "bata", "data", "ɡata", "pitu", "amat", "lata", "rata"]
 
 SEEDS = range(6)
 
@@ -140,6 +141,32 @@ def test_vowel_shift_zvysuje_obe_rady(mapper, bohaty_inventar):
         vysledky.add(mapper.render_word(word))
 
     assert vysledky == {"pito", "petu"}
+
+
+def test_nepodminena_frikativizace_ma_platne_cile(mapper, bohaty_inventar):
+    """Každá artikulační řada musí skončit na své skutečné frikativě."""
+    vysledky = set()
+    for seed in SEEDS:
+        rule = SCHEMA_REGISTRY["unconditional_fricatization"].generate_rule(
+            bohaty_inventar, year=100, rng=random.Random(seed)
+        )
+        word = mapper.parse_word("x", "pataka")
+        rule.apply_to_word(word)
+        vysledky.add(mapper.render_word(word))
+
+    assert vysledky == {"fataka", "pasaka", "pataxa"}
+
+
+def test_nepodminene_snizeni_vokalu_meni_i_na_e_a_u_na_o(mapper, bohaty_inventar):
+    """/u/ → /o/ vyžaduje vedle [hi] také změnu [lab]."""
+    rule = SCHEMA_REGISTRY["unconditional_vowel_lowering"].generate_rule(
+        bohaty_inventar, year=100
+    )
+    word = mapper.parse_word("x", "pitu")
+    rule.apply_to_word(word)
+
+    assert mapper.render_word(word) == "peto"
+    assert all(mapper.is_exact_segment(segment) for segment in word.segments)
 
 
 # --- schémata, která slova prodlužují ---------------------------------------
