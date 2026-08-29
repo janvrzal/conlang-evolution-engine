@@ -103,6 +103,32 @@ Nové schéma proto vždy: (1) přidej třídu do `SCHEMA_REGISTRY`, (2) ověř,
 ## 4. Workflow
 Předtím, než začnete psát kód:
 1. Přečtěte si `docs/CEE_master.md` pro hluboký architektonický kontext.
+2. Nejprve detailně vymyslete postup implementace, dbejte na to, aby implementace nové featury nezasahovala do funkčnosti ostatních.
+3. Při rozšiřování stávající featury je potřeba zachovat její funkcionalitu, pokud požadavek od uživatele tvrdí něco jiného, je potřeba nejprve se ho zeptat, která verze je správná.
 2. Dodržujte existující návrhové vzory (např. používání `dataclasses`).
 3. Při rozšiřování CEE se drž klasického TDD přístupu. Otevři `tests/`, napiš test na novou lingvistickou funkcionalitu (simulace lenice, palatalizace, asimilace) s důrazem na **správné Panphon rysy** a teprve pak upravuj jádro.
 4. Používejte existující testovací scénáře (např. `scenario_generator.yaml`) pro otestování vašich úprav pomocí `cee simulate`.
+
+## 5. Aktuální úkoly a cíle (Current Tasks)
+Následující body představují aktuální priority pro rozvoj enginu a UI:
+
+### 5.1. Rozšíření zvukových změn
+* **Nepodmíněné (neomezené) zvukové změny:** Enginu chybí šablony, které by uměly měnit hlásky bez závislosti na okolí (např. Grimmův zákon: plošná změna všech /p/ na /f/). Je to nutné pro prevenci "fonetické tepelné smrti" (kdy jsou slova už moc krátká na to, aby obsahovala složitější prostředí jako shluky souhlásek).
+* **Výjimky z pravidla minimální délky slova:** Gramatická slova (předložky, spojky) by měla umět ztratit i poslední slabičné jádro (zredukovat se na jedinou hlásku, např. 'v', 'k', 's'), zatímco běžná lexikální slova musí mít i nadále alespoň 2 segmenty.
+
+### 5.2. Sémantika a UI
+* **Zobrazení izoglosy na mapě:** Přidat do UI možnost vybrat jedno slovo ze slovníku a zobrazit jeho lokální varianty přímo v bublinách jednotlivých jazyků na mapě (pro rychlé vizuální porovnání dialektů).
+* ~~**DatSemShift implementace:** Hlubší zapojení sémantických grafů...~~ **Hotovo.** `SemanticEvaluator` reálně rozlišuje CLICS kolexifikaci (rozšíření polysémie) od DatSemShift posunu (přesun kořene, `edge_type='shift'` vs `'colexification'`), viz `engine/semantics.py`.
+
+### 5.3. CLICS a DatSemShift — integrace dotažena
+Engine teď staví a reálně používá kombinovaný graf z CLICS4 + DatSemShift (`semantics/builder.py`, `build_combined_semantic_graph`). Tři chyby, kvůli kterým integrace dřív existovala jen na papíře:
+
+1. **Váha CLICS hrany byla skoro vždy 0.** Kód četl pole `weight`, které v CLICS4 GML vůbec neexistuje, spadl na `families` (string) a odhadoval váhu jako `len(families.split('//')) // 2` — u jednorodinné hrany (bez `//`) to dá `0`. Whitepaper (4.7) definuje váhu jako *počet jazyků* — teď se čte přímo pole `language_count`.
+2. **CLICS4 a DatSemShift se nikdy nepotkaly.** CLICS4 GML nemá číselné `concepticon_id` na uzlech, klíčuje je anglickým glosem ("WORLD"). DatSemShift používal číselné `Concepticon_ID`. Dva různé klíčové prostory ve stejném grafu = dva nespojené podgrafy. Oprava: `Concepticon_Gloss` (ne `_ID`) jako sdílený klíč, normalizovaný přes `normalize_gloss()`.
+3. **Ani se správným grafem sémantika nic nedělala.** `concepts.json` (skutečný zdroj proto-lexikonu) dává `concept_id` malými písmeny ("tree"), graf je klíčovaný velkými ("TREE"). `SemanticGraph` teď case-insensitive normalizuje uzly při načtení i dotazy při hledání — bez toho `has_node("tree")` bylo vždy `False`.
+
+Reálná data (`~/.cee/data/{clics4,datsemshift}`, `~/.cee/semantics/graph.graphml`) se podle pravidla výše NIKDY necommitují — `resolve_semantics_path()` v `pipeline.py` preferuje reálný graf, pokud existuje, jinak spadne na `data/semantics_mock.yaml` (v repu, slovník sladěný s `concepts.json`). Stavba grafu: `python -m cee.semantics.builder` (stáhne CLICS4 samo, DatSemShift čeká staženého v `~/.cee/data/datsemshift/cldf/parameters.csv` — lexibank repo).
+
+Ověřeno end-to-end: `ProtolangGenerator` → simulace → 23/27 slov reálně nabalilo/posunulo význam přes 800 let (mj. doložený posun MOON→MONTH, kolexifikace TREE↔WOOD — přesně příklad z 4.7). Testy v `tests/test_semantic_builder.py` a `tests/test_semantics_wiring.py` používají syntetické fixture, ne reálná data.
+
+**Zbývá:** zobrazení izoglosy v UI (5.2) a validace vah proti Index Diachronica (mimo rozsah CLICS/DatSemShift, patří ke generátoru zvukových změn — 4.4/5.1).

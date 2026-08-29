@@ -1,0 +1,4 @@
+ID,Name,Concepticon_ID,Concepticon_Gloss,Linked_Concepts,Target_Concepts,Shifts,Number,Gloss_in_Source,Definition,Alias,Domain
+2000_family,family,194,FAMILY,"[{""ID"": ""3000_localonly"", ""NAME"": ""local concept"", ""PolysemyByFamily"": 2, ""DerivationByFamily"": 0}]","[{""ID"": ""2001_child"", ""NAME"": ""child"", ""PolysemyByFamily"": 4, ""DerivationByFamily"": 1}]",1,1,family,family,,Kinship
+2001_child,child,520,CHILD,[],[],0,2,child,child,,Kinship
+3000_localonly,local concept,,,[],[],0,3,local concept,local concept without concepticon match,,Misc
