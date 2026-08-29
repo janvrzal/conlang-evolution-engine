@@ -358,6 +358,132 @@ class ApocopeSchema(Schema):
         )
 
 
+class AssimilationSchema(Schema):
+    """Regresivní asimilace znělosti před další obstruentou."""
+    def __init__(self):
+        super().__init__("assimilation")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Asimilace znělosti před sonantou (gen. v {year})",
+            target={"cons": "+", "son": "-"}, action={"voi": "$after:voi"},
+            env_after={"syl": "+"}, year=year,
+        )
+
+
+class PalatalizationSchema(Schema):
+    """Fronting okluzivy před /i/; vybírá jen dvojici existující v inventáři."""
+    def __init__(self):
+        super().__init__("palatalization")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        source, target = next(((a, b) for a, b in (("t", "s"), ("k", "t"), ("ɡ", "d")) if a in inventory and b in inventory), (None, None))
+        if not source or not target:
+            return None
+        source_features = inventory.features_of(source)
+        target_features = inventory.features_of(target)
+        assert source_features and target_features
+        action = {feature: value for feature, value in target_features.items() if source_features.get(feature) != value}
+        return Rule(
+            name=f"Palatalizace /{source}/ před /i/ (gen. v {year})",
+            target=source_features, action=action,
+            env_after={"_lookahead_vowel": "+", "syl": "+", "hi": "+", "back": "-"}, year=year,
+        )
+
+
+class IntervocalicSpirantizationSchema(Schema):
+    """Intervokalická spirantizace okluziv."""
+    def __init__(self):
+        super().__init__("intervocalic_spirantization")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Intervokalická spirantizace (gen. v {year})",
+            target={"cons": "+", "son": "-", "cont": "-"}, action={"cont": "+"},
+            env_before={"syl": "+"}, env_after={"syl": "+"}, year=year,
+        )
+
+
+class ProthesisSchema(Schema):
+    """Protetický vokál před počátečním shlukem/okluzivou."""
+    def __init__(self):
+        super().__init__("prothesis")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        vowel = inventory.pick({"syl": "+"}, rng)
+        features = inventory.features_of(vowel) if vowel else None
+        if not features:
+            return None
+        return Rule(
+            name=f"Protéze /{vowel}/ (gen. v {year})", target={"cons": "+"}, action={},
+            env_before={"_boundary": "+"}, insert="before", insert_features=features, insert_label=vowel, year=year,
+        )
+
+
+class ParagogeSchema(Schema):
+    """Paragoge: vokál po koncové souhlásce."""
+    def __init__(self):
+        super().__init__("paragoge")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        vowel = inventory.pick({"syl": "+"}, rng)
+        features = inventory.features_of(vowel) if vowel else None
+        if not features:
+            return None
+        return Rule(
+            name=f"Paragoge /{vowel}/ (gen. v {year})", target={"cons": "+"}, action={},
+            env_after={"_boundary": "+"}, insert="after", insert_features=features, insert_label=vowel, year=year,
+        )
+
+
+class GeminationSchema(Schema):
+    """Geminace intervokalické souhlásky."""
+    def __init__(self):
+        super().__init__("gemination")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Intervokalická geminace (gen. v {year})", target={"cons": "+"}, action={},
+            env_before={"syl": "+"}, env_after={"syl": "+"}, operation="geminate", year=year,
+        )
+
+
+class MetathesisSchema(Schema):
+    """Metateze sousedních souhlásek; vhodná pro pozdní, vzácné změny."""
+    def __init__(self):
+        super().__init__("metathesis")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Metateze souhláskového shluku (gen. v {year})", target={"cons": "+"}, action={},
+            env_after={"cons": "+"}, operation="swap_next", year=year,
+        )
+
+
+class CompensatoryLengtheningSchema(Schema):
+    """Prodloužení vokálu před ztratitelnou koncovou souhláskou."""
+    def __init__(self):
+        super().__init__("compensatory_lengthening")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Kompenzační dloužení (gen. v {year})", target={"syl": "+"}, action={},
+            env_after={"cons": "+"}, operation="lengthen", year=year,
+        )
+
+
+class StressShiftSchema(Schema):
+    """Přesun přízvuku na penultimu jako samostatná diachronní změna."""
+    def __init__(self):
+        super().__init__("stress_shift")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Přesun přízvuku na penultimu (gen. v {year})", target={"syl": "+"}, action={},
+            operation="stress_penult", year=year,
+        )
+
+
 SCHEMA_REGISTRY = {
     "lenition": LenitionSchema(),
     "fortition": FortitionSchema(),
@@ -374,4 +500,13 @@ SCHEMA_REGISTRY = {
     "nasalization": NasalizationSchema(),
     "monophthongization": MonophthongizationSchema(),
     "apocope": ApocopeSchema(),
+    "assimilation": AssimilationSchema(),
+    "palatalization": PalatalizationSchema(),
+    "intervocalic_spirantization": IntervocalicSpirantizationSchema(),
+    "prothesis": ProthesisSchema(),
+    "paragoge": ParagogeSchema(),
+    "gemination": GeminationSchema(),
+    "metathesis": MetathesisSchema(),
+    "compensatory_lengthening": CompensatoryLengtheningSchema(),
+    "stress_shift": StressShiftSchema(),
 }

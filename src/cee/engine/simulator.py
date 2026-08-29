@@ -27,7 +27,8 @@ _PRIO_PHONOLOGY = 1
 _PRIO_SEMANTICS = 2
 _PRIO_MORPHOLOGY = 3
 _PRIO_LEXICON = 4
-_PRIO_CONTACT = 5
+_PRIO_SOCIAL = 5
+_PRIO_CONTACT = 6
 
 # Kolik let v průměru připadá na jednu zvukovou změnu, než se do toho promítnou
 # makro-parametry uzlu. Řádově odpovídá tempu doloženému v historických
@@ -79,6 +80,13 @@ class MorphologyEvent:
 class LexicalEvent:
     year: int
     branch_id: str
+
+
+@dataclass
+class SocialEvent:
+    year: int
+    branch_id: str
+    changes: Dict[str, float]
 
 
 class EvolutionSimulator:
@@ -191,6 +199,7 @@ class EvolutionSimulator:
             self._schedule_semantics(root_state.node_id, root_state.year, push)
             self._schedule_morphology(root_state.node_id, root_state.year, push)
             self._schedule_lexicon(root_state.node_id, root_state.year, push)
+            self._schedule_social(root_state.node_id, root_state.year, push)
 
         for edge in self.graph.vertical_edges:
             bez_roku = [r.name for r in edge.rules if r.year is None]
@@ -240,6 +249,7 @@ class EvolutionSimulator:
                 self._schedule_semantics(event.child_id, year, push)
                 self._schedule_morphology(event.child_id, year, push)
                 self._schedule_lexicon(event.child_id, year, push)
+                self._schedule_social(event.child_id, year, push)
 
             elif isinstance(event, PhonologyEvent):
                 branch_state = states.get(event.branch_id)
@@ -314,7 +324,12 @@ class EvolutionSimulator:
                         replacement_rate=float(lexical.get("replacement_rate", 0.015)),
                         loss_rate=float(lexical.get("loss_rate", 0.01)),
                     )
-                    replacements = evaluator.evaluate(branch_state, event.year, rng)
+                    replacements = evaluator.evaluate(
+                        branch_state, event.year, rng,
+                        taboo_concepts=lexical.get("taboo_concepts", []),
+                        resolve_homophones=bool(lexical.get("resolve_homophones", False)),
+                        render=self.mapper.render_word,
+                    )
                     if self.graph_builder:
                         for word in replacements:
                             self.graph_builder.add_word(
@@ -323,6 +338,14 @@ class EvolutionSimulator:
                             )
                             if word.parent_word_id:
                                 self.graph_builder.add_origin_edge(word.id, word.parent_word_id, "lexical_replacement")
+
+            elif isinstance(event, SocialEvent):
+                branch_state = states.get(event.branch_id)
+                if branch_state is not None:
+                    branch_state.year = event.year
+                    for key, value in event.changes.items():
+                        if key in {"prestige", "mobility", "literacy", "standardization", "population"}:
+                            branch_state.social[key] = max(0.0, min(1.0, float(value)))
 
             elif isinstance(event, ContactEvent):
                 source_state = states.get(event.source_id)
@@ -509,7 +532,10 @@ class EvolutionSimulator:
         """Složeniny, derivace a analogie patří do stejné časové osy."""
         config = self.graph.node_configs.get(node_id, {})
         morphology = config.get("morphology", {})
-        has_creation = bool(config.get("compounds") or morphology.get("compounds") or morphology.get("derivations"))
+        has_creation = bool(
+            config.get("compounds") or morphology.get("compounds") or morphology.get("derivations")
+            or morphology.get("paradigms") or morphology.get("grammaticalize") or morphology.get("reanalyze")
+        )
         analogy_rate = float(morphology.get("analogy_rate", 0.0))
         if has_creation:
             push(start_year + 1, _PRIO_MORPHOLOGY, MorphologyEvent(start_year + 1, node_id))
@@ -526,6 +552,21 @@ class EvolutionSimulator:
         horizon = self._horizon_for(start_year, node_id)
         for year in range(start_year + 100, horizon + 1, 100):
             push(year, _PRIO_LEXICON, LexicalEvent(year, node_id))
+
+    def _schedule_social(self, node_id: str, start_year: int, push) -> None:
+        """Naprogramované společenské zlomy (urbanizace, standardizace…)."""
+        history = self.graph.node_configs.get(node_id, {}).get("social_history", [])
+        for item in history:
+            try:
+                year = int(item["year"])
+            except (KeyError, TypeError, ValueError):
+                warnings.warn(f"Neplatná sociální událost pro '{node_id}': {item!r}", stacklevel=2)
+                continue
+            if year < start_year:
+                continue
+            changes = item.get("changes", {key: value for key, value in item.items() if key != "year"})
+            if isinstance(changes, dict):
+                push(year, _PRIO_SOCIAL, SocialEvent(year, node_id, changes))
 
     def _inventory_of(self, lexicon: Lexicon) -> set:
         return set(InventoryView.from_lexicon(lexicon, self.mapper))
@@ -568,6 +609,18 @@ class EvolutionSimulator:
                 warnings.warn(f"Derivace {spec!r} vyžaduje 'root', 'affix' i 'id'; přeskakuji.", stacklevel=2)
                 continue
             morph.derive(state, root, affix, new_id, prefix=spec.get("prefix"))
+
+        for word_id in morphology.get("grammaticalize", []):
+            morph.grammaticalize(state, str(word_id))
+
+        for spec in morphology.get("paradigms", []):
+            paradigm_id = str(spec.get("id", "default"))
+            stem_id = spec.get("stem")
+            if stem_id:
+                morph.inflect(state, str(stem_id), paradigm_id, spec.get("forms", []))
+
+        if morphology.get("reanalyze", False):
+            morph.reanalyze_boundaries(state, morphology.get("reanalyze_paradigm"))
 
         if float(morphology.get("analogy_rate", 0.0)) > 0:
             morph.level_analogies(state, threshold=float(morphology.get("analogy_threshold", 0.75)))

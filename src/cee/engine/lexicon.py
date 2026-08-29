@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 import random
 import uuid
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional, Sequence
 
 from cee.core.models import State, Word
 
@@ -26,7 +26,16 @@ class LexicalEvaluator:
         self.replacement_rate = max(0.0, replacement_rate)
         self.loss_rate = max(0.0, loss_rate)
 
-    def evaluate(self, state: State, year: int, rng: random.Random) -> list[Word]:
+    def evaluate(
+        self,
+        state: State,
+        year: int,
+        rng: random.Random,
+        *,
+        taboo_concepts: Sequence[str] = (),
+        resolve_homophones: bool = False,
+        render: Optional[Callable[[Word], str]] = None,
+    ) -> list[Word]:
         active = [word for word in state.lexicon.words if word.active]
         if not active:
             return []
@@ -64,8 +73,61 @@ class LexicalEvaluator:
             if word.frequency < 0.20 and rng.random() < self.loss_rate * (1.0 - standard):
                 word.active = False
 
+        # Tabu nenechá slot prázdný: starý tvar přestane být produktivní a
+        # nový se utvoří z jiného živého kořene. Konfigurace je explicitní,
+        # takže žádný koncept není bez souhlasu uživatele „zakázán“.
+        for word in active:
+            if word.concept_id not in taboo_concepts or not word.active:
+                continue
+            donor = self._donor(active, word, rng)
+            if donor is None:
+                continue
+            replacement = self._replacement_from(donor, word, year, "taboo_replacement")
+            replacement.frequency = max(0.2, word.frequency)
+            replacements.append(replacement)
+            word.active = False
+
+        if resolve_homophones and render:
+            groups: dict[str, list[Word]] = {}
+            for word in [*active, *replacements]:
+                if word.active:
+                    groups.setdefault(render(word), []).append(word)
+            for forms in groups.values():
+                if len(forms) < 2:
+                    continue
+                winner = max(forms, key=lambda word: word.frequency)
+                for loser in forms:
+                    if loser is winner or not loser.segments:
+                        continue
+                    resolved = copy.deepcopy(loser)
+                    resolved.id = str(uuid.uuid4())
+                    resolved.parent_word_id = loser.id
+                    resolved.origin_year = year
+                    resolved.origin_type = "homophony_resolution"
+                    resolved.origin_rule = "lexical disambiguation"
+                    resolved.segments.insert(0, copy.deepcopy(loser.segments[0]))
+                    resolved.frequency = max(0.1, loser.frequency * 0.7)
+                    resolved.ensure_stress()
+                    replacements.append(resolved)
+                    loser.active = False
+
         state.lexicon.words.extend(replacements)
         return replacements
+
+    @staticmethod
+    def _replacement_from(donor: Word, target: Word, year: int, origin_type: str) -> Word:
+        replacement = copy.deepcopy(donor)
+        replacement.id = str(uuid.uuid4())
+        replacement.parent_word_id = donor.id
+        replacement.concept_id = target.concept_id
+        replacement.polysemy = set()
+        replacement.origin_year = year
+        replacement.origin_type = origin_type
+        replacement.origin_rule = origin_type.replace("_", " ")
+        replacement.source_id = None
+        replacement.frequency = max(0.12, target.frequency * 0.75)
+        replacement.morpheme_boundaries = set(donor.morpheme_boundaries)
+        return replacement
 
     @staticmethod
     def _donor(words: Iterable[Word], target: Word, rng: random.Random) -> Optional[Word]:

@@ -34,6 +34,24 @@ schemas:
     base_weight: 18
   apocope:
     base_weight: 22
+  assimilation:
+    base_weight: 28
+  palatalization:
+    base_weight: 20
+  intervocalic_spirantization:
+    base_weight: 18
+  prothesis:
+    base_weight: 8
+  paragoge:
+    base_weight: 12
+  gemination:
+    base_weight: 10
+  metathesis:
+    base_weight: 6
+  compensatory_lengthening:
+    base_weight: 12
+  stress_shift:
+    base_weight: 14
 
 biomes:
   hory:
@@ -53,6 +71,15 @@ biomes:
       nasalization: 0.7
       monophthongization: 0.8
       apocope: 0.8
+      assimilation: 1.2
+      palatalization: 0.7
+      intervocalic_spirantization: 0.8
+      prothesis: 0.5
+      paragoge: 0.5
+      gemination: 0.8
+      metathesis: 0.7
+      compensatory_lengthening: 1.0
+      stress_shift: 0.8
 
   prales:
     modifiers:
@@ -71,6 +98,15 @@ biomes:
       nasalization: 1.4
       monophthongization: 1.4
       apocope: 1.8
+      assimilation: 1.3
+      palatalization: 1.1
+      intervocalic_spirantization: 1.5
+      prothesis: 1.2
+      paragoge: 1.8
+      gemination: 1.3
+      metathesis: 0.7
+      compensatory_lengthening: 0.8
+      stress_shift: 1.2
 
   temnota:
     modifiers:
@@ -89,3 +125,12 @@ biomes:
       nasalization: 0.5
       monophthongization: 0.6
       apocope: 1.2
+      assimilation: 0.8
+      palatalization: 0.6
+      intervocalic_spirantization: 0.5
+      prothesis: 0.3
+      paragoge: 0.4
+      gemination: 1.2
+      metathesis: 1.4
+      compensatory_lengthening: 0.7
+      stress_shift: 0.6

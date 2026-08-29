@@ -258,6 +258,18 @@
 		}
 	}
 
+	function updateNodeSocial(nodeId: string, field: 'prestige' | 'mobility' | 'standardization', value: number) {
+		nodes = nodes.map((node) => node.id === nodeId
+			? { ...node, data: { ...node.data, social: { ...((node.data as any).social ?? {}), [field]: value } } }
+			: node);
+	}
+
+	function setLexicalHistory(nodeId: string, enabled: boolean) {
+		nodes = nodes.map((node) => node.id === nodeId
+			? { ...node, data: { ...node.data, lexical: { ...((node.data as any).lexical ?? {}), enabled } } }
+			: node);
+	}
+
 	// Selection
 	let selectedNodeId = $state<string | null>(null);
 	let selectedNodeData = $derived(nodes.find(n => n.id === selectedNodeId));
@@ -591,6 +603,19 @@
 					<div class="flex items-center gap-2 p-2 rounded-md border {(selectedNodeData.data as any).isDead ? 'bg-muted border-border' : 'bg-background'}">
 						<Checkbox id="isDead" checked={(selectedNodeData.data as any).isDead || false} onchange={(e: Event & { currentTarget: HTMLInputElement }) => setDead(selectedNodeId!, e.currentTarget.checked)} />
 						<Label for="isDead" class="text-sm font-medium cursor-pointer">{t('deadLanguage')}</Label>
+					</div>
+					<div class="space-y-2 border rounded-md p-3">
+						<Label class="text-xs font-semibold">{t('socialProfile')}</Label>
+						{#each [['prestige', t('prestige')], ['mobility', t('mobility')], ['standardization', t('standardization')]] as [field, label]}
+							<label class="block text-xs text-muted-foreground">
+								<span class="flex justify-between"><span>{label}</span><span>{Math.round(Number((selectedNodeData.data as any).social?.[field] ?? 0.5) * 100)}%</span></span>
+								<Input type="range" min="0" max="1" step="0.05" value={Number((selectedNodeData.data as any).social?.[field] ?? 0.5)} oninput={(e) => updateNodeSocial(selectedNodeId!, field as 'prestige' | 'mobility' | 'standardization', parseFloat(e.currentTarget.value))} />
+							</label>
+						{/each}
+					</div>
+					<div class="flex items-center gap-2 p-2 rounded-md border">
+						<Checkbox id="lexical-history" checked={(selectedNodeData.data as any).lexical?.enabled ?? false} onchange={(e: Event & { currentTarget: HTMLInputElement }) => setLexicalHistory(selectedNodeId!, e.currentTarget.checked)} />
+						<Label for="lexical-history" class="text-sm font-medium cursor-pointer">{t('enableLexicalHistory')}</Label>
 					</div>
 				</CardContent>
 			</Card>

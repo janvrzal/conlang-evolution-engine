@@ -1,4 +1,4 @@
-from typing import Iterable, Optional
+from typing import Dict, Iterable, Optional
 from cee.core.models import State, Word
 import copy
 
@@ -106,4 +106,73 @@ class MorphologyEvaluator:
             word.morpheme_boundaries = {len(model_affix) if state.affixation_strategy == "prefix" else len(root)}
             word.ensure_stress()
             changed += 1
+        return changed
+
+    def inflect(
+        self,
+        state: State,
+        stem_id: str,
+        paradigm_id: str,
+        forms: Iterable[Dict[str, object]],
+    ) -> list[Word]:
+        """Vytvoří časované tvary paradigmatu z lexikalizovaných afixů.
+
+        Konfigurace drží explicitní identifikátory afixů místo nečitelných
+        řetězcových koncovek, takže i afix může mít vlastní dějiny a projít
+        zvukovou změnou před gramatikalizací.
+        """
+        stem = state.lexicon.get_word(stem_id)
+        if stem is None:
+            return []
+        created: list[Word] = []
+        for form in forms:
+            form_id = str(form.get("id", ""))
+            affix_id = str(form.get("affix", ""))
+            if not form_id or not affix_id or state.lexicon.get_word(form_id):
+                continue
+            affix = state.lexicon.get_word(affix_id)
+            if affix is None:
+                continue
+            prefix = bool(form.get("prefix", state.affixation_strategy == "prefix"))
+            left, right = (affix, stem) if prefix else (stem, affix)
+            word = Word(
+                concept_id=form_id,
+                segments=copy.deepcopy(left.segments) + copy.deepcopy(right.segments),
+                origin_year=state.year,
+                frequency=stem.frequency * 0.45,
+                morpheme_boundaries={len(left.segments)},
+                parent_word_id=stem.id,
+                origin_type="inflected",
+                origin_rule=f"paradigm:{paradigm_id}",
+                paradigm=paradigm_id,
+                grammatical_features={str(k): str(v) for k, v in dict(form.get("features", {})).items()},
+            )
+            state.lexicon.words.append(word)
+            created.append(word)
+        return created
+
+    def grammaticalize(self, state: State, word_id: str) -> bool:
+        """Označí samostatné slovo jako gramatický morfém pro budoucí derivaci."""
+        word = state.lexicon.get_word(word_id)
+        if word is None:
+            return False
+        word.is_grammatical = True
+        word.origin_rule = word.origin_rule or "grammaticalization"
+        word.frequency = min(1.0, word.frequency + 0.15)
+        return True
+
+    def reanalyze_boundaries(self, state: State, paradigm_id: Optional[str] = None) -> int:
+        """Posune nestabilní hranici o jeden segment k produktivnímu afixu."""
+        words = [word for word in state.lexicon.words if word.morpheme_boundaries and (paradigm_id is None or word.paradigm == paradigm_id)]
+        if not words:
+            return 0
+        changed = 0
+        for word in words:
+            boundary = min(word.morpheme_boundaries)
+            if state.affixation_strategy == "prefix" and boundary > 1:
+                word.morpheme_boundaries = {boundary - 1}
+                changed += 1
+            elif state.affixation_strategy != "prefix" and boundary < len(word.segments) - 1:
+                word.morpheme_boundaries = {boundary + 1}
+                changed += 1
         return changed

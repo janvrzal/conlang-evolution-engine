@@ -1,11 +1,15 @@
 <script lang="ts">
 	import { BaseEdge, EdgeLabel, getStraightPath, type EdgeProps } from '@xyflow/svelte';
 	import { Sword, Scales, Sparkle, UsersThree, Question, ArrowsLeftRight, ArrowRight, ArrowLeft } from 'phosphor-svelte';
+	import { t } from '$lib/i18n.svelte';
 
 	type ContactEdgeData = {
 		contactType?: string;
 		intensity?: number;
 		direction?: 'ab' | 'ba' | 'both';
+		prestige?: number;
+		calqueRate?: number;
+		adapt?: boolean;
 	};
 
 	type $$Props = EdgeProps & { data?: ContactEdgeData };
@@ -25,6 +29,9 @@
 	let intensity = $derived(data.intensity ?? 50);
 	let contactType = $derived(data.contactType ?? 'neighborhood');
 	let direction = $derived(data.direction ?? 'ab');
+	let prestige = $derived(data.prestige ?? 1);
+	let calqueRate = $derived(data.calqueRate ?? 0);
+	let adapt = $derived(data.adapt ?? true);
 
 	let showPicker = $state(false);
 
@@ -53,6 +60,10 @@
 	function updateIntensity(val: number) {
 		data.intensity = val;
 	}
+
+	function updatePrestige(val: number) { data.prestige = val; }
+	function updateCalqueRate(val: number) { data.calqueRate = val; }
+	function updateAdapt(val: boolean) { data.adapt = val; }
 </script>
 
 <!--
@@ -127,6 +138,22 @@
 						<div class="px-1">
 							<input type="range" min="0" max="100" value={intensity} oninput={(e) => updateIntensity(parseInt(e.currentTarget.value))} class="w-full accent-primary h-2 bg-muted/80 rounded-lg appearance-none cursor-pointer border" />
 						</div>
+					</div>
+
+					<div class="space-y-3 border-t pt-3">
+						<div class="text-[10px] uppercase font-bold text-muted-foreground px-1">{t('contactSettings')}</div>
+						<label class="block px-1 text-xs">
+							<span class="flex justify-between"><span>{t('prestige')}</span><strong>{prestige.toFixed(1)}×</strong></span>
+							<input type="range" min="0.2" max="2" step="0.1" value={prestige} oninput={(e) => updatePrestige(parseFloat(e.currentTarget.value))} class="w-full accent-primary" />
+						</label>
+						<label class="block px-1 text-xs">
+							<span class="flex justify-between"><span>{t('calqueRate')}</span><strong>{Math.round(calqueRate * 100)}%</strong></span>
+							<input type="range" min="0" max="1" step="0.05" value={calqueRate} oninput={(e) => updateCalqueRate(parseFloat(e.currentTarget.value))} class="w-full accent-primary" />
+						</label>
+						<label class="flex items-center gap-2 px-1 text-xs cursor-pointer">
+							<input type="checkbox" checked={adapt} onchange={(e) => updateAdapt(e.currentTarget.checked)} class="accent-primary" />
+							{t('loanAdaptation')}
+						</label>
 					</div>
 					
 					<div class="flex justify-end pt-1">

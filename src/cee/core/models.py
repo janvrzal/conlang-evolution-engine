@@ -51,6 +51,9 @@ class Word:
     #: Jádra slabik nesoucí kontrastivní délku. Délka se drží mimo PanPhonovy
     #: segmentové rysy, protože IPA ː není samostatný segment.
     long_nuclei: Set[int] = field(default_factory=set)
+    #: Členové jednoho paradigmatu sdílejí kmen a mohou podléhat analogii.
+    paradigm: Optional[str] = None
+    grammatical_features: Dict[str, str] = field(default_factory=dict)
 
     def ensure_stress(self) -> None:
         """Dá slovu deterministický výchozí přízvuk na první samohlásce."""

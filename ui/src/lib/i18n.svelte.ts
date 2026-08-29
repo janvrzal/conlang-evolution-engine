@@ -13,6 +13,9 @@ const messages = {
 		currentStep: 'Aktuální krok', saved: 'Uloženo', loading: 'Načítám…',
 		lexiconUnavailable: 'Spusť simulaci; pak zde uvidíš slovník v aktuálním roce.',
 		searchWord: 'Hledat slovo, význam…', lexicon: 'Slovník', stateInYear: 'stav v roce'
+		, socialProfile: 'Společenský profil', prestige: 'Prestiž', mobility: 'Mobilita', standardization: 'Standardizace',
+		lexicalHistory: 'Lexikální historie', enableLexicalHistory: 'Povolit obměnu lexika',
+		contactSettings: 'Nastavení kontaktu', loanAdaptation: 'Přizpůsobit výpůjčky fonologii', calqueRate: 'Podíl kalků'
 	},
 	en: {
 		interaction: 'Interact', relationship: 'Relationship', inheritance: 'Inheritance', contact: 'Contact',
@@ -24,6 +27,9 @@ const messages = {
 		currentStep: 'Current step', saved: 'Saved', loading: 'Loading…',
 		lexiconUnavailable: 'Run the simulation to see this language at the current year.',
 		searchWord: 'Search word or meaning…', lexicon: 'Lexicon', stateInYear: 'state in year'
+		, socialProfile: 'Social profile', prestige: 'Prestige', mobility: 'Mobility', standardization: 'Standardization',
+		lexicalHistory: 'Lexical history', enableLexicalHistory: 'Enable lexical turnover',
+		contactSettings: 'Contact settings', loanAdaptation: 'Adapt loans to phonology', calqueRate: 'Calque rate'
 	}
 } as const;
 

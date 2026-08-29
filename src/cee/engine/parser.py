@@ -22,6 +22,7 @@ class YamlParser:
                 env_after=r_dict.get('env_after'),
                 prosody=r_dict.get('prosody'),
                 syllable_part=r_dict.get('syllable_part'),
+                operation=r_dict.get('operation'),
                 year=r_dict.get('year')
             )
             rules.append(rule)
@@ -51,6 +52,7 @@ class YamlParser:
                     env_after=r_data.get('env_after'),
                     prosody=r_data.get('prosody'),
                     syllable_part=r_data.get('syllable_part'),
+                    operation=r_data.get('operation'),
                     year=r_data.get('year')
                 )
                 rules.append(rule)
