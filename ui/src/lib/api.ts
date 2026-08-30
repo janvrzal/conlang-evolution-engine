@@ -19,7 +19,7 @@ const ENGINE_SIGNATURE = 'Conlang Evolution Engine';
  * Běží-li starší, chybí mu endpointy a odpovídal by holým 404 — což vypadá
  * jako chyba aplikace, přestože stačí restartovat `cee ui`.
  */
-const REQUIRED_API_REVISION = 4;
+const REQUIRED_API_REVISION = 5;
 const DEFAULT_PORT = 8000;
 const SCAN_RANGE = 20;
 const PROBE_TIMEOUT_MS = 700;
@@ -215,7 +215,9 @@ export async function deleteProject(id: string) {
 /** Přenese výslovně zvolený výsledek ze starší lokální Neo4j instalace. */
 export async function importLegacyNeo4j(id: string) {
 	const base = await resolveApiBase();
-	const res = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/import-legacy-neo4j`, { method: 'POST' });
+	const res = await fetch(`${base}/api/projects/${encodeURIComponent(id)}/import-legacy-neo4j`, {
+		method: 'POST'
+	});
 	if (!res.ok) throw new Error(`Import starší simulace selhal: ${res.status}`);
 	return res.json() as Promise<{ status: string; run_id: string; words: number }>;
 }
@@ -254,7 +256,9 @@ export async function fetchLanguage(runId: string, nodeId: string, year?: number
 
 export async function fetchWordTrace(runId: string, wordId: string) {
 	const base = await resolveApiBase();
-	const res = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}/words/${encodeURIComponent(wordId)}/trace`);
+	const res = await fetch(
+		`${base}/api/runs/${encodeURIComponent(runId)}/words/${encodeURIComponent(wordId)}/trace`
+	);
 	if (!res.ok) throw new Error(`Načtení historie slova selhalo: ${res.status}`);
 	const body = await res.json();
 	if (body.status === 'error') throw new Error(body.error);

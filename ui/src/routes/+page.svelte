@@ -186,7 +186,9 @@
 							</CardHeader>
 						</Card>
 					{:else}
-						<div class="text-sm text-muted-foreground border border-dashed rounded-lg p-8 text-center">
+						<div
+							class="text-sm text-muted-foreground border border-dashed rounded-lg p-8 text-center"
+						>
 							Zatím nemáte žádné projekty.
 						</div>
 					{/each}

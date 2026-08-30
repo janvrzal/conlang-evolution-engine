@@ -317,11 +317,11 @@ export function retypeEdge(edge: TLEdge, wantsContact: boolean, year: number): T
  * Vrací jen `type`/`data` (bez `id`/`source`/`target`) — to už doplní
  * `addEdge()` z xyflow při spojení s objektem `Connection`.
  */
-export function newEdgeFields(
-	wantsContact: boolean,
-	year: number
-): Pick<TLEdge, 'type' | 'data'> {
+export function newEdgeFields(wantsContact: boolean, year: number): Pick<TLEdge, 'type' | 'data'> {
 	return wantsContact
-		? { type: 'contact', data: { contactType: 'neighborhood', intensity: 50, direction: 'ab', year } }
+		? {
+				type: 'contact',
+				data: { contactType: 'neighborhood', intensity: 50, direction: 'ab', year }
+			}
 		: { type: 'straight', data: { year } };
 }

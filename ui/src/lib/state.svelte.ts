@@ -161,7 +161,7 @@ export async function loadProject(id: string): Promise<void> {
 		// autosave. V catch se returnem se finally provede také, proto stav
 		// nastavujeme podmíněně podle chybového statusu.
 		if (projectState.status !== 'error') {
-		projectState.loaded = true;
+			projectState.loaded = true;
 		}
 	}
 }

@@ -1,10 +1,16 @@
 <script lang="ts">
 	import { fetchLanguage, fetchWordTrace, resetApiBase } from '$lib/api';
-	import { X, Loader2, ArrowRight, Map } from 'lucide-svelte';
+	import { X, Loader2, Map } from 'lucide-svelte';
 	import { t } from '$lib/i18n.svelte';
 
-	type TraceStep = { year: number; form: string; rule_name: string | null; type: string | null; note: string | null };
-	type WordNode = { id: string, concept_id: string, from: string, to: string, polysemy: string[] };
+	type TraceStep = {
+		year: number;
+		form: string;
+		rule_name: string | null;
+		type: string | null;
+		note: string | null;
+	};
+	type WordNode = { id: string; concept_id: string; from: string; to: string; polysemy: string[] };
 
 	let {
 		runId = null,
@@ -37,12 +43,14 @@
 	let searchQuery = $state('');
 
 	let filteredWords = $derived(
-		words.filter(w => {
+		words.filter((w) => {
 			if (!searchQuery) return true;
 			const q = searchQuery.toLowerCase();
-			return w.to.toLowerCase().includes(q) 
-				|| w.concept_id.toLowerCase().includes(q)
-				|| w.polysemy.some(p => p.toLowerCase().includes(q));
+			return (
+				w.to.toLowerCase().includes(q) ||
+				w.concept_id.toLowerCase().includes(q) ||
+				w.polysemy.some((p) => p.toLowerCase().includes(q))
+			);
 		})
 	);
 
@@ -62,7 +70,7 @@
 		try {
 			const fetched = await fetchLanguage(simulationRunId, id, year);
 			console.log(`Načteno slov pro ${id}:`, fetched.length);
-			
+
 			// Skryjeme vizuální duplicity (slova se stejným konceptem a stejným finálním zněním),
 			// aby se uživateli nezapleveloval slovník.
 			const uniqueWords = [];
@@ -74,12 +82,12 @@
 					uniqueWords.push(w);
 				}
 			}
-			
+
 			words = uniqueWords;
 			traces = {};
 			openWordId = null;
 		} catch (e) {
-			console.error("Chyba při načítání:", e);
+			console.error('Chyba při načítání:', e);
 			resetApiBase();
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -123,32 +131,44 @@
 	{:else if !runId}
 		<div class="state text-center text-muted-foreground p-8">{t('lexiconUnavailable')}</div>
 	{:else if !words.length}
-		<div class="state text-center text-muted-foreground p-8">V tomto roce jazyk ještě nemá žádná slova.</div>
+		<div class="state text-center text-muted-foreground p-8">
+			V tomto roce jazyk ještě nemá žádná slova.
+		</div>
 	{:else}
 		<section class="flex-1 flex flex-col min-h-0">
 			<div class="px-4 pb-3 pt-1 sticky top-0 bg-card z-10 border-b border-border/40">
 				<div class="flex items-center justify-between mb-3">
-					<h3 class="m-0 text-xs font-semibold tracking-wider uppercase opacity-60">{t('lexicon')} <span class="ml-1 opacity-70 font-normal">{filteredWords.length} / {words.length}</span></h3>
+					<h3 class="m-0 text-xs font-semibold tracking-wider uppercase opacity-60">
+						{t('lexicon')}
+						<span class="ml-1 opacity-70 font-normal">{filteredWords.length} / {words.length}</span>
+					</h3>
 				</div>
 				<div class="relative">
-					<input 
-						type="text" 
-						class="w-full h-8 px-3 text-sm bg-muted/50 border border-border/50 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:bg-background transition-all placeholder:text-muted-foreground" 
+					<input
+						type="text"
+						class="w-full h-8 px-3 text-sm bg-muted/50 border border-border/50 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:bg-background transition-all placeholder:text-muted-foreground"
 						placeholder={t('searchWord')}
 						bind:value={searchQuery}
 					/>
 					{#if searchQuery}
-						<button class="absolute right-2 top-1.5 text-muted-foreground hover:text-foreground" onclick={() => searchQuery = ''}>
+						<button
+							class="absolute right-2 top-1.5 text-muted-foreground hover:text-foreground"
+							onclick={() => (searchQuery = '')}
+						>
 							<X size={14} />
 						</button>
 					{/if}
 				</div>
 			</div>
-			
+
 			<ul class="words flex-1 overflow-y-auto">
 				{#each [...filteredWords].sort((a, b) => a.to.localeCompare(b.to)) as word (word.id)}
-					<li class="border-b border-border/40 last:border-0 {word.from !== word.to ? 'changed' : ''}">
-						<div class="word-container flex justify-between items-start p-3 hover:bg-muted/30 transition-colors">
+					<li
+						class="border-b border-border/40 last:border-0 {word.from !== word.to ? 'changed' : ''}"
+					>
+						<div
+							class="word-container flex justify-between items-start p-3 hover:bg-muted/30 transition-colors"
+						>
 							<button class="flex-1 text-left" onclick={() => toggle(word.id)}>
 								<div class="flex items-baseline gap-2 mb-1">
 									<strong class="text-base font-medium">{word.to}</strong>
@@ -158,36 +178,45 @@
 										</span>
 									{/if}
 								</div>
-								
+
 								<div class="text-sm text-muted-foreground mb-1 font-serif italic">
 									"{word.concept_id}"
 								</div>
-								
+
 								{#if word.polysemy?.length}
 									<div class="polysemy-tags flex flex-wrap gap-1 mt-1.5">
 										{#each word.polysemy as meaning}
-											<span class="poly-tag px-1.5 py-0.5 text-[10px] rounded bg-primary/10 text-primary font-medium">{meaning}</span>
+											<span
+												class="poly-tag px-1.5 py-0.5 text-[10px] rounded bg-primary/10 text-primary font-medium"
+												>{meaning}</span
+											>
 										{/each}
 									</div>
 								{/if}
 							</button>
-							
+
 							{#if onIsogloss}
-								<button 
+								<button
 									class="p-1.5 mt-1 text-muted-foreground hover:text-primary hover:bg-muted rounded-md transition-colors shrink-0"
 									title="Zobrazit izoglosu na mapě"
-									onclick={(e) => { e.stopPropagation(); onIsogloss(word.concept_id); }}>
+									onclick={(e) => {
+										e.stopPropagation();
+										onIsogloss(word.concept_id);
+									}}
+								>
 									<Map size={15} />
 								</button>
 							{/if}
 						</div>
-						
+
 						{#if openWordId === word.id && traces[word.id]}
 							<div class="px-3 pb-3 pt-1">
 								<ol class="trace">
 									{#each traces[word.id] as step, i (i)}
 										<li>
-											<span class="year w-10 shrink-0 text-xs text-muted-foreground">{step.year}</span>
+											<span class="year w-10 shrink-0 text-xs text-muted-foreground"
+												>{step.year}</span
+											>
 											<div class="step-info flex-1">
 												{#if step.type === 'borrowed'}
 													<span class="rule text-amber-600 font-medium">Výpůjčka</span>
@@ -199,7 +228,9 @@
 											</div>
 											<b class="form font-medium shrink-0">{step.form}</b>
 										</li>
-										<li class="empty-step text-muted-foreground italic text-xs py-1">Tvar se nezměnil.</li>
+										<li class="empty-step text-muted-foreground italic text-xs py-1">
+											Tvar se nezměnil.
+										</li>
 									{/each}
 								</ol>
 							</div>
@@ -207,9 +238,7 @@
 					</li>
 				{/each}
 				{#if filteredWords.length === 0}
-					<div class="text-center p-8 text-muted-foreground text-sm">
-						Nic nenalezeno.
-					</div>
+					<div class="text-center p-8 text-muted-foreground text-sm">Nic nenalezeno.</div>
 				{/if}
 			</ul>
 		</section>

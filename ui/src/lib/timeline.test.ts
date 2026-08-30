@@ -197,10 +197,7 @@ describe('pravidlo 4: tombstone odstraní všechny hrany mrtvého jazyka', () =>
 	it('nedotčené hrany mezi živými uzly přežijí', () => {
 		const current = {
 			nodes: [node('a', 0), node('b', 0, { isDead: true }), node('c', 0)],
-			edges: [
-				edge('e1', 'a', 'b', 0, 'contact'),
-				edge('e2', 'a', 'c', 0, 'contact')
-			]
+			edges: [edge('e1', 'a', 'b', 0, 'contact'), edge('e2', 'a', 'c', 0, 'contact')]
 		};
 
 		const next = advanceSnapshot(current, undefined, 0);
@@ -314,7 +311,13 @@ describe('stampBornYears', () => {
 	it('doplní chybějící rok narození podle prvního výskytu', () => {
 		const snapshots: SnapshotsByYear = {
 			0: { nodes: [{ id: 'a', data: {} }], edges: [] },
-			100: { nodes: [{ id: 'a', data: {} }, { id: 'b', data: {} }], edges: [] }
+			100: {
+				nodes: [
+					{ id: 'a', data: {} },
+					{ id: 'b', data: {} }
+				],
+				edges: []
+			}
 		};
 
 		stampBornYears(snapshots, [0, 100]);
@@ -355,7 +358,11 @@ describe('kreslení hrany: tlačítko Kontakt musí opravdu přepnout typ', () =
 
 		expect(vysledek.type).toBe('contact');
 		expect(vysledek.id).toBe('e1'); // stejná hrana, jen jiný typ — ne nová
-		expect(vysledek.data).toMatchObject({ contactType: 'neighborhood', intensity: 50, direction: 'ab' });
+		expect(vysledek.data).toMatchObject({
+			contactType: 'neighborhood',
+			intensity: 50,
+			direction: 'ab'
+		});
 	});
 
 	it('přetažení Dědičnosti nad existujícím kontaktem ji vrátí zpět na dědičnost', () => {
@@ -378,7 +385,11 @@ describe('kreslení hrany: tlačítko Kontakt musí opravdu přepnout typ', () =
 		const naDedicnost = retypeEdge(puvodni, false, 100);
 		const zpatkyNaKontakt = retypeEdge(naDedicnost, true, 200);
 
-		expect(zpatkyNaKontakt.data).toMatchObject({ contactType: 'war', intensity: 90, direction: 'ba' });
+		expect(zpatkyNaKontakt.data).toMatchObject({
+			contactType: 'war',
+			intensity: 90,
+			direction: 'ba'
+		});
 	});
 
 	it('newEdgeFields pro Kontakt dá type: contact a výchozí data', () => {

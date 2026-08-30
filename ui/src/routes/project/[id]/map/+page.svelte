@@ -13,30 +13,34 @@
 		type Edge
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
-	
+
 	import LanguageNode from '$lib/LanguageNode.svelte';
 	import ContactEdge from '$lib/ContactEdge.svelte';
 	import LanguageDetail from '$lib/LanguageDetail.svelte';
 	import TimelineControl from '$lib/TimelineControl.svelte';
-	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Select } from '$lib/components/ui/select';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
+	import { MousePointer2, GitCommitHorizontal, X, Download, Trash2, Map } from 'lucide-svelte';
+
 	import {
-		MousePointer2,
-		GitCommitHorizontal,
-		ArrowLeftRight,
-		X,
-		Download,
-		Trash2,
-		Map
-	} from 'lucide-svelte';
-	
-	import { simulateDynamic, resetApiBase, fetchIsogloss, fetchRunExport, importLegacyNeo4j } from '$lib/api';
+		simulateDynamic,
+		resetApiBase,
+		fetchIsogloss,
+		fetchRunExport,
+		importLegacyNeo4j
+	} from '$lib/api';
 	import { projectState, loadProject, scheduleSave, flushSave } from '$lib/state.svelte';
-	import { propagateSnapshots, findEdgeBetween, retypeEdge, newEdgeFields, snapshotForCanvas } from '$lib/timeline';
+	import {
+		propagateSnapshots,
+		findEdgeBetween,
+		retypeEdge,
+		newEdgeFields,
+		snapshotForCanvas
+	} from '$lib/timeline';
 	import type { TLEdge } from '$lib/timeline';
 	import { onMount, untrack } from 'svelte';
 	import { t } from '$lib/i18n.svelte';
@@ -69,8 +73,8 @@
 
 	// xyflow v1 nemá vestavěné mazání klávesou, takže si výběr hrany držíme sami.
 	let selectedEdgeId = $state<string | null>(null);
-	
-	let activeIsogloss = $state<{ conceptId: string, data: Record<string, string> } | null>(null);
+
+	let activeIsogloss = $state<{ conceptId: string; data: Record<string, string> } | null>(null);
 
 	// Zvýraznění vybrané hrany řeší CSS přes třídu .selected, kterou přidává
 	// sám xyflow. Přepisovat kvůli tomu pole hran by rozbilo bind:edges.
@@ -113,8 +117,6 @@
 	let currentTimeIndex = $state(0);
 
 	let timeSteps = $derived(projectState.timeSteps);
-	let snapshots = $derived(projectState.snapshots);
-
 	onMount(() => {
 		// Protojazyk zakládá store, ne tenhle callback — jinak ho stihne přebít
 		// synchronizační efekt níž a do projektu se uloží prázdný snapshot.
@@ -224,10 +226,16 @@
 		const year = timeSteps[currentTimeIndex];
 		const wantsContact = relationshipType === 'contact';
 
-		const existingIdx = findEdgeBetween(edges as unknown as TLEdge[], connection.source, connection.target);
+		const existingIdx = findEdgeBetween(
+			edges as unknown as TLEdge[],
+			connection.source,
+			connection.target
+		);
 		if (existingIdx !== -1) {
 			edges = edges.map((e, i) =>
-				i === existingIdx ? (retypeEdge(e as unknown as TLEdge, wantsContact, year) as unknown as Edge) : e
+				i === existingIdx
+					? (retypeEdge(e as unknown as TLEdge, wantsContact, year) as unknown as Edge)
+					: e
 			);
 			return;
 		}
@@ -237,7 +245,11 @@
 		// a stěžuje si na chybějící povinné `id`, i když by šlo o platné
 		// nové spojení (addEdge() by si id doplnil sám).
 		edges = addEdge(
-			{ id: `xy-edge__${connection.source}-${connection.target}`, ...connection, ...newEdgeFields(wantsContact, year) },
+			{
+				id: `xy-edge__${connection.source}-${connection.target}`,
+				...connection,
+				...newEdgeFields(wantsContact, year)
+			},
 			edges
 		);
 	}
@@ -258,21 +270,35 @@
 		}
 	}
 
-	function updateNodeSocial(nodeId: string, field: 'prestige' | 'mobility' | 'standardization', value: number) {
-		nodes = nodes.map((node) => node.id === nodeId
-			? { ...node, data: { ...node.data, social: { ...((node.data as any).social ?? {}), [field]: value } } }
-			: node);
+	function updateNodeSocial(
+		nodeId: string,
+		field: 'prestige' | 'mobility' | 'standardization',
+		value: number
+	) {
+		nodes = nodes.map((node) =>
+			node.id === nodeId
+				? {
+						...node,
+						data: { ...node.data, social: { ...((node.data as any).social ?? {}), [field]: value } }
+					}
+				: node
+		);
 	}
 
 	function setLexicalHistory(nodeId: string, enabled: boolean) {
-		nodes = nodes.map((node) => node.id === nodeId
-			? { ...node, data: { ...node.data, lexical: { ...((node.data as any).lexical ?? {}), enabled } } }
-			: node);
+		nodes = nodes.map((node) =>
+			node.id === nodeId
+				? {
+						...node,
+						data: { ...node.data, lexical: { ...((node.data as any).lexical ?? {}), enabled } }
+					}
+				: node
+		);
 	}
 
 	// Selection
 	let selectedNodeId = $state<string | null>(null);
-	let selectedNodeData = $derived(nodes.find(n => n.id === selectedNodeId));
+	let selectedNodeData = $derived(nodes.find((n) => n.id === selectedNodeId));
 
 	// xyflow v1 (Svelte 5) předává handlery jako callback props, ne přes on:.
 	// Direktiva `on:nodeclick` se nikdy nespustila, takže panel nešlo otevřít.
@@ -294,7 +320,7 @@
 			id,
 			type: 'language',
 			position: { x: Math.random() * 300 + 200, y: Math.random() * 300 + 200 },
-					data: { label: generateLanguageName(id), year }
+			data: { label: generateLanguageName(id), year }
 		};
 		nodes = [...nodes, newNode];
 	}
@@ -324,30 +350,33 @@
 	// --- Simulation Logic ---
 	let isLoading = $state(false);
 	let errorMessage = $state('');
-	let showResultsModal = $state(false);
-
 	async function handleIsogloss(conceptId: string) {
 		if (!projectState.simulationRunId) return;
 		try {
-			const data = await fetchIsogloss(projectState.simulationRunId, conceptId, timeSteps[currentTimeIndex]);
+			const data = await fetchIsogloss(
+				projectState.simulationRunId,
+				conceptId,
+				timeSteps[currentTimeIndex]
+			);
 			activeIsogloss = { conceptId, data };
 			updateNodesIsogloss();
 		} catch (e) {
-			console.error("Izoglosa failed", e);
+			console.error('Izoglosa failed', e);
 		}
 	}
-	
+
 	function clearIsogloss() {
 		activeIsogloss = null;
 		updateNodesIsogloss();
 	}
-	
+
 	function updateNodesIsogloss() {
-		nodes = nodes.map(n => {
+		nodes = nodes.map((n) => {
 			if (activeIsogloss) {
 				return { ...n, data: { ...n.data, isoglossValue: activeIsogloss.data[n.id] || '-' } };
 			} else {
-				const { isoglossValue, ...rest } = n.data as any;
+				const rest = { ...n.data } as Record<string, unknown>;
+				delete rest.isoglossValue;
 				return { ...n, data: rest };
 			}
 		});
@@ -386,15 +415,15 @@
 
 	async function runSimulation() {
 		if (projectState.generatedProtoLexicon.length === 0) {
-			alert("Nejprve vygeneruj testovací slovník v sekci Metaeditace!");
+			alert('Nejprve vygeneruj testovací slovník v sekci Metaeditace!');
 			return;
 		}
-		
+
 		isLoading = true;
 		errorMessage = '';
 		// Artificial minimum wait to show the progress bar if the API is too fast
-		const minWait = new Promise(resolve => setTimeout(resolve, 800));
-		
+		const minWait = new Promise((resolve) => setTimeout(resolve, 800));
+
 		try {
 			// Backend musí dostat celou historii mapy. Dědičnost žije jen v
 			// okamžiku odštěpení; v dalších snímcích se správně mění na kontakt.
@@ -421,7 +450,7 @@
 				projectState.simulationRunId = data.run_id;
 				// Uložení je lokální ve výchozím stavu; Neo4j je jen volitelný adaptér.
 				void flushSave();
-				
+
 				// Úspěšně nahráno do DB. Tady bychom případně mohli zobrazit toast notifikaci.
 			} else {
 				errorMessage = `Engine vrátil stav '${data.status}'.`;
@@ -430,7 +459,7 @@
 			await minWait;
 			resetApiBase();
 			errorMessage = e instanceof Error ? e.message : String(e);
-			console.error("Chyba při volání API", e);
+			console.error('Chyba při volání API', e);
 		} finally {
 			isLoading = false;
 		}
@@ -478,22 +507,24 @@
 	</div>
 
 	<!-- Toolbar Panel -->
-	<div class="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex bg-card rounded-md border shadow-sm p-1 gap-1">
-		<Button 
+	<div
+		class="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex bg-card rounded-md border shadow-sm p-1 gap-1"
+	>
+		<Button
 			variant={activeTool === 'interact' ? 'default' : 'ghost'}
-			size="sm" 
+			size="sm"
 			class="px-3"
-			onclick={() => activeTool = 'interact'}
+			onclick={() => (activeTool = 'interact')}
 			title={t('moveHint')}
 		>
 			<MousePointer2 class="w-4 h-4 mr-2" />
 			{t('interaction')}
 		</Button>
-		<Button 
+		<Button
 			variant={activeTool === 'relationship' ? 'default' : 'ghost'}
-			size="sm" 
+			size="sm"
 			class="px-3"
-			onclick={() => activeTool = 'relationship'}
+			onclick={() => (activeTool = 'relationship')}
 			title={t('relationshipHint')}
 		>
 			<GitCommitHorizontal class="w-4 h-4 mr-2" />
@@ -522,10 +553,15 @@
 
 	<!-- Izoglosa Banner -->
 	{#if activeIsogloss}
-		<div class="absolute top-4 left-1/2 ml-[220px] z-10 flex bg-primary text-primary-foreground rounded-md shadow-lg p-1.5 px-3 items-center gap-2 animate-in slide-in-from-top-4">
+		<div
+			class="absolute top-4 left-1/2 ml-[220px] z-10 flex bg-primary text-primary-foreground rounded-md shadow-lg p-1.5 px-3 items-center gap-2 animate-in slide-in-from-top-4"
+		>
 			<Map class="w-4 h-4" />
 			<span class="text-sm font-semibold tracking-tight">Izoglosa: {activeIsogloss.conceptId}</span>
-			<button class="ml-2 hover:bg-primary-foreground/20 p-0.5 rounded transition-colors" onclick={clearIsogloss}>
+			<button
+				class="ml-2 hover:bg-primary-foreground/20 p-0.5 rounded transition-colors"
+				onclick={clearIsogloss}
+			>
 				<X size={16} />
 			</button>
 		</div>
@@ -541,13 +577,27 @@
 				<Button class="w-full" variant="outline" size="sm" onclick={addLanguage}>
 					+ {t('addNode')}
 				</Button>
-				<Button class="w-full" variant="outline" size="sm" onclick={() => goto(`/project/${$page.params.id}/meta`)}>
+				<Button
+					class="w-full"
+					variant="outline"
+					size="sm"
+					onclick={() => goto(`/project/${$page.params.id}/meta`)}
+				>
 					{t('projectSettings')}
 				</Button>
-				<Button class="w-full relative overflow-hidden" variant="default" size="sm" onclick={runSimulation} disabled={isLoading}>
+				<Button
+					class="w-full relative overflow-hidden"
+					variant="default"
+					size="sm"
+					onclick={runSimulation}
+					disabled={isLoading}
+				>
 					<span class="relative z-10">{isLoading ? '…' : t('simulate')}</span>
 					{#if isLoading}
-						<div class="absolute bottom-0 left-0 h-1 bg-white/40 animate-pulse transition-all duration-[800ms] ease-out w-full" style="animation: fillProgress 800ms ease-out forwards;"></div>
+						<div
+							class="absolute bottom-0 left-0 h-1 bg-white/40 animate-pulse transition-all duration-[800ms] ease-out w-full"
+							style="animation: fillProgress 800ms ease-out forwards;"
+						></div>
 					{/if}
 				</Button>
 				{#if projectState.simulationRunId}
@@ -555,7 +605,13 @@
 						<Download class="w-4 h-4 mr-2" /> Exportovat simulaci
 					</Button>
 				{:else}
-					<Button class="w-full" variant="outline" size="sm" onclick={importPreviousSimulation} disabled={isLoading}>
+					<Button
+						class="w-full"
+						variant="outline"
+						size="sm"
+						onclick={importPreviousSimulation}
+						disabled={isLoading}
+					>
 						{t('importLegacy')}
 					</Button>
 				{/if}
@@ -592,34 +648,77 @@
 				<CardContent class="space-y-4">
 					<div class="space-y-1.5">
 						<Label class="text-xs text-muted-foreground">{t('languageName')}</Label>
-						<Input value={selectedNodeData.data.label} oninput={(e) => {
-							nodes = nodes.map(n => n.id === selectedNodeId ? { ...n, data: { ...n.data, label: e.currentTarget.value } } : n);
-						}} />
+						<Input
+							value={selectedNodeData.data.label}
+							oninput={(e) => {
+								nodes = nodes.map((n) =>
+									n.id === selectedNodeId
+										? { ...n, data: { ...n.data, label: e.currentTarget.value } }
+										: n
+								);
+							}}
+						/>
 					</div>
 					<div class="space-y-1.5">
 						<Label class="text-xs text-muted-foreground">{t('bornYear')}</Label>
 						<Input disabled value={selectedNodeData.data.year} />
 					</div>
-					<div class="flex items-center gap-2 p-2 rounded-md border {(selectedNodeData.data as any).isDead ? 'bg-muted border-border' : 'bg-background'}">
-						<Checkbox id="isDead" checked={(selectedNodeData.data as any).isDead || false} onchange={(e: Event & { currentTarget: HTMLInputElement }) => setDead(selectedNodeId!, e.currentTarget.checked)} />
-						<Label for="isDead" class="text-sm font-medium cursor-pointer">{t('deadLanguage')}</Label>
+					<div
+						class="flex items-center gap-2 p-2 rounded-md border {(selectedNodeData.data as any)
+							.isDead
+							? 'bg-muted border-border'
+							: 'bg-background'}"
+					>
+						<Checkbox
+							id="isDead"
+							checked={(selectedNodeData.data as any).isDead || false}
+							onchange={(e: Event & { currentTarget: HTMLInputElement }) =>
+								setDead(selectedNodeId!, e.currentTarget.checked)}
+						/>
+						<Label for="isDead" class="text-sm font-medium cursor-pointer"
+							>{t('deadLanguage')}</Label
+						>
 					</div>
 					<div class="space-y-2 border rounded-md p-3">
 						<Label class="text-xs font-semibold">{t('socialProfile')}</Label>
 						{#each [['prestige', t('prestige')], ['mobility', t('mobility')], ['standardization', t('standardization')]] as [field, label]}
 							<label class="block text-xs text-muted-foreground">
-								<span class="flex justify-between"><span>{label}</span><span>{Math.round(Number((selectedNodeData.data as any).social?.[field] ?? 0.5) * 100)}%</span></span>
-								<Input type="range" min="0" max="1" step="0.05" value={Number((selectedNodeData.data as any).social?.[field] ?? 0.5)} oninput={(e) => updateNodeSocial(selectedNodeId!, field as 'prestige' | 'mobility' | 'standardization', parseFloat(e.currentTarget.value))} />
+								<span class="flex justify-between"
+									><span>{label}</span><span
+										>{Math.round(
+											Number((selectedNodeData.data as any).social?.[field] ?? 0.5) * 100
+										)}%</span
+									></span
+								>
+								<Input
+									type="range"
+									min="0"
+									max="1"
+									step="0.05"
+									value={Number((selectedNodeData.data as any).social?.[field] ?? 0.5)}
+									oninput={(e) =>
+										updateNodeSocial(
+											selectedNodeId!,
+											field as 'prestige' | 'mobility' | 'standardization',
+											parseFloat(e.currentTarget.value)
+										)}
+								/>
 							</label>
 						{/each}
 					</div>
 					<div class="flex items-center gap-2 p-2 rounded-md border">
-						<Checkbox id="lexical-history" checked={(selectedNodeData.data as any).lexical?.enabled ?? false} onchange={(e: Event & { currentTarget: HTMLInputElement }) => setLexicalHistory(selectedNodeId!, e.currentTarget.checked)} />
-						<Label for="lexical-history" class="text-sm font-medium cursor-pointer">{t('enableLexicalHistory')}</Label>
+						<Checkbox
+							id="lexical-history"
+							checked={(selectedNodeData.data as any).lexical?.enabled ?? false}
+							onchange={(e: Event & { currentTarget: HTMLInputElement }) =>
+								setLexicalHistory(selectedNodeId!, e.currentTarget.checked)}
+						/>
+						<Label for="lexical-history" class="text-sm font-medium cursor-pointer"
+							>{t('enableLexicalHistory')}</Label
+						>
 					</div>
 				</CardContent>
 			</Card>
-
 		{/if}
 	</div>
 
@@ -646,7 +745,6 @@
 		onChange={(index) => (currentTimeIndex = index)}
 		onAdd={addTimeStep}
 	/>
-
 </div>
 
 <style>
@@ -679,7 +777,13 @@
 	}
 
 	@keyframes fillProgress {
-		0% { width: 0%; opacity: 0.8; }
-		100% { width: 100%; opacity: 0; }
+		0% {
+			width: 0%;
+			opacity: 0.8;
+		}
+		100% {
+			width: 100%;
+			opacity: 0;
+		}
 	}
 </style>
