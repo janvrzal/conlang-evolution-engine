@@ -56,20 +56,49 @@ cee calibrate correspondences --gled-tsv /data/gled.tsv --out /data/gled-corresp
 
 Příkaz níže vytvoří deterministický dvouvětvový benchmark nad syntetickým
 protolexikonem, zarovná odpovídající potomky a vybere kombinaci rychlosti,
-eroze kod a konzervativnosti nejbližší globálnímu GLED profilu. Neučí směr
-jednotlivých pravidel.
+podílu deletivních zákonů a konzervativnosti nejbližší globálnímu GLED
+profilu. Eroze kod se ladí až v navazujícím, podmíněném kroku, aby se
+nepřekrývala s obecným podílem mazání. Příkaz neučí směr jednotlivých pravidel.
 
 ```bash
 cee calibrate macro \
   --target /data/gled-correspondences.json \
   --preset src/cee/data/presets/fantasy_preset.yaml \
+  --repeats 3 \
   --out /data/gled-macro-report.json
 ```
 
 Hellingerova vzdálenost je 0 při shodě a 1 při krajně rozdílném profilu.
-Report slouží k hledání přespříliš konzervativní či erozivní oblasti parametrů;
-nejde o univerzální výchozí preset, dokud neprojde více inventářů a časových
-hloubek.
+Report navíc vypisuje skutečně smazané segmenty podle schématu, takže lze
+odlišit vysoký podíl mezer způsobený několika deletivními kaskádami od běžné
+divergence. Slouží k hledání přespříliš konzervativní či erozivní oblasti
+parametrů; nejde o univerzální výchozí preset, dokud neprojde více inventářů a
+časových hloubek.
+
+Každý kandidát se standardně opakuje třikrát s odlišným, ale deterministicky
+odvozeným protolexikonem i seedem simulace; report obsahuje jejich průměr.
+Tím se nemůže vybrat parametr jen proto, že jednomu náhodnému lexikonu sedl
+neobvyklý sled pravidel.
+
+Generátor navíc nepřipustí tutéž širokou inovaci v intervalu kratším než 500
+let. Nejde o tvrzení, že se například synkopa nemůže v jazyce vrátit; je to
+ochrana generativního modelu před artefaktem, kdy tentýž abstraktní mechanismus
+v krátkém sledu vyrábí a zase maže stejný strukturální materiál.
+
+## Referenční běh (2026-08-30)
+
+Nad GLED `20221127/gled.tsv` (SHA-256
+`3e3b093afb8a7479bcf403905c6ddbd2f8bf7984877f11afc83e58d717d5acfd`) měl
+rodinně vyvážený cíl `identity=66,28 %`, `substitution=18,12 %`, `gap=15,60 %`.
+Tříopakovaný dvouvětvový benchmark (200 lexémů, 1 500 let, seedy 42–44) našel
+nejbližší kandidát `change_rate=1.5`, `deletion_rate=0.5`,
+`conservatism=0.2`: `identity=56,0 %`, `substitution=23,1 %`, `gap=20,9 %`,
+Hellinger `0,075`.
+
+To je kontrolní bod, nikoli tvrzení o kalibraci „všech jazyků“: zejména mezery
+jsou stále o 5,3 p. b. výše než referenční profil. Další krok je podmíněně
+ladit typ kody a délku nad více časovými hloubkami, ne zpětně vybírat jeden
+náhodný seed s lepším skóre.
 
 ## Odhad a metriky
 

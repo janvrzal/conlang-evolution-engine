@@ -25,8 +25,24 @@ from cee.engine.schemas import SCHEMA_REGISTRY
 # Kolikrát se pro jeden slot v chronologii zkusí jiné schéma, než to vzdáme.
 MAX_ATTEMPTS_PER_SLOT = 25
 
+# Jedna instance širokého schématu (např. synkopa) má být dějinná inovace,
+# ne opakovaný tah stejného automatu v několika sousedních slotech. Kratší
+# interval zejména dovoloval cyklus epenteze/geminace → synkopa, který uměle
+# nafukoval jak formy, tak následné mazání.
+MIN_SCHEMA_REUSE_YEARS = 500
+
 # Schémata, která ukrajují konce slov — na ně sahá makro-parametr eroze.
 CODA_SCHEMAS = ("coda_loss", "syncope")
+
+# Všechna schémata, jejichž běžnou operací je skutečné odstranění segmentu.
+# Regulují se zvlášť: délka vývoje a poměr deletivních změn nejsou tatáž věc.
+DELETION_SCHEMAS = (
+    "syncope",
+    "coda_loss",
+    "monophthongization",
+    "apocope",
+    "compensatory_lengthening",
+)
 
 
 @dataclass
@@ -47,6 +63,10 @@ class MacroParams:
     #: Násobí váhu schémat ukrajujících konce slov (coda_loss, syncope).
     coda_erosion: float = 1.0
 
+    #: Násobí šanci zákonů, které skutečně mažou segment. Konzervativní
+    #: výchozí hodnota chrání slovník před náhodnou erozivní kaskádou.
+    deletion_rate: float = 0.4
+
     #: Rozptyl roku uvnitř slotu. 0 = pravidelný takt, 0.5 = pořádně rozházené.
     timing_jitter: float = 0.35
 
@@ -60,7 +80,9 @@ class MacroParams:
         for source in sources:
             if not source:
                 continue
-            for field_name in ("change_rate", "conservatism", "coda_erosion", "timing_jitter"):
+            for field_name in (
+                "change_rate", "conservatism", "coda_erosion", "deletion_rate", "timing_jitter"
+            ):
                 if field_name in source:
                     values[field_name] = float(source[field_name])
 
@@ -69,6 +91,7 @@ class MacroParams:
         params.conservatism = max(0.0, min(1.0, params.conservatism))
         params.change_rate = max(0.0, params.change_rate)
         params.coda_erosion = max(0.0, params.coda_erosion)
+        params.deletion_rate = max(0.0, params.deletion_rate)
         params.timing_jitter = max(0.0, min(1.0, params.timing_jitter))
         return params
 
@@ -152,6 +175,18 @@ def _is_duplicate(previous: Optional[Rule], candidate: Rule) -> bool:
     )
 
 
+def _reuses_schema_too_soon(history: Optional[List[Rule]], candidate: Rule) -> bool:
+    """Zabrání rychlému opakování jedné široké historické inovace."""
+    if not candidate.schema_id or candidate.year is None:
+        return False
+    return any(
+        earlier.schema_id == candidate.schema_id
+        and earlier.year is not None
+        and 0 <= candidate.year - earlier.year < MIN_SCHEMA_REUSE_YEARS
+        for earlier in history or []
+    )
+
+
 class SoundChangeGenerator:
     """Vážený generátor zvukových změn na základě šablon, priorů a biomů."""
 
@@ -184,6 +219,8 @@ class SoundChangeGenerator:
             weight *= self.schema_multipliers.get(schema_id, 1.0)
             if schema_id in CODA_SCHEMAS:
                 weight *= self.macro.coda_erosion
+            if schema_id in DELETION_SCHEMAS:
+                weight *= self.macro.deletion_rate
 
             if weight > 0:
                 choices.append(SCHEMA_REGISTRY[schema_id])
@@ -290,6 +327,7 @@ class SoundChangeGenerator:
                 any(_reverses(earlier, candidate) for earlier in (history or []))
                 or _undoes_insertion(previous, candidate)
                 or _is_duplicate(previous, candidate)
+                or _reuses_schema_too_soon(history, candidate)
             ):
                 continue
             if accepts is not None and not accepts(candidate):

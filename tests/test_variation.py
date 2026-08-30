@@ -154,6 +154,19 @@ def test_eroze_konců_posiluje_prislusna_schemata(mapper, preset):
     assert vaha(silna)["lenition"] == vaha(slaba)["lenition"]
 
 
+def test_deletion_rate_reguluje_vsechny_mazaci_zakony(mapper, preset):
+    silna = SoundChangeGenerator(preset, seed=1, macro=MacroParams(deletion_rate=1.0))
+    slaba = SoundChangeGenerator(preset, seed=1, macro=MacroParams(deletion_rate=0.1))
+
+    def vaha(gen):
+        choices, weights = gen._weighted_schemas("hory")
+        return {s.name: w for s, w in zip(choices, weights)}
+
+    assert vaha(silna)["apocope"] > vaha(slaba)["apocope"]
+    assert vaha(silna)["compensatory_lengthening"] > vaha(slaba)["compensatory_lengthening"]
+    assert vaha(silna)["lenition"] == vaha(slaba)["lenition"]
+
+
 def test_rok_zmeny_je_rozptyleny_ale_v_mezich(mapper, preset):
     """Bez rozptylu padají změny v přesném taktu, což nevypadá jako dějiny."""
     gen = SoundChangeGenerator(preset, seed=5, macro=MacroParams(timing_jitter=0.5))

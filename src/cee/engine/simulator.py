@@ -542,15 +542,18 @@ class EvolutionSimulator:
 
     def _apply_phonology(self, state: State, rule: Rule, year: int) -> None:
         changed = 0
+        deleted_segments = 0
         for word in state.lexicon.words:
             if not word.active:
                 continue
             before = self._word_signature(word)
+            before_segments = len(word.segments)
             old_id = word.id
             rule.apply_to_word(word)
             # Oprava je součást téže historické události; genealogie
             # nikdy neuloží mezitvar, který ve výsledném lexikonu neexistuje.
             repair_clusters(word)
+            deleted_segments += max(0, before_segments - len(word.segments))
             if self._word_signature(word) == before:
                 continue
             self._version_word(word, old_id, state.node_id, year, "mutated", rule.name)
@@ -563,7 +566,9 @@ class EvolutionSimulator:
                 year,
                 state.node_id,
                 rule=rule.name,
+                schema_id=rule.schema_id or "manual",
                 hit_count=changed,
+                deleted_segments=deleted_segments,
             )
 
     def _schedule_semantics(self, node_id: str, start_year: int, push) -> None:

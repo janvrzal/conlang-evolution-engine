@@ -2,7 +2,7 @@
 import pytest
 
 from cee.core.models import Inventory, State, Lexicon
-from cee.engine.generator import SoundChangeGenerator, _reverses
+from cee.engine.generator import SoundChangeGenerator, _reverses, _reuses_schema_too_soon
 from cee.engine.inventory import InventoryView
 from cee.engine.parser import YamlParser
 from cee.engine.rules import Rule
@@ -71,6 +71,21 @@ def test_reverses_pozna_okamzite_zvraceni():
     assert _reverses(lenice, jina) is False
     assert _reverses(lenice, lenice) is False
     assert _reverses(None, zpet) is False
+
+
+def test_stejne_schema_se_neopakuje_v_kratkem_sledu():
+    previous = Rule(
+        name="Synkopa", target={"syl": "+"}, action={"delete": "+"}, year=200, schema_id="syncope"
+    )
+    soon = Rule(
+        name="Další synkopa", target={"syl": "+"}, action={"delete": "+"}, year=500, schema_id="syncope"
+    )
+    later = Rule(
+        name="Pozdní synkopa", target={"syl": "+"}, action={"delete": "+"}, year=700, schema_id="syncope"
+    )
+
+    assert _reuses_schema_too_soon([previous], soon) is True
+    assert _reuses_schema_too_soon([previous], later) is False
 
 
 def test_chronologie_neobsahuje_okamzite_zvraceni(mapper, preset):

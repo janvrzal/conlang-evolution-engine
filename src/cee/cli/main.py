@@ -32,6 +32,7 @@ from cee.metrics.global_baseline import (
 from cee.metrics.correspondence import build_gled_correspondence_profile
 from cee.metrics.correspondence import profile_simulated_word_pairs
 from cee.metrics.macro_calibration import calibrate_macro_grid
+from cee.metrics.macro_calibration import deletion_diagnostics
 from cee.metrics.retention import LexicalRetention
 from cee.metrics.validation import ValidationMetric
 from cee.pipeline import (
@@ -187,6 +188,7 @@ def calibrate_global_macro(
     lexicon_size: int = typer.Option(400, min=50, max=2000, help="Počet syntetických protolexémů."),
     years: int = typer.Option(1500, min=100, help="Časová hloubka dvou sesterských větví."),
     seed: int = typer.Option(42, help="Seed syntetického benchmarku."),
+    repeats: int = typer.Option(3, min=1, max=20, help="Počet nezávislých deterministických opakování."),
 ):
     """Kalibruje makro-divergenci simulovaných sester proti GLED.
 
@@ -198,48 +200,60 @@ def calibrate_global_macro(
     preset_data = YamlParser.parse_preset(str(preset))
     mapper = FeatureMapper()
     concepts = [{"id": f"benchmark-{index}"} for index in range(lexicon_size)]
-    records = ProtolangGenerator(seed=seed).generate_lexicon(
-        "p t k b d ɡ f s m n l r j w",
-        "a e i o u",
-        "CVC",
-        concepts,
-    )
+    diagnostics = {}
 
     def measure(candidate):
         from cee.engine.topology import EvolutionGraph, VerticalEdge
+        from cee.engine.graph_builder import GraphBuilder
 
-        graph = EvolutionGraph(
-            node_configs={
-                "proto": {},
-                "left": {"map": {"macro": dict(candidate)}},
-                "right": {"map": {"macro": dict(candidate)}},
-            },
-            vertical_edges=[VerticalEdge("proto", "left"), VerticalEdge("proto", "right")],
-        )
-        states = run_simulation(
-            load_lexicon_from_records(copy.deepcopy(records), mapper),
-            graph,
-            mapper,
-            SimulationConfig(
-                preset=preset_data,
-                seed=seed,
-                years=years,
-                root_id="proto",
-                enable_semantics=False,
-            ),
-        )
-        left = {word.concept_id: word for word in states["left"].lexicon.words if word.active}
-        right = {word.concept_id: word for word in states["right"].lexicon.words if word.active}
-        return profile_simulated_word_pairs(
-            [(left[key], right[key]) for key in sorted(set(left) & set(right))], mapper
-        )
+        profiles = []
+        deleted = {}
+        for offset in range(repeats):
+            run_seed = seed + offset
+            records = ProtolangGenerator(seed=run_seed).generate_lexicon(
+                "p t k b d ɡ f s m n l r j w", "a e i o u", "CVC", concepts
+            )
+            graph = EvolutionGraph(
+                node_configs={
+                    "proto": {},
+                    "left": {"map": {"macro": dict(candidate)}},
+                    "right": {"map": {"macro": dict(candidate)}},
+                },
+                vertical_edges=[VerticalEdge("proto", "left"), VerticalEdge("proto", "right")],
+            )
+            builder = GraphBuilder()
+            states = run_simulation(
+                load_lexicon_from_records(copy.deepcopy(records), mapper),
+                graph,
+                mapper,
+                SimulationConfig(
+                    preset=preset_data,
+                    seed=run_seed,
+                    years=years,
+                    root_id="proto",
+                    enable_semantics=False,
+                ),
+                graph_builder=builder,
+            )
+            for schema_id, count in deletion_diagnostics(builder.events).items():
+                deleted[schema_id] = deleted.get(schema_id, 0) + count
+            left = {word.concept_id: word for word in states["left"].lexicon.words if word.active}
+            right = {word.concept_id: word for word in states["right"].lexicon.words if word.active}
+            profiles.append(profile_simulated_word_pairs(
+                [(left[key], right[key]) for key in sorted(set(left) & set(right))], mapper
+            ))
 
-    # Osm kandidátů drží interaktivní běh pod rozumnou dobou; report je
-    # auditovatelný a širší grid lze přidat až po nalezení vhodné oblasti.
+        diagnostics[tuple(sorted(candidate.items()))] = deleted
+        keys = set().union(*profiles)
+        return {key: sum(profile.get(key, 0.0) for profile in profiles) / repeats for key in keys}
+
+    # Osm kandidátů drží interaktivní běh pod rozumnou dobou. V první iteraci
+    # ladíme celkovou rychlost a podíl deletivních změn; eroze kody zůstává
+    # neutrální, aby se dva překrývající regulátory nemíchaly dohromady.
     candidates = [
-        {"change_rate": rate, "coda_erosion": erosion, "conservatism": conservatism}
+        {"change_rate": rate, "deletion_rate": deletion, "conservatism": conservatism}
         for rate in (0.75, 1.5)
-        for erosion in (0.5, 2.0)
+        for deletion in (0.2, 0.5)
         for conservatism in (0.0, 0.2)
     ]
     results = calibrate_macro_grid(candidates, target_profile, measure)
@@ -249,8 +263,14 @@ def calibrate_global_macro(
         "lexicon_size": lexicon_size,
         "years": years,
         "seed": seed,
+        "repeats": repeats,
         "results": [
-            {"parameters": result.parameters, "profile": result.profile, "distance": result.distance}
+            {
+                "parameters": result.parameters,
+                "profile": result.profile,
+                "distance": result.distance,
+                "deleted_segments_by_schema": diagnostics[tuple(sorted(result.parameters.items()))],
+            }
             for result in results
         ],
     }
@@ -261,6 +281,8 @@ def calibrate_global_macro(
         f"Nejbližší kandidát: {best.parameters}; Hellinger={best.distance:.3f}.\n"
         f"Profil: " + ", ".join(f"{key}={value:.1%}" for key, value in best.profile.items())
     )
+    if deleted := diagnostics[tuple(sorted(best.parameters.items()))]:
+        typer.echo("Mazání podle schématu: " + ", ".join(f"{key}={value}" for key, value in deleted.items()))
 
 def load_csv_lexicon(proto_csv: str, mapper: FeatureMapper) -> Lexicon:
     """Zpětně kompatibilní alias, kanonická implementace je v cee.pipeline."""

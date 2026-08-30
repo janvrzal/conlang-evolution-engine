@@ -1,6 +1,11 @@
 name: "Fantasy World Preset"
 description: "Příkladový preset pro fantasy světy se specifickými biomy (hory, prales, temnota)."
 
+macro:
+  # Bez explicitní regulace deletivní zákony v dlouhých simulacích snadno
+  # převáží a systematicky erodují lexikon.
+  deletion_rate: 0.4
+
 schemas:
   lenition:
     base_weight: 100
