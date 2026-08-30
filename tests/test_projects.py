@@ -47,6 +47,28 @@ def test_prezije_opakovane_ulozeni():
     assert projects.load("demo").data == {"v": 2}
 
 
+def test_mapovy_podklad_se_uklada_s_meritkem_a_viditelnosti():
+    projects.save(
+        projects.Project(
+            id="demo",
+            data={
+                "mapBackground": {
+                    "dataUrl": "data:image/png;base64,cG5n",
+                    "scale": 140,
+                    "opacity": 0.45,
+                }
+            },
+        )
+    )
+
+    background = projects.load("demo").data["mapBackground"]
+    assert background == {
+        "dataUrl": "data:image/png;base64,cG5n",
+        "scale": 140.0,
+        "opacity": 0.45,
+    }
+
+
 def test_load_or_create_zalozi_prazdny():
     p = projects.load_or_create("novy", "Můj svět")
     assert p.name == "Můj svět"

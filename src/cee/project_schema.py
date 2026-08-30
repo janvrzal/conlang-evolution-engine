@@ -23,6 +23,14 @@ class TimelineSnapshot(BaseModel):
     edges: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class MapBackground(BaseModel):
+    """Přenositelný rastrový podklad mapy uložený přímo v projektu."""
+
+    dataUrl: str
+    scale: float = 100.0
+    opacity: float = 0.35
+
+
 class ProjectData(BaseModel):
     """Kanonický obsah projektu; neznámá pole zachová pro dopřednou kompatibilitu."""
 
@@ -34,6 +42,7 @@ class ProjectData(BaseModel):
     protoLanguages: list[dict[str, Any]] = Field(default_factory=list)
     simulationRunAt: str | None = None
     simulationRunId: str | None = None
+    mapBackground: MapBackground | None = None
 
 
 def migrate_data(version: int, data: dict[str, Any]) -> tuple[int, dict[str, Any]]:

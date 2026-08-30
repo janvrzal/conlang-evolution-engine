@@ -472,6 +472,16 @@
 <div class="relative w-full h-screen bg-background overflow-hidden flex tool-{activeTool}">
 	<!-- Canvas -->
 	<div class="absolute inset-0">
+		{#if projectState.mapBackground}
+			<div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+				<img
+					src={projectState.mapBackground.dataUrl}
+					alt=""
+					class="absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 select-none"
+					style={`width: ${projectState.mapBackground.scale}%; opacity: ${projectState.mapBackground.opacity};`}
+				/>
+			</div>
+		{/if}
 		<!--
 			XYFlow si ke každému ID uzlu ukládá interní změřenou pozici. ID jsou
 			záměrně stejná ve všech časových snímcích, ale jejich `position` se

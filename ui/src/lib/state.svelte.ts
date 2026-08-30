@@ -13,6 +13,15 @@ const AUTOSAVE_DELAY_MS = 800;
 
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
+export type MapBackground = {
+	/** Lokální data URL; projekt je bez externí URL reprodukovatelný i offline. */
+	dataUrl: string;
+	/** Měřítko vůči přirozené velikosti obrázku v procentech. */
+	scale: number;
+	/** Čitelnost uzlů nad podkladem. */
+	opacity: number;
+};
+
 export type ProjectData = {
 	/** Vygenerovaný proto-slovník z Metaeditace. */
 	generatedProtoLexicon: any[];
@@ -32,6 +41,8 @@ export type ProjectData = {
 	simulationRunAt: string | null;
 	/** Identifikátor uložené genealogie; stabilní mezi otevřeními projektu. */
 	simulationRunId: string | null;
+	/** Volitelný rastrový podklad mapového editoru. */
+	mapBackground: MapBackground | null;
 };
 
 /** Uzel, kterým každý nový projekt začíná. */
@@ -54,7 +65,8 @@ function emptyData(): ProjectData {
 		snapshots: { 0: { nodes: [protoNode(0)], edges: [] } },
 		protoLanguages: [],
 		simulationRunAt: null,
-		simulationRunId: null
+		simulationRunId: null,
+		mapBackground: null
 	};
 }
 
@@ -67,6 +79,7 @@ export const projectState = $state<{
 	lastSavedAt: string | null;
 	simulationRunAt: string | null;
 	simulationRunId: string | null;
+	mapBackground: MapBackground | null;
 	generatedProtoLexicon: any[];
 	timeSteps: number[];
 	snapshots: Record<number, { nodes: any[]; edges: any[] }>;
@@ -93,7 +106,8 @@ function snapshotData(): ProjectData {
 		snapshots: $state.snapshot(projectState.snapshots) as ProjectData['snapshots'],
 		protoLanguages: $state.snapshot(projectState.protoLanguages) as any[],
 		simulationRunAt: projectState.simulationRunAt,
-		simulationRunId: projectState.simulationRunId
+		simulationRunId: projectState.simulationRunId,
+		mapBackground: $state.snapshot(projectState.mapBackground) as MapBackground | null
 	};
 }
 
@@ -145,6 +159,7 @@ export async function loadProject(id: string): Promise<void> {
 
 			projectState.simulationRunAt = data.simulationRunAt ?? null;
 			projectState.simulationRunId = data.simulationRunId ?? null;
+			projectState.mapBackground = data.mapBackground ?? null;
 			projectState.lastSavedAt = project.updated_at;
 			projectState.status = 'saved';
 		} else {
