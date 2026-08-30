@@ -58,6 +58,19 @@ class MacroParams:
     #: Násobí počet zvukových změn za období. 2.0 = dvakrát bouřlivější vývoj.
     change_rate: float = 1.0
 
+    #: Očekávaný počet velkých zvukových inovací za tisíc let před sociálními
+    #: a rodinnými korekcemi. Není to univerzální lingvistická konstanta:
+    #: jde o transparentní výchozí prior pro earth-like profil.
+    sound_changes_per_millennium: float = 8.0
+
+    #: Kolik let inovace typicky proniká lexikonem. Nulová hodnota znamená
+    #: okamžité pravidlo a je vyhrazena ručně zapsané historii.
+    change_spread_years: int = 120
+
+    #: 0 = silně propojený jazyk, 1 = izolovaný. Izolace tlumí počet nových
+    #: inovací, neplatí však, že by jazyk přestal měnit interně.
+    isolation: float = 0.5
+
     #: 0.0 až 1.0. Konzervativní jazyk mění méně, i když je rychlost vysoká.
     conservatism: float = 0.0
 
@@ -83,6 +96,9 @@ class MacroParams:
                 continue
             for field_name in (
                 "change_rate",
+                "sound_changes_per_millennium",
+                "change_spread_years",
+                "isolation",
                 "conservatism",
                 "coda_erosion",
                 "deletion_rate",
@@ -95,6 +111,9 @@ class MacroParams:
         # Konzervativnost je podíl, mimo 0–1 nedává smysl.
         params.conservatism = max(0.0, min(1.0, params.conservatism))
         params.change_rate = max(0.0, params.change_rate)
+        params.sound_changes_per_millennium = max(0.0, params.sound_changes_per_millennium)
+        params.change_spread_years = max(0, int(params.change_spread_years))
+        params.isolation = max(0.0, min(1.0, params.isolation))
         params.coda_erosion = max(0.0, params.coda_erosion)
         params.deletion_rate = max(0.0, params.deletion_rate)
         params.timing_jitter = max(0.0, min(1.0, params.timing_jitter))
@@ -104,6 +123,12 @@ class MacroParams:
     def activity(self) -> float:
         """Výsledná míra změny po započtení konzervativnosti."""
         return self.change_rate * (1.0 - self.conservatism)
+
+    @property
+    def innovations_per_millennium(self) -> float:
+        """Tempo inovací po konzervativnosti a sociální propojenosti."""
+        contact_factor = 1.25 - 0.5 * self.isolation
+        return self.sound_changes_per_millennium * self.activity * contact_factor
 
     def slots_for(self, base_slots: int) -> int:
         """Kolik pokusů o změnu se v daném období vůbec udělá."""

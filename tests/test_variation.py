@@ -182,6 +182,82 @@ def test_rok_zmeny_je_rozptyleny_ale_v_mezich(mapper, preset):
     assert roky != takt
 
 
+def test_izolace_tlumi_tempo_inovaci_neblokuje_je_uplne():
+    propojeny = MacroParams(sound_changes_per_millennium=8.0, isolation=0.0)
+    izolovany = MacroParams(sound_changes_per_millennium=8.0, isolation=1.0)
+
+    assert propojeny.innovations_per_millennium == 10.0
+    assert izolovany.innovations_per_millennium == 6.0
+
+
+def test_generovana_zmena_se_siri_postupne_a_je_auditovatelna(mapper):
+    """Jedna inovace má počátek, fáze šíření a konec; není to skrytý skok."""
+    from cee.engine.graph_builder import GraphBuilder
+    from cee.engine.topology import EvolutionGraph, VerticalEdge
+
+    preset = {
+        "schemas": {"final_devoicing": {"base_weight": 1.0}},
+        "biomes": {},
+        "macro": {
+            "sound_changes_per_millennium": 4.0,
+            "change_spread_years": 120,
+            "timing_jitter": 0.0,
+        },
+    }
+    graph = EvolutionGraph(
+        node_configs={"proto": {}, "child": {"year": 0}},
+        vertical_edges=[VerticalEdge("proto", "child", [])],
+    )
+    builder = GraphBuilder()
+    state = __import__("cee.pipeline").pipeline.run_simulation(
+        Lexicon([mapper.parse_word(f"word-{index}", "ab") for index in range(80)]),
+        graph,
+        mapper,
+        SimulationConfig(years=500, preset=preset, root_id="proto", seed=9),
+        builder,
+    )["child"]
+
+    events = [
+        event
+        for event in builder.events
+        if event.get("kind") == "sound_change" and event.get("schema_id") == "final_devoicing"
+    ]
+    assert events
+    first_change_id = events[0]["change_id"]
+    phases = [event for event in events if event["change_id"] == first_change_id]
+    assert phases[0]["duration"] > 0
+    assert phases[0]["progress"] < 1.0
+    assert phases[-1]["progress"] == 1.0
+    assert 0 < phases[0]["hit_count"] < 80
+    assert all(mapper.render_word(word) == "ap" for word in state.lexicon.words)
+
+
+def test_potomek_dedi_i_zmenu_ktera_prave_probiha(mapper):
+    from cee.engine.events import SoundChangeEvent
+    from cee.engine.rules import Rule
+    from cee.engine.simulator import EvolutionSimulator
+    from cee.engine.topology import EvolutionGraph
+
+    simulator = EvolutionSimulator(EvolutionGraph(), mapper)
+    change = SoundChangeEvent(
+        year=10,
+        branch_id="parent",
+        rule=Rule("odzneleni", {"voi": "+"}, {"voi": "-"}),
+        change_id="parent:10:1",
+        duration=120,
+    )
+    simulator._sound_changes[change.change_id] = change
+    simulator._sound_change_adoptions[change.change_id] = {("word", 0, "")}
+    queued = []
+
+    simulator._inherit_active_sound_changes("parent", "child", 60, lambda *args: queued.append(args))
+
+    inherited_id = "parent:10:1:fork:child"
+    assert simulator._sound_change_adoptions[inherited_id] == {("word", 0, "")}
+    assert queued
+    assert all(event.branch_id == "child" and event.year > 60 for _, _, event in queued)
+
+
 # --- kontakt mezi propojenými jazyky ----------------------------------------
 
 

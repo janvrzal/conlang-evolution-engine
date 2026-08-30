@@ -17,6 +17,8 @@ from cee.engine.events import (
     PhonologySlotEvent,
     SemanticEvent,
     SocialEvent,
+    SoundChangeEvent,
+    SoundChangeSpreadEvent,
 )
 from cee.engine.generator import MacroParams, SoundChangeGenerator
 from cee.engine.graph_builder import GraphBuilder
@@ -39,10 +41,9 @@ _PRIO_LEXICON = 4
 _PRIO_SOCIAL = 5
 _PRIO_CONTACT = 6
 
-# Kolik let v průměru připadá na jednu zvukovou změnu, než se do toho promítnou
-# makro-parametry uzlu. Řádově odpovídá tempu doloženému v historických
-# gramatikách; přesné ladění je práce pro validaci V2a.
-YEARS_PER_RULE_SLOT = 25
+# Jemnost záznamu šíření jedné inovace. Není to tempo jazykové změny:
+# to nastavuje MacroParams.sound_changes_per_millennium.
+SPREAD_PHASE_YEARS = 40
 
 
 class EvolutionSimulator:
@@ -84,6 +85,9 @@ class EvolutionSimulator:
         # i vlastní makro-parametry (viz _generator_for).
         self._generators: Dict[str, SoundChangeGenerator] = {}
         self._generated_history: Dict[str, List[Rule]] = {}
+        self._sound_changes: Dict[str, SoundChangeEvent] = {}
+        self._sound_change_adoptions: Dict[str, set[tuple[str, int, str]]] = {}
+        self._sound_change_sequence = 0
 
     def _generator_for(self, node_id: str) -> Optional[SoundChangeGenerator]:
         """
@@ -112,6 +116,9 @@ class EvolutionSimulator:
                     "conservatism": min(1.0, max(0.0, 0.35 * standard + 0.15 * literacy)),
                     "change_rate": max(0.1, 0.65 + mobility),
                 }
+            social_macro["isolation"] = float(
+                node_cfg.get("map", {}).get("isolation", node_cfg.get("isolation", 0.5))
+            )
             macro = MacroParams.from_config(
                 self.preset.get("macro"),
                 social_macro,
@@ -235,6 +242,9 @@ class EvolutionSimulator:
                 self._generated_history[event.child_id] = list(
                     self._generated_history.get(event.parent_id, [])
                 )
+                self._inherit_active_sound_changes(
+                    event.parent_id, event.child_id, year, push
+                )
                 # Pravidlo se vybere až ve svém budoucím slotu. Pozdější
                 # výpůjčky, morfologie i sociální změny tak mohou ovlivnit
                 # inventář a tempo, ze kterých generátor skutečně vychází.
@@ -249,7 +259,26 @@ class EvolutionSimulator:
                 branch_state = states.get(event.branch_id)
                 if branch_state is None:
                     continue
-                self._generate_and_apply_slot(branch_state, event.year)
+                self._generate_and_schedule_slot(branch_state, event.year, push)
+
+            elif isinstance(event, SoundChangeEvent):
+                branch_state = states.get(event.branch_id)
+                if branch_state is None:
+                    continue
+                # Událost se zapíše do historie už při plánování: pozdější
+                # kandidát pak nemůže být okamžitým zvratem inovace, která se
+                # právě šíří, i když ještě nezasáhla celý lexikon.
+                self._sound_changes[event.change_id] = event
+                self._sound_change_adoptions[event.change_id] = set()
+                phases = max(1, math.ceil(event.duration / SPREAD_PHASE_YEARS))
+                self._propagate_sound_change(branch_state, event, 1 / phases, event.year)
+                self._schedule_sound_change_spread(event, push)
+
+            elif isinstance(event, SoundChangeSpreadEvent):
+                branch_state = states.get(event.branch_id)
+                change = self._sound_changes.get(event.change_id)
+                if branch_state is not None and change is not None:
+                    self._propagate_sound_change(branch_state, change, event.progress, event.year)
 
             elif isinstance(event, PhonologyEvent):
                 branch_state = states.get(event.branch_id)
@@ -513,10 +542,18 @@ class EvolutionSimulator:
             return
         horizon = self._horizon_for(start_year, node_id)
         span = max(1, horizon - start_year)
-        slot_count = max(1, math.ceil(span / YEARS_PER_RULE_SLOT))
+        expected = span * generator.macro.innovations_per_millennium / 1_000
+        count_rng = random.Random(
+            derive_seed(self.seed, "phonology-count", node_id, str(start_year), str(horizon))
+        )
+        slot_count = int(expected)
+        if count_rng.random() < expected - slot_count:
+            slot_count += 1
+        if slot_count <= 0:
+            return
         for slot in range(slot_count):
-            window_start = start_year + slot * YEARS_PER_RULE_SLOT
-            window_end = min(horizon, window_start + YEARS_PER_RULE_SLOT)
+            window_start = start_year + span * slot / slot_count
+            window_end = start_year + span * (slot + 1) / slot_count
             rng = random.Random(
                 derive_seed(self.seed, "phonology-slot", node_id, str(slot), str(start_year))
             )
@@ -534,6 +571,7 @@ class EvolutionSimulator:
         social_macro = {
             "conservatism": min(1.0, max(0.0, 0.35 * standard + 0.15 * literacy)),
             "change_rate": max(0.1, 0.65 + mobility),
+            "isolation": float(node_cfg.get("map", {}).get("isolation", node_cfg.get("isolation", 0.5))),
         }
         return MacroParams.from_config(
             self.preset.get("macro") if self.preset else None,
@@ -542,7 +580,7 @@ class EvolutionSimulator:
             node_cfg.get("map", {}).get("macro"),
         )
 
-    def _generate_and_apply_slot(self, state: State, year: int) -> None:
+    def _generate_and_schedule_slot(self, state: State, year: int, push) -> None:
         generator = self._generator_for(state.node_id)
         if generator is None:
             return
@@ -581,13 +619,113 @@ class EvolutionSimulator:
             )
             if candidate is None:
                 continue
+            # Hned rezervujeme pravidlo v historii, aby další kandidát
+            # v témže slotu nemohl vygenerovat jeho zvrat.
             history.append(candidate)
-            self._apply_phonology(state, candidate, year)
+            self._sound_change_sequence += 1
+            change_id = f"{state.node_id}:{year}:{self._sound_change_sequence}"
+            duration = min(
+                generator.macro.change_spread_years,
+                max(0, self._horizon_for(state.year, state.node_id) - year),
+            )
+            push(
+                year,
+                _PRIO_PHONOLOGY,
+                SoundChangeEvent(
+                    year=year,
+                    branch_id=state.node_id,
+                    rule=candidate,
+                    change_id=change_id,
+                    duration=duration,
+                ),
+            )
 
-    def _apply_phonology(self, state: State, rule: Rule, year: int) -> None:
+    def _inherit_active_sound_changes(self, parent_id: str, child_id: str, year: int, push) -> None:
+        """Potomek pokračuje v inovacích, které při odštěpení ještě dobíhaly."""
+        inherited = [
+            change
+            for change in self._sound_changes.values()
+            if change.branch_id == parent_id and change.year < year < change.year + change.duration
+        ]
+        for change in inherited:
+            child_change = copy.copy(change)
+            child_change.branch_id = child_id
+            child_change.change_id = f"{change.change_id}:fork:{child_id}"
+            self._sound_changes[child_change.change_id] = child_change
+            self._sound_change_adoptions[child_change.change_id] = set(
+                self._sound_change_adoptions[change.change_id]
+            )
+            self._schedule_sound_change_spread(child_change, push, after_year=year)
+
+    def _schedule_sound_change_spread(
+        self, change: SoundChangeEvent, push, *, after_year: Optional[int] = None
+    ) -> None:
+        """Rozepíše zbývající kumulativní fáze šíření na společnou časovou osu."""
+        if change.duration <= 0:
+            return
+        phases = max(1, math.ceil(change.duration / SPREAD_PHASE_YEARS))
+        for phase in range(2, phases + 1):
+            progress = phase / phases
+            year = change.year + int(round(change.duration * progress))
+            if after_year is not None and year <= after_year:
+                continue
+            push(
+                year,
+                _PRIO_PHONOLOGY,
+                SoundChangeSpreadEvent(year, change.branch_id, change.change_id, progress),
+            )
+
+    @staticmethod
+    def _sound_change_word_key(word) -> tuple[str, int, str]:
+        return word.concept_id, word.origin_year, word.source_id or ""
+
+    def _propagate_sound_change(
+        self, state: State, change: SoundChangeEvent, progress: float, year: int
+    ) -> None:
+        """Aplikuje dosud neadoptovanou, deterministicky vybranou část lexikonu."""
+        state.year = year
+        adopted = self._sound_change_adoptions[change.change_id]
+        threshold = min(1.0, max(0.0, progress * change.intensity))
+        selected = []
+        for word in state.lexicon.words:
+            if not word.active:
+                continue
+            key = self._sound_change_word_key(word)
+            if key in adopted or not change.rule.can_apply_to_word(word):
+                continue
+            sample = random.Random(
+                derive_seed(self.seed, "sound-change-adoption", change.change_id, *map(str, key))
+            ).random()
+            if sample <= threshold:
+                selected.append(word)
+                adopted.add(key)
+        self._apply_phonology(
+            state,
+            change.rule,
+            year,
+            words=selected,
+            event_metadata={
+                "change_id": change.change_id,
+                "start_year": change.year,
+                "end_year": change.year + change.duration,
+                "duration": change.duration,
+                "progress": round(progress, 4),
+                "intensity": change.intensity,
+            },
+        )
+
+    def _apply_phonology(
+        self,
+        state: State,
+        rule: Rule,
+        year: int,
+        *,
+        words=None,
+        event_metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
         changed = 0
         deleted_segments = 0
-        for word in state.lexicon.words:
+        for word in words if words is not None else state.lexicon.words:
             if not word.active:
                 continue
             before = self._word_signature(word)
@@ -605,15 +743,15 @@ class EvolutionSimulator:
 
         state.inventory = Inventory(segments=self._inventory_of(state.lexicon))
         if self.graph_builder:
-            self.graph_builder.add_event(
-                "sound_change",
-                year,
-                state.node_id,
-                rule=rule.name,
-                schema_id=rule.schema_id or "manual",
-                hit_count=changed,
-                deleted_segments=deleted_segments,
-            )
+            payload = {
+                "rule": rule.name,
+                "schema_id": rule.schema_id or "manual",
+                "hit_count": changed,
+                "deleted_segments": deleted_segments,
+            }
+            if event_metadata:
+                payload.update(event_metadata)
+            self.graph_builder.add_event("sound_change", year, state.node_id, **payload)
 
     def _schedule_semantics(self, node_id: str, start_year: int, push) -> None:
         """Vloží sémantiku do stejné absolutní chronologie jako kontakt."""

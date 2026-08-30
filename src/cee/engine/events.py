@@ -20,9 +20,33 @@ class ForkEvent:
 
 @dataclass
 class PhonologyEvent:
+    """Ručně zapsané, okamžité pravidlo pro zpětnou kompatibilitu."""
+
     year: int
     branch_id: str
     rule: Rule
+
+
+@dataclass
+class SoundChangeEvent:
+    """Začátek generované změny, která se šíří po části časové osy."""
+
+    year: int
+    branch_id: str
+    rule: Rule
+    change_id: str
+    duration: int
+    intensity: float = 1.0
+
+
+@dataclass
+class SoundChangeSpreadEvent:
+    """Jedna kumulativní fáze šíření dříve vzniklé zvukové inovace."""
+
+    year: int
+    branch_id: str
+    change_id: str
+    progress: float
 
 
 @dataclass
