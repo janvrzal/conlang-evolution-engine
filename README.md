@@ -5,6 +5,7 @@ chronologies, and historical phonology modeling.
 
 Technický whitepaper: [`docs/CEE_master.md`](docs/CEE_master.md).
 Konvence a pravidla pro práci v repu: [`AGENT.md`](AGENT.md).
+Ověřený implementovaný rozsah a hranice: [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md).
 
 ## Instalace
 
@@ -40,14 +41,32 @@ nechají vygenerovat podle biomu uzlu:
 cee simulate --topology-yaml scenario_generator.yaml --proto-csv fantasy_v1.csv --preset-yaml src/cee/data/presets/fantasy_preset.yaml
 ```
 
+Volitelná empirická fonologická cache se stahuje jen explicitně; simulace pak
+neběží přes síť:
+
+```bash
+cee phonology update-data
+cee simulate --topology-yaml scenario_generator.yaml --proto-csv fantasy_v1.csv \
+  --preset-yaml src/cee/data/presets/fantasy_preset.yaml --empirical-phonology
+```
+
 Bez `--out-dir` se výsledky ukládají do `runs/run_YYYYMMDD_HHMMSS/`.
 
 ## Testy
 
 ```bash
 .venv/bin/python -m pytest
+cd ui && npm run check && npm run lint && npm test && npm run build
 ```
 
 Sada obsahuje validaci **V1** (výstupní brána Etapy 1 dle `docs/CEE_master.md`
 5.2): derivace latinského lexikonu publikovanou sadou zvukových zákonů
 a měření shody s doloženými formami.
+
+## Stav projektu
+
+CEE už obsahuje lokální projektový editor, časovou mapu, genealogický export,
+CLICS4/DatSemShift, volitelné Index Diachronica/PHOIBLE cache a diachronní
+historii slov. Kalibrační vědecké brány, content-addressed rerolly a produktové
+exporty jako CLDF/PDF/Anki jsou zatím plánované; úplný přehled je v
+[`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md).

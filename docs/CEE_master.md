@@ -6,6 +6,12 @@
 
 ---
 
+> **Stav implementace k 30. 8. 2026.** Toto je whitepaper a popis cílové
+> architektury, ne doslovný seznam hotových funkcí. Ověřený rozsah, částečné
+> implementace a vědomé mezery jsou v [`CURRENT_STATE.md`](CURRENT_STATE.md).
+> Kalibrace V2a/V2b, content-addressed verzování, CLDF/Lexurgy a prémiové
+> exporty jsou zatím cíle, nikoli současná funkčnost.
+
 ## 0. Shrnutí
 
 **Conlang Evolution Engine (CEE)** je generativní simulátor jazykové změny. Z jednoho protojazyka a sítě historických událostí — štěpení populací, obchodních kontaktů, dobývání, vzniku písemnictví — odvozuje rodinu příbuzných jazyků, u nichž je každé slovo zpětně trasovatelné až ke svému kořeni.
@@ -111,19 +117,19 @@ Nikdo nespojuje: (a) generování pravidel místo jejich aplikace, (b) graf cel�
 
 ## 4. Architektura
 
-### 4.1 Datový model: graf a verzování po vzoru Gitu
+### 4.1 Cílový datový model: graf a verzování po vzoru Gitu
 
 Jádrem je graf uzlů (jazyk v čase) s dvěma typy hran: **vertikálními** (dědičnost) a **horizontálními** (kontakt).
 
 **Pravidla jsou pravda, slovníky jsou cache.** Každá vertikální hrana drží uspořádaný, neměnný seznam pravidel, kterými z rodiče vznikl potomek. Slovník uzlu je odvozený artefakt vypočtený přehráním pravidel od protoformy. Nejtěžší část historické fonologie je *pořadí* pravidel (feeding, bleeding) a tento model ho činí explicitním a auditovatelným.
 
-**Verzování je Git, ne zamykání.** Uzel je adresován hashem `H(hash rodiče ‖ serializovaný seznam pravidel ‖ seed)`. Z toho plyne:
+**Cílové verzování je Git, ne zamykání.** Uzel má být adresován hashem `H(hash rodiče ‖ serializovaný seznam pravidel ‖ seed)`. Z toho plyne:
 
 - *Invalidace* je triviální — hash nesedí, přepočítej.
 - *Reroll* je vytvoření **paralelní větve**, ne destruktivní přepis. Uživatel neztrácí předchozí variantu a nemusí nic „odmrazovat".
 - *Freeze* je v tomto slovníku prostě **tag** na konkrétním commitu: pojmenovaný, stabilní odkaz, ze kterého se dá dál větvit.
 
-**Cache se persistuje.** Formulace „slovník se fyzicky neukládá" je zavádějící: cache je content-addressed a **musí přežít zavření projektu**. Bez toho se při každém otevření přepočítává celý strom. Řádový odhad: list ve hloubce 30 kroků při ~40 pravidlech na hranu a 2 000 lexémech znamená kolem 2,4 milionu aplikací pravidla, tedy v Pythonu desítky sekund; s memoizací po uzlech jde o poslední hranu, ~80 tisíc aplikací, tedy podsekundový čas. Rozdíl mezi nepoužitelným a interaktivním nástrojem je zde výhradně v klíčování a persistenci cache.
+**Cílová cache se persistuje.** Formulace „slovník se fyzicky neukládá" je zavádějící: cache má být content-addressed a **musí přežít zavření projektu**. Bez toho se při každém otevření přepočítává celý strom. Řádový odhad: list ve hloubce 30 kroků při ~40 pravidlech na hranu a 2 000 lexémech znamená kolem 2,4 milionu aplikací pravidla, tedy v Pythonu desítky sekund; s memoizací po uzlech jde o poslední hranu, ~80 tisíc aplikací, tedy podsekundový čas. Rozdíl mezi nepoužitelným a interaktivním nástrojem je zde výhradně v klíčování a persistenci cache.
 
 **Mapa je aktivní.** Uživatel nahraje obrázek mapy a nad ním ve druhé vrstvě štětcem nakreslí **biomovou masku** (les, step, poušť, hory, pobřeží). Engine čte biom uzlu z jeho XY pozice. Mapa tedy není pasivní plátno — je to vstup do sémantického modulu (4.7).
 
@@ -312,18 +318,24 @@ Projekt považuji za vyvrácený v příslušné části, pokud:
 
 F3 pokládám za nejpravděpodobnější způsob selhání a zároveň za nejinformativnější.
 
-### 5.5 Reprodukovatelnost
+### 5.5 Cílová reprodukovatelnost
 
 Vlastnost, která je pro vědecké použití nutná, pro produkt je konkurenční výhodou a přitom skoro nic nestojí, je-li zabudována od začátku:
 
-- **Seed** je součástí hashe uzlu. Táž konfigurace dává týž výsledek.
+- **Seed** má být součástí hashe uzlu. Dnešní engine je deterministický, ale
+  content-addressed hash uzlu zatím neimplementuje.
 - **Verze dat.** Projekt si ukládá verze všech použitých datasetů (Concepticon, CLICS, DatSemShift, priory). Simulace z roku 2026 je spustitelná v roce 2030 se stejným výsledkem.
 - **Autorské priory jsou označené.** Kde váha nepochází z dat, je to v souboru priorů explicitně vyznačeno — jinak by nebylo možné oddělit empirický základ od autorského odhadu.
-- **Celá historie je exportovatelná** jako lidsky čitelný soubor pravidel (viz Lexurgy export). Uživatel není uzamčen.
+- **Celá historie má být exportovatelná** jako lidsky čitelný soubor pravidel
+  (viz Lexurgy export). Dnes je k dispozici auditovatelný JSON export.
 
 ---
 
 ## 6. Etapizace
+
+Etapy jsou cílové validační brány; implementace probíhala částečně paralelně.
+Aktuální stav jednotlivých položek je v `CURRENT_STATE.md`, proto tento seznam
+neoznačuje jednotlivé etapy jako dokončené jen podle existence dílčích funkcí.
 
 **Etapa 1 — jádro (MVP).** CLI, žádné GUI, jedna linie bez kontaktu. Rysový derivační engine, ruční sady pravidel, trasovatelnost jednoho slova, obě metriky z 5.1. **Výstupní brána: validace V1.** Dokud aplikátor neprojde latinou, nemá smysl stavět nic nad ním.
 
@@ -441,4 +453,3 @@ Uveden proto, že v předchozích verzích dokumentu se čtyři pojmy vyskytoval
 - Hawkins, J. & Gilligan, G. (1988): *Prefixing and suffixing universals in relation to basic word order* — asymetrie sufixační preference.
 - Williams, E. (1981): *On the notions "lexically related" and "head of a word"* — pravidlo pravé hlavy ve složeninách.
 - List, J.-M. a kol.: publikace k CLICS, Concepticon a CLDF.
-
