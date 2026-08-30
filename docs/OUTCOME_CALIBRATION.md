@@ -9,7 +9,8 @@ earth-like režim a o cíl pro budoucí citlivostní experimenty.
 Příkaz přijímá místní CLDF-like soubory:
 
 - `languages.csv`: povinné `ID`; volitelné `Family`, `Macroarea` a
-  `Glottocode`.
+  `Glottocode`. Řádky s `Is_Proto=true` se ve výchozím nastavení z měření
+  současného jazyka vyloučí.
 - `forms.csv`: povinné `Language_ID`; jedna z forem `Segments`, `Value` nebo
   `Form`; pro proxy homofonie volitelný `Parameter_ID`.
 - `phoible.csv`: volitelný zdroj skutečných fonémových inventářů. Připojí se
@@ -27,6 +28,29 @@ cee calibrate outcomes \
 
 Zdrojová data se neukládají do repozitáře. Výstup obsahuje SHA-256 všech
 vstupů, seed a počet bootstrapových opakování.
+
+## Protolexikon z CLDF rekonstrukcí
+
+Samotná kalibrace potřebuje dostatečně velký, explicitně rekonstruovaný
+výchozí lexikon. CEE proto umí převést lokálně získaný CLDF zdroj, jehož
+`languages.csv` značí rekonstruovaný jazyk `Is_Proto=true`. Nehádat, který
+protojazyk zdroj myslí: jeho ID se vždy předává explicitně.
+
+```bash
+cee calibrate protolexicon \
+  --forms /data/mcd/cldf/forms.csv \
+  --languages /data/mcd/cldf/languages.csv \
+  --proto-language-id protomicronesian \
+  --out /data/proto/proto-micronesian.csv \
+  --metadata-out /data/proto/proto-micronesian.metadata.json
+```
+
+Výstupní CSV má pouze `id,ipa_proto` a lze jej předat simulátoru. Manifest
+uchová název i ID protojazyka, SHA-256 vstupů a počty vyřazených pochybných,
+nečitelných či alternativních rekonstrukcí. Na jeden koncept se exportuje
+jedna deterministicky vybraná forma; alternativy se nepletou za nezávislá
+slova. Zdrojové CLDF soubory ani exporty nevkládej do repozitáře, pokud to
+jejich licence výslovně nepovoluje.
 
 ## Metriky a nejistota
 

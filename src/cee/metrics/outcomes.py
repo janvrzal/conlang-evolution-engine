@@ -196,6 +196,7 @@ def measure_language_outcomes(
     forms_path: str | Path,
     languages_path: str | Path,
     phoible_path: str | Path | None = None,
+    include_proto: bool = False,
 ) -> tuple[list[LanguageOutcome], int]:
     """Vytvoří language-level metriky z CLDF-like forms a languages CSV."""
     language_rows = list(_iter_csv(languages_path))
@@ -204,6 +205,7 @@ def measure_language_outcomes(
             "family": row.get("Family", row.get("Family_ID", "")).strip(),
             "macroarea": row.get("Macroarea", row.get("Macroarea_ID", "")).strip(),
             "glottocode": row.get("Glottocode", row.get("glottocode", "")).strip(),
+            "is_proto": row.get("Is_Proto", "").strip().lower() in {"true", "1", "yes"},
         }
         for row in language_rows
         if row.get("ID", "").strip()
@@ -214,7 +216,7 @@ def measure_language_outcomes(
     per_language: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for row in _iter_csv(forms_path):
         language_id = row.get(_LANGUAGE_ID, "").strip()
-        if language_id not in languages:
+        if language_id not in languages or (languages[language_id]["is_proto"] and not include_proto):
             continue
         value = _first_present(row, _FORM_COLUMNS)
         if value:
@@ -325,11 +327,14 @@ def build_outcome_profile(
     phoible_path: str | Path | None = None,
     bootstrap_replicates: int = 1_000,
     bootstrap_seed: int = 42,
+    include_proto: bool = False,
 ) -> OutcomeProfile:
     """Agreguje outcome metriky s cluster bootstrapem podle genealogie."""
     if bootstrap_replicates < 100:
         raise ValueError("Pro interval 95 % použij alespoň 100 bootstrap opakování.")
-    outcomes, excluded = measure_language_outcomes(forms_path, languages_path, phoible_path)
+    outcomes, excluded = measure_language_outcomes(
+        forms_path, languages_path, phoible_path, include_proto
+    )
     groups = [
         _estimate_group(
             "global",

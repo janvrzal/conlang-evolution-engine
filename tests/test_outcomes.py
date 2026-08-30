@@ -95,6 +95,23 @@ def test_outcome_profile_joins_optional_phoible_inventory_metric(tmp_path):
     assert "phoible" in profile.source_checksums
 
 
+def test_outcome_profile_excludes_explicit_proto_languages_by_default(tmp_path):
+    forms, languages = _write_sample(tmp_path)
+    languages.write_text(
+        languages.read_text(encoding="utf-8").replace("ID,Family,Macroarea", "ID,Family,Macroarea,Is_Proto").replace(
+            "a,Fam-1,Eurasia", "a,Fam-1,Eurasia,false"
+        ).replace("b,Fam-1,Eurasia", "b,Fam-1,Eurasia,true").replace(
+            "c,Fam-2,Africa", "c,Fam-2,Africa,false"
+        ).replace("d,Fam-2,Africa", "d,Fam-2,Africa,false"),
+        encoding="utf-8",
+    )
+
+    profile = build_outcome_profile(forms, languages, bootstrap_replicates=100)
+
+    global_group = next(group for group in profile.groups if group.kind == "global")
+    assert global_group.languages == 3
+
+
 def test_outcome_score_is_zero_inside_intervals():
     score, inside, compared = score_metrics(
         {"mean_segment_length": 4.5, "coda_segment_rate": 0.3},

@@ -41,6 +41,7 @@ from cee.metrics.local_research import (
 from cee.metrics.macro_calibration import calibrate_macro_grid, deletion_diagnostics
 from cee.metrics.outcome_search import load_target_group, search_macro_parameters
 from cee.metrics.outcomes import build_outcome_profile
+from cee.metrics.protolexicon import extract_protolexicon, write_protolexicon
 from cee.metrics.retention import LexicalRetention
 from cee.metrics.schema_profiles import save_local_schema_profile
 from cee.metrics.validation import ValidationMetric
@@ -173,9 +174,12 @@ def profile_observed_outcomes(
     out: Path = typer.Option(..., help="Auditovatelný JSON outcome profilu."),
     bootstrap_replicates: int = typer.Option(1_000, min=100, help="Počet cluster-bootstrapů."),
     seed: int = typer.Option(42, help="Seed bootstrapu."),
+    include_proto: bool = typer.Option(False, help="Zahrnout Is_Proto řádky; výchozí profil měří doložené jazyky."),
 ):
     """Změří současné jazykové vlastnosti globálně, podle regionu a rodiny."""
-    profile = build_outcome_profile(forms, languages, phoible, bootstrap_replicates, seed)
+    profile = build_outcome_profile(
+        forms, languages, phoible, bootstrap_replicates, seed, include_proto
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(profile.as_dict(), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     global_group = next(group for group in profile.groups if group.kind == "global")
@@ -183,6 +187,26 @@ def profile_observed_outcomes(
         f"Hotovo: {global_group.languages} jazyků, {global_group.families} rodin, "
         f"{len(profile.groups)} profilů; přeskočeno forem: {profile.excluded_forms}.\n"
         f"Profil: {out}"
+    )
+
+
+@calibration_app.command("protolexicon")
+def export_cldf_protolexicon(
+    forms: Path = typer.Option(..., exists=True, help="CLDF forms.csv s Language_ID, Parameter_ID a Segments."),
+    languages: Path = typer.Option(..., exists=True, help="CLDF languages.csv se sloupcem Is_Proto."),
+    proto_language_id: str = typer.Option(..., help="ID explicitně rekonstruovaného protojazyka."),
+    out: Path = typer.Option(..., help="Výstupní CSV CEE: id,ipa_proto."),
+    metadata_out: Path = typer.Option(..., help="Auditní JSON s původem a checksumy."),
+    include_doubtful: bool = typer.Option(False, help="Zahrnout zdrojové řádky označené Doubt."),
+):
+    """Převede lokální CLDF rekonstrukce na auditatelný protolexikon CEE."""
+    export = extract_protolexicon(forms, languages, proto_language_id, include_doubtful)
+    write_protolexicon(export, out, metadata_out)
+    typer.echo(
+        f"Hotovo: {len(export.records)} forem pro {export.proto_language_name}; "
+        f"přeskočeno: doubtful {export.skipped_doubtful}, "
+        f"nečitelných {export.skipped_unparseable}, duplicit {export.skipped_duplicate_concepts}.\n"
+        f"Lexikon: {out}\nMetadata: {metadata_out}"
     )
 
 
