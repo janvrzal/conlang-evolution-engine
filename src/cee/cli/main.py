@@ -34,8 +34,10 @@ from cee.metrics.global_baseline import (
     save_global_baseline,
     train_from_manifest,
 )
+from cee.metrics.local_research import build_local_research_profile
 from cee.metrics.macro_calibration import calibrate_macro_grid, deletion_diagnostics
 from cee.metrics.retention import LexicalRetention
+from cee.metrics.schema_profiles import save_local_schema_profile
 from cee.metrics.validation import ValidationMetric
 from cee.pipeline import (
     SimulationConfig,
@@ -135,6 +137,25 @@ def extract_cldf_candidates(
     candidates = extract_reflex_candidates(forms, family_id, proto_language)
     write_reflex_candidates(candidates, out)
     typer.echo(f"Hotovo: {len(candidates)} kandidátů pro lidskou anotaci v {out}.")
+
+
+@calibration_app.command("research-profile")
+def create_local_research_profile(
+    changes: Path = typer.Option(..., exists=True, help="Lokální CSV se sloupci source,target,context."),
+    out: Path = typer.Option(..., help="Lokální JSON profil; nevkládá se do repozitáře."),
+    profile_id: str = typer.Option("user-research", help="Lokální identifikátor profilu."),
+    label: str = typer.Option("Můj výzkumný profil", help="Zobrazovaný název."),
+    source_column: str = typer.Option("source"), target_column: str = typer.Option("target"),
+    context_column: str = typer.Option("context"),
+    acknowledge_local_research: bool = typer.Option(False, help="Potvrzuji, že data zůstávají lokální a jejich licenci řeším já."),
+):
+    """Vytvoří lokální výzkumný profil z uživatelem dodaných změn."""
+    if not acknowledge_local_research:
+        raise typer.BadParameter("Použij --acknowledge-local-research; tento režim není distribuovaný empirický profil.")
+    profile, used, skipped = build_local_research_profile(changes, profile_id, label, source_column, target_column, context_column)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    save_local_schema_profile(profile, out)
+    typer.echo(f"Hotovo: {used} konzervativně zařazených, {skipped} přeskočených řádků. Profil zůstal lokální: {out}")
 
 
 @calibration_app.command("measure")

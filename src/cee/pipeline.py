@@ -32,8 +32,8 @@ from cee.engine.semantics import SemanticEvaluator
 from cee.engine.simulator import EvolutionSimulator
 from cee.engine.topology import EvolutionGraph
 from cee.metrics.global_baseline import load_global_baseline
-from cee.metrics.schema_profiles import load_schema_profile
 from cee.metrics.retention import LexicalRetention, RetentionResult
+from cee.metrics.schema_profiles import load_local_schema_profile, load_schema_profile
 from cee.semantics.builder import default_paths as default_semantics_paths
 from cee.semantics.graph import SemanticGraph
 
@@ -67,6 +67,7 @@ class SimulationConfig:
     #: Cesta k auditovatelné globální kalibraci. Bez ní zůstává čistý preset.
     global_baseline_path: Optional[str] = None
     schema_profile_id: str = "heuristic-default"
+    local_schema_profile_path: Optional[str] = None
 
 
 @dataclass
@@ -266,6 +267,8 @@ def build_global_schema_multipliers(config: SimulationConfig) -> Dict[str, float
     """Načte už vytvořenou globální kalibraci, bez síťového I/O."""
     if not config.global_baseline_path:
         try:
+            if config.local_schema_profile_path:
+                return load_local_schema_profile(config.local_schema_profile_path).schema_multipliers
             return load_schema_profile(config.schema_profile_id).schema_multipliers
         except (OSError, ValueError, KeyError, FileNotFoundError) as exc:
             warnings.warn(f"Profil vah '{config.schema_profile_id}' nelze načíst: {exc}", stacklevel=2)

@@ -72,6 +72,21 @@ Index Diachronica se kvůli CC BY-NC-SA 3.0 nedodává ani jako vestavěný prof
 ani jako automatický downloader. Případné použití je věcí samostatné licence a
 odpovědnosti uživatele; nesmí se prezentovat jako profil distribuovaný CEE.
 
+### Lokální výzkumný profil
+
+Uživatel může dodat vlastní CSV se sloupci `source`, `target` a volitelným
+`context`. CEE jej čte pouze lokálně a vytvoří profil označený
+`user-local-research`; do projektu se neukládají vstupní data, jen SHA-256
+otisk. Nejednoznačné řádky se nepřiřazují. Tento režim není náhradou licence
+ani distribuovaný empirický profil.
+
+```bash
+cee calibrate research-profile \
+  --changes /data/moje-zmeny.csv \
+  --out /data/moj-vyzkumny-profil.json \
+  --acknowledge-local-research
+```
+
 ## Globální korespondence
 
 GLED je vhodný otevřený doplněk (CC BY 4.0): obsahuje globálně pokryté

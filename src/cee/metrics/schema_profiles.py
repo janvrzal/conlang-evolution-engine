@@ -47,3 +47,12 @@ def load_schema_profile(profile_id: str) -> SchemaProfile:
 
 def available_schema_profiles() -> list[SchemaProfile]:
     return [load_schema_profile(path.stem) for path in sorted(_BUILTIN_DIR.glob("*.json"))]
+
+
+def load_local_schema_profile(path: str | Path) -> SchemaProfile:
+    """Načte uživatelem dodaný profil; volající rozhoduje, zda jej smí použít."""
+    return SchemaProfile.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
+
+
+def save_local_schema_profile(profile: SchemaProfile, path: str | Path) -> None:
+    Path(path).write_text(json.dumps(profile.__dict__, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
