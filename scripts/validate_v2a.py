@@ -43,12 +43,12 @@ def main() -> None:
         state = State(node_id=f"v2a-{seed}", year=0, inventory=Inventory(), lexicon=lexicon)
         rules.extend(generator.generate_rules_for_edge(state, 0, 1000, args.rules, inventory))
 
-    generated = profile_rules(rules, years=args.runs * 1000)
-    attested = GeneratorProfile(priors.observations, priors.counts, priors.environments, 0.0)
+    generated = profile_rules(rules, years=args.runs * 1000, broad=True)
+    attested = GeneratorProfile(priors.observations, priors.annotations, priors.environments, 0.0)
     comparison = compare_profiles(generated, attested)
     print(json.dumps({
         "generated": generated.__dict__,
-        "attested": {"changes": priors.observations, "schemas": priors.counts, "provenance": priors.provenance},
+        "attested": {"changes": priors.observations, "schemas": priors.annotations, "provenance": priors.provenance},
         "comparison": {
             "schema_hellinger": comparison["schema_hellinger"],
             "comparable_schema_hellinger": comparison["comparable_schema_hellinger"],

@@ -8,6 +8,12 @@ from typing import Iterable
 
 from cee.engine.rules import Rule
 
+_V2A_CLASS = {
+    "apocope": "deletion", "coda_loss": "deletion", "syncope": "deletion",
+    "vowel_shift": "vowel_change", "umlaut": "vowel_change", "nasalization": "vowel_change",
+    "diphthongization": "vowel_change", "monophthongization": "vowel_change",
+}
+
 
 def _environment(rule: Rule) -> str:
     if rule.env_before or rule.env_after:
@@ -29,9 +35,12 @@ class GeneratorProfile:
     changes_per_millennium: float
 
 
-def profile_rules(rules: Iterable[Rule], years: int) -> GeneratorProfile:
+def profile_rules(rules: Iterable[Rule], years: int, broad: bool = False) -> GeneratorProfile:
     rules = list(rules)
-    schema_counts = Counter(rule.schema_id or "manual" for rule in rules)
+    schema_counts = Counter(
+        _V2A_CLASS.get(rule.schema_id or "manual", "consonant_change") if broad else rule.schema_id or "manual"
+        for rule in rules
+    )
     environment_counts = Counter(_environment(rule) for rule in rules)
     return GeneratorProfile(
         changes=len(rules),

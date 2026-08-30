@@ -31,6 +31,7 @@ def test_index_diachronica_redux_se_prevede_na_auditovatelne_priory(tmp_path):
     assert priors.counts["apocope"] == 1
     assert priors.counts["vowel_shift"] == 1
     assert priors.environments == {"unconditional": 2, "conditioned": 2, "word_final": 1}
+    assert priors.annotations == {"consonant_change": 3, "deletion": 1, "vowel_change": 1}
     assert priors.provenance["source"] == "Index Diachronica Redux"
     assert priors.multiplier("palatalization") > 1
 

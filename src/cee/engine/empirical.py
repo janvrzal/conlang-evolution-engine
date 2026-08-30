@@ -66,6 +66,7 @@ class DiachronicaPriors:
     provenance: Dict[str, str]
     #: Normalizovaná strukturální prostředí; nezávislá osa pro V2a.
     environments: Dict[str, int] = field(default_factory=dict)
+    annotations: Dict[str, int] = field(default_factory=dict)
 
     def multiplier(self, schema_id: str) -> float:
         """Vyhlazený poměr vůči rovnoměrnému prioru (nikdy nula)."""
@@ -76,7 +77,7 @@ class DiachronicaPriors:
         return (self.counts.get(schema_id, 0) + 1.0) / (average + 1.0)
 
     def as_dict(self) -> Dict[str, object]:
-        return {"counts": self.counts, "observations": self.observations, "provenance": self.provenance, "environments": self.environments}
+        return {"counts": self.counts, "observations": self.observations, "provenance": self.provenance, "environments": self.environments, "annotations": self.annotations}
 
     @classmethod
     def from_dict(cls, data: Dict[str, object]) -> "DiachronicaPriors":
@@ -85,6 +86,7 @@ class DiachronicaPriors:
             observations=int(data.get("observations", 0)),
             provenance={str(key): str(value) for key, value in dict(data.get("provenance", {})).items()},
             environments={str(key): int(value) for key, value in dict(data.get("environments", {})).items()},
+            annotations={str(key): int(value) for key, value in dict(data.get("annotations", {})).items()},
         )
 
 
@@ -132,12 +134,27 @@ def _classify_environment(context: str) -> str:
     return "structural_or_uncertain"
 
 
+def _annotation_class(source: str, target: str) -> str:
+    """Široká V2a anotace, která nezaměňuje nejisté reflexy za schéma enginu."""
+    source, target = _clean_ipa(source), _clean_ipa(target)
+    if not target:
+        return "deletion"
+    if _is_vowel(source) and _is_vowel(target):
+        return "vowel_change"
+    if any(marker in source + target for marker in "[{"):
+        return "complex_or_split"
+    if source and target:
+        return "consonant_change"
+    return "unparsed"
+
+
 def build_diachronic_priors(changes_dir: str | Path) -> DiachronicaPriors:
     """Načte textové změny z Index Diachronica Redux bez závislosti na parseru UI."""
     directory = Path(changes_dir)
     paths = list(directory.glob("*.txt"))
     counts: Dict[str, int] = {}
     environments: Dict[str, int] = {}
+    annotations: Dict[str, int] = {}
     observations = 0
     for path in paths:
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -154,6 +171,8 @@ def build_diachronic_priors(changes_dir: str | Path) -> DiachronicaPriors:
             counts[category] = counts.get(category, 0) + 1
             environment = _classify_environment(context)
             environments[environment] = environments.get(environment, 0) + 1
+            annotation = _annotation_class(source, target)
+            annotations[annotation] = annotations.get(annotation, 0) + 1
             observations += 1
     provenance = {
         "source": "Index Diachronica Redux",
@@ -168,6 +187,7 @@ def build_diachronic_priors(changes_dir: str | Path) -> DiachronicaPriors:
         observations=observations,
         provenance=provenance,
         environments=environments,
+        annotations=annotations,
     )
 
 
