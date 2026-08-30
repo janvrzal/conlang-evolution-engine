@@ -87,6 +87,22 @@ cee calibrate research-profile \
   --acknowledge-local-research
 ```
 
+Stejný vstup lze měřit proti výchozím vahám presetu, aniž by se profil
+ukládal. Volba `--use-derived-weights` je pouze in-sample diagnostika: ukazuje,
+zda by váhy odvozené z daného souboru posunuly generátor k tomuto souboru, ale
+není nezávislou validací.
+
+```bash
+cee calibrate research-measure \
+  --changes /data/moje-zmeny.csv \
+  --preset src/cee/data/presets/fantasy_preset.yaml
+```
+
+Výsledek je srovnání kategorií a prostředí pouze nad jednoznačně
+přiřaditelnými řádky. Pokud vstup neobsahuje identifikátor rodiny ani datovaný
+interval, CEE záměrně neuvádí rodinně vyvážený globální výsledek ani rychlost
+změn.
+
 ## Globální korespondence
 
 GLED je vhodný otevřený doplněk (CC BY 4.0): obsahuje globálně pokryté

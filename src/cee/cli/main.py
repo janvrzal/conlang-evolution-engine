@@ -34,7 +34,10 @@ from cee.metrics.global_baseline import (
     save_global_baseline,
     train_from_manifest,
 )
-from cee.metrics.local_research import build_local_research_profile
+from cee.metrics.local_research import (
+    build_local_research_profile,
+    profile_local_research_changes,
+)
 from cee.metrics.macro_calibration import calibrate_macro_grid, deletion_diagnostics
 from cee.metrics.retention import LexicalRetention
 from cee.metrics.schema_profiles import save_local_schema_profile
@@ -156,6 +159,68 @@ def create_local_research_profile(
     out.parent.mkdir(parents=True, exist_ok=True)
     save_local_schema_profile(profile, out)
     typer.echo(f"Hotovo: {used} konzervativně zařazených, {skipped} přeskočených řádků. Profil zůstal lokální: {out}")
+
+
+@calibration_app.command("research-measure")
+def measure_local_research_profile(
+    changes: Path = typer.Option(..., exists=True, help="Lokální CSV se sloupci zdroje, výsledku a kontextu."),
+    preset: Path = typer.Option(..., exists=True, help="Preset generátoru, který se má měřit."),
+    source_column: str = typer.Option("source"), target_column: str = typer.Option("target"),
+    context_column: str = typer.Option("context"),
+    runs: int = typer.Option(50, min=1, help="Počet deterministických vzorků generátoru."),
+    years: int = typer.Option(1000, min=1, help="Délka každého vzorku."),
+    rules_per_run: int = typer.Option(12, min=1, help="Počet slotů pravidel na vzorek."),
+    seed: int = typer.Option(42, help="Počáteční seed vzorkování."),
+    use_derived_weights: bool = typer.Option(
+        False,
+        help="Použije váhy odvozené z téhož lokálního vstupu (diagnostika, ne nezávislá validace).",
+    ),
+):
+    """Lokální V2a porovnání proti uživatelem dodaným změnám.
+
+    Bez rodiny a časových intervalů je výsledek jen nevyvážené srovnání
+    přiřaditelných typů a prostředí; není to globální kalibrace.
+    """
+    attested, used, skipped = profile_local_research_changes(
+        changes, source_column, target_column, context_column
+    )
+    local_profile, _, _ = build_local_research_profile(
+        changes, "local-v2a", "Lokální V2a", source_column, target_column, context_column
+    )
+    preset_data = YamlParser.parse_preset(str(preset))
+    mapper = FeatureMapper()
+    inventory = InventoryView(mapper, set("aeiouptkbdɡfvszʃxhmnŋlrjw"))
+    generated = []
+    for index in range(runs):
+        generator = SoundChangeGenerator(
+            preset_data,
+            seed=seed + index,
+            schema_multipliers=(local_profile.schema_multipliers if use_derived_weights else None),
+        )
+        generated.extend(
+            generator.generate_rules_for_edge(
+                State(node_id=f"local-v2a-{index}", inventory=Inventory(), lexicon=Lexicon(), map={}),
+                0,
+                years,
+                num_rules=rules_per_run,
+                inventory=inventory,
+            )
+        )
+    generated_profile = profile_rules(generated, years=years * runs)
+    metrics = compare_to_global_distribution(
+        generated_profile,
+        {key: value / attested.changes for key, value in attested.schemas.items()},
+        {key: value / attested.changes for key, value in attested.environments.items()},
+    )
+    total = used + skipped
+    mode = "odvozené lokální váhy (in-sample)" if use_derived_weights else "výchozí váhy presetu"
+    typer.echo(f"Režim generátoru: {mode}.")
+    typer.echo(f"Lokální vstup: {used}/{total} ({used / max(1, total):.1%}) konzervativně přiřazeno.")
+    typer.echo(f"Vygenerováno pravidel: {generated_profile.changes}")
+    typer.echo(f"Hellinger (typ změny): {metrics['schema_hellinger']:.3f}")
+    typer.echo(f"Hellinger (prostředí): {metrics['environment_hellinger']:.3f}")
+    typer.echo(f"Pokrytí doložených schémat: {metrics['attested_schema_coverage']:.1%}")
+    typer.echo("Bez rodin a datovaných intervalů se neuvádí globální vyvážení ani rychlost změn.")
 
 
 @calibration_app.command("measure")
