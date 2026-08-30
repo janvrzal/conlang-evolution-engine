@@ -1,5 +1,7 @@
 import csv
+import copy
 import datetime
+import hashlib
 import json
 import subprocess
 import threading
@@ -18,6 +20,7 @@ from cee.engine.generator import SoundChangeGenerator
 from cee.engine.inventory import InventoryView
 from cee.engine.parser import YamlParser
 from cee.engine.phonology import FeatureMapper
+from cee.engine.protolang import ProtolangGenerator
 from cee.engine.schemas import SCHEMA_REGISTRY
 from cee.engine.semantics import SemanticEvaluator
 from cee.metrics.generator_validation import compare_to_global_distribution, profile_rules
@@ -27,12 +30,15 @@ from cee.metrics.global_baseline import (
     train_from_manifest,
 )
 from cee.metrics.correspondence import build_gled_correspondence_profile
+from cee.metrics.correspondence import profile_simulated_word_pairs
+from cee.metrics.macro_calibration import calibrate_macro_grid
 from cee.metrics.retention import LexicalRetention
 from cee.metrics.validation import ValidationMetric
 from cee.pipeline import (
     SimulationConfig,
     build_branch_views,
     load_lexicon_from_csv,
+    load_lexicon_from_records,
     run_simulation,
 )
 from cee.semantics.graph import SemanticGraph
@@ -170,6 +176,90 @@ def measure_global_correspondences(
         f"{profile.families} rodin.\n"
         f"Rodinně vyvážený profil: "
         + ", ".join(f"{key}={value:.1%}" for key, value in profile.family_distribution.items())
+    )
+
+
+@calibration_app.command("macro")
+def calibrate_global_macro(
+    target: Path = typer.Option(..., exists=True, help="GLED profil z 'calibrate correspondences'."),
+    preset: Path = typer.Option(..., exists=True, help="Preset určený ke kalibraci."),
+    out: Path = typer.Option(..., help="Cílový JSON report grid-search."),
+    lexicon_size: int = typer.Option(400, min=50, max=2000, help="Počet syntetických protolexémů."),
+    years: int = typer.Option(1500, min=100, help="Časová hloubka dvou sesterských větví."),
+    seed: int = typer.Option(42, help="Seed syntetického benchmarku."),
+):
+    """Kalibruje makro-divergenci simulovaných sester proti GLED.
+
+    Jde o reprodukovatelný syntetický benchmark, nikoli o důkaz, že jedna
+    konkrétní simulovaná rodina reprezentuje všechny reálné rodiny.
+    """
+    target_data = json.loads(target.read_text(encoding="utf-8"))
+    target_profile = target_data["family_distribution"]
+    preset_data = YamlParser.parse_preset(str(preset))
+    mapper = FeatureMapper()
+    concepts = [{"id": f"benchmark-{index}"} for index in range(lexicon_size)]
+    records = ProtolangGenerator(seed=seed).generate_lexicon(
+        "p t k b d ɡ f s m n l r j w",
+        "a e i o u",
+        "CVC",
+        concepts,
+    )
+
+    def measure(candidate):
+        from cee.engine.topology import EvolutionGraph, VerticalEdge
+
+        graph = EvolutionGraph(
+            node_configs={
+                "proto": {},
+                "left": {"map": {"macro": dict(candidate)}},
+                "right": {"map": {"macro": dict(candidate)}},
+            },
+            vertical_edges=[VerticalEdge("proto", "left"), VerticalEdge("proto", "right")],
+        )
+        states = run_simulation(
+            load_lexicon_from_records(copy.deepcopy(records), mapper),
+            graph,
+            mapper,
+            SimulationConfig(
+                preset=preset_data,
+                seed=seed,
+                years=years,
+                root_id="proto",
+                enable_semantics=False,
+            ),
+        )
+        left = {word.concept_id: word for word in states["left"].lexicon.words if word.active}
+        right = {word.concept_id: word for word in states["right"].lexicon.words if word.active}
+        return profile_simulated_word_pairs(
+            [(left[key], right[key]) for key in sorted(set(left) & set(right))], mapper
+        )
+
+    # Osm kandidátů drží interaktivní běh pod rozumnou dobou; report je
+    # auditovatelný a širší grid lze přidat až po nalezení vhodné oblasti.
+    candidates = [
+        {"change_rate": rate, "coda_erosion": erosion, "conservatism": conservatism}
+        for rate in (0.75, 1.5)
+        for erosion in (0.5, 2.0)
+        for conservatism in (0.0, 0.2)
+    ]
+    results = calibrate_macro_grid(candidates, target_profile, measure)
+    payload = {
+        "target": str(target),
+        "target_sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+        "lexicon_size": lexicon_size,
+        "years": years,
+        "seed": seed,
+        "results": [
+            {"parameters": result.parameters, "profile": result.profile, "distance": result.distance}
+            for result in results
+        ],
+    }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    best = results[0]
+    typer.echo(
+        f"Nejbližší kandidát: {best.parameters}; Hellinger={best.distance:.3f}.\n"
+        f"Profil: " + ", ".join(f"{key}={value:.1%}" for key, value in best.profile.items())
     )
 
 def load_csv_lexicon(proto_csv: str, mapper: FeatureMapper) -> Lexicon:

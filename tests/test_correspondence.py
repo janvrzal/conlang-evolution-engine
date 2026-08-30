@@ -1,7 +1,11 @@
 from typer.testing import CliRunner
 
 from cee.cli.main import app
-from cee.metrics.correspondence import build_gled_correspondence_profile
+from cee.metrics.correspondence import (
+    build_gled_correspondence_profile,
+    correspondence_hellinger,
+    profile_simulated_word_pairs,
+)
 
 
 def test_gled_profile_is_family_balanced_and_does_not_infer_direction(tmp_path):
@@ -42,3 +46,13 @@ def test_cli_writes_correspondence_profile(tmp_path):
 
     assert result.exit_code == 0, result.output
     assert output.exists()
+
+
+def test_simulated_pairs_are_aligned_and_compared_without_direction(mapper):
+    word_a = mapper.parse_word("one", "pa")
+    word_b = mapper.parse_word("one", "pi")
+
+    profile = profile_simulated_word_pairs([(word_a, word_b)], mapper)
+
+    assert profile == {"identity": 0.5, "substitution": 0.5}
+    assert correspondence_hellinger(profile, profile) == 0.0

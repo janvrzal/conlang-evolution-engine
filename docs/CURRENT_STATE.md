@@ -30,6 +30,9 @@ výhradně to, co je v repozitáři implementované a kryté testy.
 - Infrastruktura globální baseline už rodinně vyvažuje anotovaná pozorování a
   předává vyhlazené váhy presetům. Zatím ale není připojen dostatečně široký
   otevřený směrovaný korpus, takže nelze tvrdit globální vědeckou kalibraci.
+- GLED lze použít jako CC BY globální profil nesměrované kognátní divergence
+  (identita, substituce, mezery) a jako cíl makro-kalibrace. Není a nesmí být
+  zdrojem směrovaných vah jednotlivých zvukových schémat.
 - PHOIBLE je sanity filtr inventáře, nikoli úplný generativní model
   typologické pravděpodobnosti.
 - Sociální, lexikální a morfologická historie je agregovaný model, ne

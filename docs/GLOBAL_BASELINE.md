@@ -52,6 +52,25 @@ vyvážený podle rodin; nekrmí jím přímo volbu směrovaného schématu.
 cee calibrate correspondences --gled-tsv /data/gled.tsv --out /data/gled-correspondences.json
 ```
 
+## Kalibrace makro-divergence
+
+Příkaz níže vytvoří deterministický dvouvětvový benchmark nad syntetickým
+protolexikonem, zarovná odpovídající potomky a vybere kombinaci rychlosti,
+eroze kod a konzervativnosti nejbližší globálnímu GLED profilu. Neučí směr
+jednotlivých pravidel.
+
+```bash
+cee calibrate macro \
+  --target /data/gled-correspondences.json \
+  --preset src/cee/data/presets/fantasy_preset.yaml \
+  --out /data/gled-macro-report.json
+```
+
+Hellingerova vzdálenost je 0 při shodě a 1 při krajně rozdílném profilu.
+Report slouží k hledání přespříliš konzervativní či erozivní oblasti parametrů;
+nejde o univerzální výchozí preset, dokud neprojde více inventářů a časových
+hloubek.
+
 ## Odhad a metriky
 
 1. V každé rodině se nejprve normalizují počty změn na distribuci.

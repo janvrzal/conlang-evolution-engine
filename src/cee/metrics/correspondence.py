@@ -10,8 +10,12 @@ import csv
 import hashlib
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
+from math import sqrt
 from pathlib import Path
-from typing import Iterator, Mapping
+from typing import Iterable, Iterator, Mapping
+
+from cee.core.models import Word
+from cee.engine.phonology import FeatureMapper
 
 
 @dataclass(frozen=True)
@@ -44,6 +48,75 @@ def _pair_columns(left: str, right: str) -> Iterator[str]:
             yield "gap"
         else:
             yield "substitution"
+
+
+def _align_segments(left: list[str], right: list[str]) -> list[tuple[str, str]]:
+    """Globální zarovnání pro dvě simulované příbuzné formy."""
+    costs = [[0] * (len(right) + 1) for _ in range(len(left) + 1)]
+    for index in range(1, len(left) + 1):
+        costs[index][0] = index
+    for index in range(1, len(right) + 1):
+        costs[0][index] = index
+    for left_index, left_phone in enumerate(left, 1):
+        for right_index, right_phone in enumerate(right, 1):
+            substitute = costs[left_index - 1][right_index - 1] + (left_phone != right_phone)
+            costs[left_index][right_index] = min(
+                substitute,
+                costs[left_index - 1][right_index] + 1,
+                costs[left_index][right_index - 1] + 1,
+            )
+
+    pairs: list[tuple[str, str]] = []
+    left_index, right_index = len(left), len(right)
+    while left_index or right_index:
+        if (
+            left_index
+            and right_index
+            and costs[left_index][right_index]
+            == costs[left_index - 1][right_index - 1]
+            + (left[left_index - 1] != right[right_index - 1])
+        ):
+            pairs.append((left[left_index - 1], right[right_index - 1]))
+            left_index, right_index = left_index - 1, right_index - 1
+        elif (
+            left_index
+            and costs[left_index][right_index] == costs[left_index - 1][right_index] + 1
+        ):
+            pairs.append((left[left_index - 1], "-"))
+            left_index -= 1
+        else:
+            pairs.append(("-", right[right_index - 1]))
+            right_index -= 1
+    return list(reversed(pairs))
+
+
+def profile_simulated_word_pairs(
+    pairs: Iterable[tuple[Word, Word]], mapper: FeatureMapper
+) -> dict[str, float]:
+    """Profiluje potomky stejného kořene bez vydávání rozdílu za směr změny."""
+    counts: Counter[str] = Counter()
+    for left_word, right_word in pairs:
+        left = [mapper.segment_to_ipa(segment) for segment in left_word.segments]
+        right = [mapper.segment_to_ipa(segment) for segment in right_word.segments]
+        for left_phone, right_phone in _align_segments(left, right):
+            if left_phone == right_phone:
+                counts["identity"] += 1
+            elif left_phone == "-" or right_phone == "-":
+                counts["gap"] += 1
+            else:
+                counts["substitution"] += 1
+    return _normalise(counts)
+
+
+def correspondence_hellinger(
+    observed: Mapping[str, float], target: Mapping[str, float]
+) -> float:
+    """Vzdálenost simulované a referenční korespondence (0 = shoda)."""
+    keys = set(observed) | set(target)
+    squared = sum(
+        (sqrt(observed.get(key, 0.0)) - sqrt(target.get(key, 0.0))) ** 2 for key in keys
+    )
+    return sqrt(squared) / sqrt(2)
 
 
 def build_gled_correspondence_profile(path: str | Path) -> CorrespondenceProfile:
