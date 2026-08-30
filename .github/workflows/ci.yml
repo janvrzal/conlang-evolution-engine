@@ -33,5 +33,9 @@ jobs:
         run: npm ci
       - name: Type-check UI
         run: npm run check
+      - name: Lint UI
+        run: npm run lint
       - name: Run UI tests
         run: npm test
+      - name: Build UI
+        run: npm run build
