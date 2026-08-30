@@ -15,9 +15,9 @@ def _environment(rule: Rule) -> str:
             return "word_final"
         if rule.env_before and rule.env_before.get("_boundary") == "+":
             return "word_initial"
-        if rule.env_before and rule.env_after:
-            return "medial_conditioned"
-        return "one_sided_conditioned"
+        # Index Redux neodlišuje systematicky levé, pravé a oboustranné
+        # segmentové podmínky; pro srovnatelnou osu je spojujeme.
+        return "conditioned"
     return "unconditional"
 
 

@@ -10,7 +10,7 @@ def test_v2a_profil_rozeznava_typ_a_prostredi_zmeny():
     profile = profile_rules(rules, years=500)
 
     assert profile.schemas == {"coda_loss": 1, "lenition": 1}
-    assert profile.environments == {"medial_conditioned": 1, "word_final": 1}
+    assert profile.environments == {"conditioned": 1, "word_final": 1}
     assert profile.changes_per_millennium == 4.0
 
 

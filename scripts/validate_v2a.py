@@ -44,7 +44,7 @@ def main() -> None:
         rules.extend(generator.generate_rules_for_edge(state, 0, 1000, args.rules, inventory))
 
     generated = profile_rules(rules, years=args.runs * 1000)
-    attested = GeneratorProfile(priors.observations, priors.counts, {}, 0.0)
+    attested = GeneratorProfile(priors.observations, priors.counts, priors.environments, 0.0)
     comparison = compare_profiles(generated, attested)
     print(json.dumps({
         "generated": generated.__dict__,
@@ -53,9 +53,9 @@ def main() -> None:
             "schema_hellinger": comparison["schema_hellinger"],
             "comparable_schema_hellinger": comparison["comparable_schema_hellinger"],
             "attested_schema_coverage": comparison["attested_schema_coverage"],
+            "environment_hellinger": comparison["environment_hellinger"],
         },
         "limitations": [
-            "Index cache currently stores no normalized environments; environment distance is intentionally unavailable.",
             "Index records do not supply a common time denominator; rate comparison is intentionally unavailable.",
             "This is a generator calibration probe, not V2a completion or Romance-family validation.",
         ],

@@ -64,6 +64,8 @@ class DiachronicaPriors:
     counts: Dict[str, int]
     observations: int
     provenance: Dict[str, str]
+    #: Normalizovaná strukturální prostředí; nezávislá osa pro V2a.
+    environments: Dict[str, int] = field(default_factory=dict)
 
     def multiplier(self, schema_id: str) -> float:
         """Vyhlazený poměr vůči rovnoměrnému prioru (nikdy nula)."""
@@ -74,7 +76,7 @@ class DiachronicaPriors:
         return (self.counts.get(schema_id, 0) + 1.0) / (average + 1.0)
 
     def as_dict(self) -> Dict[str, object]:
-        return {"counts": self.counts, "observations": self.observations, "provenance": self.provenance}
+        return {"counts": self.counts, "observations": self.observations, "provenance": self.provenance, "environments": self.environments}
 
     @classmethod
     def from_dict(cls, data: Dict[str, object]) -> "DiachronicaPriors":
@@ -82,6 +84,7 @@ class DiachronicaPriors:
             counts={str(key): int(value) for key, value in dict(data.get("counts", {})).items()},
             observations=int(data.get("observations", 0)),
             provenance={str(key): str(value) for key, value in dict(data.get("provenance", {})).items()},
+            environments={str(key): int(value) for key, value in dict(data.get("environments", {})).items()},
         )
 
 
@@ -114,11 +117,27 @@ def _classify_change(source: str, target: str, context: str) -> str:
     return "other_attested"
 
 
+def _classify_environment(context: str) -> str:
+    """Převod zápisu Reduxu na malé, auditovatelné třídy prostředí."""
+    compact = re.sub(r"\s+", "", context)
+    if not compact:
+        return "unconditional"
+    if "_#" in compact:
+        return "word_final"
+    if "#_" in compact:
+        return "word_initial"
+    if "_" in compact:
+        return "conditioned"
+    # Poznámkové podmínky (např. /& in onset) nejsou segmentové prostředí.
+    return "structural_or_uncertain"
+
+
 def build_diachronic_priors(changes_dir: str | Path) -> DiachronicaPriors:
     """Načte textové změny z Index Diachronica Redux bez závislosti na parseru UI."""
     directory = Path(changes_dir)
     paths = list(directory.glob("*.txt"))
     counts: Dict[str, int] = {}
+    environments: Dict[str, int] = {}
     observations = 0
     for path in paths:
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -133,6 +152,8 @@ def build_diachronic_priors(changes_dir: str | Path) -> DiachronicaPriors:
             context = " / ".join(fields[2:]) if len(fields) > 2 else ""
             category = _classify_change(source, target, context)
             counts[category] = counts.get(category, 0) + 1
+            environment = _classify_environment(context)
+            environments[environment] = environments.get(environment, 0) + 1
             observations += 1
     provenance = {
         "source": "Index Diachronica Redux",
@@ -146,6 +167,7 @@ def build_diachronic_priors(changes_dir: str | Path) -> DiachronicaPriors:
         counts=counts,
         observations=observations,
         provenance=provenance,
+        environments=environments,
     )
 
 
