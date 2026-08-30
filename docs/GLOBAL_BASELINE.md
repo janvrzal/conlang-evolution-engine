@@ -41,6 +41,17 @@ vowel_shift,unconditional,indo1319,language-id,Eurasia
 `schema_id`, `environment` a `family_id` jsou povinné. `family_id` má být
 stabilní identifikátor (typicky Glottocode), nikoli volný název rodiny.
 
+## Globální korespondence
+
+GLED je vhodný otevřený doplněk (CC BY 4.0): obsahuje globálně pokryté
+kognátní sady a fonologická zarovnání, ale ne směr vývoje. CEE z něj proto
+vytváří samostatný referenční profil `identity`, `substitution` a `gap`,
+vyvážený podle rodin; nekrmí jím přímo volbu směrovaného schématu.
+
+```bash
+cee calibrate correspondences --gled-tsv /data/gled.tsv --out /data/gled-correspondences.json
+```
+
 ## Odhad a metriky
 
 1. V každé rodině se nejprve normalizují počty změn na distribuci.

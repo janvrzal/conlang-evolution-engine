@@ -1,5 +1,6 @@
 import csv
 import datetime
+import json
 import subprocess
 import threading
 import time
@@ -25,6 +26,7 @@ from cee.metrics.global_baseline import (
     save_global_baseline,
     train_from_manifest,
 )
+from cee.metrics.correspondence import build_gled_correspondence_profile
 from cee.metrics.retention import LexicalRetention
 from cee.metrics.validation import ValidationMetric
 from cee.pipeline import (
@@ -152,6 +154,23 @@ def measure_global_calibration(
     typer.echo(f"Hellinger (prostředí): {metrics['environment_hellinger']:.3f}")
     typer.echo(f"Pokrytí baseline schémat: {metrics['attested_schema_coverage']:.1%}")
     typer.echo("Rychlost změn/tisíciletí se neuvádí: vstup neobsahuje datované intervaly.")
+
+
+@calibration_app.command("correspondences")
+def measure_global_correspondences(
+    gled_tsv: Path = typer.Option(..., exists=True, help="Cesta k release TSV databáze GLED."),
+    out: Path = typer.Option(..., help="Cílový JSON profil korespondencí."),
+):
+    """Sestaví globální profil nesměrovaných korespondencí z GLED."""
+    profile = build_gled_correspondence_profile(gled_tsv)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(profile.as_dict(), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    typer.echo(
+        f"Hotovo: {profile.forms} forem, {profile.cognate_sets} kognátních sad, "
+        f"{profile.families} rodin.\n"
+        f"Rodinně vyvážený profil: "
+        + ", ".join(f"{key}={value:.1%}" for key, value in profile.family_distribution.items())
+    )
 
 def load_csv_lexicon(proto_csv: str, mapper: FeatureMapper) -> Lexicon:
     """Zpětně kompatibilní alias, kanonická implementace je v cee.pipeline."""
