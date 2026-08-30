@@ -27,6 +27,20 @@ def test_ulozi_a_nacte():
     assert nacteny.data["timeSteps"] == [0, 500]
 
 
+def test_v1_projekt_se_pri_nacteni_migruje_na_verzovane_schema(izolovana_slozka):
+    (izolovana_slozka / "legacy.json").write_text(
+        '{"id":"legacy","name":"Legacy","schema_version":1,'
+        '"data":{"timeSteps":[1000,0,0],"snapshots":{"0":{"nodes":[],"edges":[]}}}}',
+        encoding="utf-8",
+    )
+
+    project = projects.load("legacy")
+    assert project.schema_version == 2
+    assert project.data["timeSteps"] == [0, 1000]
+    assert set(project.data["snapshots"]) == {"0"}
+    assert project.data["generatedProtoLexicon"] == []
+
+
 def test_prezije_opakovane_ulozeni():
     projects.save(projects.Project(id="demo", data={"v": 1}))
     projects.save(projects.Project(id="demo", data={"v": 2}))

@@ -49,6 +49,9 @@ class SimulationConfig:
 
     preset: Optional[Dict[str, Any]] = None
     semantics_path: Optional[str] = None
+    #: Benchmarky a specializované běhy mohou sémantickou vrstvu výslovně
+    #: vypnout; běžná simulace ji nadále používá.
+    enable_semantics: bool = True
     seed: int = DEFAULT_SEED
     shift_prob: float = DEFAULT_SHIFT_PROB
     forget_prob: float = DEFAULT_FORGET_PROB
@@ -201,6 +204,8 @@ def build_semantic_evaluator(config: SimulationConfig) -> Optional[SemanticEvalu
     Sestaví sémantický evaluátor, nebo vrátí None. Chybějící graf běh nezastaví,
     ale nesmí zmizet potichu.
     """
+    if not config.enable_semantics:
+        return None
     path = resolve_semantics_path(config.semantics_path)
     if not path:
         return None

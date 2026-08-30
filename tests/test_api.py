@@ -180,6 +180,63 @@ def test_health_hlasi_revizi_rozhrani():
     assert zdravi["version"]
 
 
+def test_skutecna_simulace_pres_api_ulozi_casovy_rez_a_export(monkeypatch, tmp_path):
+    """Integrační kontrakt: UI payload → engine → úložiště → export.
+
+    Na rozdíl od testů normalizace topologie se zde `run_simulation` nemockuje.
+    Malý slovník drží test rychlý, ale projde stejnou cestou jako tlačítko
+    „Spustit vývoj“ v mapovém editoru.
+    """
+    from cee.api import runs
+
+    store = FileGenealogyStore(tmp_path / "real-run")
+    monkeypatch.setattr("cee.api.server.get_genealogy_store", lambda: store)
+    monkeypatch.setattr("cee.api.runs.get_genealogy_store", lambda: store)
+    req = DynamicSimulateRequest(
+        topology_data={
+            "snapshots": [
+                {
+                    "year": 0,
+                    "nodes": [{"id": "proto", "data": {"isProto": True, "year": 0}}],
+                    "edges": [],
+                },
+                {
+                    "year": 100,
+                    "nodes": [
+                        {"id": "proto", "data": {"isProto": True, "year": 0}},
+                        {"id": "child", "data": {"year": 100}},
+                    ],
+                    "edges": [{"source": "proto", "target": "child", "type": "straight", "data": {}}],
+                },
+            ]
+        },
+        proto_lexicon=PROTO,
+        semantics="",
+        years=100,
+        run_id="integration",
+        empirical_phonology=False,
+    )
+
+    result = run_dynamic_simulation(req)
+    assert result == {
+        "status": "success",
+        "message": "Simulace byla uložena.",
+        "run_id": "integration",
+        "storage": "file",
+    }
+
+    at_start = runs.get_language("integration", "proto", year=0)
+    at_end = runs.get_language("integration", "child", year=100)
+    exported = runs.export_run("integration")
+    assert len(at_start["words"]) == len(PROTO)
+    assert len(at_end["words"]) == len(PROTO)
+    assert exported["schema_version"] == 2
+    assert exported["events"]
+    trace = runs.get_word_trace("integration", at_end["words"][0]["id"])
+    assert trace["status"] == "success"
+    assert trace["trace"]
+
+
 def test_revize_pokryva_soucasne_endpointy():
     """Přidal-li někdo endpoint, musí zvýšit i revizi."""
     from cee.api.ports import API_REVISION

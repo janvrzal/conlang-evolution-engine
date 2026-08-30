@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from cee.project_schema import CURRENT_PROJECT_SCHEMA, normalize_data
+
 # ID projektu se stává jménem souboru, takže musí projít sítem — jinak by
 # `../../` v URL ukázalo kamkoli po disku.
 #
@@ -29,7 +31,7 @@ SAFE_ID = re.compile(r"^[\w-]{1,64}$", re.UNICODE)
 
 MAX_ID_LENGTH = 64
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = CURRENT_PROJECT_SCHEMA
 
 
 class ProjectError(Exception):
@@ -113,13 +115,19 @@ class Project:
 
     @classmethod
     def from_dict(cls, payload: Dict[str, Any]) -> "Project":
+        try:
+            schema_version, data = normalize_data(
+                int(payload.get("schema_version", 1)), payload.get("data", {})
+            )
+        except (TypeError, ValueError) as exc:
+            raise ProjectError(f"Projekt má neplatná data: {exc}") from exc
         return cls(
             id=payload["id"],
             name=payload.get("name", "Nový projekt"),
             created_at=payload.get("created_at", _now()),
             updated_at=payload.get("updated_at", _now()),
-            schema_version=payload.get("schema_version", SCHEMA_VERSION),
-            data=payload.get("data", {}),
+            schema_version=schema_version,
+            data=data,
         )
 
 
@@ -131,6 +139,10 @@ def save(project: Project) -> Project:
     aplikace spadla uprostřed, na disku zůstane předchozí verze, ne půlka nové.
     """
     project.id = validate_id(project.id)
+    try:
+        project.schema_version, project.data = normalize_data(project.schema_version, project.data)
+    except (TypeError, ValueError) as exc:
+        raise ProjectError(f"Projekt {project.id!r} má neplatná data: {exc}") from exc
     path = _path_for(project.id)
     project.updated_at = _now()
     payload = json.dumps(project.as_dict(), ensure_ascii=False, indent=2)

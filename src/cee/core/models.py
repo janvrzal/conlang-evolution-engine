@@ -112,7 +112,6 @@ class State:
     lexicon: Lexicon
     year: int = 0
     parent_id: Optional[str] = None
-    hash: Optional[str] = None
     map: Dict[str, Any] = field(default_factory=dict)
     
     # Morfologické / Typologické parametry

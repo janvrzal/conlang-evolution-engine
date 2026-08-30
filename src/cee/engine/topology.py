@@ -1,4 +1,3 @@
-import hashlib
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 
@@ -63,17 +62,3 @@ class EvolutionGraph:
             if e.parent_id == parent_id and e.child_id == child_id:
                 return e.rules
         return []
-
-def compute_state_hash(parent_id: Optional[str], rules: List[Rule], seed: int = 42) -> str:
-    """
-    Git-like verzování stavu na základě jeho historie.
-    """
-    m = hashlib.sha256()
-    if parent_id:
-        m.update(parent_id.encode('utf-8'))
-    for rule in rules:
-        m.update(rule.name.encode('utf-8'))
-        if rule.year:
-            m.update(str(rule.year).encode('utf-8'))
-    m.update(str(seed).encode('utf-8'))
-    return m.hexdigest()[:12]
