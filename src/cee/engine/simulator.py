@@ -6,10 +6,19 @@ import inspect
 import math
 import random
 import warnings
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from cee.core.models import Inventory, Lexicon, State
+from cee.engine.events import (
+    ContactEvent,
+    ForkEvent,
+    LexicalEvent,
+    MorphologyEvent,
+    PhonologyEvent,
+    PhonologySlotEvent,
+    SemanticEvent,
+    SocialEvent,
+)
 from cee.engine.generator import MacroParams, SoundChangeGenerator
 
 from cee.engine.graph_builder import GraphBuilder
@@ -36,67 +45,6 @@ _PRIO_CONTACT = 6
 # makro-parametry uzlu. Řádově odpovídá tempu doloženému v historických
 # gramatikách; přesné ladění je práce pro validaci V2a.
 YEARS_PER_RULE_SLOT = 25
-
-
-@dataclass
-class ForkEvent:
-    year: int
-    parent_id: str
-    child_id: str
-
-
-@dataclass
-class PhonologyEvent:
-    year: int
-    branch_id: str
-    rule: Rule
-
-
-@dataclass
-class PhonologySlotEvent:
-    """Okamžik, kdy se pravidlo teprve vybere z tehdejšího stavu jazyka."""
-
-    year: int
-    branch_id: str
-
-
-@dataclass
-class ContactEvent:
-    year: int
-    source_id: str
-    target_id: str
-    volume: int
-    domain: str = "neighborhood"
-    prestige: float = 1.0
-    calque_rate: float = 0.0
-    adapt: bool = False
-
-
-@dataclass
-class SemanticEvent:
-    """Jedna pravidelná diachronní sémantická vrstva pro větev."""
-
-    year: int
-    branch_id: str
-
-
-@dataclass
-class MorphologyEvent:
-    year: int
-    branch_id: str
-
-
-@dataclass
-class LexicalEvent:
-    year: int
-    branch_id: str
-
-
-@dataclass
-class SocialEvent:
-    year: int
-    branch_id: str
-    changes: Dict[str, float]
 
 
 class EvolutionSimulator:
