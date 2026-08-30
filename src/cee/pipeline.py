@@ -142,7 +142,15 @@ def load_lexicon_from_csv(path: str, mapper: FeatureMapper) -> Lexicon:
                     f"Řádek {row.get('id')!r} v {path} nemá IPA, přeskakuji.", stacklevel=2
                 )
                 continue
-            lexicon.words.append(mapper.parse_word(concept_id=row["id"], ipa_string=ipa))
+            word = mapper.parse_word(concept_id=row["id"], ipa_string=ipa)
+            for csv_column, feature_key in (
+                ("part_of_speech", "lexical.pos"),
+                ("semantic_domains", "lexical.domains"),
+                ("register", "lexical.register"),
+            ):
+                if row.get(csv_column, "").strip():
+                    word.grammatical_features[feature_key] = row[csv_column].strip()
+            lexicon.words.append(word)
     return lexicon
 
 
@@ -157,7 +165,10 @@ def load_lexicon_from_records(records: Iterable[Dict[str, str]], mapper: Feature
                 is_grammatical=bool(record.get("is_grammatical", False)),
             )
         )
-        lexicon.words[-1].polysemy = set(record.get("polysemy", []))
+        word = lexicon.words[-1]
+        word.polysemy = set(record.get("polysemy", []))
+        word.frequency = float(record.get("frequency", word.frequency))
+        word.grammatical_features = dict(record.get("grammatical_features", {}))
     return lexicon
 
 

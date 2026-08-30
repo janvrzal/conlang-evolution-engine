@@ -23,9 +23,15 @@ class LexicalEvaluator:
     zůstávají plnohodnotnými účastníky pozdějších zvukových změn.
     """
 
-    def __init__(self, replacement_rate: float = 0.015, loss_rate: float = 0.01):
+    def __init__(
+        self,
+        replacement_rate: float = 0.015,
+        loss_rate: float = 0.01,
+        homophony_resolution_rate: float = 1.0,
+    ):
         self.replacement_rate = max(0.0, replacement_rate)
         self.loss_rate = max(0.0, loss_rate)
+        self.homophony_resolution_rate = min(1.0, max(0.0, homophony_resolution_rate))
 
     def evaluate(
         self,
@@ -108,6 +114,16 @@ class LexicalEvaluator:
                 for loser in forms:
                     if loser is winner or not loser.segments:
                         continue
+                    # Plná hodnota zachovává předchozí explicitní chování
+                    # ``resolve_homophones: true``. Menší hodnota je
+                    # frekvenčně i kontextově vážená pravděpodobnost, že se
+                    # mluvčí vůbec rozhodnou kolizi aktivně rozlišovat.
+                    pressure = self._collision_pressure(winner, loser)
+                    if (
+                        self.homophony_resolution_rate < 1.0
+                        and rng.random() >= self.homophony_resolution_rate * pressure
+                    ):
+                        continue
                     resolved = self._disambiguate(loser, markers, occupied, render)
                     if resolved is None:
                         # Když ani jeden foném inventáře tvar nerozliší,
@@ -154,6 +170,40 @@ class LexicalEvaluator:
                 key = tuple(sorted(segment.features.items()))
                 markers.setdefault(key, segment)
         return [markers[key] for key in sorted(markers)]
+
+    @staticmethod
+    def _collision_pressure(winner: Word, loser: Word) -> float:
+        """Odhad komunikačního tlaku na rozlišení jedné homofonie.
+
+        Nejde o tvrzení, že bez ručně dodaného korpusu známe skutečnou
+        funkční zátěž. Je to transparentní proxy: častá slova ve stejném
+        slovním druhu, doméně a registru soutěží více než položky oddělené
+        gramatikou či situací. Metadata jsou volitelně v ``grammatical_features``
+        jako ``lexical.pos``, ``lexical.domains`` (CSV) a ``lexical.register``.
+        Při jejich absenci zůstává neutrální tlak 1.0, aby staré projekty
+        nezískaly skrytou klasifikaci z názvu konceptu.
+        """
+        def value(word: Word, key: str) -> str:
+            return word.grammatical_features.get(key, "").strip().lower()
+
+        pressure = 1.0
+        winner_pos, loser_pos = value(winner, "lexical.pos"), value(loser, "lexical.pos")
+        if winner_pos and loser_pos and winner_pos != loser_pos:
+            pressure *= 0.35
+
+        winner_domains = {item.strip() for item in value(winner, "lexical.domains").split(",") if item.strip()}
+        loser_domains = {item.strip() for item in value(loser, "lexical.domains").split(",") if item.strip()}
+        if winner_domains and loser_domains:
+            pressure *= 1.0 if winner_domains & loser_domains else 0.4
+
+        winner_register, loser_register = value(winner, "lexical.register"), value(loser, "lexical.register")
+        if winner_register and loser_register and winner_register != loser_register:
+            pressure *= 0.5
+
+        # Dvě okrajová slova bývají méně naléhavá než kolize frekventního
+        # jádra. Spodní mez zabraňuje tomu, aby položka vypadla z modelu úplně.
+        frequency = max(0.15, (max(0.0, winner.frequency) * max(0.0, loser.frequency)) ** 0.5)
+        return min(1.0, pressure * frequency)
 
     @staticmethod
     def _disambiguate(

@@ -316,6 +316,9 @@ class EvolutionSimulator:
                     evaluator = LexicalEvaluator(
                         replacement_rate=float(lexical.get("replacement_rate", 0.015)),
                         loss_rate=float(lexical.get("loss_rate", 0.01)),
+                        homophony_resolution_rate=float(
+                            lexical.get("homophony_resolution_rate", 1.0)
+                        ),
                     )
                     evaluator.evaluate(
                         branch_state,

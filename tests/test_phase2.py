@@ -1,6 +1,7 @@
 """Regrese pro společné diachronní jádro etapy 2."""
 
 from cee.core.models import Inventory, Lexicon, State
+from cee.engine.lexicon import LexicalEvaluator
 from cee.engine.prosody import syllabify
 from cee.engine.rules import Rule
 from cee.engine.simulator import EvolutionSimulator
@@ -212,6 +213,22 @@ def test_rozliseni_homofonie_prida_jeden_inventarni_marker_ne_duplikat_korene(ma
     assert resolved.origin_rule == "lexical disambiguation prefix"
     active_forms = [mapper.render_word(word) for word in state.lexicon.words if word.active]
     assert len(active_forms) == len(set(active_forms))
+
+
+def test_kontextova_kolize_ma_nizsi_tlak_nez_stejna_domena(mapper):
+    high_a = mapper.parse_word("a", "pata")
+    high_b = mapper.parse_word("b", "pata")
+    low_a = mapper.parse_word("c", "pata")
+    low_b = mapper.parse_word("d", "pata")
+    for word in (high_a, high_b, low_a, low_b):
+        word.frequency = 0.9
+    high_a.grammatical_features = {"lexical.pos": "noun", "lexical.domains": "body"}
+    high_b.grammatical_features = {"lexical.pos": "noun", "lexical.domains": "body"}
+    low_a.grammatical_features = {"lexical.pos": "noun", "lexical.domains": "body"}
+    low_b.grammatical_features = {"lexical.pos": "verb", "lexical.domains": "motion"}
+
+    assert LexicalEvaluator._collision_pressure(high_a, high_b) == 0.9
+    assert LexicalEvaluator._collision_pressure(low_a, low_b) < 0.2
 
 
 def test_socialni_historie_meni_stav_v_konkretnim_roce(mapper):
