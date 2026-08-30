@@ -41,6 +41,24 @@ vowel_shift,unconditional,indo1319,language-id,Eurasia
 `schema_id`, `environment` a `family_id` jsou povinné. `family_id` má být
 stabilní identifikátor (typicky Glottocode), nikoli volný název rodiny.
 
+## Fronta reflexů z historického CLDF
+
+Historický CLDF, který propojuje protoformy a reflexy přes `Origin_ID`, lze
+proměnit na deterministickou frontu pro kurátora. Příkaz **neodvozuje** z
+dvojice forem zvukový zákon: k tomu chybí zarovnání, pravidelnost napříč
+lexémy a odborné posouzení. Výslovné výpůjčky přeskočí.
+
+```bash
+cee calibrate candidates \
+  --forms /data/family/forms.csv \
+  --family-id drav1251 \
+  --proto-language proto-dravidian \
+  --out /data/family/reflex-candidates.csv
+```
+
+Kurátor z fronty vytváří až výsledné `changes.csv` a uchová identifikátory
+obou forem i přesnou citaci ve zdrojovém pracovním souboru.
+
 ## Globální korespondence
 
 GLED je vhodný otevřený doplněk (CC BY 4.0): obsahuje globálně pokryté

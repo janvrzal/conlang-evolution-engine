@@ -31,6 +31,7 @@ from cee.metrics.global_baseline import (
 )
 from cee.metrics.correspondence import build_gled_correspondence_profile
 from cee.metrics.correspondence import profile_simulated_word_pairs
+from cee.metrics.cldf_reflexes import extract_reflex_candidates, write_reflex_candidates
 from cee.metrics.macro_calibration import calibrate_macro_grid
 from cee.metrics.macro_calibration import deletion_diagnostics
 from cee.metrics.retention import LexicalRetention
@@ -113,6 +114,19 @@ def train_global_calibration(
             )[:5]
         )
     )
+
+
+@calibration_app.command("candidates")
+def extract_cldf_candidates(
+    forms: Path = typer.Option(..., exists=True, help="Historický CLDF forms.csv."),
+    family_id: str = typer.Option(..., help="Stabilní identifikátor rodiny (typicky Glottocode)."),
+    proto_language: list[str] = typer.Option(..., help="ID protojazyka v Language_ID; lze opakovat."),
+    out: Path = typer.Option(..., help="CSV fronta protoforma → reflex pro kurátora."),
+):
+    """Vytáhne kandidáty reflexů; neurčuje z nich automaticky zvukové zákony."""
+    candidates = extract_reflex_candidates(forms, family_id, proto_language)
+    write_reflex_candidates(candidates, out)
+    typer.echo(f"Hotovo: {len(candidates)} kandidátů pro lidskou anotaci v {out}.")
 
 
 @calibration_app.command("measure")
