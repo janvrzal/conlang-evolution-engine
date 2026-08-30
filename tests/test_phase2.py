@@ -6,6 +6,7 @@ from cee.engine.prosody import syllabify
 from cee.engine.rules import Rule
 from cee.engine.simulator import EvolutionSimulator
 from cee.engine.topology import ContactEdge, EvolutionGraph, VerticalEdge
+from cee.pipeline import load_lexicon_from_csv, load_lexicon_from_records
 
 
 def _root(mapper, words):
@@ -229,6 +230,41 @@ def test_kontextova_kolize_ma_nizsi_tlak_nez_stejna_domena(mapper):
 
     assert LexicalEvaluator._collision_pressure(high_a, high_b) == 0.9
     assert LexicalEvaluator._collision_pressure(low_a, low_b) < 0.2
+
+
+def test_importer_doplni_pruhledne_zakladni_lexikalni_tridy(tmp_path, mapper):
+    proto = tmp_path / "proto.csv"
+    proto.write_text("id,ipa_proto\nsubject_pronoun,mi\nwater,aka\n", encoding="utf-8")
+
+    words = {word.concept_id: word for word in load_lexicon_from_csv(str(proto), mapper).words}
+    assert words["subject_pronoun"].grammatical_features["lexical.class"] == "function"
+    assert words["subject_pronoun"].frequency == 0.75
+    assert words["water"].grammatical_features["lexical.class"] == "content"
+    assert words["water"].frequency == 0.5
+
+
+def test_explicitni_trida_a_frekvence_maji_prednost_pred_heuristikou(mapper):
+    lexicon = load_lexicon_from_records(
+        [
+            {"id": "water", "ipa": "aka", "lexical_class": "function", "frequency": 0.9},
+            {"id": "subject_pronoun", "ipa": "mi", "lexical_class": "content"},
+        ],
+        mapper,
+    )
+    words = {word.concept_id: word for word in lexicon.words}
+    assert words["water"].grammatical_features["lexical.class"] == "function"
+    assert words["water"].frequency == 0.9
+    assert words["subject_pronoun"].grammatical_features["lexical.class"] == "content"
+
+
+def test_funkcni_a_obsahove_slovo_maji_nizsi_tlak_na_rozliseni(mapper):
+    function = mapper.parse_word("subject_pronoun", "pata")
+    content = mapper.parse_word("water", "pata")
+    for word, lexical_class in ((function, "function"), (content, "content")):
+        word.frequency = 0.9
+        word.grammatical_features["lexical.class"] = lexical_class
+
+    assert LexicalEvaluator._collision_pressure(function, content) == 0.315
 
 
 def test_socialni_historie_meni_stav_v_konkretnim_roce(mapper):

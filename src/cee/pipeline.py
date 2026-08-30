@@ -27,6 +27,7 @@ from cee.engine.empirical import (
 )
 from cee.engine.graph_builder import GraphBuilder
 from cee.engine.inventory import InventoryView
+from cee.engine.lexicon import annotate_basic_lexical_class
 from cee.engine.phonology import FeatureMapper
 from cee.engine.semantics import SemanticEvaluator
 from cee.engine.simulator import EvolutionSimulator
@@ -147,9 +148,13 @@ def load_lexicon_from_csv(path: str, mapper: FeatureMapper) -> Lexicon:
                 ("part_of_speech", "lexical.pos"),
                 ("semantic_domains", "lexical.domains"),
                 ("register", "lexical.register"),
+                ("lexical_class", "lexical.class"),
             ):
                 if row.get(csv_column, "").strip():
                     word.grammatical_features[feature_key] = row[csv_column].strip()
+            annotate_basic_lexical_class(word)
+            if row.get("frequency", "").strip():
+                word.frequency = float(row["frequency"])
             lexicon.words.append(word)
     return lexicon
 
@@ -167,8 +172,12 @@ def load_lexicon_from_records(records: Iterable[Dict[str, str]], mapper: Feature
         )
         word = lexicon.words[-1]
         word.polysemy = set(record.get("polysemy", []))
-        word.frequency = float(record.get("frequency", word.frequency))
         word.grammatical_features = dict(record.get("grammatical_features", {}))
+        if record.get("lexical_class"):
+            word.grammatical_features["lexical.class"] = str(record["lexical_class"])
+        annotate_basic_lexical_class(word)
+        if record.get("frequency") is not None:
+            word.frequency = float(record["frequency"])
     return lexicon
 
 

@@ -9,6 +9,91 @@ from typing import Callable, Iterable, Optional, Sequence
 
 from cee.core.models import State, Word
 
+_FUNCTION_CONCEPTS = frozenset(
+    {
+        "and",
+        "or",
+        "not",
+        "if",
+        "of",
+        "to",
+        "from",
+        "in",
+        "on",
+        "at",
+        "with",
+        "for",
+        "by",
+        "this",
+        "that",
+        "i",
+        "you",
+        "we",
+        "he",
+        "she",
+        "it",
+        "who",
+        "what",
+        "where",
+        "when",
+        "how",
+    }
+)
+_FUNCTION_MARKERS = (
+    "pronoun",
+    "suffix",
+    "prefix",
+    "particle",
+    "classifier",
+    "determiner",
+    "article",
+    "conjunction",
+    "preposition",
+    "postposition",
+    "demonstrative",
+    "interrogative",
+    "negative",
+    "possessive",
+    "reciprocal",
+    "causative",
+    "locative",
+    "genitive",
+)
+
+
+def infer_lexical_class(concept_id: str, *, is_grammatical: bool = False) -> str:
+    """Vrátí konzervativní základní třídu bez závislosti na ontologii.
+
+    CEE zatím nepotřebuje automaticky hádat jemný sémantický význam každého
+    konceptu. Pro frekvenční model a řešení homofonie stačí robustní minimum:
+    rozlišit gramatická/funkční slova od obsahových. Rozhodnutí je záměrně
+    malé, vysvětlitelné a v importéru vždy přepsatelné explicitní hodnotou.
+    """
+    if is_grammatical:
+        return "function"
+    normalized = concept_id.strip().lower()
+    compact = "".join(char for char in normalized if char.isalnum())
+    if normalized in _FUNCTION_CONCEPTS or any(marker in compact for marker in _FUNCTION_MARKERS):
+        return "function"
+    return "content"
+
+
+def annotate_basic_lexical_class(word: Word) -> None:
+    """Doplní výchozí třídu a frekvenční prior, pokud je uživatel neurčil."""
+    explicit = word.grammatical_features.get("lexical.class", "").strip().lower()
+    lexical_class = explicit if explicit in {"function", "content"} else infer_lexical_class(
+        word.concept_id, is_grammatical=word.is_grammatical
+    )
+    word.grammatical_features["lexical.class"] = lexical_class
+    word.grammatical_features.setdefault(
+        "lexical.classification", "explicit" if explicit else "heuristic-basic-v1"
+    )
+    # Funkční prvky mají bez dodaného korpusu vyšší, ale nikoli absolutní
+    # frekvenční prior. Explicitní frekvence se nepřepisuje: importer ji
+    # nastaví až po této funkci, pokud ji zdroj skutečně obsahuje.
+    if lexical_class == "function" and word.frequency == 0.5:
+        word.frequency = 0.75
+
 
 def _is_basic(word: Word) -> bool:
     """První, staré a časté položky považujeme za konzervativnější jádro."""
@@ -177,16 +262,20 @@ class LexicalEvaluator:
 
         Nejde o tvrzení, že bez ručně dodaného korpusu známe skutečnou
         funkční zátěž. Je to transparentní proxy: častá slova ve stejném
-        slovním druhu, doméně a registru soutěží více než položky oddělené
-        gramatikou či situací. Metadata jsou volitelně v ``grammatical_features``
-        jako ``lexical.pos``, ``lexical.domains`` (CSV) a ``lexical.register``.
-        Při jejich absenci zůstává neutrální tlak 1.0, aby staré projekty
-        nezískaly skrytou klasifikaci z názvu konceptu.
+        základním lexikálním typu, slovním druhu, doméně a registru soutěží
+        více než položky oddělené gramatikou či situací. ``lexical.class``
+        (``function``/``content``) je automaticky doplněný už při importu;
+        jemnější metadata ``lexical.pos``, ``lexical.domains`` (CSV) a
+        ``lexical.register`` jsou volitelná.
         """
         def value(word: Word, key: str) -> str:
             return word.grammatical_features.get(key, "").strip().lower()
 
         pressure = 1.0
+        winner_class, loser_class = value(winner, "lexical.class"), value(loser, "lexical.class")
+        if winner_class and loser_class and winner_class != loser_class:
+            pressure *= 0.35
+
         winner_pos, loser_pos = value(winner, "lexical.pos"), value(loser, "lexical.pos")
         if winner_pos and loser_pos and winner_pos != loser_pos:
             pressure *= 0.35
