@@ -7,6 +7,13 @@ Technický whitepaper: [`docs/CEE_master.md`](docs/CEE_master.md).
 Konvence a pravidla pro práci v repu: [`AGENT.md`](AGENT.md).
 Ověřený implementovaný rozsah a hranice: [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md).
 
+CEE není replikátor historické Země. Jeho výzkumná osa je reprodukovatelná
+simulace důsledků explicitních zásahů — například jak vyšší synkopa, kontakt
+nebo analogie promění rodinu jazyků v čase. Empirická data slouží jako volitelné
+priory a diagnostiky, nikoli jako jediná definice správného výstupu; podrobnosti
+jsou ve whitepaperu v [hlavní tezi](docs/CEE_master.md#21-hlavní-teze) a
+[experimentálním protokolu](docs/CEE_master.md#511-experimentální-protokol-a-funkčnost).
+
 ## Instalace
 
 ```bash
