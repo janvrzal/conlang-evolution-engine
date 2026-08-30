@@ -198,3 +198,55 @@ def test_semantika_bezi_v_casove_fronte_pred_pozdejsim_odstepeni(mapper):
     ).simulate(_root(mapper, [("tree", "tara")]))
 
     assert "WOOD" in states["daughter"].lexicon.words[0].polysemy
+
+
+def test_semanticka_nahoda_vetve_je_nezavisla_na_cizim_uzlu(mapper):
+    class RandomSemantics:
+        def evaluate(self, lexicon, random_gen=None):
+            lexicon.words[0].polysemy.add(f"roll-{random_gen.random():.12f}")
+            return lexicon
+
+    def run(extra_branch: bool):
+        graph = EvolutionGraph()
+        graph.node_configs = {"proto": {}, "a": {"year": 0}}
+        graph.vertical_edges.append(
+            __import__("cee.engine.topology", fromlist=["VerticalEdge"]).VerticalEdge(
+                "proto", "a", []
+            )
+        )
+        if extra_branch:
+            graph.node_configs["b"] = {"year": 0}
+            graph.vertical_edges.append(
+                __import__("cee.engine.topology", fromlist=["VerticalEdge"]).VerticalEdge(
+                    "proto", "b", []
+                )
+            )
+        states = EvolutionSimulator(
+            graph, mapper, seed=77, semantic_evaluator=RandomSemantics(), end_year=300
+        ).simulate(_root(mapper, [("tree", "tara")]))
+        return states["a"].lexicon.words[0].polysemy
+
+    assert run(False) == run(True)
+
+
+def test_genealogicky_export_je_deterministicky_vcetne_id(mapper):
+    from cee.engine.graph_builder import GraphBuilder
+    from cee.engine.topology import VerticalEdge
+
+    graph = EvolutionGraph(
+        node_configs={"proto": {}, "child": {"year": 0}},
+        vertical_edges=[VerticalEdge("proto", "child", [
+            __import__("cee.engine.rules", fromlist=["Rule"]).Rule(
+                "p > b", {"cons": "+", "voi": "-"}, {"voi": "+"}, year=20
+            )
+        ])],
+    )
+
+    def run():
+        builder = GraphBuilder()
+        EvolutionSimulator(graph, mapper, seed=9, graph_builder=builder).simulate(
+            _root(mapper, [("one", "apa"), ("two", "pata")])
+        )
+        return builder.nodes, builder.edges, builder.events
+
+    assert run() == run()

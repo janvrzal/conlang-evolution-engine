@@ -44,7 +44,7 @@ def test_seed_nezamenuje_slozene_casti():
 # --- vývoj jednotlivých jazyků ----------------------------------------------
 
 
-def _vyvoj(mapper, preset, node_id, biome="hory", **kwargs):
+def _vyvoj(mapper, preset, node_id, biome="hory", years=1000, **kwargs):
     from cee.engine.simulator import EvolutionSimulator
     from cee.engine.topology import EvolutionGraph
     from cee.pipeline import SimulationConfig
@@ -53,7 +53,7 @@ def _vyvoj(mapper, preset, node_id, biome="hory", **kwargs):
     graph = EvolutionGraph()
     graph.node_configs[node_id] = {"map": {"biome": biome}, **kwargs}
     
-    config = SimulationConfig(years=1000, preset=preset, root_id="proto")
+    config = SimulationConfig(years=years, preset=preset, root_id="proto")
     
     # We must start from a root proto node connected to our node to mimic how simulator forks
     graph.node_configs["proto"] = {}
@@ -71,7 +71,11 @@ def _vyvoj(mapper, preset, node_id, biome="hory", **kwargs):
     state = states[node_id]
     
     def count_mutations():
-        return sum(1 for edge in builder.edges if edge.get("type") == "mutated")
+        return sum(
+            1
+            for event in builder.events
+            if event.get("kind") == "sound_change" and event.get("hit_count", 0) > 0
+        )
         
     return {w.concept_id: mapper.render_word(w) for w in state.lexicon.words}, count_mutations
 
@@ -111,8 +115,12 @@ def test_konzervativni_jazyk_se_meni_min(mapper, preset):
 
 
 def test_rychlost_zmeny_pridava_pravidla(mapper, preset):
-    _f, pomaly_mutations = _vyvoj(mapper, preset, "u", macro={"change_rate": 0.5})
-    _f, rychly_mutations = _vyvoj(mapper, preset, "u", macro={"change_rate": 2.0})
+    _f, pomaly_mutations = _vyvoj(
+        mapper, preset, "u", years=200, macro={"change_rate": 0.5}
+    )
+    _f, rychly_mutations = _vyvoj(
+        mapper, preset, "u", years=200, macro={"change_rate": 2.0}
+    )
 
     assert rychly_mutations() > pomaly_mutations()
 

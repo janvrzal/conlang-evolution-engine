@@ -138,3 +138,108 @@ def test_socialni_historie_meni_stav_v_konkretnim_roce(mapper):
     state = EvolutionSimulator(graph, mapper, end_year=100).simulate(_root(mapper, [("one", "pata")]))["child"]
     assert state.social["prestige"] == 0.9
     assert state.social["standardization"] == 0.8
+
+
+def test_analogie_se_nepreleva_mezi_paradigmaty(mapper):
+    from cee.engine.morphology import MorphologyEvaluator
+
+    state = _root(
+        mapper,
+        [("noun.model", "pata"), ("noun.rare", "kumi"), ("verb.rare", "seno")],
+    )
+    noun_model, noun_rare, verb_rare = state.lexicon.words
+    noun_model.paradigm = noun_rare.paradigm = "noun"
+    verb_rare.paradigm = "verb"
+    noun_model.frequency = 0.9
+    noun_rare.frequency = verb_rare.frequency = 0.1
+    for word in state.lexicon.words:
+        word.morpheme_boundaries = {2}
+    verb_before = mapper.render_word(verb_rare)
+
+    changed = MorphologyEvaluator().level_analogies(state)
+
+    assert changed == 1
+    assert mapper.render_word(verb_rare) == verb_before
+
+
+def test_prozodicky_export_zobrazi_prizvuk_i_delku(mapper):
+    word = mapper.parse_word("word", "pata")
+    word.stress_index = 3
+    word.long_nuclei = {3}
+
+    assert mapper.render_word(word) == "pataː"
+    assert mapper.render_word_prosodic(word) == "patˈaː"
+
+
+def test_genealogie_uklada_finalni_tvar_po_prosodicke_oprave(mapper):
+    from cee.engine.graph_builder import GraphBuilder
+
+    graph = EvolutionGraph(
+        node_configs={"proto": {}, "child": {"year": 0}},
+        vertical_edges=[
+            VerticalEdge(
+                "proto",
+                "child",
+                [
+                    Rule(
+                        "synkopa",
+                        {"syl": "+"},
+                        {"delete": "+"},
+                        env_before={"cons": "+"},
+                        env_after={"cons": "+"},
+                        year=50,
+                    )
+                ],
+            )
+        ],
+    )
+    builder = GraphBuilder()
+    state = EvolutionSimulator(graph, mapper, graph_builder=builder).simulate(
+        _root(mapper, [("word", "kapata")])
+    )["child"]
+    final_word = state.lexicon.get_word("word")
+    stored = next(node for node in builder.nodes if node["id"] == final_word.id)
+
+    assert stored["ipa"] == mapper.render_word(final_word)
+    assert any(event["kind"] == "sound_change" for event in builder.events)
+
+
+def test_budouci_pravidlo_se_vybira_az_po_vypujcce(mapper):
+    """Nový foném z kontaktu musí ovlivnit ještě nevylosovanou fonologii."""
+    preset = {
+        "schemas": {"final_devoicing": {"base_weight": 1.0}},
+        "biomes": {},
+        "macro": {"change_rate": 1.0, "conservatism": 0.0, "timing_jitter": 0.0},
+    }
+    graph = EvolutionGraph(
+        node_configs={"proto": {}, "source": {"year": 0}, "target": {"year": 0}},
+        vertical_edges=[
+            VerticalEdge(
+                "proto",
+                "source",
+                [
+                    Rule(
+                        "p > b",
+                        {"cons": "+", "lab": "+", "cont": "-", "voi": "-"},
+                        {"voi": "+"},
+                        year=1,
+                    )
+                ],
+            ),
+            VerticalEdge("proto", "target", []),
+        ],
+        contact_edges=[
+            __import__("cee.engine.topology", fromlist=["ContactEdge"]).ContactEdge(
+                30, "source", "target", volume=1
+            )
+        ],
+    )
+
+    state = EvolutionSimulator(graph, mapper, preset=preset, end_year=100).simulate(
+        _root(mapper, [("word", "ap")])
+    )["target"]
+    loan = next(word for word in state.lexicon.words if word.source_id == "source")
+
+    # V roce 30 vstoupí jako /ab/; finální odznělení se vybere až v
+    # pozdějším slotu z inventáře, který už /b/ skutečně obsahuje.
+    assert mapper.render_word(loan) == "ap"

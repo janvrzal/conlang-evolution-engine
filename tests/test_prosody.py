@@ -19,6 +19,7 @@ def test_synkopa_nezasahne_prizvucne_jadro(mapper):
 
 def test_stary_lexikon_dostane_deterministicky_prizvuk(mapper):
     word = mapper.parse_word("test", "pata")
-    assert word.stress_index is None
+    assert word.stress_index == 1
+    word.stress_index = None  # simulace starého serializovaného lexikonu
     word.ensure_stress()
     assert word.stress_index == 1

@@ -90,22 +90,43 @@ class MorphologyEvaluator:
         méně frekventních členů stejné orientace. Tím opravuje část
         nepravidelností vytvořených předchozí fonologií, aniž by mazal kořen.
         """
-        candidates = [w for w in state.lexicon.words if w.active and w.morpheme_boundaries]
-        if len(candidates) < 2:
-            return 0
-        model = max(candidates, key=lambda w: w.frequency)
-        boundary = min(model.morpheme_boundaries)
-        model_affix = model.segments[:boundary] if state.affixation_strategy == "prefix" else model.segments[boundary:]
         changed = 0
-        for word in candidates:
-            if word is model or word.frequency >= threshold or not word.morpheme_boundaries:
+        paradigms: Dict[str, list[Word]] = {}
+        for word in state.lexicon.words:
+            if word.active and word.paradigm and word.morpheme_boundaries:
+                paradigms.setdefault(word.paradigm, []).append(word)
+
+        for members in paradigms.values():
+            if len(members) < 2:
                 continue
-            split = min(word.morpheme_boundaries)
-            root = word.segments[split:] if state.affixation_strategy == "prefix" else word.segments[:split]
-            word.segments = copy.deepcopy(model_affix) + root if state.affixation_strategy == "prefix" else root + copy.deepcopy(model_affix)
-            word.morpheme_boundaries = {len(model_affix) if state.affixation_strategy == "prefix" else len(root)}
-            word.ensure_stress()
-            changed += 1
+            model = max(members, key=lambda word: word.frequency)
+            boundary = min(model.morpheme_boundaries)
+            model_affix = (
+                model.segments[:boundary]
+                if state.affixation_strategy == "prefix"
+                else model.segments[boundary:]
+            )
+            for word in members:
+                if word is model or word.frequency >= threshold:
+                    continue
+                split = min(word.morpheme_boundaries)
+                root = (
+                    word.segments[split:]
+                    if state.affixation_strategy == "prefix"
+                    else word.segments[:split]
+                )
+                word.segments = (
+                    copy.deepcopy(model_affix) + root
+                    if state.affixation_strategy == "prefix"
+                    else root + copy.deepcopy(model_affix)
+                )
+                word.morpheme_boundaries = {
+                    len(model_affix)
+                    if state.affixation_strategy == "prefix"
+                    else len(root)
+                }
+                word.ensure_stress()
+                changed += 1
         return changed
 
     def inflect(

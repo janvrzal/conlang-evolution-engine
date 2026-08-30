@@ -2,6 +2,8 @@ import uuid
 
 import copy
 import heapq
+import inspect
+import math
 import random
 import warnings
 from dataclasses import dataclass
@@ -48,6 +50,14 @@ class PhonologyEvent:
     year: int
     branch_id: str
     rule: Rule
+
+
+@dataclass
+class PhonologySlotEvent:
+    """Okamžik, kdy se pravidlo teprve vybere z tehdejšího stavu jazyka."""
+
+    year: int
+    branch_id: str
 
 
 @dataclass
@@ -107,7 +117,6 @@ class EvolutionSimulator:
         self.mapper = mapper
         self.graph_builder = graph_builder
         self.preset = preset
-        self.random = random.Random(seed)
         self.semantic_evaluator = semantic_evaluator
         self.seed = seed
         self.evolve_root = evolve_root
@@ -120,7 +129,7 @@ class EvolutionSimulator:
         # Generátor se staví pro každý uzel zvlášť, aby měl vlastní seed
         # i vlastní makro-parametry (viz _generator_for).
         self._generators: Dict[str, SoundChangeGenerator] = {}
-        self._lexical_evaluator = LexicalEvaluator()
+        self._generated_history: Dict[str, List[Rule]] = {}
 
     def _generator_for(self, node_id: str) -> Optional[SoundChangeGenerator]:
         """
@@ -171,14 +180,22 @@ class EvolutionSimulator:
         Prochází strom do libovolné hloubky: každý uzel se odštěpí od svého
         rodiče v roce prvního pravidla na příslušné hraně.
         """
+        root_config = self.graph.node_configs.get(root_state.node_id, {})
+        root_state.map = root_config.get("map", root_config)
+        root_state.__post_init__()
+        for index, word in enumerate(root_state.lexicon.words):
+            word.id = self._deterministic_word_id(
+                "root", root_state.node_id, str(root_state.year), str(index), word.concept_id
+            )
+            word.parent_word_id = None
         parent_of = self._collect_tree(root_state.node_id)
         
         if self.graph_builder:
             for w in root_state.lexicon.words:
-                self.graph_builder.add_word(
-                    w.id, w.concept_id, self.mapper.render_word(w),
-                    root_state.year, root_state.node_id, list(w.polysemy)
-                )
+                self._record_word(w, root_state.year, root_state.node_id)
+            self.graph_builder.add_event(
+                "simulation_start", root_state.year, root_state.node_id
+            )
 
         if not parent_of and not self.evolve_root:
             return {root_state.node_id: root_state}
@@ -201,8 +218,7 @@ class EvolutionSimulator:
             push(fork_years[child_id], _PRIO_FORK, ForkEvent(fork_years[child_id], parent_id, child_id))
 
         if self.evolve_root:
-            for rule in self._generated_rules_for_root(root_state):
-                push(rule.year, _PRIO_PHONOLOGY, PhonologyEvent(rule.year, root_state.node_id, rule))
+            self._schedule_phonology_slots(root_state.node_id, root_state.year, push)
             self._schedule_semantics(root_state.node_id, root_state.year, push)
             self._schedule_morphology(root_state.node_id, root_state.year, push)
             self._schedule_lexicon(root_state.node_id, root_state.year, push)
@@ -249,51 +265,33 @@ class EvolutionSimulator:
 
                 child_state = self._fork(parent_state, event.child_id, year)
                 states[event.child_id] = child_state
-                # Pravidla se generují až tady — čerstvě odštěpený uzel už zná
-                # svůj inventář i biom, takže generátor má z čeho vycházet.
-                for rule in self._generated_rules_for(event.child_id, child_state, year):
-                    push(rule.year, _PRIO_PHONOLOGY, PhonologyEvent(rule.year, event.child_id, rule))
+                self._generated_history[event.child_id] = list(
+                    self._generated_history.get(event.parent_id, [])
+                )
+                # Pravidlo se vybere až ve svém budoucím slotu. Pozdější
+                # výpůjčky, morfologie i sociální změny tak mohou ovlivnit
+                # inventář a tempo, ze kterých generátor skutečně vychází.
+                if not self.graph.get_rules_for_edge(event.parent_id, event.child_id):
+                    self._schedule_phonology_slots(event.child_id, year, push)
                 self._schedule_semantics(event.child_id, year, push)
                 self._schedule_morphology(event.child_id, year, push)
                 self._schedule_lexicon(event.child_id, year, push)
                 self._schedule_social(event.child_id, year, push)
 
+            elif isinstance(event, PhonologySlotEvent):
+                branch_state = states.get(event.branch_id)
+                if branch_state is None:
+                    continue
+                self._generate_and_apply_slot(branch_state, event.year)
+
             elif isinstance(event, PhonologyEvent):
                 branch_state = states.get(event.branch_id)
                 if branch_state is None:
                     continue
-
-                for word in branch_state.lexicon.words:
-                    before_ipa = self.mapper.render_word(word)
-                    old_id = word.id
-                    
-                    if event.rule.apply_to_word(word):
-                        after_ipa = self.mapper.render_word(word)
-                        if after_ipa != before_ipa:
-                            word.parent_word_id = old_id
-                            word.id = str(uuid.uuid4())
-                            word.origin_type = "mutated"
-                            word.origin_rule = event.rule.name
-                            word.origin_year = event.year
-                            
-                            if self.graph_builder:
-                                self.graph_builder.add_word(
-                                    word.id, word.concept_id, after_ipa,
-                                    event.year, event.branch_id, list(word.polysemy)
-                                )
-                                self.graph_builder.add_origin_edge(
-                                    word.id, old_id, "mutated", event.rule.name
-                                )
-
-                branch_state.inventory = Inventory(
-                    segments=self._inventory_of(branch_state.lexicon)
-                )
-
-                # Eroze může vytvořit trojitý shluk; jazyk ho opraví ještě v
-                # téže epoše, aby další událost nepracovala s nevyhovujícím
-                # mezistavem.
-                for word in branch_state.lexicon.words:
-                    repair_clusters(word)
+                # Ručně zadaná historie je stejně důležitá jako generovaná:
+                # potomci ji zdědí a generátor pak nenabídne okamžitý obrat.
+                self._generated_history.setdefault(event.branch_id, []).append(event.rule)
+                self._apply_phonology(branch_state, event.rule, event.year)
 
             elif isinstance(event, SemanticEvent):
                 branch_state = states.get(event.branch_id)
@@ -302,49 +300,67 @@ class EvolutionSimulator:
                     # zadaného roku, potom se její významy změní. Dítě, které
                     # vznikne později, tak dědí právě tehdejší lexikon.
                     branch_state.year = event.year
-                    self.semantic_evaluator.evaluate(branch_state.lexicon)
+                    before = self._word_versions(branch_state)
+                    semantic_rng = random.Random(
+                        derive_seed(self.seed, "semantics", event.branch_id, str(event.year))
+                    )
+                    parameters = inspect.signature(self.semantic_evaluator.evaluate).parameters
+                    if "random_gen" in parameters:
+                        self.semantic_evaluator.evaluate(
+                            branch_state.lexicon, random_gen=semantic_rng
+                        )
+                    else:  # zpětná kompatibilita malých uživatelských evaluátorů
+                        self.semantic_evaluator.evaluate(branch_state.lexicon)
+                    hit_count = self._record_changed_words(
+                        branch_state,
+                        before,
+                        event.year,
+                        "semantic_shift",
+                        "semantic change",
+                    )
+                    if self.graph_builder:
+                        self.graph_builder.add_event(
+                            "semantics", event.year, event.branch_id, hit_count=hit_count
+                        )
 
             elif isinstance(event, MorphologyEvent):
                 branch_state = states.get(event.branch_id)
                 if branch_state is not None:
                     branch_state.year = event.year
-                    before_ids = {word.id for word in branch_state.lexicon.words}
+                    before = self._word_versions(branch_state)
                     self._apply_morphology(branch_state)
+                    hit_count = self._record_changed_words(
+                        branch_state, before, event.year, "morphological_change", "morphology"
+                    )
                     if self.graph_builder:
-                        for word in branch_state.lexicon.words:
-                            if word.id in before_ids:
-                                continue
-                            self.graph_builder.add_word(
-                                word.id, word.concept_id, self.mapper.render_word(word),
-                                event.year, event.branch_id, list(word.polysemy),
-                            )
-                            if word.parent_word_id:
-                                self.graph_builder.add_origin_edge(word.id, word.parent_word_id, word.origin_type, word.origin_rule)
+                        self.graph_builder.add_event(
+                            "morphology", event.year, event.branch_id, hit_count=hit_count
+                        )
 
             elif isinstance(event, LexicalEvent):
                 branch_state = states.get(event.branch_id)
                 if branch_state is not None:
                     branch_state.year = event.year
+                    before = self._word_versions(branch_state)
                     rng = random.Random(derive_seed(self.seed, "lexicon", event.branch_id, str(event.year)))
                     lexical = self.graph.node_configs.get(event.branch_id, {}).get("lexical", {})
                     evaluator = LexicalEvaluator(
                         replacement_rate=float(lexical.get("replacement_rate", 0.015)),
                         loss_rate=float(lexical.get("loss_rate", 0.01)),
                     )
-                    replacements = evaluator.evaluate(
+                    evaluator.evaluate(
                         branch_state, event.year, rng,
                         taboo_concepts=lexical.get("taboo_concepts", []),
                         resolve_homophones=bool(lexical.get("resolve_homophones", False)),
                         render=self.mapper.render_word,
                     )
+                    hit_count = self._record_changed_words(
+                        branch_state, before, event.year, "lexical_change", "lexical change"
+                    )
                     if self.graph_builder:
-                        for word in replacements:
-                            self.graph_builder.add_word(
-                                word.id, word.concept_id, self.mapper.render_word(word),
-                                event.year, event.branch_id, list(word.polysemy),
-                            )
-                            if word.parent_word_id:
-                                self.graph_builder.add_origin_edge(word.id, word.parent_word_id, "lexical_replacement")
+                        self.graph_builder.add_event(
+                            "lexicon", event.year, event.branch_id, hit_count=hit_count
+                        )
 
             elif isinstance(event, SocialEvent):
                 branch_state = states.get(event.branch_id)
@@ -353,6 +369,13 @@ class EvolutionSimulator:
                     for key, value in event.changes.items():
                         if key in {"prestige", "mobility", "literacy", "standardization", "population"}:
                             branch_state.social[key] = max(0.0, min(1.0, float(value)))
+                    if self.graph_builder:
+                        self.graph_builder.add_event(
+                            "social_change",
+                            event.year,
+                            event.branch_id,
+                            changes=dict(branch_state.social),
+                        )
 
             elif isinstance(event, ContactEvent):
                 source_state = states.get(event.source_id)
@@ -440,23 +463,27 @@ class EvolutionSimulator:
         node_cfg = self.graph.node_configs.get(child_id, {})
         new_lexicon = Lexicon(words=[])
         
-        for parent_word in parent_state.lexicon.words:
+        for index, parent_word in enumerate(parent_state.lexicon.words):
             new_word = copy.deepcopy(parent_word)
             new_word.parent_word_id = parent_word.id
-            new_word.id = str(uuid.uuid4())
+            new_word.id = self._deterministic_word_id(
+                "fork", parent_word.id, child_id, str(year), str(index)
+            )
             new_word.origin_type = "inherited"
             new_word.origin_rule = None
             new_word.origin_year = year
             new_lexicon.words.append(new_word)
             
             if self.graph_builder:
-                self.graph_builder.add_word(
-                    new_word.id, new_word.concept_id, self.mapper.render_word(new_word),
-                    year, child_id, list(new_word.polysemy)
-                )
+                self._record_word(new_word, year, child_id)
                 self.graph_builder.add_origin_edge(
                     new_word.id, parent_word.id, "inherited"
                 )
+
+        if self.graph_builder:
+            self.graph_builder.add_event(
+                "split", year, child_id, parent_id=parent_state.node_id
+            )
 
         return State(
             node_id=child_id,
@@ -484,46 +511,117 @@ class EvolutionSimulator:
         horizon = max([c for c in candidates if c is not None], default=start_year + 200)
         return max(horizon, start_year + 1)
 
-    def _generated_rules_for(self, child_id: str, state: State, start_year: int) -> List[Rule]:
+    def _schedule_phonology_slots(self, node_id: str, start_year: int, push) -> None:
+        """Rozloží pouze příležitosti ke změně, ne hotová pravidla.
+
+        Kandidát se vytvoří až při zpracování slotu z tehdejšího živého
+        inventáře. Pevná hustota slotů dovolí, aby sociální historie
+        průběžně měnila pravděpodobnost i počet inovací.
         """
-        Dogeneruje pravidla pro hranu, která žádná nemá. Výsledek se nezapisuje
-        zpět do topologie — graf zůstává neměnný, takže opakované volání
-        `simulate()` dá stejný výsledek.
-        """
-        generator = self._generator_for(child_id)
-        if not generator:
-            return []
+        generator = self._generator_for(node_id)
+        if generator is None:
+            return
+        horizon = self._horizon_for(start_year, node_id)
+        span = max(1, horizon - start_year)
+        slot_count = max(1, math.ceil(span / YEARS_PER_RULE_SLOT))
+        for slot in range(slot_count):
+            window_start = start_year + slot * YEARS_PER_RULE_SLOT
+            window_end = min(horizon, window_start + YEARS_PER_RULE_SLOT)
+            rng = random.Random(
+                derive_seed(self.seed, "phonology-slot", node_id, str(slot), str(start_year))
+            )
+            center = (window_start + window_end) / 2
+            wobble = (window_end - window_start) * generator.macro.timing_jitter / 2
+            year = int(round(rng.uniform(center - wobble, center + wobble)))
+            year = min(horizon, max(start_year + 1, year))
+            push(year, _PRIO_PHONOLOGY, PhonologySlotEvent(year, node_id))
 
-        edge_rules = self.graph.get_rules_for_edge(state.parent_id, child_id)
-        if edge_rules:
-            return []
-
-        view = InventoryView.from_lexicon(state.lexicon, self.mapper)
-        state.inventory = view.to_inventory()
-
-        end_year = self._horizon_for(start_year, child_id)
-
-        # Počet pokusů roste s délkou období, ne s pevným číslem — jinak by
-        # tisíciletý vývoj měl stejně změn jako dvě století.
-        slots = max(1, round((end_year - start_year) / YEARS_PER_RULE_SLOT))
-
-        return generator.generate_rules_for_edge(
-            state, start_year, end_year, num_rules=slots, inventory=view
+    def _current_macro(self, state: State) -> MacroParams:
+        node_cfg = self.graph.node_configs.get(state.node_id, {})
+        standard = state.social.get("standardization", 0.0)
+        literacy = state.social.get("literacy", 0.0)
+        mobility = state.social.get("mobility", 0.5)
+        social_macro = {
+            "conservatism": min(1.0, max(0.0, 0.35 * standard + 0.15 * literacy)),
+            "change_rate": max(0.1, 0.65 + mobility),
+        }
+        return MacroParams.from_config(
+            self.preset.get("macro") if self.preset else None,
+            social_macro,
+            node_cfg.get("macro"),
+            node_cfg.get("map", {}).get("macro"),
         )
 
-    def _generated_rules_for_root(self, state: State) -> List[Rule]:
-        """Vygeneruje historii i pro kořenový protojazyk zobrazený v UI."""
+    def _generate_and_apply_slot(self, state: State, year: int) -> None:
         generator = self._generator_for(state.node_id)
-        if not generator:
-            return []
-
-        view = InventoryView.from_lexicon(state.lexicon, self.mapper)
-        state.inventory = view.to_inventory()
-        end_year = self.end_year or state.year + 200
-        slots = max(1, round((end_year - state.year) / YEARS_PER_RULE_SLOT))
-        return generator.generate_rules_for_edge(
-            state, state.year, end_year, num_rules=slots, inventory=view
+        if generator is None:
+            return
+        generator.macro = self._current_macro(state)
+        activity = generator.macro.activity
+        whole = int(activity)
+        fraction = activity - whole
+        slot_rng = random.Random(
+            derive_seed(self.seed, "phonology-activity", state.node_id, str(year))
         )
+        attempts = whole + (1 if slot_rng.random() < fraction else 0)
+        if attempts == 0:
+            return
+
+        history = self._generated_history.setdefault(state.node_id, [])
+        for _ in range(attempts):
+            inventory = InventoryView.from_lexicon(state.lexicon, self.mapper)
+            state.inventory = inventory.to_inventory()
+            active_words = [word for word in state.lexicon.words if word.active]
+
+            def accepts(rule: Rule) -> bool:
+                for word in active_words:
+                    probe = copy.deepcopy(word)
+                    before = self._word_signature(probe)
+                    if rule.apply_to_word(probe):
+                        repair_clusters(probe)
+                        if self._word_signature(probe) != before:
+                            return True
+                return False
+
+            previous = history[-1] if history else None
+            candidate = generator.generate_one(
+                state,
+                year,
+                inventory,
+                previous=previous,
+                history=history,
+                accepts=accepts,
+            )
+            if candidate is None:
+                continue
+            history.append(candidate)
+            self._apply_phonology(state, candidate, year)
+
+    def _apply_phonology(self, state: State, rule: Rule, year: int) -> None:
+        changed = 0
+        for word in state.lexicon.words:
+            if not word.active:
+                continue
+            before = self._word_signature(word)
+            old_id = word.id
+            rule.apply_to_word(word)
+            # Oprava je součást téže historické události; genealogie
+            # nikdy neuloží mezitvar, který ve výsledném lexikonu neexistuje.
+            repair_clusters(word)
+            if self._word_signature(word) == before:
+                continue
+            self._version_word(word, old_id, state.node_id, year, "mutated", rule.name)
+            changed += 1
+
+        state.inventory = Inventory(segments=self._inventory_of(state.lexicon))
+        if self.graph_builder:
+            self.graph_builder.add_event(
+                "sound_change",
+                year,
+                state.node_id,
+                rule=rule.name,
+                hit_count=changed,
+            )
 
     def _schedule_semantics(self, node_id: str, start_year: int, push) -> None:
         """Vloží sémantiku do stejné absolutní chronologie jako kontakt."""
@@ -574,6 +672,111 @@ class EvolutionSimulator:
             changes = item.get("changes", {key: value for key, value in item.items() if key != "year"})
             if isinstance(changes, dict):
                 push(year, _PRIO_SOCIAL, SocialEvent(year, node_id, changes))
+
+    def _word_signature(self, word) -> tuple:
+        """Vše, co tvoří historicky rozlišitelný stav lexému."""
+        return (
+            tuple(tuple(sorted(segment.features.items())) for segment in word.segments),
+            word.concept_id,
+            tuple(sorted(word.polysemy)),
+            word.stress_index,
+            tuple(sorted(word.long_nuclei)),
+            tuple(sorted(word.morpheme_boundaries)),
+            word.paradigm,
+            tuple(sorted(word.grammatical_features.items())),
+            word.is_grammatical,
+            word.active,
+            round(word.frequency, 8),
+        )
+
+    def _word_versions(self, state: State) -> Dict[str, tuple]:
+        return {word.id: self._word_signature(word) for word in state.lexicon.words}
+
+    def _deterministic_word_id(self, *parts: str) -> str:
+        material = "\x1f".join((str(self.seed), *parts))
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, f"cee:{material}"))
+
+    def _record_word(self, word, year: int, node_id: str) -> None:
+        if not self.graph_builder:
+            return
+        self.graph_builder.add_word(
+            word.id,
+            word.concept_id,
+            self.mapper.render_word(word),
+            year,
+            node_id,
+            sorted(word.polysemy),
+            ipa_prosodic=self.mapper.render_word_prosodic(word),
+            stress_index=word.stress_index,
+            long_nuclei=sorted(word.long_nuclei),
+            morpheme_boundaries=sorted(word.morpheme_boundaries),
+            active=word.active,
+            frequency=word.frequency,
+            paradigm=word.paradigm,
+            grammatical_features=dict(word.grammatical_features),
+            is_grammatical=word.is_grammatical,
+            origin_type=word.origin_type,
+        )
+
+    def _version_word(
+        self,
+        word,
+        old_id: str,
+        node_id: str,
+        year: int,
+        origin_type: str,
+        rule: str,
+    ) -> None:
+        word.parent_word_id = old_id
+        word.id = self._deterministic_word_id(
+            "version", old_id, node_id, str(year), origin_type, rule
+        )
+        word.origin_type = origin_type
+        word.origin_rule = rule
+        word.origin_year = year
+        self._record_word(word, year, node_id)
+        if self.graph_builder:
+            self.graph_builder.add_origin_edge(word.id, old_id, origin_type, rule)
+
+    def _record_changed_words(
+        self,
+        state: State,
+        before: Dict[str, tuple],
+        year: int,
+        origin_type: str,
+        rule: str,
+    ) -> int:
+        """Verzuje změněné objekty a zapíše nově vytvořené lexémy."""
+        new_index = 0
+        changed = 0
+        for word in state.lexicon.words:
+            if word.id not in before:
+                word.id = self._deterministic_word_id(
+                    "new",
+                    state.node_id,
+                    str(year),
+                    origin_type,
+                    word.parent_word_id or "",
+                    word.concept_id,
+                    str(new_index),
+                )
+                new_index += 1
+                changed += 1
+                self._record_word(word, year, state.node_id)
+                if self.graph_builder and word.parent_word_id:
+                    self.graph_builder.add_origin_edge(
+                        word.id,
+                        word.parent_word_id,
+                        word.origin_type or origin_type,
+                        word.origin_rule or rule,
+                    )
+                continue
+            if self._word_signature(word) != before[word.id]:
+                self._version_word(
+                    word, word.id, state.node_id, year, origin_type, rule
+                )
+                changed += 1
+        return changed
 
     def _inventory_of(self, lexicon: Lexicon) -> set:
         return set(InventoryView.from_lexicon(lexicon, self.mapper))
@@ -671,21 +874,30 @@ class EvolutionSimulator:
         target_view = InventoryView.from_lexicon(target.lexicon, self.mapper)
 
 
-        for w in words_to_borrow:
+        borrowed_count = 0
+        calque_count = 0
+        for borrow_index, w in enumerate(words_to_borrow):
             # Zabráníme zbytečným duplicitám: Pokud už cílový jazyk má pro tento koncept 
             # slovo, které zní úplně stejně, výpůjčku přeskočíme.
-            existing_words = [x for x in target.lexicon.words if x.concept_id == w.concept_id]
+            existing_words = target.lexicon.get_words(w.concept_id)
             if any(x.segments == w.segments for x in existing_words):
                 continue
 
             # Kalk přenáší významovou asociaci bez importu cizího tvaru.
             if existing_words and rng.random() < max(0.0, min(1.0, calque_rate)):
                 existing_words[0].polysemy.update(w.polysemy)
+                calque_count += 1
                 continue
                 
             new_word = copy.deepcopy(w)
             new_word.parent_word_id = w.id
-            new_word.id = str(uuid.uuid4())
+            new_word.id = self._deterministic_word_id(
+                "borrow",
+                w.id,
+                target.node_id,
+                str(year),
+                str(borrow_index),
+            )
             new_word.origin_type = "borrowed"
             new_word.origin_rule = None
             new_word.origin_year = year
@@ -695,15 +907,27 @@ class EvolutionSimulator:
                 self._adapt_loan(new_word, target_view)
 
             target.lexicon.words.append(new_word)
+            borrowed_count += 1
             
             if self.graph_builder:
-                self.graph_builder.add_word(
-                    new_word.id, new_word.concept_id, self.mapper.render_word(new_word),
-                    year, target.node_id, list(new_word.polysemy)
-                )
+                self._record_word(new_word, year, target.node_id)
                 self.graph_builder.add_origin_edge(
                     new_word.id, w.id, "borrowed"
                 )
+
+        if self.graph_builder:
+            self.graph_builder.add_event(
+                "contact",
+                year,
+                target.node_id,
+                source_id=source.node_id,
+                domain=domain,
+                requested_volume=volume,
+                borrowed_count=borrowed_count,
+                calque_count=calque_count,
+                prestige=prestige,
+                adapted=adapt,
+            )
 
     def _adapt_loan(self, word, target_view: InventoryView) -> None:
         """Nahradí cizí foném nejbližším dostupným fonémem cílového jazyka."""

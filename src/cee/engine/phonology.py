@@ -42,7 +42,12 @@ class FeatureMapper:
         mapping = {1: '+', -1: '-', 0: '0'}
         panphon_segs = self.ft.word_fts(ipa_string)
         segments = [Segment(features={k: mapping.get(v, str(v)) for k, v in seg.data.items()}) for seg in panphon_segs]
-        return Word(concept_id=concept_id, segments=segments, is_grammatical=is_grammatical)
+        word = Word(concept_id=concept_id, segments=segments, is_grammatical=is_grammatical)
+        # Výchozí prozodie je součást vstupního stavu, ne první náhodné
+        # zvukové změny. Jinak by se pouhé přiřazení přízvuku mylně
+        # zapisovalo jako zásah historického pravidla.
+        word.ensure_stress()
+        return word
 
     def segment_to_ipa(self, segment: Segment) -> str:
         """
@@ -109,5 +114,14 @@ class FeatureMapper:
         """
         return "".join(
             self.segment_to_ipa(segment) + ("ː" if index in word.long_nuclei else "")
+            for index, segment in enumerate(word.segments)
+        )
+
+    def render_word_prosodic(self, word: Word) -> str:
+        """IPA tvar s explicitní značkou uloženého hlavního přízvuku."""
+        return "".join(
+            ("ˈ" if index == word.stress_index else "")
+            + self.segment_to_ipa(segment)
+            + ("ː" if index in word.long_nuclei else "")
             for index, segment in enumerate(word.segments)
         )

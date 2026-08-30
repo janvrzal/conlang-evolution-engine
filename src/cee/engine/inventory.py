@@ -36,6 +36,7 @@ class InventoryView:
         segments = {
             mapper.segment_to_ipa(segment)
             for word in lexicon.words
+            if word.active
             for segment in word.segments
         }
         return cls(mapper, segments)

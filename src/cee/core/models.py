@@ -81,15 +81,20 @@ class Lexicon:
     words: List[Word] = field(default_factory=list)
     
     def get_word(self, concept_id: str) -> Optional[Word]:
-        """Vrátí první nalezené slovo pokrývající tento koncept (primární nebo sdílený)."""
+        """Vrátí první živé slovo pokrývající tento koncept."""
         for word in self.words:
-            if word.concept_id == concept_id or concept_id in word.polysemy:
+            if word.active and (word.concept_id == concept_id or concept_id in word.polysemy):
                 return word
         return None
         
     def get_words(self, concept_id: str) -> List[Word]:
-        """Vrátí všechna slova, která pokrývají daný koncept (synonyma)."""
-        return [w for w in self.words if w.concept_id == concept_id or concept_id in w.polysemy]
+        """Vrátí všechna živá slova pokrývající koncept (synonyma)."""
+        return [
+            word
+            for word in self.words
+            if word.active
+            and (word.concept_id == concept_id or concept_id in word.polysemy)
+        ]
 
 @dataclass
 class Inventory:

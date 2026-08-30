@@ -4,6 +4,7 @@ import pytest
 from cee.engine.inventory import InventoryView
 from cee.engine.rules import Rule
 from cee.engine.schemas import SCHEMA_REGISTRY
+from cee.core.models import Lexicon
 
 
 @pytest.fixture
@@ -67,3 +68,14 @@ def test_mazaci_pravidlo_inventar_nemeni(mapper, inv):
 def test_prevod_tam_a_zpet(mapper):
     inv = InventoryView(mapper, set("ptk"))
     assert set(InventoryView.from_inventory(inv.to_inventory(), mapper)) == {"p", "t", "k"}
+
+
+def test_mrtvy_lexem_nedrzi_fonem_v_zivem_inventari(mapper):
+    living = mapper.parse_word("living", "pata")
+    retired = mapper.parse_word("retired", "zuzu")
+    retired.active = False
+
+    inventory = InventoryView.from_lexicon(Lexicon([living, retired]), mapper)
+
+    assert "p" in inventory
+    assert "z" not in inventory

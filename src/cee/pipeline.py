@@ -69,23 +69,37 @@ class SimulationConfig:
 class WordView:
     id: str
     ipa: str
+    ipa_prosodic: str = ""
     polysemy: List[str] = field(default_factory=list)
     origin_year: int = 0
     source_id: Optional[str] = None
     frequency: float = 0.5
     active: bool = True
     origin_type: str = "inherited"
+    stress_index: Optional[int] = None
+    long_nuclei: List[int] = field(default_factory=list)
+    morpheme_boundaries: List[int] = field(default_factory=list)
+    paradigm: Optional[str] = None
+    grammatical_features: Dict[str, str] = field(default_factory=dict)
+    is_grammatical: bool = False
 
     def as_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
             "ipa": self.ipa,
+            "ipa_prosodic": self.ipa_prosodic,
             "polysemy": self.polysemy,
             "origin_year": self.origin_year,
             "source_id": self.source_id,
             "frequency": self.frequency,
             "active": self.active,
             "origin_type": self.origin_type,
+            "stress_index": self.stress_index,
+            "long_nuclei": self.long_nuclei,
+            "morpheme_boundaries": self.morpheme_boundaries,
+            "paradigm": self.paradigm,
+            "grammatical_features": self.grammatical_features,
+            "is_grammatical": self.is_grammatical,
         }
 
 
@@ -346,12 +360,19 @@ def build_branch_view(
         WordView(
             id=word.concept_id,
             ipa=mapper.render_word(word),
+            ipa_prosodic=mapper.render_word_prosodic(word),
             polysemy=sorted(word.polysemy),
             origin_year=word.origin_year,
             source_id=word.source_id,
             frequency=word.frequency,
             active=word.active,
             origin_type=word.origin_type,
+            stress_index=word.stress_index,
+            long_nuclei=sorted(word.long_nuclei),
+            morpheme_boundaries=sorted(word.morpheme_boundaries),
+            paradigm=word.paradigm,
+            grammatical_features=dict(word.grammatical_features),
+            is_grammatical=word.is_grammatical,
         )
         for word in state.lexicon.words
     ]
