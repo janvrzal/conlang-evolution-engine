@@ -1,33 +1,45 @@
 import csv
-import subprocess
-import typer
 import datetime
+import subprocess
 import threading
 import time
 import warnings
 import webbrowser
 from pathlib import Path
-from cee.engine.phonology import FeatureMapper
-from cee.engine.parser import YamlParser
+
+import typer
+
+from cee.core.models import Inventory, Lexicon, State
+from cee.engine.empirical import PhoibleInventoryModel, save_phoible_model
+from cee.engine.empirical import default_paths as default_empirical_paths
 from cee.engine.fold import DerivationFold
-from cee.core.models import Lexicon, State, Inventory
-from cee.metrics.validation import ValidationMetric
-from cee.semantics.graph import SemanticGraph
+from cee.engine.generator import SoundChangeGenerator
+from cee.engine.inventory import InventoryView
+from cee.engine.parser import YamlParser
+from cee.engine.phonology import FeatureMapper
+from cee.engine.schemas import SCHEMA_REGISTRY
 from cee.engine.semantics import SemanticEvaluator
+from cee.metrics.generator_validation import compare_to_global_distribution, profile_rules
+from cee.metrics.global_baseline import (
+    load_global_baseline,
+    save_global_baseline,
+    train_from_manifest,
+)
 from cee.metrics.retention import LexicalRetention
+from cee.metrics.validation import ValidationMetric
 from cee.pipeline import (
-    LineageConfig,
     SimulationConfig,
-    
     build_branch_views,
     load_lexicon_from_csv,
     run_simulation,
 )
-from cee.engine.empirical import PhoibleInventoryModel, default_paths as default_empirical_paths, save_phoible_model
+from cee.semantics.graph import SemanticGraph
 
 app = typer.Typer(help="Conlang Evolution Engine CLI", no_args_is_help=True)
 phonology_app = typer.Typer(help="Správa volitelných empirických fonologických dat.")
+calibration_app = typer.Typer(help="Tvorba auditovatelných kalibrací generátoru.")
 app.add_typer(phonology_app, name="phonology")
+app.add_typer(calibration_app, name="calibrate")
 
 PHOIBLE_REPOSITORY_URL = "https://github.com/phoible/dev.git"
 
@@ -66,6 +78,80 @@ def update_phonology_data(
         f"Hotovo: {len(model.inventories)} inventářů PHOIBLE.\n"
         f"PHOIBLE SHA-256: {model.provenance['sha256']}"
     )
+
+
+@calibration_app.command("global")
+def train_global_calibration(
+    manifest: Path = typer.Option(..., exists=True, help="Manifest otevřených anotovaných pozorování."),
+    out: Path = typer.Option(..., help="Cílová JSON baseline; je bezpečné ji verzovat."),
+):
+    """Natrénuje rodinně vyvážené váhy globálních schémat.
+
+    Vstupní data se neukládají do repozitáře. Výstup nese jejich SHA-256,
+    verzi, licenci a citaci, takže je vždy auditovatelný a reprodukovatelný.
+    """
+    baseline = train_from_manifest(manifest, SCHEMA_REGISTRY)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    save_global_baseline(baseline, out)
+    typer.echo(
+        f"Hotovo: {baseline.observations} pozorování z {baseline.families} rodin.\n"
+        f"Baseline: {out}\n"
+        f"Nejsilnější váhy: "
+        + ", ".join(
+            f"{schema}={weight:.2f}"
+            for schema, weight in sorted(
+                baseline.schema_multipliers.items(), key=lambda item: item[1], reverse=True
+            )[:5]
+        )
+    )
+
+
+@calibration_app.command("measure")
+def measure_global_calibration(
+    baseline: Path = typer.Option(..., exists=True, help="Baseline vytvořená příkazem 'calibrate global'."),
+    preset: Path = typer.Option(..., exists=True, help="Preset, který se má měřit."),
+    runs: int = typer.Option(50, min=1, help="Počet deterministických vzorků generátoru."),
+    years: int = typer.Option(1000, min=1, help="Délka každého vzorku."),
+    rules_per_run: int = typer.Option(12, min=1, help="Počet slotů pravidel na vzorek."),
+    seed: int = typer.Option(42, help="Počáteční seed vzorkování."),
+):
+    """Změří V2a distribuci aktuálního generátoru proti globální baseline."""
+    learned = load_global_baseline(baseline)
+    preset_data = YamlParser.parse_preset(str(preset))
+    mapper = FeatureMapper()
+    # Široký referenční inventář měří volbu schémat, ne specifičnost jedné
+    # konkrétní fonologie. Vlastní simulace dále filtruje neproveditelné změny.
+    inventory = InventoryView(mapper, set("aeiouptkbdɡfvszʃxhmnŋlrjw"))
+    generated = []
+    for index in range(runs):
+        generator = SoundChangeGenerator(
+            preset_data,
+            seed=seed + index,
+            schema_multipliers=learned.schema_multipliers,
+        )
+        generated.extend(
+            generator.generate_rules_for_edge(
+                State(
+                    node_id=f"calibration-{index}",
+                    inventory=Inventory(),
+                    lexicon=Lexicon(),
+                    map={},
+                ),
+                0,
+                years,
+                num_rules=rules_per_run,
+                inventory=inventory,
+            )
+        )
+    profile = profile_rules(generated, years=years * runs)
+    metrics = compare_to_global_distribution(
+        profile, learned.schema_distribution, learned.environment_distribution
+    )
+    typer.echo(f"Vygenerováno pravidel: {profile.changes}")
+    typer.echo(f"Hellinger (typ změny): {metrics['schema_hellinger']:.3f}")
+    typer.echo(f"Hellinger (prostředí): {metrics['environment_hellinger']:.3f}")
+    typer.echo(f"Pokrytí baseline schémat: {metrics['attested_schema_coverage']:.1%}")
+    typer.echo("Rychlost změn/tisíciletí se neuvádí: vstup neobsahuje datované intervaly.")
 
 def load_csv_lexicon(proto_csv: str, mapper: FeatureMapper) -> Lexicon:
     """Zpětně kompatibilní alias, kanonická implementace je v cee.pipeline."""
@@ -160,6 +246,10 @@ def simulate(
         "--empirical-phonology",
         help="Použít lokální PHOIBLE kontrolu inventáře (nejdřív cee phonology update-data).",
     ),
+    global_baseline: Path = typer.Option(
+        None,
+        help="Volitelná auditovatelná baseline z 'cee calibrate global'.",
+    ),
 ):
     """
     Spustí globální lockstep simulaci celé rodiny na základě topologie a výpůjček.
@@ -187,6 +277,7 @@ def simulate(
         semantics_path=str(semantics_yaml) if semantics_yaml else None,
         seed=seed,
         use_empirical_phonology=empirical_phonology,
+        global_baseline_path=str(global_baseline) if global_baseline else None,
     )
 
     # Diagnostický seznam se bere z protojazyka PŘED simulací a je pro všechny
@@ -271,7 +362,7 @@ def ui(
     _write_api_url(api_url)
 
     typer.echo(f"🌐 CEE API běží na {api_url}")
-    typer.echo(f"   Frontend spusť zvlášť: cd ui && npm run dev")
+    typer.echo("   Frontend spusť zvlášť: cd ui && npm run dev")
 
     if open_browser_flag:
         def open_browser():

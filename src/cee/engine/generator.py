@@ -15,7 +15,7 @@ co jí předchozí připravila.
 import random
 import warnings
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from cee.core.models import State
 from cee.engine.inventory import InventoryView
@@ -157,11 +157,15 @@ class SoundChangeGenerator:
 
     def __init__(self, preset: Dict[str, Any], seed: int = 42,
                  macro: Optional[MacroParams] = None,
-                 inventory_validator=None):
+                 inventory_validator=None,
+                 schema_multipliers: Optional[Mapping[str, float]] = None):
         self.preset = preset
         self.random = random.Random(seed)
         self.macro = macro or MacroParams.from_config(preset.get("macro"))
         self.inventory_validator = inventory_validator
+        # Kalibrace je jen násobek nad explicitním presetem. Uživatel má
+        # nadále poslední slovo: schéma s nulovou vahou zůstane vypnuté.
+        self.schema_multipliers = dict(schema_multipliers or {})
 
     def _weighted_schemas(self, biome: Optional[str]):
         """
@@ -177,6 +181,7 @@ class SoundChangeGenerator:
                 continue
 
             weight = schema_cfg.get("base_weight", 0) * modifiers.get(schema_id, 1.0)
+            weight *= self.schema_multipliers.get(schema_id, 1.0)
             if schema_id in CODA_SCHEMAS:
                 weight *= self.macro.coda_erosion
 

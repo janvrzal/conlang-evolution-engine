@@ -118,8 +118,10 @@ milníku.
 
 - Nepodmíněná i podmíněná zvuková schémata, prosodie a derivační kontrakty.
 - CLICS4/DatSemShift s lokální cache a fallbackem, izoglosa v UI.
-- Index Diachronica Redux jako volitelný prior a PHOIBLE jako volitelný
-  inventářový filtr (`cee phonology update-data`).
+- PHOIBLE jako volitelný inventářový filtr (`cee phonology update-data`).
+  Globální váhy změn vznikají pouze z odděleného, licenčně auditovaného
+  manifestu; synchronní inventáře ani neorientované kognátní formy nejsou
+  zdrojem směrovaných změn.
 
 ### 5.2 Co nesmí agent prezentovat jako hotové
 

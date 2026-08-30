@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from math import sqrt
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from cee.engine.rules import Rule
 
@@ -21,8 +21,8 @@ def _environment(rule: Rule) -> str:
             return "word_final"
         if rule.env_before and rule.env_before.get("_boundary") == "+":
             return "word_initial"
-        # Index Redux neodlišuje systematicky levé, pravé a oboustranné
-        # segmentové podmínky; pro srovnatelnou osu je spojujeme.
+        # Globální profil sjednocuje levé, pravé a oboustranné segmentové
+        # podmínky do jedné srovnatelné osy.
         return "conditioned"
     return "unconditional"
 
@@ -72,4 +72,31 @@ def compare_profiles(generated: GeneratorProfile, attested: GeneratorProfile) ->
         "attested_schema_coverage": attested_coverage,
         "environment_hellinger": _distribution_distance(generated.environments, attested.environments),
         "rate_delta_per_millennium": rate_delta,
+    }
+
+
+def compare_to_global_distribution(
+    generated: GeneratorProfile,
+    schemas: Mapping[str, float],
+    environments: Mapping[str, float],
+) -> dict[str, float]:
+    """V2a pro baseline bez falešně známé historické rychlosti.
+
+    Globální zdroje mohou popisovat typ a prostředí změny, ale bez délky
+    jednotlivých historických intervalů z nich nelze odvodit změny/tisíciletí.
+    Tato metrika proto poctivě vrací jen porovnatelné distribuční osy.
+    """
+    scale = 1_000_000
+    reference = GeneratorProfile(
+        changes=scale,
+        schemas={key: round(value * scale) for key, value in schemas.items()},
+        environments={key: round(value * scale) for key, value in environments.items()},
+        changes_per_millennium=0.0,
+    )
+    compared = compare_profiles(generated, reference)
+    return {
+        "schema_hellinger": compared["schema_hellinger"],
+        "comparable_schema_hellinger": compared["comparable_schema_hellinger"],
+        "attested_schema_coverage": compared["attested_schema_coverage"],
+        "environment_hellinger": compared["environment_hellinger"],
     }

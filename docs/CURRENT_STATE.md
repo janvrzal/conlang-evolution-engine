@@ -15,9 +15,10 @@ výhradně to, co je v repozitáři implementované a kryté testy.
   derivační kontrakty v `tests/test_diachronic_schema_contracts.py`.
 - CLICS4 + DatSemShift se načítají z lokální cache s fallbackem na malý
   zabalený graf. CLICS slouží kolexifikaci a DatSemShift směrovaným posunům.
-- Index Diachronica Redux a PHOIBLE se aktualizují explicitně příkazem
-  `cee phonology update-data`; simulace je potom používá offline. Cache ukládá
-  commit a SHA-256 zdrojů.
+- PHOIBLE se aktualizuje explicitně příkazem `cee phonology update-data` a
+  slouží jako offline sanity filtr inventáře. Globální kalibrační baseline se
+  trénuje jen z licenčně auditovaného manifestu anotovaných změn; výstup nese
+  SHA-256, verze, licence a citace vstupů.
 - Výsledky se ukládají ve výchozím nastavení do souborového genealogického
   úložiště. Neo4j je volitelný adaptér. JSON export obsahuje slova, původové
   hrany, události a prosodická data.
@@ -26,8 +27,9 @@ výhradně to, co je v repozitáři implementované a kryté testy.
 
 ## Částečně implementováno
 
-- Priory z Index Diachronica jsou zatím konzervativní mapování doložených
-  změn na registry schémat; nejsou plnou statistikou rodin, prostředí a epoch.
+- Infrastruktura globální baseline už rodinně vyvažuje anotovaná pozorování a
+  předává vyhlazené váhy presetům. Zatím ale není připojen dostatečně široký
+  otevřený směrovaný korpus, takže nelze tvrdit globální vědeckou kalibraci.
 - PHOIBLE je sanity filtr inventáře, nikoli úplný generativní model
   typologické pravděpodobnosti.
 - Sociální, lexikální a morfologická historie je agregovaný model, ne

@@ -1,10 +1,9 @@
-import uuid
-
 import copy
 import heapq
 import inspect
 import math
 import random
+import uuid
 import warnings
 from typing import Any, Dict, List, Optional
 
@@ -20,14 +19,13 @@ from cee.engine.events import (
     SocialEvent,
 )
 from cee.engine.generator import MacroParams, SoundChangeGenerator
-
 from cee.engine.graph_builder import GraphBuilder
 from cee.engine.inventory import InventoryView
-from cee.engine.rng import derive_seed
-from cee.engine.morphology import MorphologyEvaluator
 from cee.engine.lexicon import LexicalEvaluator
+from cee.engine.morphology import MorphologyEvaluator
 from cee.engine.phonology import FeatureMapper
 from cee.engine.prosody import repair_clusters
+from cee.engine.rng import derive_seed
 from cee.engine.rules import Rule
 from cee.engine.topology import EvolutionGraph
 
@@ -60,7 +58,7 @@ class EvolutionSimulator:
                  seed: int = 42, semantic_evaluator=None,
                  graph_builder: Optional[GraphBuilder] = None,
                  end_year: Optional[int] = None, evolve_root: bool = False,
-                 inventory_validator=None):
+                 inventory_validator=None, schema_multipliers=None):
         self.graph = graph_topo
         self.mapper = mapper
         self.graph_builder = graph_builder
@@ -73,6 +71,7 @@ class EvolutionSimulator:
         # a pozdější kontakt už zastihl nehybný stav.
         self.end_year = end_year
         self.inventory_validator = inventory_validator
+        self.schema_multipliers = schema_multipliers
         # Generátor se staví pro každý uzel zvlášť, aby měl vlastní seed
         # i vlastní makro-parametry (viz _generator_for).
         self._generators: Dict[str, SoundChangeGenerator] = {}
@@ -116,6 +115,7 @@ class EvolutionSimulator:
                 seed=derive_seed(self.seed, node_id),
                 macro=macro,
                 inventory_validator=self.inventory_validator,
+                schema_multipliers=self.schema_multipliers,
             )
         return self._generators[node_id]
 

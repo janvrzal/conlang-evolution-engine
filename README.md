@@ -50,6 +50,15 @@ cee simulate --topology-yaml scenario_generator.yaml --proto-csv fantasy_v1.csv 
   --preset-yaml src/cee/data/presets/fantasy_preset.yaml --empirical-phonology
 ```
 
+Globální váhy změn se nevyrábějí z PHOIBLE (to obsahuje inventáře, ne směry
+historických změn). Pro licenčně auditovaný korpus anotovaných změn viz
+[`docs/GLOBAL_BASELINE.md`](docs/GLOBAL_BASELINE.md):
+
+```bash
+cee calibrate global --manifest /data/global/manifest.json --out /data/global/baseline.json
+cee simulate ... --global-baseline /data/global/baseline.json
+```
+
 Bez `--out-dir` se výsledky ukládají do `runs/run_YYYYMMDD_HHMMSS/`.
 
 ## Testy
@@ -66,7 +75,7 @@ a měření shody s doloženými formami.
 ## Stav projektu
 
 CEE už obsahuje lokální projektový editor, časovou mapu, genealogický export,
-CLICS4/DatSemShift, volitelné Index Diachronica/PHOIBLE cache a diachronní
+CLICS4/DatSemShift, volitelná PHOIBLE cache a diachronní
 historii slov. Kalibrační vědecké brány, content-addressed rerolly a produktové
 exporty jako CLDF/PDF/Anki jsou zatím plánované; úplný přehled je v
 [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md).

@@ -8,7 +8,6 @@ rozhraní chovají stejně — dřív existovala ve třech kopiích, které se l
 """
 from __future__ import annotations
 
-import copy
 import csv
 import json
 import os
@@ -18,20 +17,20 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from cee.core.models import Inventory, Lexicon, State
-from cee.engine.generator import MacroParams, SoundChangeGenerator
 from cee.engine.empirical import (
     PhoibleInventoryModel,
-    default_paths as default_empirical_paths,
     load_phoible_model,
 )
+from cee.engine.empirical import (
+    default_paths as default_empirical_paths,
+)
 from cee.engine.graph_builder import GraphBuilder
-from cee.engine.rng import derive_seed
-
 from cee.engine.inventory import InventoryView
 from cee.engine.phonology import FeatureMapper
 from cee.engine.semantics import SemanticEvaluator
 from cee.engine.simulator import EvolutionSimulator
 from cee.engine.topology import EvolutionGraph
+from cee.metrics.global_baseline import load_global_baseline
 from cee.metrics.retention import LexicalRetention, RetentionResult
 from cee.semantics.builder import default_paths as default_semantics_paths
 from cee.semantics.graph import SemanticGraph
@@ -63,6 +62,8 @@ class SimulationConfig:
     #: PHOIBLE je opt-in lokální kontrola inventáře; síť se při simulaci nepoužívá.
     use_empirical_phonology: bool = False
     phoible_model_path: Optional[str] = None
+    #: Cesta k auditovatelné globální kalibraci. Bez ní zůstává čistý preset.
+    global_baseline_path: Optional[str] = None
 
 
 @dataclass
@@ -256,6 +257,24 @@ def build_empirical_phonology(
     return model
 
 
+def build_global_schema_multipliers(config: SimulationConfig) -> Dict[str, float]:
+    """Načte už vytvořenou globální kalibraci, bez síťového I/O."""
+    if not config.global_baseline_path:
+        return {}
+    path = Path(config.global_baseline_path)
+    if not path.exists():
+        warnings.warn(
+            f"Globální baseline '{path}' neexistuje; používám preset bez kalibrace.",
+            stacklevel=2,
+        )
+        return {}
+    try:
+        return load_global_baseline(path).schema_multipliers
+    except (OSError, ValueError, TypeError, json.JSONDecodeError, KeyError) as exc:
+        warnings.warn(f"Globální baseline '{path}' nelze načíst: {exc}", stacklevel=2)
+        return {}
+
+
 def run_simulation(
     lexicon: Lexicon,
     graph: EvolutionGraph,
@@ -273,6 +292,7 @@ def run_simulation(
         lexicon=lexicon,
     )
     inventory_validator = build_empirical_phonology(config)
+    schema_multipliers = build_global_schema_multipliers(config)
 
     simulator = EvolutionSimulator(
         graph,
@@ -284,6 +304,7 @@ def run_simulation(
         graph_builder=graph_builder,
         evolve_root=config.evolve_root,
         inventory_validator=inventory_validator,
+        schema_multipliers=schema_multipliers,
     )
     return simulator.simulate(root_state)
 

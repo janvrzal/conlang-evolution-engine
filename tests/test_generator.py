@@ -50,6 +50,18 @@ def test_bez_inventare_negeneruje_a_varuje(mapper, preset):
         assert gen.generate_rules_for_edge(_state(), 0, 400, inventory=None) == []
 
 
+def test_kalibrace_nasobi_preset_ale_nezapne_vypnute_schema(preset):
+    calibrated = SoundChangeGenerator(
+        preset,
+        schema_multipliers={"lenition": 2.5, "fortition": 0.0},
+    )
+    choices, weights = calibrated._weighted_schemas(None)
+    result = {schema.name: weight for schema, weight in zip(choices, weights)}
+
+    assert result["lenition"] == 250.0
+    assert "fortition" not in result
+
+
 def test_reverses_pozna_okamzite_zvraceni():
     lenice = Rule(name="lenice", target={"voi": "-", "cons": "+"}, action={"voi": "+"})
     zpet = Rule(name="ztráta znělosti", target={"voi": "+", "cons": "+"}, action={"voi": "-"})

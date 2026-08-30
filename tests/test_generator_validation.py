@@ -1,5 +1,9 @@
 from cee.engine.rules import Rule
-from cee.metrics.generator_validation import compare_profiles, profile_rules
+from cee.metrics.generator_validation import (
+    compare_profiles,
+    compare_to_global_distribution,
+    profile_rules,
+)
 
 
 def test_v2a_profil_rozeznava_typ_a_prostredi_zmeny():
@@ -24,4 +28,21 @@ def test_v2a_stejne_profily_maji_nulovou_vzdalenost():
         "attested_schema_coverage": 1.0,
         "environment_hellinger": 0.0,
         "rate_delta_per_millennium": 0.0,
+    }
+
+
+def test_globalni_srovnani_nepredstira_neznamou_rychlost():
+    profile = profile_rules([Rule("a", {}, {}, schema_id="lenition")], years=1000)
+
+    metrics = compare_to_global_distribution(
+        profile,
+        {"lenition": 1.0},
+        {"unconditional": 1.0},
+    )
+
+    assert metrics == {
+        "schema_hellinger": 0.0,
+        "comparable_schema_hellinger": 0.0,
+        "attested_schema_coverage": 1.0,
+        "environment_hellinger": 0.0,
     }
