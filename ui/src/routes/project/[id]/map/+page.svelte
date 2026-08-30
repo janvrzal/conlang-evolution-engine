@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
 	import {
 		SvelteFlow,
 		Controls,
@@ -19,12 +18,12 @@
 	import LanguageDetail from '$lib/LanguageDetail.svelte';
 	import TimelineControl from '$lib/TimelineControl.svelte';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { Select } from '$lib/components/ui/select';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
-	import { MousePointer2, GitCommitHorizontal, X, Download, Trash2, Map } from 'lucide-svelte';
+	import { X, Map } from 'lucide-svelte';
+	import MapToolbar from '$lib/MapToolbar.svelte';
+	import MapProjectPanel from '$lib/MapProjectPanel.svelte';
 
 	import {
 		simulateDynamic,
@@ -506,50 +505,12 @@
 		{/key}
 	</div>
 
-	<!-- Toolbar Panel -->
-	<div
-		class="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex bg-card rounded-md border shadow-sm p-1 gap-1"
-	>
-		<Button
-			variant={activeTool === 'interact' ? 'default' : 'ghost'}
-			size="sm"
-			class="px-3"
-			onclick={() => (activeTool = 'interact')}
-			title={t('moveHint')}
-		>
-			<MousePointer2 class="w-4 h-4 mr-2" />
-			{t('interaction')}
-		</Button>
-		<Button
-			variant={activeTool === 'relationship' ? 'default' : 'ghost'}
-			size="sm"
-			class="px-3"
-			onclick={() => (activeTool = 'relationship')}
-			title={t('relationshipHint')}
-		>
-			<GitCommitHorizontal class="w-4 h-4 mr-2" />
-			{t('relationship')}
-		</Button>
-		{#if activeTool === 'relationship'}
-			<Select class="h-8 w-36" bind:value={relationshipType} title={t('relationship')}>
-				<option value="inheritance">{t('inheritance')}</option>
-				<option value="contact">{t('contact')}</option>
-			</Select>
-		{/if}
-		{#if selectedEdgeId}
-			<div class="w-px bg-border mx-1"></div>
-			<Button
-				variant="ghost"
-				size="sm"
-				class="px-3 text-destructive hover:text-destructive"
-				onclick={deleteSelectedEdge}
-				title="Smazat vybrané spojení (Delete)"
-			>
-				<Trash2 class="w-4 h-4 mr-2" />
-				Smazat spojení
-			</Button>
-		{/if}
-	</div>
+	<MapToolbar
+		bind:activeTool
+		bind:relationshipType
+		{selectedEdgeId}
+		onDeleteEdge={deleteSelectedEdge}
+	/>
 
 	<!-- Izoglosa Banner -->
 	{#if activeIsogloss}
@@ -569,76 +530,15 @@
 
 	<!-- Left Panel: Project Settings -->
 	<div class="absolute top-4 left-4 z-10 w-80 flex flex-col gap-4">
-		<Card class="shadow-sm">
-			<CardHeader class="pb-3">
-				<CardTitle class="text-lg">Projekt: {projectState.name}</CardTitle>
-			</CardHeader>
-			<CardContent class="space-y-4">
-				<Button class="w-full" variant="outline" size="sm" onclick={addLanguage}>
-					+ {t('addNode')}
-				</Button>
-				<Button
-					class="w-full"
-					variant="outline"
-					size="sm"
-					onclick={() => goto(`/project/${$page.params.id}/meta`)}
-				>
-					{t('projectSettings')}
-				</Button>
-				<Button
-					class="w-full relative overflow-hidden"
-					variant="default"
-					size="sm"
-					onclick={runSimulation}
-					disabled={isLoading}
-				>
-					<span class="relative z-10">{isLoading ? '…' : t('simulate')}</span>
-					{#if isLoading}
-						<div
-							class="absolute bottom-0 left-0 h-1 bg-white/40 animate-pulse transition-all duration-[800ms] ease-out w-full"
-							style="animation: fillProgress 800ms ease-out forwards;"
-						></div>
-					{/if}
-				</Button>
-				{#if projectState.simulationRunId}
-					<Button class="w-full" variant="outline" size="sm" onclick={exportSimulation}>
-						<Download class="w-4 h-4 mr-2" /> Exportovat simulaci
-					</Button>
-				{:else}
-					<Button
-						class="w-full"
-						variant="outline"
-						size="sm"
-						onclick={importPreviousSimulation}
-						disabled={isLoading}
-					>
-						{t('importLegacy')}
-					</Button>
-				{/if}
-				{#if errorMessage}
-					<p class="text-xs text-destructive">{errorMessage}</p>
-				{/if}
-
-				<div class="text-xs text-muted-foreground space-y-1">
-					<p>{t('currentStep')}: <strong>{t('year')} {timeSteps[currentTimeIndex]}</strong></p>
-					<p class="flex items-center gap-1.5">
-						{#if projectState.status === 'saving'}
-							<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Ukládám…
-						{:else if projectState.status === 'dirty'}
-							<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Neuloženo
-						{:else if projectState.status === 'error'}
-							<span class="w-1.5 h-1.5 rounded-full bg-destructive"></span>
-							<span class="text-destructive">Uložení selhalo</span>
-						{:else if projectState.status === 'saved'}
-							<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> {t('saved')}
-						{/if}
-					</p>
-					{#if projectState.error}
-						<p class="text-destructive">{projectState.error}</p>
-					{/if}
-				</div>
-			</CardContent>
-		</Card>
+		<MapProjectPanel
+			currentYear={timeSteps[currentTimeIndex]}
+			{isLoading}
+			{errorMessage}
+			onAddLanguage={addLanguage}
+			onRunSimulation={runSimulation}
+			onExport={exportSimulation}
+			onImportLegacy={importPreviousSimulation}
+		/>
 
 		{#if selectedNodeId && selectedNodeData}
 			<Card class="shadow-sm border-primary">
@@ -774,16 +674,5 @@
 	}
 	:global(.tool-relationship .svelte-flow__handle) {
 		pointer-events: auto !important;
-	}
-
-	@keyframes fillProgress {
-		0% {
-			width: 0%;
-			opacity: 0.8;
-		}
-		100% {
-			width: 100%;
-			opacity: 0;
-		}
 	}
 </style>
