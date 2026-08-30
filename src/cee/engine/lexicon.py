@@ -93,6 +93,14 @@ class LexicalEvaluator:
             for word in [*active, *replacements]:
                 if word.active:
                     groups.setdefault(render(word), []).append(word)
+            # Označení nesmí vznikat prostým zdvojením prvního segmentu
+            # kolidujícího kořene. To u krátkých slov rychle nafukovalo
+            # délku lexikonu (pata -> ppata -> pppata) a zároveň to nebyla
+            # samostatná morfologická inovace. Bereme proto jeden existující
+            # foném jako nejmenší produktivní rozlišovací prefix; jeho výběr
+            # je deterministický a nesmí vytvořit další obsazený tvar.
+            markers = self._disambiguation_markers([*active, *replacements])
+            occupied = set(groups)
             for forms in groups.values():
                 if len(forms) < 2:
                     continue
@@ -100,16 +108,21 @@ class LexicalEvaluator:
                 for loser in forms:
                     if loser is winner or not loser.segments:
                         continue
-                    resolved = copy.deepcopy(loser)
+                    resolved = self._disambiguate(loser, markers, occupied, render)
+                    if resolved is None:
+                        # Když ani jeden foném inventáře tvar nerozliší,
+                        # raději kolizi ponecháme pro další lexikální cyklus,
+                        # než abychom vymysleli neomezeně dlouhý pseudotvar.
+                        continue
                     resolved.id = str(uuid.uuid4())
                     resolved.parent_word_id = loser.id
                     resolved.origin_year = year
                     resolved.origin_type = "homophony_resolution"
-                    resolved.origin_rule = "lexical disambiguation"
-                    resolved.segments.insert(0, copy.deepcopy(loser.segments[0]))
+                    resolved.origin_rule = "lexical disambiguation prefix"
                     resolved.frequency = max(0.1, loser.frequency * 0.7)
                     resolved.ensure_stress()
                     replacements.append(resolved)
+                    occupied.add(render(resolved))
                     loser.active = False
 
         state.lexicon.words.extend(replacements)
@@ -129,6 +142,35 @@ class LexicalEvaluator:
         replacement.frequency = max(0.12, target.frequency * 0.75)
         replacement.morpheme_boundaries = set(donor.morpheme_boundaries)
         return replacement
+
+    @staticmethod
+    def _disambiguation_markers(words: Iterable[Word]):
+        """Jednosegmentové markery z aktuálního inventáře ve stabilním pořadí."""
+        markers = {}
+        for word in words:
+            if not word.active:
+                continue
+            for segment in word.segments:
+                key = tuple(sorted(segment.features.items()))
+                markers.setdefault(key, segment)
+        return [markers[key] for key in sorted(markers)]
+
+    @staticmethod
+    def _disambiguate(
+        loser: Word,
+        markers,
+        occupied: set[str],
+        render: Callable[[Word], str],
+    ) -> Optional[Word]:
+        for marker in markers:
+            candidate = copy.deepcopy(loser)
+            candidate.segments.insert(0, copy.deepcopy(marker))
+            candidate.morpheme_boundaries = {boundary + 1 for boundary in loser.morpheme_boundaries}
+            candidate.morpheme_boundaries.add(1)
+            candidate.ensure_stress()
+            if render(candidate) not in occupied:
+                return candidate
+        return None
 
     @staticmethod
     def _donor(words: Iterable[Word], target: Word, rng: random.Random) -> Optional[Word]:

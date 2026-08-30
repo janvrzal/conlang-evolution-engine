@@ -1,0 +1,30 @@
+# Kalibrační topologie s aktivním životním cyklem lexikonu.
+#
+# Nezapíná lexikální náhrady: současná implementace náhrady přebírá celý tvar
+# jiného kořene, a proto by sama vytvářela homofony. Aktivní je jen průběžné
+# rozlišení již vzniklých kolizí. Morfologie zde zůstává prázdná záměrně —
+# potřebuje explicitně vybrané koncepty/afixy konkrétního lexikonu.
+nodes:
+  - id: proto
+  - id: high_mountains
+    map:
+      biome: "hory"
+    lexical:
+      enabled: true
+      replacement_rate: 0.0
+      loss_rate: 0.0
+      resolve_homophones: true
+  - id: deep_jungle
+    map:
+      biome: "prales"
+    lexical:
+      enabled: true
+      replacement_rate: 0.0
+      loss_rate: 0.0
+      resolve_homophones: true
+
+vertical_edges:
+  - parent: proto
+    child: high_mountains
+  - parent: proto
+    child: deep_jungle

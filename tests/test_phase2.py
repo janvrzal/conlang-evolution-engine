@@ -191,6 +191,29 @@ def test_taboo_nahrada_a_rozliseni_homofonie_jsou_volitelne(mapper):
     assert any(word.origin_type == "homophony_resolution" for word in state.lexicon.words)
 
 
+def test_rozliseni_homofonie_prida_jeden_inventarni_marker_ne_duplikat_korene(mapper):
+    graph = EvolutionGraph(
+        node_configs={
+            "proto": {},
+            "child": {
+                "year": 0,
+                "lexical": {"enabled": True, "replacement_rate": 0.0, "resolve_homophones": True},
+            },
+        },
+        vertical_edges=[VerticalEdge("proto", "child", [])],
+    )
+    state = EvolutionSimulator(graph, mapper, end_year=100).simulate(
+        _root(mapper, [("one", "pata"), ("two", "pata"), ("three", "kumi")])
+    )["child"]
+    resolved = next(word for word in state.lexicon.words if word.origin_type == "homophony_resolution")
+
+    assert len(resolved.segments) == 5
+    assert resolved.morpheme_boundaries == {1}
+    assert resolved.origin_rule == "lexical disambiguation prefix"
+    active_forms = [mapper.render_word(word) for word in state.lexicon.words if word.active]
+    assert len(active_forms) == len(set(active_forms))
+
+
 def test_socialni_historie_meni_stav_v_konkretnim_roce(mapper):
     graph = EvolutionGraph(
         node_configs={
