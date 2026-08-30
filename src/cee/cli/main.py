@@ -39,6 +39,7 @@ from cee.metrics.local_research import (
     profile_local_research_changes,
 )
 from cee.metrics.macro_calibration import calibrate_macro_grid, deletion_diagnostics
+from cee.metrics.outcomes import build_outcome_profile
 from cee.metrics.retention import LexicalRetention
 from cee.metrics.schema_profiles import save_local_schema_profile
 from cee.metrics.validation import ValidationMetric
@@ -159,6 +160,29 @@ def create_local_research_profile(
     out.parent.mkdir(parents=True, exist_ok=True)
     save_local_schema_profile(profile, out)
     typer.echo(f"Hotovo: {used} konzervativně zařazených, {skipped} přeskočených řádků. Profil zůstal lokální: {out}")
+
+
+@calibration_app.command("outcomes")
+def profile_observed_outcomes(
+    forms: Path = typer.Option(..., exists=True, help="CLDF-like forms.csv s Language_ID a Segments/Value/Form."),
+    languages: Path = typer.Option(..., exists=True, help="languages.csv s ID, Family a Macroarea."),
+    phoible: Path | None = typer.Option(
+        None, exists=True, help="Volitelné lokální phoible.csv; languages.csv musí mít Glottocode."
+    ),
+    out: Path = typer.Option(..., help="Auditovatelný JSON outcome profilu."),
+    bootstrap_replicates: int = typer.Option(1_000, min=100, help="Počet cluster-bootstrapů."),
+    seed: int = typer.Option(42, help="Seed bootstrapu."),
+):
+    """Změří současné jazykové vlastnosti globálně, podle regionu a rodiny."""
+    profile = build_outcome_profile(forms, languages, phoible, bootstrap_replicates, seed)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(profile.as_dict(), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    global_group = next(group for group in profile.groups if group.kind == "global")
+    typer.echo(
+        f"Hotovo: {global_group.languages} jazyků, {global_group.families} rodin, "
+        f"{len(profile.groups)} profilů; přeskočeno forem: {profile.excluded_forms}.\n"
+        f"Profil: {out}"
+    )
 
 
 @calibration_app.command("research-measure")
