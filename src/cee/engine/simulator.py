@@ -60,7 +60,7 @@ class EvolutionSimulator:
                  seed: int = 42, semantic_evaluator=None,
                  graph_builder: Optional[GraphBuilder] = None,
                  end_year: Optional[int] = None, evolve_root: bool = False,
-                 empirical_priors=None, inventory_validator=None):
+                 inventory_validator=None):
         self.graph = graph_topo
         self.mapper = mapper
         self.graph_builder = graph_builder
@@ -72,7 +72,6 @@ class EvolutionSimulator:
         # horizont 200 let a dvě pravidla — jazyky ztuhly hned na začátku
         # a pozdější kontakt už zastihl nehybný stav.
         self.end_year = end_year
-        self.empirical_priors = empirical_priors
         self.inventory_validator = inventory_validator
         # Generátor se staví pro každý uzel zvlášť, aby měl vlastní seed
         # i vlastní makro-parametry (viz _generator_for).
@@ -116,7 +115,6 @@ class EvolutionSimulator:
                 self.preset,
                 seed=derive_seed(self.seed, node_id),
                 macro=macro,
-                empirical_priors=self.empirical_priors,
                 inventory_validator=self.inventory_validator,
             )
         return self._generators[node_id]

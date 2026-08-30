@@ -23,13 +23,12 @@ from cee.pipeline import (
     load_lexicon_from_csv,
     run_simulation,
 )
-from cee.engine.empirical import build_empirical_cache, default_paths as default_empirical_paths
+from cee.engine.empirical import PhoibleInventoryModel, default_paths as default_empirical_paths, save_phoible_model
 
 app = typer.Typer(help="Conlang Evolution Engine CLI", no_args_is_help=True)
 phonology_app = typer.Typer(help="Správa volitelných empirických fonologických dat.")
 app.add_typer(phonology_app, name="phonology")
 
-INDEX_DIACHRONICA_REDUX_URL = "https://github.com/bradrn/index-diachronica-redux.git"
 PHOIBLE_REPOSITORY_URL = "https://github.com/phoible/dev.git"
 
 
@@ -44,21 +43,13 @@ def _main() -> None:
 def update_phonology_data(
     cache_dir: Path = typer.Option(None, help="Lokální cache (default: ~/.cee/phonology)."),
 ):
-    """Stáhne Index Diachronica Redux a PHOIBLE a zafixuje jejich offline cache.
+    """Stáhne PHOIBLE a zafixuje jeho offline cache.
 
     Tento příkaz je jediná síťová cesta empirické vrstvy. Simulace samotná
     používá jen hotové JSON cache soubory, takže je reprodukovatelná offline.
     """
     paths = default_empirical_paths(cache_dir)
     paths["root"].mkdir(parents=True, exist_ok=True)
-    repository = paths["diachronica_raw"]
-    if (repository / ".git").is_dir():
-        typer.echo("Aktualizuji lokální kopii Index Diachronica Redux…")
-        subprocess.run(["git", "-C", str(repository), "pull", "--ff-only"], check=True)
-    else:
-        typer.echo("Stahuji Index Diachronica Redux…")
-        subprocess.run(["git", "clone", "--depth", "1", INDEX_DIACHRONICA_REDUX_URL, str(repository)], check=True)
-
     phoible_repository = paths["phoible_repository"]
     if (phoible_repository / ".git").is_dir():
         typer.echo("Aktualizuji lokální kopii PHOIBLE…")
@@ -69,14 +60,11 @@ def update_phonology_data(
         # přesný zdrojový commit, z nějž lokální cache vznikla.
         typer.echo("Stahuji aktuální PHOIBLE…")
         subprocess.run(["git", "clone", "--depth", "1", PHOIBLE_REPOSITORY_URL, str(phoible_repository)], check=True)
-    report = build_empirical_cache(paths["root"])
+    model = PhoibleInventoryModel.from_csv(paths["phoible_raw"])
+    save_phoible_model(model, paths["phoible_model"])
     typer.echo(
-        "Hotovo: "
-        f"{report['observations']} změn Indexu, {report['inventories']} inventářů PHOIBLE.\n"
-        f"Index commit: {report['diachronica_revision']}\n"
-        f"PHOIBLE commit: {report['phoible_revision']}\n"
-        f"Index SHA-256: {report['diachronica_sha256']}\n"
-        f"PHOIBLE SHA-256: {report['phoible_sha256']}"
+        f"Hotovo: {len(model.inventories)} inventářů PHOIBLE.\n"
+        f"PHOIBLE SHA-256: {model.provenance['sha256']}"
     )
 
 def load_csv_lexicon(proto_csv: str, mapper: FeatureMapper) -> Lexicon:
@@ -170,7 +158,7 @@ def simulate(
     empirical_phonology: bool = typer.Option(
         False,
         "--empirical-phonology",
-        help="Použít lokální Index Diachronica/PHOIBLE cache (nejdřív cee phonology update-data).",
+        help="Použít lokální PHOIBLE kontrolu inventáře (nejdřív cee phonology update-data).",
     ),
 ):
     """

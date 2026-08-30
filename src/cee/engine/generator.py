@@ -156,15 +156,11 @@ class SoundChangeGenerator:
     """Vážený generátor zvukových změn na základě šablon, priorů a biomů."""
 
     def __init__(self, preset: Dict[str, Any], seed: int = 42,
-                 macro: Optional[MacroParams] = None, empirical_priors=None,
+                 macro: Optional[MacroParams] = None,
                  inventory_validator=None):
         self.preset = preset
         self.random = random.Random(seed)
         self.macro = macro or MacroParams.from_config(preset.get("macro"))
-        # Oba adaptéry jsou volitelné: bez lokální cache zůstane běh zcela
-        # offline a zpětně kompatibilní, jen transparentně používá autorské
-        # váhy presetu místo empiricky kalibrovaných.
-        self.empirical_priors = empirical_priors
         self.inventory_validator = inventory_validator
 
     def _weighted_schemas(self, biome: Optional[str]):
@@ -181,8 +177,6 @@ class SoundChangeGenerator:
                 continue
 
             weight = schema_cfg.get("base_weight", 0) * modifiers.get(schema_id, 1.0)
-            if self.empirical_priors is not None:
-                weight *= self.empirical_priors.multiplier(schema_id)
             if schema_id in CODA_SCHEMAS:
                 weight *= self.macro.coda_erosion
 
