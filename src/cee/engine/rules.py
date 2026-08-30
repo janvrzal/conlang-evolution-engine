@@ -31,6 +31,9 @@ class Rule:
     #: Podporované: swap_next, geminate, degeminate, lengthen, shorten,
     #: compensatory_lengthening, stress_initial, stress_penult a stress_final.
     operation: Optional[str] = None
+    #: Stabilní identifikátor schématu, z něhož pravidlo vzniklo. Ručně
+    #: zadaná pravidla ho mít nemusí; používá ho kalibrace generátoru.
+    schema_id: Optional[str] = None
 
     def matching_indices(self, word: Word) -> List[int]:
         """Najde terče bez mutace tvaru; používá ho generátor i aplikátor."""

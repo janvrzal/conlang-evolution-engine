@@ -282,6 +282,7 @@ class SoundChangeGenerator:
 
             if candidate is None:
                 continue  # třída je v inventáři prázdná
+            candidate.schema_id = schema.name
             if self.inventory_validator is not None:
                 report = self.inventory_validator.validate(inventory.apply(candidate))
                 if not report.accepted:
