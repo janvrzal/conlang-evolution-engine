@@ -67,6 +67,22 @@ class DiachronicaPriors:
     #: Normalizovaná strukturální prostředí; nezávislá osa pro V2a.
     environments: Dict[str, int] = field(default_factory=dict)
     annotations: Dict[str, int] = field(default_factory=dict)
+    family_annotations: Dict[str, Dict[str, int]] = field(default_factory=dict)
+
+    def balanced_annotations(self, weight: int = 1000) -> Dict[str, int]:
+        """Globální baseline s rovnou vahou každé rodiny, ne každého řádku.
+
+        Bez toho by rodina s nejlepším popisem převážila profil jen počtem
+        citovaných změn. `weight` je virtuální velikost vzorku na rodinu.
+        """
+        result: Dict[str, int] = {}
+        for counts in self.family_annotations.values():
+            total = sum(counts.values())
+            if not total:
+                continue
+            for category, count in counts.items():
+                result[category] = result.get(category, 0) + round(weight * count / total)
+        return result or dict(self.annotations)
 
     def multiplier(self, schema_id: str) -> float:
         """Vyhlazený poměr vůči rovnoměrnému prioru (nikdy nula)."""
@@ -77,7 +93,7 @@ class DiachronicaPriors:
         return (self.counts.get(schema_id, 0) + 1.0) / (average + 1.0)
 
     def as_dict(self) -> Dict[str, object]:
-        return {"counts": self.counts, "observations": self.observations, "provenance": self.provenance, "environments": self.environments, "annotations": self.annotations}
+        return {"counts": self.counts, "observations": self.observations, "provenance": self.provenance, "environments": self.environments, "annotations": self.annotations, "family_annotations": self.family_annotations}
 
     @classmethod
     def from_dict(cls, data: Dict[str, object]) -> "DiachronicaPriors":
@@ -87,6 +103,7 @@ class DiachronicaPriors:
             provenance={str(key): str(value) for key, value in dict(data.get("provenance", {})).items()},
             environments={str(key): int(value) for key, value in dict(data.get("environments", {})).items()},
             annotations={str(key): int(value) for key, value in dict(data.get("annotations", {})).items()},
+            family_annotations={str(family): {str(key): int(value) for key, value in dict(counts).items()} for family, counts in dict(data.get("family_annotations", {})).items()},
         )
 
 
@@ -155,8 +172,10 @@ def build_diachronic_priors(changes_dir: str | Path) -> DiachronicaPriors:
     counts: Dict[str, int] = {}
     environments: Dict[str, int] = {}
     annotations: Dict[str, int] = {}
+    family_annotations: Dict[str, Dict[str, int]] = {}
     observations = 0
     for path in paths:
+        family = path.stem
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.startswith("- "):
                 continue
@@ -173,6 +192,8 @@ def build_diachronic_priors(changes_dir: str | Path) -> DiachronicaPriors:
             environments[environment] = environments.get(environment, 0) + 1
             annotation = _annotation_class(source, target)
             annotations[annotation] = annotations.get(annotation, 0) + 1
+            per_family = family_annotations.setdefault(family, {})
+            per_family[annotation] = per_family.get(annotation, 0) + 1
             observations += 1
     provenance = {
         "source": "Index Diachronica Redux",
@@ -188,6 +209,7 @@ def build_diachronic_priors(changes_dir: str | Path) -> DiachronicaPriors:
         provenance=provenance,
         environments=environments,
         annotations=annotations,
+        family_annotations=family_annotations,
     )
 
 

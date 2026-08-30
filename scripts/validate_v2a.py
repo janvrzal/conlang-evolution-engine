@@ -26,6 +26,7 @@ def main() -> None:
     parser.add_argument("--runs", type=int, default=50)
     parser.add_argument("--rules", type=int, default=12, help="počet slotů na běh za tisíc let")
     parser.add_argument("--cache-dir", default=None)
+    parser.add_argument("--baseline", choices=("raw", "family-balanced"), default="family-balanced")
     args = parser.parse_args()
     if args.runs < 1 or args.rules < 1:
         parser.error("runs i rules musí být kladné")
@@ -44,11 +45,12 @@ def main() -> None:
         rules.extend(generator.generate_rules_for_edge(state, 0, 1000, args.rules, inventory))
 
     generated = profile_rules(rules, years=args.runs * 1000, broad=True)
-    attested = GeneratorProfile(priors.observations, priors.annotations, priors.environments, 0.0)
+    annotations = priors.balanced_annotations() if args.baseline == "family-balanced" else priors.annotations
+    attested = GeneratorProfile(sum(annotations.values()), annotations, priors.environments, 0.0)
     comparison = compare_profiles(generated, attested)
     print(json.dumps({
         "generated": generated.__dict__,
-        "attested": {"changes": priors.observations, "schemas": priors.annotations, "provenance": priors.provenance},
+        "attested": {"changes": sum(annotations.values()), "schemas": annotations, "baseline": args.baseline, "families": sorted(priors.family_annotations), "provenance": priors.provenance},
         "comparison": {
             "schema_hellinger": comparison["schema_hellinger"],
             "comparable_schema_hellinger": comparison["comparable_schema_hellinger"],
