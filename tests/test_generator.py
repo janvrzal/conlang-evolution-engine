@@ -67,6 +67,10 @@ def test_kalibrace_nasobi_preset_ale_nezapne_vypnute_schema(preset):
     assert "fortition" not in result
 
 
+def test_parser_presetu_zachova_makro_parametry(preset):
+    assert preset["macro"]["deletion_rate"] == 0.4
+
+
 def test_reverses_pozna_okamzite_zvraceni():
     lenice = Rule(name="lenice", target={"voi": "-", "cons": "+"}, action={"voi": "+"})
     zpet = Rule(name="ztráta znělosti", target={"voi": "+", "cons": "+"}, action={"voi": "-"})

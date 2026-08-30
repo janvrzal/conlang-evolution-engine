@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Mapping
 
+from cee.core.models import State
 from cee.engine.phonology import FeatureMapper
 
 _LANGUAGE_ID = "Language_ID"
@@ -245,6 +246,17 @@ def measure_language_outcomes(
     if not outcomes:
         raise ValueError("Žádná forma nešla segmentovat jako IPA nebo CLDF segmenty.")
     return outcomes, excluded
+
+
+def measure_state_outcome(state: State, mapper: FeatureMapper) -> dict[str, float]:
+    """Změří simulovaný stav stejnými lexikálními proxy jako pozorovaný jazyk."""
+    forms = [
+        (word.concept_id, mapper.render_word(word))
+        for word in state.lexicon.words
+        if word.active
+    ]
+    metrics, _ = _word_metrics(forms, mapper, {})
+    return metrics
 
 
 def _percentile(values: list[float], proportion: float) -> float:

@@ -3,6 +3,7 @@ import json
 from typer.testing import CliRunner
 
 from cee.cli.main import app
+from cee.metrics.outcome_search import score_metrics
 from cee.metrics.outcomes import build_outcome_profile
 
 
@@ -92,3 +93,14 @@ def test_outcome_profile_joins_optional_phoible_inventory_metric(tmp_path):
     global_group = next(group for group in profile.groups if group.kind == "global")
     assert global_group.metrics["phoible_inventory_size"].mean == 2.0
     assert "phoible" in profile.source_checksums
+
+
+def test_outcome_score_is_zero_inside_intervals():
+    score, inside, compared = score_metrics(
+        {"mean_segment_length": 4.5, "coda_segment_rate": 0.3},
+        {
+            "mean_segment_length": {"interval_95": [4.0, 5.0]},
+            "coda_segment_rate": {"interval_95": [0.2, 0.4]},
+        },
+    )
+    assert (score, inside, compared) == (0.0, 2, 2)

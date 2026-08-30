@@ -89,6 +89,7 @@ class YamlParser:
         preset = {
             "name": data.get("name", "Unknown Preset"),
             "description": data.get("description", ""),
+            "macro": data.get("macro", {}),
             "schemas": data.get("schemas", {}),
             "biomes": data.get("biomes", {}),
         }

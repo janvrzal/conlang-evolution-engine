@@ -51,3 +51,23 @@ vést ke stejné délce slov či podobnému inventáři. Kalibrátor proto má h
 množinu scénářů, jejichž opakované simulace vstoupí do zvolených intervalů.
 Rodinný profil se vzorkuje před simulací jako sdílený styl větví; nemění se
 zpětně podle výsledku jednoho běhu.
+
+První automatický krok je makro-hledání nad konkrétním scénářem. Pro vzorkované
+kombinace `change_rate`, `coda_erosion` a `deletion_rate` opakuje simulaci přes
+více seedů, změří listové jazyky a řadí kandidáty podle vzdálenosti od intervalů
+vybraného outcome profilu:
+
+```bash
+cee calibrate outcome-search \
+  --target /data/outcomes/lexibank-earth.json \
+  --target-kind macroarea --target-id Eurasia \
+  --topology /data/scenario.yaml \
+  --proto /data/proto.csv \
+  --preset src/cee/data/presets/fantasy_preset.yaml \
+  --out /data/outcomes/eurasia-candidates.json
+```
+
+Tento první search hledá pouze makro-parametry a je určen pro dostatečně velký,
+segmentovaný protolexikon. Nelze z něj vyvozovat „správnou historii“ ani jej
+spolehlivě vyhodnotit nad ukázkovým slovníkem s několika slovy. Další vrstva
+rozšíří hledání o sdílené rodinné váhy schémat a nezávislý holdout scénář.

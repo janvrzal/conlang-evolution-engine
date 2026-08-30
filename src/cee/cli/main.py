@@ -39,6 +39,7 @@ from cee.metrics.local_research import (
     profile_local_research_changes,
 )
 from cee.metrics.macro_calibration import calibrate_macro_grid, deletion_diagnostics
+from cee.metrics.outcome_search import load_target_group, search_macro_parameters
 from cee.metrics.outcomes import build_outcome_profile
 from cee.metrics.retention import LexicalRetention
 from cee.metrics.schema_profiles import save_local_schema_profile
@@ -182,6 +183,57 @@ def profile_observed_outcomes(
         f"Hotovo: {global_group.languages} jazyků, {global_group.families} rodin, "
         f"{len(profile.groups)} profilů; přeskočeno forem: {profile.excluded_forms}.\n"
         f"Profil: {out}"
+    )
+
+
+@calibration_app.command("outcome-search")
+def search_outcome_parameters(
+    target: Path = typer.Option(..., exists=True, help="JSON z 'calibrate outcomes'."),
+    target_kind: str = typer.Option("global", help="global, macroarea nebo family."),
+    target_id: str = typer.Option("global", help="ID cílové skupiny."),
+    topology: Path = typer.Option(..., exists=True, help="Topologie simulovaného scénáře."),
+    proto: Path = typer.Option(..., exists=True, help="Protolexikon se sloupci id a ipa_proto."),
+    preset: Path = typer.Option(..., exists=True, help="Výchozí preset generátoru."),
+    out: Path = typer.Option(..., help="JSON kandidátů seřazených podle outcome vzdálenosti."),
+    years: int = typer.Option(2_000, min=1),
+    trials: int = typer.Option(30, min=1, help="Počet vzorkovaných makro-scenářů."),
+    replicates: int = typer.Option(3, min=1, help="Počet seedů pro každý scénář."),
+    seed: int = typer.Option(42),
+):
+    """Hledá makro-parametry, jejichž simulace vstoupí do outcome intervalů."""
+    candidates = search_macro_parameters(
+        load_target_group(target, target_kind, target_id),
+        topology,
+        proto,
+        preset,
+        years,
+        trials,
+        replicates,
+        seed,
+    )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "target": {"kind": target_kind, "id": target_id},
+                "years": years,
+                "trials": trials,
+                "replicates": replicates,
+                "seed": seed,
+                "candidates": [candidate.as_dict() for candidate in candidates],
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    best = candidates[0]
+    typer.echo(
+        f"Nejlepší kandidát: skóre {best.score:.3f}, "
+        f"v intervalech {best.inside_intervals}/{best.compared_metrics}; {best.parameters}.\n"
+        f"Report: {out}"
     )
 
 
