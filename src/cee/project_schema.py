@@ -1,10 +1,10 @@
 """Verzované schéma persistentního projektu a čisté migrace."""
+
 from __future__ import annotations
 
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 CURRENT_PROJECT_SCHEMA = 2
 
@@ -49,7 +49,7 @@ def migrate_data(version: int, data: dict[str, Any]) -> tuple[int, dict[str, Any
     """Vrátí aktuální tvar bez mutace vstupního JSONu."""
     if version > CURRENT_PROJECT_SCHEMA:
         raise ValueError(
-            f"Projekt má novější schéma {version}; tato verze CEE umí nejvýše {CURRENT_PROJECT_SCHEMA}."
+            f"Projekt má novější schéma {version}; tato verze CEE umí nejvýše {CURRENT_PROJECT_SCHEMA}."  # noqa: E501
         )
     migrated = dict(data)
     current = version

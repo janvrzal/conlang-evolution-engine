@@ -22,7 +22,9 @@ def _graph() -> GraphBuilder:
         active=True,
         origin_type="mutated",
     )
-    graph.add_origin_edge("coastal-tree-late", "coastal-tree-early", "mutated", "snížení samohlásky")
+    graph.add_origin_edge(
+        "coastal-tree-late", "coastal-tree-early", "mutated", "snížení samohlásky"
+    )
     return graph
 
 
@@ -34,20 +36,14 @@ def test_rez_slovnikem_respektuje_rok_a_dedi_predka(tmp_path):
     late = store.language("run-one", "coastal", 1000)
 
     assert len(early) == len(late) == 1
-    assert {
-        key: early[0][key]
-        for key in ("id", "concept_id", "to", "from", "polysemy")
-    } == {
+    assert {key: early[0][key] for key in ("id", "concept_id", "to", "from", "polysemy")} == {
         "id": "coastal-tree-early",
         "concept_id": "TREE",
         "to": "tara",
         "from": "tara",
         "polysemy": ["WOOD"],
     }
-    assert {
-        key: late[0][key]
-        for key in ("id", "concept_id", "to", "from", "polysemy")
-    } == {
+    assert {key: late[0][key] for key in ("id", "concept_id", "to", "from", "polysemy")} == {
         "id": "coastal-tree-late",
         "concept_id": "TREE",
         "to": "tora",

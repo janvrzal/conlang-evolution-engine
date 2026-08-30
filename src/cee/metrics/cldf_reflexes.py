@@ -4,6 +4,7 @@ Modul záměrně neurčuje zvukový zákon automaticky. Shoda dvou segmentů v j
 etymologii sama o sobě není historická změna; výsledkem je proto fronta pro
 lidskou anotaci, nikoli vstup přímo do tréninku vah.
 """
+
 from __future__ import annotations
 
 import csv
@@ -73,17 +74,19 @@ def extract_reflex_candidates(
             if key in seen:
                 continue
             seen.add(key)
-            candidates.append(ReflexCandidate(
-                family_id=family_id.strip(),
-                proto_form_id=origin_id,
-                proto_language_id=proto["Language_ID"],
-                proto_form=_form(proto),
-                reflex_form_id=reflex["ID"],
-                reflex_language_id=reflex["Language_ID"],
-                reflex_form=_form(reflex),
-                parameter_id=reflex.get("Parameter_ID", ""),
-                relation=relation or "inherited",
-            ))
+            candidates.append(
+                ReflexCandidate(
+                    family_id=family_id.strip(),
+                    proto_form_id=origin_id,
+                    proto_language_id=proto["Language_ID"],
+                    proto_form=_form(proto),
+                    reflex_form_id=reflex["ID"],
+                    reflex_language_id=reflex["Language_ID"],
+                    reflex_form=_form(reflex),
+                    parameter_id=reflex.get("Parameter_ID", ""),
+                    relation=relation or "inherited",
+                )
+            )
     return sorted(candidates, key=lambda row: (row.proto_form_id, row.reflex_form_id))
 
 

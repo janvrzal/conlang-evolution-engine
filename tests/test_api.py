@@ -2,6 +2,7 @@
 Testy API vrstvy. Přeskočí se, když není nainstalované extra `ui`
 (`pip install -e '.[ui]'`).
 """
+
 import pytest
 
 pytest.importorskip("fastapi")
@@ -73,16 +74,18 @@ def test_biom_z_ui_ovlivni_vysledek(monkeypatch):
     )
 
     captured_graph = None
+
     def mock_run_simulation(lexicon, graph, mapper, config, builder):
         nonlocal captured_graph
         captured_graph = graph
         return {}
-        
+
     monkeypatch.setattr("cee.api.server.run_simulation", mock_run_simulation)
 
     result = run_dynamic_simulation(req)
     assert result["status"] == "success"
 
+    assert captured_graph is not None
     assert captured_graph.node_configs["hory"]["map"]["biome"] == "hory"
     assert captured_graph.node_configs["prales"]["map"]["biome"] == "prales"
 
@@ -90,27 +93,30 @@ def test_biom_z_ui_ovlivni_vysledek(monkeypatch):
 def test_dynamicka_topologie_respektuje_map_i_primo(monkeypatch):
     """Kanonický tvar z YAML (`map`) musí fungovat stejně jako plochý z UI."""
     captured_graph = None
+
     def mock_run_simulation(lexicon, graph, mapper, config, builder):
         nonlocal captured_graph
         captured_graph = graph
         return {}
-        
+
     monkeypatch.setattr("cee.api.server.run_simulation", mock_run_simulation)
-    
+
     def spustit(nodes):
-        run_dynamic_simulation(DynamicSimulateRequest(
-            topology_data={
-                "nodes": nodes,
-                "edges": [{"source": "proto", "target": "hory"}],
-            },
-            proto_lexicon=PROTO,
-            semantics="",
-        ))
+        run_dynamic_simulation(
+            DynamicSimulateRequest(
+                topology_data={
+                    "nodes": nodes,
+                    "edges": [{"source": "proto", "target": "hory"}],
+                },
+                proto_lexicon=PROTO,
+                semantics="",
+            )
+        )
         return captured_graph
 
     plochy = spustit({"proto": {}, "hory": {"biome": "hory"}})
     plochy_biome = plochy.node_configs["hory"]["map"]["biome"]
-    
+
     kanonicky = spustit({"proto": {}, "hory": {"map": {"biome": "hory"}}})
     kanonicky_biome = kanonicky.node_configs["hory"]["map"]["biome"]
 
@@ -129,43 +135,55 @@ def test_casova_osa_zachova_dedictvi_jen_v_okamziku_odstepeni(monkeypatch):
         return {}
 
     monkeypatch.setattr("cee.api.server.run_simulation", mock_run_simulation)
-    run_dynamic_simulation(DynamicSimulateRequest(
-        topology_data={
-            "snapshots": [
-                {
-                    "year": 0,
-                    "nodes": [{"id": "lang-1", "data": {"isProto": True, "year": 0}}],
-                    "edges": [],
-                },
-                {
-                    "year": 500,
-                    "nodes": [
-                        {"id": "lang-1", "data": {"isProto": True, "year": 0}},
-                        {"id": "coastal", "data": {"year": 500}},
-                    ],
-                    "edges": [{"source": "lang-1", "target": "coastal", "type": "straight", "data": {}}],
-                },
-                {
-                    "year": 1000,
-                    "nodes": [
-                        {"id": "lang-1", "data": {"isProto": True, "year": 0}},
-                        {"id": "coastal", "data": {"year": 500}},
-                    ],
-                    "edges": [{"source": "lang-1", "target": "coastal", "type": "contact", "data": {}}],
-                },
-            ],
-        },
-        proto_lexicon=PROTO,
-        semantics="",
-    ))
+    run_dynamic_simulation(
+        DynamicSimulateRequest(
+            topology_data={
+                "snapshots": [
+                    {
+                        "year": 0,
+                        "nodes": [{"id": "lang-1", "data": {"isProto": True, "year": 0}}],
+                        "edges": [],
+                    },
+                    {
+                        "year": 500,
+                        "nodes": [
+                            {"id": "lang-1", "data": {"isProto": True, "year": 0}},
+                            {"id": "coastal", "data": {"year": 500}},
+                        ],
+                        "edges": [
+                            {
+                                "source": "lang-1",
+                                "target": "coastal",
+                                "type": "straight",
+                                "data": {},
+                            }
+                        ],
+                    },
+                    {
+                        "year": 1000,
+                        "nodes": [
+                            {"id": "lang-1", "data": {"isProto": True, "year": 0}},
+                            {"id": "coastal", "data": {"year": 500}},
+                        ],
+                        "edges": [
+                            {"source": "lang-1", "target": "coastal", "type": "contact", "data": {}}
+                        ],
+                    },
+                ],
+            },
+            proto_lexicon=PROTO,
+            semantics="",
+        )
+    )
 
+    assert captured_graph is not None
     assert any(
         edge.parent_id == "lang-1" and edge.child_id == "coastal"
         for edge in captured_graph.vertical_edges
     )
-    assert [(edge.year, edge.source_id, edge.target_id) for edge in captured_graph.contact_edges] == [
-        (1000, "lang-1", "coastal")
-    ]
+    assert [
+        (edge.year, edge.source_id, edge.target_id) for edge in captured_graph.contact_edges
+    ] == [(1000, "lang-1", "coastal")]
 
 
 def test_health_hlasi_revizi_rozhrani():
@@ -206,7 +224,9 @@ def test_skutecna_simulace_pres_api_ulozi_casovy_rez_a_export(monkeypatch, tmp_p
                         {"id": "proto", "data": {"isProto": True, "year": 0}},
                         {"id": "child", "data": {"year": 100}},
                     ],
-                    "edges": [{"source": "proto", "target": "child", "type": "straight", "data": {}}],
+                    "edges": [
+                        {"source": "proto", "target": "child", "type": "straight", "data": {}}
+                    ],
                 },
             ]
         },

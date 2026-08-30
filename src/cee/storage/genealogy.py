@@ -4,6 +4,7 @@ Výchozí implementace je lokální JSON soubor v ``~/.cee/runs``. Neo4j je
 volitelný adaptér aktivovaný až explicitní konfigurací; běžná instalace CEE
 tak pro simulaci, prohlížení ani export nepotřebuje databázový server.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,11 +25,11 @@ class GenealogyStore(Protocol):
 
     def delete(self, run_id: str) -> None: ...
 
-    def language(self, run_id: str, node_id: str, year: int | None = None) -> list[dict[str, Any]]: ...
+    def language(
+        self, run_id: str, node_id: str, year: int | None = None
+    ) -> list[dict[str, Any]]: ...
 
-    def isogloss(
-        self, run_id: str, concept_id: str, year: int | None = None
-    ) -> dict[str, str]: ...
+    def isogloss(self, run_id: str, concept_id: str, year: int | None = None) -> dict[str, str]: ...
 
     def word_trace(self, run_id: str, word_id: str) -> list[dict[str, Any]]: ...
 
@@ -49,16 +50,8 @@ def _active_words(
         if word["language_id"] == node_id and (year is None or word["year"] <= year)
     ]
     timed_ids = {word["id"] for word in timed}
-    superseded = {
-        edge["source_id"]
-        for edge in edges
-        if edge["target_id"] in timed_ids
-    }
-    return [
-        word
-        for word in timed
-        if word["id"] not in superseded and word.get("active", True)
-    ]
+    superseded = {edge["source_id"] for edge in edges if edge["target_id"] in timed_ids}
+    return [word for word in timed if word["id"] not in superseded and word.get("active", True)]
 
 
 def _ancestor(
@@ -108,8 +101,12 @@ class FileGenealogyStore:
             self.directory = Path.home() / ".cee" / "runs"
 
     def _path(self, run_id: str) -> Path:
-        if not run_id or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for char in run_id):
+        if not run_id or any(
+            char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+            for char in run_id
+        ):
             raise ValueError("ID simulace smí obsahovat jen písmena, číslice, '-' a '_'.")
+        assert self.directory is not None
         return self.directory / f"{run_id}.json"
 
     def _read(self, run_id: str) -> dict[str, Any]:
@@ -122,6 +119,7 @@ class FileGenealogyStore:
 
     def save(self, run_id: str, builder: GraphBuilder) -> None:
         path = self._path(run_id)
+        assert self.directory is not None
         self.directory.mkdir(parents=True, exist_ok=True)
         payload = {
             "schema_version": 2,
@@ -151,24 +149,26 @@ class FileGenealogyStore:
         words = []
         for word in _active_words(nodes, edges, node_id, year):
             proto = _ancestor(word, by_id, parent_of)
-            words.append({
-                "id": word["id"],
-                "concept_id": word["concept_id"],
-                "to": word["ipa"],
-                "from": proto["ipa"],
-                "to_prosodic": word.get("ipa_prosodic", word["ipa"]),
-                "from_prosodic": proto.get("ipa_prosodic", proto["ipa"]),
-                "polysemy": word.get("polysemy", []),
-                "stress_index": word.get("stress_index"),
-                "long_nuclei": word.get("long_nuclei", []),
-                "morpheme_boundaries": word.get("morpheme_boundaries", []),
-                "paradigm": word.get("paradigm"),
-                "grammatical_features": word.get("grammatical_features", {}),
-                "frequency": word.get("frequency", 1.0),
-                "is_grammatical": word.get("is_grammatical", False),
-                "active": word.get("active", True),
-                "origin_type": word.get("origin_type", "inherited"),
-            })
+            words.append(
+                {
+                    "id": word["id"],
+                    "concept_id": word["concept_id"],
+                    "to": word["ipa"],
+                    "from": proto["ipa"],
+                    "to_prosodic": word.get("ipa_prosodic", word["ipa"]),
+                    "from_prosodic": proto.get("ipa_prosodic", proto["ipa"]),
+                    "polysemy": word.get("polysemy", []),
+                    "stress_index": word.get("stress_index"),
+                    "long_nuclei": word.get("long_nuclei", []),
+                    "morpheme_boundaries": word.get("morpheme_boundaries", []),
+                    "paradigm": word.get("paradigm"),
+                    "grammatical_features": word.get("grammatical_features", {}),
+                    "frequency": word.get("frequency", 1.0),
+                    "is_grammatical": word.get("is_grammatical", False),
+                    "active": word.get("active", True),
+                    "origin_type": word.get("origin_type", "inherited"),
+                }
+            )
         return words
 
     def isogloss(self, run_id: str, concept_id: str, year: int | None = None) -> dict[str, str]:
@@ -230,7 +230,9 @@ class Neo4jGenealogyStore:
         try:
             from neo4j import GraphDatabase
         except ImportError as exc:  # pragma: no cover - záleží na extra balíčku
-            raise RuntimeError("Pro CEE_GENEALOGY_STORE=neo4j nainstaluj extra 'cee[neo4j]'.") from exc
+            raise RuntimeError(
+                "Pro CEE_GENEALOGY_STORE=neo4j nainstaluj extra 'cee[neo4j]'."
+            ) from exc
         self.driver = GraphDatabase.driver(uri, auth=(username, password))
 
     def save(self, run_id: str, builder: GraphBuilder) -> None:
@@ -286,13 +288,15 @@ class Neo4jGenealogyStore:
     def delete(self, run_id: str) -> None:
         with self.driver.session() as session:
             session.run(
-                "MATCH (simulation:Simulation {id: $run_id}) DETACH DELETE simulation", run_id=run_id
+                "MATCH (simulation:Simulation {id: $run_id}) DETACH DELETE simulation",
+                run_id=run_id,
             ).consume()
             session.run(
                 "MATCH (word:Word {simulation_id: $run_id}) DETACH DELETE word", run_id=run_id
             ).consume()
             session.run(
-                "MATCH (language:Language {simulation_id: $run_id}) DETACH DELETE language", run_id=run_id
+                "MATCH (language:Language {simulation_id: $run_id}) DETACH DELETE language",
+                run_id=run_id,
             ).consume()
 
     def _file_equivalent(self, run_id: str) -> FileGenealogyStore:
@@ -300,11 +304,11 @@ class Neo4jGenealogyStore:
 
     def language(self, run_id: str, node_id: str, year: int | None = None) -> list[dict[str, Any]]:
         query = """
-            MATCH (word:Word {simulation_id: $run_id})-[:BELONGS_TO]->(:Language {simulation_id: $run_id, id: $node_id})
+            MATCH (word:Word {simulation_id: $run_id})-[:BELONGS_TO]->(:Language {simulation_id: $run_id, id: $node_id})  # noqa: E501
             WHERE ($year IS NULL OR word.year <= $year)
               AND coalesce(word.active, true)
               AND NOT EXISTS {
-                MATCH (word)<-[:ORIGIN]-(child:Word {simulation_id: $run_id})-[:BELONGS_TO]->(:Language {simulation_id: $run_id, id: $node_id})
+                MATCH (word)<-[:ORIGIN]-(child:Word {simulation_id: $run_id})-[:BELONGS_TO]->(:Language {simulation_id: $run_id, id: $node_id})  # noqa: E501
                 WHERE $year IS NULL OR child.year <= $year
               }
             OPTIONAL MATCH path = (word)-[:ORIGIN*]->(proto:Word {simulation_id: $run_id})
@@ -332,21 +336,24 @@ class Neo4jGenealogyStore:
     def isogloss(self, run_id: str, concept_id: str, year: int | None = None) -> dict[str, str]:
         # Výběr aktivní varianty pro každý jazyk je stejný jako v `language`.
         query = """
-            MATCH (word:Word {simulation_id: $run_id, concept_id: $concept_id})-[:BELONGS_TO]->(language:Language {simulation_id: $run_id})
+            MATCH (word:Word {simulation_id: $run_id, concept_id: $concept_id})-[:BELONGS_TO]->(language:Language {simulation_id: $run_id})  # noqa: E501
             WHERE ($year IS NULL OR word.year <= $year)
               AND coalesce(word.active, true)
               AND NOT EXISTS {
-                MATCH (word)<-[:ORIGIN]-(child:Word {simulation_id: $run_id})-[:BELONGS_TO]->(language)
+                MATCH (word)<-[:ORIGIN]-(child:Word {simulation_id: $run_id})-[:BELONGS_TO]->(language)  # noqa: E501
                 WHERE $year IS NULL OR child.year <= $year
               }
             RETURN language.id AS language_id, word.ipa AS ipa
         """
         with self.driver.session() as session:
-            return {record["language_id"]: record["ipa"] for record in session.run(query, run_id=run_id, concept_id=concept_id, year=year)}
+            return {
+                record["language_id"]: record["ipa"]
+                for record in session.run(query, run_id=run_id, concept_id=concept_id, year=year)
+            }
 
     def word_trace(self, run_id: str, word_id: str) -> list[dict[str, Any]]:
         query = """
-            MATCH path = (word:Word {simulation_id: $run_id, id: $word_id})-[:ORIGIN*0..]->(proto:Word {simulation_id: $run_id})
+            MATCH path = (word:Word {simulation_id: $run_id, id: $word_id})-[:ORIGIN*0..]->(proto:Word {simulation_id: $run_id})  # noqa: E501
             WHERE NOT (proto)-[:ORIGIN]->()
             RETURN nodes(path) AS nodes, relationships(path) AS relationships
         """
@@ -371,27 +378,35 @@ class Neo4jGenealogyStore:
     def export(self, run_id: str) -> dict[str, Any]:
         with self.driver.session() as session:
             simulation = session.run(
-                "MATCH (simulation:Simulation {id: $run_id}) RETURN simulation.events_json AS events_json",
+                "MATCH (simulation:Simulation {id: $run_id}) RETURN simulation.events_json AS events_json",  # noqa: E501
                 run_id=run_id,
             ).single()
             nodes = [
                 dict(record)
                 for record in session.run(
-                    "MATCH (word:Word {simulation_id: $run_id})-[:BELONGS_TO]->(language:Language {simulation_id: $run_id}) RETURN word.id AS id, word.concept_id AS concept_id, word.ipa AS ipa, word.ipa_prosodic AS ipa_prosodic, word.year AS year, word.polysemy AS polysemy, word.stress_index AS stress_index, word.long_nuclei AS long_nuclei, word.morpheme_boundaries AS morpheme_boundaries, word.active AS active, word.frequency AS frequency, word.paradigm AS paradigm, word.grammatical_features_json AS grammatical_features_json, word.is_grammatical AS is_grammatical, word.origin_type AS origin_type, language.id AS language_id",
+                    (
+                        "MATCH (word:Word {simulation_id: $run_id})-[:BELONGS_TO]->(language:Language {simulation_id: $run_id}) "  # noqa: E501
+                        "RETURN word.id AS id, word.concept_id AS concept_id, word.ipa AS ipa, word.ipa_prosodic AS ipa_prosodic, "  # noqa: E501
+                        "word.year AS year, word.polysemy AS polysemy, word.stress_index AS stress_index, word.long_nuclei AS long_nuclei, "  # noqa: E501
+                        "word.morpheme_boundaries AS morpheme_boundaries, word.active AS active, word.frequency AS frequency, "  # noqa: E501
+                        "word.paradigm AS paradigm, word.grammatical_features_json AS grammatical_features_json, "  # noqa: E501
+                        "word.is_grammatical AS is_grammatical, word.origin_type AS origin_type, language.id AS language_id"  # noqa: E501
+                    ),
                     run_id=run_id,
                 )
             ]
             edges = [
                 dict(record)
                 for record in session.run(
-                    "MATCH (target:Word {simulation_id: $run_id})-[origin:ORIGIN]->(source:Word {simulation_id: $run_id}) RETURN target.id AS target_id, source.id AS source_id, origin.type AS type, origin.rule AS rule",
+                    (
+                        "MATCH (target:Word {simulation_id: $run_id})-[origin:ORIGIN]->(source:Word {simulation_id: $run_id}) "  # noqa: E501
+                        "RETURN target.id AS target_id, source.id AS source_id, origin.type AS type, origin.rule AS rule"  # noqa: E501
+                    ),
                     run_id=run_id,
                 )
             ]
         for node in nodes:
-            node["grammatical_features"] = json.loads(
-                node.pop("grammatical_features_json") or "{}"
-            )
+            node["grammatical_features"] = json.loads(node.pop("grammatical_features_json") or "{}")
         events = json.loads(simulation["events_json"] or "[]") if simulation else []
         return {
             "schema_version": 2,

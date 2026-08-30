@@ -1,4 +1,5 @@
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
+
 
 class GraphBuilder:
     """Sbírá uzly slov a hrany původu během simulace v paměti.
@@ -6,6 +7,7 @@ class GraphBuilder:
     Po dokončení jej zpracuje zvolený adaptér `GenealogyStore`: výchozí
     souborový, nebo volitelný Neo4j. Builder proto nezná žádnou databázi.
     """
+
     def __init__(self):
         self.nodes: List[Dict[str, Any]] = []
         self.edges: List[Dict[str, Any]] = []
@@ -33,7 +35,9 @@ class GraphBuilder:
         node.update(metadata)
         self.nodes.append(node)
 
-    def add_origin_edge(self, target_id: str, source_id: str, origin_type: str, rule: Optional[str] = None):
+    def add_origin_edge(
+        self, target_id: str, source_id: str, origin_type: str, rule: Optional[str] = None
+    ):
         """Přidá hranu původu od target k source."""
         edge = {
             "target_id": target_id,
@@ -46,6 +50,4 @@ class GraphBuilder:
 
     def add_event(self, kind: str, year: int, language_id: str, **payload: Any) -> None:
         """Zaznamená i nesegmentovou událost simulace pro audit a export."""
-        self.events.append(
-            {"kind": kind, "year": year, "language_id": language_id, **payload}
-        )
+        self.events.append({"kind": kind, "year": year, "language_id": language_id, **payload})

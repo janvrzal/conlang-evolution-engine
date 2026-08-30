@@ -4,6 +4,7 @@ Oddělení datových nosičů od `EvolutionSimulator` drží samotný orchestrá
 zaměřený na pořadí a účinky událostí. Události jsou záměrně malé a nemají
 vlastní chování: historická pravidla zůstávají v `rules.py`.
 """
+
 from dataclasses import dataclass
 from typing import Dict
 

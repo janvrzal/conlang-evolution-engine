@@ -7,6 +7,7 @@ kombinovaný CLICS4+DatSemShift graf, a engine by ho stejně nikdy nepoužil —
 `resolve_semantics_path`/`build_semantic_evaluator` je poslední krok
 integrace, který data skutečně dostane k `SemanticEvaluator`u.
 """
+
 from pathlib import Path
 
 import pytest
@@ -69,13 +70,9 @@ def test_cache_je_klicovana_cestou_ne_globalni(tmp_path):
     který výslovně chtěl jiný soubor. Cache musí rozlišovat podle cesty.
     """
     yaml_a = tmp_path / "a.yaml"
-    yaml_a.write_text(
-        "shifts:\n  - source: X\n    target: Y\n    weight: 1.0\n", encoding="utf-8"
-    )
+    yaml_a.write_text("shifts:\n  - source: X\n    target: Y\n    weight: 1.0\n", encoding="utf-8")
     yaml_b = tmp_path / "b.yaml"
-    yaml_b.write_text(
-        "shifts:\n  - source: P\n    target: Q\n    weight: 1.0\n", encoding="utf-8"
-    )
+    yaml_b.write_text("shifts:\n  - source: P\n    target: Q\n    weight: 1.0\n", encoding="utf-8")
 
     ev_a = build_semantic_evaluator(SimulationConfig(semantics_path=str(yaml_a)))
     ev_b = build_semantic_evaluator(SimulationConfig(semantics_path=str(yaml_b)))
@@ -94,6 +91,7 @@ def test_stejna_cesta_pouzije_stejny_graf_z_cache(tmp_path):
     ev1 = build_semantic_evaluator(SimulationConfig(semantics_path=str(yaml_a)))
     ev2 = build_semantic_evaluator(SimulationConfig(semantics_path=str(yaml_a)))
 
+    assert ev1 is not None and ev2 is not None
     assert ev1.graph is ev2.graph  # stejný objekt, ne jen rovnocenná data
 
 

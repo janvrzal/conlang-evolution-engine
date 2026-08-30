@@ -1,14 +1,17 @@
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+
 from cee.core.models import Segment, Word
+
 
 @dataclass
 class Rule:
     """
     Reprezentuje jediné historické fonologické pravidlo.
-    Tato třída je zcela nezávislá na tom, z jakého textového formátu 
+    Tato třída je zcela nezávislá na tom, z jakého textového formátu
     byla načtena (YAML, JSON, Lexurgy).
     """
+
     name: str
     target: Dict[str, str]
     action: Dict[str, str]
@@ -50,6 +53,7 @@ class Rule:
                 continue
             if self.syllable_part:
                 from cee.engine.prosody import syllable_position
+
                 if syllable_position(word, i) != self.syllable_part:
                     continue
             if self.env_before:
@@ -63,13 +67,19 @@ class Rule:
                     if i != len(word.segments) - 1:
                         continue
                 elif self.env_after.get("_lookahead_vowel") == "+":
-                    environment = {key: value for key, value in self.env_after.items() if not key.startswith("_")}
+                    environment = {
+                        key: value
+                        for key, value in self.env_after.items()
+                        if not key.startswith("_")
+                    }
                     if not any(
                         candidate.features.get("syl") == "+" and candidate.matches(environment)
-                        for candidate in word.segments[i + 1:]
+                        for candidate in word.segments[i + 1 :]
                     ):
                         continue
-                elif i == len(word.segments) - 1 or not word.segments[i + 1].matches(self.env_after):
+                elif i == len(word.segments) - 1 or not word.segments[i + 1].matches(
+                    self.env_after
+                ):
                     continue
             targets.append(i)
         return targets
@@ -103,18 +113,27 @@ class Rule:
             return any(i in word.long_nuclei for i in targets)
         if self.operation == "compensatory_lengthening":
             lost = {
-                i + 1 for i in targets
+                i + 1
+                for i in targets
                 if i + 1 < len(word.segments)
-                and (i + 1 == len(word.segments) - 1 or (
-                    i + 2 < len(word.segments) and word.segments[i + 2].features.get("cons") == "+"
-                ))
+                and (
+                    i + 1 == len(word.segments) - 1
+                    or (
+                        i + 2 < len(word.segments)
+                        and word.segments[i + 2].features.get("cons") == "+"
+                    )
+                )
             }
             return bool(lost) and self._passes_minimality(
-                word, word.segments, [segment for i, segment in enumerate(word.segments) if i not in lost]
+                word,
+                word.segments,
+                [segment for i, segment in enumerate(word.segments) if i not in lost],
             )
         if self.action.get("delete") == "+":
             return self._passes_minimality(
-                word, word.segments, [segment for i, segment in enumerate(word.segments) if i not in set(targets)]
+                word,
+                word.segments,
+                [segment for i, segment in enumerate(word.segments) if i not in set(targets)],
             )
         if self.operation in {"stress_initial", "stress_penult", "stress_final"}:
             nuclei = word.syllable_nuclei()
@@ -138,12 +157,16 @@ class Rule:
             for feature, new_value in self.action.items():
                 if isinstance(new_value, str) and new_value.startswith("$after:"):
                     if i + 1 < len(word.segments):
-                        expected = word.segments[i + 1].features.get(new_value.split(":", 1)[1], "0")
+                        expected = word.segments[i + 1].features.get(
+                            new_value.split(":", 1)[1], "0"
+                        )
                     else:
                         continue
                 elif isinstance(new_value, str) and new_value.startswith("$before:"):
                     if i > 0:
-                        expected = word.segments[i - 1].features.get(new_value.split(":", 1)[1], "0")
+                        expected = word.segments[i - 1].features.get(
+                            new_value.split(":", 1)[1], "0"
+                        )
                     else:
                         continue
                 else:
@@ -173,8 +196,13 @@ class Rule:
 
         if self.operation == "geminate":
             word.segments = [
-                part for i, segment in enumerate(word.segments)
-                for part in ([segment, Segment(features=dict(segment.features))] if i in targets_to_modify else [segment])
+                part
+                for i, segment in enumerate(word.segments)
+                for part in (
+                    [segment, Segment(features=dict(segment.features))]
+                    if i in targets_to_modify
+                    else [segment]
+                )
             ]
             word.ensure_stress()
             return True
@@ -182,8 +210,13 @@ class Rule:
         if self.operation == "degeminate":
             targets = set(targets_to_modify)
             remaining = [
-                segment for i, segment in enumerate(word.segments)
-                if not (i in targets and i + 1 < len(word.segments) and segment.features == word.segments[i + 1].features)
+                segment
+                for i, segment in enumerate(word.segments)
+                if not (
+                    i in targets
+                    and i + 1 < len(word.segments)
+                    and segment.features == word.segments[i + 1].features
+                )
             ]
             if len(remaining) == len(word.segments):
                 return False
@@ -193,7 +226,9 @@ class Rule:
 
         if self.operation in {"lengthen", "shorten"}:
             if self.operation == "lengthen":
-                word.long_nuclei.update(i for i in targets_to_modify if word.segments[i].features.get("syl") == "+")
+                word.long_nuclei.update(
+                    i for i in targets_to_modify if word.segments[i].features.get("syl") == "+"
+                )
             else:
                 word.long_nuclei.difference_update(targets_to_modify)
             word.ensure_stress()
@@ -222,6 +257,7 @@ class Rule:
             remaining = [segment for i, segment in enumerate(word.segments) if i not in lost]
             if not self._passes_minimality(word, word.segments, remaining):
                 return False
+
             # Přepočet indexů zachová i délky, které ve slově byly předtím.
             def new_index(index: int) -> int:
                 return index - sum(1 for removed in lost if removed < index)
@@ -270,10 +306,14 @@ class Rule:
             for feature, new_value in self.action.items():
                 if isinstance(new_value, str) and new_value.startswith("$after:"):
                     if i + 1 < len(word.segments):
-                        segment.features[feature] = word.segments[i + 1].features.get(new_value.split(":", 1)[1], "0")
+                        segment.features[feature] = word.segments[i + 1].features.get(
+                            new_value.split(":", 1)[1], "0"
+                        )
                 elif isinstance(new_value, str) and new_value.startswith("$before:"):
                     if i > 0:
-                        segment.features[feature] = word.segments[i - 1].features.get(new_value.split(":", 1)[1], "0")
+                        segment.features[feature] = word.segments[i - 1].features.get(
+                            new_value.split(":", 1)[1], "0"
+                        )
                 else:
                     segment.features[feature] = new_value
 
@@ -320,11 +360,11 @@ class Rule:
 
         for i, segment in enumerate(word.segments):
             if i in pozice and self.insert == "before":
-                vysledek.append(Segment(features=dict(self.insert_features)))
+                vysledek.append(Segment(features=dict(self.insert_features or {})))
 
             vysledek.append(segment)
 
             if i in pozice and self.insert == "after":
-                vysledek.append(Segment(features=dict(self.insert_features)))
+                vysledek.append(Segment(features=dict(self.insert_features or {})))
 
         return vysledek

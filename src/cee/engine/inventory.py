@@ -6,6 +6,7 @@ inventáře* — pravidlo mířící na prázdnou třídu se nemá vůbec vygene
 `Inventory` v core.models drží jen IPA řetězce, takže na rysové dotazy
 nestačí; tahle třída k nim přidává rysové matice z panphonu.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional

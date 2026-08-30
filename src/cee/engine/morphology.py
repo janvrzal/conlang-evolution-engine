@@ -1,40 +1,44 @@
-from typing import Dict, Iterable, Optional
-from cee.core.models import State, Word
 import copy
+from typing import Dict, Iterable, Optional, cast
+
+from cee.core.models import State, Word
+
 
 class MorphologyEvaluator:
     """
     Vykonává morfologické operace, např. skládání slov (compounding)
     a případně analogii (zarovnávání nepravidelností).
     """
-    
-    def compound(self, state: State, word1_id: str, word2_id: str, new_concept_id: str) -> Optional[Word]:
+
+    def compound(
+        self, state: State, word1_id: str, word2_id: str, new_concept_id: str
+    ) -> Optional[Word]:
         """
         Vytvoří nové slovo spojením dvou existujících slov z lexikonu státu.
         Respektuje typologický parametr 'compound_head' (initial vs final).
         word1: hlava (head)
         word2: modifikátor (modifier)
-        
-        Např: head='město', modifier='zlatý'. 
+
+        Např: head='město', modifier='zlatý'.
         Pokud head='final', výsledek bude [zlatý][město].
         Pokud head='initial', výsledek bude [město][zlatý].
         """
         w1 = state.lexicon.get_word(word1_id)
         w2 = state.lexicon.get_word(word2_id)
-        
+
         if not w1 or not w2:
             return None
         existing = state.lexicon.get_word(new_concept_id)
         if existing:
             return existing
-            
+
         head_order = state.compound_head
-        
+
         if head_order == "initial":
             new_segments = copy.deepcopy(w1.segments) + copy.deepcopy(w2.segments)
-        else: # final
+        else:  # final
             new_segments = copy.deepcopy(w2.segments) + copy.deepcopy(w1.segments)
-            
+
         new_word = Word(
             concept_id=new_concept_id,
             segments=new_segments,
@@ -45,7 +49,7 @@ class MorphologyEvaluator:
             origin_type="compound",
             origin_rule="compounding",
         )
-        
+
         # Přidáme do lexikonu
         state.lexicon.words.append(new_word)
         return new_word
@@ -121,9 +125,7 @@ class MorphologyEvaluator:
                     else root + copy.deepcopy(model_affix)
                 )
                 word.morpheme_boundaries = {
-                    len(model_affix)
-                    if state.affixation_strategy == "prefix"
-                    else len(root)
+                    len(model_affix) if state.affixation_strategy == "prefix" else len(root)
                 }
                 word.ensure_stress()
                 changed += 1
@@ -166,7 +168,10 @@ class MorphologyEvaluator:
                 origin_type="inflected",
                 origin_rule=f"paradigm:{paradigm_id}",
                 paradigm=paradigm_id,
-                grammatical_features={str(k): str(v) for k, v in dict(form.get("features", {})).items()},
+                grammatical_features={
+                    str(k): str(v)
+                    for k, v in cast(dict[str, str], form.get("features", {})).items()
+                },
             )
             state.lexicon.words.append(word)
             created.append(word)
@@ -184,7 +189,11 @@ class MorphologyEvaluator:
 
     def reanalyze_boundaries(self, state: State, paradigm_id: Optional[str] = None) -> int:
         """Posune nestabilní hranici o jeden segment k produktivnímu afixu."""
-        words = [word for word in state.lexicon.words if word.morpheme_boundaries and (paradigm_id is None or word.paradigm == paradigm_id)]
+        words = [
+            word
+            for word in state.lexicon.words
+            if word.morpheme_boundaries and (paradigm_id is None or word.paradigm == paradigm_id)
+        ]
         if not words:
             return 0
         changed = 0

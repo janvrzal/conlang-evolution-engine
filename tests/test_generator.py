@@ -1,8 +1,9 @@
 """Generátor zvukových změn: priory, filtr věrohodnosti, stavovost."""
+
 import pytest
 
-from cee.core.models import Inventory, State, Lexicon
-from cee.engine.generator import SoundChangeGenerator, _reverses, _reuses_schema_too_soon
+from cee.core.models import Inventory, Lexicon, State
+from cee.engine.generator import SoundChangeGenerator, _reuses_schema_too_soon, _reverses
 from cee.engine.inventory import InventoryView
 from cee.engine.parser import YamlParser
 from cee.engine.rules import Rule
@@ -16,8 +17,12 @@ def preset():
 
 
 def _state(biome=None):
-    return State(node_id="test", inventory=Inventory(), lexicon=Lexicon(),
-                 map={"biome": biome} if biome else {})
+    return State(
+        node_id="test",
+        inventory=Inventory(),
+        lexicon=Lexicon(),
+        map={"biome": biome} if biome else {},
+    )
 
 
 def test_negeneruje_pravidla_bez_opory_v_inventari(mapper, preset):
@@ -35,9 +40,9 @@ def test_negeneruje_pravidla_bez_opory_v_inventari(mapper, preset):
     # v tom, co mu připravila předchozí pravidla.
     stav = inv
     for rule in rules:
-        assert stav.has_all(rule.target, rule.env_before, rule.env_after), (
-            f"'{rule.name}' míří na třídu, která v inventáři {stav} není."
-        )
+        assert stav.has_all(
+            rule.target, rule.env_before, rule.env_after
+        ), f"'{rule.name}' míří na třídu, která v inventáři {stav} není."
         stav = stav.apply(rule)
 
     zakazana = ("Fortice", "Zvýšení zadních")
@@ -78,10 +83,18 @@ def test_stejne_schema_se_neopakuje_v_kratkem_sledu():
         name="Synkopa", target={"syl": "+"}, action={"delete": "+"}, year=200, schema_id="syncope"
     )
     soon = Rule(
-        name="Další synkopa", target={"syl": "+"}, action={"delete": "+"}, year=500, schema_id="syncope"
+        name="Další synkopa",
+        target={"syl": "+"},
+        action={"delete": "+"},
+        year=500,
+        schema_id="syncope",
     )
     later = Rule(
-        name="Pozdní synkopa", target={"syl": "+"}, action={"delete": "+"}, year=700, schema_id="syncope"
+        name="Pozdní synkopa",
+        target={"syl": "+"},
+        action={"delete": "+"},
+        year=700,
+        schema_id="syncope",
     )
 
     assert _reuses_schema_too_soon([previous], soon) is True
@@ -94,15 +107,19 @@ def test_chronologie_neobsahuje_okamzite_zvraceni(mapper, preset):
     rules = gen.generate_rules_for_edge(_state(), 0, 1000, num_rules=10, inventory=inv)
 
     for predchozi, dalsi in zip(rules, rules[1:]):
-        assert not _reverses(predchozi, dalsi), (
-            f"'{predchozi.name}' je hned zrušeno pravidlem '{dalsi.name}'."
-        )
+        assert not _reverses(
+            predchozi, dalsi
+        ), f"'{predchozi.name}' je hned zrušeno pravidlem '{dalsi.name}'."
 
 
 def test_pravidla_jsou_serazena_v_case(mapper, preset):
     inv = InventoryView(mapper, set("aeiouptkbdɡfvszlrmn"))
     gen = SoundChangeGenerator(preset, seed=3)
-    roky = [r.year for r in gen.generate_rules_for_edge(_state(), 100, 900, num_rules=5, inventory=inv)]
+    roky = [
+        r.year
+        for r in gen.generate_rules_for_edge(_state(), 100, 900, num_rules=5, inventory=inv)
+        if r.year is not None
+    ]
     assert roky == sorted(roky)
     assert all(100 <= y <= 900 for y in roky)
 
@@ -112,8 +129,10 @@ def test_biom_meni_vysledek(mapper, preset):
 
     def bez(biome):
         gen = SoundChangeGenerator(preset, seed=42)
-        return [r.name for r in gen.generate_rules_for_edge(
-            _state(biome), 0, 600, num_rules=4, inventory=inv)]
+        return [
+            r.name
+            for r in gen.generate_rules_for_edge(_state(biome), 0, 600, num_rules=4, inventory=inv)
+        ]
 
     assert bez("hory") != bez("prales")
 
@@ -123,7 +142,9 @@ def test_stejny_seed_stejny_vysledek(mapper, preset):
 
     def bez():
         gen = SoundChangeGenerator(preset, seed=11)
-        return [r.name for r in gen.generate_rules_for_edge(
-            _state("hory"), 0, 600, num_rules=4, inventory=inv)]
+        return [
+            r.name
+            for r in gen.generate_rules_for_edge(_state("hory"), 0, 600, num_rules=4, inventory=inv)
+        ]
 
     assert bez() == bez()

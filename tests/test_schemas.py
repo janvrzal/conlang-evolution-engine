@@ -11,6 +11,7 @@ Chrání před třemi třídami tichých chyb, které se v enginu už vyskytly:
 3. **Příliš široký terč** — {cons: +, voi: +, cont: +} bez {son: -} pohltí
    kromě znělých frikativ i likvidy /l/ a /r/.
 """
+
 import random
 
 import pytest
@@ -22,10 +23,21 @@ from cee.engine.schemas import SCHEMA_REGISTRY
 # začátku slova, likvidy a koncovou souhlásku — tedy terče všech schémat
 # v registru.
 SONDY = [
-    "petrakofis", "vata", "zata", "bata", "data", "ɡata", "pitu", "amat", "lata", "rata",
+    "petrakofis",
+    "vata",
+    "zata",
+    "bata",
+    "data",
+    "ɡata",
+    "pitu",
+    "amat",
+    "lata",
+    "rata",
     # Kontrakty podmíněných strukturálních změn: obstruentní hranice,
     # dvojhláska a počáteční shluk.
-    "atd", "paj", "sta",
+    "atd",
+    "paj",
+    "sta",
 ]
 
 SEEDS = range(6)
@@ -38,10 +50,11 @@ def bohaty_inventar(mapper):
 
 
 def _rules(schema_id, inventory):
-    return [
+    rules = [
         SCHEMA_REGISTRY[schema_id].generate_rule(inventory, year=100, rng=random.Random(seed))
         for seed in SEEDS
     ]
+    return [r for r in rules if r is not None]
 
 
 @pytest.mark.parametrize("schema_id", sorted(SCHEMA_REGISTRY))
@@ -97,8 +110,14 @@ def test_fortice_nesahne_na_likvidy(mapper, bohaty_inventar):
     fortice měnila na okluzivy a mapper z toho dělal tónovou značku.
     """
     rule = SCHEMA_REGISTRY["fortition"].generate_rule(bohaty_inventar, year=100)
-    for vstup, ocekavano in [("vata", "bata"), ("zata", "data"), ("ɣata", "ɡata"),
-                             ("lata", "lata"), ("rata", "rata")]:
+    assert rule is not None
+    for vstup, ocekavano in [
+        ("vata", "bata"),
+        ("zata", "data"),
+        ("ɣata", "ɡata"),
+        ("lata", "lata"),
+        ("rata", "rata"),
+    ]:
         word = mapper.parse_word("x", vstup)
         rule.apply_to_word(word)
         assert mapper.render_word(word) == ocekavano
@@ -117,6 +136,7 @@ def test_synkopa_maze_jen_vokal_sve_kvality(mapper, bohaty_inventar):
         rule = SCHEMA_REGISTRY["syncope"].generate_rule(
             bohaty_inventar, year=100, rng=random.Random(seed)
         )
+        assert rule is not None
         word = mapper.parse_word("x", "peritoka")
         rule.apply_to_word(word)
         vysledky[rule.name] = mapper.render_word(word)
@@ -129,6 +149,7 @@ def test_synkopa_maze_jen_vokal_sve_kvality(mapper, bohaty_inventar):
 
     # Výchozí varianta (bez rng) cílí na vysoké vokály — zmizí jen /i/.
     vysoke = SCHEMA_REGISTRY["syncope"].generate_rule(bohaty_inventar, year=100)
+    assert vysoke is not None
     word = mapper.parse_word("x", "peritoka")
     vysoke.apply_to_word(word)
     assert mapper.render_word(word) == "pertoka"
@@ -142,6 +163,7 @@ def test_vowel_shift_zvysuje_obe_rady(mapper, bohaty_inventar):
             bohaty_inventar, year=100, rng=random.Random(seed)
         )
         word = mapper.parse_word("x", "peto")
+        assert rule is not None
         rule.apply_to_word(word)
         vysledky.add(mapper.render_word(word))
 
@@ -156,6 +178,7 @@ def test_nepodminena_frikativizace_ma_platne_cile(mapper, bohaty_inventar):
             bohaty_inventar, year=100, rng=random.Random(seed)
         )
         word = mapper.parse_word("x", "pataka")
+        assert rule is not None
         rule.apply_to_word(word)
         vysledky.add(mapper.render_word(word))
 
@@ -164,10 +187,9 @@ def test_nepodminena_frikativizace_ma_platne_cile(mapper, bohaty_inventar):
 
 def test_nepodminene_snizeni_vokalu_meni_i_na_e_a_u_na_o(mapper, bohaty_inventar):
     """/u/ → /o/ vyžaduje vedle [hi] také změnu [lab]."""
-    rule = SCHEMA_REGISTRY["unconditional_vowel_lowering"].generate_rule(
-        bohaty_inventar, year=100
-    )
+    rule = SCHEMA_REGISTRY["unconditional_vowel_lowering"].generate_rule(bohaty_inventar, year=100)
     word = mapper.parse_word("x", "pitu")
+    assert rule is not None
     rule.apply_to_word(word)
 
     assert mapper.render_word(word) == "peto"
@@ -183,6 +205,7 @@ def test_epenteze_rozbiji_souhlaskovy_shluk(mapper, bohaty_inventar):
     scvrkne do shluků souhlásek.
     """
     rule = SCHEMA_REGISTRY["epenthesis"].generate_rule(bohaty_inventar, year=100)
+    assert rule is not None
     word = mapper.parse_word("x", "ptra")
 
     assert rule.apply_to_word(word) is True
@@ -196,7 +219,7 @@ def test_epenteze_vklada_hlasku_z_inventare(mapper):
     jen_u = InventoryView(mapper, set("ptkru"))
     rule = SCHEMA_REGISTRY["epenthesis"].generate_rule(jen_u, year=100)
 
-    assert rule.insert_label in set(jen_u)
+    assert rule is not None and rule.insert_label in set(jen_u)
 
 
 def test_epenteze_odmitne_jazyk_bez_vokalu(mapper):
@@ -206,6 +229,7 @@ def test_epenteze_odmitne_jazyk_bez_vokalu(mapper):
 
 def test_diftongizace_prodlouzi_vokalismus(mapper, bohaty_inventar):
     rule = SCHEMA_REGISTRY["diphthongization"].generate_rule(bohaty_inventar, year=100)
+    assert rule is not None
     word = mapper.parse_word("x", "petra")
 
     assert rule.apply_to_word(word) is True
@@ -220,7 +244,8 @@ def test_registr_obsahuje_i_prodluzujici_schemata():
     from cee.engine.schemas import DiphthongizationSchema, EpenthesisSchema
 
     prodluzujici = [
-        s for s in SCHEMA_REGISTRY.values()
+        s
+        for s in SCHEMA_REGISTRY.values()
         if isinstance(s, (EpenthesisSchema, DiphthongizationSchema))
     ]
     assert len(prodluzujici) >= 2

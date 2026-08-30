@@ -1,4 +1,5 @@
 """HTTP endpointy pro jeden persistovaný běh simulace."""
+
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException

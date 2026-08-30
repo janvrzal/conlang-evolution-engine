@@ -4,6 +4,7 @@ Persistence projektů.
 Bez ní se rozdělaná práce držela jen v paměti prohlížeče a mizela při přechodu
 mezi stránkami i po reloadu.
 """
+
 import json
 
 import pytest
@@ -107,9 +108,7 @@ def test_seznam_radi_od_nejcerstvejsiho():
     # save() razítko přepisuje, takže "stary" dostane čerstvé; seřaď podle něj.
     ids = [p["id"] for p in projects.list_projects()]
     assert set(ids) == {"stary", "novy"}
-    assert ids == sorted(
-        ids, key=lambda i: projects.load(i).updated_at, reverse=True
-    )
+    assert ids == sorted(ids, key=lambda i: projects.load(i).updated_at, reverse=True)
 
 
 def test_poskozeny_soubor_neshodi_vypis(izolovana_slozka):

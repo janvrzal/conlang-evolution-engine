@@ -1,4 +1,5 @@
 """Diachronní lexikální obměna: frekvence, konkurence a náhrada kořene."""
+
 from __future__ import annotations
 
 import copy
@@ -131,7 +132,11 @@ class LexicalEvaluator:
 
     @staticmethod
     def _donor(words: Iterable[Word], target: Word, rng: random.Random) -> Optional[Word]:
-        candidates = [word for word in words if word is not target and word.active and word.concept_id != target.concept_id]
+        candidates = [
+            word
+            for word in words
+            if word is not target and word.active and word.concept_id != target.concept_id
+        ]
         if not candidates:
             return None
         # Vyšší frekvence zvyšuje šanci, ale neuzavírá cestu okrajovým slovům.

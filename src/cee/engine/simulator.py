@@ -54,11 +54,19 @@ class EvolutionSimulator:
     všechny větve sdílejí tutéž časovou osu.
     """
 
-    def __init__(self, graph_topo: EvolutionGraph, mapper: FeatureMapper, preset: Dict[str, Any] = None,
-                 seed: int = 42, semantic_evaluator=None,
-                 graph_builder: Optional[GraphBuilder] = None,
-                 end_year: Optional[int] = None, evolve_root: bool = False,
-                 inventory_validator=None, schema_multipliers=None):
+    def __init__(
+        self,
+        graph_topo: EvolutionGraph,
+        mapper: FeatureMapper,
+        preset: Dict[str, Any] | None = None,
+        seed: int = 42,
+        semantic_evaluator=None,
+        graph_builder: Optional[GraphBuilder] = None,
+        end_year: Optional[int] = None,
+        evolve_root: bool = False,
+        inventory_validator=None,
+        schema_multipliers=None,
+    ):
         self.graph = graph_topo
         self.mapper = mapper
         self.graph_builder = graph_builder
@@ -135,13 +143,11 @@ class EvolutionSimulator:
             )
             word.parent_word_id = None
         parent_of = self._collect_tree(root_state.node_id)
-        
+
         if self.graph_builder:
             for w in root_state.lexicon.words:
                 self._record_word(w, root_state.year, root_state.node_id)
-            self.graph_builder.add_event(
-                "simulation_start", root_state.year, root_state.node_id
-            )
+            self.graph_builder.add_event("simulation_start", root_state.year, root_state.node_id)
 
         if not parent_of and not self.evolve_root:
             return {root_state.node_id: root_state}
@@ -161,7 +167,11 @@ class EvolutionSimulator:
             counter += 1
 
         for child_id, parent_id in parent_of.items():
-            push(fork_years[child_id], _PRIO_FORK, ForkEvent(fork_years[child_id], parent_id, child_id))
+            push(
+                fork_years[child_id],
+                _PRIO_FORK,
+                ForkEvent(fork_years[child_id], parent_id, child_id),
+            )
 
         if self.evolve_root:
             self._schedule_phonology_slots(root_state.node_id, root_state.year, push)
@@ -189,9 +199,20 @@ class EvolutionSimulator:
             # Oboustranný kontakt se rozpadne na dvě události, aby si každý
             # směr nesl vlastní stopu ve výpůjčkách i v historii.
             for source_id, target_id in contact.directions():
-                push(contact.year, _PRIO_CONTACT,
-                     ContactEvent(contact.year, source_id, target_id, contact.volume,
-                                  contact.domain, contact.prestige, contact.calque_rate, contact.adapt))
+                push(
+                    contact.year,
+                    _PRIO_CONTACT,
+                    ContactEvent(
+                        contact.year,
+                        source_id,
+                        target_id,
+                        contact.volume,
+                        contact.domain,
+                        contact.prestige,
+                        contact.calque_rate,
+                        contact.adapt,
+                    ),
+                )
 
         last_year = root_state.year
 
@@ -288,14 +309,18 @@ class EvolutionSimulator:
                 if branch_state is not None:
                     branch_state.year = event.year
                     before = self._word_versions(branch_state)
-                    rng = random.Random(derive_seed(self.seed, "lexicon", event.branch_id, str(event.year)))
+                    rng = random.Random(
+                        derive_seed(self.seed, "lexicon", event.branch_id, str(event.year))
+                    )
                     lexical = self.graph.node_configs.get(event.branch_id, {}).get("lexical", {})
                     evaluator = LexicalEvaluator(
                         replacement_rate=float(lexical.get("replacement_rate", 0.015)),
                         loss_rate=float(lexical.get("loss_rate", 0.01)),
                     )
                     evaluator.evaluate(
-                        branch_state, event.year, rng,
+                        branch_state,
+                        event.year,
+                        rng,
                         taboo_concepts=lexical.get("taboo_concepts", []),
                         resolve_homophones=bool(lexical.get("resolve_homophones", False)),
                         render=self.mapper.render_word,
@@ -313,7 +338,13 @@ class EvolutionSimulator:
                 if branch_state is not None:
                     branch_state.year = event.year
                     for key, value in event.changes.items():
-                        if key in {"prestige", "mobility", "literacy", "standardization", "population"}:
+                        if key in {
+                            "prestige",
+                            "mobility",
+                            "literacy",
+                            "standardization",
+                            "population",
+                        }:
                             branch_state.social[key] = max(0.0, min(1.0, float(value)))
                     if self.graph_builder:
                         self.graph_builder.add_event(
@@ -333,8 +364,16 @@ class EvolutionSimulator:
                         stacklevel=2,
                     )
                     continue
-                self._apply_contact(source_state, target_state, event.year, event.volume,
-                                    event.domain, event.prestige, event.calque_rate, event.adapt)
+                self._apply_contact(
+                    source_state,
+                    target_state,
+                    event.year,
+                    event.volume,
+                    event.domain,
+                    event.prestige,
+                    event.calque_rate,
+                    event.adapt,
+                )
 
         result = {
             node_id: state
@@ -408,7 +447,7 @@ class EvolutionSimulator:
         """Odštěpí nový uzel jako nezávislou kopii rodiče v daném roce."""
         node_cfg = self.graph.node_configs.get(child_id, {})
         new_lexicon = Lexicon(words=[])
-        
+
         for index, parent_word in enumerate(parent_state.lexicon.words):
             new_word = copy.deepcopy(parent_word)
             new_word.parent_word_id = parent_word.id
@@ -419,17 +458,13 @@ class EvolutionSimulator:
             new_word.origin_rule = None
             new_word.origin_year = year
             new_lexicon.words.append(new_word)
-            
+
             if self.graph_builder:
                 self._record_word(new_word, year, child_id)
-                self.graph_builder.add_origin_edge(
-                    new_word.id, parent_word.id, "inherited"
-                )
+                self.graph_builder.add_origin_edge(new_word.id, parent_word.id, "inherited")
 
         if self.graph_builder:
-            self.graph_builder.add_event(
-                "split", year, child_id, parent_id=parent_state.node_id
-            )
+            self.graph_builder.add_event("split", year, child_id, parent_id=parent_state.node_id)
 
         return State(
             node_id=child_id,
@@ -437,7 +472,7 @@ class EvolutionSimulator:
             inventory=copy.deepcopy(parent_state.inventory),
             lexicon=new_lexicon,
             parent_id=parent_state.node_id,
-            map=node_cfg.get('map', {}),
+            map=node_cfg.get("map", {}),
         )
 
     def _horizon_for(self, start_year: int, child_id: str) -> int:
@@ -449,10 +484,16 @@ class EvolutionSimulator:
         """
         candidates = [self.end_year] if self.end_year else []
 
-        candidates += [c.year for c in self.graph.contact_edges
-                       if child_id in (c.source_id, c.target_id)]
-        candidates += [r.year for e in self.graph.vertical_edges if e.parent_id == child_id
-                       for r in e.rules if r.year is not None]
+        candidates += [
+            c.year for c in self.graph.contact_edges if child_id in (c.source_id, c.target_id)
+        ]
+        candidates += [
+            r.year
+            for e in self.graph.vertical_edges
+            if e.parent_id == child_id
+            for r in e.rules
+            if r.year is not None
+        ]
 
         horizon = max([c for c in candidates if c is not None], default=start_year + 200)
         return max(horizon, start_year + 1)
@@ -586,8 +627,12 @@ class EvolutionSimulator:
         config = self.graph.node_configs.get(node_id, {})
         morphology = config.get("morphology", {})
         has_creation = bool(
-            config.get("compounds") or morphology.get("compounds") or morphology.get("derivations")
-            or morphology.get("paradigms") or morphology.get("grammaticalize") or morphology.get("reanalyze")
+            config.get("compounds")
+            or morphology.get("compounds")
+            or morphology.get("derivations")
+            or morphology.get("paradigms")
+            or morphology.get("grammaticalize")
+            or morphology.get("reanalyze")
         )
         analogy_rate = float(morphology.get("analogy_rate", 0.0))
         if has_creation:
@@ -617,7 +662,9 @@ class EvolutionSimulator:
                 continue
             if year < start_year:
                 continue
-            changes = item.get("changes", {key: value for key, value in item.items() if key != "year"})
+            changes = item.get(
+                "changes", {key: value for key, value in item.items() if key != "year"}
+            )
             if isinstance(changes, dict):
                 push(year, _PRIO_SOCIAL, SocialEvent(year, node_id, changes))
 
@@ -720,9 +767,7 @@ class EvolutionSimulator:
                     )
                 continue
             if self._word_signature(word) != before[word.id]:
-                self._version_word(
-                    word, word.id, state.node_id, year, origin_type, rule
-                )
+                self._version_word(word, word.id, state.node_id, year, origin_type, rule)
                 changed += 1
         return changed
 
@@ -742,11 +787,11 @@ class EvolutionSimulator:
         """
         config = self.graph.node_configs.get(state.node_id, {})
         morphology = config.get("morphology", {})
-        specs = [*config.get('compounds', []), *morphology.get("compounds", [])]
+        specs = [*config.get("compounds", []), *morphology.get("compounds", [])]
 
         morph = MorphologyEvaluator()
         for spec in specs:
-            head, modifier, new_id = spec.get('head'), spec.get('modifier'), spec.get('id')
+            head, modifier, new_id = spec.get("head"), spec.get("modifier"), spec.get("id")
             if not (head and modifier and new_id):
                 warnings.warn(
                     f"Složenina {spec!r} v uzlu '{state.node_id}' vyžaduje "
@@ -764,7 +809,9 @@ class EvolutionSimulator:
         for spec in morphology.get("derivations", []):
             root, affix, new_id = spec.get("root"), spec.get("affix"), spec.get("id")
             if not (root and affix and new_id):
-                warnings.warn(f"Derivace {spec!r} vyžaduje 'root', 'affix' i 'id'; přeskakuji.", stacklevel=2)
+                warnings.warn(
+                    f"Derivace {spec!r} vyžaduje 'root', 'affix' i 'id'; přeskakuji.", stacklevel=2
+                )
                 continue
             morph.derive(state, root, affix, new_id, prefix=spec.get("prefix"))
 
@@ -807,10 +854,16 @@ class EvolutionSimulator:
         source_prestige = source.social.get("prestige", 0.5)
         target_mobility = target.social.get("mobility", 0.5)
         target_standard = target.social.get("standardization", 0.0)
-        multiplier = max(0.2, prestige) * (0.75 + target_mobility) * (1.25 - target_standard) * (0.75 + source_prestige)
+        multiplier = (
+            max(0.2, prestige)
+            * (0.75 + target_mobility)
+            * (1.25 - target_standard)
+            * (0.75 + source_prestige)
+        )
         num_borrow = min(max(1, round(volume * multiplier)), len(source.lexicon.words))
-        rng = random.Random(derive_seed(self.seed, "contact", source.node_id,
-                                        target.node_id, str(year), domain))
+        rng = random.Random(
+            derive_seed(self.seed, "contact", source.node_id, target.node_id, str(year), domain)
+        )
         candidates = [word for word in source.lexicon.words if word.active]
         if not candidates:
             return
@@ -821,11 +874,10 @@ class EvolutionSimulator:
         words_to_borrow = rng.choices(candidates, weights=weights, k=num_borrow)
         target_view = InventoryView.from_lexicon(target.lexicon, self.mapper)
 
-
         borrowed_count = 0
         calque_count = 0
         for borrow_index, w in enumerate(words_to_borrow):
-            # Zabráníme zbytečným duplicitám: Pokud už cílový jazyk má pro tento koncept 
+            # Zabráníme zbytečným duplicitám: Pokud už cílový jazyk má pro tento koncept
             # slovo, které zní úplně stejně, výpůjčku přeskočíme.
             existing_words = target.lexicon.get_words(w.concept_id)
             if any(x.segments == w.segments for x in existing_words):
@@ -836,7 +888,7 @@ class EvolutionSimulator:
                 existing_words[0].polysemy.update(w.polysemy)
                 calque_count += 1
                 continue
-                
+
             new_word = copy.deepcopy(w)
             new_word.parent_word_id = w.id
             new_word.id = self._deterministic_word_id(
@@ -856,12 +908,10 @@ class EvolutionSimulator:
 
             target.lexicon.words.append(new_word)
             borrowed_count += 1
-            
+
             if self.graph_builder:
                 self._record_word(new_word, year, target.node_id)
-                self.graph_builder.add_origin_edge(
-                    new_word.id, w.id, "borrowed"
-                )
+                self.graph_builder.add_origin_edge(new_word.id, w.id, "borrowed")
 
         if self.graph_builder:
             self.graph_builder.add_event(
@@ -886,12 +936,19 @@ class EvolutionSimulator:
             ipa = self.mapper.segment_to_ipa(segment)
             if ipa in target_view:
                 continue
-            same_class = [pair for pair in candidates if pair[1] and pair[1].get("syl") == segment.features.get("syl")]
+            same_class = [
+                pair
+                for pair in candidates
+                if pair[1] and pair[1].get("syl") == segment.features.get("syl")
+            ]
             options = same_class or candidates
             best_ipa, best_features = max(
                 options,
-                key=lambda pair: sum(value == pair[1].get(feature) for feature, value in segment.features.items()),
+                key=lambda pair: sum(
+                    value == (pair[1].get(feature) if pair[1] else None)
+                    for feature, value in segment.features.items()
+                ),
             )
             del best_ipa
-            segment.features = dict(best_features)
+            segment.features = dict(best_features or {})
         word.ensure_stress()

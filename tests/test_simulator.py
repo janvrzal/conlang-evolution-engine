@@ -1,4 +1,5 @@
 """Chování evolučního simulátoru: hloubka stromu, kontakt, složeniny, determinismus."""
+
 import pytest
 import yaml
 
@@ -42,13 +43,16 @@ def test_vnoreny_strom_se_nezahodi(mapper, tmp_path):
     Třípatrová topologie: vnuk musí zdědit změny rodiče a přidat vlastní.
     Dřív se do simulace dostaly jen přímé děti rootu a vnuci mizeli bez hlášky.
     """
-    graph = _topologie(tmp_path, {
-        "nodes": [{"id": "proto"}, {"id": "west"}, {"id": "west_a"}],
-        "vertical_edges": [
-            {"parent": "proto", "child": "west", "rules": [LENICE]},
-            {"parent": "west", "child": "west_a", "rules": [APOKOPA]},
-        ],
-    })
+    graph = _topologie(
+        tmp_path,
+        {
+            "nodes": [{"id": "proto"}, {"id": "west"}, {"id": "west_a"}],
+            "vertical_edges": [
+                {"parent": "proto", "child": "west", "rules": [LENICE]},
+                {"parent": "west", "child": "west_a", "rules": [APOKOPA]},
+            ],
+        },
+    )
 
     root = _root(mapper, [("vlk", "lupu")])
     states = EvolutionSimulator(graph, mapper).simulate(root)
@@ -60,12 +64,15 @@ def test_vnoreny_strom_se_nezahodi(mapper, tmp_path):
 
 
 def test_nedosazitelny_uzel_varuje(mapper, tmp_path):
-    graph = _topologie(tmp_path, {
-        "nodes": [{"id": "proto"}, {"id": "sirotek"}],
-        "vertical_edges": [
-            {"parent": "neznamy_rodic", "child": "sirotek", "rules": [LENICE]},
-        ],
-    })
+    graph = _topologie(
+        tmp_path,
+        {
+            "nodes": [{"id": "proto"}, {"id": "sirotek"}],
+            "vertical_edges": [
+                {"parent": "neznamy_rodic", "child": "sirotek", "rules": [LENICE]},
+            ],
+        },
+    )
 
     root = _root(mapper, [("vlk", "lupu")])
     with pytest.warns(UserWarning, match="nejsou z 'proto' dosažitelné"):
@@ -74,16 +81,19 @@ def test_nedosazitelny_uzel_varuje(mapper, tmp_path):
 
 
 def test_vypujcka_nese_stopu_a_unika_starsim_pravidlum(mapper, tmp_path):
-    graph = _topologie(tmp_path, {
-        "nodes": [{"id": "proto"}, {"id": "north"}, {"id": "south"}],
-        "vertical_edges": [
-            {"parent": "proto", "child": "north", "rules": [LENICE]},
-            {"parent": "proto", "child": "south", "rules": [APOKOPA]},
-        ],
-        "contact_edges": [
-            {"year": 300, "source": "north", "target": "south", "volume": 1},
-        ],
-    })
+    graph = _topologie(
+        tmp_path,
+        {
+            "nodes": [{"id": "proto"}, {"id": "north"}, {"id": "south"}],
+            "vertical_edges": [
+                {"parent": "proto", "child": "north", "rules": [LENICE]},
+                {"parent": "proto", "child": "south", "rules": [APOKOPA]},
+            ],
+            "contact_edges": [
+                {"year": 300, "source": "north", "target": "south", "volume": 1},
+            ],
+        },
+    )
 
     root = _root(mapper, [("vlk", "lupu")])
     states = EvolutionSimulator(graph, mapper).simulate(root)
@@ -105,32 +115,38 @@ def test_slozeniny_ridi_topologie_ne_kod(mapper, tmp_path):
     Teď je předepisuje topologie a respektuje se compound_head.
     """
     slozenina = [{"head": "mesto", "modifier": "zlaty", "id": "zlate_mesto"}]
-    graph = _topologie(tmp_path, {
-        "nodes": [
-            {"id": "proto"},
-            {"id": "north", "map": {"compound_head": "initial"}, "compounds": slozenina},
-            {"id": "south", "map": {"compound_head": "final"}, "compounds": slozenina},
-        ],
-        "vertical_edges": [
-            {"parent": "proto", "child": "north"},
-            {"parent": "proto", "child": "south"},
-        ],
-    })
+    graph = _topologie(
+        tmp_path,
+        {
+            "nodes": [
+                {"id": "proto"},
+                {"id": "north", "map": {"compound_head": "initial"}, "compounds": slozenina},
+                {"id": "south", "map": {"compound_head": "final"}, "compounds": slozenina},
+            ],
+            "vertical_edges": [
+                {"parent": "proto", "child": "north"},
+                {"parent": "proto", "child": "south"},
+            ],
+        },
+    )
 
     root = _root(mapper, [("mesto", "viku"), ("zlaty", "auru")])
     states = EvolutionSimulator(graph, mapper).simulate(root)
 
     north = states["north"].lexicon.get_word("zlate_mesto")
     south = states["south"].lexicon.get_word("zlate_mesto")
-    assert mapper.render_word(north) == "vikuauru"   # head-initial
-    assert mapper.render_word(south) == "auruviku"   # head-final
+    assert mapper.render_word(north) == "vikuauru"  # head-initial
+    assert mapper.render_word(south) == "auruviku"  # head-final
 
 
 def test_bez_predepsanych_slozenin_zadne_nevzniknou(mapper, tmp_path):
-    graph = _topologie(tmp_path, {
-        "nodes": [{"id": "proto"}, {"id": "north"}],
-        "vertical_edges": [{"parent": "proto", "child": "north", "rules": [LENICE]}],
-    })
+    graph = _topologie(
+        tmp_path,
+        {
+            "nodes": [{"id": "proto"}, {"id": "north"}],
+            "vertical_edges": [{"parent": "proto", "child": "north", "rules": [LENICE]}],
+        },
+    )
 
     root = _root(mapper, [("mesto", "viku"), ("zlaty", "auru")])
     states = EvolutionSimulator(graph, mapper).simulate(root)
@@ -140,10 +156,13 @@ def test_bez_predepsanych_slozenin_zadne_nevzniknou(mapper, tmp_path):
 def test_simulace_je_deterministicka_a_neprepisuje_topologii(mapper, tmp_path):
     """Dvojí běh nad týmž grafem musí dát tentýž výsledek (AGENT.md §1)."""
     preset = YamlParser.parse_preset("src/cee/data/presets/fantasy_preset.yaml")
-    graph = _topologie(tmp_path, {
-        "nodes": [{"id": "proto"}, {"id": "hory", "map": {"biome": "hory"}}],
-        "vertical_edges": [{"parent": "proto", "child": "hory"}],
-    })
+    graph = _topologie(
+        tmp_path,
+        {
+            "nodes": [{"id": "proto"}, {"id": "hory", "map": {"biome": "hory"}}],
+            "vertical_edges": [{"parent": "proto", "child": "hory"}],
+        },
+    )
 
     def bez(seed=42):
         root = _root(mapper, [("vlk", "lupu"), ("voda", "laku")])
@@ -173,7 +192,9 @@ def test_uzel_bez_vlastniho_pravidla_vznika_v_roce_z_konfigurace(mapper):
     graph = EvolutionGraph()
     graph.node_configs = {"proto": {}, "daughter": {"year": 500}}
     graph.vertical_edges.append(
-        __import__("cee.engine.topology", fromlist=["VerticalEdge"]).VerticalEdge("proto", "daughter", [])
+        __import__("cee.engine.topology", fromlist=["VerticalEdge"]).VerticalEdge(
+            "proto", "daughter", []
+        )
     )
 
     states = EvolutionSimulator(graph, mapper).simulate(_root(mapper, [("vlk", "lupu")]))
@@ -182,6 +203,7 @@ def test_uzel_bez_vlastniho_pravidla_vznika_v_roce_z_konfigurace(mapper):
 
 def test_semantika_bezi_v_casove_fronte_pred_pozdejsim_odstepeni(mapper):
     """Dítě musí dědit významy, které rodič získal ještě před svým vznikem."""
+
     class RecordingSemantics:
         def evaluate(self, lexicon):
             lexicon.words[0].polysemy.add("WOOD")
@@ -190,7 +212,9 @@ def test_semantika_bezi_v_casove_fronte_pred_pozdejsim_odstepeni(mapper):
     graph = EvolutionGraph()
     graph.node_configs = {"proto": {}, "daughter": {"year": 200}}
     graph.vertical_edges.append(
-        __import__("cee.engine.topology", fromlist=["VerticalEdge"]).VerticalEdge("proto", "daughter", [])
+        __import__("cee.engine.topology", fromlist=["VerticalEdge"]).VerticalEdge(
+            "proto", "daughter", []
+        )
     )
 
     states = EvolutionSimulator(
@@ -235,11 +259,17 @@ def test_genealogicky_export_je_deterministicky_vcetne_id(mapper):
 
     graph = EvolutionGraph(
         node_configs={"proto": {}, "child": {"year": 0}},
-        vertical_edges=[VerticalEdge("proto", "child", [
-            __import__("cee.engine.rules", fromlist=["Rule"]).Rule(
-                "p > b", {"cons": "+", "voi": "-"}, {"voi": "+"}, year=20
+        vertical_edges=[
+            VerticalEdge(
+                "proto",
+                "child",
+                [
+                    __import__("cee.engine.rules", fromlist=["Rule"]).Rule(
+                        "p > b", {"cons": "+", "voi": "-"}, {"voi": "+"}, year=20
+                    )
+                ],
             )
-        ])],
+        ],
     )
 
     def run():

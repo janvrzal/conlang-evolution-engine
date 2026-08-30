@@ -1,4 +1,5 @@
 """Prosodická kostra: slabiky, přízvuk a konzervativní opravy shluků."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

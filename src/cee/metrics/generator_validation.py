@@ -1,4 +1,5 @@
 """V2a: profilové srovnání generovaných a doložených zvukových změn."""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -9,9 +10,14 @@ from typing import Iterable, Mapping
 from cee.engine.rules import Rule
 
 _V2A_CLASS = {
-    "apocope": "deletion", "coda_loss": "deletion", "syncope": "deletion",
-    "vowel_shift": "vowel_change", "umlaut": "vowel_change", "nasalization": "vowel_change",
-    "diphthongization": "vowel_change", "monophthongization": "vowel_change",
+    "apocope": "deletion",
+    "coda_loss": "deletion",
+    "syncope": "deletion",
+    "vowel_shift": "vowel_change",
+    "umlaut": "vowel_change",
+    "nasalization": "vowel_change",
+    "diphthongization": "vowel_change",
+    "monophthongization": "vowel_change",
 }
 
 
@@ -38,7 +44,11 @@ class GeneratorProfile:
 def profile_rules(rules: Iterable[Rule], years: int, broad: bool = False) -> GeneratorProfile:
     rules = list(rules)
     schema_counts = Counter(
-        _V2A_CLASS.get(rule.schema_id or "manual", "consonant_change") if broad else rule.schema_id or "manual"
+        (
+            _V2A_CLASS.get(rule.schema_id or "manual", "consonant_change")
+            if broad
+            else rule.schema_id or "manual"
+        )
         for rule in rules
     )
     environment_counts = Counter(_environment(rule) for rule in rules)
@@ -56,7 +66,12 @@ def _distribution_distance(left: dict[str, int], right: dict[str, int]) -> float
     left_total, right_total = sum(left.values()), sum(right.values())
     if not keys or not left_total or not right_total:
         return 1.0
-    return sqrt(sum((sqrt(left.get(key, 0) / left_total) - sqrt(right.get(key, 0) / right_total)) ** 2 for key in keys)) / sqrt(2)
+    return sqrt(
+        sum(
+            (sqrt(left.get(key, 0) / left_total) - sqrt(right.get(key, 0) / right_total)) ** 2
+            for key in keys
+        )
+    ) / sqrt(2)
 
 
 def compare_profiles(generated: GeneratorProfile, attested: GeneratorProfile) -> dict[str, float]:
@@ -70,7 +85,9 @@ def compare_profiles(generated: GeneratorProfile, attested: GeneratorProfile) ->
         "schema_hellinger": _distribution_distance(generated.schemas, attested.schemas),
         "comparable_schema_hellinger": _distribution_distance(generated_shared, attested_shared),
         "attested_schema_coverage": attested_coverage,
-        "environment_hellinger": _distribution_distance(generated.environments, attested.environments),
+        "environment_hellinger": _distribution_distance(
+            generated.environments, attested.environments
+        ),
         "rate_delta_per_millennium": rate_delta,
     }
 

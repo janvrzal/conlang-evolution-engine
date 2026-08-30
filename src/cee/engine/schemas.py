@@ -9,6 +9,7 @@ mířící na prázdnou přirozenou třídu nemá vygenerovat. Tuhle kontrolu d�
 Pozor na rysové matice — viz AGENT.md 3.1b. Akce musí vyrobit kombinaci rysů,
 která odpovídá reálné hlásce, jinak ji mapper tiše nahradí nejbližším odhadem.
 """
+
 from typing import Optional
 
 from cee.engine.inventory import InventoryView
@@ -261,6 +262,7 @@ class UnconditionalFricatizationSchema(Schema):
             year=year,
         )
 
+
 class UnconditionalDevoicingSchema(Schema):
     """Plošná ztráta znělosti u okluziv."""
 
@@ -274,6 +276,7 @@ class UnconditionalDevoicingSchema(Schema):
             action={"voi": "-"},
             year=year,
         )
+
 
 class UnconditionalVowelLoweringSchema(Schema):
     """Plošné snížení vysokých samohlásek (i, u) na středové (e, o)."""
@@ -295,6 +298,7 @@ class UnconditionalVowelLoweringSchema(Schema):
 
 class FinalDevoicingSchema(Schema):
     """Finální ztráta znělosti u obstruentů."""
+
     def __init__(self):
         super().__init__("final_devoicing")
 
@@ -302,38 +306,47 @@ class FinalDevoicingSchema(Schema):
         return Rule(
             name=f"Finální odznělení (gen. v {year})",
             target={"cons": "+", "son": "-"},
-            action={"voi": "-"}, env_after={"_boundary": "+"}, year=year,
+            action={"voi": "-"},
+            env_after={"_boundary": "+"},
+            year=year,
         )
 
 
 class UmlautSchema(Schema):
     """Přední vokál táhne předcházející samohlásku dopředu (umlaut)."""
+
     def __init__(self):
         super().__init__("umlaut")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
             name=f"Umlaut před vysokým předním vokálem (gen. v {year})",
-            target={"syl": "+", "back": "+"}, action={"back": "-", "lab": "-"},
-            env_after={"_lookahead_vowel": "+", "syl": "+", "hi": "+", "back": "-"}, year=year,
+            target={"syl": "+", "back": "+"},
+            action={"back": "-", "lab": "-"},
+            env_after={"_lookahead_vowel": "+", "syl": "+", "hi": "+", "back": "-"},
+            year=year,
         )
 
 
 class NasalizationSchema(Schema):
     """Nazalizace vokálu před nosovkou."""
+
     def __init__(self):
         super().__init__("nasalization")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
             name=f"Nazalizace před nosovkou (gen. v {year})",
-            target={"syl": "+"}, action={"nas": "+"},
-            env_after={"cons": "+", "nas": "+"}, year=year,
+            target={"syl": "+"},
+            action={"nas": "+"},
+            env_after={"cons": "+", "nas": "+"},
+            year=year,
         )
 
 
 class MonophthongizationSchema(Schema):
     """Ztráta druhé, neslabičné části dvojhlásky Vj/Vw."""
+
     def __init__(self):
         super().__init__("monophthongization")
 
@@ -344,38 +357,48 @@ class MonophthongizationSchema(Schema):
             # vysokým aproximantem /j/ nebo /w/; samotné /i, u/ proto není
             # nikdy terčem monoftongizace.
             target={"syl": "-", "son": "+", "cons": "-", "hi": "+"},
-            action={"delete": "+"}, env_before={"syl": "+"}, year=year,
+            action={"delete": "+"},
+            env_before={"syl": "+"},
+            year=year,
         )
 
 
 class ApocopeSchema(Schema):
     """Samostatná ztráta nepřízvučné koncové samohlásky."""
+
     def __init__(self):
         super().__init__("apocope")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
             name=f"Apokopa nepřízvučného vokálu (gen. v {year})",
-            target={"syl": "+"}, action={"delete": "+"}, prosody="unstressed",
-            env_after={"_boundary": "+"}, year=year,
+            target={"syl": "+"},
+            action={"delete": "+"},
+            prosody="unstressed",
+            env_after={"_boundary": "+"},
+            year=year,
         )
 
 
 class AssimilationSchema(Schema):
     """Regresivní asimilace znělosti před další obstruentou."""
+
     def __init__(self):
         super().__init__("assimilation")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
             name=f"Asimilace znělosti před obstruentou (gen. v {year})",
-            target={"cons": "+", "son": "-"}, action={"voi": "$after:voi"},
-            env_after={"cons": "+", "son": "-"}, year=year,
+            target={"cons": "+", "son": "-"},
+            action={"voi": "$after:voi"},
+            env_after={"cons": "+", "son": "-"},
+            year=year,
         )
 
 
 class PalatalizationSchema(Schema):
     """Palatalizace okluzivy před /i/; výsledek může rozšířit inventář."""
+
     def __init__(self):
         super().__init__("palatalization")
 
@@ -383,7 +406,11 @@ class PalatalizationSchema(Schema):
         # Cílový foném se záměrně nemusí v inventáři už vyskytovat: právě
         # palatalizace je běžný zdroj nových afrikát a palatál.
         source, target = next(
-            ((a, b) for a, b in (("t", "t͡ʃ"), ("d", "d͡ʒ"), ("k", "c"), ("ɡ", "ɟ")) if a in inventory),
+            (
+                (a, b)
+                for a, b in (("t", "t͡ʃ"), ("d", "d͡ʒ"), ("k", "c"), ("ɡ", "ɟ"))
+                if a in inventory
+            ),
             (None, None),
         )
         if source is None or target is None:
@@ -393,29 +420,40 @@ class PalatalizationSchema(Schema):
         # inventáře ani ho nevyžadujeme v `generate_rule`.
         target_features = inventory.features_for_ipa(target)
         assert source_features and target_features
-        action = {feature: value for feature, value in target_features.items() if source_features.get(feature) != value}
+        action = {
+            feature: value
+            for feature, value in target_features.items()
+            if source_features.get(feature) != value
+        }
         return Rule(
             name=f"Palatalizace /{source}/ před /i/ (gen. v {year})",
-            target=source_features, action=action,
-            env_after={"_lookahead_vowel": "+", "syl": "+", "hi": "+", "back": "-"}, year=year,
+            target=source_features,
+            action=action,
+            env_after={"_lookahead_vowel": "+", "syl": "+", "hi": "+", "back": "-"},
+            year=year,
         )
 
 
 class IntervocalicSpirantizationSchema(Schema):
     """Intervokalická spirantizace okluziv."""
+
     def __init__(self):
         super().__init__("intervocalic_spirantization")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
             name=f"Intervokalická spirantizace (gen. v {year})",
-            target={"cons": "+", "son": "-", "cont": "-"}, action={"cont": "+"},
-            env_before={"syl": "+"}, env_after={"syl": "+"}, year=year,
+            target={"cons": "+", "son": "-", "cont": "-"},
+            action={"cont": "+"},
+            env_before={"syl": "+"},
+            env_after={"syl": "+"},
+            year=year,
         )
 
 
 class ProthesisSchema(Schema):
     """Protetický vokál před počátečním shlukem/okluzivou."""
+
     def __init__(self):
         super().__init__("prothesis")
 
@@ -425,15 +463,22 @@ class ProthesisSchema(Schema):
         if not features:
             return None
         return Rule(
-            name=f"Protéze /{vowel}/ (gen. v {year})", target={"cons": "+"}, action={},
+            name=f"Protéze /{vowel}/ (gen. v {year})",
+            target={"cons": "+"},
+            action={},
             # Jen počáteční shluk CC, ne libovolný jednoduchý onset.
-            env_before={"_boundary": "+"}, env_after={"cons": "+"},
-            insert="before", insert_features=features, insert_label=vowel, year=year,
+            env_before={"_boundary": "+"},
+            env_after={"cons": "+"},
+            insert="before",
+            insert_features=features,
+            insert_label=vowel,
+            year=year,
         )
 
 
 class ParagogeSchema(Schema):
     """Paragoge: vokál po koncové souhlásce."""
+
     def __init__(self):
         super().__init__("paragoge")
 
@@ -443,57 +488,82 @@ class ParagogeSchema(Schema):
         if not features:
             return None
         return Rule(
-            name=f"Paragoge /{vowel}/ (gen. v {year})", target={"cons": "+"}, action={},
-            env_after={"_boundary": "+"}, insert="after", insert_features=features, insert_label=vowel, year=year,
+            name=f"Paragoge /{vowel}/ (gen. v {year})",
+            target={"cons": "+"},
+            action={},
+            env_after={"_boundary": "+"},
+            insert="after",
+            insert_features=features,
+            insert_label=vowel,
+            year=year,
         )
 
 
 class GeminationSchema(Schema):
     """Geminace intervokalické souhlásky."""
+
     def __init__(self):
         super().__init__("gemination")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
-            name=f"Intervokalická geminace (gen. v {year})", target={"cons": "+"}, action={},
-            env_before={"syl": "+"}, env_after={"syl": "+"}, operation="geminate", year=year,
+            name=f"Intervokalická geminace (gen. v {year})",
+            target={"cons": "+"},
+            action={},
+            env_before={"syl": "+"},
+            env_after={"syl": "+"},
+            operation="geminate",
+            year=year,
         )
 
 
 class MetathesisSchema(Schema):
     """Metateze sousedních souhlásek; vhodná pro pozdní, vzácné změny."""
+
     def __init__(self):
         super().__init__("metathesis")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
-            name=f"Metateze souhláskového shluku (gen. v {year})", target={"cons": "+"}, action={},
-            env_after={"cons": "+"}, operation="swap_next", year=year,
+            name=f"Metateze souhláskového shluku (gen. v {year})",
+            target={"cons": "+"},
+            action={},
+            env_after={"cons": "+"},
+            operation="swap_next",
+            year=year,
         )
 
 
 class CompensatoryLengtheningSchema(Schema):
     """Prodloužení vokálu před ztratitelnou koncovou souhláskou."""
+
     def __init__(self):
         super().__init__("compensatory_lengthening")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
             name=f"Kompenzační dloužení se ztrátou kody (gen. v {year})",
-            target={"syl": "+"}, action={},
-            env_after={"cons": "+", "son": "-"}, operation="compensatory_lengthening", year=year,
+            target={"syl": "+"},
+            action={},
+            env_after={"cons": "+", "son": "-"},
+            operation="compensatory_lengthening",
+            year=year,
         )
 
 
 class StressShiftSchema(Schema):
     """Přesun přízvuku na penultimu jako samostatná diachronní změna."""
+
     def __init__(self):
         super().__init__("stress_shift")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
         return Rule(
-            name=f"Přesun přízvuku na penultimu (gen. v {year})", target={"syl": "+"}, action={},
-            operation="stress_penult", year=year,
+            name=f"Přesun přízvuku na penultimu (gen. v {year})",
+            target={"syl": "+"},
+            action={},
+            operation="stress_penult",
+            year=year,
         )
 
 

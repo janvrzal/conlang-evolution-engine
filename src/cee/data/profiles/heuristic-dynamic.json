@@ -1,0 +1,1 @@
+{"id":"heuristic-dynamic","kind":"heuristic","label":"Dynamický vývoj","description":"Více vokalických a konsonantických inovací bez zvýšení deletivních kaskád.","schema_multipliers":{"vowel_shift":1.35,"umlaut":1.35,"lenition":1.2,"palatalization":1.2,"apocope":0.8,"coda_loss":0.8,"syncope":0.8},"license":"CC0-1.0","provenance":"CEE maintainers; explicitně heuristické"}

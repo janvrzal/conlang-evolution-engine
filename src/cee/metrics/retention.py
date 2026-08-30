@@ -10,6 +10,7 @@ Retence **není tvrdý cíl**. Swadeshova konstanta není konstanta — Bergslan
 a Vogt to ukázali už v roce 1962 na islandštině proti kontinentální
 skandinávštině. Slouží jako volné pásmo (řádově 75–95 % za tisíciletí).
 """
+
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence
 

@@ -4,20 +4,22 @@ Lokální HTTP API pro grafické rozhraní.
 Vlastní logika simulace žije v `cee.pipeline` — tenhle modul jen překládá
 HTTP požadavky na volání služby a zpátky na JSON.
 """
-import uuid
+
 import os
+import uuid
+from dataclasses import asdict
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
-
 from pydantic import BaseModel
 
-from cee import __version__
+from cee import __version__, projects
 from cee.api.ports import API_REVISION, DEFAULT_PORT, ENGINE_SIGNATURE
+from cee.api.runs import router as run_router
 from cee.engine.parser import YamlParser
 from cee.engine.topology import ContactEdge, EvolutionGraph, VerticalEdge
-from cee import projects
+from cee.metrics.schema_profiles import available_schema_profiles
 from cee.pipeline import (
     DEFAULT_SEED,
     SimulationConfig,
@@ -28,7 +30,6 @@ from cee.pipeline import (
 from cee.semantics.graph import SemanticGraph
 from cee.storage.genealogy import get_genealogy_store
 from cee.storage.legacy_neo4j import import_legacy_graph
-from cee.api.runs import router as run_router
 
 app = FastAPI(title="CEE Engine API")
 app.include_router(run_router)
@@ -59,6 +60,12 @@ def health_check():
 @app.get("/")
 def read_root():
     return {"message": "API běží. Frontend spusťte přes 'npm run dev' ve složce 'ui'."}
+
+
+@app.get("/api/schema-profiles")
+def list_schema_profiles():
+    """Vestavěné profily, které UI může bezpečně nabídnout uživateli."""
+    return [asdict(profile) for profile in available_schema_profiles()]
 
 
 class SimulateRequest(BaseModel):
@@ -93,6 +100,7 @@ class DynamicSimulateRequest(BaseModel):
     years: int = 1000
     #: UI používá existující lokální cache; její absence je bezpečný fallback.
     empirical_phonology: bool = True
+    schema_profile_id: str = "heuristic-default"
     #: Prázdné ID založí nový běh; opakování se stejným ID nahradí jen jeho data.
     run_id: Optional[str] = None
 
@@ -105,6 +113,7 @@ def _config(req, preset_path: str) -> SimulationConfig:
         seed=req.seed,
         years=getattr(req, "years", None),
         use_empirical_phonology=getattr(req, "empirical_phonology", False),
+        schema_profile_id=getattr(req, "schema_profile_id", "heuristic-default"),
     )
 
 
@@ -121,7 +130,11 @@ def generate_protolang(req: ProtolangRequest):
         "status": "success",
         "words": words,
         "concept_count": sum(1 + len(word["polysemy"]) for word in words),
-        "source": "CLICS4 + DatSemShift" if graph_path and graph_path.endswith(".graphml") else "zabalený sémantický mock",
+        "source": (
+            "CLICS4 + DatSemShift"
+            if graph_path and graph_path.endswith(".graphml")
+            else "zabalený sémantický mock"
+        ),
     }
 
 
@@ -200,6 +213,7 @@ def import_legacy_neo4j(project_id: str):
 def run_dynamic_simulation(req: DynamicSimulateRequest):
     """Spustí simulaci nad celou časovou osou sestavenou v grafovém editoru."""
     from cee.pipeline import get_feature_mapper
+
     mapper = get_feature_mapper()
     lexicon = load_lexicon_from_records(req.proto_lexicon, mapper)
 
@@ -227,24 +241,35 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
                     source_id, target_id = edge["source"], edge["target"]
                     if direction == "ba":
                         source_id, target_id = target_id, source_id
-                    graph.contact_edges.append(ContactEdge(
-                        year=epoch_year,
-                        source_id=source_id,
-                        target_id=target_id,
-                        volume=max(1, round(int(data.get("volume", 5)) * float(data.get("intensity", 50)) / 50)),
-                        mutual=direction == "both" or bool(data.get("mutual", False)),
-                        domain=data.get("contactType", "neighborhood"),
-                        prestige=float(data.get("prestige", 1.0)),
-                        calque_rate=float(data.get("calqueRate", 0.0)),
-                        adapt=bool(data.get("adapt", True)),
-                    ))
+                    graph.contact_edges.append(
+                        ContactEdge(
+                            year=epoch_year,
+                            source_id=source_id,
+                            target_id=target_id,
+                            volume=max(
+                                1,
+                                round(
+                                    int(data.get("volume", 5))
+                                    * float(data.get("intensity", 50))
+                                    / 50
+                                ),
+                            ),
+                            mutual=direction == "both" or bool(data.get("mutual", False)),
+                            domain=data.get("contactType", "neighborhood"),
+                            prestige=float(data.get("prestige", 1.0)),
+                            calque_rate=float(data.get("calqueRate", 0.0)),
+                            adapt=bool(data.get("adapt", True)),
+                        )
+                    )
                 else:
                     pair = (edge["source"], edge["target"])
                     if pair not in vertical_pairs:
                         vertical_pairs.add(pair)
-                        graph.vertical_edges.append(VerticalEdge(
-                            parent_id=edge["source"], child_id=edge["target"], rules=[]
-                        ))
+                        graph.vertical_edges.append(
+                            VerticalEdge(
+                                parent_id=edge["source"], child_id=edge["target"], rules=[]
+                            )
+                        )
     else:
         # Zpětná kompatibilita se starším klientem, který ještě posílal jen
         # jeden statický snímek.
@@ -254,24 +279,33 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
         }
         for edge in req.topology_data.get("edges", []):
             if edge.get("kind") == "contact":
-                graph.contact_edges.append(ContactEdge(
-                    year=int(edge.get("year", req.years // 2)),
-                    source_id=edge["source"], target_id=edge["target"],
-                    volume=int(edge.get("volume", 5)), mutual=bool(edge.get("mutual", True)),
-                    domain=edge.get("domain", "neighborhood"),
-                    prestige=float(edge.get("prestige", 1.0)),
-                    calque_rate=float(edge.get("calque_rate", 0.0)),
-                    adapt=bool(edge.get("adapt", False)),
-                ))
+                graph.contact_edges.append(
+                    ContactEdge(
+                        year=int(edge.get("year", req.years // 2)),
+                        source_id=edge["source"],
+                        target_id=edge["target"],
+                        volume=int(edge.get("volume", 5)),
+                        mutual=bool(edge.get("mutual", True)),
+                        domain=edge.get("domain", "neighborhood"),
+                        prestige=float(edge.get("prestige", 1.0)),
+                        calque_rate=float(edge.get("calque_rate", 0.0)),
+                        adapt=bool(edge.get("adapt", False)),
+                    )
+                )
             else:
-                graph.vertical_edges.append(VerticalEdge(
-                    parent_id=edge["source"], child_id=edge["target"], rules=[]
-                ))
+                graph.vertical_edges.append(
+                    VerticalEdge(parent_id=edge["source"], child_id=edge["target"], rules=[])
+                )
 
     root_candidates = [node_id for node_id, cfg in graph.node_configs.items() if cfg.get("isProto")]
-    root_id = root_candidates[0] if root_candidates else "lang-1" if "lang-1" in graph.node_configs else "proto"
+    root_id = (
+        root_candidates[0]
+        if root_candidates
+        else "lang-1" if "lang-1" in graph.node_configs else "proto"
+    )
 
     from cee.engine.graph_builder import GraphBuilder
+
     builder = GraphBuilder()
 
     cfg = _config(req, req.preset)

@@ -7,6 +7,7 @@ přechodu mezi stránkami nebo po F5.
 
 Formát je prostý JSON, aby šel číst a verzovat i mimo aplikaci.
 """
+
 from __future__ import annotations
 
 import json
@@ -78,7 +79,6 @@ def validate_id(project_id: str) -> str:
 def _path_for(project_id: str) -> Path:
     path = (projects_dir() / f"{validate_id(project_id)}.json").resolve()
 
-
     # Pás navíc ke šlím: i kdyby síto výše někdo obešel, cesta musí zůstat uvnitř.
     if path.parent != projects_dir().resolve():
         raise InvalidProjectId(f"ID {project_id!r} ukazuje mimo složku projektů.")
@@ -148,7 +148,11 @@ def save(project: Project) -> Project:
     payload = json.dumps(project.as_dict(), ensure_ascii=False, indent=2)
 
     with tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", dir=path.parent, prefix=".tmp-", suffix=".json.tmp",
+        "w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=".tmp-",
+        suffix=".json.tmp",
         delete=False,
     ) as tmp:
         tmp.write(payload)

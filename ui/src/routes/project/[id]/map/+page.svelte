@@ -7,6 +7,7 @@
 		BackgroundVariant,
 		ConnectionLineType,
 		ConnectionMode,
+		ViewportPortal,
 		addEdge,
 		type Node,
 		type Edge
@@ -472,16 +473,6 @@
 <div class="relative w-full h-screen bg-background overflow-hidden flex tool-{activeTool}">
 	<!-- Canvas -->
 	<div class="absolute inset-0">
-		{#if projectState.mapBackground}
-			<div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-				<img
-					src={projectState.mapBackground.dataUrl}
-					alt=""
-					class="absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 select-none"
-					style={`width: ${projectState.mapBackground.scale}%; opacity: ${projectState.mapBackground.opacity};`}
-				/>
-			</div>
-		{/if}
 		<!--
 			XYFlow si ke každému ID uzlu ukládá interní změřenou pozici. ID jsou
 			záměrně stejná ve všech časových snímcích, ale jejich `position` se
@@ -509,6 +500,25 @@
 				onpaneclick={onPaneClick}
 				fitView
 			>
+				<!--
+					Podklad patří do stejného transformovaného viewportu jako uzly.
+					Je ukotvený ve světovém počátku (0, 0), takže při posouvání
+					nebo přibližování plátna cestuje i mění měřítko spolu s jazyky.
+				-->
+				{#if projectState.mapBackground}
+					<ViewportPortal
+						target="back"
+						class="pointer-events-none overflow-visible"
+						aria-hidden="true"
+					>
+						<img
+							src={projectState.mapBackground.dataUrl}
+							alt=""
+							class="map-background absolute left-0 top-0 max-w-none select-none"
+							style={`--map-scale: ${projectState.mapBackground.scale / 100}; opacity: ${projectState.mapBackground.opacity};`}
+						/>
+					</ViewportPortal>
+				{/if}
 				<Background variant={BackgroundVariant.Dots} gap={28} size={1} class="opacity-30" />
 				<Controls class="bg-card border-border fill-foreground" />
 			</SvelteFlow>
@@ -658,6 +668,11 @@
 </div>
 
 <style>
+	.map-background {
+		transform: scale(var(--map-scale));
+		transform-origin: left top;
+	}
+
 	/* Hrany reagují na kurzor, ať je vůbec možné je vybrat a smazat. */
 	:global(.svelte-flow__edge) {
 		cursor: pointer;

@@ -1,10 +1,11 @@
 """InventoryView — dotazy na přirozené třídy a vývoj inventáře v čase."""
+
 import pytest
 
+from cee.core.models import Lexicon
 from cee.engine.inventory import InventoryView
 from cee.engine.rules import Rule
 from cee.engine.schemas import SCHEMA_REGISTRY
-from cee.core.models import Lexicon
 
 
 @pytest.fixture

@@ -1,0 +1,49 @@
+"""Přenositelné profily vah schémat s jasným původem a licenčním režimem."""
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Mapping
+
+PROFILE_KINDS = frozenset({"heuristic", "cc-by-empirical", "user-local-research"})
+_BUILTIN_DIR = Path(__file__).resolve().parents[1] / "data" / "profiles"
+
+
+@dataclass(frozen=True)
+class SchemaProfile:
+    id: str
+    kind: str
+    label: str
+    description: str
+    schema_multipliers: dict[str, float]
+    license: str = ""
+    provenance: str = ""
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "SchemaProfile":
+        profile = cls(
+            id=str(data["id"]), kind=str(data["kind"]), label=str(data["label"]),
+            description=str(data["description"]),
+            schema_multipliers={str(k): float(v) for k, v in dict(data.get("schema_multipliers", {})).items()},
+            license=str(data.get("license", "")), provenance=str(data.get("provenance", "")),
+        )
+        if profile.kind not in PROFILE_KINDS:
+            raise ValueError(f"Neznámý typ profilu: {profile.kind!r}")
+        if not profile.id or not profile.label:
+            raise ValueError("Profil musí mít id a label.")
+        if any(value < 0 for value in profile.schema_multipliers.values()):
+            raise ValueError("Násobky vah profilu nesmí být záporné.")
+        return profile
+
+
+def load_schema_profile(profile_id: str) -> SchemaProfile:
+    """Načte výhradně vestavěný profil; externí soubory jsou import uživatele."""
+    path = _BUILTIN_DIR / f"{profile_id}.json"
+    if not path.is_file():
+        raise FileNotFoundError(f"Vestavěný profil '{profile_id}' neexistuje.")
+    return SchemaProfile.from_dict(json.loads(path.read_text(encoding="utf-8")))
+
+
+def available_schema_profiles() -> list[SchemaProfile]:
+    return [load_schema_profile(path.stem) for path in sorted(_BUILTIN_DIR.glob("*.json"))]

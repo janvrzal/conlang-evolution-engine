@@ -4,6 +4,7 @@ Lexikální retence — metrika (A) z CEE_master.md 5.1.
 Klíčové je, že měří jinou osu než fonetická vzdálenost: drastická zvuková
 změna může mít stoprocentní retenci.
 """
+
 import pytest
 
 from cee.core.models import Lexicon, Word
@@ -28,11 +29,13 @@ def test_domaci_slova_drzi_retenci():
 
 def test_vypujcka_se_nepocita_jako_retence():
     """Výpůjčka slot obsadí, ale původní kořen v něm už není."""
-    lex = Lexicon(words=[
-        _slovo("voda"),
-        _slovo("vlk", source_id="north"),
-        _slovo("strom"),
-    ])
+    lex = Lexicon(
+        words=[
+            _slovo("voda"),
+            _slovo("vlk", source_id="north"),
+            _slovo("strom"),
+        ]
+    )
     r = LexicalRetention.evaluate(lex, DIAGNOSTIKA)
 
     assert r.retained == ["voda", "strom"]
@@ -77,18 +80,20 @@ def test_retence_je_nezavisla_na_fonetickem_rozpadu(mapper):
     assert r.ratio == 1.0
 
     import lingpy
-    eroze = lingpy.edit_dist(mapper.render_word(puvodni), mapper.render_word(potomek),
-                             normalized=True)
+
+    eroze = lingpy.edit_dist(
+        mapper.render_word(puvodni), mapper.render_word(potomek), normalized=True
+    )
     assert eroze > 0.5, "Fonetická vzdálenost má být vysoká, zatímco retence je plná."
 
 
 @pytest.mark.parametrize(
     "ratio, years, ocekavano",
     [
-        (0.85, 1000, True),    # uvnitř pásma 75–95 %
-        (0.50, 1000, False),   # příliš rychlá náhrada
-        (0.99, 1000, False),   # nepravděpodobně konzervativní
-        (0.85, 0, None),       # nulová hloubka: pásmo nedává smysl
+        (0.85, 1000, True),  # uvnitř pásma 75–95 %
+        (0.50, 1000, False),  # příliš rychlá náhrada
+        (0.99, 1000, False),  # nepravděpodobně konzervativní
+        (0.85, 0, None),  # nulová hloubka: pásmo nedává smysl
     ],
 )
 def test_volne_pasmo_retence(ratio, years, ocekavano):

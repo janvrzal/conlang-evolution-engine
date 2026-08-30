@@ -1,4 +1,5 @@
 """Regrese pro společné diachronní jádro etapy 2."""
+
 from cee.core.models import Inventory, Lexicon, State
 from cee.engine.prosody import syllabify
 from cee.engine.rules import Rule
@@ -8,7 +9,9 @@ from cee.engine.topology import ContactEdge, EvolutionGraph, VerticalEdge
 
 def _root(mapper, words):
     return State(
-        node_id="proto", year=0, inventory=Inventory(),
+        node_id="proto",
+        year=0,
+        inventory=Inventory(),
         lexicon=Lexicon([mapper.parse_word(concept, ipa) for concept, ipa in words]),
     )
 
@@ -20,7 +23,10 @@ def test_slabiky_rozlisuji_kodu_a_pravidlo_na_ni_miri(mapper):
     assert not syllables[0].is_open
 
     rule = Rule(
-        name="ztráta kody", year=1, target={"cons": "+"}, action={"delete": "+"},
+        name="ztráta kody",
+        year=1,
+        target={"cons": "+"},
+        action={"delete": "+"},
         syllable_part="coda",
     )
     assert rule.apply_to_word(word)
@@ -36,11 +42,25 @@ def test_slozenina_vznikne_pred_pozdejsi_fonologii(mapper):
                 "compounds": [{"head": "town", "modifier": "gold", "id": "gold_town"}],
             },
         },
-        vertical_edges=[VerticalEdge("proto", "child", [
-            Rule("finální apokopa", {"syl": "+"}, {"delete": "+"}, env_after={"_boundary": "+"}, year=50),
-        ])],
+        vertical_edges=[
+            VerticalEdge(
+                "proto",
+                "child",
+                [
+                    Rule(
+                        "finální apokopa",
+                        {"syl": "+"},
+                        {"delete": "+"},
+                        env_after={"_boundary": "+"},
+                        year=50,
+                    ),
+                ],
+            )
+        ],
     )
-    states = EvolutionSimulator(graph, mapper).simulate(_root(mapper, [("town", "viku"), ("gold", "auru")]))
+    states = EvolutionSimulator(graph, mapper).simulate(
+        _root(mapper, [("town", "viku"), ("gold", "auru")])
+    )
     compound = states["child"].lexicon.get_word("gold_town")
     assert compound is not None
     assert mapper.render_word(compound).endswith("vik")
@@ -48,13 +68,18 @@ def test_slozenina_vznikne_pred_pozdejsi_fonologii(mapper):
 
 def test_lexikalni_nahrada_je_volitelna_a_casovana(mapper):
     graph = EvolutionGraph(
-        node_configs={"proto": {}, "child": {"year": 0, "lexical": {"enabled": True, "replacement_rate": 1.0}}},
+        node_configs={
+            "proto": {},
+            "child": {"year": 0, "lexical": {"enabled": True, "replacement_rate": 1.0}},
+        },
         vertical_edges=[VerticalEdge("proto", "child", [])],
     )
     state = EvolutionSimulator(graph, mapper, end_year=100).simulate(
         _root(mapper, [("one", "pata"), ("two", "kumi")])
     )["child"]
-    replacements = [word for word in state.lexicon.words if word.origin_type == "lexical_replacement"]
+    replacements = [
+        word for word in state.lexicon.words if word.origin_type == "lexical_replacement"
+    ]
     assert replacements
     assert all(word.origin_year == 100 for word in replacements)
 
@@ -62,14 +87,31 @@ def test_lexikalni_nahrada_je_volitelna_a_casovana(mapper):
 def test_adaptovana_vypujcka_respektuje_cilovy_inventar(mapper):
     graph = EvolutionGraph(
         node_configs={"proto": {}, "a": {"year": 0}, "b": {"year": 0}},
-        vertical_edges=[VerticalEdge("proto", "a", [
-            Rule("znělá labiala", {"cons": "+", "lab": "+", "cont": "-", "voi": "-"}, {"voi": "+"}, year=1),
-        ]), VerticalEdge("proto", "b", [])],
+        vertical_edges=[
+            VerticalEdge(
+                "proto",
+                "a",
+                [
+                    Rule(
+                        "znělá labiala",
+                        {"cons": "+", "lab": "+", "cont": "-", "voi": "-"},
+                        {"voi": "+"},
+                        year=1,
+                    ),
+                ],
+            ),
+            VerticalEdge("proto", "b", []),
+        ],
         contact_edges=[ContactEdge(10, "a", "b", volume=1, adapt=True)],
     )
     states = EvolutionSimulator(graph, mapper).simulate(_root(mapper, [("one", "pata")]))
     loan = next(word for word in states["b"].lexicon.words if word.source_id == "a")
-    target_inventory = {mapper.segment_to_ipa(segment) for word in states["b"].lexicon.words if word.source_id is None for segment in word.segments}
+    target_inventory = {
+        mapper.segment_to_ipa(segment)
+        for word in states["b"].lexicon.words
+        if word.source_id is None
+        for segment in word.segments
+    }
     assert all(mapper.segment_to_ipa(segment) in target_inventory for segment in loan.segments)
 
 
@@ -81,22 +123,35 @@ def test_paradigma_gramatikalizuje_afix_a_vznika_v_historickem_case(mapper):
                 "year": 0,
                 "morphology": {
                     "grammaticalize": ["plural"],
-                    "paradigms": [{
-                        "id": "noun", "stem": "tree",
-                        "forms": [{"id": "tree.pl", "affix": "plural", "features": {"number": "plural"}}],
-                    }],
+                    "paradigms": [
+                        {
+                            "id": "noun",
+                            "stem": "tree",
+                            "forms": [
+                                {
+                                    "id": "tree.pl",
+                                    "affix": "plural",
+                                    "features": {"number": "plural"},
+                                }
+                            ],
+                        }
+                    ],
                 },
             },
         },
         vertical_edges=[VerticalEdge("proto", "child", [])],
     )
-    state = EvolutionSimulator(graph, mapper).simulate(_root(mapper, [("tree", "tara"), ("plural", "mi")]))["child"]
+    state = EvolutionSimulator(graph, mapper).simulate(
+        _root(mapper, [("tree", "tara"), ("plural", "mi")])
+    )["child"]
     plural = state.lexicon.get_word("tree.pl")
     assert plural is not None
     assert plural.paradigm == "noun"
     assert plural.grammatical_features == {"number": "plural"}
     assert plural.origin_year == 1
-    assert state.lexicon.get_word("plural").is_grammatical
+    plural_word = state.lexicon.get_word("plural")
+    assert plural_word is not None
+    assert plural_word.is_grammatical
 
 
 def test_strukturalni_fonologicke_operace(mapper):
@@ -114,16 +169,25 @@ def test_taboo_nahrada_a_rozliseni_homofonie_jsou_volitelne(mapper):
     graph = EvolutionGraph(
         node_configs={
             "proto": {},
-            "child": {"year": 0, "lexical": {
-                "enabled": True, "replacement_rate": 0.0, "taboo_concepts": ["fire"], "resolve_homophones": True,
-            }},
+            "child": {
+                "year": 0,
+                "lexical": {
+                    "enabled": True,
+                    "replacement_rate": 0.0,
+                    "taboo_concepts": ["fire"],
+                    "resolve_homophones": True,
+                },
+            },
         },
         vertical_edges=[VerticalEdge("proto", "child", [])],
     )
     state = EvolutionSimulator(graph, mapper, end_year=100).simulate(
         _root(mapper, [("fire", "pata"), ("water", "pata"), ("stone", "kumi")])
     )["child"]
-    assert any(word.origin_type == "taboo_replacement" and word.concept_id == "fire" for word in state.lexicon.words)
+    assert any(
+        word.origin_type == "taboo_replacement" and word.concept_id == "fire"
+        for word in state.lexicon.words
+    )
     assert any(word.origin_type == "homophony_resolution" for word in state.lexicon.words)
 
 
@@ -131,11 +195,18 @@ def test_socialni_historie_meni_stav_v_konkretnim_roce(mapper):
     graph = EvolutionGraph(
         node_configs={
             "proto": {},
-            "child": {"year": 0, "social_history": [{"year": 80, "changes": {"prestige": 0.9, "standardization": 0.8}}]},
+            "child": {
+                "year": 0,
+                "social_history": [
+                    {"year": 80, "changes": {"prestige": 0.9, "standardization": 0.8}}
+                ],
+            },
         },
         vertical_edges=[VerticalEdge("proto", "child", [])],
     )
-    state = EvolutionSimulator(graph, mapper, end_year=100).simulate(_root(mapper, [("one", "pata")]))["child"]
+    state = EvolutionSimulator(graph, mapper, end_year=100).simulate(
+        _root(mapper, [("one", "pata")])
+    )["child"]
     assert state.social["prestige"] == 0.9
     assert state.social["standardization"] == 0.8
 
@@ -198,6 +269,7 @@ def test_genealogie_uklada_finalni_tvar_po_prosodicke_oprave(mapper):
         _root(mapper, [("word", "kapata")])
     )["child"]
     final_word = state.lexicon.get_word("word")
+    assert final_word is not None
     stored = next(node for node in builder.nodes if node["id"] == final_word.id)
 
     assert stored["ipa"] == mapper.render_word(final_word)

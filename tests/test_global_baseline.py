@@ -4,12 +4,26 @@ import pytest
 from typer.testing import CliRunner
 
 from cee.cli.main import app
+from cee.api.server import list_schema_profiles
 from cee.metrics.global_baseline import (
     ChangeObservation,
     CorpusSource,
     train_from_manifest,
     train_global_baseline,
 )
+from cee.metrics.schema_profiles import available_schema_profiles, load_schema_profile
+from cee.pipeline import SimulationConfig, build_global_schema_multipliers
+
+
+def test_builtin_heuristic_profiles_are_explicit_and_selectable():
+    assert {profile.id for profile in available_schema_profiles()} == {
+        "heuristic-conservative", "heuristic-default", "heuristic-dynamic"
+    }
+    assert load_schema_profile("heuristic-default").kind == "heuristic"
+    assert build_global_schema_multipliers(SimulationConfig(schema_profile_id="heuristic-conservative"))["syncope"] == 0.5
+    assert {profile["id"] for profile in list_schema_profiles()} == {
+        "heuristic-conservative", "heuristic-default", "heuristic-dynamic"
+    }
 
 
 def _source() -> CorpusSource:
@@ -21,7 +35,9 @@ def test_globally_balanced_training_does_not_reward_the_largest_family():
         *(ChangeObservation("lenition", "conditioned", "family-a", "open") for _ in range(100)),
         ChangeObservation("vowel_shift", "unconditional", "family-b", "open"),
     ]
-    baseline = train_global_baseline(rows, [_source()], {"open": "abc"}, ["lenition", "vowel_shift"])
+    baseline = train_global_baseline(
+        rows, [_source()], {"open": "abc"}, ["lenition", "vowel_shift"]
+    )
 
     assert baseline.observations == 101
     assert baseline.families == 2
@@ -99,7 +115,9 @@ def test_cli_trains_and_measures_a_calibration(tmp_path):
     output = tmp_path / "baseline.json"
     runner = CliRunner()
 
-    trained = runner.invoke(app, ["calibrate", "global", "--manifest", str(manifest), "--out", str(output)])
+    trained = runner.invoke(
+        app, ["calibrate", "global", "--manifest", str(manifest), "--out", str(output)]
+    )
     measured = runner.invoke(
         app,
         [

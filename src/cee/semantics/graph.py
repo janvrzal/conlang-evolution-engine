@@ -1,6 +1,7 @@
 import os
 import random
 from pathlib import Path
+from typing import Any
 
 import networkx as nx
 import yaml
@@ -14,13 +15,15 @@ class SemanticGraph:
     Zajišťuje načtení .graphml a metody pro náhodné sémantické posuny.
     """
 
-    def __init__(self, graphml_path: str = None):
+    def __init__(self, graphml_path: str | None = None):
         if graphml_path is None:
             home = str(Path.home())
             graphml_path = os.path.join(home, ".cee", "semantics", "graph.graphml")
 
         if not os.path.exists(graphml_path):
-            raise FileNotFoundError(f"Sémantický graf nenalezen: {graphml_path}. Spusťte nejdřív builder.py")
+            raise FileNotFoundError(
+                f"Sémantický graf nenalezen: {graphml_path}. Spusťte nejdřív builder.py"
+            )
 
         if graphml_path.endswith(".yaml"):
             self._load_yaml(graphml_path)
@@ -75,10 +78,10 @@ class SemanticGraph:
         shifts.sort(key=lambda x: x[2], reverse=True)
         return shifts
 
-    def random_shift(self, concept_id: str, random_gen=None, edge_type: str = None):
+    def random_shift(self, concept_id: str, random_gen=None, edge_type: str | None = None):
         """
         Vybere jeden cílový koncept na základě vážené pravděpodobnosti.
-        Pokud `edge_type` je zadaný, filtruje hrany pouze na tento typ (např. 'shift' nebo 'colexification').
+        Pokud `edge_type` je zadaný, filtruje hrany pouze na tento typ (např. 'shift' nebo 'colexification').  # noqa: E501
         Pokud uzel nemá následníky odpovídající filtru, vrátí None.
         """
         shifts = self.get_possible_shifts(concept_id)
@@ -95,7 +98,7 @@ class SemanticGraph:
         chosen = gen.choices(targets, weights=weights, k=1)[0]
         return chosen
 
-    def lexical_entries(self) -> list[dict[str, object]]:
+    def lexical_entries(self) -> list[dict[str, Any]]:
         """Vrátí deterministický výchozí slovník pokrývající celý graf.
 
         Každý význam v CLICS4/DatSemShiftu dostane pokrytí. Kde je doložená

@@ -3,6 +3,7 @@
 Každý kontrakt obsahuje pozitivní i negativní sondu: schéma nesmí jen
 "něco" měnit, ale musí zasáhnout právě v historicky deklarovaném prostředí.
 """
+
 from cee.engine.inventory import InventoryView
 from cee.engine.schemas import SCHEMA_REGISTRY
 

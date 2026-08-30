@@ -1,0 +1,1 @@
+{"id":"heuristic-default","kind":"heuristic","label":"Vyvážený heuristický vývoj","description":"Transparentní výchozí váhy CEE bez tvrzení o empirické kalibraci.","schema_multipliers":{},"license":"CC0-1.0","provenance":"CEE maintainers; explicitně heuristické"}

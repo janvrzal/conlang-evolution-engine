@@ -5,6 +5,7 @@ výhradně *anotovaná směrovaná pozorování* z otevřených zdrojů nebo vla
 kurace. Každé pozorování nese rodinu a zdroj, takže dobře popsaná rodina
 nemůže převážit globální profil jen počtem řádků.
 """
+
 from __future__ import annotations
 
 import csv
@@ -77,11 +78,15 @@ class GlobalBaseline:
         return cls(
             observations=int(raw["observations"]),
             families=int(raw["families"]),
-            schema_distribution={str(k): float(v) for k, v in dict(raw["schema_distribution"]).items()},
+            schema_distribution={
+                str(k): float(v) for k, v in dict(raw["schema_distribution"]).items()
+            },
             environment_distribution={
                 str(k): float(v) for k, v in dict(raw["environment_distribution"]).items()
             },
-            schema_multipliers={str(k): float(v) for k, v in dict(raw["schema_multipliers"]).items()},
+            schema_multipliers={
+                str(k): float(v) for k, v in dict(raw["schema_multipliers"]).items()
+            },
             source_checksums={str(k): str(v) for k, v in dict(raw["source_checksums"]).items()},
             sources=[CorpusSource(**source) for source in list(raw["sources"])],
             smoothing=float(raw.get("smoothing", 1.0)),
@@ -162,7 +167,9 @@ def train_global_baseline(
     )
 
 
-def load_observations(source: CorpusSource, base_dir: str | Path) -> tuple[list[ChangeObservation], str]:
+def load_observations(
+    source: CorpusSource, base_dir: str | Path
+) -> tuple[list[ChangeObservation], str]:
     """Načte malý CSV kontrakt pro kurátory a externí převodníky.
 
     Povinné sloupce: ``schema_id,environment,family_id``. Dobrovolné:
@@ -205,12 +212,19 @@ def train_from_manifest(path: str | Path, schema_ids: Iterable[str]) -> GlobalBa
         observations.extend(rows)
         checksums[source.id] = checksum
     return train_global_baseline(
-        observations, sources, checksums, schema_ids, smoothing=float(manifest.get("smoothing", 1.0))
+        observations,
+        sources,
+        checksums,
+        schema_ids,
+        smoothing=float(manifest.get("smoothing", 1.0)),
     )
 
 
 def save_global_baseline(baseline: GlobalBaseline, path: str | Path) -> None:
-    Path(path).write_text(json.dumps(baseline.as_dict(), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    Path(path).write_text(
+        json.dumps(baseline.as_dict(), ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def load_global_baseline(path: str | Path) -> GlobalBaseline:

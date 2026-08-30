@@ -11,6 +11,7 @@ což je přesně ten gloss, který CLICS4 používá) by obě sady sice sdílely
 jeden `networkx.DiGraph`, ale nikdy by se jejich uzly nepotkaly — graf by byl
 "kombinovaný" jen podle jména souboru.
 """
+
 import csv
 import io
 import json
@@ -19,7 +20,7 @@ import ssl
 import urllib.request
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import networkx as nx
 
@@ -32,7 +33,7 @@ def download_clics4_graph(out_path: str) -> None:
         return
 
     print("Stahuji CLICS4 data...")
-    ssl._create_default_https_context = ssl._create_unverified_context
+    ssl._create_default_https_context = ssl._create_unverified_context  # type: ignore[assignment]
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     try:
@@ -114,7 +115,9 @@ def _concept_shift_weight(entry: Dict[str, Any]) -> int:
     Váha DatSemShift hrany: součet doložení posunu i odvození, počítáno po
     rodinách (aby jedna přehnaně zdokumentovaná rodina hranu neutopila).
     """
-    weight = int(entry.get("PolysemyByFamily", 1) or 0) + int(entry.get("DerivationByFamily", 0) or 0)
+    weight = int(entry.get("PolysemyByFamily", 1) or 0) + int(
+        entry.get("DerivationByFamily", 0) or 0
+    )
     return weight or 1
 
 
@@ -148,7 +151,10 @@ def _load_datsemshift(G: nx.DiGraph, datsemshift_path: str) -> None:
         for row in csv.DictReader(f):
             source_key = local_to_key[row["ID"]]
 
-            for field, edge_type in (("Target_Concepts", "shift"), ("Linked_Concepts", "colexification")):
+            for field, edge_type in (
+                ("Target_Concepts", "shift"),
+                ("Linked_Concepts", "colexification"),
+            ):
                 try:
                     entries = json.loads(row.get(field, "[]") or "[]")
                 except json.JSONDecodeError:
@@ -173,7 +179,9 @@ def _load_datsemshift(G: nx.DiGraph, datsemshift_path: str) -> None:
     print("DatSemShift zpracován.")
 
 
-def build_combined_semantic_graph(datsemshift_path: str, clics4_path: str, out_path: str) -> nx.DiGraph:
+def build_combined_semantic_graph(
+    datsemshift_path: str, clics4_path: str, out_path: str
+) -> nx.DiGraph:
     """
     Vybuduje kombinovaný `networkx.DiGraph` z DatSemShift (orientované posuny)
     a CLICS4 (kolexifikace) a uloží ho jako GraphML.
@@ -207,7 +215,9 @@ def build_combined_semantic_graph(datsemshift_path: str, clics4_path: str, out_p
 def default_paths() -> Dict[str, str]:
     home = str(Path.home())
     return {
-        "datsemshift_path": os.path.join(home, ".cee", "data", "datsemshift", "cldf", "parameters.csv"),
+        "datsemshift_path": os.path.join(
+            home, ".cee", "data", "datsemshift", "cldf", "parameters.csv"
+        ),
         "clics4_path": os.path.join(home, ".cee", "data", "clics4", "clics4-graph.gml"),
         "out_path": os.path.join(home, ".cee", "semantics", "graph.graphml"),
     }

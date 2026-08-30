@@ -4,18 +4,24 @@ Rozrůzněnost vývoje: seed per uzel, makro-parametry, kontakt.
 Reprodukovatelnost neznamená, že se všechny jazyky chovají stejně — znamená,
 že se táž konfigurace chová stejně pokaždé (CEE_master.md 5.5).
 """
+
 import pytest
 
-from cee.core.models import Inventory, Lexicon, State
+from cee.core.models import Lexicon
 from cee.engine.generator import MacroParams, SoundChangeGenerator
-from cee.engine.inventory import InventoryView
 from cee.engine.parser import YamlParser
 from cee.engine.rng import derive_seed
 from cee.pipeline import SimulationConfig
 
 PRESET_PATH = "src/cee/data/presets/fantasy_preset.yaml"
-SLOVA = [("vlk", "lupu"), ("voda", "laku"), ("strom", "petra"),
-         ("oheň", "foku"), ("kámen", "sekuru"), ("přítel", "amiku")]
+SLOVA = [
+    ("vlk", "lupu"),
+    ("voda", "laku"),
+    ("strom", "petra"),
+    ("oheň", "foku"),
+    ("kámen", "sekuru"),
+    ("přítel", "amiku"),
+]
 
 
 @pytest.fixture(scope="module")
@@ -45,16 +51,14 @@ def test_seed_nezamenuje_slozene_casti():
 
 
 def _vyvoj(mapper, preset, node_id, biome="hory", years=1000, **kwargs):
-    from cee.engine.simulator import EvolutionSimulator
-    from cee.engine.topology import EvolutionGraph
-    from cee.pipeline import SimulationConfig
     from cee.engine.graph_builder import GraphBuilder
-    
+    from cee.engine.topology import EvolutionGraph
+
     graph = EvolutionGraph()
     graph.node_configs[node_id] = {"map": {"biome": biome}, **kwargs}
-    
+
     config = SimulationConfig(years=years, preset=preset, root_id="proto")
-    
+
     # We must start from a root proto node connected to our node to mimic how simulator forks
     graph.node_configs["proto"] = {}
     graph.vertical_edges.append(
@@ -62,21 +66,21 @@ def _vyvoj(mapper, preset, node_id, biome="hory", years=1000, **kwargs):
             parent_id="proto", child_id=node_id, rules=[]
         )
     )
-    
+
     builder = GraphBuilder()
     states = __import__("cee.pipeline").pipeline.run_simulation(
         _lexikon(mapper), graph, mapper, config, builder
     )
-    
+
     state = states[node_id]
-    
+
     def count_mutations():
         return sum(
             1
             for event in builder.events
             if event.get("kind") == "sound_change" and event.get("hit_count", 0) > 0
         )
-        
+
     return {w.concept_id: mapper.render_word(w) for w in state.lexicon.words}, count_mutations
 
 
@@ -115,12 +119,8 @@ def test_konzervativni_jazyk_se_meni_min(mapper, preset):
 
 
 def test_rychlost_zmeny_pridava_pravidla(mapper, preset):
-    _f, pomaly_mutations = _vyvoj(
-        mapper, preset, "u", years=200, macro={"change_rate": 0.5}
-    )
-    _f, rychly_mutations = _vyvoj(
-        mapper, preset, "u", years=200, macro={"change_rate": 2.0}
-    )
+    _f, pomaly_mutations = _vyvoj(mapper, preset, "u", years=200, macro={"change_rate": 0.5})
+    _f, rychly_mutations = _vyvoj(mapper, preset, "u", years=200, macro={"change_rate": 2.0})
 
     assert rychly_mutations() > pomaly_mutations()
 
@@ -128,8 +128,8 @@ def test_rychlost_zmeny_pridava_pravidla(mapper, preset):
 @pytest.mark.parametrize(
     "vstup, ocekavano",
     [
-        ({"conservatism": 5}, 1.0),      # ořez shora
-        ({"conservatism": -3}, 0.0),     # ořez zdola
+        ({"conservatism": 5}, 1.0),  # ořez shora
+        ({"conservatism": -3}, 0.0),  # ořez zdola
     ],
 )
 def test_konzervativnost_se_orizne(vstup, ocekavano):
@@ -186,17 +186,15 @@ def test_rok_zmeny_je_rozptyleny_ale_v_mezich(mapper, preset):
 
 
 def _rodina(mapper, preset, edges, years=1000):
-    from cee.engine.topology import EvolutionGraph
-    from cee.engine.topology import ContactEdge, VerticalEdge
-    from cee.pipeline import LineageConfig, run_simulation
-    
+    from cee.engine.topology import ContactEdge, EvolutionGraph, VerticalEdge
+
     graph = EvolutionGraph()
     graph.node_configs = {
         "proto": {},
         "sever": {"map": {"biome": "hory"}},
-        "jih": {"map": {"biome": "prales"}}
+        "jih": {"map": {"biome": "prales"}},
     }
-    
+
     for edge in edges:
         if edge.get("kind") == "contact":
             graph.contact_edges.append(
@@ -212,22 +210,28 @@ def _rodina(mapper, preset, edges, years=1000):
             graph.vertical_edges.append(
                 VerticalEdge(parent_id=edge["source"], child_id=edge["target"], rules=[])
             )
-            
-    config = __import__("cee.pipeline").pipeline.SimulationConfig(years=years, root_id="proto", preset=preset)
-    states = __import__("cee.pipeline").pipeline.run_simulation(_lexikon(mapper), graph, mapper, config)
-    
+
+    config = __import__("cee.pipeline").pipeline.SimulationConfig(
+        years=years, root_id="proto", preset=preset
+    )
+    states = __import__("cee.pipeline").pipeline.run_simulation(
+        _lexikon(mapper), graph, mapper, config
+    )
+
     branches = {}
     for node_id, state in states.items():
         words = []
         for w in state.lexicon.words:
-            words.append({
-                "id": w.concept_id,
-                "ipa": mapper.render_word(w),
-                "source_id": w.source_id,
-                "origin_year": w.origin_year
-            })
+            words.append(
+                {
+                    "id": w.concept_id,
+                    "ipa": mapper.render_word(w),
+                    "source_id": w.source_id,
+                    "origin_year": w.origin_year,
+                }
+            )
         branches[node_id] = {"year": state.year, "words": words}
-        
+
     return branches
 
 
@@ -258,9 +262,14 @@ def test_bez_kontaktni_hrany_zadne_vypujcky(mapper, preset):
 
 def test_kontaktni_hrana_pusobi_obema_smery(mapper, preset):
     """Sousedící jazyky se ovlivňují navzájem, ne jen jedním směrem."""
-    vetve = _rodina(mapper, preset, DEDICNOST + [
-        {"source": "sever", "target": "jih", "kind": "contact", "year": 500, "volume": 3},
-    ])
+    vetve = _rodina(
+        mapper,
+        preset,
+        DEDICNOST
+        + [
+            {"source": "sever", "target": "jih", "kind": "contact", "year": 500, "volume": 3},
+        ],
+    )
 
     for branch_id, druhy in [("sever", "jih"), ("jih", "sever")]:
         pujcky = [w for w in vetve[branch_id]["words"] if w["source_id"]]
@@ -271,10 +280,21 @@ def test_kontaktni_hrana_pusobi_obema_smery(mapper, preset):
 
 def test_jednosmerny_kontakt(mapper, preset):
     """Výrazně nesymetrická prestiž = kontakt jen jedním směrem."""
-    vetve = _rodina(mapper, preset, DEDICNOST + [
-        {"source": "sever", "target": "jih", "kind": "contact",
-         "year": 500, "volume": 3, "mutual": False},
-    ])
+    vetve = _rodina(
+        mapper,
+        preset,
+        DEDICNOST
+        + [
+            {
+                "source": "sever",
+                "target": "jih",
+                "kind": "contact",
+                "year": 500,
+                "volume": 3,
+                "mutual": False,
+            },
+        ],
+    )
 
     assert [w for w in vetve["jih"]["words"] if w["source_id"]]
     assert not [w for w in vetve["sever"]["words"] if w["source_id"]]
@@ -285,15 +305,20 @@ def test_vypujcka_projde_jen_pozdejsimi_zmenami(mapper, preset):
     Slovo přejaté v roce 500 nesmí projít změnami z roku 200 — to je smysl
     atributu origin_year (AGENT.md §1.4).
     """
-    vetve = _rodina(mapper, preset, DEDICNOST + [
-        {"source": "sever", "target": "jih", "kind": "contact", "year": 500, "volume": 5},
-    ])
+    vetve = _rodina(
+        mapper,
+        preset,
+        DEDICNOST
+        + [
+            {"source": "sever", "target": "jih", "kind": "contact", "year": 500, "volume": 5},
+        ],
+    )
 
     pujcky = {w["id"]: w["ipa"] for w in vetve["jih"]["words"] if w["source_id"]}
     domaci = {w["id"]: w["ipa"] for w in vetve["jih"]["words"] if not w["source_id"]}
 
     spolecne = set(pujcky) & set(domaci)
     assert spolecne, "Chybí koncept, který má domácí i přejatý tvar."
-    assert any(pujcky[k] != domaci[k] for k in spolecne), (
-        "Přejatý tvar vyšel stejně jako domácí — origin_year se neuplatnil."
-    )
+    assert any(
+        pujcky[k] != domaci[k] for k in spolecne
+    ), "Přejatý tvar vyšel stejně jako domácí — origin_year se neuplatnil."

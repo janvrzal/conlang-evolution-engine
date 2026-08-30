@@ -1,5 +1,5 @@
 """Sémantika aplikace pravidel: dvoufázovost, hranice slova, časová stopa."""
-from cee.core.models import Word
+
 from cee.engine.rules import Rule
 
 
@@ -223,7 +223,8 @@ def test_minimalita_neresi_slovo_bez_samohlasky_od_pocatku(mapper):
     Umělé slovo bez jediné samohlásky nemá co ztratit navíc — minimalita
     ho nesmí zaseknout na věčné mazání ničeho.
     """
-    from cee.core.models import Segment, Word as WordModel
+    from cee.core.models import Segment
+    from cee.core.models import Word as WordModel
 
     p = Segment(features=dict(mapper.parse_word("x", "p").segments[0].features))
     t = Segment(features=dict(mapper.parse_word("x", "t").segments[0].features))

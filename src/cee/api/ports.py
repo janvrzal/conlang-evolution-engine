@@ -1,4 +1,5 @@
 """Hledání volného portu pro lokální API server."""
+
 import socket
 from contextlib import closing
 
@@ -33,8 +34,9 @@ def is_port_free(port: int, host: str = "127.0.0.1") -> bool:
         return True
 
 
-def find_free_port(preferred: int = DEFAULT_PORT, host: str = "127.0.0.1",
-                   scan_range: int = SCAN_RANGE) -> int:
+def find_free_port(
+    preferred: int = DEFAULT_PORT, host: str = "127.0.0.1", scan_range: int = SCAN_RANGE
+) -> int:
     """
     Vrátí volný port: nejdřív zkusí `preferred`, pak `scan_range` portů nad ním,
     a když ani jeden nevyjde, nechá port přidělit systémem.

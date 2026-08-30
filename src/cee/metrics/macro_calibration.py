@@ -1,8 +1,9 @@
 """Výběr makro-parametrů proti nesměrovanému profilu kognátů."""
+
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections import Counter
+from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Mapping
 
 from cee.metrics.correspondence import correspondence_hellinger

@@ -4,6 +4,7 @@ Měří pouze teplý běh enginu: FeatureMapper i syntetický protolexikon vznik
 před měřením. Výsledek je JSON, aby šel uložit jako artefakt CI nebo porovnat
 mezi commity, ale sám benchmark žádná data do repozitáře nezapisuje.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -13,13 +14,12 @@ import statistics
 import time
 import tracemalloc
 
-from cee.core.models import Inventory, Lexicon, State
+from cee.core.models import Lexicon
 from cee.engine.graph_builder import GraphBuilder
 from cee.engine.parser import YamlParser
 from cee.engine.phonology import FeatureMapper
 from cee.engine.topology import EvolutionGraph
 from cee.pipeline import SimulationConfig, run_simulation
-
 
 FORMS = ("pata", "tika", "kuma", "sapi", "moru", "lena", "ratu", "noka")
 
@@ -35,7 +35,9 @@ def build_lexicon(mapper: FeatureMapper, size: int) -> Lexicon:
     return Lexicon(words=words)
 
 
-def run_once(mapper: FeatureMapper, lexicon: Lexicon, years: int, genealogy: bool) -> tuple[float, float, int]:
+def run_once(
+    mapper: FeatureMapper, lexicon: Lexicon, years: int, genealogy: bool
+) -> tuple[float, float, int]:
     graph = EvolutionGraph(node_configs={"proto": {"map": {"biome": "none"}}})
     config = SimulationConfig(
         preset=YamlParser.parse_preset("src/cee/data/presets/fantasy_preset.yaml"),
@@ -70,15 +72,21 @@ def main() -> None:
     lexicon = build_lexicon(mapper, args.lexemes)
     runs = [run_once(mapper, lexicon, args.years, args.genealogy) for _ in range(args.repetitions)]
     elapsed, memory, events = zip(*runs)
-    print(json.dumps({
-        "lexemes": args.lexemes,
-        "years": args.years,
-        "repetitions": args.repetitions,
-        "genealogy": args.genealogy,
-        "median_seconds": round(statistics.median(elapsed), 4),
-        "max_peak_mib": round(max(memory), 2),
-        "event_count": max(events),
-    }, ensure_ascii=False, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "lexemes": args.lexemes,
+                "years": args.years,
+                "repetitions": args.repetitions,
+                "genealogy": args.genealogy,
+                "median_seconds": round(statistics.median(elapsed), 4),
+                "max_peak_mib": round(max(memory), 2),
+                "event_count": max(events),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -20,10 +20,10 @@ Testy pokrývají dvě chyby, které builder reálně měl:
    různé klíčové prostory ve stejném `networkx.DiGraph` znamenají dva
    nespojené podgrafy, ne jeden kombinovaný.
 """
+
 from pathlib import Path
 
 import networkx as nx
-import pytest
 
 from cee.semantics.builder import (
     _add_or_merge_edge,
@@ -239,9 +239,7 @@ class TestSemanticGraphCaseNormalization:
         `concepts.json` (dřív česky: "slunce", "voda"...), fallback by
         nikdy nic neudělal, stejně jako chybějící reálný graf.
         """
-        mock_path = (
-            Path(__file__).parent.parent / "src" / "cee" / "data" / "semantics_mock.yaml"
-        )
+        mock_path = Path(__file__).parent.parent / "src" / "cee" / "data" / "semantics_mock.yaml"
         sg = SemanticGraph(str(mock_path))
 
         import json

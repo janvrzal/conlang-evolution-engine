@@ -4,6 +4,7 @@ Validace V1 — výstupní brána Etapy 1 (CEE_master.md, 5.2).
 Aplikátor dostane latinský lexikon a publikovanou sadu zvukových zákonů;
 měříme podíl odvozených forem shodných s doloženými.
 """
+
 import csv
 from pathlib import Path
 

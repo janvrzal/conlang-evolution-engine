@@ -4,6 +4,7 @@ Tato vrstva je oddělená od vah historických schémat: párové formy potomků
 neříkají, kterým směrem změna proběhla. Jsou ale silným, globálně dostupným
 kontrolním profilem míry shody, substitucí a mezer v kognátech.
 """
+
 from __future__ import annotations
 
 import csv
@@ -79,8 +80,7 @@ def _align_segments(left: list[str], right: list[str]) -> list[tuple[str, str]]:
             pairs.append((left[left_index - 1], right[right_index - 1]))
             left_index, right_index = left_index - 1, right_index - 1
         elif (
-            left_index
-            and costs[left_index][right_index] == costs[left_index - 1][right_index] + 1
+            left_index and costs[left_index][right_index] == costs[left_index - 1][right_index] + 1
         ):
             pairs.append((left[left_index - 1], "-"))
             left_index -= 1
@@ -108,14 +108,10 @@ def profile_simulated_word_pairs(
     return _normalise(counts)
 
 
-def correspondence_hellinger(
-    observed: Mapping[str, float], target: Mapping[str, float]
-) -> float:
+def correspondence_hellinger(observed: Mapping[str, float], target: Mapping[str, float]) -> float:
     """Vzdálenost simulované a referenční korespondence (0 = shoda)."""
     keys = set(observed) | set(target)
-    squared = sum(
-        (sqrt(observed.get(key, 0.0)) - sqrt(target.get(key, 0.0))) ** 2 for key in keys
-    )
+    squared = sum((sqrt(observed.get(key, 0.0)) - sqrt(target.get(key, 0.0))) ** 2 for key in keys)
     return sqrt(squared) / sqrt(2)
 
 
@@ -162,10 +158,10 @@ def build_gled_correspondence_profile(path: str | Path) -> CorrespondenceProfile
                 aligned_columns += len(categories)
             previous_alignment = alignment
 
-    family_average: Counter[str] = Counter()
+    family_average: dict[str, float] = {}
     for counts in per_family.values():
         for category, share in _normalise(counts).items():
-            family_average[category] += share
+            family_average[category] = family_average.get(category, 0.0) + share
     return CorrespondenceProfile(
         source=str(source),
         sha256=hashlib.sha256(source.read_bytes()).hexdigest(),

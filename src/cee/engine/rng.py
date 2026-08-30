@@ -9,6 +9,7 @@ chronologii, což je vlastnost losování, ne jazykové skutečnosti.
 Seed uzlu se proto odvozuje z globálního seedu a identity uzlu. Výsledek je
 deterministický, ale pro každý uzel jiný.
 """
+
 import hashlib
 from typing import Iterable
 

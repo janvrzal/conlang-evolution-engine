@@ -4,6 +4,7 @@ Globální kalibrace změn je samostatná v :mod:`cee.metrics.global_baseline`.
 PHOIBLE popisuje synchronní inventáře, a proto jej nelze vydávat za korpus
 směrovaných historických změn.
 """
+
 from __future__ import annotations
 
 import csv
@@ -91,7 +92,9 @@ class PhoibleInventoryModel:
         ]
         return cls(
             inventories=inventories,
-            provenance={str(key): str(value) for key, value in dict(data.get("provenance", {})).items()},
+            provenance={
+                str(key): str(value) for key, value in dict(data.get("provenance", {})).items()
+            },
         )
 
     def validate(self, inventory: InventoryView) -> InventoryValidationReport:

@@ -52,7 +52,10 @@ Správný název rysu nestačí. `action` musí vyrobit matici, která **přesn�
 
 Postup: rozdíl dvou hlásek si nech vypsat, nehádej ho.
 ```python
-fa, fb = mapper.parse_word('x','v').segments[0].features, mapper.parse_word('x','b').segments[0].features
+fa, fb = (
+    mapper.parse_word("x", "v").segments[0].features,
+    mapper.parse_word("x", "b").segments[0].features,
+)
 print({k: (fa[k], fb[k]) for k in fa if fa[k] != fb[k]})
 ```
 K ověření slouží `FeatureMapper.is_exact_segment(segment)` → `False` znamená, že matice žádné hlásce neodpovídá. Hlídá to test `tests/test_schemas.py::test_vysledek_odpovida_realne_hlasce` nad každým schématem v `SCHEMA_REGISTRY`.

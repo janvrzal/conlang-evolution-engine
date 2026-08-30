@@ -6,6 +6,7 @@ simulátor, serializuj výsledek. Držet ji na jednom místě znamená, že se o
 rozhraní chovají stejně — dřív existovala ve třech kopiích, které se lišily
 (např. jen jedna z nich předávala seed).
 """
+
 from __future__ import annotations
 
 import csv
@@ -31,6 +32,7 @@ from cee.engine.semantics import SemanticEvaluator
 from cee.engine.simulator import EvolutionSimulator
 from cee.engine.topology import EvolutionGraph
 from cee.metrics.global_baseline import load_global_baseline
+from cee.metrics.schema_profiles import load_schema_profile
 from cee.metrics.retention import LexicalRetention, RetentionResult
 from cee.semantics.builder import default_paths as default_semantics_paths
 from cee.semantics.graph import SemanticGraph
@@ -64,6 +66,7 @@ class SimulationConfig:
     phoible_model_path: Optional[str] = None
     #: Cesta k auditovatelné globální kalibraci. Bez ní zůstává čistý preset.
     global_baseline_path: Optional[str] = None
+    schema_profile_id: str = "heuristic-default"
 
 
 @dataclass
@@ -134,8 +137,9 @@ def load_lexicon_from_csv(path: str, mapper: FeatureMapper) -> Lexicon:
         for row in csv.DictReader(f):
             ipa = row.get("ipa_proto") or row.get("ipa")
             if not ipa:
-                warnings.warn(f"Řádek {row.get('id')!r} v {path} nemá IPA, přeskakuji.",
-                              stacklevel=2)
+                warnings.warn(
+                    f"Řádek {row.get('id')!r} v {path} nemá IPA, přeskakuji.", stacklevel=2
+                )
                 continue
             lexicon.words.append(mapper.parse_word(concept_id=row["id"], ipa_string=ipa))
     return lexicon
@@ -149,7 +153,7 @@ def load_lexicon_from_records(records: Iterable[Dict[str, str]], mapper: Feature
             mapper.parse_word(
                 concept_id=record["id"],
                 ipa_string=record["ipa"],
-                is_grammatical=record.get("is_grammatical", False)
+                is_grammatical=bool(record.get("is_grammatical", False)),
             )
         )
         lexicon.words[-1].polysemy = set(record.get("polysemy", []))
@@ -221,8 +225,7 @@ def build_semantic_evaluator(config: SimulationConfig) -> Optional[SemanticEvalu
             # tvrdý pád místo hlášky a pádu zpět na jiný zdroj — a to je
             # přesně to, co má tahle funkce podle jména dělat.
             warnings.warn(
-                f"Sémantický graf '{path}' se nepodařilo načíst "
-                f"({type(exc).__name__}): {exc}",
+                f"Sémantický graf '{path}' se nepodařilo načíst ({type(exc).__name__}): {exc}",
                 stacklevel=2,
             )
             return None
@@ -247,7 +250,9 @@ def build_empirical_phonology(
         return None
 
     locations = default_empirical_paths()
-    model_path = Path(config.phoible_model_path) if config.phoible_model_path else locations["phoible_model"]
+    model_path = (
+        Path(config.phoible_model_path) if config.phoible_model_path else locations["phoible_model"]
+    )
     model: Optional[PhoibleInventoryModel] = None
     if model_path.exists():
         try:
@@ -260,7 +265,11 @@ def build_empirical_phonology(
 def build_global_schema_multipliers(config: SimulationConfig) -> Dict[str, float]:
     """Načte už vytvořenou globální kalibraci, bez síťového I/O."""
     if not config.global_baseline_path:
-        return {}
+        try:
+            return load_schema_profile(config.schema_profile_id).schema_multipliers
+        except (OSError, ValueError, KeyError, FileNotFoundError) as exc:
+            warnings.warn(f"Profil vah '{config.schema_profile_id}' nelze načíst: {exc}", stacklevel=2)
+            return {}
     path = Path(config.global_baseline_path)
     if not path.exists():
         warnings.warn(
@@ -297,7 +306,7 @@ def run_simulation(
     simulator = EvolutionSimulator(
         graph,
         mapper,
-        preset=config.preset,
+        preset=config.preset or {},
         seed=config.seed,
         semantic_evaluator=build_semantic_evaluator(config),
         end_year=config.years,
@@ -336,10 +345,15 @@ def grammar_sketch(
 
     if state.social:
         labels = {
-            "prestige": "prestiž", "mobility": "mobilita", "literacy": "gramotnost",
-            "standardization": "standardizace", "population": "populace",
+            "prestige": "prestiž",
+            "mobility": "mobilita",
+            "literacy": "gramotnost",
+            "standardization": "standardizace",
+            "population": "populace",
         }
-        social = ", ".join(f"{labels.get(key, key)} {value:.0%}" for key, value in sorted(state.social.items()))
+        social = ", ".join(
+            f"{labels.get(key, key)} {value:.0%}" for key, value in sorted(state.social.items())
+        )
         lines += ["", "## Společnost", "", f"- {social}"]
 
     if retention is not None and retention.total:
@@ -392,9 +406,7 @@ def build_branch_view(
     ]
 
     retention = (
-        LexicalRetention.evaluate(state.lexicon, diagnostic)
-        if diagnostic is not None
-        else None
+        LexicalRetention.evaluate(state.lexicon, diagnostic) if diagnostic is not None else None
     )
 
     return BranchView(
@@ -413,8 +425,7 @@ def build_branch_views(
     diagnostic: Optional[Sequence[str]] = None,
 ) -> Dict[str, BranchView]:
     return {
-        node_id: build_branch_view(state, mapper, diagnostic)
-        for node_id, state in states.items()
+        node_id: build_branch_view(state, mapper, diagnostic) for node_id, state in states.items()
     }
 
 
@@ -422,8 +433,7 @@ def topology_payload(graph: EvolutionGraph) -> Dict[str, Any]:
     return {
         "nodes": [{"id": node_id} for node_id in graph.node_configs],
         "edges": [
-            {"source": edge.parent_id, "target": edge.child_id}
-            for edge in graph.vertical_edges
+            {"source": edge.parent_id, "target": edge.child_id} for edge in graph.vertical_edges
         ],
     }
 

@@ -59,6 +59,19 @@ cee calibrate candidates \
 Kurátor z fronty vytváří až výsledné `changes.csv` a uchová identifikátory
 obou forem i přesnou citaci ve zdrojovém pracovním souboru.
 
+## Režimy profilů
+
+CEE vždy uvádí původ vah. Vestavěné `heuristic-default`,
+`heuristic-conservative` a `heuristic-dynamic` jsou transparentní autorské
+presety; nejsou vydávány za empirickou kalibraci. Empirický profil vzniká jen
+z `cee calibrate global` nad licenčně auditovaným manifestem a má přednost před
+heuristickým profilem. Režim `user-local-research` je vyhrazen pro data
+uživatele: CEE je nestahuje, neodesílá ani nedistribuuje jejich odvozené váhy.
+
+Index Diachronica se kvůli CC BY-NC-SA 3.0 nedodává ani jako vestavěný profil,
+ani jako automatický downloader. Případné použití je věcí samostatné licence a
+odpovědnosti uživatele; nesmí se prezentovat jako profil distribuovaný CEE.
+
 ## Globální korespondence
 
 GLED je vhodný otevřený doplněk (CC BY 4.0): obsahuje globálně pokryté

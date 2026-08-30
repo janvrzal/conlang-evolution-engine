@@ -12,6 +12,7 @@ změny (řeší `_reverses` níže).
 Inventář se mezi pravidly průběžně aktualizuje, takže pozdější změna vidí to,
 co jí předchozí připravila.
 """
+
 import random
 import warnings
 from dataclasses import dataclass
@@ -81,7 +82,11 @@ class MacroParams:
             if not source:
                 continue
             for field_name in (
-                "change_rate", "conservatism", "coda_erosion", "deletion_rate", "timing_jitter"
+                "change_rate",
+                "conservatism",
+                "coda_erosion",
+                "deletion_rate",
+                "timing_jitter",
             ):
                 if field_name in source:
                     values[field_name] = float(source[field_name])
@@ -152,13 +157,13 @@ def _undoes_insertion(previous: Optional[Rule], candidate: Rule) -> bool:
 
     if previous.insert and _maze(candidate):
         vlozene = previous.insert_features or {}
-        return all(vlozene.get(f) == v for f, v in candidate.target.items()
-                   if not f.startswith("_"))
+        return all(
+            vlozene.get(f) == v for f, v in candidate.target.items() if not f.startswith("_")
+        )
 
     if _maze(previous) and candidate.insert:
         vlozene = candidate.insert_features or {}
-        return all(vlozene.get(f) == v for f, v in previous.target.items()
-                   if not f.startswith("_"))
+        return all(vlozene.get(f) == v for f, v in previous.target.items() if not f.startswith("_"))
 
     return False
 
@@ -190,10 +195,14 @@ def _reuses_schema_too_soon(history: Optional[List[Rule]], candidate: Rule) -> b
 class SoundChangeGenerator:
     """Vážený generátor zvukových změn na základě šablon, priorů a biomů."""
 
-    def __init__(self, preset: Dict[str, Any], seed: int = 42,
-                 macro: Optional[MacroParams] = None,
-                 inventory_validator=None,
-                 schema_multipliers: Optional[Mapping[str, float]] = None):
+    def __init__(
+        self,
+        preset: Dict[str, Any],
+        seed: int = 42,
+        macro: Optional[MacroParams] = None,
+        inventory_validator=None,
+        schema_multipliers: Optional[Mapping[str, float]] = None,
+    ):
         self.preset = preset
         self.random = random.Random(seed)
         self.macro = macro or MacroParams.from_config(preset.get("macro"))
