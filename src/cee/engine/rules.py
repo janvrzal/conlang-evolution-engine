@@ -32,65 +32,129 @@ class Rule:
     #: compensatory_lengthening, stress_initial, stress_penult a stress_final.
     operation: Optional[str] = None
 
-    def apply_to_word(self, word: Word) -> bool:
-        """
-        Aplikuje pravidlo na slovo in-place. Vrací True, pokud došlo ke změně.
-        Provedeno ve dvou fázích (identifikace -> mutace) pro zamezení self-feeding artefaktů.
-        """
-        # 0. Kontrola časové stopy (výpůjčky přejaté po pravidle jím neprojdou)
+    def matching_indices(self, word: Word) -> List[int]:
+        """Najde terče bez mutace tvaru; používá ho generátor i aplikátor."""
         if self.year is not None and self.year < word.origin_year:
-            return False
-            
+            return []
         word.ensure_stress()
-        # Fáze 1: Identifikace terčů
-        targets_to_modify = []
+        targets: List[int] = []
         for i, segment in enumerate(word.segments):
-            # 1. Odpovídá segment terči pravidla?
             if not segment.matches(self.target):
                 continue
-
             if self.prosody == "unstressed" and i == word.stress_index:
                 continue
             if self.prosody == "stressed" and i != word.stress_index:
                 continue
-
             if self.syllable_part:
                 from cee.engine.prosody import syllable_position
                 if syllable_position(word, i) != self.syllable_part:
                     continue
-                
-            # 2. Odpovídá předchozí segment prostředí 'env_before'?
             if self.env_before:
                 if self.env_before.get("_boundary") == "+":
                     if i != 0:
                         continue
-                else:
-                    if i == 0 or not word.segments[i-1].matches(self.env_before):
-                        continue
-                    
-            # 3. Odpovídá následující segment prostředí 'env_after'?
+                elif i == 0 or not word.segments[i - 1].matches(self.env_before):
+                    continue
             if self.env_after:
                 if self.env_after.get("_boundary") == "+":
                     if i != len(word.segments) - 1:
                         continue
                 elif self.env_after.get("_lookahead_vowel") == "+":
-                    environment = {
-                        key: value for key, value in self.env_after.items()
-                        if not key.startswith("_")
-                    }
-                    following_vowel = next(
-                        (candidate for candidate in word.segments[i + 1:]
-                         if candidate.features.get("syl") == "+" and candidate.matches(environment)),
-                        None,
-                    )
-                    if following_vowel is None:
+                    environment = {key: value for key, value in self.env_after.items() if not key.startswith("_")}
+                    if not any(
+                        candidate.features.get("syl") == "+" and candidate.matches(environment)
+                        for candidate in word.segments[i + 1:]
+                    ):
+                        continue
+                elif i == len(word.segments) - 1 or not word.segments[i + 1].matches(self.env_after):
+                    continue
+            targets.append(i)
+        return targets
+
+    def can_apply_to_word(self, word: Word) -> bool:
+        """Levný predikát pro výběr kandidátního pravidla.
+
+        Záměrně nevytváří deep-copy každého slova. U mazání kontroluje stejnou
+        minimální prosodii jako aplikátor, aby se do historie nedostávalo
+        pravidlo, které reálně nikam nezasáhne.
+        """
+        targets = self.matching_indices(word)
+        if not targets:
+            return False
+        if self.operation == "swap_next":
+            return any(i + 1 < len(word.segments) for i in targets)
+        if self.operation == "geminate":
+            return True
+        if self.operation == "degeminate":
+            return any(
+                i + 1 < len(word.segments)
+                and word.segments[i].features == word.segments[i + 1].features
+                for i in targets
+            )
+        if self.operation == "lengthen":
+            return any(
+                word.segments[i].features.get("syl") == "+" and i not in word.long_nuclei
+                for i in targets
+            )
+        if self.operation == "shorten":
+            return any(i in word.long_nuclei for i in targets)
+        if self.operation == "compensatory_lengthening":
+            lost = {
+                i + 1 for i in targets
+                if i + 1 < len(word.segments)
+                and (i + 1 == len(word.segments) - 1 or (
+                    i + 2 < len(word.segments) and word.segments[i + 2].features.get("cons") == "+"
+                ))
+            }
+            return bool(lost) and self._passes_minimality(
+                word, word.segments, [segment for i, segment in enumerate(word.segments) if i not in lost]
+            )
+        if self.action.get("delete") == "+":
+            return self._passes_minimality(
+                word, word.segments, [segment for i, segment in enumerate(word.segments) if i not in set(targets)]
+            )
+        if self.operation in {"stress_initial", "stress_penult", "stress_final"}:
+            nuclei = word.syllable_nuclei()
+            if not nuclei:
+                return False
+            desired = {
+                "stress_initial": nuclei[0],
+                "stress_final": nuclei[-1],
+                "stress_penult": nuclei[-2] if len(nuclei) > 1 else nuclei[0],
+            }[self.operation]
+            return word.stress_index != desired
+        if self.insert and self.insert_features:
+            return True
+
+        # Pravidlo odpovídající terči ještě nemusí nic změnit: například
+        # finální odznělení /p/ → /p/ nesmí blokovat pozdější kandidát pro
+        # skutečně znělé /b/. Referenční zápisy ($before/$after) hodnotíme
+        # stejně jako aplikátor.
+        for i in targets:
+            segment = word.segments[i]
+            for feature, new_value in self.action.items():
+                if isinstance(new_value, str) and new_value.startswith("$after:"):
+                    if i + 1 < len(word.segments):
+                        expected = word.segments[i + 1].features.get(new_value.split(":", 1)[1], "0")
+                    else:
+                        continue
+                elif isinstance(new_value, str) and new_value.startswith("$before:"):
+                    if i > 0:
+                        expected = word.segments[i - 1].features.get(new_value.split(":", 1)[1], "0")
+                    else:
                         continue
                 else:
-                    if i == len(word.segments) - 1 or not word.segments[i+1].matches(self.env_after):
-                        continue
-                        
-            targets_to_modify.append(i)
-            
+                    expected = new_value
+                if segment.features.get(feature) != expected:
+                    return True
+        return False
+
+    def apply_to_word(self, word: Word) -> bool:
+        """
+        Aplikuje pravidlo na slovo in-place. Vrací True, pokud došlo ke změně.
+        Provedeno ve dvou fázích (identifikace -> mutace) pro zamezení self-feeding artefaktů.
+        """
+        targets_to_modify = self.matching_indices(word)
         # Fáze 2: Simultánní mutace
         if not targets_to_modify:
             return False

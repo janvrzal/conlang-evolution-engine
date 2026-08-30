@@ -574,14 +574,11 @@ class EvolutionSimulator:
             active_words = [word for word in state.lexicon.words if word.active]
 
             def accepts(rule: Rule) -> bool:
-                for word in active_words:
-                    probe = copy.deepcopy(word)
-                    before = self._word_signature(probe)
-                    if rule.apply_to_word(probe):
-                        repair_clusters(probe)
-                        if self._word_signature(probe) != before:
-                            return True
-                return False
+                # Při generování se vyhodnotí mnoho kandidátů. Dříve se pro
+                # každý kandidát hluboce kopíroval každý tvar, což u reálného
+                # slovníku přerůstalo samotnou simulaci. Pravidlo umí určit,
+                # zda se na tvar skutečně dá aplikovat, aniž by jej měnilo.
+                return any(rule.can_apply_to_word(word) for word in active_words)
 
             previous = history[-1] if history else None
             candidate = generator.generate_one(

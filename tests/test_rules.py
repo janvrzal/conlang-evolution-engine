@@ -71,6 +71,46 @@ def test_pravidlo_bez_zasahu_vraci_false(mapper):
     assert rule.apply_to_word(word) is False
 
 
+def test_predikat_pravidla_nemeni_tvar_a_uzna_platny_zasah(mapper):
+    """Výběr kandidáta nesmí simulovat změnu mutací slovníku."""
+    rule = Rule(
+        name="lenice mezi vokály",
+        target={"cons": "+", "cont": "-", "voi": "-"},
+        action={"voi": "+"},
+        env_before={"syl": "+"},
+        env_after={"syl": "+"},
+    )
+    word = mapper.parse_word("x", "apa")
+
+    assert rule.can_apply_to_word(word) is True
+    assert mapper.render_word(word) == "apa"
+
+
+def test_predikat_pravidla_respektuje_prosodickou_minimalitu(mapper):
+    rule = Rule(
+        name="synkopa vysokých vokálů",
+        target={"syl": "+", "hi": "+"},
+        action={"delete": "+"},
+        env_before={"cons": "+"},
+        env_after={"cons": "+"},
+    )
+    word = mapper.parse_word("x", "spir")
+
+    assert rule.can_apply_to_word(word) is False
+
+
+def test_predikat_nebere_pravidlo_ktere_uz_nema_co_zmenit(mapper):
+    rule = Rule(
+        name="finální odznělení",
+        target={"cons": "+", "son": "-"},
+        action={"voi": "-"},
+        env_after={"_boundary": "+"},
+    )
+
+    assert rule.can_apply_to_word(mapper.parse_word("x", "ap")) is False
+    assert rule.can_apply_to_word(mapper.parse_word("x", "ab")) is True
+
+
 def test_vlozeni_segmentu_za_terc(mapper):
     """Engine musí umět i přidávat, ne jen měnit rysy a mazat."""
     from cee.engine.inventory import InventoryView
