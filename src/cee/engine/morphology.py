@@ -82,6 +82,7 @@ class MorphologyEvaluator:
             parent_word_id=root.id,
             origin_type="derived",
             origin_rule="affixation",
+            grammatical_features={"morphology.affix_id": affix.id},
         )
         state.lexicon.words.append(word)
         return word
@@ -171,11 +172,70 @@ class MorphologyEvaluator:
                 grammatical_features={
                     str(k): str(v)
                     for k, v in cast(dict[str, str], form.get("features", {})).items()
-                },
+                }
+                | {"morphology.affix_id": affix.id},
             )
             state.lexicon.words.append(word)
             created.append(word)
         return created
+
+    def promote_productive_affixes(self, state: State, minimum_uses: int = 2) -> int:
+        """Z frekventované, opakované konstrukce udělá produktivní afix.
+
+        Nehádá nový morfém ze segmentů: sleduje jen afix, který už je doložen
+        v odvozených či flektovaných formách. Produktivita je tedy vysvětlitelný
+        důsledek užívání, ne náhodný přepínač.
+        """
+        uses: Dict[str, list[Word]] = {}
+        for word in state.lexicon.words:
+            affix_id = word.grammatical_features.get("morphology.affix_id")
+            if word.active and affix_id:
+                uses.setdefault(affix_id, []).append(word)
+        promoted = 0
+        for affix_id, forms in uses.items():
+            affix = next((word for word in state.lexicon.words if word.id == affix_id), None)
+            if affix is None or len(forms) < minimum_uses:
+                continue
+            exposure = sum(word.frequency for word in forms)
+            if exposure < 0.6:
+                continue
+            if not affix.is_grammatical:
+                affix.is_grammatical = True
+                affix.origin_rule = affix.origin_rule or "productive_grammaticalization"
+                promoted += 1
+            affix.grammatical_features["morphology.productivity"] = f"{min(1.0, exposure / len(forms)):.3f}"
+            affix.grammatical_features["morphology.productive_since"] = str(state.year)
+        return promoted
+
+    def erode_productive_affixes(self, state: State, threshold: float = 0.75) -> int:
+        """Časté členy produktivní konstrukce mohou ztratit okraj afixu.
+
+        Eroze se děje jen ve formách s doloženým produktivním afixem a jen u
+        nejfrekventnějších forem. Tím vznikne skutečná nepravidelnost, kterou
+        pozdější analogie může, ale nemusí vyrovnat.
+        """
+        changed = 0
+        for word in state.lexicon.words:
+            affix_id = word.grammatical_features.get("morphology.affix_id")
+            if not word.active or not affix_id or word.frequency < threshold:
+                continue
+            affix = next((candidate for candidate in state.lexicon.words if candidate.id == affix_id), None)
+            if affix is None or not affix.is_grammatical or not word.morpheme_boundaries:
+                continue
+            boundary = min(word.morpheme_boundaries)
+            remove_at = 0 if state.affixation_strategy == "prefix" else len(word.segments) - 1
+            # Nesmí zmizet celý afix ani kořen; to by nebyla eroze afixu, ale
+            # destrukce konstrukce.
+            affix_size = boundary if state.affixation_strategy == "prefix" else len(word.segments) - boundary
+            if affix_size < 2 or len(word.segments) < 3:
+                continue
+            word.segments.pop(remove_at)
+            if state.affixation_strategy == "prefix":
+                word.morpheme_boundaries = {boundary - 1}
+            word.grammatical_features["morphology.eroded"] = "true"
+            word.ensure_stress()
+            changed += 1
+        return changed
 
     def grammaticalize(self, state: State, word_id: str) -> bool:
         """Označí samostatné slovo jako gramatický morfém pro budoucí derivaci."""

@@ -149,7 +149,8 @@ def test_paradigma_gramatikalizuje_afix_a_vznika_v_historickem_case(mapper):
     plural = state.lexicon.get_word("tree.pl")
     assert plural is not None
     assert plural.paradigm == "noun"
-    assert plural.grammatical_features == {"number": "plural"}
+    assert plural.grammatical_features["number"] == "plural"
+    assert plural.grammatical_features["morphology.affix_id"]
     assert plural.origin_year == 1
     plural_word = state.lexicon.get_word("plural")
     assert plural_word is not None

@@ -888,10 +888,15 @@ class EvolutionSimulator:
             or morphology.get("paradigms")
             or morphology.get("grammaticalize")
             or morphology.get("reanalyze")
+            or morphology.get("enabled")
         )
         analogy_rate = float(morphology.get("analogy_rate", 0.0))
         if has_creation:
             push(start_year + 1, _PRIO_MORPHOLOGY, MorphologyEvent(start_year + 1, node_id))
+        if morphology.get("enabled"):
+            horizon = self._horizon_for(start_year, node_id)
+            for year in range(start_year + 100, horizon + 1, 100):
+                push(year, _PRIO_MORPHOLOGY, MorphologyEvent(year, node_id))
         if analogy_rate > 0:
             horizon = self._horizon_for(start_year, node_id)
             for year in range(start_year + 200, horizon + 1, 200):
@@ -1089,6 +1094,15 @@ class EvolutionSimulator:
 
         if float(morphology.get("analogy_rate", 0.0)) > 0:
             morph.level_analogies(state, threshold=float(morphology.get("analogy_threshold", 0.75)))
+
+        if morphology.get("enabled"):
+            morph.promote_productive_affixes(
+                state, minimum_uses=int(morphology.get("productivity_minimum_uses", 2))
+            )
+            if morphology.get("affix_erosion", True):
+                morph.erode_productive_affixes(
+                    state, threshold=float(morphology.get("erosion_frequency_threshold", 0.75))
+                )
 
     def _apply_contact(
         self,
