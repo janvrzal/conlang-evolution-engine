@@ -59,7 +59,21 @@ mezi mluvčími je pak podkladem pro lexikon i kontakt.
   explicitní legitimní strategie; chybí rozšířená historie možných reakcí.
 - [ ] Autorova fronta nevyřešených kolizí.
 
-## 5. Kontakt a výpůjčky
+## 5. Sociální vrstvy, variety a potřeby
+
+- [ ] Variety jednoho jazyka: elita, městský/střední proud a periferie.
+  Varieta drží jen odchylky frekvencí, inovací, registrů a lexika, nikoli
+  úplnou kopii jazyka.
+- [ ] Dialektové subnody, které lze později povýšit na samostatný jazyk bez
+  přerušení historie.
+- [ ] Společenské potřeby jako zdroj návrhů: obchod, náboženství, správa,
+  gramotnost, migrace a generační inovace.
+- [ ] Registry a domény: neutrální, formální, rituální, tabu, obchodní a
+  lokální; worldbuilder může návrh potvrdit, změnit či zakázat.
+- [ ] Síť šíření mezi varietami: prestiž, mobilita, město/venkov, bilingvismus
+  a izolace.
+
+## 6. Kontakt a výpůjčky
 
 - [ ] Výběr výpůjček podle sémantické domény kontaktu.
 - [ ] Nativizace podle fonotaktiky, ne jen nejbližšího segmentu.
@@ -68,7 +82,7 @@ mezi mluvčími je pak podkladem pro lexikon i kontakt.
 - [ ] Kontaktní vrstvy: lidová, elitní, písemná a rituální.
 - [ ] Kontakt jako zdroj konkrétní homofonní náhrady.
 
-## 6. Sociální a historické síly
+## 7. Sociální a historické síly
 
 - [ ] Dialekty a jejich vzájemné šíření.
 - [ ] Věkové kohorty, město/venkov a síť mluvčích.
