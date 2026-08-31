@@ -640,29 +640,28 @@ class EvolutionSimulator:
         for _ in range(attempts):
             inventory = InventoryView.from_lexicon(state.lexicon, self.mapper)
             state.inventory = inventory.to_inventory()
-            decision_holder = {}
+            decisions = {}
 
-            def accepts(rule: Rule) -> bool:
-                # Při generování se vyhodnotí mnoho kandidátů. Dříve se pro
-                # každý kandidát hluboce kopíroval každý tvar, což u reálného
-                # slovníku přerůstalo samotnou simulaci. Pravidlo umí určit,
-                # zda se na tvar skutečně dá aplikovat, aniž by jej měnilo.
+            def pressure(rule: Rule) -> float:
+                # Při generování se vyhodnotí kandidát nad skutečným
+                # lexikonem, bez hlubokého kopírování všech forem. Uchováme
+                # auditovatelný výsledek pro vítěznou inovaci.
                 decision = self.decision_engine.assess_sound_change(state, rule)
-                decision_holder["decision"] = decision
-                return decision.applicable_words > 0
+                decisions[id(rule)] = decision
+                return decision.pressure
 
             previous = history[-1] if history else None
-            candidate = generator.generate_one(
+            candidate = generator.generate_pressure_driven(
                 state,
                 year,
                 inventory,
                 previous=previous,
                 history=history,
-                accepts=accepts,
+                score=pressure,
             )
             if candidate is None:
                 continue
-            decision = decision_holder.get("decision")
+            decision = decisions.get(id(candidate))
             if decision is None:
                 continue
             # Hned rezervujeme pravidlo v historii, aby další kandidát

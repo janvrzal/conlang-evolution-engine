@@ -3,6 +3,7 @@
 import pytest
 
 from cee.core.models import Inventory, Lexicon, State
+from cee.engine.decisions import ChangeDecisionEngine
 from cee.engine.generator import SoundChangeGenerator, _reuses_schema_too_soon, _reverses
 from cee.engine.inventory import InventoryView
 from cee.engine.parser import YamlParser
@@ -152,3 +153,28 @@ def test_stejny_seed_stejny_vysledek(mapper, preset):
         ]
 
     assert bez() == bez()
+
+
+def test_lexikalni_tlak_prebije_vahu_schema(mapper):
+    """Prior nesmí vybrat slabší inovaci jen proto, že je velmi vysoký."""
+    words = [mapper.parse_word(f"intervocalic-{index}", "apa") for index in range(9)]
+    words.append(mapper.parse_word("final", "ab"))
+    state = State(node_id="test", inventory=Inventory(), lexicon=Lexicon(words=words))
+    inventory = InventoryView.from_lexicon(state.lexicon, mapper)
+    preset = {
+        "schemas": {
+            "final_devoicing": {"base_weight": 10_000},
+            "lenition": {"base_weight": 1},
+        }
+    }
+    generator = SoundChangeGenerator(preset, seed=7)
+
+    candidate = generator.generate_pressure_driven(
+        state,
+        200,
+        inventory,
+        score=lambda rule: ChangeDecisionEngine.assess_sound_change(state, rule).pressure,
+    )
+
+    assert candidate is not None
+    assert candidate.schema_id == "lenition"

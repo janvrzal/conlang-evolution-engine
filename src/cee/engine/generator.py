@@ -9,6 +9,10 @@ Skládá chronologii pravidel ze tří vrstev:
 (řeší `Schema.generate_rule`) a sekvence nesmí obsahovat zvrácení už proběhlé
 změny (řeší `_reverses` níže).
 
+Při běhu simulátoru navíc vzniká změna výběrem z kandidátů podle tlaku v
+aktuálním lexikonu. Váhy presetu v tomto režimu pouze rozsekávají prakticky
+stejně silné kandidáty; nejsou samy o sobě příčinou změny.
+
 Inventář se mezi pravidly průběžně aktualizuje, takže pozdější změna vidí to,
 co jí předchozí připravila.
 """
@@ -377,3 +381,64 @@ class SoundChangeGenerator:
             return candidate
 
         return None
+
+    def generate_pressure_driven(
+        self,
+        state: State,
+        year: int,
+        inventory: InventoryView,
+        previous: Optional[Rule] = None,
+        history: Optional[List[Rule]] = None,
+        score: Optional[Callable[[Rule], float]] = None,
+    ) -> Optional[Rule]:
+        """Vybere inovaci podle její opory v živém lexikonu.
+
+        Každé aktivní schéma dostane v daném slotu jednu příležitost vytvořit
+        kandidáta. ``score`` pak reprezentuje měřitelný tlak (obvykle pokrytí
+        skutečných slovních prostředí). Prior z presetu se použije až mezi
+        kandidáty s prakticky stejným skóre, aby nemohl přebít silnější tlak
+        jen proto, že má historicky vyšší výchozí váhu.
+        """
+        biome = (state.map or {}).get("biome")
+        choices, weights = self._weighted_schemas(biome)
+        if not choices or not inventory or score is None:
+            return None
+
+        candidates: list[tuple[Rule, float, float]] = []
+        for schema, prior in zip(choices, weights):
+            candidate = schema.generate_rule(inventory, year, rng=self.random)
+            if candidate is None:
+                continue
+            candidate.schema_id = schema.name
+            if self.inventory_validator is not None:
+                report = self.inventory_validator.validate(inventory.apply(candidate))
+                if not report.accepted:
+                    continue
+            if (
+                any(_reverses(earlier, candidate) for earlier in (history or []))
+                or _undoes_insertion(previous, candidate)
+                or _is_duplicate(previous, candidate)
+                or _reuses_schema_too_soon(history, candidate)
+            ):
+                continue
+
+            pressure = score(candidate)
+            if pressure > 0:
+                candidates.append((candidate, pressure, prior))
+
+        if not candidates:
+            return None
+
+        strongest = max(pressure for _, pressure, _ in candidates)
+        # Rozdíl do dvou procentních bodů je pro tento hrubý první model
+        # nerozhodný. Teprve zde smí projevit výchozí typologický prior.
+        near_ties = [
+            (candidate, prior)
+            for candidate, pressure, prior in candidates
+            if strongest - pressure <= 0.02
+        ]
+        return self.random.choices(
+            [candidate for candidate, _ in near_ties],
+            weights=[prior for _, prior in near_ties],
+            k=1,
+        )[0]
