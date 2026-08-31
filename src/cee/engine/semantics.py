@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from cee.core.models import Lexicon
+from cee.engine.decisions import SemanticContextModel
 from cee.semantics.graph import SemanticGraph
 
 
@@ -12,11 +13,12 @@ class SemanticProposal:
 
     word_lineage_id: str
     source_concept: str
-    target_concept: str
+    target_concept: Optional[str]
     kind: str
     pressure: float
     evidence_weight: float
     evidence_type: str
+    competitor_lineage_id: Optional[str] = None
 
     def duration(self, base_years: int = 240) -> int:
         """Silnější tlak urychlí přijetí, ale nezmění význam okamžitě."""
@@ -27,6 +29,11 @@ class SemanticProposal:
     def adoption_threshold(self, frequency: float) -> float:
         """Okamžik, kdy se nové užití stane součástí živého lexikonu."""
         bounded_frequency = max(0.0, min(1.0, frequency))
+        if self.kind == "loss":
+            return min(
+                0.9,
+                max(0.4, 0.5 + 0.25 * bounded_frequency + 0.1 * (1 - self.pressure)),
+            )
         return min(0.85, max(0.3, 0.65 - 0.25 * bounded_frequency + 0.1 * (1 - self.pressure)))
 
 
@@ -53,20 +60,10 @@ class SemanticEvaluator:
         self.shift_prob = shift_prob
         self.forget_prob = forget_prob
         self.random = random.Random(seed)
+        self.context_model = SemanticContextModel()
 
-    def propose_changes(
-        self,
-        lexicon: Lexicon,
-        random_gen: Optional[random.Random] = None,
-    ) -> list[SemanticProposal]:
-        """Navrhne nanejvýš jednu změnu podle datové a lexikální opory.
-
-        Hrana v CLICS/DatSemShift určuje, *který* posun je legitimní. Její
-        lokálně normalizovaná váha, frekvence zdrojového lexému a přítomnost
-        cílového významu v jazyce určují tlak. ``shift_prob`` zůstává mírou
-        historických příležitostí za století, nikoli vahou cílového významu.
-        """
-        rng = random_gen or self.random
+    def extension_candidates(self, lexicon: Lexicon) -> list[SemanticProposal]:
+        """Sestaví doložená rozšíření a posuny bez náhodného losování."""
         covered = {
             meaning.lower()
             for word in lexicon.words
@@ -109,20 +106,112 @@ class SemanticEvaluator:
                             evidence_type=str(edge_type),
                         )
                     )
+        return candidates
 
-        if not candidates:
+    @staticmethod
+    def _stability(word) -> float:
+        raw = word.grammatical_features.get(
+            "semantic.stability", word.grammatical_features.get("lexical.stability", "0.5")
+        )
+        try:
+            return max(0.0, min(1.0, float(raw)))
+        except (TypeError, ValueError):
+            return 0.5
+
+    def loss_candidates(self, lexicon: Lexicon) -> list[SemanticProposal]:
+        """Najde redundantní významy vytlačované silnějším synonymem.
+
+        Nízká frekvence sama nestačí. Význam lze ztratit jen tehdy, pokud jej
+        pokrývá jiný aktivní lexém ve srovnatelném komunikačním kontextu.
+        """
+        meanings: dict[str, list] = {}
+        for word in lexicon.words:
+            if not word.active:
+                continue
+            for meaning in {word.concept_id.lower(), *(item.lower() for item in word.polysemy)}:
+                meanings.setdefault(meaning, []).append(word)
+
+        candidates: list[SemanticProposal] = []
+        for meaning, words in meanings.items():
+            if len(words) < 2:
+                continue
+            strength = {
+                word.id: max(0.0, min(1.0, word.frequency)) * (0.5 + 0.5 * self._stability(word))
+                for word in words
+            }
+            # Při shodné síle zachováme pořadí lexikonu. UUID objektu Word
+            # nesmí rozhodovat o historickém výsledku mimo simulátor.
+            winner = max(words, key=lambda word: strength[word.id])
+            winner_strength = strength[winner.id]
+            if winner_strength <= 0:
+                continue
+            for loser in words:
+                if loser is winner:
+                    continue
+                advantage = max(0.0, (winner_strength - strength[loser.id]) / winner_strength)
+                if advantage <= 0:
+                    continue
+                context_overlap, evidence_level = self.context_model.overlap(loser, winner)
+                if context_overlap <= 0:
+                    continue
+                # Ztráta jednoho z více významů je méně riskantní než zánik
+                # posledního užití celého lexému.
+                survival = 1.0 if loser.polysemy else 0.65
+                pressure = min(1.0, (advantage * context_overlap) ** 0.5 * survival)
+                candidates.append(
+                    SemanticProposal(
+                        word_lineage_id=loser.lineage_id or loser.id,
+                        source_concept=meaning,
+                        target_concept=None,
+                        kind="loss",
+                        pressure=round(pressure, 6),
+                        evidence_weight=round(advantage, 6),
+                        evidence_type=f"synonym-competition:{evidence_level}",
+                        competitor_lineage_id=winner.lineage_id or winner.id,
+                    )
+                )
+        return candidates
+
+    def propose_changes(
+        self,
+        lexicon: Lexicon,
+        random_gen: Optional[random.Random] = None,
+    ) -> list[SemanticProposal]:
+        """Navrhne nanejvýš jednu změnu podle datové a lexikální opory.
+
+        Hrana v CLICS/DatSemShift určuje, *který* posun je legitimní. Konkurence
+        živých synonym určuje, *který* význam může zaniknout bez ztráty
+        sémantického pokrytí. ``shift_prob`` a ``forget_prob`` jsou pouze míry
+        historických příležitostí za století, ne losování cílového významu.
+        """
+        rng = random_gen or self.random
+        opportunities: list[SemanticProposal] = []
+        groups = (
+            (self.extension_candidates(lexicon), self.shift_prob),
+            (self.loss_candidates(lexicon), self.forget_prob),
+        )
+        for candidates, rate in groups:
+            if not candidates or rate <= 0:
+                continue
+            candidates.sort(
+                key=lambda item: (
+                    -item.pressure,
+                    -item.evidence_weight,
+                )
+            )
+            strongest = candidates[0]
+            if rng.random() < rate * strongest.pressure:
+                opportunities.append(strongest)
+
+        if not opportunities:
             return []
-        candidates.sort(
+        opportunities.sort(
             key=lambda item: (
-                -item.pressure,
+                -(item.pressure * (self.forget_prob if item.kind == "loss" else self.shift_prob)),
                 -item.evidence_weight,
-                item.word_lineage_id,
-                item.source_concept,
-                item.target_concept,
             )
         )
-        strongest = candidates[0]
-        return [strongest] if rng.random() < self.shift_prob * strongest.pressure else []
+        return [opportunities[0]]
 
     def evaluate(
         self,

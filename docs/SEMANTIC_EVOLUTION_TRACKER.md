@@ -19,12 +19,16 @@ kauzálním, časově rozloženým a auditovatelným změnám. Stav **hotovo** z
 - [x] Udržet aktivní změnu přes mezilehlé verze lexému a odštěpení větve.
 - [x] Zachovat kompatibilitu jednoduchých vlastních evaluátorů používajících
   původní metodu `evaluate()`.
+- [x] Kauzální zúžení a zánik významu pouze při dostupnosti živého konkurenta.
+- [x] Skórovat konkurenci synonym podle frekvence, stability a kontextového
+  překryvu.
+- [x] Tlumit konkurenci synonym používaných v odlišných registrech či rolích.
+- [x] U polysemního lexému odstranit jen vytlačený význam; poslední užití smí
+  zaniknout pouze tehdy, když je koncept dál pokrytý silnějším lexémem.
+- [x] Zapojit `forget_prob` jako tempo příležitostí pro kauzální ztrátu.
 
 ## Následuje
 
-- [ ] Kauzální zúžení a zánik významu; současný `forget_prob` zůstává pouze
-  v kompatibilním okamžitém evaluátoru, dokud nebude existovat tlak pro ztrátu.
-- [ ] Konkurence synonym podle frekvence, kontextového překryvu a stability.
 - [ ] Samostatné mechanismy metafory, metonymie, generalizace a specializace.
 - [ ] Tlak tabu, registru, prestiže a komunikační potřeby.
 - [ ] Sémantické změny vyvolané kontaktem, kalky a přejímáním konstrukcí.
@@ -42,3 +46,9 @@ Binární `concept_id`/`polysemy` zatím neumějí vyjádřit procento mluvčíc
 nové užití přijali; postupnost je proto zachycena historickými fázemi a
 mezistavem polysémie. Populační rozšíření bude vyžadovat explicitní model
 variant či řečových komunit.
+
+Stabilita je zatím lexémová hodnota z metadat (`semantic.stability` nebo
+`lexical.stability`), nikoli samostatný empiricky kalibrovaný parametr každého
+významu. Pokud hlavní význam polysemního slova zanikne, převezme jeho místo
+deterministicky první zbývající význam; prominence jednotlivých významů bude
+potřebovat vlastní model užití.

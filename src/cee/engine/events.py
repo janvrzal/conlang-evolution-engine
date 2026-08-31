@@ -6,7 +6,7 @@ vlastní chování: historická pravidla zůstávají v `rules.py`.
 """
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 
 from cee.engine.rules import Rule
 
@@ -87,13 +87,14 @@ class SemanticChangeEvent:
     change_id: str
     word_lineage_id: str
     source_concept: str
-    target_concept: str
+    target_concept: Optional[str]
     kind: str
     duration: int
     pressure: float
     evidence_weight: float
     evidence_type: str
     adoption_threshold: float
+    competitor_lineage_id: Optional[str] = None
     introduced: bool = False
 
 

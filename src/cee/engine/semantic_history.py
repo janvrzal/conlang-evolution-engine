@@ -69,6 +69,7 @@ class SemanticChangeRuntime:
                     evidence_weight=proposal.evidence_weight,
                     evidence_type=proposal.evidence_type,
                     adoption_threshold=proposal.adoption_threshold(word.frequency),
+                    competitor_lineage_id=proposal.competitor_lineage_id,
                 ),
             )
             active_lineages.add(proposal.word_lineage_id)
@@ -97,6 +98,7 @@ class SemanticChangeRuntime:
                 pressure=change.pressure,
                 evidence_weight=change.evidence_weight,
                 evidence_type=change.evidence_type,
+                competitor_lineage_id=change.competitor_lineage_id,
             )
         phases = max(1, math.ceil(change.duration / SEMANTIC_SPREAD_PHASE_YEARS))
         self._propagate(
@@ -192,12 +194,45 @@ class SemanticChangeRuntime:
 
         before = word_versions(state)
         phase = "diffusing"
-        if not change.introduced and progress >= change.adoption_threshold:
+        if change.kind == "loss" and not change.introduced:
+            if progress >= change.adoption_threshold:
+                change.introduced = True
+                phase = "receding"
+        elif not change.introduced and progress >= change.adoption_threshold:
+            assert change.target_concept is not None
             word.polysemy.add(change.target_concept)
             change.introduced = True
             phase = "coexisting"
 
-        if change.kind == "shift" and progress >= 1.0 and change.introduced:
+        if change.kind == "loss" and progress >= 1.0:
+            competitor = next(
+                (
+                    item
+                    for item in state.lexicon.words
+                    if item.active
+                    and item.lineage_id == change.competitor_lineage_id
+                    and change.source_concept
+                    in {item.concept_id.lower(), *(value.lower() for value in item.polysemy)}
+                ),
+                None,
+            )
+            if competitor is None:
+                phase = "cancelled"
+            else:
+                if change.source_concept in {item.lower() for item in word.polysemy}:
+                    word.polysemy = {
+                        item for item in word.polysemy if item.lower() != change.source_concept
+                    }
+                elif word.concept_id.lower() == change.source_concept:
+                    if word.polysemy:
+                        replacement = min(word.polysemy)
+                        word.polysemy.remove(replacement)
+                        word.concept_id = replacement
+                    else:
+                        word.active = False
+                phase = "completed"
+        elif change.kind == "shift" and progress >= 1.0 and change.introduced:
+            assert change.target_concept is not None
             if word.concept_id.lower() == change.source_concept:
                 word.concept_id = change.target_concept
                 word.polysemy.discard(change.target_concept)
@@ -211,7 +246,11 @@ class SemanticChangeRuntime:
             before,
             year,
             "semantic_shift",
-            f"{change.source_concept} > {change.target_concept} ({change.kind})",
+            (
+                f"loss of {change.source_concept}"
+                if change.kind == "loss"
+                else f"{change.source_concept} > {change.target_concept} ({change.kind})"
+            ),
         )
         if graph_builder:
             graph_builder.add_event(
@@ -222,6 +261,7 @@ class SemanticChangeRuntime:
                 source_concept=change.source_concept,
                 target_concept=change.target_concept,
                 change_kind=change.kind,
+                competitor_lineage_id=change.competitor_lineage_id,
                 progress=round(progress, 4),
                 phase=phase,
                 hit_count=hit_count,

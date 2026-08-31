@@ -40,7 +40,7 @@ viditelná na časové ose a později ji lze rozšířit o populační prevalenc
 
 - Sémantické změny jsou auditovatelné a dědí se při odštěpení.
 - Staré vlastní evaluátory dál fungují přes `evaluate()`.
-- `forget_prob` ještě není součástí kauzální cesty; ztráta významu potřebuje
-  vlastní tlak a bude doplněna v následujícím řezu.
+- Kauzální cesta ztráty významu byla následně doplněna v ADR-011;
+  `forget_prob` v ní řídí tempo příležitostí, nikoli náhodný výběr významu.
 - UI může později zobrazit začátek, koexistenci a dokončení změny bez změny
   základního event modelu.
