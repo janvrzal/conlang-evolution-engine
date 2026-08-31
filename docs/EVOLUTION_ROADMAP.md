@@ -96,6 +96,19 @@ mezi mluvčími je pak podkladem pro lexikon i kontakt.
   měnit při štěpení, standardizaci či politické identitě. Worldbuilder určí
   míru autonomie a případně kurátorovaný seznam jmen.
 
+## 5b. Správa jazyka a autorská časová osa
+
+- [x] Samostatná stránka jazyka s řezem v konkrétním roce, auditními
+  událostmi, varietami a katalogem jazyků projektu.
+- [x] Konceptově i tvarově orientovaný slovník s filtry registru, komunity a
+  lexikální třídy; homonyma a synonyma se nezakrývají, ale označují.
+- [~] Autorské události uložené do projektové osy: změna metadat, rozhodnutí o
+  varietě, instituce a migrace. Dnes jsou auditovatelná rozhodnutí autora;
+  jejich specifické mechanické dopady se doplní společně s typovaným systémem
+  historických událostí v sekci 5a.
+- [ ] Převod variety na nový jazyk, asimilace či podpora variety jako
+  potvrzené operace nad topologií projektu.
+
 ## 6. Kontakt a výpůjčky
 
 - [ ] Výběr výpůjček podle sémantické domény kontaktu.
