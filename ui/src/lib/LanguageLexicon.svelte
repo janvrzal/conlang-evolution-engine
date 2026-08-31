@@ -19,42 +19,13 @@
 		grammatical_features?: Record<string, string>;
 	};
 
-	let { words = [], onTrace }: { words?: LanguageWord[]; onTrace?: (word: LanguageWord) => void } = $props();
-	let query = $state('');
+	export type LexiconFilters = { query: string; register: string; community: string; lexicalClass: string };
+	let { words = [], total = 0, facets = { registers: [], communities: [], lexicalClasses: [], homonymForms: [], synonymConcepts: [] }, filters, loading = false, hasMore = false, onFiltersChange, onLoadMore, onTrace }: { words?: LanguageWord[]; total?: number; facets?: { registers: string[]; communities: string[]; lexicalClasses: string[]; homonymForms: string[]; synonymConcepts: string[] }; filters: LexiconFilters; loading?: boolean; hasMore?: boolean; onFiltersChange: (filters: LexiconFilters) => void; onLoadMore?: () => void; onTrace?: (word: LanguageWord) => void } = $props();
 	let grouping = $state<'concept' | 'form'>('concept');
-	let register = $state('all');
-	let community = $state('all');
-	let lexicalClass = $state('all');
-
-	const registers = $derived([
-		...new Set(words.map((word) => word.grammatical_features?.['lexical.register']).filter(Boolean))
-	].sort());
-	const communities = $derived([
-		...new Set(words.map((word) => word.grammatical_features?.['social.group']).filter(Boolean))
-	].sort());
-	const classes = $derived([
-		...new Set(words.map((word) => word.grammatical_features?.['lexical.class']).filter(Boolean))
-	].sort());
-	const homonyms = $derived.by(() => {
-		const forms = new Map<string, Set<string>>();
-		for (const word of words) forms.set(word.to, new Set([...(forms.get(word.to) ?? []), word.concept_id]));
-		return new Set([...forms].filter(([, concepts]) => concepts.size > 1).map(([form]) => form));
-	});
-	const filtered = $derived(
-		words.filter((word) => {
-			const q = query.trim().toLowerCase();
-			const features = word.grammatical_features ?? {};
-			return (
-				(!q || `${word.to} ${word.concept_id} ${(word.polysemy ?? []).join(' ')}`.toLowerCase().includes(q)) &&
-				(register === 'all' || features['lexical.register'] === register) &&
-				(community === 'all' || features['social.group'] === community) &&
-				(lexicalClass === 'all' || features['lexical.class'] === lexicalClass)
-			);
-		})
-	);
+	const homonyms = $derived(new Set(facets.homonymForms));
 	const groups = $derived.by(() => {
 		const grouped = new Map<string, LanguageWord[]>();
-		for (const word of filtered) {
+		for (const word of words) {
 			const key = grouping === 'concept' ? word.concept_id : word.to;
 			grouped.set(key, [...(grouped.get(key) ?? []), word]);
 		}
@@ -64,7 +35,7 @@
 	function flags(word: LanguageWord): string[] {
 		const result: string[] = [];
 		if (homonyms.has(word.to)) result.push('homonymum');
-		if (words.filter((item) => item.concept_id === word.concept_id).length > 1) result.push('synonymum');
+		if (facets.synonymConcepts.includes(word.concept_id)) result.push('synonymum');
 		const registerName = word.grammatical_features?.['lexical.register'];
 		if (registerName && registerName !== 'neutral' && registerName !== 'ordinary') result.push(registerName);
 		if (word.origin_type && word.origin_type !== 'inherited') result.push(word.origin_type);
@@ -76,15 +47,15 @@
 	<CardHeader class="gap-3">
 		<div class="flex items-center justify-between gap-3">
 			<CardTitle class="flex items-center gap-2"><Volume2 size={18} /> Slovník</CardTitle>
-			<span class="text-xs text-muted-foreground">{filtered.length} / {words.length}</span>
+			<span class="text-xs text-muted-foreground">{words.length} načteno / {total}</span>
 		</div>
 		<div class="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-			<div class="relative md:col-span-2"><Search class="absolute left-3 top-2.5 text-muted-foreground" size={15} /><Input class="pl-9" bind:value={query} placeholder="Hledat formu, koncept nebo význam" /></div>
+			<div class="relative md:col-span-2"><Search class="absolute left-3 top-2.5 text-muted-foreground" size={15} /><Input class="pl-9" value={filters.query} oninput={(event) => onFiltersChange({ ...filters, query: event.currentTarget.value })} placeholder="Hledat formu, koncept nebo význam" /></div>
 			<Select bind:value={grouping}><option value="concept">Podle konceptu</option><option value="form">Podle formy</option></Select>
-			<Select bind:value={register}><option value="all">Všechny registry</option>{#each registers as item}<option value={item}>{item}</option>{/each}</Select>
-			<Select bind:value={community}><option value="all">Všechny komunity</option>{#each communities as item}<option value={item}>{item}</option>{/each}</Select>
+			<Select value={filters.register} onchange={(event) => onFiltersChange({ ...filters, register: event.currentTarget.value })}><option value="all">Všechny registry</option>{#each facets.registers as item}<option value={item}>{item}</option>{/each}</Select>
+			<Select value={filters.community} onchange={(event) => onFiltersChange({ ...filters, community: event.currentTarget.value })}><option value="all">Všechny komunity</option>{#each facets.communities as item}<option value={item}>{item}</option>{/each}</Select>
 		</div>
-		<div class="flex gap-2"><Select class="max-w-52" bind:value={lexicalClass}><option value="all">Všechny třídy slov</option>{#each classes as item}<option value={item}>{item}</option>{/each}</Select><span class="text-xs text-muted-foreground self-center">Homonyma a synonyma se počítají z celého řezu v daném roce.</span></div>
+		<div class="flex gap-2"><Select class="max-w-52" value={filters.lexicalClass} onchange={(event) => onFiltersChange({ ...filters, lexicalClass: event.currentTarget.value })}><option value="all">Všechny třídy slov</option>{#each facets.lexicalClasses as item}<option value={item}>{item}</option>{/each}</Select><span class="text-xs text-muted-foreground self-center">Homonyma a synonyma se počítají z celého řezu v daném roce.</span></div>
 	</CardHeader>
 	<CardContent class="space-y-4">
 		{#each groups as [key, items]}
@@ -97,7 +68,8 @@
 				</TableBody></Table>
 			</section>
 		{:else}
-			<div class="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">Žádný lexém neodpovídá zvoleným filtrům.</div>
+			<div class="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">{loading ? 'Načítám slovník…' : 'Žádný lexém neodpovídá zvoleným filtrům.'}</div>
 		{/each}
+		{#if hasMore}<div class="flex justify-center pt-2"><Button variant="outline" onclick={() => onLoadMore?.()} disabled={loading}>Načíst dalších 100</Button></div>{/if}
 	</CardContent>
 </Card>

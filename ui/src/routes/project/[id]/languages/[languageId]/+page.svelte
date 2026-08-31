@@ -9,7 +9,8 @@
 	import { Select } from '$lib/components/ui/select';
 	import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '$lib/components/ui/table';
 	import LanguageLexicon, { type LanguageWord } from '$lib/LanguageLexicon.svelte';
-	import { fetchLanguage, fetchRunExport, fetchWordTrace } from '$lib/api';
+	import { fetchRunExport, fetchWordTrace } from '$lib/api';
+	import { fetchLanguagePage, type LexiconFilters } from '$lib/language-api';
 	import { loadProject, projectState, scheduleSave } from '$lib/state.svelte';
 
 	type AuthorEvent = { id: string; year: number; type: string; note: string; varietyId?: string };
@@ -27,6 +28,11 @@
 	let eventNote = $state('');
 	let selectedTrace = $state<{ word: LanguageWord; steps: any[] } | null>(null);
 	let activeView = $state<'overview' | 'lexicon' | 'timeline' | 'varieties' | 'settings' | 'catalog'>('overview');
+	let lexiconFilters = $state<LexiconFilters>({ query: '', register: 'all', community: 'all', lexicalClass: 'all' });
+	let lexiconTotal = $state(0);
+	let lexiconNextOffset = $state<number | null>(null);
+	let lexiconFacets = $state({ registers: [] as string[], communities: [] as string[], lexicalClasses: [] as string[], homonymForms: [] as string[], synonymConcepts: [] as string[] });
+	let filterTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const languageId = $derived($page.params.languageId);
 	const projectId = $derived($page.params.id);
@@ -89,14 +95,28 @@
 	}
 
 	async function loadHistoricalState() {
-		if (!projectState.simulationRunId) { words = []; auditEvents = []; return; }
+		if (!projectState.simulationRunId) { words = []; auditEvents = []; lexiconTotal = 0; return; }
 		loading = true; error = null;
 		try {
-			words = await fetchLanguage(projectState.simulationRunId, languageId ?? '', selectedYear);
+			await loadLexiconPage(0);
 			const exported = await fetchRunExport(projectState.simulationRunId);
 			auditEvents = (exported.events ?? []).filter((event: AuditEvent) => event.language_id === languageId);
 		} catch (cause) { error = cause instanceof Error ? cause.message : String(cause); }
 		finally { loading = false; }
+	}
+
+	async function loadLexiconPage(offset: number, append = false) {
+		if (!projectState.simulationRunId) return;
+		const result = await fetchLanguagePage(projectState.simulationRunId, languageId ?? '', selectedYear, offset, lexiconFilters);
+		words = append ? [...words, ...result.words] : result.words;
+		lexiconTotal = result.total;
+		lexiconNextOffset = result.nextOffset;
+		lexiconFacets = result.facets;
+	}
+	function updateLexiconFilters(filters: LexiconFilters) {
+		lexiconFilters = filters;
+		if (filterTimer) clearTimeout(filterTimer);
+		filterTimer = setTimeout(() => { void loadLexiconPage(0); }, 220);
 	}
 
 	function updateLanguageData(update: Record<string, unknown>) {
@@ -176,7 +196,7 @@
 						<div class="grid gap-4 md:grid-cols-3"><Card><CardHeader><CardDescription>Živé lexémy</CardDescription><CardTitle class="text-3xl">{words.length}</CardTitle></CardHeader></Card><Card><CardHeader><CardDescription>Variety</CardDescription><CardTitle class="text-3xl">{varieties.length}</CardTitle></CardHeader></Card><Card><CardHeader><CardDescription>Události do roku</CardDescription><CardTitle class="text-3xl">{visibleEvents.length}</CardTitle></CardHeader></Card></div>
 						<Card><CardHeader><CardTitle>Co je důležité v tomto okamžiku</CardTitle><CardDescription>Nejnovější změny a otevřené možnosti pro worldbuildera.</CardDescription></CardHeader><CardContent class="space-y-3">{#each visibleEvents.slice(0, 5) as event, index (`overview-${event.kind}-${event.year}-${index}`)}<div class="flex gap-3 border-b pb-3 last:border-0"><span class="w-14 text-sm text-muted-foreground">{event.year}</span><div><strong class="text-sm">{String(event.kind ?? event.type)}</strong><p class="text-sm text-muted-foreground">{String(event.note ?? event.reason ?? event.rule ?? 'Historická událost')}</p></div></div>{:else}<p class="text-sm text-muted-foreground">Ještě nejsou k dispozici auditní události. Spusť simulaci nebo přidej autorskou událost.</p>{/each}</CardContent></Card>
 					{:else if activeView === 'lexicon'}
-						{#if loading}<Card><CardContent class="p-8 text-muted-foreground">Načítám historický stav jazyka…</CardContent></Card>{:else}<LanguageLexicon {words} onTrace={showTrace} />{/if}
+						{#if loading}<Card><CardContent class="p-8 text-muted-foreground">Načítám historický stav jazyka…</CardContent></Card>{:else}<LanguageLexicon {words} total={lexiconTotal} facets={lexiconFacets} filters={lexiconFilters} onFiltersChange={updateLexiconFilters} hasMore={lexiconNextOffset !== null} onLoadMore={() => lexiconNextOffset !== null && loadLexiconPage(lexiconNextOffset, true)} onTrace={showTrace} />{/if}
 						{#if selectedTrace}<Card><CardHeader><CardTitle>Historie: {selectedTrace.word.to}</CardTitle><CardDescription>{selectedTrace.word.concept_id}</CardDescription></CardHeader><CardContent><ol class="space-y-2">{#each selectedTrace.steps as step}<li class="flex gap-3 border-b pb-2 last:border-0"><span class="w-14 text-muted-foreground">{step.year}</span><strong>{step.form}</strong><span class="text-muted-foreground">{step.rule_name ?? step.note ?? step.type ?? ''}</span></li>{/each}</ol></CardContent></Card>{/if}
 					{:else if activeView === 'timeline'}
 						<Card><CardHeader><CardTitle class="flex items-center gap-2"><History size={18} /> Události jazyka</CardTitle><CardDescription>Audit simulace a vlastní rozhodnutí autora pro vybraný rok.</CardDescription></CardHeader><CardContent class="space-y-3">{#each visibleEvents as event, index (`${event.kind}-${event.year}-${index}`)}<div class="rounded-lg border p-3"><div class="flex justify-between gap-3"><strong class="text-sm">{String(event.kind ?? event.type)}</strong><span class="text-xs text-muted-foreground">{event.year}</span></div><p class="mt-1 text-sm text-muted-foreground">{String(event.note ?? event.reason ?? event.rule ?? event.change_id ?? 'Historická událost')}</p></div>{:else}<p class="text-sm text-muted-foreground">Pro tento jazyk zatím nejsou žádné události.</p>{/each}</CardContent></Card>
