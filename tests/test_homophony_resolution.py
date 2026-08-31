@@ -63,4 +63,6 @@ def test_legitimni_strategie_homofonie_jsou_casovane_a_dohledatelne(mapper):
     assert stream is not None and stream.origin_type == "homophony_compound"
     assert all(word.origin_type != "homophony_resolution" for word in state.lexicon.words)
     actions = {event["action"] for event in builder.events if event.get("kind") == "homophony_pressure"}
+    pending = [event for event in builder.events if event.get("kind") == "homophony_pending"]
+    assert all(event["status"] == "pending" for event in pending)
     assert {"colexification", "semantic_shift", "derivation", "compound"} <= actions

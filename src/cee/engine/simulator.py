@@ -435,7 +435,24 @@ class EvolutionSimulator:
                                 evidence_level=decision.evidence_level,
                                 action=decision.action,
                                 reason=decision.reason,
+                                winner_id=decision.winner_id,
+                                loser_id=decision.loser_id,
                             )
+                            if decision.action == "needs_legitimate_innovation":
+                                self.graph_builder.add_event(
+                                    "homophony_pending",
+                                    event.year,
+                                    event.branch_id,
+                                    decision_id=(
+                                        f"{event.branch_id}:{event.year}:"
+                                        f"{decision.winner_id}:{decision.loser_id}"
+                                    ),
+                                    winner_id=decision.winner_id,
+                                    loser_id=decision.loser_id,
+                                    pressure=decision.pressure,
+                                    reason=decision.reason,
+                                    status="pending",
+                                )
                         for competition in evaluator.last_competitions:
                             self.graph_builder.add_event(
                                 "lexical_competition", event.year, event.branch_id, **competition
