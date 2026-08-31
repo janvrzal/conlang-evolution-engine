@@ -18,7 +18,8 @@ class SchemaProfile:
     description: str
     schema_multipliers: dict[str, float]
     macro: dict[str, float] = field(default_factory=dict)
-    lexical: dict[str, float] = field(default_factory=dict)
+    # Lexikální profil nese kromě čísel i politiku homofonie (`audit`/`resolve`).
+    lexical: dict[str, Any] = field(default_factory=dict)
     license: str = ""
     provenance: str = ""
 
@@ -29,7 +30,7 @@ class SchemaProfile:
             description=str(data["description"]),
             schema_multipliers={str(k): float(v) for k, v in dict(data.get("schema_multipliers", {})).items()},
             macro={str(k): float(v) for k, v in dict(data.get("macro", {})).items()},
-            lexical={str(k): float(v) for k, v in dict(data.get("lexical", {})).items()},
+            lexical={str(k): v for k, v in dict(data.get("lexical", {})).items()},
             license=str(data.get("license", "")), provenance=str(data.get("provenance", "")),
         )
         if profile.kind not in PROFILE_KINDS:

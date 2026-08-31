@@ -357,13 +357,19 @@ class EvolutionSimulator:
                         homophony_resolution_rate=float(
                             lexical.get("homophony_resolution_rate", 1.0)
                         ),
+                        homophony_policy=str(
+                            lexical.get(
+                                "homophony_policy",
+                                "audit" if lexical.get("resolve_homophones", False) else "off",
+                            )
+                        ),
+                        homophony_strategies=lexical.get("homophony_strategies", {}),
                     )
                     evaluator.evaluate(
                         branch_state,
                         event.year,
                         rng,
                         taboo_concepts=lexical.get("taboo_concepts", []),
-                        resolve_homophones=bool(lexical.get("resolve_homophones", False)),
                         render=self.mapper.render_word,
                     )
                     hit_count = self._record_changed_words(

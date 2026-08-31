@@ -177,7 +177,7 @@ def test_taboo_nahrada_a_rozliseni_homofonie_jsou_volitelne(mapper):
                     "enabled": True,
                     "replacement_rate": 0.0,
                     "taboo_concepts": ["fire"],
-                    "resolve_homophones": True,
+                    "homophony_policy": "audit",
                 },
             },
         },
@@ -201,7 +201,7 @@ def test_homofonie_se_bez_legitimni_inovace_nedeformuje_na_prefix(mapper):
             "proto": {},
             "child": {
                 "year": 0,
-                "lexical": {"enabled": True, "replacement_rate": 0.0, "resolve_homophones": True},
+                "lexical": {"enabled": True, "replacement_rate": 0.0, "homophony_policy": "audit"},
             },
         },
         vertical_edges=[VerticalEdge("proto", "child", [])],

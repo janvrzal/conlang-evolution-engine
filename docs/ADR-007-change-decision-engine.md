@@ -30,4 +30,13 @@ CLICS4 a DatSemShift s ním sdílejí Concepticonovou identitu konceptu.
 - Vysoká homofonie se objeví v genealogickém auditu jako tlak, nikoli jako
   falešně vyřešená změna.
 - Stejný kontrakt lze rozšířit na fonologické spouštěče a samostatné trvání
-  inovací místo jediného globálního tempa.
+ inovací místo jediného globálního tempa.
+
+## Politika homofonie
+
+Konfigurace `homophony_policy` má tři hodnoty: `off`, `audit` a `resolve`.
+Režim `resolve` neprovádí žádnou implicitní opravu; vyžaduje pro konkrétní
+koncept historii v `homophony_strategies`: `colexification`, `semantic_shift`,
+`derivation` nebo `compound`. Staré `resolve_homophones` se při načtení
+dočasně přeloží na `audit`, aby nezměnilo existující projekty na skrytou
+automatickou mutaci.

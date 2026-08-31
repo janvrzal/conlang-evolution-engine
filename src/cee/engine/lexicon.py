@@ -5,10 +5,12 @@ from __future__ import annotations
 import copy
 import random
 import uuid
+from dataclasses import replace
 from typing import Callable, Iterable, Optional, Sequence
 
 from cee.core.models import State, Word
 from cee.engine.decisions import ChangeDecisionEngine
+from cee.engine.morphology import MorphologyEvaluator
 
 _FUNCTION_CONCEPTS = frozenset(
     {
@@ -114,10 +116,14 @@ class LexicalEvaluator:
         replacement_rate: float = 0.015,
         loss_rate: float = 0.01,
         homophony_resolution_rate: float = 1.0,
+        homophony_policy: str = "off",
+        homophony_strategies: Optional[dict] = None,
     ):
         self.replacement_rate = max(0.0, replacement_rate)
         self.loss_rate = max(0.0, loss_rate)
         self.homophony_resolution_rate = min(1.0, max(0.0, homophony_resolution_rate))
+        self.homophony_policy = homophony_policy if homophony_policy in {"off", "audit", "resolve"} else "off"
+        self.homophony_strategies = dict(homophony_strategies or {})
         self.decision_engine = ChangeDecisionEngine()
         self.last_homophony_decisions = []
 
@@ -128,7 +134,6 @@ class LexicalEvaluator:
         rng: random.Random,
         *,
         taboo_concepts: Sequence[str] = (),
-        resolve_homophones: bool = False,
         render: Optional[Callable[[Word], str]] = None,
     ) -> list[Word]:
         active = [word for word in state.lexicon.words if word.active]
@@ -182,7 +187,7 @@ class LexicalEvaluator:
             replacements.append(replacement)
             word.active = False
 
-        if resolve_homophones and render:
+        if self.homophony_policy != "off" and render:
             groups: dict[str, list[Word]] = {}
             for word in [*active, *replacements]:
                 if word.active:
@@ -195,10 +200,89 @@ class LexicalEvaluator:
                 # posoudí podle automaticky sestavených kontextů. Samotnou
                 # náhradu smí provést až reálná událost (sémantika, morfologie
                 # nebo kontakt), která dodá její historický původ.
-                self.last_homophony_decisions.extend(self.decision_engine.assess_homophones(forms))
+                for decision in self.decision_engine.assess_homophones(forms):
+                    if self.homophony_policy != "resolve" or decision.action != "needs_legitimate_innovation":
+                        self.last_homophony_decisions.append(decision)
+                        continue
+                    if rng.random() > self.homophony_resolution_rate:
+                        self.last_homophony_decisions.append(decision)
+                        continue
+                    words_by_id = {word.id: word for word in [*state.lexicon.words, *replacements]}
+                    winner, loser = words_by_id[decision.winner_id], words_by_id[decision.loser_id]
+                    strategy = self.homophony_strategies.get(loser.concept_id)
+                    resolved = self._resolve_homophony(state, winner, loser, year, strategy)
+                    self.last_homophony_decisions.append(
+                        replace(
+                            decision,
+                            action=resolved or "needs_legitimate_innovation",
+                            reason=(
+                                f"Kolize vyřešena historickou událostí: {resolved}."
+                                if resolved
+                                else decision.reason
+                            ),
+                        )
+                    )
 
         state.lexicon.words.extend(replacements)
         return replacements
+
+    @staticmethod
+    def _resolve_homophony(
+        state: State, winner: Word, loser: Word, year: int, strategy: object
+    ) -> Optional[str]:
+        """Provede pouze explicitně doložený typ lexikální inovace.
+
+        Specifikace je součástí historie projektu. Bez ní vysoký tlak jen
+        zůstane auditním záznamem — algoritmus nevymýšlí afix ani kořen.
+        """
+        if not isinstance(strategy, dict):
+            return None
+        kind = str(strategy.get("kind", ""))
+        if kind == "colexification":
+            winner.polysemy.add(loser.concept_id)
+            winner.grammatical_features["lexical.homophony_resolution"] = "colexification"
+            loser.active = False
+            return kind
+
+        morphology = MorphologyEvaluator()
+        loser.active = False
+        try:
+            if kind == "semantic_shift":
+                source = state.lexicon.get_word(str(strategy.get("source", "")))
+                if source is None:
+                    loser.active = True
+                    return None
+                source.polysemy.add(loser.concept_id)
+                source.grammatical_features["lexical.homophony_resolution"] = "semantic_shift"
+                source.grammatical_features["lexical.semantic_shift_year"] = str(year)
+                return kind
+            if kind == "derivation":
+                derived = morphology.derive(
+                    state,
+                    str(strategy.get("root", "")),
+                    str(strategy.get("affix", "")),
+                    loser.concept_id,
+                    prefix=strategy.get("prefix"),
+                )
+                if derived is not None:
+                    derived.origin_type = "homophony_derivation"
+                    derived.origin_rule = "homophony:derivation"
+                    return kind
+            if kind == "compound":
+                compound = morphology.compound(
+                    state,
+                    str(strategy.get("head", "")),
+                    str(strategy.get("modifier", "")),
+                    loser.concept_id,
+                )
+                if compound is not None:
+                    compound.origin_type = "homophony_compound"
+                    compound.origin_rule = "homophony:compound"
+                    return kind
+        finally:
+            if not state.lexicon.get_words(loser.concept_id):
+                loser.active = True
+        return None
 
     @staticmethod
     def _replacement_from(donor: Word, target: Word, year: int, origin_type: str) -> Word:
