@@ -18,3 +18,6 @@ použitelné, ale bez plné kauzální či sociální vrstvy; **plán** = dalš�
 
 Podrobný stav významové vrstvy je v
 [SEMANTIC_EVOLUTION_TRACKER.md](SEMANTIC_EVOLUTION_TRACKER.md).
+
+Úplný odškrtávací plán napříč zvukem, významem, morfologií, lexikonem,
+kontaktem a společností je v [EVOLUTION_ROADMAP.md](EVOLUTION_ROADMAP.md).
