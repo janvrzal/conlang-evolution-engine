@@ -33,6 +33,7 @@
 	let lexiconNextOffset = $state<number | null>(null);
 	let lexiconFacets = $state({ registers: [] as string[], communities: [] as string[], lexicalClasses: [] as string[], homonymForms: [] as string[], synonymConcepts: [] as string[] });
 	let filterTimer: ReturnType<typeof setTimeout> | null = null;
+	let lastHistoricalLoad = $state('');
 
 	const languageId = $derived($page.params.languageId);
 	const projectId = $derived($page.params.id);
@@ -79,13 +80,19 @@
 			selectedYearOption = String(selectedYear);
 			labelDraft = String(languageData.label ?? languageId);
 			ready = true;
-			await loadHistoricalState();
 		})();
 	});
 
 	$effect(() => {
 		if (!ready) return;
 		labelDraft = String(languageData.label ?? languageId);
+	});
+
+	$effect(() => {
+		if (!ready) return;
+		const loadKey = `${projectState.simulationRunId ?? ''}:${languageId ?? ''}:${selectedYear}`;
+		if (loadKey === lastHistoricalLoad) return;
+		lastHistoricalLoad = loadKey;
 		void loadHistoricalState();
 	});
 
