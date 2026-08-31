@@ -49,6 +49,8 @@ class SemanticGraph:
                 fields = shift.get("fields", [])
                 edge_type = shift.get("type", "yaml_mock")
                 mechanism = shift.get("mechanism")
+                bridge = shift.get("bridge")
+                scope = shift.get("scope")
                 self.G.add_node(u, name=u)
                 self.G.add_node(v, name=v)
                 self.G.add_edge(
@@ -58,6 +60,8 @@ class SemanticGraph:
                     type=edge_type,
                     fields=fields,
                     mechanism=mechanism,
+                    bridge=bridge,
+                    scope=scope,
                 )
 
     def get_concept_name(self, concept_id: str) -> str:
@@ -108,6 +112,8 @@ class SemanticGraph:
                     edge_data.get("weight", 1),
                     edge_data.get("type", "unknown"),
                     edge_data.get("mechanism") or None,
+                    edge_data.get("bridge") or None,
+                    edge_data.get("scope") or None,
                 )
             )
         relations.sort(key=lambda item: item[2], reverse=True)

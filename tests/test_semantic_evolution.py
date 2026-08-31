@@ -7,6 +7,7 @@ from cee.engine.semantic_history import SemanticChangeRuntime
 from cee.engine.semantics import SemanticEvaluator
 from cee.engine.simulator import EvolutionSimulator
 from cee.engine.topology import EvolutionGraph, VerticalEdge
+from cee.semantics.concepts import ConceptMetadata
 
 
 class OneShiftGraph:
@@ -29,10 +30,10 @@ class EmptyGraph:
 
 class MechanismGraph:
     _relations = {
-        "sun": [("SKY", "sky", 1.0, "shift", "metaphor")],
-        "hand": [("EAT", "eat", 1.0, "shift", "metonymy")],
-        "child": [("PERSON", "person", 1.0, "shift", "generalization")],
-        "animal": [("DOG", "dog", 1.0, "shift", "specialization")],
+        "sun": [("SKY", "sky", 1.0, "shift", "metaphor", None, None)],
+        "hand": [("EAT", "eat", 1.0, "shift", "metonymy", "instrument_action", None)],
+        "child": [("PERSON", "person", 1.0, "shift", "generalization", None, "broader")],
+        "animal": [("DOG", "dog", 1.0, "shift", "specialization", None, "narrower")],
     }
 
     def get_possible_relations(self, concept_id: str):
@@ -40,6 +41,23 @@ class MechanismGraph:
 
     def get_possible_shifts(self, concept_id: str):
         return [relation[:4] for relation in self.get_possible_relations(concept_id)]
+
+
+class MechanismConceptIndex:
+    _domains = {
+        "sun": "celestial bodies",
+        "sky": "weather",
+        "hand": "the body",
+        "eat": "the body",
+    }
+
+    def lookup(self, concept_id: str):
+        domain = self._domains.get(concept_id.lower(), "")
+        return ConceptMetadata("", concept_id.upper(), domain, "") if domain else None
+
+
+class IncompleteMechanismConceptIndex(MechanismConceptIndex):
+    _domains = {"sun": "celestial bodies"}
 
 
 def _root(mapper) -> State:
@@ -68,7 +86,9 @@ def test_navrh_vybira_nejsilneji_dolozeny_posun(mapper):
 
 def test_kuratorovany_mechanismus_urcuje_typ_semanticke_zmeny(mapper):
     words = [mapper.parse_word(concept, "sula") for concept in MechanismGraph._relations]
-    evaluator = SemanticEvaluator(MechanismGraph(), shift_prob=1.0)
+    evaluator = SemanticEvaluator(
+        MechanismGraph(), shift_prob=1.0, concept_index=MechanismConceptIndex()
+    )
 
     proposals = evaluator.extension_candidates(Lexicon(words))
     by_mechanism = {proposal.mechanism: proposal for proposal in proposals}
@@ -77,6 +97,8 @@ def test_kuratorovany_mechanismus_urcuje_typ_semanticke_zmeny(mapper):
     assert by_mechanism["metonymy"].kind == "extension"
     assert by_mechanism["generalization"].kind == "extension"
     assert by_mechanism["specialization"].kind == "shift"
+    assert by_mechanism["metaphor"].mechanism_reason == "cross-domain bridge"
+    assert by_mechanism["metonymy"].mechanism_reason == "same-domain instrument_action bridge"
 
 
 def test_autoruv_prepis_oznaci_neoznacenou_hranu_bez_odhadu(mapper):
@@ -84,14 +106,53 @@ def test_autoruv_prepis_oznaci_neoznacenou_hranu_bez_odhadu(mapper):
     evaluator = SemanticEvaluator(
         graph,
         shift_prob=1.0,
-        mechanism_overrides={"sun->sky": "metonymy"},
+        mechanism_overrides={"sun->sky": "metaphor"},
+        concept_index=MechanismConceptIndex(),
     )
     word = mapper.parse_word("sun", "sula")
+
+    proposal = next(
+        item
+        for item in evaluator.extension_candidates(Lexicon([word]))
+        if item.target_concept == "sky"
+    )
+
+    assert proposal.mechanism == "metaphor"
+    assert proposal.kind == "extension"
+
+
+def test_autoruv_strukturalni_most_aktivuje_metonymii(mapper):
+    class HandGraph:
+        def get_possible_shifts(self, concept_id: str):
+            return [("EAT", "eat", 1.0, "shift")] if concept_id.lower() == "hand" else []
+
+    evaluator = SemanticEvaluator(
+        HandGraph(),
+        mechanism_overrides={"hand->eat": "metonymy"},
+        relation_overrides={"hand->eat": {"bridge": "instrument_action"}},
+        concept_index=MechanismConceptIndex(),
+    )
+    word = mapper.parse_word("hand", "sula")
 
     proposal = evaluator.extension_candidates(Lexicon([word]))[0]
 
     assert proposal.mechanism == "metonymy"
-    assert proposal.kind == "extension"
+    assert proposal.mechanism_reason == "same-domain instrument_action bridge"
+
+
+def test_mechanismus_bez_sve_evidence_se_nespusti(mapper):
+    word = mapper.parse_word("sun", "sula")
+    evaluator = SemanticEvaluator(
+        OneShiftGraph("shift"),
+        mechanism_overrides={"sun->sky": "metaphor"},
+        concept_index=IncompleteMechanismConceptIndex(),
+    )
+
+    assert not [
+        proposal
+        for proposal in evaluator.extension_candidates(Lexicon([word]))
+        if proposal.target_concept == "sky"
+    ]
 
 
 def test_neoznaceny_datovy_posun_se_netvari_jako_konkretni_mechanismus(mapper):
@@ -131,7 +192,9 @@ def test_mechanismus_je_soucasti_auditni_udalosti(mapper):
     states = EvolutionSimulator(
         EvolutionGraph(),
         mapper,
-        semantic_evaluator=SemanticEvaluator(MechanismGraph(), shift_prob=1.0),
+        semantic_evaluator=SemanticEvaluator(
+            MechanismGraph(), shift_prob=1.0, concept_index=MechanismConceptIndex()
+        ),
         graph_builder=builder,
         end_year=300,
         evolve_root=True,
@@ -140,6 +203,7 @@ def test_mechanismus_je_soucasti_auditni_udalosti(mapper):
     started = [event for event in builder.events if event["kind"] == "semantic_change_started"]
     assert states["proto"].lexicon.words[0].polysemy == {"sky"}
     assert started[0]["mechanism"] == "metaphor"
+    assert started[0]["mechanism_pressure"] == 1.0
 
 
 def test_uplny_posun_ma_obdobi_polysemie(mapper):

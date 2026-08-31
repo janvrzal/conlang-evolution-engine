@@ -115,4 +115,4 @@ def test_yaml_hrana_nese_kuratorovany_mechanismus(tmp_path):
 
     relation = SemanticGraph(str(graph_file)).get_possible_relations("sun")[0]
 
-    assert relation[3:] == ("shift", "metaphor")
+    assert relation[3:] == ("shift", "metaphor", None, None)

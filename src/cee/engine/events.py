@@ -96,6 +96,8 @@ class SemanticChangeEvent:
     adoption_threshold: float
     competitor_lineage_id: Optional[str] = None
     mechanism: Optional[str] = None
+    mechanism_pressure: float = 1.0
+    mechanism_reason: str = "untyped relation"
     introduced: bool = False
 
 

@@ -65,6 +65,10 @@ class SimulationConfig:
     #: Explicitní mechanismy přesně zadaných hran, např.
     #: {"hand->eat": "metonymy"}. Neoznačené hrany se neklasifikují odhadem.
     semantic_mechanism_overrides: Dict[str, str] = field(default_factory=dict)
+    #: Strukturální evidence pro ručně zadané mechanismy, např.
+    #: {"hand->eat": {"bridge": "instrument_action"}}.
+    semantic_relation_overrides: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    concepticon_path: Optional[str] = None
     root_id: str = "proto"
     root_year: int = 0
 
@@ -293,6 +297,8 @@ def build_semantic_evaluator(config: SimulationConfig) -> Optional[SemanticEvalu
         forget_prob=config.forget_prob,
         seed=config.seed,
         mechanism_overrides=config.semantic_mechanism_overrides,
+        relation_overrides=config.semantic_relation_overrides,
+        concept_index=resolve_concepticon_index(config.concepticon_path),
     )
 
 

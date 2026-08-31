@@ -4,6 +4,7 @@ from typing import Mapping, Optional
 
 from cee.core.models import Lexicon
 from cee.engine.decisions import SemanticContextModel
+from cee.semantics.concepts import ConcepticonIndex
 from cee.semantics.graph import SemanticGraph
 
 
@@ -20,6 +21,8 @@ class SemanticProposal:
     evidence_type: str
     competitor_lineage_id: Optional[str] = None
     mechanism: Optional[str] = None
+    mechanism_pressure: float = 1.0
+    mechanism_reason: str = "untyped relation"
 
     def duration(self, base_years: int = 240) -> int:
         """Silnější tlak urychlí přijetí, ale nezmění význam okamžitě."""
@@ -51,6 +54,8 @@ class SemanticEvaluator:
         forget_prob: float = 0.01,
         seed: int = 42,
         mechanism_overrides: Optional[Mapping[str, str]] = None,
+        relation_overrides: Optional[Mapping[str, Mapping[str, str]]] = None,
+        concept_index: Optional[ConcepticonIndex] = None,
     ):
         """
         :param graph: Načtená síť Concepticon/DatSemShift/CLICS
@@ -67,18 +72,91 @@ class SemanticEvaluator:
             str(key).strip().lower(): str(value).strip().lower()
             for key, value in (mechanism_overrides or {}).items()
         }
+        self.relation_overrides = {
+            str(key).strip().lower(): {
+                str(field).strip().lower(): str(value).strip().lower()
+                for field, value in values.items()
+            }
+            for key, values in (relation_overrides or {}).items()
+            if isinstance(values, Mapping)
+        }
+        self.concept_index = concept_index
 
     _MECHANISMS = {"metaphor", "metonymy", "generalization", "specialization"}
 
     def _relations_for(self, concept_id: str):
         if hasattr(self.graph, "get_possible_relations"):
-            return self.graph.get_possible_relations(concept_id)
-        return [(*relation, None) for relation in self.graph.get_possible_shifts(concept_id)]
+            relations = self.graph.get_possible_relations(concept_id)
+        else:
+            relations = [
+                (*relation, None) for relation in self.graph.get_possible_shifts(concept_id)
+            ]
+        return [tuple(list(relation) + [None] * (7 - len(relation)))[:7] for relation in relations]
 
     def _mechanism_for(self, source: str, target: str, declared: Optional[str]) -> Optional[str]:
         override = self.mechanism_overrides.get(f"{source.lower()}->{target.lower()}")
         mechanism = override or (str(declared).strip().lower() if declared else None)
         return mechanism if mechanism in self._MECHANISMS else None
+
+    def _relation_details(
+        self, source: str, target: str, bridge: Optional[str], scope: Optional[str]
+    ) -> tuple[Optional[str], Optional[str]]:
+        override = self.relation_overrides.get(f"{source.lower()}->{target.lower()}", {})
+        return override.get("bridge", bridge), override.get("scope", scope)
+
+    def _domains_for(self, concept_id: str, word) -> set[str]:
+        metadata = self.concept_index.lookup(concept_id) if self.concept_index else None
+        raw = (
+            metadata.semantic_field
+            if metadata
+            else word.grammatical_features.get("semantic.domains", "")
+        )
+        return {value.strip().lower() for value in raw.split(",") if value.strip()}
+
+    def _mechanism_pressure(
+        self,
+        mechanism: Optional[str],
+        source: str,
+        target: str,
+        word,
+        bridge: Optional[str],
+        scope: Optional[str],
+    ) -> tuple[float, str]:
+        """Vrátí tlak specifický pro mechanismus, nebo nulu bez evidence."""
+        if mechanism is None:
+            return 1.0, "untyped relation"
+        source_domains = self._domains_for(source, word)
+        target_domains = self._domains_for(target, word)
+        bridge = (bridge or "").strip().lower()
+        scope = (scope or "").strip().lower()
+        if mechanism == "metaphor":
+            if source_domains and target_domains and source_domains.isdisjoint(target_domains):
+                return 1.0, "cross-domain bridge"
+            return 0.0, "metaphor needs distinct annotated domains"
+        if mechanism == "metonymy":
+            valid_bridges = {
+                "part_whole",
+                "container_content",
+                "instrument_action",
+                "place_people",
+                "producer_product",
+            }
+            if source_domains & target_domains and bridge in valid_bridges:
+                return 1.0, f"same-domain {bridge} bridge"
+            return 0.0, "metonymy needs same domain and structural bridge"
+        if mechanism == "generalization":
+            return (
+                (1.0, "declared broader scope")
+                if scope == "broader"
+                else (0.0, "generalization needs broader scope")
+            )
+        if mechanism == "specialization":
+            return (
+                (1.0, "declared narrower scope")
+                if scope == "narrower"
+                else (0.0, "specialization needs narrower scope")
+            )
+        return 0.0, "unsupported mechanism"
 
     def extension_candidates(self, lexicon: Lexicon) -> list[SemanticProposal]:
         """Sestaví doložená rozšíření a posuny bez náhodného losování."""
@@ -101,7 +179,15 @@ class SemanticEvaluator:
                 local_max = max(positive_weights, default=0.0)
                 if local_max <= 0:
                     continue
-                for target, _name, raw_weight, edge_type, declared_mechanism in relations:
+                for (
+                    target,
+                    _name,
+                    raw_weight,
+                    edge_type,
+                    declared_mechanism,
+                    bridge,
+                    scope,
+                ) in relations:
                     target_id = str(target).lower()
                     if target_id in existing:
                         continue
@@ -111,8 +197,16 @@ class SemanticEvaluator:
                     # Už existující samostatný lexém trochu snižuje potřebu
                     # rozšíření, ale neblokuje běžnou kolexifikaci.
                     lexical_need = 0.85 if target_id in covered else 1.0
-                    pressure = min(1.0, evidence_strength * exposure * lexical_need)
                     mechanism = self._mechanism_for(str(source), target_id, declared_mechanism)
+                    bridge, scope = self._relation_details(str(source), target_id, bridge, scope)
+                    mechanism_pressure, mechanism_reason = self._mechanism_pressure(
+                        mechanism, str(source), target_id, word, bridge, scope
+                    )
+                    if mechanism_pressure <= 0:
+                        continue
+                    pressure = min(
+                        1.0, evidence_strength * exposure * lexical_need * mechanism_pressure
+                    )
                     # Metafora, metonymie a generalizace nejprve rozšíří
                     # význam. Specializace nahrazuje hlavní, širší užití až
                     # po období polysémie. Neoznačený datový posun zůstává
@@ -133,6 +227,8 @@ class SemanticEvaluator:
                             evidence_weight=round(evidence_weight, 6),
                             evidence_type=str(edge_type),
                             mechanism=mechanism,
+                            mechanism_pressure=round(mechanism_pressure, 6),
+                            mechanism_reason=mechanism_reason,
                         )
                     )
         return candidates

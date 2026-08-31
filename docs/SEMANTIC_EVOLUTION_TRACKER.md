@@ -30,6 +30,9 @@ kauzálním, časově rozloženým a auditovatelným změnám. Stav **hotovo** z
   kurátorovaného metadata nebo přesného autorského přepisu.
 - [x] Zapsat mechanismus do auditní události a zachovat neoznačené hrany jako
   obecný posun či kolexifikaci.
+- [x] Vyžadovat vlastní tlak mechanismu: mezidoménový most pro metaforu,
+  strukturální vztah pro metonymii a explicitní rozsah pro generalizaci či
+  specializaci.
 
 ## Následuje
 
