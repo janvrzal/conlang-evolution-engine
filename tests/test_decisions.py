@@ -1,3 +1,4 @@
+from cee.core.models import Inventory, Lexicon, State
 from cee.engine.decisions import ChangeDecisionEngine
 from cee.engine.rules import Rule
 
@@ -48,3 +49,19 @@ def test_morfemova_hranice_zpomali_lexikalni_sireni(mapper):
     assert ChangeDecisionEngine.sound_change_adoption_threshold(boundary, rule, 0.5) > (
         ChangeDecisionEngine.sound_change_adoption_threshold(plain, rule, 0.5)
     )
+
+
+def test_funkcni_zatez_snizi_prioritu_kolapsu_kontrastu(mapper):
+    unvoiced = mapper.parse_word("p", "apa")
+    voiced = mapper.parse_word("b", "aba")
+    state = State("x", Inventory(), Lexicon([unvoiced, voiced]))
+    rule = Rule(
+        "plošné odznělení b",
+        target=dict(voiced.segments[1].features),
+        action={"voi": "-"},
+    )
+
+    decision = ChangeDecisionEngine.assess_sound_change(state, rule, mapper)
+
+    assert decision.contrast_retention == 0.5
+    assert decision.pressure < 1.0

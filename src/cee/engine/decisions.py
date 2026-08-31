@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from cee.core.models import State, Word
+from cee.engine.phonology import FeatureMapper
 from cee.engine.rules import Rule
 
 
@@ -35,6 +36,7 @@ class SoundChangeDecision:
     applicable_words: int
     word_coverage: float
     frequency_coverage: float
+    contrast_retention: float
     pressure: float
     reason: str
 
@@ -152,7 +154,7 @@ class ChangeDecisionEngine:
         return decisions
 
     @staticmethod
-    def assess_sound_change(state: State, rule: Rule) -> SoundChangeDecision:
+    def assess_sound_change(state: State, rule: Rule, mapper: FeatureMapper | None = None) -> SoundChangeDecision:
         """Změří, zda má kandidát reálnou oporu v aktuálním lexikonu.
 
         Inventář sám říká jen to, že hláska existuje. Tato metoda navíc ověří
@@ -170,10 +172,26 @@ class ChangeDecisionEngine:
         # zasahuje jen mnoho řídkých slov, a pravidlo s jedním častým zásahem
         # nejsou totožné historické situace.
         pressure = (word_coverage * frequency_coverage) ** 0.5
+        # Funkční zátěž konkrétního pravidla: kolik původně rozlišených forem
+        # by jeho plošná aplikace slilo.  Nezakazuje běžné neutralizace, jen
+        # snižuje jejich prioritu, pokud ničí mnoho častých opozic.
+        contrast_retention = 1.0
+        if mapper and applicable:
+            rendered_before = {mapper.render_word(word) for word in words}
+            rendered_after = set()
+            for word in words:
+                import copy
+
+                candidate = copy.deepcopy(word)
+                rule.apply_to_word(candidate)
+                rendered_after.add(mapper.render_word(candidate))
+            contrast_retention = min(1.0, len(rendered_after) / max(1, len(rendered_before)))
+            pressure *= 0.45 + 0.55 * contrast_retention
         return SoundChangeDecision(
             applicable_words=len(applicable),
             word_coverage=round(word_coverage, 6),
             frequency_coverage=round(frequency_coverage, 6),
+            contrast_retention=round(contrast_retention, 6),
             pressure=round(pressure, 6),
             reason=(
                 "Pravidlo má oporu v reálných slovních prostředích."

@@ -29,7 +29,7 @@ from cee.engine.inventory import InventoryView
 from cee.engine.lexicon import LexicalEvaluator
 from cee.engine.morphology import MorphologyEvaluator
 from cee.engine.phonology import FeatureMapper
-from cee.engine.prosody import repair_clusters
+from cee.engine.phonotactics import PhonotacticProfile
 from cee.engine.rng import derive_seed
 from cee.engine.rules import Rule
 from cee.engine.semantic_history import SemanticChangeRuntime
@@ -690,7 +690,7 @@ class EvolutionSimulator:
                 # Při generování se vyhodnotí kandidát nad skutečným
                 # lexikonem, bez hlubokého kopírování všech forem. Uchováme
                 # auditovatelný výsledek pro vítěznou inovaci.
-                decision = self.decision_engine.assess_sound_change(state, rule)
+                decision = self.decision_engine.assess_sound_change(state, rule, self.mapper)
                 decisions[id(rule)] = decision
                 return decision.pressure
 
@@ -729,6 +729,7 @@ class EvolutionSimulator:
                     pressure=decision.pressure,
                     applicable_words=decision.applicable_words,
                     frequency_coverage=decision.frequency_coverage,
+                    contrast_retention=decision.contrast_retention,
                 ),
             )
 
@@ -809,6 +810,7 @@ class EvolutionSimulator:
                 "pressure": change.pressure,
                 "applicable_words": change.applicable_words,
                 "frequency_coverage": change.frequency_coverage,
+                "contrast_retention": change.contrast_retention,
             },
         )
 
@@ -823,6 +825,8 @@ class EvolutionSimulator:
     ) -> None:
         changed = 0
         deleted_segments = 0
+        phonotactics = PhonotacticProfile.learn(state.lexicon.words)
+        repaired_forms = 0
         for word in words if words is not None else state.lexicon.words:
             if not word.active:
                 continue
@@ -832,7 +836,10 @@ class EvolutionSimulator:
             rule.apply_to_word(word)
             # Oprava je součást téže historické události; genealogie
             # nikdy neuloží mezitvar, který ve výsledném lexikonu neexistuje.
-            repair_clusters(word)
+            # Formu nesrovnáváme s globální hranicí tří souhlásek, ale s
+            # fonotaktikou, kterou jazyk doložil před touto inovací.
+            if phonotactics.repair(word):
+                repaired_forms += 1
             deleted_segments += max(0, before_segments - len(word.segments))
             if self._word_signature(word) == before:
                 continue
@@ -846,6 +853,7 @@ class EvolutionSimulator:
                 "schema_id": rule.schema_id or "manual",
                 "hit_count": changed,
                 "deleted_segments": deleted_segments,
+                "phonotactic_repairs": repaired_forms,
             }
             if event_metadata:
                 payload.update(event_metadata)

@@ -15,9 +15,12 @@ mezi mluvčími je pak podkladem pro lexikon i kontakt.
 - [~] Postupné lexikální šíření podle frekvence, sociální skupiny a
   morfologické třídy. Dnes: frekvence a morfémová hranice; chybí skupiny a
   třídy.
-- [ ] Tlak na zachování kontrastů a funkční zátěž fonémů.
-- [ ] Oprava fonotaktiky podle naučené gramatiky jazyka, ne jen lokální
-  opravy shluků.
+- [~] Tlak na zachování kontrastů a funkční zátěž fonémů. Dnes: kandidát
+  ztrácí prioritu podle počtu sloučených slovních forem; chybí kontrasty
+  napříč paradigmatem a komunikačními funkcemi.
+- [~] Oprava fonotaktiky podle naučené gramatiky jazyka. Dnes: profil se učí
+  povolenou velikost onsetu a kody z vlastního lexikonu; chybí sonorita,
+  výjimky a produktivní vážená gramatika.
 
 ## 2. Význam a užívání
 

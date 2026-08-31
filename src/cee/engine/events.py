@@ -40,6 +40,7 @@ class SoundChangeEvent:
     pressure: float = 0.0
     applicable_words: int = 0
     frequency_coverage: float = 0.0
+    contrast_retention: float = 1.0
 
 
 @dataclass
