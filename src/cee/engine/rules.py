@@ -109,6 +109,8 @@ class Rule:
             return any(i + 1 < len(word.segments) for i in targets)
         if self.operation == "tone_shift":
             return any(i in word.tones for i in targets)
+        if self.operation == "tone_sandhi":
+            return len(word.tones) > 1
         if self.operation == "geminate":
             return True
         if self.operation == "degeminate":
@@ -246,6 +248,19 @@ class Rule:
                 if i in word.tones:
                     word.tones[i] = rotation.get(word.tones[i], "H")
                     changed = True
+            word.ensure_stress()
+            return changed
+
+        if self.operation == "tone_sandhi":
+            # Jednoduché disimilační sandhi: H následované L se realizuje
+            # jako R-L. Je to pravidlo nad tóny, nikoli přepsání segmentu.
+            nuclei = sorted(index for index in targets_to_modify if index in word.tones)
+            changed = False
+            for first, second in zip(nuclei, nuclei[1:]):
+                if word.tones.get(first) == "H" and word.tones.get(second) == "L":
+                    word.tones[first] = "R"
+                    changed = True
+            word.ensure_stress()
             return changed
 
         if self.operation == "geminate":

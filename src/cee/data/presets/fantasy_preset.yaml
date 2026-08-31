@@ -57,6 +57,16 @@ schemas:
     base_weight: 12
   stress_shift:
     base_weight: 14
+  vowel_harmony:
+    base_weight: 16
+  chain_shift:
+    base_weight: 6
+  tonogenesis:
+    base_weight: 5
+  tone_shift:
+    base_weight: 3
+  tone_sandhi:
+    base_weight: 4
 
 biomes:
   hory:

@@ -70,6 +70,15 @@ class Word:
 
     def ensure_stress(self) -> None:
         """Dá slovu deterministický výchozí přízvuk na první samohlásce."""
+        # Tóny se vedle objektového pole otiskují i do běžných metadat slova.
+        # Tím přežijí starší úložiště, která ještě neznají samostatný sloupec.
+        if not self.tones and self.grammatical_features.get("phonology.tones"):
+            parsed: Dict[int, str] = {}
+            for item in self.grammatical_features["phonology.tones"].split(","):
+                index, separator, tone = item.partition(":")
+                if separator and index.isdigit() and tone in {"H", "L", "R"}:
+                    parsed[int(index)] = tone
+            self.tones = parsed
         nuclei = [
             i for i, segment in enumerate(self.segments) if segment.features.get("syl") == "+"
         ]
@@ -79,6 +88,12 @@ class Word:
             self.stress_index = nuclei[0]
         self.long_nuclei.intersection_update(nuclei)
         self.tones = {index: tone for index, tone in self.tones.items() if index in nuclei}
+        if self.tones:
+            self.grammatical_features["phonology.tones"] = ",".join(
+                f"{index}:{tone}" for index, tone in sorted(self.tones.items())
+            )
+        else:
+            self.grammatical_features.pop("phonology.tones", None)
         self.morpheme_boundaries = {
             boundary for boundary in self.morpheme_boundaries if 0 < boundary < len(self.segments)
         }

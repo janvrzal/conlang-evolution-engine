@@ -595,17 +595,33 @@ class ChainShiftSchema(Schema):
         super().__init__("chain_shift")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
-        vowels = [inventory.features_of(ipa) for ipa in ("a", "e", "i")]
+        ipa_vowels = inventory.matching({"syl": "+"})
+        if len(ipa_vowels) < 3:
+            return None
+        # Upřednostní běžnou nízká–střední–vysoká řadu, ale funguje i pro
+        # inventář bez přesně /a e i/: vybere tři skutečně doložené vokály.
+        ranked = sorted(
+            ipa_vowels,
+            key=lambda ipa: (
+                0 if (inventory.features_of(ipa) or {}).get("lo") == "+" else 1,
+                0 if (inventory.features_of(ipa) or {}).get("hi") == "-" else 1,
+                ipa,
+            ),
+        )
+        selected = [ipa for ipa in ("a", "e", "i") if ipa in ipa_vowels]
+        selected += [ipa for ipa in ranked if ipa not in selected]
+        selected = selected[:3]
+        vowels = [inventory.features_of(ipa) for ipa in selected]
         if any(features is None for features in vowels):
             return None
-        a, e, i = vowels
-        assert a and e and i
+        first, second, third = vowels
+        assert first and second and third
         return Rule(
-            name=f"Řetězový posun a → e → i → a (gen. v {year})",
+            name=f"Řetězový posun {' → '.join((*selected, selected[0]))} (gen. v {year})",
             target={"syl": "+"},
             action={},
             operation="chain_shift",
-            chain_steps=[(a, e), (e, i), (i, a)],
+            chain_steps=[(first, second), (second, third), (third, first)],
             year=year,
         )
 
@@ -643,6 +659,22 @@ class ToneShiftSchema(Schema):
         )
 
 
+class ToneSandhiSchema(Schema):
+    """Tónové sandhi nad sousedními jádry ve víceslabičné formě."""
+
+    def __init__(self):
+        super().__init__("tone_sandhi")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Tónové sandhi H-L → R-L (gen. v {year})",
+            target={"syl": "+"},
+            action={},
+            operation="tone_sandhi",
+            year=year,
+        )
+
+
 SCHEMA_REGISTRY = {
     "lenition": LenitionSchema(),
     "fortition": FortitionSchema(),
@@ -672,4 +704,5 @@ SCHEMA_REGISTRY = {
     "chain_shift": ChainShiftSchema(),
     "tonogenesis": TonogenesisSchema(),
     "tone_shift": ToneShiftSchema(),
+    "tone_sandhi": ToneSandhiSchema(),
 }
