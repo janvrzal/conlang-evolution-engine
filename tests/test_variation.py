@@ -226,6 +226,9 @@ def test_generovana_zmena_se_siri_postupne_a_je_auditovatelna(mapper):
     first_change_id = events[0]["change_id"]
     phases = [event for event in events if event["change_id"] == first_change_id]
     assert phases[0]["duration"] > 0
+    assert 0 < phases[0]["pressure"] <= 1
+    assert phases[0]["applicable_words"] == 80
+    assert phases[0]["frequency_coverage"] == 1.0
     assert phases[0]["progress"] < 1.0
     assert phases[-1]["progress"] == 1.0
     assert 0 < phases[0]["hit_count"] < 80

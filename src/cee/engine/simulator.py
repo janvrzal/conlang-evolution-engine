@@ -8,6 +8,7 @@ import warnings
 from typing import Any, Dict, List, Optional
 
 from cee.core.models import Inventory, Lexicon, State
+from cee.engine.decisions import ChangeDecisionEngine
 from cee.engine.events import (
     ContactEvent,
     ForkEvent,
@@ -85,6 +86,7 @@ class EvolutionSimulator:
         self.schema_multipliers = schema_multipliers
         self.profile_macro = dict(profile_macro or {})
         self.profile_lexical = dict(profile_lexical or {})
+        self.decision_engine = ChangeDecisionEngine()
         # Generátor se staví pro každý uzel zvlášť, aby měl vlastní seed
         # i vlastní makro-parametry (viz _generator_for).
         self._generators: Dict[str, SoundChangeGenerator] = {}
@@ -638,14 +640,16 @@ class EvolutionSimulator:
         for _ in range(attempts):
             inventory = InventoryView.from_lexicon(state.lexicon, self.mapper)
             state.inventory = inventory.to_inventory()
-            active_words = [word for word in state.lexicon.words if word.active]
+            decision_holder = {}
 
             def accepts(rule: Rule) -> bool:
                 # Při generování se vyhodnotí mnoho kandidátů. Dříve se pro
                 # každý kandidát hluboce kopíroval každý tvar, což u reálného
                 # slovníku přerůstalo samotnou simulaci. Pravidlo umí určit,
                 # zda se na tvar skutečně dá aplikovat, aniž by jej měnilo.
-                return any(rule.can_apply_to_word(word) for word in active_words)
+                decision = self.decision_engine.assess_sound_change(state, rule)
+                decision_holder["decision"] = decision
+                return decision.applicable_words > 0
 
             previous = history[-1] if history else None
             candidate = generator.generate_one(
@@ -658,13 +662,16 @@ class EvolutionSimulator:
             )
             if candidate is None:
                 continue
+            decision = decision_holder.get("decision")
+            if decision is None:
+                continue
             # Hned rezervujeme pravidlo v historii, aby další kandidát
             # v témže slotu nemohl vygenerovat jeho zvrat.
             history.append(candidate)
             self._sound_change_sequence += 1
             change_id = f"{state.node_id}:{year}:{self._sound_change_sequence}"
             duration = min(
-                generator.macro.change_spread_years,
+                decision.duration(generator.macro.change_spread_years),
                 max(0, self._horizon_for(state.year, state.node_id) - year),
             )
             push(
@@ -676,6 +683,9 @@ class EvolutionSimulator:
                     rule=candidate,
                     change_id=change_id,
                     duration=duration,
+                    pressure=decision.pressure,
+                    applicable_words=decision.applicable_words,
+                    frequency_coverage=decision.frequency_coverage,
                 ),
             )
 
@@ -735,7 +745,10 @@ class EvolutionSimulator:
             sample = random.Random(
                 derive_seed(self.seed, "sound-change-adoption", change.change_id, *map(str, key))
             ).random()
-            if sample <= threshold:
+            adoption_threshold = self.decision_engine.sound_change_adoption_threshold(
+                word, change.rule, sample
+            )
+            if adoption_threshold <= threshold:
                 selected.append(word)
                 adopted.add(key)
         self._apply_phonology(
@@ -750,6 +763,9 @@ class EvolutionSimulator:
                 "duration": change.duration,
                 "progress": round(progress, 4),
                 "intensity": change.intensity,
+                "pressure": change.pressure,
+                "applicable_words": change.applicable_words,
+                "frequency_coverage": change.frequency_coverage,
             },
         )
 

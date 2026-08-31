@@ -37,6 +37,9 @@ class SoundChangeEvent:
     change_id: str
     duration: int
     intensity: float = 1.0
+    pressure: float = 0.0
+    applicable_words: int = 0
+    frequency_coverage: float = 0.0
 
 
 @dataclass

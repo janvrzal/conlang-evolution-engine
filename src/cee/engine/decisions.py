@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
-from cee.core.models import Word
+from cee.core.models import State, Word
+from cee.engine.rules import Rule
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,23 @@ class HomophonyDecision:
     evidence_level: str
     action: str
     reason: str
+
+
+@dataclass(frozen=True)
+class SoundChangeDecision:
+    """Měřitelný tlak a plán šíření jedné fonologické inovace."""
+
+    applicable_words: int
+    word_coverage: float
+    frequency_coverage: float
+    pressure: float
+    reason: str
+
+    def duration(self, base_years: int) -> int:
+        """Silně podpořená inovace se šíří rychleji, ale nikdy okamžitě."""
+        if base_years <= 0:
+            return 0
+        return max(40, round(base_years * (1.3 - 0.6 * self.pressure)))
 
 
 class SemanticContextModel:
@@ -132,3 +150,49 @@ class ChangeDecisionEngine:
                     )
                 )
         return decisions
+
+    @staticmethod
+    def assess_sound_change(state: State, rule: Rule) -> SoundChangeDecision:
+        """Změří, zda má kandidát reálnou oporu v aktuálním lexikonu.
+
+        Inventář sám říká jen to, že hláska existuje. Tato metoda navíc ověří
+        skutečné slovní prostředí pravidla a frekvenční rozsah inovace. To je
+        minimální kauzální tlak, který lze spočítat bez předstírání znalosti
+        konkrétní historické komunity.
+        """
+        words = [word for word in state.lexicon.words if word.active]
+        applicable = [word for word in words if rule.can_apply_to_word(word)]
+        total_frequency = sum(max(0.01, word.frequency) for word in words)
+        affected_frequency = sum(max(0.01, word.frequency) for word in applicable)
+        word_coverage = len(applicable) / len(words) if words else 0.0
+        frequency_coverage = affected_frequency / total_frequency if total_frequency else 0.0
+        # Typová i frekvenční opora jsou stejně důležité: pravidlo, které
+        # zasahuje jen mnoho řídkých slov, a pravidlo s jedním častým zásahem
+        # nejsou totožné historické situace.
+        pressure = (word_coverage * frequency_coverage) ** 0.5
+        return SoundChangeDecision(
+            applicable_words=len(applicable),
+            word_coverage=round(word_coverage, 6),
+            frequency_coverage=round(frequency_coverage, 6),
+            pressure=round(pressure, 6),
+            reason=(
+                "Pravidlo má oporu v reálných slovních prostředích."
+                if applicable
+                else "Pravidlo nemá v aktuálním lexikonu žádný zásah."
+            ),
+        )
+
+    @staticmethod
+    def sound_change_adoption_threshold(word: Word, rule: Rule, sample: float) -> float:
+        """Relativní okamžik, kdy lexém přijme aktivní inovaci (0 až 1).
+
+        Častější slova jsou v tomto prvním modelu dostupnější pro šíření;
+        zásah přímo na morfémové hranici je konzervativnější, protože její
+        transparentnost může změnu brzdit. Náhodná složka je seedovaná ve
+        simulátoru, proto je běh stále reprodukovatelný.
+        """
+        matching = rule.matching_indices(word)
+        boundary_hit = any(index in word.morpheme_boundaries or index + 1 in word.morpheme_boundaries for index in matching)
+        frequency_bias = (0.5 - max(0.0, min(1.0, word.frequency))) * 0.3
+        boundary_delay = 0.15 if boundary_hit else 0.0
+        return min(1.0, max(0.0, sample + frequency_bias + boundary_delay))
