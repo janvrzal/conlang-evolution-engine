@@ -730,6 +730,8 @@ class EvolutionSimulator:
                     applicable_words=decision.applicable_words,
                     frequency_coverage=decision.frequency_coverage,
                     contrast_retention=decision.contrast_retention,
+                    innovation_group=decision.innovation_group,
+                    innovation_class=decision.innovation_class,
                 ),
             )
 
@@ -790,7 +792,11 @@ class EvolutionSimulator:
                 derive_seed(self.seed, "sound-change-adoption", change.change_id, *map(str, key))
             ).random()
             adoption_threshold = self.decision_engine.sound_change_adoption_threshold(
-                word, change.rule, sample
+                word,
+                change.rule,
+                sample,
+                innovation_group=change.innovation_group,
+                innovation_class=change.innovation_class,
             )
             if adoption_threshold <= threshold:
                 selected.append(word)
@@ -811,6 +817,8 @@ class EvolutionSimulator:
                 "applicable_words": change.applicable_words,
                 "frequency_coverage": change.frequency_coverage,
                 "contrast_retention": change.contrast_retention,
+                "innovation_group": change.innovation_group,
+                "innovation_class": change.innovation_class,
             },
         )
 

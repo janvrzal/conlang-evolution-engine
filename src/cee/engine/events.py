@@ -41,6 +41,8 @@ class SoundChangeEvent:
     applicable_words: int = 0
     frequency_coverage: float = 0.0
     contrast_retention: float = 1.0
+    innovation_group: Optional[str] = None
+    innovation_class: Optional[str] = None
 
 
 @dataclass

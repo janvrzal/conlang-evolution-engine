@@ -13,8 +13,9 @@ mezi mluvčími je pak podkladem pro lexikon i kontakt.
 - [ ] Tonogeneze a tónová historie.
 - [ ] Vokálová harmonie jako systémový proces.
 - [~] Postupné lexikální šíření podle frekvence, sociální skupiny a
-  morfologické třídy. Dnes: frekvence a morfémová hranice; chybí skupiny a
-  třídy.
+  morfologické třídy. Dnes: změna má ohnisko v doložené skupině/třídě a
+  ostatní vrstvy přijímají inovaci později; chybí populace, sítě mluvčích a
+  samostatné dialekty.
 - [~] Tlak na zachování kontrastů a funkční zátěž fonémů. Dnes: kandidát
   ztrácí prioritu podle počtu sloučených slovních forem; chybí kontrasty
   napříč paradigmatem a komunikačními funkcemi.

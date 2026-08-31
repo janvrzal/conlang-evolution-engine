@@ -51,6 +51,34 @@ def test_morfemova_hranice_zpomali_lexikalni_sireni(mapper):
     )
 
 
+def test_ohnisko_inovace_se_siri_drive_ve_sve_socialni_skupine(mapper):
+    center = mapper.parse_word("center", "pata")
+    outside = mapper.parse_word("outside", "pata")
+    center.grammatical_features["social.group"] = "city"
+    outside.grammatical_features["social.group"] = "rural"
+    rule = Rule("lenice", {"cons": "+"}, {"voi": "+"})
+
+    assert ChangeDecisionEngine.sound_change_adoption_threshold(
+        center, rule, 0.5, innovation_group="city"
+    ) < ChangeDecisionEngine.sound_change_adoption_threshold(
+        outside, rule, 0.5, innovation_group="city"
+    )
+
+
+def test_morfologicka_trida_dostane_vlastni_difuzni_ohnisko(mapper):
+    regular = mapper.parse_word("regular", "pata")
+    other = mapper.parse_word("other", "pata")
+    regular.grammatical_features["phonology.morph_class"] = "verb-past"
+    other.grammatical_features["phonology.morph_class"] = "noun"
+    rule = Rule("lenice", {"cons": "+"}, {"voi": "+"})
+
+    assert ChangeDecisionEngine.sound_change_adoption_threshold(
+        regular, rule, 0.5, innovation_class="verb-past"
+    ) < ChangeDecisionEngine.sound_change_adoption_threshold(
+        other, rule, 0.5, innovation_class="verb-past"
+    )
+
+
 def test_funkcni_zatez_snizi_prioritu_kolapsu_kontrastu(mapper):
     unvoiced = mapper.parse_word("p", "apa")
     voiced = mapper.parse_word("b", "aba")

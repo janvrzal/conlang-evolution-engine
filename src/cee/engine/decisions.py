@@ -39,6 +39,8 @@ class SoundChangeDecision:
     contrast_retention: float
     pressure: float
     reason: str
+    innovation_group: str | None = None
+    innovation_class: str | None = None
 
     def duration(self, base_years: int) -> int:
         """Silně podpořená inovace se šíří rychleji, ale nikdy okamžitě."""
@@ -187,11 +189,26 @@ class ChangeDecisionEngine:
                 rendered_after.add(mapper.render_word(candidate))
             contrast_retention = min(1.0, len(rendered_after) / max(1, len(rendered_before)))
             pressure *= 0.45 + 0.55 * contrast_retention
+
+        # Inovace nevzniká abstraktně „v celém jazyce“. Pokud lexikon nese
+        # značku sociální skupiny nebo morfologické třídy, vybereme jako
+        # ohnisko nejčastěji zasaženou vrstvu. Neoznačená slova zůstávají
+        # neutrální, takže import starších projektů se nemění.
+        def dominant(key: str) -> str | None:
+            mass: dict[str, float] = {}
+            for word in applicable:
+                value = word.grammatical_features.get(key, "").strip()
+                if value:
+                    mass[value] = mass.get(value, 0.0) + max(0.01, word.frequency)
+            return max(mass, key=mass.get) if mass else None
+
         return SoundChangeDecision(
             applicable_words=len(applicable),
             word_coverage=round(word_coverage, 6),
             frequency_coverage=round(frequency_coverage, 6),
             contrast_retention=round(contrast_retention, 6),
+            innovation_group=dominant("social.group"),
+            innovation_class=dominant("phonology.morph_class") or dominant("morph.class"),
             pressure=round(pressure, 6),
             reason=(
                 "Pravidlo má oporu v reálných slovních prostředích."
@@ -201,7 +218,14 @@ class ChangeDecisionEngine:
         )
 
     @staticmethod
-    def sound_change_adoption_threshold(word: Word, rule: Rule, sample: float) -> float:
+    def sound_change_adoption_threshold(
+        word: Word,
+        rule: Rule,
+        sample: float,
+        *,
+        innovation_group: str | None = None,
+        innovation_class: str | None = None,
+    ) -> float:
         """Relativní okamžik, kdy lexém přijme aktivní inovaci (0 až 1).
 
         Častější slova jsou v tomto prvním modelu dostupnější pro šíření;
@@ -213,4 +237,14 @@ class ChangeDecisionEngine:
         boundary_hit = any(index in word.morpheme_boundaries or index + 1 in word.morpheme_boundaries for index in matching)
         frequency_bias = (0.5 - max(0.0, min(1.0, word.frequency))) * 0.3
         boundary_delay = 0.15 if boundary_hit else 0.0
-        return min(1.0, max(0.0, sample + frequency_bias + boundary_delay))
+        group = word.grammatical_features.get("social.group", "").strip()
+        lexical_class = (
+            word.grammatical_features.get("phonology.morph_class", "").strip()
+            or word.grammatical_features.get("morph.class", "").strip()
+        )
+        # Ohniště přijme změnu dříve; ostatní vrstvy nejsou blokované, jen
+        # čekají na další fázi. To dává změně skutečnou difuzi místo jediné
+        # globální náhody.
+        group_bias = -0.18 if innovation_group and group == innovation_group else 0.08 if innovation_group and group else 0.0
+        class_bias = -0.12 if innovation_class and lexical_class == innovation_class else 0.06 if innovation_class and lexical_class else 0.0
+        return min(1.0, max(0.0, sample + frequency_bias + boundary_delay + group_bias + class_bias))
