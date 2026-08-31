@@ -187,10 +187,14 @@ def test_taboo_nahrada_a_rozliseni_homofonie_jsou_volitelne(mapper):
     state = EvolutionSimulator(graph, mapper, end_year=100).simulate(
         _root(mapper, [("fire", "pata"), ("water", "pata"), ("stone", "kumi")])
     )["child"]
-    assert any(
-        word.origin_type == "taboo_replacement" and word.concept_id == "fire"
+    replacements = [
+        word
         for word in state.lexicon.words
-    )
+        if word.origin_type == "taboo_replacement" and word.concept_id == "fire"
+    ]
+    assert replacements
+    assert all(word.grammatical_features["lexical.register"] == "circumlocution" for word in replacements)
+    assert all(word.grammatical_features["lexical.euphemism_for"] == "fire" for word in replacements)
     # Samotná kolize nesmí generovat náhodný prefix. Tabu má svůj historický
     # původ; homofonie bez sémantické/morfologické inovace zůstává auditem.
     assert not any(word.origin_type == "homophony_resolution" for word in state.lexicon.words)

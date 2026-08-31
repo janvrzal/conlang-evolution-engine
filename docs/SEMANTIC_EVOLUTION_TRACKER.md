@@ -33,10 +33,16 @@ kauzálním, časově rozloženým a auditovatelným změnám. Stav **hotovo** z
 - [x] Vyžadovat vlastní tlak mechanismu: mezidoménový most pro metaforu,
   strukturální vztah pro metonymii a explicitní rozsah pro generalizaci či
   specializaci.
+- [x] Přidat komunikační tlaky biomu, ekonomiky, technologie a institucí jako
+  transparentní zvýhodnění už doloženého cílového významu.
+- [x] Modelovat malé životní cykly registru: institucionální formalizaci,
+  explicitně nastavené šíření rituálního výrazu a tabuovou náhradu označenou
+  jako opis.
+- [x] Zapsat kontextový tlak i registrální přechody do event logu.
 
 ## Následuje
 
-- [ ] Tlak tabu, registru, prestiže a komunikační potřeby.
+- [ ] Jemnější tlak prestiže a komunikační potřeby podle řečových komunit.
 - [ ] Sémantické změny vyvolané kontaktem, kalky a přejímáním konstrukcí.
 - [ ] Šíření podle sociálních skupin a regionů, nejen po jedné jazykové větvi.
 - [ ] Ruční schválení či odmítnutí navržené inovace worldbuilderem.

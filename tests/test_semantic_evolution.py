@@ -60,6 +60,14 @@ class IncompleteMechanismConceptIndex(MechanismConceptIndex):
     _domains = {"sun": "celestial bodies"}
 
 
+class ContextConceptIndex(MechanismConceptIndex):
+    _domains = {
+        "sun": "celestial bodies",
+        "sky": "commerce",
+        "law": "law",
+    }
+
+
 def _root(mapper) -> State:
     word = mapper.parse_word("sun", "sula")
     word.frequency = 1.0
@@ -82,6 +90,23 @@ def test_navrh_vybira_nejsilneji_dolozeny_posun(mapper):
     assert proposal.kind == "extension"
     assert proposal.pressure == 1.0
     assert proposal.duration() == 144
+
+
+def test_komunikacni_tlak_zvysi_jen_dolozeny_cilovy_vyznam(mapper):
+    word = mapper.parse_word("sun", "sula")
+    word.frequency = 0.5
+    evaluator = SemanticEvaluator(
+        OneShiftGraph(), shift_prob=1.0, concept_index=ContextConceptIndex()
+    )
+
+    baseline = evaluator.extension_candidates(Lexicon([word]))[0]
+    pressured = evaluator.extension_candidates(
+        Lexicon([word]), context={"semantic": {"pressures": {"economy": 1.0}}}
+    )[0]
+
+    assert pressured.pressure > baseline.pressure
+    assert pressured.context_pressure == 1.6
+    assert pressured.context_reason == "economy"
 
 
 def test_kuratorovany_mechanismus_urcuje_typ_semanticke_zmeny(mapper):
@@ -288,6 +313,58 @@ def test_odlisny_registr_snizuje_konkurenci_synonym(mapper):
     split_context = evaluator.loss_candidates(Lexicon([weak, strong]))[0].pressure
 
     assert split_context < same_context
+
+
+def test_instituce_meni_neutralni_lexem_na_formalni_a_zapisou_audit(mapper):
+    word = mapper.parse_word("law", "sula")
+    word.grammatical_features["semantic.domains"] = "law"
+    builder = GraphBuilder()
+    graph = EvolutionGraph(
+        node_configs={
+            "proto": {
+                "map": {"social": {"standardization": 1.0}},
+                "semantic": {"pressures": {"institutions": 1.0}},
+            }
+        }
+    )
+
+    states = EvolutionSimulator(
+        graph,
+        mapper,
+        semantic_evaluator=SemanticEvaluator(EmptyGraph(), shift_prob=0.0, forget_prob=0.0),
+        graph_builder=builder,
+        end_year=100,
+        evolve_root=True,
+    ).simulate(State("proto", Inventory(), Lexicon([word])))
+
+    changed = states["proto"].lexicon.words[0]
+    assert changed.grammatical_features["lexical.register"] == "formal"
+    transition = next(event for event in builder.events if event["kind"] == "register_transition")
+    assert transition["reason"] == "institutional standardization"
+    assert transition["to_register"] == "formal"
+
+
+def test_ritualni_registr_se_siri_do_bezneho_pouze_pri_nastavenem_tlaku(mapper):
+    word = mapper.parse_word("sun", "sula")
+    word.lineage_id = "sun-word"
+    word.grammatical_features["lexical.register"] = "ritual"
+    evaluator = SemanticEvaluator(EmptyGraph())
+
+    assert evaluator.evolve_registers(Lexicon([word])) == []
+    transitions = evaluator.evolve_registers(
+        Lexicon([word]), context={"semantic": {"registers": {"secularization": 0.7}}}
+    )
+
+    assert word.grammatical_features["lexical.register"] == "ordinary"
+    assert transitions == [
+        {
+            "word_lineage_id": "sun-word",
+            "from_register": "ritual",
+            "to_register": "ordinary",
+            "pressure": 0.7,
+            "reason": "configured ritual diffusion",
+        }
+    ]
 
 
 def test_neprekryvajici_se_kontexty_synonyma_nevytesnuji(mapper):

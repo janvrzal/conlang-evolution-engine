@@ -317,6 +317,36 @@ class EvolutionSimulator:
                         derive_seed(self.seed, "semantics", event.branch_id, str(event.year))
                     )
                     if hasattr(self.semantic_evaluator, "propose_changes"):
+                        semantic_context = self._semantic_context(branch_state)
+                        register_changes = (
+                            self.semantic_evaluator.evolve_registers(
+                                branch_state.lexicon, semantic_context
+                            )
+                            if hasattr(self.semantic_evaluator, "evolve_registers")
+                            else []
+                        )
+                        register_hit_count = self._record_changed_words(
+                            branch_state,
+                            before,
+                            event.year,
+                            "register_change",
+                            "semantic register transition",
+                        )
+                        if self.graph_builder:
+                            for transition in register_changes:
+                                self.graph_builder.add_event(
+                                    "register_transition",
+                                    event.year,
+                                    event.branch_id,
+                                    **transition,
+                                )
+                            if register_hit_count:
+                                self.graph_builder.add_event(
+                                    "semantic_registers",
+                                    event.year,
+                                    event.branch_id,
+                                    hit_count=register_hit_count,
+                                )
                         self.semantic_history.schedule_proposals(
                             branch_state,
                             event.year,
@@ -325,6 +355,7 @@ class EvolutionSimulator:
                             push,
                             _PRIO_SEMANTICS,
                             self._horizon_for(branch_state.year, event.branch_id),
+                            context=semantic_context,
                         )
                     else:
                         parameters = inspect.signature(self.semantic_evaluator.evaluate).parameters
@@ -897,6 +928,18 @@ class EvolutionSimulator:
         # posun přichází až po vzniku jazyka, nikdy při samotném odštěpení.
         for year in range(start_year + 100, horizon + 1, 100):
             push(year, _PRIO_SEMANTICS, SemanticEvent(year, node_id))
+
+    def _semantic_context(self, state: State) -> Dict[str, Any]:
+        """Sestaví dohledatelný kontext významového užití pro jeden uzel."""
+        node_config = self.graph.node_configs.get(state.node_id, {})
+        map_config = state.map or {}
+        configured_social = map_config.get("social", map_config.get("society", {}))
+        return {
+            "map": map_config,
+            "social": state.social or configured_social or {},
+            "semantic": node_config.get("semantic", (state.map or {}).get("semantic", {})),
+            "lexical": node_config.get("lexical", (state.map or {}).get("lexical", {})),
+        }
 
     def _schedule_morphology(self, node_id: str, start_year: int, push) -> None:
         """Složeniny, derivace a analogie patří do stejné časové osy."""

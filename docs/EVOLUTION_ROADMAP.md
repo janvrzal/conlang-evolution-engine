@@ -31,13 +31,16 @@ mezi mluvčími je pak podkladem pro lexikon i kontakt.
 
 ## 2. Význam a užívání
 
-- [ ] Tlak biomu, ekonomiky, technologie či institucí na konkrétní význam.
-- [ ] Životní cyklus registrů: neutrální → formální, tabu → opis, rituální →
-  běžný.
+- [x] Tlak biomu, ekonomiky, technologie či institucí na konkrétní význam.
+  Doložená hrana zůstává nutnou podmínkou; kontext ji pouze zvýhodňuje a do
+  auditu zapisuje svůj důvod.
+- [x] Životní cyklus registrů: neutrální → formální, tabu → opis, rituální →
+  běžný. Tabu spouští legitimní lexikální náhradu, která je označena jako opis;
+  registrální přechod i náhrada jsou samostatné auditní události.
 - [x] Metafora, metonymie, specializace a generalizace jako samostatné,
   podmíněné mechanismy.
-- [~] Konkurence synonym podle významu. Dnes: tlak z překryvu kontextů,
-  domén, registru a frekvence; chybí šíření variant mezi mluvčími.
+- [x] Konkurence synonym podle významu: tlak z překryvu kontextů, frekvence a
+  stability, včetně postupného šíření a vítězství varianty.
 
 ## 3. Morfologická historie a tvorba slov
 

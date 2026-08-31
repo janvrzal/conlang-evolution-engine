@@ -6,6 +6,7 @@ fázování a dopad na lexikon.
 """
 
 import copy
+import inspect
 import math
 from typing import Callable, Optional
 
@@ -31,8 +32,13 @@ class SemanticChangeRuntime:
         push,
         priority: int,
         horizon: int,
+        context=None,
     ) -> None:
-        proposals = evaluator.propose_changes(state.lexicon, random_gen=random_gen)
+        parameters = inspect.signature(evaluator.propose_changes).parameters
+        kwargs = {"random_gen": random_gen}
+        if "context" in parameters:
+            kwargs["context"] = context
+        proposals = evaluator.propose_changes(state.lexicon, **kwargs)
         active_lineages = {
             change.word_lineage_id
             for change in self.changes.values()
@@ -73,6 +79,8 @@ class SemanticChangeRuntime:
                     mechanism=proposal.mechanism,
                     mechanism_pressure=proposal.mechanism_pressure,
                     mechanism_reason=proposal.mechanism_reason,
+                    context_pressure=proposal.context_pressure,
+                    context_reason=proposal.context_reason,
                 ),
             )
             active_lineages.add(proposal.word_lineage_id)
@@ -105,6 +113,8 @@ class SemanticChangeRuntime:
                 mechanism=change.mechanism,
                 mechanism_pressure=change.mechanism_pressure,
                 mechanism_reason=change.mechanism_reason,
+                context_pressure=change.context_pressure,
+                context_reason=change.context_reason,
             )
         phases = max(1, math.ceil(change.duration / SEMANTIC_SPREAD_PHASE_YEARS))
         self._propagate(
@@ -271,6 +281,8 @@ class SemanticChangeRuntime:
                 mechanism=change.mechanism,
                 mechanism_pressure=change.mechanism_pressure,
                 mechanism_reason=change.mechanism_reason,
+                context_pressure=change.context_pressure,
+                context_reason=change.context_reason,
                 progress=round(progress, 4),
                 phase=phase,
                 hit_count=hit_count,

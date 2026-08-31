@@ -189,6 +189,8 @@ class LexicalEvaluator:
                 continue
             replacement = self._replacement_from(donor, word, year, "taboo_replacement")
             replacement.frequency = max(0.2, word.frequency)
+            replacement.grammatical_features["lexical.register"] = "circumlocution"
+            replacement.grammatical_features["lexical.euphemism_for"] = word.concept_id
             replacements.append(replacement)
             word.active = False
 

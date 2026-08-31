@@ -23,6 +23,8 @@ class SemanticProposal:
     mechanism: Optional[str] = None
     mechanism_pressure: float = 1.0
     mechanism_reason: str = "untyped relation"
+    context_pressure: float = 1.0
+    context_reason: str = "no configured communicative pressure"
 
     def duration(self, base_years: int = 240) -> int:
         """Silnější tlak urychlí přijetí, ale nezmění význam okamžitě."""
@@ -83,6 +85,27 @@ class SemanticEvaluator:
         self.concept_index = concept_index
 
     _MECHANISMS = {"metaphor", "metonymy", "generalization", "specialization"}
+    _PRESSURE_DOMAINS = {
+        "economy": {"commerce", "money", "possession", "quantity", "exchange"},
+        "technology": {"technology", "tools", "material culture", "work"},
+        "institutions": {"law", "politics", "society", "government", "administration"},
+        "religion": {"religion", "ritual", "belief", "spiritual"},
+    }
+    _BIOME_DOMAINS = {
+        "forest": {"plants", "animals", "physical world"},
+        "rainforest": {"plants", "animals", "physical world"},
+        "les": {"plants", "animals", "physical world"},
+        "prales": {"plants", "animals", "physical world"},
+        "mountains": {"physical world", "weather", "motion"},
+        "mountain": {"physical world", "weather", "motion"},
+        "hory": {"physical world", "weather", "motion"},
+        "desert": {"weather", "physical world", "water"},
+        "poušť": {"weather", "physical world", "water"},
+        "coast": {"water", "animals", "motion"},
+        "pobřeží": {"water", "animals", "motion"},
+        "island": {"water", "animals", "motion"},
+        "ostrov": {"water", "animals", "motion"},
+    }
 
     def _relations_for(self, concept_id: str):
         if hasattr(self.graph, "get_possible_relations"):
@@ -158,7 +181,116 @@ class SemanticEvaluator:
             )
         return 0.0, "unsupported mechanism"
 
-    def extension_candidates(self, lexicon: Lexicon) -> list[SemanticProposal]:
+    @staticmethod
+    def _bounded(value: object, default: float = 0.0) -> float:
+        try:
+            return max(0.0, min(1.0, float(value)))
+        except (TypeError, ValueError):
+            return default
+
+    def _context_pressure(
+        self, target: str, word, context: Optional[Mapping[str, object]]
+    ) -> tuple[float, str]:
+        """Vrátí jen zesílení *doložené* změny, nikdy novou hranu.
+
+        Biome, hospodářství a instituce zde neurčují, co se slovo může stát.
+        To dál omezuje CLICS/DatSemShift. Určují pouze, které z již
+        doložených možností má v daném jazyce větší komunikační potřebu.
+        """
+        if not context:
+            return 1.0, "no configured communicative pressure"
+        semantic = context.get("semantic", {})
+        semantic = semantic if isinstance(semantic, Mapping) else {}
+        configured = semantic.get("pressures", {})
+        configured = configured if isinstance(configured, Mapping) else {}
+        target_domains = self._domains_for(target, word)
+        matched: list[tuple[float, str]] = []
+        for pressure_name, domains in self._PRESSURE_DOMAINS.items():
+            strength = self._bounded(configured.get(pressure_name))
+            if strength and target_domains & domains:
+                matched.append((strength, pressure_name))
+
+        map_config = context.get("map", {})
+        map_config = map_config if isinstance(map_config, Mapping) else {}
+        biome = str(map_config.get("biome", "")).strip().lower()
+        biome_strength = self._bounded(configured.get("biome", 0.35 if biome else 0.0))
+        if biome_strength and target_domains & self._BIOME_DOMAINS.get(biome, set()):
+            matched.append((biome_strength, f"biome:{biome}"))
+
+        # Autor může přesně přebít mapování širokého pole, aniž by měnil kód.
+        for key, raw_strength in configured.items():
+            if not str(key).startswith("domain:"):
+                continue
+            domain = str(key).split(":", 1)[1].strip().lower()
+            strength = self._bounded(raw_strength)
+            if strength and domain in target_domains:
+                matched.append((strength, f"domain:{domain}"))
+        if not matched:
+            return 1.0, "no matching communicative pressure"
+        strength, reason = max(matched)
+        return round(1.0 + 0.6 * strength, 6), reason
+
+    def evolve_registers(
+        self, lexicon: Lexicon, context: Optional[Mapping[str, object]] = None
+    ) -> list[dict[str, object]]:
+        """Posune užití lexému mezi několika malými, explicitními registry.
+
+        Nezavádí to umělý nový tvar: opis vzniká až v lexikálním motoru jako
+        legitimní náhrada tabu. Tady se eviduje, proč staré slovo přestalo
+        patřit do neutrálního užití.
+        """
+        context = context or {}
+        semantic = context.get("semantic", {})
+        semantic = semantic if isinstance(semantic, Mapping) else {}
+        pressures = semantic.get("pressures", {})
+        pressures = pressures if isinstance(pressures, Mapping) else {}
+        registers = semantic.get("registers", {})
+        registers = registers if isinstance(registers, Mapping) else {}
+        social = context.get("social", {})
+        social = social if isinstance(social, Mapping) else {}
+        formalization = max(
+            self._bounded(registers.get("formalization")),
+            self._bounded(pressures.get("institutions"))
+            * max(0.5, self._bounded(social.get("standardization"))),
+        )
+        secularization = self._bounded(registers.get("secularization"))
+        lexical = context.get("lexical", {})
+        lexical = lexical if isinstance(lexical, Mapping) else {}
+        taboo_concepts = {str(value).lower() for value in lexical.get("taboo_concepts", [])}
+        transitions: list[dict[str, object]] = []
+        institutional_domains = self._PRESSURE_DOMAINS["institutions"]
+
+        for word in lexicon.words:
+            if not word.active:
+                continue
+            current = word.grammatical_features.get("lexical.register", "neutral").lower()
+            domains = self._domains_for(word.concept_id, word)
+            target: Optional[str] = None
+            reason = ""
+            pressure = 0.0
+            if word.concept_id.lower() in taboo_concepts and current != "taboo":
+                target, reason, pressure = "taboo", "configured taboo concept", 1.0
+            elif current in {"neutral", "ordinary"} and formalization >= 0.5 and domains & institutional_domains:
+                target, reason, pressure = "formal", "institutional standardization", formalization
+            elif current == "ritual" and secularization >= 0.5:
+                target, reason, pressure = "ordinary", "configured ritual diffusion", secularization
+            if target is None or target == current:
+                continue
+            word.grammatical_features["lexical.register"] = target
+            transitions.append(
+                {
+                    "word_lineage_id": word.lineage_id or word.id,
+                    "from_register": current,
+                    "to_register": target,
+                    "pressure": round(pressure, 6),
+                    "reason": reason,
+                }
+            )
+        return transitions
+
+    def extension_candidates(
+        self, lexicon: Lexicon, context: Optional[Mapping[str, object]] = None
+    ) -> list[SemanticProposal]:
         """Sestaví doložená rozšíření a posuny bez náhodného losování."""
         covered = {
             meaning.lower()
@@ -204,8 +336,16 @@ class SemanticEvaluator:
                     )
                     if mechanism_pressure <= 0:
                         continue
+                    context_pressure, context_reason = self._context_pressure(
+                        target_id, word, context
+                    )
                     pressure = min(
-                        1.0, evidence_strength * exposure * lexical_need * mechanism_pressure
+                        1.0,
+                        evidence_strength
+                        * exposure
+                        * lexical_need
+                        * mechanism_pressure
+                        * context_pressure,
                     )
                     # Metafora, metonymie a generalizace nejprve rozšíří
                     # význam. Specializace nahrazuje hlavní, širší užití až
@@ -229,6 +369,8 @@ class SemanticEvaluator:
                             mechanism=mechanism,
                             mechanism_pressure=round(mechanism_pressure, 6),
                             mechanism_reason=mechanism_reason,
+                            context_pressure=context_pressure,
+                            context_reason=context_reason,
                         )
                     )
         return candidates
@@ -301,6 +443,7 @@ class SemanticEvaluator:
         self,
         lexicon: Lexicon,
         random_gen: Optional[random.Random] = None,
+        context: Optional[Mapping[str, object]] = None,
     ) -> list[SemanticProposal]:
         """Navrhne nanejvýš jednu změnu podle datové a lexikální opory.
 
@@ -312,7 +455,7 @@ class SemanticEvaluator:
         rng = random_gen or self.random
         opportunities: list[SemanticProposal] = []
         groups = (
-            (self.extension_candidates(lexicon), self.shift_prob),
+            (self.extension_candidates(lexicon, context=context), self.shift_prob),
             (self.loss_candidates(lexicon), self.forget_prob),
         )
         for candidates, rate in groups:
