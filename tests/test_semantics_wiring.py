@@ -14,6 +14,7 @@ import pytest
 
 import cee.pipeline as pipeline
 from cee.pipeline import SimulationConfig, build_semantic_evaluator, resolve_semantics_path
+from cee.semantics.graph import SemanticGraph
 
 
 @pytest.fixture(autouse=True)
@@ -103,3 +104,15 @@ def test_neplatny_graf_varuje_a_nezastavi_beh(tmp_path):
         result = build_semantic_evaluator(SimulationConfig(semantics_path=str(spatny)))
 
     assert result is None
+
+
+def test_yaml_hrana_nese_kuratorovany_mechanismus(tmp_path):
+    graph_file = tmp_path / "mechanism.yaml"
+    graph_file.write_text(
+        "shifts:\n  - source: sun\n    target: sky\n    type: shift\n    mechanism: metaphor\n",
+        encoding="utf-8",
+    )
+
+    relation = SemanticGraph(str(graph_file)).get_possible_relations("sun")[0]
+
+    assert relation[3:] == ("shift", "metaphor")

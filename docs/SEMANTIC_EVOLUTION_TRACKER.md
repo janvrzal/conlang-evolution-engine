@@ -26,10 +26,13 @@ kauzálním, časově rozloženým a auditovatelným změnám. Stav **hotovo** z
 - [x] U polysemního lexému odstranit jen vytlačený význam; poslední užití smí
   zaniknout pouze tehdy, když je koncept dál pokrytý silnějším lexémem.
 - [x] Zapojit `forget_prob` jako tempo příležitostí pro kauzální ztrátu.
+- [x] Rozlišit metaforu, metonymii, generalizaci a specializaci jen z
+  kurátorovaného metadata nebo přesného autorského přepisu.
+- [x] Zapsat mechanismus do auditní události a zachovat neoznačené hrany jako
+  obecný posun či kolexifikaci.
 
 ## Následuje
 
-- [ ] Samostatné mechanismy metafory, metonymie, generalizace a specializace.
 - [ ] Tlak tabu, registru, prestiže a komunikační potřeby.
 - [ ] Sémantické změny vyvolané kontaktem, kalky a přejímáním konstrukcí.
 - [ ] Šíření podle sociálních skupin a regionů, nejen po jedné jazykové větvi.

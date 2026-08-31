@@ -95,6 +95,7 @@ class SemanticChangeEvent:
     evidence_type: str
     adoption_threshold: float
     competitor_lineage_id: Optional[str] = None
+    mechanism: Optional[str] = None
     introduced: bool = False
 
 

@@ -27,6 +27,21 @@ class EmptyGraph:
         return []
 
 
+class MechanismGraph:
+    _relations = {
+        "sun": [("SKY", "sky", 1.0, "shift", "metaphor")],
+        "hand": [("EAT", "eat", 1.0, "shift", "metonymy")],
+        "child": [("PERSON", "person", 1.0, "shift", "generalization")],
+        "animal": [("DOG", "dog", 1.0, "shift", "specialization")],
+    }
+
+    def get_possible_relations(self, concept_id: str):
+        return self._relations.get(concept_id.lower(), [])
+
+    def get_possible_shifts(self, concept_id: str):
+        return [relation[:4] for relation in self.get_possible_relations(concept_id)]
+
+
 def _root(mapper) -> State:
     word = mapper.parse_word("sun", "sula")
     word.frequency = 1.0
@@ -51,6 +66,42 @@ def test_navrh_vybira_nejsilneji_dolozeny_posun(mapper):
     assert proposal.duration() == 144
 
 
+def test_kuratorovany_mechanismus_urcuje_typ_semanticke_zmeny(mapper):
+    words = [mapper.parse_word(concept, "sula") for concept in MechanismGraph._relations]
+    evaluator = SemanticEvaluator(MechanismGraph(), shift_prob=1.0)
+
+    proposals = evaluator.extension_candidates(Lexicon(words))
+    by_mechanism = {proposal.mechanism: proposal for proposal in proposals}
+
+    assert by_mechanism["metaphor"].kind == "extension"
+    assert by_mechanism["metonymy"].kind == "extension"
+    assert by_mechanism["generalization"].kind == "extension"
+    assert by_mechanism["specialization"].kind == "shift"
+
+
+def test_autoruv_prepis_oznaci_neoznacenou_hranu_bez_odhadu(mapper):
+    graph = OneShiftGraph("shift")
+    evaluator = SemanticEvaluator(
+        graph,
+        shift_prob=1.0,
+        mechanism_overrides={"sun->sky": "metonymy"},
+    )
+    word = mapper.parse_word("sun", "sula")
+
+    proposal = evaluator.extension_candidates(Lexicon([word]))[0]
+
+    assert proposal.mechanism == "metonymy"
+    assert proposal.kind == "extension"
+
+
+def test_neoznaceny_datovy_posun_se_netvari_jako_konkretni_mechanismus(mapper):
+    word = mapper.parse_word("sun", "sula")
+    proposal = SemanticEvaluator(OneShiftGraph("shift")).extension_candidates(Lexicon([word]))[0]
+
+    assert proposal.mechanism is None
+    assert proposal.kind == "shift"
+
+
 def test_rozsireni_vyznamu_neprobehne_okamzite(mapper):
     builder = GraphBuilder()
     states = EvolutionSimulator(
@@ -73,6 +124,22 @@ def test_rozsireni_vyznamu_neprobehne_okamzite(mapper):
     assert started[0]["year"] == 100
     assert started[0]["duration"] == 144
     assert started[0]["pressure"] == 1.0
+
+
+def test_mechanismus_je_soucasti_auditni_udalosti(mapper):
+    builder = GraphBuilder()
+    states = EvolutionSimulator(
+        EvolutionGraph(),
+        mapper,
+        semantic_evaluator=SemanticEvaluator(MechanismGraph(), shift_prob=1.0),
+        graph_builder=builder,
+        end_year=300,
+        evolve_root=True,
+    ).simulate(_root(mapper))
+
+    started = [event for event in builder.events if event["kind"] == "semantic_change_started"]
+    assert states["proto"].lexicon.words[0].polysemy == {"sky"}
+    assert started[0]["mechanism"] == "metaphor"
 
 
 def test_uplny_posun_ma_obdobi_polysemie(mapper):

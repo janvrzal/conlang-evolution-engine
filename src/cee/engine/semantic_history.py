@@ -70,6 +70,7 @@ class SemanticChangeRuntime:
                     evidence_type=proposal.evidence_type,
                     adoption_threshold=proposal.adoption_threshold(word.frequency),
                     competitor_lineage_id=proposal.competitor_lineage_id,
+                    mechanism=proposal.mechanism,
                 ),
             )
             active_lineages.add(proposal.word_lineage_id)
@@ -99,6 +100,7 @@ class SemanticChangeRuntime:
                 evidence_weight=change.evidence_weight,
                 evidence_type=change.evidence_type,
                 competitor_lineage_id=change.competitor_lineage_id,
+                mechanism=change.mechanism,
             )
         phases = max(1, math.ceil(change.duration / SEMANTIC_SPREAD_PHASE_YEARS))
         self._propagate(
@@ -262,6 +264,7 @@ class SemanticChangeRuntime:
                 target_concept=change.target_concept,
                 change_kind=change.kind,
                 competitor_lineage_id=change.competitor_lineage_id,
+                mechanism=change.mechanism,
                 progress=round(progress, 4),
                 phase=phase,
                 hit_count=hit_count,

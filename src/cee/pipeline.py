@@ -62,6 +62,9 @@ class SimulationConfig:
     seed: int = DEFAULT_SEED
     shift_prob: float = DEFAULT_SHIFT_PROB
     forget_prob: float = DEFAULT_FORGET_PROB
+    #: Explicitní mechanismy přesně zadaných hran, např.
+    #: {"hand->eat": "metonymy"}. Neoznačené hrany se neklasifikují odhadem.
+    semantic_mechanism_overrides: Dict[str, str] = field(default_factory=dict)
     root_id: str = "proto"
     root_year: int = 0
 
@@ -289,6 +292,7 @@ def build_semantic_evaluator(config: SimulationConfig) -> Optional[SemanticEvalu
         shift_prob=config.shift_prob,
         forget_prob=config.forget_prob,
         seed=config.seed,
+        mechanism_overrides=config.semantic_mechanism_overrides,
     )
 
 

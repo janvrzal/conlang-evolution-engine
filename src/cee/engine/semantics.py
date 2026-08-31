@@ -1,6 +1,6 @@
 import random
 from dataclasses import dataclass
-from typing import Optional
+from typing import Mapping, Optional
 
 from cee.core.models import Lexicon
 from cee.engine.decisions import SemanticContextModel
@@ -19,6 +19,7 @@ class SemanticProposal:
     evidence_weight: float
     evidence_type: str
     competitor_lineage_id: Optional[str] = None
+    mechanism: Optional[str] = None
 
     def duration(self, base_years: int = 240) -> int:
         """Silnější tlak urychlí přijetí, ale nezmění význam okamžitě."""
@@ -49,6 +50,7 @@ class SemanticEvaluator:
         shift_prob: float = 0.05,
         forget_prob: float = 0.01,
         seed: int = 42,
+        mechanism_overrides: Optional[Mapping[str, str]] = None,
     ):
         """
         :param graph: Načtená síť Concepticon/DatSemShift/CLICS
@@ -61,6 +63,22 @@ class SemanticEvaluator:
         self.forget_prob = forget_prob
         self.random = random.Random(seed)
         self.context_model = SemanticContextModel()
+        self.mechanism_overrides = {
+            str(key).strip().lower(): str(value).strip().lower()
+            for key, value in (mechanism_overrides or {}).items()
+        }
+
+    _MECHANISMS = {"metaphor", "metonymy", "generalization", "specialization"}
+
+    def _relations_for(self, concept_id: str):
+        if hasattr(self.graph, "get_possible_relations"):
+            return self.graph.get_possible_relations(concept_id)
+        return [(*relation, None) for relation in self.graph.get_possible_shifts(concept_id)]
+
+    def _mechanism_for(self, source: str, target: str, declared: Optional[str]) -> Optional[str]:
+        override = self.mechanism_overrides.get(f"{source.lower()}->{target.lower()}")
+        mechanism = override or (str(declared).strip().lower() if declared else None)
+        return mechanism if mechanism in self._MECHANISMS else None
 
     def extension_candidates(self, lexicon: Lexicon) -> list[SemanticProposal]:
         """Sestaví doložená rozšíření a posuny bez náhodného losování."""
@@ -78,12 +96,12 @@ class SemanticEvaluator:
             lineage_id = word.lineage_id or word.id
             existing = {word.concept_id.lower(), *(meaning.lower() for meaning in word.polysemy)}
             for source in (word.concept_id, *sorted(word.polysemy)):
-                shifts = self.graph.get_possible_shifts(source)
-                positive_weights = [max(0.0, float(item[2])) for item in shifts]
+                relations = self._relations_for(source)
+                positive_weights = [max(0.0, float(item[2])) for item in relations]
                 local_max = max(positive_weights, default=0.0)
                 if local_max <= 0:
                     continue
-                for target, _name, raw_weight, edge_type in shifts:
+                for target, _name, raw_weight, edge_type, declared_mechanism in relations:
                     target_id = str(target).lower()
                     if target_id in existing:
                         continue
@@ -94,7 +112,17 @@ class SemanticEvaluator:
                     # rozšíření, ale neblokuje běžnou kolexifikaci.
                     lexical_need = 0.85 if target_id in covered else 1.0
                     pressure = min(1.0, evidence_strength * exposure * lexical_need)
-                    kind = "shift" if edge_type == "shift" else "extension"
+                    mechanism = self._mechanism_for(str(source), target_id, declared_mechanism)
+                    # Metafora, metonymie a generalizace nejprve rozšíří
+                    # význam. Specializace nahrazuje hlavní, širší užití až
+                    # po období polysémie. Neoznačený datový posun zůstává
+                    # obecný "shift", žádný mechanismus si nevymýšlíme.
+                    kind = (
+                        "shift"
+                        if mechanism == "specialization"
+                        or (mechanism is None and edge_type == "shift")
+                        else "extension"
+                    )
                     candidates.append(
                         SemanticProposal(
                             word_lineage_id=lineage_id,
@@ -104,6 +132,7 @@ class SemanticEvaluator:
                             pressure=round(pressure, 6),
                             evidence_weight=round(evidence_weight, 6),
                             evidence_type=str(edge_type),
+                            mechanism=mechanism,
                         )
                     )
         return candidates

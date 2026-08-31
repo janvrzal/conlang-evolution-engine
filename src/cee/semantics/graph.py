@@ -47,9 +47,18 @@ class SemanticGraph:
                 v = shift["target"]
                 w = shift.get("weight", 1.0)
                 fields = shift.get("fields", [])
+                edge_type = shift.get("type", "yaml_mock")
+                mechanism = shift.get("mechanism")
                 self.G.add_node(u, name=u)
                 self.G.add_node(v, name=v)
-                self.G.add_edge(u, v, weight=w, type="yaml_mock", fields=fields)
+                self.G.add_edge(
+                    u,
+                    v,
+                    weight=w,
+                    type=edge_type,
+                    fields=fields,
+                    mechanism=mechanism,
+                )
 
     def get_concept_name(self, concept_id: str) -> str:
         key = normalize_gloss(concept_id)
@@ -77,6 +86,32 @@ class SemanticGraph:
         # Seřadíme podle váhy klesajíc
         shifts.sort(key=lambda x: x[2], reverse=True)
         return shifts
+
+    def get_possible_relations(self, concept_id: str):
+        """Vrátí kandidáty včetně volitelného typu významového mechanismu.
+
+        CLICS4 ani DatSemShift mechanismus samy neimplikují; je-li prázdný,
+        volající ho nesmí dopočítávat z pouhé dvojice konceptů. Kurátorovaný
+        graf nebo worldbuilder jej může vložit do atributu ``mechanism``.
+        """
+        key = normalize_gloss(concept_id)
+        if not self.G.has_node(key):
+            return []
+
+        relations = []
+        for target in self.G.successors(key):
+            edge_data = self.G.get_edge_data(key, target) or {}
+            relations.append(
+                (
+                    target,
+                    self.G.nodes[target].get("name", target),
+                    edge_data.get("weight", 1),
+                    edge_data.get("type", "unknown"),
+                    edge_data.get("mechanism") or None,
+                )
+            )
+        relations.sort(key=lambda item: item[2], reverse=True)
+        return relations
 
     def random_shift(self, concept_id: str, random_gen=None, edge_type: str | None = None):
         """
