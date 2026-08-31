@@ -126,6 +126,7 @@ class LexicalEvaluator:
         self.homophony_strategies = dict(homophony_strategies or {})
         self.decision_engine = ChangeDecisionEngine()
         self.last_homophony_decisions = []
+        self.last_competitions: list[dict[str, object]] = []
 
     def evaluate(
         self,
@@ -145,6 +146,11 @@ class LexicalEvaluator:
         replacements: list[Word] = []
 
         for word in active:
+            # Frekvenci rozběhnuté synonymní soutěže spravuje samostatný
+            # model níže; obecná stabilita by jinak každý krok mazala i
+            # právě se šířící inovaci.
+            if len(state.lexicon.get_words(word.concept_id)) > 1:
+                continue
             stability = 0.65 if _is_basic(word) else 0.25
             word.frequency = min(1.0, max(0.01, word.frequency + (stability - 0.5) * 0.08))
 
@@ -168,10 +174,9 @@ class LexicalEvaluator:
             replacement.source_id = None
             replacement.frequency = max(0.12, word.frequency * 0.75)
             replacement.morpheme_boundaries = set(donor.morpheme_boundaries)
+            replacement.grammatical_features["lexical.variant_for"] = word.lineage_id or word.id
+            replacement.grammatical_features["lexical.stage"] = "introduced"
             replacements.append(replacement)
-
-            if word.frequency < 0.20 and rng.random() < self.loss_rate * (1.0 - standard):
-                word.active = False
 
         # Tabu nenechá slot prázdný: starý tvar přestane být produktivní a
         # nový se utvoří z jiného živého kořene. Konfigurace je explicitní,
@@ -224,7 +229,43 @@ class LexicalEvaluator:
                     )
 
         state.lexicon.words.extend(replacements)
+        self._advance_competitions(state, mobility=mobility, standard=standard)
         return replacements
+
+    def _advance_competitions(self, state: State, *, mobility: float, standard: float) -> None:
+        """Posune rozběhnuté synonymní soutěže o jednu historickou epochu."""
+        self.last_competitions = []
+        by_concept: dict[str, list[Word]] = {}
+        for word in state.lexicon.words:
+            if word.active:
+                by_concept.setdefault(word.concept_id, []).append(word)
+        for concept, variants in by_concept.items():
+            innovators = [word for word in variants if word.grammatical_features.get("lexical.variant_for")]
+            incumbents = [word for word in variants if word not in innovators]
+            if not innovators or not incumbents:
+                continue
+            innovator = max(innovators, key=lambda word: word.frequency)
+            incumbent = max(incumbents, key=lambda word: word.frequency)
+            gain = 0.12 * (0.4 + mobility) * (1.0 - standard)
+            shift = min(incumbent.frequency, gain * max(0.15, 1.0 - innovator.frequency))
+            innovator.frequency = min(1.0, innovator.frequency + shift)
+            incumbent.frequency = max(0.01, incumbent.frequency - shift)
+            stage = "dominant" if innovator.frequency >= incumbent.frequency else "spreading"
+            innovator.grammatical_features["lexical.stage"] = stage
+            resolved = False
+            if innovator.frequency >= incumbent.frequency * 2 and incumbent.frequency <= self.loss_rate * 8:
+                incumbent.active = False
+                innovator.grammatical_features["lexical.stage"] = "established"
+                resolved = True
+            self.last_competitions.append(
+                {
+                    "concept_id": concept,
+                    "incumbent_id": incumbent.id,
+                    "innovator_id": innovator.id,
+                    "stage": innovator.grammatical_features["lexical.stage"],
+                    "resolved": resolved,
+                }
+            )
 
     @staticmethod
     def _resolve_homophony(

@@ -436,6 +436,10 @@ class EvolutionSimulator:
                                 action=decision.action,
                                 reason=decision.reason,
                             )
+                        for competition in evaluator.last_competitions:
+                            self.graph_builder.add_event(
+                                "lexical_competition", event.year, event.branch_id, **competition
+                            )
 
             elif isinstance(event, SocialEvent):
                 branch_state = states.get(event.branch_id)
