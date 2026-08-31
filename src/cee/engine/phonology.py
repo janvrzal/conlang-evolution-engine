@@ -130,5 +130,6 @@ class FeatureMapper:
             ("ˈ" if index == word.stress_index else "")
             + self.segment_to_ipa(segment)
             + ("ː" if index in word.long_nuclei else "")
+            + {"H": "˥", "L": "˩", "R": "˧˥"}.get(word.tones.get(index, ""), "")
             for index, segment in enumerate(word.segments)
         )

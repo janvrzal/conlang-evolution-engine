@@ -64,6 +64,9 @@ class Word:
     #: inovaci najít i poté, co mezitím proběhla jiná změna nebo odštěpení.
     #: Je na konci kvůli kompatibilitě existujících pozičních konstruktorů.
     lineage_id: Optional[str] = None
+    #: Tón přiřazený slabičnému jádru (index segmentu -> H/L/R). Drží se mimo
+    #: PanPhonovy segmentové rysy, protože tón není samostatný segment.
+    tones: Dict[int, str] = field(default_factory=dict)
 
     def ensure_stress(self) -> None:
         """Dá slovu deterministický výchozí přízvuk na první samohlásce."""
@@ -75,6 +78,7 @@ class Word:
         elif self.stress_index not in nuclei:
             self.stress_index = nuclei[0]
         self.long_nuclei.intersection_update(nuclei)
+        self.tones = {index: tone for index, tone in self.tones.items() if index in nuclei}
         self.morpheme_boundaries = {
             boundary for boundary in self.morpheme_boundaries if 0 < boundary < len(self.segments)
         }

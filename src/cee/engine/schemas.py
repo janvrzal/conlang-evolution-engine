@@ -567,6 +567,82 @@ class StressShiftSchema(Schema):
         )
 
 
+class VowelHarmonySchema(Schema):
+    """Regresivní harmonie: přední vokál přetáhne všechny předchozí zadní."""
+
+    def __init__(self):
+        super().__init__("vowel_harmony")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        front_mid = inventory.features_for_ipa("e")
+        if not front_mid:
+            return None
+        return Rule(
+            name=f"Regresivní vokálová harmonie (gen. v {year})",
+            target={"syl": "+", "back": "+"},
+            # Zadní /o/ → přední /e/ není jen přepnutí [back]: bez úpravy
+            # dalších rysů by panphon korektně vybral za výsledek /ø/.
+            action=front_mid,
+            env_after={"_lookahead_vowel": "+", "syl": "+", "back": "-"},
+            year=year,
+        )
+
+
+class ChainShiftSchema(Schema):
+    """Souběžná rotace /a e i/; kontrasty se přesouvají, ne mažou."""
+
+    def __init__(self):
+        super().__init__("chain_shift")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        vowels = [inventory.features_of(ipa) for ipa in ("a", "e", "i")]
+        if any(features is None for features in vowels):
+            return None
+        a, e, i = vowels
+        assert a and e and i
+        return Rule(
+            name=f"Řetězový posun a → e → i → a (gen. v {year})",
+            target={"syl": "+"},
+            action={},
+            operation="chain_shift",
+            chain_steps=[(a, e), (e, i), (i, a)],
+            year=year,
+        )
+
+
+class TonogenesisSchema(Schema):
+    """Ztráta kódové obstruenty ponechá tón jako její historickou stopu."""
+
+    def __init__(self):
+        super().__init__("tonogenesis")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Tonogeneze po ztrátě kody (gen. v {year})",
+            target={"syl": "+"},
+            action={},
+            env_after={"cons": "+", "son": "-"},
+            operation="tonogenesis",
+            year=year,
+        )
+
+
+class ToneShiftSchema(Schema):
+    """Pozdější rotace tónů, dostupná až po dřívější tonogenezi."""
+
+    def __init__(self):
+        super().__init__("tone_shift")
+
+    def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        return Rule(
+            name=f"Posun tónové řady (gen. v {year})",
+            target={"syl": "+"},
+            action={},
+            operation="tone_shift",
+            year=year,
+        )
+
+
 SCHEMA_REGISTRY = {
     "lenition": LenitionSchema(),
     "fortition": FortitionSchema(),
@@ -592,4 +668,8 @@ SCHEMA_REGISTRY = {
     "metathesis": MetathesisSchema(),
     "compensatory_lengthening": CompensatoryLengtheningSchema(),
     "stress_shift": StressShiftSchema(),
+    "vowel_harmony": VowelHarmonySchema(),
+    "chain_shift": ChainShiftSchema(),
+    "tonogenesis": TonogenesisSchema(),
+    "tone_shift": ToneShiftSchema(),
 }

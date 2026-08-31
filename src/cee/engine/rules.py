@@ -37,6 +37,8 @@ class Rule:
     #: Stabilní identifikátor schématu, z něhož pravidlo vzniklo. Ručně
     #: zadaná pravidla ho mít nemusí; používá ho kalibrace generátoru.
     schema_id: Optional[str] = None
+    #: Souběžná rotace kontrastů pro systémový řetězový posun.
+    chain_steps: Optional[List[tuple[Dict[str, str], Dict[str, str]]]] = None
 
     def matching_indices(self, word: Word) -> List[int]:
         """Najde terče bez mutace tvaru; používá ho generátor i aplikátor."""
@@ -45,7 +47,12 @@ class Rule:
         word.ensure_stress()
         targets: List[int] = []
         for i, segment in enumerate(word.segments):
-            if not segment.matches(self.target):
+            matches_target = (
+                any(segment.matches(source) for source, _ in self.chain_steps or [])
+                if self.operation == "chain_shift"
+                else segment.matches(self.target)
+            )
+            if not matches_target:
                 continue
             if self.prosody == "unstressed" and i == word.stress_index:
                 continue
@@ -96,6 +103,12 @@ class Rule:
             return False
         if self.operation == "swap_next":
             return any(i + 1 < len(word.segments) for i in targets)
+        if self.operation == "chain_shift":
+            return bool(targets)
+        if self.operation == "tonogenesis":
+            return any(i + 1 < len(word.segments) for i in targets)
+        if self.operation == "tone_shift":
+            return any(i in word.tones for i in targets)
         if self.operation == "geminate":
             return True
         if self.operation == "degeminate":
@@ -192,6 +205,47 @@ class Rule:
                     word.segments[i], word.segments[i + 1] = word.segments[i + 1], word.segments[i]
                     changed = True
             word.ensure_stress()
+            return changed
+
+        if self.operation == "chain_shift":
+            changed = False
+            for i in targets_to_modify:
+                for source, action in self.chain_steps or []:
+                    if word.segments[i].matches(source):
+                        word.segments[i].features.update(action)
+                        changed = True
+                        break
+            word.ensure_stress()
+            return changed
+
+        if self.operation == "tonogenesis":
+            changed = False
+            removed: set[int] = set()
+            for i in targets_to_modify:
+                following = i + 1
+                if following >= len(word.segments):
+                    continue
+                coda = word.segments[following]
+                word.tones[i] = "L" if coda.features.get("voi") == "+" else "H"
+                removed.add(following)
+                changed = True
+            if not changed:
+                return False
+            def remap(index: int) -> int:
+                return index - sum(1 for removed_index in removed if removed_index < index)
+            word.segments = [segment for index, segment in enumerate(word.segments) if index not in removed]
+            word.long_nuclei = {remap(index) for index in word.long_nuclei if index not in removed}
+            word.tones = {remap(index): tone for index, tone in word.tones.items() if index not in removed}
+            word.ensure_stress()
+            return True
+
+        if self.operation == "tone_shift":
+            changed = False
+            rotation = {"H": "R", "R": "L", "L": "H"}
+            for i in targets_to_modify:
+                if i in word.tones:
+                    word.tones[i] = rotation.get(word.tones[i], "H")
+                    changed = True
             return changed
 
         if self.operation == "geminate":

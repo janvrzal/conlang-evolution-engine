@@ -9,9 +9,15 @@ mezi mluvčími je pak podkladem pro lexikon i kontakt.
 
 ## 1. Zvuková historie — aktuální priorita
 
-- [ ] Řetězové posuny jako propojené série kontrastů.
-- [ ] Tonogeneze a tónová historie.
-- [ ] Vokálová harmonie jako systémový proces.
+- [~] Řetězové posuny jako propojené série kontrastů. Dnes: simultánní
+  rotace doložené řady /a e i/ bez mezitvarových kolapsů; chybí obecný
+  výběr řady z inventáře a vícekrokové řetězce s prázdným místem.
+- [~] Tonogeneze a tónová historie. Dnes: ztracená koda vytvoří H/L tón a
+  následná tónová řada se může historicky posunout; chybí kontury, sandhi a
+  tónová registrace podle populace.
+- [~] Vokálová harmonie jako systémový proces. Dnes: regresivní harmonie
+  přenáší přednost přes celé slovo; chybí volba směru, domén a víceharmonické
+  systémy.
 - [~] Postupné lexikální šíření podle frekvence, sociální skupiny a
   morfologické třídy. Dnes: změna má ohnisko v doložené skupině/třídě a
   ostatní vrstvy přijímají inovaci později; chybí populace, sítě mluvčích a
