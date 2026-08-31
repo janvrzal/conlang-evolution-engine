@@ -36,6 +36,13 @@ from cee.metrics.global_baseline import load_global_baseline
 from cee.metrics.retention import LexicalRetention, RetentionResult
 from cee.metrics.schema_profiles import load_local_schema_profile, load_schema_profile
 from cee.semantics.builder import default_paths as default_semantics_paths
+from cee.semantics.concepts import (
+    ConcepticonIndex,
+    annotate_concept_metadata,
+)
+from cee.semantics.concepts import (
+    default_path as default_concepticon_path,
+)
 from cee.semantics.graph import SemanticGraph
 
 DEFAULT_SEED = 42
@@ -135,7 +142,26 @@ class BranchView:
         return payload
 
 
-def load_lexicon_from_csv(path: str, mapper: FeatureMapper) -> Lexicon:
+_concepticon_index_cache: Dict[str, Optional[ConcepticonIndex]] = {}
+
+
+def resolve_concepticon_index(path: Optional[str] = None) -> Optional[ConcepticonIndex]:
+    """Načte lokální cache Concepticonu; absence nikdy nezastaví simulaci."""
+    resolved = path or default_concepticon_path()
+    if resolved not in _concepticon_index_cache:
+        try:
+            _concepticon_index_cache[resolved] = (
+                ConcepticonIndex.from_tsv(resolved) if os.path.exists(resolved) else None
+            )
+        except (OSError, csv.Error, UnicodeError) as exc:
+            warnings.warn(f"Concepticon se nepodařilo načíst ({exc}); používám fallback.", stacklevel=2)
+            _concepticon_index_cache[resolved] = None
+    return _concepticon_index_cache[resolved]
+
+
+def load_lexicon_from_csv(
+    path: str, mapper: FeatureMapper, *, concepticon_index: Optional[ConcepticonIndex] = None
+) -> Lexicon:
     """Načte proto-lexikon z CSV se sloupci `id` a `ipa_proto` (nebo `ipa`)."""
     lexicon = Lexicon()
     with open(path, "r", encoding="utf-8") as f:
@@ -155,6 +181,7 @@ def load_lexicon_from_csv(path: str, mapper: FeatureMapper) -> Lexicon:
             ):
                 if row.get(csv_column, "").strip():
                     word.grammatical_features[feature_key] = row[csv_column].strip()
+            annotate_concept_metadata(word, concepticon_index or resolve_concepticon_index())
             annotate_basic_lexical_class(word)
             if row.get("frequency", "").strip():
                 word.frequency = float(row["frequency"])
@@ -162,7 +189,9 @@ def load_lexicon_from_csv(path: str, mapper: FeatureMapper) -> Lexicon:
     return lexicon
 
 
-def load_lexicon_from_records(records: Iterable[Dict[str, str]], mapper: FeatureMapper) -> Lexicon:
+def load_lexicon_from_records(
+    records: Iterable[Dict[str, str]], mapper: FeatureMapper, *, concepticon_index: Optional[ConcepticonIndex] = None
+) -> Lexicon:
     """Načte proto-lexikon z JSON záznamů, jak je posílá UI."""
     lexicon = Lexicon()
     for record in records:
@@ -178,6 +207,7 @@ def load_lexicon_from_records(records: Iterable[Dict[str, str]], mapper: Feature
         word.grammatical_features = dict(record.get("grammatical_features", {}))
         if record.get("lexical_class"):
             word.grammatical_features["lexical.class"] = str(record["lexical_class"])
+        annotate_concept_metadata(word, concepticon_index or resolve_concepticon_index())
         annotate_basic_lexical_class(word)
         if record.get("frequency") is not None:
             word.frequency = float(record["frequency"])

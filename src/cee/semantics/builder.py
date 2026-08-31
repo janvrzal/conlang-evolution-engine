@@ -219,6 +219,7 @@ def default_paths() -> Dict[str, str]:
             home, ".cee", "data", "datsemshift", "cldf", "parameters.csv"
         ),
         "clics4_path": os.path.join(home, ".cee", "data", "clics4", "clics4-graph.gml"),
+        "concepticon_path": os.path.join(home, ".cee", "data", "concepticon", "concepticon.tsv"),
         "out_path": os.path.join(home, ".cee", "semantics", "graph.graphml"),
     }
 

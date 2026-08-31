@@ -190,10 +190,12 @@ def test_taboo_nahrada_a_rozliseni_homofonie_jsou_volitelne(mapper):
         word.origin_type == "taboo_replacement" and word.concept_id == "fire"
         for word in state.lexicon.words
     )
-    assert any(word.origin_type == "homophony_resolution" for word in state.lexicon.words)
+    # Samotná kolize nesmí generovat náhodný prefix. Tabu má svůj historický
+    # původ; homofonie bez sémantické/morfologické inovace zůstává auditem.
+    assert not any(word.origin_type == "homophony_resolution" for word in state.lexicon.words)
 
 
-def test_rozliseni_homofonie_prida_jeden_inventarni_marker_ne_duplikat_korene(mapper):
+def test_homofonie_se_bez_legitimni_inovace_nedeformuje_na_prefix(mapper):
     graph = EvolutionGraph(
         node_configs={
             "proto": {},
@@ -207,13 +209,9 @@ def test_rozliseni_homofonie_prida_jeden_inventarni_marker_ne_duplikat_korene(ma
     state = EvolutionSimulator(graph, mapper, end_year=100).simulate(
         _root(mapper, [("one", "pata"), ("two", "pata"), ("three", "kumi")])
     )["child"]
-    resolved = next(word for word in state.lexicon.words if word.origin_type == "homophony_resolution")
-
-    assert len(resolved.segments) == 5
-    assert resolved.morpheme_boundaries == {1}
-    assert resolved.origin_rule == "lexical disambiguation prefix"
+    assert not any(word.origin_type == "homophony_resolution" for word in state.lexicon.words)
     active_forms = [mapper.render_word(word) for word in state.lexicon.words if word.active]
-    assert len(active_forms) == len(set(active_forms))
+    assert active_forms.count("pata") == 2
 
 
 def test_kontextova_kolize_ma_nizsi_tlak_nez_stejna_domena(mapper):
@@ -257,14 +255,14 @@ def test_explicitni_trida_a_frekvence_maji_prednost_pred_heuristikou(mapper):
     assert words["subject_pronoun"].grammatical_features["lexical.class"] == "content"
 
 
-def test_funkcni_a_obsahove_slovo_maji_nizsi_tlak_na_rozliseni(mapper):
+def test_funkcni_a_obsahove_slovo_bez_spolecne_role_nema_tlak_na_rozliseni(mapper):
     function = mapper.parse_word("subject_pronoun", "pata")
     content = mapper.parse_word("water", "pata")
     for word, lexical_class in ((function, "function"), (content, "content")):
         word.frequency = 0.9
         word.grammatical_features["lexical.class"] = lexical_class
 
-    assert LexicalEvaluator._collision_pressure(function, content) == 0.315
+    assert LexicalEvaluator._collision_pressure(function, content) == 0.0
 
 
 def test_socialni_historie_meni_stav_v_konkretnim_roce(mapper):

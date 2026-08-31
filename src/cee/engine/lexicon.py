@@ -8,6 +8,7 @@ import uuid
 from typing import Callable, Iterable, Optional, Sequence
 
 from cee.core.models import State, Word
+from cee.engine.decisions import ChangeDecisionEngine
 
 _FUNCTION_CONCEPTS = frozenset(
     {
@@ -117,6 +118,8 @@ class LexicalEvaluator:
         self.replacement_rate = max(0.0, replacement_rate)
         self.loss_rate = max(0.0, loss_rate)
         self.homophony_resolution_rate = min(1.0, max(0.0, homophony_resolution_rate))
+        self.decision_engine = ChangeDecisionEngine()
+        self.last_homophony_decisions = []
 
     def evaluate(
         self,
@@ -184,47 +187,15 @@ class LexicalEvaluator:
             for word in [*active, *replacements]:
                 if word.active:
                     groups.setdefault(render(word), []).append(word)
-            # Označení nesmí vznikat prostým zdvojením prvního segmentu
-            # kolidujícího kořene. To u krátkých slov rychle nafukovalo
-            # délku lexikonu (pata -> ppata -> pppata) a zároveň to nebyla
-            # samostatná morfologická inovace. Bereme proto jeden existující
-            # foném jako nejmenší produktivní rozlišovací prefix; jeho výběr
-            # je deterministický a nesmí vytvořit další obsazený tvar.
-            markers = self._disambiguation_markers([*active, *replacements])
-            occupied = set(groups)
             for forms in groups.values():
                 if len(forms) < 2:
                     continue
-                winner = max(forms, key=lambda word: word.frequency)
-                for loser in forms:
-                    if loser is winner or not loser.segments:
-                        continue
-                    # Plná hodnota zachovává předchozí explicitní chování
-                    # ``resolve_homophones: true``. Menší hodnota je
-                    # frekvenčně i kontextově vážená pravděpodobnost, že se
-                    # mluvčí vůbec rozhodnou kolizi aktivně rozlišovat.
-                    pressure = self._collision_pressure(winner, loser)
-                    if (
-                        self.homophony_resolution_rate < 1.0
-                        and rng.random() >= self.homophony_resolution_rate * pressure
-                    ):
-                        continue
-                    resolved = self._disambiguate(loser, markers, occupied, render)
-                    if resolved is None:
-                        # Když ani jeden foném inventáře tvar nerozliší,
-                        # raději kolizi ponecháme pro další lexikální cyklus,
-                        # než abychom vymysleli neomezeně dlouhý pseudotvar.
-                        continue
-                    resolved.id = str(uuid.uuid4())
-                    resolved.parent_word_id = loser.id
-                    resolved.origin_year = year
-                    resolved.origin_type = "homophony_resolution"
-                    resolved.origin_rule = "lexical disambiguation prefix"
-                    resolved.frequency = max(0.1, loser.frequency * 0.7)
-                    resolved.ensure_stress()
-                    replacements.append(resolved)
-                    occupied.add(render(resolved))
-                    loser.active = False
+                # Homofonie je diagnostická situace, nikoli licence přilepit
+                # k poraženému slovu náhodný segment.  Rozhodovací jádro ji
+                # posoudí podle automaticky sestavených kontextů. Samotnou
+                # náhradu smí provést až reálná událost (sémantika, morfologie
+                # nebo kontakt), která dodá její historický původ.
+                self.last_homophony_decisions.extend(self.decision_engine.assess_homophones(forms))
 
         state.lexicon.words.extend(replacements)
         return replacements
@@ -268,48 +239,8 @@ class LexicalEvaluator:
         jemnější metadata ``lexical.pos``, ``lexical.domains`` (CSV) a
         ``lexical.register`` jsou volitelná.
         """
-        def value(word: Word, key: str) -> str:
-            return word.grammatical_features.get(key, "").strip().lower()
-
-        pressure = 1.0
-        winner_class, loser_class = value(winner, "lexical.class"), value(loser, "lexical.class")
-        if winner_class and loser_class and winner_class != loser_class:
-            pressure *= 0.35
-
-        winner_pos, loser_pos = value(winner, "lexical.pos"), value(loser, "lexical.pos")
-        if winner_pos and loser_pos and winner_pos != loser_pos:
-            pressure *= 0.35
-
-        winner_domains = {item.strip() for item in value(winner, "lexical.domains").split(",") if item.strip()}
-        loser_domains = {item.strip() for item in value(loser, "lexical.domains").split(",") if item.strip()}
-        if winner_domains and loser_domains:
-            pressure *= 1.0 if winner_domains & loser_domains else 0.4
-
-        winner_register, loser_register = value(winner, "lexical.register"), value(loser, "lexical.register")
-        if winner_register and loser_register and winner_register != loser_register:
-            pressure *= 0.5
-
-        # Dvě okrajová slova bývají méně naléhavá než kolize frekventního
-        # jádra. Spodní mez zabraňuje tomu, aby položka vypadla z modelu úplně.
-        frequency = max(0.15, (max(0.0, winner.frequency) * max(0.0, loser.frequency)) ** 0.5)
-        return min(1.0, pressure * frequency)
-
-    @staticmethod
-    def _disambiguate(
-        loser: Word,
-        markers,
-        occupied: set[str],
-        render: Callable[[Word], str],
-    ) -> Optional[Word]:
-        for marker in markers:
-            candidate = copy.deepcopy(loser)
-            candidate.segments.insert(0, copy.deepcopy(marker))
-            candidate.morpheme_boundaries = {boundary + 1 for boundary in loser.morpheme_boundaries}
-            candidate.morpheme_boundaries.add(1)
-            candidate.ensure_stress()
-            if render(candidate) not in occupied:
-                return candidate
-        return None
+        decisions = ChangeDecisionEngine().assess_homophones([winner, loser])
+        return decisions[0].pressure if decisions else 0.0
 
     @staticmethod
     def _donor(words: Iterable[Word], target: Word, rng: random.Random) -> Optional[Word]:

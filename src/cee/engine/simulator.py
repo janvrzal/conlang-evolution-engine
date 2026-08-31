@@ -373,6 +373,17 @@ class EvolutionSimulator:
                         self.graph_builder.add_event(
                             "lexicon", event.year, event.branch_id, hit_count=hit_count
                         )
+                        for decision in evaluator.last_homophony_decisions:
+                            self.graph_builder.add_event(
+                                "homophony_pressure",
+                                event.year,
+                                event.branch_id,
+                                pressure=decision.pressure,
+                                context_overlap=decision.context_overlap,
+                                evidence_level=decision.evidence_level,
+                                action=decision.action,
+                                reason=decision.reason,
+                            )
 
             elif isinstance(event, SocialEvent):
                 branch_state = states.get(event.branch_id)
