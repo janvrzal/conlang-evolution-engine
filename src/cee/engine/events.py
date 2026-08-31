@@ -133,3 +133,11 @@ class SocialEvent:
     year: int
     branch_id: str
     changes: Dict[str, float]
+
+
+@dataclass
+class SocialDynamicsEvent:
+    """Pravidelný krok komunit a dialektních variet."""
+
+    year: int
+    branch_id: str

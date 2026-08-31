@@ -64,17 +64,37 @@ mezi mluvčími je pak podkladem pro lexikon i kontakt.
 
 ## 5. Sociální vrstvy, variety a potřeby
 
-- [ ] Variety jednoho jazyka: elita, městský/střední proud a periferie.
-  Varieta drží jen odchylky frekvencí, inovací, registrů a lexika, nikoli
-  úplnou kopii jazyka.
-- [ ] Dialektové subnody, které lze později povýšit na samostatný jazyk bez
-  přerušení historie.
+- [x] Populační profil: řád velikosti, rozloha, koncentrace a počet center;
+  používá se jako tlak na vznik a divergenci variet, nikoli jako nepodložená
+  simulace jednotlivých obyvatel.
+- [x] Komunity uvnitř jazyka: podíl, prestiž, mobilita, domény a typ skupiny.
+  Mohou být sociální, městské nebo regionální a poskytují ohnisko inovace.
+- [x] Lehké dialektní variety: drží jen vlastní divergenci, ne kopii lexikonu;
+  při dlouhodobé regionální divergenci vznikne auditní kandidát na odštěpení.
+- [ ] Povýšení dialektové variety na samostatný jazyk v UI bez přerušení
+  historie. Vznik uzlu zůstane autorským krokem, simulátor sám nemění graf.
 - [ ] Společenské potřeby jako zdroj návrhů: obchod, náboženství, správa,
   gramotnost, migrace a generační inovace.
 - [ ] Registry a domény: neutrální, formální, rituální, tabu, obchodní a
   lokální; worldbuilder může návrh potvrdit, změnit či zakázat.
 - [ ] Síť šíření mezi varietami: prestiž, mobilita, město/venkov, bilingvismus
   a izolace.
+
+## 5a. Prostor, státy a historické události — navazující návrh
+
+- [ ] Stát jako politická jednotka: jméno, hranice/území, instituce a skupina
+  jazyků. Stát neznamená automaticky jeden jazyk, ale zvyšuje jejich vnitřní
+  kontakt a standardizační tlak.
+- [ ] Jazyky vznikají z existujícího jazyka nebo z potvrzené variety; formulář
+  „nový jazyk“ proto nabídne původ, rok vzniku a výchozí komunitu.
+- [ ] Ručně kreslené obchodní trasy jako samostatné mapové objekty, s typem
+  námořní/pozemní/říční a intenzitou. Až nad nimi budou vznikat kontaktní
+  události, nikoli přímým spojováním náhodných uzlů.
+- [ ] Historické události s trváním a dopady: migrace, válka, kolaps,
+  urbanizace, standardizace, náboženská reforma a obchodní rozkvět.
+- [ ] Dynamické názvy jazyků: větev uchová endonymum i exonymum a může je
+  měnit při štěpení, standardizaci či politické identitě. Worldbuilder určí
+  míru autonomie a případně kurátorovaný seznam jmen.
 
 ## 6. Kontakt a výpůjčky
 

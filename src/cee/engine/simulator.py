@@ -19,6 +19,7 @@ from cee.engine.events import (
     SemanticChangeEvent,
     SemanticChangeSpreadEvent,
     SemanticEvent,
+    SocialDynamicsEvent,
     SocialEvent,
     SoundChangeEvent,
     SoundChangeSpreadEvent,
@@ -33,6 +34,7 @@ from cee.engine.phonotactics import PhonotacticProfile
 from cee.engine.rng import derive_seed
 from cee.engine.rules import Rule
 from cee.engine.semantic_history import SemanticChangeRuntime
+from cee.engine.social import SocialDynamicsEngine
 from cee.engine.topology import EvolutionGraph
 
 # Priorita událostí ve stejném roce: uzel musí nejdřív vzniknout, teprve pak
@@ -98,6 +100,7 @@ class EvolutionSimulator:
         self._sound_change_adoptions: Dict[str, set[tuple[str, int, str]]] = {}
         self._sound_change_sequence = 0
         self.semantic_history = SemanticChangeRuntime()
+        self.social_dynamics = SocialDynamicsEngine()
 
     def _generator_for(self, node_id: str) -> Optional[SoundChangeGenerator]:
         """
@@ -154,7 +157,7 @@ class EvolutionSimulator:
         rodiče v roce prvního pravidla na příslušné hraně.
         """
         root_config = self.graph.node_configs.get(root_state.node_id, {})
-        root_state.map = root_config.get("map", root_config)
+        root_state.map = self._state_map_config(root_config)
         root_state.__post_init__()
         for index, word in enumerate(root_state.lexicon.words):
             word.id = self._deterministic_word_id(
@@ -510,6 +513,16 @@ class EvolutionSimulator:
                             changes=dict(branch_state.social),
                         )
 
+            elif isinstance(event, SocialDynamicsEvent):
+                branch_state = states.get(event.branch_id)
+                if branch_state is not None:
+                    branch_state.year = event.year
+                    for change in self.social_dynamics.advance(branch_state, event.year):
+                        if self.graph_builder:
+                            kind = change.pop("kind")
+                            change.pop("year", None)
+                            self.graph_builder.add_event(kind, event.year, event.branch_id, **change)
+
             elif isinstance(event, ContactEvent):
                 source_state = states.get(event.source_id)
                 target_state = states.get(event.target_id)
@@ -622,14 +635,29 @@ class EvolutionSimulator:
         if self.graph_builder:
             self.graph_builder.add_event("split", year, child_id, parent_id=parent_state.node_id)
 
-        return State(
+        child_map = self._state_map_config(node_cfg)
+        child_state = State(
             node_id=child_id,
             year=year,
             inventory=copy.deepcopy(parent_state.inventory),
             lexicon=new_lexicon,
             parent_id=parent_state.node_id,
-            map=node_cfg.get("map", {}),
+            map=child_map,
+            population=copy.deepcopy(parent_state.population),
+            communities=copy.deepcopy(parent_state.communities),
+            varieties=copy.deepcopy(parent_state.varieties),
         )
+        return child_state
+
+    @staticmethod
+    def _state_map_config(node_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Sloučí mapová a sociální data do stavu bez změny veřejného YAML."""
+        base = node_config.get("map", node_config)
+        result = dict(base) if isinstance(base, dict) else {}
+        for key in ("population", "communities"):
+            if key in node_config:
+                result[key] = node_config[key]
+        return result
 
     def _horizon_for(self, start_year: int, child_id: str) -> int:
         """
@@ -991,6 +1019,18 @@ class EvolutionSimulator:
             )
             if isinstance(changes, dict):
                 push(year, _PRIO_SOCIAL, SocialEvent(year, node_id, changes))
+        config = self.graph.node_configs.get(node_id, {})
+        map_config = config.get("map", config)
+        population = map_config.get("population", config.get("population", {}))
+        communities = map_config.get("communities", config.get("communities", []))
+        has_social_topology = bool(communities) or (
+            isinstance(population, dict) and int(population.get("centers", 1)) > 1
+        )
+        if not has_social_topology:
+            return
+        horizon = self._horizon_for(start_year, node_id)
+        for year in range(start_year + 100, horizon + 1, 100):
+            push(year, _PRIO_SOCIAL, SocialDynamicsEvent(year, node_id))
 
     def _word_signature(self, word) -> tuple:
         """Vše, co tvoří historicky rozlišitelný stav lexému."""

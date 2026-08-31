@@ -138,6 +138,39 @@ class Inventory:
 
 
 @dataclass
+class PopulationProfile:
+    """Záměrně hrubá demografie: řád velikosti, nikoli falešná přesnost."""
+
+    size: int = 0
+    area: float = 0.0
+    concentration: float = 0.5
+    centers: int = 1
+
+
+@dataclass
+class SpeechCommunity:
+    """Jedna sociální nebo regionální skupina mluvčích uvnitř jazyka."""
+
+    id: str
+    share: float = 1.0
+    prestige: float = 0.5
+    mobility: float = 0.5
+    domains: Set[str] = field(default_factory=set)
+    kind: str = "social"
+    variety_id: Optional[str] = None
+
+
+@dataclass
+class VarietyState:
+    """Lehká dialektní odchylka; lexikon se zde nekopíruje."""
+
+    id: str
+    community_id: str
+    divergence: float = 0.0
+    split_candidate: bool = False
+
+
+@dataclass
 class State:
     """Stav jazyka v určitém čase/uzlu."""
 
@@ -154,6 +187,9 @@ class State:
     #: Malý, vysvětlitelný sociolingvistický profil. Nejde o simulaci každého
     #: mluvčího, ale o parametry, které mění rychlost šíření inovací a kontakt.
     social: Dict[str, float] = field(default_factory=dict)
+    population: PopulationProfile = field(default_factory=PopulationProfile)
+    communities: Dict[str, SpeechCommunity] = field(default_factory=dict)
+    varieties: Dict[str, VarietyState] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.map is None:
@@ -169,3 +205,47 @@ class State:
                 for key, value in raw_social.items()
                 if key in {"prestige", "mobility", "literacy", "standardization", "population"}
             }
+        population = self.map.get("population", {})
+        if isinstance(population, dict):
+            try:
+                self.population = PopulationProfile(
+                    size=max(0, int(population.get("size", self.population.size))),
+                    area=max(0.0, float(population.get("area", self.population.area))),
+                    concentration=max(
+                        0.0,
+                        min(1.0, float(population.get("concentration", self.population.concentration))),
+                    ),
+                    centers=max(1, int(population.get("centers", self.population.centers))),
+                )
+            except (TypeError, ValueError):
+                pass
+        raw_communities = self.map.get("communities", [])
+        if isinstance(raw_communities, list) and raw_communities:
+            parsed: Dict[str, SpeechCommunity] = {}
+            for index, item in enumerate(raw_communities):
+                if not isinstance(item, dict):
+                    continue
+                identifier = str(item.get("id", f"community-{index + 1}")).strip()
+                if not identifier:
+                    continue
+                parsed[identifier] = SpeechCommunity(
+                    id=identifier,
+                    share=max(0.0, float(item.get("share", 1.0))),
+                    prestige=max(0.0, min(1.0, float(item.get("prestige", 0.5)))),
+                    mobility=max(0.0, min(1.0, float(item.get("mobility", 0.5)))),
+                    domains={str(value).strip().lower() for value in item.get("domains", []) if str(value).strip()},
+                    kind=str(item.get("kind", "social")).strip().lower() or "social",
+                    variety_id=(str(item["variety_id"]) if item.get("variety_id") else None),
+                )
+            if parsed:
+                total = sum(item.share for item in parsed.values())
+                if total > 0:
+                    for item in parsed.values():
+                        item.share /= total
+                self.communities = parsed
+        if self.communities and not self.varieties:
+            for community in self.communities.values():
+                if community.variety_id or community.kind in {"regional", "rural", "urban"}:
+                    variety_id = community.variety_id or f"variety:{community.id}"
+                    community.variety_id = variety_id
+                    self.varieties[variety_id] = VarietyState(variety_id, community.id)

@@ -441,7 +441,7 @@ def grammar_sketch(
     if loans:
         lines += ["", "## Kontakt", "", f"- Výpůjčky z: {', '.join(loans)}"]
 
-    if state.social:
+    if state.social or state.population.size or state.communities:
         labels = {
             "prestige": "prestiž",
             "mobility": "mobilita",
@@ -452,7 +452,15 @@ def grammar_sketch(
         social = ", ".join(
             f"{labels.get(key, key)} {value:.0%}" for key, value in sorted(state.social.items())
         )
-        lines += ["", "## Společnost", "", f"- {social}"]
+        lines += ["", "## Společnost", "", f"- {social}" if social else "- bez globálních parametrů"]
+        if state.population.size or state.population.area:
+            lines.append(
+                "- Populace: "
+                f"{state.population.size or 'neurčena'}; rozloha {state.population.area or 'neurčena'}; "
+                f"centra {state.population.centers}"
+            )
+        if state.communities:
+            lines.append("- Komunity: " + ", ".join(sorted(state.communities)))
 
     if retention is not None and retention.total:
         lines += [
