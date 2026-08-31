@@ -69,6 +69,9 @@ class SimulationConfig:
     global_baseline_path: Optional[str] = None
     schema_profile_id: str = "heuristic-default"
     local_schema_profile_path: Optional[str] = None
+    #: Přímé ovladače UI; přebijí profil, ale ne konfiguraci konkrétní větve.
+    macro_overrides: Dict[str, float] = field(default_factory=dict)
+    lexical_overrides: Dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -307,6 +310,34 @@ def build_global_schema_multipliers(config: SimulationConfig) -> Dict[str, float
         return {}
 
 
+def _load_configured_schema_profile(config: SimulationConfig):
+    if config.local_schema_profile_path:
+        return load_local_schema_profile(config.local_schema_profile_path)
+    return load_schema_profile(config.schema_profile_id)
+
+
+def build_profile_macro(config: SimulationConfig) -> Dict[str, float]:
+    """Makro-prior vestavěného/uživatelského profilu, bez přebití uzlu."""
+    if config.global_baseline_path:
+        return {}
+    try:
+        return {**_load_configured_schema_profile(config).macro, **config.macro_overrides}
+    except (OSError, ValueError, KeyError, FileNotFoundError) as exc:
+        warnings.warn(f"Profil makra '{config.schema_profile_id}' nelze načíst: {exc}", stacklevel=2)
+        return {}
+
+
+def build_profile_lexical(config: SimulationConfig) -> Dict[str, float]:
+    """Lexikální prior profilu; konfigurace konkrétního uzlu má vždy přednost."""
+    if config.global_baseline_path:
+        return {}
+    try:
+        return {**_load_configured_schema_profile(config).lexical, **config.lexical_overrides}
+    except (OSError, ValueError, KeyError, FileNotFoundError) as exc:
+        warnings.warn(f"Lexikální profil '{config.schema_profile_id}' nelze načíst: {exc}", stacklevel=2)
+        return {}
+
+
 def run_simulation(
     lexicon: Lexicon,
     graph: EvolutionGraph,
@@ -325,6 +356,8 @@ def run_simulation(
     )
     inventory_validator = build_empirical_phonology(config)
     schema_multipliers = build_global_schema_multipliers(config)
+    profile_macro = build_profile_macro(config)
+    profile_lexical = build_profile_lexical(config)
 
     simulator = EvolutionSimulator(
         graph,
@@ -337,6 +370,8 @@ def run_simulation(
         evolve_root=config.evolve_root,
         inventory_validator=inventory_validator,
         schema_multipliers=schema_multipliers,
+        profile_macro=profile_macro,
+        profile_lexical=profile_lexical,
     )
     return simulator.simulate(root_state)
 

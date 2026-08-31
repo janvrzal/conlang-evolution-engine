@@ -258,6 +258,19 @@ def test_potomek_dedi_i_zmenu_ktera_prave_probiha(mapper):
     assert all(event.branch_id == "child" and event.year > 60 for _, _, event in queued)
 
 
+def test_sila_kontaktu_se_promitne_do_tempa_inovaci(mapper):
+    from cee.engine.simulator import EvolutionSimulator
+    from cee.engine.topology import ContactEdge, EvolutionGraph
+
+    graph = EvolutionGraph(
+        contact_edges=[ContactEdge(100, "a", "b", volume=5, prestige=1.0)]
+    )
+    simulator = EvolutionSimulator(graph, mapper)
+
+    assert simulator._contact_intensity("a") == 0.5
+    assert simulator._contact_intensity("isolated") == 0.0
+
+
 # --- kontakt mezi propojenými jazyky ----------------------------------------
 
 

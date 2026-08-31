@@ -71,6 +71,10 @@ class MacroParams:
     #: inovací, neplatí však, že by jazyk přestal měnit interně.
     isolation: float = 0.5
 
+    #: Síla skutečných kontaktových vazeb větve (0 až 1). Simulátor ji umí
+    #: odvodit z hran grafu, uživatel ji může přepsat v makro profilu.
+    contact_intensity: float = 0.5
+
     #: 0.0 až 1.0. Konzervativní jazyk mění méně, i když je rychlost vysoká.
     conservatism: float = 0.0
 
@@ -99,6 +103,7 @@ class MacroParams:
                 "sound_changes_per_millennium",
                 "change_spread_years",
                 "isolation",
+                "contact_intensity",
                 "conservatism",
                 "coda_erosion",
                 "deletion_rate",
@@ -114,6 +119,7 @@ class MacroParams:
         params.sound_changes_per_millennium = max(0.0, params.sound_changes_per_millennium)
         params.change_spread_years = max(0, int(params.change_spread_years))
         params.isolation = max(0.0, min(1.0, params.isolation))
+        params.contact_intensity = max(0.0, min(1.0, params.contact_intensity))
         params.coda_erosion = max(0.0, params.coda_erosion)
         params.deletion_rate = max(0.0, params.deletion_rate)
         params.timing_jitter = max(0.0, min(1.0, params.timing_jitter))
@@ -127,8 +133,9 @@ class MacroParams:
     @property
     def innovations_per_millennium(self) -> float:
         """Tempo inovací po konzervativnosti a sociální propojenosti."""
-        contact_factor = 1.25 - 0.5 * self.isolation
-        return self.sound_changes_per_millennium * self.activity * contact_factor
+        isolation_factor = 1.25 - 0.5 * self.isolation
+        contact_factor = 0.8 + 0.4 * self.contact_intensity
+        return self.sound_changes_per_millennium * self.activity * isolation_factor * contact_factor
 
     def slots_for(self, base_slots: int) -> int:
         """Kolik pokusů o změnu se v daném období vůbec udělá."""

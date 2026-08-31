@@ -116,29 +116,45 @@ def _mean(values: Iterable[float]) -> float:
 
 
 def _word_metrics(
-    forms: list[tuple[str, str]],
+    forms: list[tuple[str, str] | tuple[str, str, float]],
     mapper: FeatureMapper,
     segment_cache: dict[str, tuple[dict[str, str], ...]],
 ) -> tuple[dict[str, float], int]:
     """Metriky wordlistu; homofonie je bez frekvence pouze proxy."""
-    parsed: list[tuple[str, str, list[dict[str, str]]]] = []
+    parsed: list[tuple[str, str, list[dict[str, str]], float]] = []
     excluded = 0
-    for concept, value in forms:
+    for row in forms:
+        concept, value = row[0], row[1]
+        frequency = float(row[2]) if len(row) > 2 else 1.0
         segments = _segments(value, mapper, segment_cache)
         if not segments:
             excluded += 1
             continue
-        parsed.append((concept, value, segments))
+        parsed.append((concept, value, segments, max(0.0, frequency)))
     if not parsed:
         return {}, excluded
 
-    lengths = [len(segments) for _, _, segments in parsed]
+    lengths = [len(segments) for _, _, segments, _ in parsed]
     inventories = {
-        tuple(sorted(features.items())) for _, _, segments in parsed for features in segments
+        tuple(sorted(features.items())) for _, _, segments, _ in parsed for features in segments
     }
+    feature_mass: dict[tuple[tuple[str, str], ...], float] = defaultdict(float)
+    total_segment_mass = 0.0
+    for _, _, segments, frequency in parsed:
+        for features in segments:
+            feature_mass[tuple(sorted(features.items()))] += frequency
+            total_segment_mass += frequency
+    # Inventář z prostého wordlistu přeceňuje soustavy právě u změny, která
+    # se šíří: krátce žijící reflex se objeví v jedné položce stejně jako
+    # stabilní foném. Efektivní inventář proto vyžaduje alespoň 1 % vážené
+    # segmentové hmoty. Raw metriku ponecháváme pro srovnání s CLDF.
+    effective_inventory = sum(
+        mass / total_segment_mass >= 0.01
+        for mass in feature_mass.values()
+    ) if total_segment_mass else 0
     consonant_runs = []
     coda_segments = 0
-    for _, _, segments in parsed:
+    for _, _, segments, _ in parsed:
         run = longest = 0
         for features in segments:
             if features.get("syl") == "+":
@@ -154,19 +170,29 @@ def _word_metrics(
         coda_segments += max(0, len(segments) - last_vowel - 1)
 
     concepts_by_form: dict[str, set[str]] = defaultdict(set)
-    for concept, value, _ in parsed:
+    frequency_by_concept: dict[str, float] = {}
+    for concept, value, _, frequency in parsed:
         concepts_by_form[value].add(concept)
+        frequency_by_concept[concept] = frequency
     colliding_concepts = sum(
         len(concepts) for concepts in concepts_by_form.values() if len(concepts) > 1
     )
+    colliding_mass = sum(
+        sum(frequency_by_concept[concept] for concept in concepts)
+        for concepts in concepts_by_form.values()
+        if len(concepts) > 1
+    )
+    total_mass = sum(frequency_by_concept.values())
     form_count = len(parsed)
     return {
         "mean_segment_length": _mean(lengths),
         "median_segment_length": float(statistics.median(lengths)),
         "inventory_size_from_wordlist": float(len(inventories)),
+        "effective_inventory_size": float(effective_inventory),
         "mean_max_consonant_run": _mean(consonant_runs),
         "coda_segment_rate": coda_segments / sum(lengths),
         "wordlist_homophony_rate": colliding_concepts / form_count,
+        "frequency_weighted_homophony_rate": colliding_mass / total_mass if total_mass else 0.0,
     }, excluded
 
 
@@ -253,7 +279,7 @@ def measure_language_outcomes(
 def measure_state_outcome(state: State, mapper: FeatureMapper) -> dict[str, float]:
     """Změří simulovaný stav stejnými lexikálními proxy jako pozorovaný jazyk."""
     forms = [
-        (word.concept_id, mapper.render_word(word))
+        (word.concept_id, mapper.render_word(word), word.frequency)
         for word in state.lexicon.words
         if word.active
     ]

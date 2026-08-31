@@ -67,6 +67,8 @@ class EvolutionSimulator:
         evolve_root: bool = False,
         inventory_validator=None,
         schema_multipliers=None,
+        profile_macro=None,
+        profile_lexical=None,
     ):
         self.graph = graph_topo
         self.mapper = mapper
@@ -81,6 +83,8 @@ class EvolutionSimulator:
         self.end_year = end_year
         self.inventory_validator = inventory_validator
         self.schema_multipliers = schema_multipliers
+        self.profile_macro = dict(profile_macro or {})
+        self.profile_lexical = dict(profile_lexical or {})
         # Generátor se staví pro každý uzel zvlášť, aby měl vlastní seed
         # i vlastní makro-parametry (viz _generator_for).
         self._generators: Dict[str, SoundChangeGenerator] = {}
@@ -119,8 +123,10 @@ class EvolutionSimulator:
             social_macro["isolation"] = float(
                 node_cfg.get("map", {}).get("isolation", node_cfg.get("isolation", 0.5))
             )
+            social_macro["contact_intensity"] = self._contact_intensity(node_id)
             macro = MacroParams.from_config(
                 self.preset.get("macro"),
+                self.profile_macro,
                 social_macro,
                 node_cfg.get("macro"),
                 node_cfg.get("map", {}).get("macro"),
@@ -341,7 +347,10 @@ class EvolutionSimulator:
                     rng = random.Random(
                         derive_seed(self.seed, "lexicon", event.branch_id, str(event.year))
                     )
-                    lexical = self.graph.node_configs.get(event.branch_id, {}).get("lexical", {})
+                    lexical = {
+                        **self.profile_lexical,
+                        **self.graph.node_configs.get(event.branch_id, {}).get("lexical", {}),
+                    }
                     evaluator = LexicalEvaluator(
                         replacement_rate=float(lexical.get("replacement_rate", 0.015)),
                         loss_rate=float(lexical.get("loss_rate", 0.01)),
@@ -530,6 +539,17 @@ class EvolutionSimulator:
         horizon = max([c for c in candidates if c is not None], default=start_year + 200)
         return max(horizon, start_year + 1)
 
+    def _contact_intensity(self, node_id: str) -> float:
+        """Převede hrany kontaktu na jemný modifikátor inovačního tempa."""
+        exposure = sum(
+            max(0, edge.volume) * max(0.0, edge.prestige)
+            for edge in self.graph.contact_edges
+            if node_id in (edge.source_id, edge.target_id)
+        )
+        # Saturace brání tomu, aby jedna hustá hranice znamenala nekonečný
+        # příval inovací; nula zůstává legitimním izolovaným jazykem.
+        return exposure / (exposure + 5.0) if exposure else 0.0
+
     def _schedule_phonology_slots(self, node_id: str, start_year: int, push) -> None:
         """Rozloží pouze příležitosti ke změně, ne hotová pravidla.
 
@@ -572,9 +592,11 @@ class EvolutionSimulator:
             "conservatism": min(1.0, max(0.0, 0.35 * standard + 0.15 * literacy)),
             "change_rate": max(0.1, 0.65 + mobility),
             "isolation": float(node_cfg.get("map", {}).get("isolation", node_cfg.get("isolation", 0.5))),
+            "contact_intensity": self._contact_intensity(state.node_id),
         }
         return MacroParams.from_config(
             self.preset.get("macro") if self.preset else None,
+            self.profile_macro,
             social_macro,
             node_cfg.get("macro"),
             node_cfg.get("map", {}).get("macro"),

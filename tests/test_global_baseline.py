@@ -3,8 +3,8 @@ import json
 import pytest
 from typer.testing import CliRunner
 
-from cee.cli.main import app
 from cee.api.server import list_schema_profiles
+from cee.cli.main import app
 from cee.metrics.global_baseline import (
     ChangeObservation,
     CorpusSource,
@@ -12,7 +12,12 @@ from cee.metrics.global_baseline import (
     train_global_baseline,
 )
 from cee.metrics.schema_profiles import available_schema_profiles, load_schema_profile
-from cee.pipeline import SimulationConfig, build_global_schema_multipliers
+from cee.pipeline import (
+    SimulationConfig,
+    build_global_schema_multipliers,
+    build_profile_lexical,
+    build_profile_macro,
+)
 
 
 def test_builtin_heuristic_profiles_are_explicit_and_selectable():
@@ -21,6 +26,12 @@ def test_builtin_heuristic_profiles_are_explicit_and_selectable():
     }
     assert load_schema_profile("heuristic-default").kind == "heuristic"
     assert build_global_schema_multipliers(SimulationConfig(schema_profile_id="heuristic-conservative"))["syncope"] == 0.5
+    assert build_profile_macro(SimulationConfig(schema_profile_id="heuristic-conservative"))[
+        "sound_changes_per_millennium"
+    ] == 4
+    assert build_profile_lexical(SimulationConfig(schema_profile_id="heuristic-dynamic"))[
+        "homophony_resolution_rate"
+    ] == 0.4
     assert {profile["id"] for profile in list_schema_profiles()} == {
         "heuristic-conservative", "heuristic-default", "heuristic-dynamic"
     }

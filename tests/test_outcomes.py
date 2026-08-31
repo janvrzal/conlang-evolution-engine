@@ -3,8 +3,10 @@ import json
 from typer.testing import CliRunner
 
 from cee.cli.main import app
+from cee.core.models import Inventory, Lexicon, State
 from cee.metrics.outcome_search import score_metrics
-from cee.metrics.outcomes import build_outcome_profile
+from cee.metrics.outcomes import build_outcome_profile, measure_state_outcome
+from cee.pipeline import get_feature_mapper
 
 
 def _write_sample(tmp_path):
@@ -121,3 +123,25 @@ def test_outcome_score_is_zero_inside_intervals():
         },
     )
     assert (score, inside, compared) == (0.0, 2, 2)
+
+
+def test_simulovany_vystup_vazi_homofonii_a_inventar_frekvenci():
+    mapper = get_feature_mapper()
+    state = State(
+        node_id="x",
+        inventory=Inventory(),
+        lexicon=Lexicon(
+            [
+                mapper.parse_word("common-a", "pa"),
+                mapper.parse_word("common-b", "pa"),
+                mapper.parse_word("rare", "xy"),
+            ]
+        ),
+    )
+    state.lexicon.words[0].frequency = 0.9
+    state.lexicon.words[1].frequency = 0.9
+    state.lexicon.words[2].frequency = 0.001
+
+    metrics = measure_state_outcome(state, mapper)
+    assert metrics["frequency_weighted_homophony_rate"] > metrics["wordlist_homophony_rate"]
+    assert metrics["effective_inventory_size"] < metrics["inventory_size_from_wordlist"]

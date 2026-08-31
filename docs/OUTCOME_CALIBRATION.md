@@ -60,13 +60,19 @@ bootstrap: pro globální a regionální profil se resamplují rodiny, pro rodin
 profil jazyky. Interval se neuvádí, pokud skupina nemá alespoň dva klastry.
 
 První sada zahrnuje průměrnou a mediánovou délku segmentované formy, velikost
-inventáře ve wordlistu, průměrnou délku nejdelšího souhláskového shluku,
-podíl kodových segmentů, wordlistovou proxy homofonie a — je-li dodán PHOIBLE
+inventáře ve wordlistu, efektivní inventář (fonémy s alespoň 1 % vážené
+segmentové hmoty), průměrnou délku nejdelšího souhláskového shluku,
+podíl kodových segmentů, wordlistovou i frekvenčně váženou proxy homofonie a — je-li dodán PHOIBLE
 — medián velikosti jeho nemarginálních inventářů pro daný glottocode.
 
 Wordlist není úplný lexikon ani frekvenční korpus. Proto wordlistová homofonie
 není funkční zátěž a nelze z ní odvozovat komunikační rychlost. Tyto limity jsou
 součástí výstupu a nesmějí se skrýt v jedné „plausibility“ známce.
+
+U simulace se efektivní inventář a frekvenčně vážená homofonie počítají z
+frekvence aktivních lexémů. To rozlišuje stabilní fonémový systém od
+přechodných reflexů změny, která se právě šíří. U pozorovaných CLDF wordlistů,
+které frekvence nemají, je váha každé formy rovná jedné.
 
 ## Použití při kalibraci
 
