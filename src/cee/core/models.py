@@ -59,6 +59,11 @@ class Word:
     #: Členové jednoho paradigmatu sdílejí kmen a mohou podléhat analogii.
     paradigm: Optional[str] = None
     grammatical_features: Dict[str, str] = field(default_factory=dict)
+    #: Stabilní identita lexému napříč jeho historickými verzemi. ``id`` se
+    #: při každé doložené změně mění, zatímco lineage_id dovoluje dlouhotrvající
+    #: inovaci najít i poté, co mezitím proběhla jiná změna nebo odštěpení.
+    #: Je na konci kvůli kompatibilitě existujících pozičních konstruktorů.
+    lineage_id: Optional[str] = None
 
     def ensure_stress(self) -> None:
         """Dá slovu deterministický výchozí přízvuk na první samohlásce."""

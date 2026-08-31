@@ -79,6 +79,35 @@ class SemanticEvent:
 
 
 @dataclass
+class SemanticChangeEvent:
+    """Sémantická inovace, která po určitou dobu koexistuje se starým užitím."""
+
+    year: int
+    branch_id: str
+    change_id: str
+    word_lineage_id: str
+    source_concept: str
+    target_concept: str
+    kind: str
+    duration: int
+    pressure: float
+    evidence_weight: float
+    evidence_type: str
+    adoption_threshold: float
+    introduced: bool = False
+
+
+@dataclass
+class SemanticChangeSpreadEvent:
+    """Kumulativní fáze šíření jedné sémantické inovace."""
+
+    year: int
+    branch_id: str
+    change_id: str
+    progress: float
+
+
+@dataclass
 class MorphologyEvent:
     year: int
     branch_id: str

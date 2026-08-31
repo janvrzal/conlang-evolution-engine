@@ -16,6 +16,8 @@ from cee.engine.events import (
     MorphologyEvent,
     PhonologyEvent,
     PhonologySlotEvent,
+    SemanticChangeEvent,
+    SemanticChangeSpreadEvent,
     SemanticEvent,
     SocialEvent,
     SoundChangeEvent,
@@ -30,6 +32,7 @@ from cee.engine.phonology import FeatureMapper
 from cee.engine.prosody import repair_clusters
 from cee.engine.rng import derive_seed
 from cee.engine.rules import Rule
+from cee.engine.semantic_history import SemanticChangeRuntime
 from cee.engine.topology import EvolutionGraph
 
 # Priorita událostí ve stejném roce: uzel musí nejdřív vzniknout, teprve pak
@@ -94,6 +97,7 @@ class EvolutionSimulator:
         self._sound_changes: Dict[str, SoundChangeEvent] = {}
         self._sound_change_adoptions: Dict[str, set[tuple[str, int, str]]] = {}
         self._sound_change_sequence = 0
+        self.semantic_history = SemanticChangeRuntime()
 
     def _generator_for(self, node_id: str) -> Optional[SoundChangeGenerator]:
         """
@@ -156,6 +160,7 @@ class EvolutionSimulator:
             word.id = self._deterministic_word_id(
                 "root", root_state.node_id, str(root_state.year), str(index), word.concept_id
             )
+            word.lineage_id = word.lineage_id or word.id
             word.parent_word_id = None
         parent_of = self._collect_tree(root_state.node_id)
 
@@ -253,6 +258,9 @@ class EvolutionSimulator:
                 self._inherit_active_sound_changes(
                     event.parent_id, event.child_id, year, push
                 )
+                self.semantic_history.inherit(
+                    event.parent_id, event.child_id, year, push, _PRIO_SEMANTICS
+                )
                 # Pravidlo se vybere až ve svém budoucím slotu. Pozdější
                 # výpůjčky, morfologie i sociální změny tak mohou ovlivnit
                 # inventář a tempo, ze kterých generátor skutečně vychází.
@@ -308,24 +316,60 @@ class EvolutionSimulator:
                     semantic_rng = random.Random(
                         derive_seed(self.seed, "semantics", event.branch_id, str(event.year))
                     )
-                    parameters = inspect.signature(self.semantic_evaluator.evaluate).parameters
-                    if "random_gen" in parameters:
-                        self.semantic_evaluator.evaluate(
-                            branch_state.lexicon, random_gen=semantic_rng
+                    if hasattr(self.semantic_evaluator, "propose_changes"):
+                        self.semantic_history.schedule_proposals(
+                            branch_state,
+                            event.year,
+                            self.semantic_evaluator,
+                            semantic_rng,
+                            push,
+                            _PRIO_SEMANTICS,
+                            self._horizon_for(branch_state.year, event.branch_id),
                         )
-                    else:  # zpětná kompatibilita malých uživatelských evaluátorů
-                        self.semantic_evaluator.evaluate(branch_state.lexicon)
-                    hit_count = self._record_changed_words(
+                    else:
+                        parameters = inspect.signature(self.semantic_evaluator.evaluate).parameters
+                        if "random_gen" in parameters:
+                            self.semantic_evaluator.evaluate(
+                                branch_state.lexicon, random_gen=semantic_rng
+                            )
+                        else:  # zpětná kompatibilita malých uživatelských evaluátorů
+                            self.semantic_evaluator.evaluate(branch_state.lexicon)
+                        hit_count = self._record_changed_words(
+                            branch_state,
+                            before,
+                            event.year,
+                            "semantic_shift",
+                            "semantic change",
+                        )
+                        if self.graph_builder:
+                            self.graph_builder.add_event(
+                                "semantics", event.year, event.branch_id, hit_count=hit_count
+                            )
+
+            elif isinstance(event, SemanticChangeEvent):
+                branch_state = states.get(event.branch_id)
+                if branch_state is None:
+                    continue
+                self.semantic_history.start(
+                    branch_state,
+                    event,
+                    push,
+                    _PRIO_SEMANTICS,
+                    self._record_changed_words,
+                    self._word_versions,
+                    self.graph_builder,
+                )
+
+            elif isinstance(event, SemanticChangeSpreadEvent):
+                branch_state = states.get(event.branch_id)
+                if branch_state is not None:
+                    self.semantic_history.spread(
                         branch_state,
-                        before,
-                        event.year,
-                        "semantic_shift",
-                        "semantic change",
+                        event,
+                        self._record_changed_words,
+                        self._word_versions,
+                        self.graph_builder,
                     )
-                    if self.graph_builder:
-                        self.graph_builder.add_event(
-                            "semantics", event.year, event.branch_id, hit_count=hit_count
-                        )
 
             elif isinstance(event, MorphologyEvent):
                 branch_state = states.get(event.branch_id)
@@ -896,6 +940,7 @@ class EvolutionSimulator:
             year,
             node_id,
             sorted(word.polysemy),
+            lineage_id=word.lineage_id,
             ipa_prosodic=self.mapper.render_word_prosodic(word),
             stress_index=word.stress_index,
             long_nuclei=sorted(word.long_nuclei),
@@ -917,6 +962,7 @@ class EvolutionSimulator:
         origin_type: str,
         rule: str,
     ) -> None:
+        word.lineage_id = word.lineage_id or old_id
         word.parent_word_id = old_id
         word.id = self._deterministic_word_id(
             "version", old_id, node_id, str(year), origin_type, rule
@@ -951,6 +997,7 @@ class EvolutionSimulator:
                     str(new_index),
                 )
                 new_index += 1
+                word.lineage_id = word.lineage_id or word.id
                 changed += 1
                 self._record_word(word, year, state.node_id)
                 if self.graph_builder and word.parent_word_id:
