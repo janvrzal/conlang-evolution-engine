@@ -10,6 +10,8 @@ pytest.importorskip("fastapi")
 from cee.api.ports import ENGINE_SIGNATURE, find_free_port, is_port_free  # noqa: E402
 from cee.api.server import (  # noqa: E402
     DynamicSimulateRequest,
+    ProtolangRequest,
+    generate_protolang,
     health_check,
     run_dynamic_simulation,
 )
@@ -33,6 +35,19 @@ def localni_uloziste_simulace(tmp_path, monkeypatch):
 def test_health_nese_podpis_enginu():
     """Podle `engine` pozná frontend CEE od jiné aplikace na stejném portu."""
     assert health_check()["engine"] == ENGINE_SIGNATURE
+
+
+def test_vychozi_protolexikon_je_kuratorovane_jadro_a_prijme_vlastni_slovo():
+    """Nový projekt nesmí tiše vytvořit několik tisíc položek z CLICS4."""
+    result = generate_protolang(
+        ProtolangRequest(custom_concepts=["skyship", "moonstone"])
+    )
+
+    concepts = {word["id"] for word in result["words"]}
+    assert result["source"] == "Swadeshovo jádro + rozšířené koncepty"
+    assert "water" in concepts
+    assert {"skyship", "moonstone"} <= concepts
+    assert 100 < len(concepts) < 250
 
 
 def test_find_free_port_vrati_navazatelny_port():
@@ -121,6 +136,28 @@ def test_dynamicka_topologie_respektuje_map_i_primo(monkeypatch):
     kanonicky_biome = kanonicky.node_configs["hory"]["map"]["biome"]
 
     assert plochy_biome == kanonicky_biome == "hory"
+
+
+def test_simulace_odmitne_neplatnou_referenci_pred_spustenim():
+    """Poškozená topologie nesmí propadnout až do simulátoru."""
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc_info:
+        run_dynamic_simulation(
+            DynamicSimulateRequest(
+                topology_data={
+                    "snapshots": [{
+                        "year": 0,
+                        "nodes": [{"id": "proto"}],
+                        "edges": [{"source": "proto", "target": "missing", "type": "straight"}],
+                    }],
+                },
+                proto_lexicon=PROTO,
+                semantics="",
+            )
+        )
+    assert exc_info.value.status_code == 422
+    assert "neexistující ID: missing" in str(exc_info.value.detail)
 
 
 def test_casova_osa_zachova_dedictvi_jen_v_okamziku_odstepeni(monkeypatch):
@@ -250,11 +287,103 @@ def test_skutecna_simulace_pres_api_ulozi_casovy_rez_a_export(monkeypatch, tmp_p
     exported = runs.export_run("integration")
     assert len(at_start["words"]) == len(PROTO)
     assert len(at_end["words"]) == len(PROTO)
-    assert exported["schema_version"] == 2
+    assert exported["schema_version"] == 3
     assert exported["events"]
+    assert "child" in exported["artifacts"]["grammars"]
     trace = runs.get_word_trace("integration", at_end["words"][0]["id"])
     assert trace["status"] == "success"
     assert trace["trace"]
+
+    grammar = runs.get_grammar("integration", "child")
+    metrics = runs.get_run_metrics("integration")
+    rules = runs.get_edge_rules("integration", "child")
+    assert grammar["grammar_md"].startswith("# Gramatika jazyka child")
+    assert "sound_changes" in metrics["metrics"]
+    assert rules["status"] == "success"
+
+
+def test_e2e_semanticka_varianta_projde_kontaktem_az_do_exportu(monkeypatch, tmp_path):
+    """UI payload → sémantika → kontakt → časový řez → export bez mocku."""
+    from cee.api import runs
+
+    store = FileGenealogyStore(tmp_path / "semantic-contact")
+    monkeypatch.setattr("cee.api.server.get_genealogy_store", lambda: store)
+    monkeypatch.setattr("cee.api.runs.get_genealogy_store", lambda: store)
+    req = DynamicSimulateRequest(
+        topology_data={
+            "snapshots": [
+                {
+                    "year": 0,
+                    "nodes": [
+                        {"id": "proto", "data": {"isProto": True, "year": 0}},
+                        {"id": "source", "data": {"year": 0}},
+                        {"id": "target", "data": {"year": 0}},
+                    ],
+                    "edges": [
+                        {"source": "proto", "target": "source", "type": "straight", "data": {}},
+                        {"source": "proto", "target": "target", "type": "straight", "data": {}},
+                    ],
+                },
+                {
+                    "year": 367,
+                    "nodes": [
+                        {"id": "proto", "data": {"isProto": True, "year": 0}},
+                        {"id": "source", "data": {"year": 0}},
+                        {"id": "target", "data": {"year": 0}},
+                    ],
+                    "edges": [
+                        {"source": "source", "target": "target", "type": "contact", "data": {"calqueRate": 1.0}},
+                    ],
+                },
+            ]
+        },
+        proto_lexicon=[{"id": "sun", "ipa": "sula", "frequency": 1.0}],
+        semantics="",
+        years=400,
+        run_id="semantic-contact",
+        empirical_phonology=False,
+    )
+
+    assert run_dynamic_simulation(req)["status"] == "success"
+    at_year = runs.get_language("semantic-contact", "target", year=400)
+    exported = runs.export_run("semantic-contact")
+
+    assert at_year["words"]
+    assert any(event["kind"] == "semantic_change_started" for event in exported["events"])
+    assert any(event["kind"] == "semantic_contact_variant" for event in exported["events"])
+    assert any(event["kind"] == "contact" for event in exported["events"])
+
+
+def test_strankovany_slovnik_filtruje_a_omezi_odpoved(monkeypatch, tmp_path):
+    """Detail jazyka nesmí kvůli jednomu pohledu posílat celý lexikon."""
+    from cee.api import runs
+    from cee.engine.graph_builder import GraphBuilder
+
+    store = FileGenealogyStore(tmp_path / "paged-run")
+    graph = GraphBuilder()
+    for index in range(6):
+        graph.add_word(
+            f"word-{index}",
+            "TREE" if index < 2 else f"CONCEPT-{index}",
+            "tara" if index < 2 else f"form-{index}",
+            0,
+            "proto",
+                [],
+            grammatical_features={
+                "lexical.register": "ritual" if index % 2 else "ordinary",
+                "social.group": "city" if index < 3 else "rural",
+            },
+        )
+    store.save("paged", graph)
+    monkeypatch.setattr("cee.api.runs.get_genealogy_store", lambda: store)
+
+    result = runs.get_language_page("paged", "proto", limit=2, community="city")
+
+    assert result["total"] == 3
+    assert len(result["words"]) == 2
+    assert result["next_offset"] == 2
+    assert result["facets"]["homonym_forms"] == ["tara"]
+    assert result["facets"]["synonym_concepts"] == ["TREE"]
 
 
 def test_revize_pokryva_soucasne_endpointy():

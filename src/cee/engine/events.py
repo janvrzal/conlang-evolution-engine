@@ -5,8 +5,8 @@ zaměřený na pořadí a účinky událostí. Události jsou záměrně malé a
 vlastní chování: historická pravidla zůstávají v `rules.py`.
 """
 
-from dataclasses import dataclass
-from typing import Dict, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
 
 from cee.engine.rules import Rule
 
@@ -41,6 +41,8 @@ class SoundChangeEvent:
     applicable_words: int = 0
     frequency_coverage: float = 0.0
     contrast_retention: float = 1.0
+    functional_load: float = 0.0
+    paradigm_retention: float = 1.0
     innovation_group: Optional[str] = None
     innovation_class: Optional[str] = None
 
@@ -73,6 +75,10 @@ class ContactEvent:
     prestige: float = 1.0
     calque_rate: float = 0.0
     adapt: bool = False
+    layer: str = "folk"
+    transfer_morphology: bool = False
+    resolve_homophony: bool = False
+    construction_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -103,6 +109,7 @@ class SemanticChangeEvent:
     mechanism_reason: str = "untyped relation"
     context_pressure: float = 1.0
     context_reason: str = "no configured communicative pressure"
+    innovation_group: Optional[str] = None
     introduced: bool = False
 
 
@@ -132,7 +139,9 @@ class LexicalEvent:
 class SocialEvent:
     year: int
     branch_id: str
-    changes: Dict[str, float]
+    changes: Dict[str, Any]
+    #: Volitelná stopa autorské události, ze které tlak pochází.
+    history: Dict[str, object] | None = None
 
 
 @dataclass

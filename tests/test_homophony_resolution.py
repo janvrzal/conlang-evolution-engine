@@ -1,4 +1,5 @@
 from cee.core.models import Inventory, Lexicon, State
+from cee.engine.lexicon import LexicalEvaluator
 from cee.engine.graph_builder import GraphBuilder
 from cee.engine.simulator import EvolutionSimulator
 from cee.engine.topology import EvolutionGraph, VerticalEdge
@@ -66,3 +67,40 @@ def test_legitimni_strategie_homofonie_jsou_casovane_a_dohledatelne(mapper):
     pending = [event for event in builder.events if event.get("kind") == "homophony_pending"]
     assert all(event["status"] == "pending" for event in pending)
     assert {"colexification", "semantic_shift", "derivation", "compound"} <= actions
+
+
+def test_recept_slozeniny_je_legitimni_automaticka_reakce_na_homofonii(mapper):
+    import random
+
+    cloud = _word(mapper, "cloud", "pata", 0.95, "The physical world")
+    rain = _word(mapper, "rain", "pata", 0.8, "The physical world")
+    sky = _word(mapper, "sky", "mi", 0.6, "The physical world")
+    water = _word(mapper, "water", "ka", 0.6, "The physical world")
+    state = State("x", Inventory(), Lexicon([cloud, rain, sky, water]))
+    evaluator = LexicalEvaluator(homophony_policy="resolve", homophony_resolution_rate=1.0)
+
+    evaluator.evaluate(state, 100, random.Random(2), render=mapper.render_word)
+
+    resolved = state.lexicon.get_word("rain")
+    assert resolved is not None
+    assert resolved.origin_type == "homophony_compound"
+    assert mapper.render_word(resolved) == "kami"
+
+
+def test_produktivni_afix_je_legitimni_automaticka_reakce_na_homofonii(mapper):
+    import random
+
+    winner = _word(mapper, "stone", "pata", 0.95, "The physical world")
+    loser = _word(mapper, "pebble", "pata", 0.8, "The physical world")
+    affix = _word(mapper, "diminutive", "mi", 0.7, "Grammar")
+    affix.is_grammatical = True
+    affix.grammatical_features["morphology.productivity"] = "0.8"
+    state = State("x", Inventory(), Lexicon([winner, loser, affix]))
+    evaluator = LexicalEvaluator(homophony_policy="resolve", homophony_resolution_rate=1.0)
+
+    evaluator.evaluate(state, 100, random.Random(2), render=mapper.render_word)
+
+    resolved = state.lexicon.get_word("pebble")
+    assert resolved is not None
+    assert resolved.origin_type == "homophony_productive_derivation"
+    assert mapper.render_word(resolved) == "patami"

@@ -91,6 +91,22 @@ def available_suggestions(state: State, target: str) -> list[CompoundSuggestion]
     ]
 
 
+def automatic_suggestions(state: State) -> list[CompoundSuggestion]:
+    """Recepty, které lze bezpečně nabídnout samotnému simulátoru.
+
+    Složenina nenahrazuje existující kořen a nevzniká z neexistujících zdrojů.
+    Tím je automatizace omezená na skutečnou lexikální mezeru; autor může
+    mechanismus kdykoli vypnout přes ``morphology.recipe_compounds``.
+    """
+    return [
+        suggestion
+        for suggestion in all_suggestions()
+        if state.lexicon.get_word(suggestion.target) is None
+        and state.lexicon.get_word(suggestion.head) is not None
+        and state.lexicon.get_word(suggestion.modifier) is not None
+    ]
+
+
 def swadesh_coverage() -> dict[str, list[CompoundSuggestion]]:
     """Úplné pokrytí: prázdný seznam znamená „ponech jako samostatný kořen“."""
     return {concept: suggestions_for(concept) for concept in SWADESH_100}
@@ -98,7 +114,10 @@ def swadesh_coverage() -> dict[str, list[CompoundSuggestion]]:
 
 def apply_suggestion(state: State, suggestion: CompoundSuggestion):
     """Až po výslovném potvrzení vytvoří složeninu existujícím evaluátorem."""
-    return MorphologyEvaluator().compound(state, suggestion.head, suggestion.modifier, suggestion.target)
+    word = MorphologyEvaluator().compound(state, suggestion.head, suggestion.modifier, suggestion.target)
+    if word is not None and word.origin_rule == "compounding":
+        word.origin_rule = f"semantic_recipe:{suggestion.label}"
+    return word
 
 
 def all_suggestions() -> Iterable[CompoundSuggestion]:

@@ -117,6 +117,33 @@ def test_adaptovana_vypujcka_respektuje_cilovy_inventar(mapper):
     assert all(mapper.segment_to_ipa(segment) in target_inventory for segment in loan.segments)
 
 
+def test_obchodni_kontakt_uprednostni_anotovany_obchodni_lexem(mapper):
+    source_trade = mapper.parse_word("coin", "pata")
+    source_trade.grammatical_features["semantic.domains"] = "commerce,money"
+    source_river = mapper.parse_word("river", "kumi")
+    source_river.grammatical_features["semantic.domains"] = "physical world"
+    source = State("source", Inventory(), Lexicon([source_trade, source_river]))
+    target = State("target", Inventory(), Lexicon([mapper.parse_word("water", "maka")]))
+    simulator = EvolutionSimulator(EvolutionGraph(), mapper)
+
+    simulator._apply_contact(source, target, 100, volume=1, domain="trade")
+
+    loan = next(word for word in target.lexicon.words if word.source_id == "source")
+    assert loan.concept_id == "coin"
+
+
+def test_kontaktni_vrstva_oznaci_registr_vypujcky(mapper):
+    source = State("source", Inventory(), Lexicon([mapper.parse_word("prayer", "pata")]))
+    target = State("target", Inventory(), Lexicon([mapper.parse_word("water", "maka")]))
+    simulator = EvolutionSimulator(EvolutionGraph(), mapper)
+
+    simulator._apply_contact(source, target, 100, volume=1, layer="ritual")
+
+    loan = next(word for word in target.lexicon.words if word.source_id == "source")
+    assert loan.grammatical_features["contact.layer"] == "ritual"
+    assert loan.grammatical_features["lexical.register"] == "ritual"
+
+
 def test_paradigma_gramatikalizuje_afix_a_vznika_v_historickem_case(mapper):
     graph = EvolutionGraph(
         node_configs={
@@ -258,6 +285,23 @@ def test_explicitni_trida_a_frekvence_maji_prednost_pred_heuristikou(mapper):
     assert words["water"].grammatical_features["lexical.class"] == "function"
     assert words["water"].frequency == 0.9
     assert words["subject_pronoun"].grammatical_features["lexical.class"] == "content"
+
+
+def test_motivovany_novy_koren_vstoupi_do_synonymni_souteze(mapper):
+    import random
+
+    old = mapper.parse_word("trade", "pata")
+    old.frequency = 0.2
+    material = mapper.parse_word("river", "kumi")
+    state = State("x", Inventory(), Lexicon([old, material]), social={"mobility": 1.0})
+    evaluator = LexicalEvaluator(replacement_rate=1.0, innovation_rate=1.0, innovation_sources={"trade_slang": 1.0})
+
+    replacements = evaluator.evaluate(state, 100, random.Random(5), render=mapper.render_word)
+
+    innovation = next(word for word in replacements if word.concept_id == "trade")
+    assert innovation.origin_type == "lexical_innovation_trade_slang"
+    assert innovation.grammatical_features["lexical.motivation"] == "trade_slang"
+    assert innovation.grammatical_features["lexical.variant_for"] == old.id
 
 
 def test_funkcni_a_obsahove_slovo_bez_spolecne_role_nema_tlak_na_rozliseni(mapper):

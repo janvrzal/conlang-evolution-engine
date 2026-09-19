@@ -118,12 +118,20 @@ class LexicalEvaluator:
         homophony_resolution_rate: float = 1.0,
         homophony_policy: str = "off",
         homophony_strategies: Optional[dict] = None,
+        innovation_rate: float = 0.0,
+        innovation_sources: Optional[dict[str, float]] = None,
     ):
         self.replacement_rate = max(0.0, replacement_rate)
         self.loss_rate = max(0.0, loss_rate)
         self.homophony_resolution_rate = min(1.0, max(0.0, homophony_resolution_rate))
         self.homophony_policy = homophony_policy if homophony_policy in {"off", "audit", "resolve"} else "off"
         self.homophony_strategies = dict(homophony_strategies or {})
+        self.innovation_rate = min(1.0, max(0.0, innovation_rate))
+        self.innovation_sources = {
+            str(source): max(0.0, float(weight))
+            for source, weight in (innovation_sources or {}).items()
+            if str(source)
+        }
         self.decision_engine = ChangeDecisionEngine()
         self.last_homophony_decisions = []
         self.last_competitions: list[dict[str, object]] = []
@@ -160,20 +168,13 @@ class LexicalEvaluator:
             if _is_basic(word) or rng.random() >= rate:
                 continue
 
-            donor = self._donor(active, word, rng)
-            if donor is None:
+            if rng.random() < self.innovation_rate:
+                replacement = self._motivated_root(state, active, word, year, rng, render)
+            else:
+                donor = self._donor(active, word, rng)
+                replacement = self._replacement_from(donor, word, year, "lexical_replacement") if donor else None
+            if replacement is None:
                 continue
-            replacement = copy.deepcopy(donor)
-            replacement.id = str(uuid.uuid4())
-            replacement.parent_word_id = donor.id
-            replacement.concept_id = word.concept_id
-            replacement.polysemy = set()
-            replacement.origin_year = year
-            replacement.origin_type = "lexical_replacement"
-            replacement.origin_rule = "lexical replacement"
-            replacement.source_id = None
-            replacement.frequency = max(0.12, word.frequency * 0.75)
-            replacement.morpheme_boundaries = set(donor.morpheme_boundaries)
             replacement.grammatical_features["lexical.variant_for"] = word.lineage_id or word.id
             replacement.grammatical_features["lexical.stage"] = "introduced"
             replacements.append(replacement)
@@ -216,7 +217,9 @@ class LexicalEvaluator:
                         continue
                     words_by_id = {word.id: word for word in [*state.lexicon.words, *replacements]}
                     winner, loser = words_by_id[decision.winner_id], words_by_id[decision.loser_id]
-                    strategy = self.homophony_strategies.get(loser.concept_id)
+                    strategy = self.homophony_strategies.get(loser.concept_id) or self._automatic_homophony_strategy(
+                        state, loser
+                    )
                     resolved = self._resolve_homophony(state, winner, loser, year, strategy)
                     self.last_homophony_decisions.append(
                         replace(
@@ -248,7 +251,29 @@ class LexicalEvaluator:
                 continue
             innovator = max(innovators, key=lambda word: word.frequency)
             incumbent = max(incumbents, key=lambda word: word.frequency)
-            gain = 0.12 * (0.4 + mobility) * (1.0 - standard)
+            # Standardizace není jen globální brzda: při dostatečné síle
+            # instituce vybere konkrétní nejrozšířenější variantu a označí ji
+            # jako normu. Zbývající varianty mohou dál přežívat, ale soutěží
+            # proti skutečnému standardnímu tvaru.
+            if standard >= 0.6:
+                standard_variant = max(variants, key=lambda word: word.frequency)
+                standard_variant.grammatical_features["lexical.standard_variant"] = "true"
+                standard_variant.frequency = min(1.0, standard_variant.frequency + 0.03 * standard)
+            source_group = innovator.grammatical_features.get("social.group", "").strip()
+            target_group = incumbent.grammatical_features.get("social.group", "").strip()
+            network = 1.0
+            if source_group and target_group and source_group != target_group:
+                source = state.communities.get(source_group)
+                target = state.communities.get(target_group)
+                if source is not None and target is not None:
+                    connection = max(
+                        float(source.links.get(target_group, 0.0)),
+                        float(target.links.get(source_group, 0.0)),
+                        float(source.bilingualism.get(target_group, 0.0)),
+                        float(target.bilingualism.get(source_group, 0.0)),
+                    )
+                    network = 0.25 + 0.75 * connection
+            gain = 0.12 * (0.4 + mobility) * (1.0 - standard) * network
             shift = min(incumbent.frequency, gain * max(0.15, 1.0 - innovator.frequency))
             innovator.frequency = min(1.0, innovator.frequency + shift)
             incumbent.frequency = max(0.01, incumbent.frequency - shift)
@@ -266,6 +291,7 @@ class LexicalEvaluator:
                     "innovator_id": innovator.id,
                     "stage": innovator.grammatical_features["lexical.stage"],
                     "resolved": resolved,
+                    "network_spread": round(network, 6),
                 }
             )
 
@@ -311,6 +337,34 @@ class LexicalEvaluator:
                     derived.origin_type = "homophony_derivation"
                     derived.origin_rule = "homophony:derivation"
                     return kind
+            if kind == "productive_derivation":
+                affix = state.lexicon.get_word(str(strategy.get("affix", "")))
+                # Kořen je právě poražený lexém. Přípona/předpona je však
+                # samostatně doložený produktivní morfém, ne nouzový segment.
+                if affix is None or not affix.is_grammatical:
+                    return None
+                productivity = float(affix.grammatical_features.get("morphology.productivity", "0"))
+                if productivity <= 0:
+                    return None
+                use_prefix = state.affixation_strategy == "prefix"
+                left, right = (affix, loser) if use_prefix else (loser, affix)
+                derived = copy.deepcopy(loser)
+                derived.id = str(uuid.uuid4())
+                derived.parent_word_id = loser.id
+                derived.active = True
+                derived.segments = copy.deepcopy(left.segments) + copy.deepcopy(right.segments)
+                derived.morpheme_boundaries = {len(left.segments)}
+                derived.origin_year = year
+                derived.origin_type = "homophony_productive_derivation"
+                derived.origin_rule = "homophony:productive_derivation"
+                derived.grammatical_features = {
+                    **derived.grammatical_features,
+                    "morphology.affix_id": affix.id,
+                    "lexical.homophony_resolution": "productive_derivation",
+                }
+                derived.ensure_stress()
+                state.lexicon.words.append(derived)
+                return kind
             if kind == "compound":
                 compound = morphology.compound(
                     state,
@@ -328,6 +382,40 @@ class LexicalEvaluator:
         return None
 
     @staticmethod
+    def _automatic_homophony_strategy(state: State, loser: Word) -> Optional[dict[str, str]]:
+        """Najde pouze takovou reakci, která už má doložený recept a kořeny.
+
+        Automatika zde nesmí maskovat nevysvětlitelný zásah. Použije jen
+        kurátorovanou sémantickou složeninu se dvěma živými kořeny nebo už
+        produktivní gramatický afix. Vše ostatní zůstává ve frontě pro autora
+        nebo explicitní historickou strategii.
+        """
+        from cee.semantics.swadesh import available_suggestions
+
+        suggestions = available_suggestions(state, loser.concept_id)
+        if suggestions:
+            choice = suggestions[0]
+            return {"kind": "compound", "head": choice.head, "modifier": choice.modifier}
+
+        productive_affixes = [
+            word for word in state.lexicon.words
+            if word.active
+            and word.is_grammatical
+            and word.id != loser.id
+            and float(word.grammatical_features.get("morphology.productivity", "0")) > 0
+        ]
+        if productive_affixes:
+            affix = max(
+                productive_affixes,
+                key=lambda word: (
+                    float(word.grammatical_features.get("morphology.productivity", "0")),
+                    word.frequency,
+                ),
+            )
+            return {"kind": "productive_derivation", "affix": affix.concept_id}
+        return None
+
+    @staticmethod
     def _replacement_from(donor: Word, target: Word, year: int, origin_type: str) -> Word:
         replacement = copy.deepcopy(donor)
         replacement.id = str(uuid.uuid4())
@@ -341,6 +429,58 @@ class LexicalEvaluator:
         replacement.frequency = max(0.12, target.frequency * 0.75)
         replacement.morpheme_boundaries = set(donor.morpheme_boundaries)
         return replacement
+
+    def _motivated_root(
+        self,
+        state: State,
+        active: Sequence[Word],
+        target: Word,
+        year: int,
+        rng: random.Random,
+        render: Optional[Callable[[Word], str]],
+    ) -> Optional[Word]:
+        """Vytvoří nový kořen z fonémů daného jazyka a doloží jeho motivaci.
+
+        Nejde o náhodný prefix ani o kopii cizího slova. Nový lexém skládá
+        vlastní segmenty jazyka v rozsahu běžných kořenů a vstupuje do stejné
+        synonymní soutěže jako výpůjčka či opis. Zdroj motivace je explicitně
+        auditovatelný a lze ho vážit konfigurací.
+        """
+        segments = [segment for word in active for segment in word.segments]
+        if len(segments) < 2:
+            return None
+        sources = self.innovation_sources or {
+            "expressive": 0.35 + (1.0 - float(state.social.get("standardization", 0.0))) * 0.25,
+            "child_speech": 0.2,
+            "trade_slang": 0.1 + float(state.social.get("mobility", 0.5)) * 0.3,
+            "local_substrate": 0.15 + float(state.map.get("contact_intensity", 0.0)) * 0.2,
+        }
+        names = [name for name, weight in sources.items() if weight > 0]
+        if not names:
+            return None
+        source = rng.choices(names, weights=[sources[name] for name in names], k=1)[0]
+        # Dvouslabičný až krátký tříslabičný kořen: délka se opírá o současný
+        # lexikon, ale nikdy neprodukuje jednosegmentový artefakt.
+        lengths = [max(2, min(6, len(word.segments))) for word in active if word.segments]
+        length = rng.choice(lengths) if lengths else 2
+        existing_forms = {render(word) for word in active} if render else set()
+        for _ in range(12):
+            candidate = Word(
+                concept_id=target.concept_id,
+                segments=[copy.deepcopy(rng.choice(segments)) for _ in range(length)],
+                origin_year=year,
+                frequency=max(0.12, target.frequency * 0.65),
+                parent_word_id=target.id,
+                origin_type=f"lexical_innovation_{source}",
+                origin_rule=f"motivated_root:{source}",
+                grammatical_features={
+                    "lexical.motivation": source,
+                    "lexical.innovation_year": str(year),
+                },
+            )
+            if render is None or render(candidate) not in existing_forms:
+                return candidate
+        return None
 
     @staticmethod
     def _disambiguation_markers(words: Iterable[Word]):

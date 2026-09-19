@@ -42,6 +42,7 @@ from cee.metrics.macro_calibration import calibrate_macro_grid, deletion_diagnos
 from cee.metrics.outcome_search import load_target_group, search_macro_parameters
 from cee.metrics.outcomes import build_outcome_profile
 from cee.metrics.protolexicon import extract_protolexicon, write_protolexicon
+from cee.metrics.empirical_validation import RetentionCorpus, aggregate_reports, build_report, write_report
 from cee.metrics.retention import LexicalRetention
 from cee.metrics.schema_profiles import save_local_schema_profile
 from cee.metrics.validation import ValidationMetric
@@ -57,10 +58,67 @@ from cee.semantics.graph import SemanticGraph
 app = typer.Typer(help="Conlang Evolution Engine CLI", no_args_is_help=True)
 phonology_app = typer.Typer(help="Správa volitelných empirických fonologických dat.")
 calibration_app = typer.Typer(help="Tvorba auditovatelných kalibrací generátoru.")
+diagnostic_app = typer.Typer(help="Reprodukovatelná diagnostika lexika a sémantiky.")
 app.add_typer(phonology_app, name="phonology")
 app.add_typer(calibration_app, name="calibrate")
+app.add_typer(diagnostic_app, name="diagnostic")
 
 PHOIBLE_REPOSITORY_URL = "https://github.com/phoible/dev.git"
+
+
+@diagnostic_app.command("report")
+def empirical_diagnostic_report(
+    topology_yaml: Path = typer.Option(..., exists=True, help="Vstupní topologie běhu."),
+    proto_csv: Path = typer.Option(..., exists=True, help="Vstupní protolexikon."),
+    out_dir: Path = typer.Option(..., help="Složka pro JSON, CSV a Markdown report."),
+    seed: int = typer.Option(42, help="Fixní seed běhu."),
+    preset_yaml: Path | None = typer.Option(None, exists=True, help="Volitelný preset generátoru."),
+    semantics_yaml: Path | None = typer.Option(None, exists=True, help="Volitelný sémantický graf."),
+    retention_corpus: Path | None = typer.Option(None, exists=True, help="Samostatný retenční korpus CSV/TSV."),
+    retention_manifest: Path | None = typer.Option(None, exists=True, help="Provenance manifest retenčního korpusu."),
+):
+    """Spustí scénář a uloží auditovatelnou diagnostiku; nemění parametry enginu."""
+    mapper = FeatureMapper()
+    lexicon = load_lexicon_from_csv(str(proto_csv), mapper)
+    concepts = LexicalRetention.diagnostic_from(lexicon)
+    graph = YamlParser.parse_topology(str(topology_yaml))
+    preset = YamlParser.parse_preset(str(preset_yaml)) if preset_yaml else None
+    from cee.engine.graph_builder import GraphBuilder
+    from cee import __version__
+
+    builder = GraphBuilder()
+    states = run_simulation(
+        lexicon, graph, mapper,
+        SimulationConfig(preset=preset, semantics_path=str(semantics_yaml) if semantics_yaml else None, seed=seed),
+        graph_builder=builder,
+    )
+    corpus = RetentionCorpus.from_csv(retention_corpus, retention_manifest) if retention_corpus else None
+    inputs: dict[str, Path] = {"topology": topology_yaml, "protolexicon": proto_csv}
+    if preset_yaml:
+        inputs["preset"] = preset_yaml
+    if semantics_yaml:
+        inputs["semantic_graph"] = semantics_yaml
+    if retention_corpus:
+        inputs["retention_corpus"] = retention_corpus
+    if retention_manifest:
+        inputs["retention_manifest"] = retention_manifest
+    report = build_report(states, concepts, seed=seed, simulator_version=__version__, inputs=inputs,
+                          events=builder.events, corpus=corpus)
+    json_path, csv_path, md_path = write_report(report, out_dir)
+    typer.echo(f"Hotovo: {json_path}\n{csv_path}\n{md_path}")
+
+
+@diagnostic_app.command("aggregate")
+def aggregate_empirical_diagnostic_reports(
+    reports: list[Path] = typer.Option(..., exists=True, help="JSON reporty z různých seedů; lze opakovat."),
+    out: Path = typer.Option(..., help="Agregovaný JSON report."),
+):
+    """Agreguje jen běhy se shodným explicitním konceptovým seznamem."""
+    loaded = [json.loads(path.read_text(encoding="utf-8")) for path in reports]
+    aggregate = aggregate_reports(loaded)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(aggregate, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    typer.echo(f"Hotovo: {out} ({len(loaded)} běhů).")
 
 
 @app.callback()

@@ -2,15 +2,15 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Select } from '$lib/components/ui/select';
 	import { t } from '$lib/i18n.svelte';
-	import { GitCommitHorizontal, MousePointer2, Trash2 } from 'lucide-svelte';
+	import { GitCommitHorizontal, MousePointer2, Route, Trash2 } from 'lucide-svelte';
 
 	let {
-		activeTool = $bindable<'interact' | 'relationship'>(),
+		activeTool = $bindable<'interact' | 'relationship' | 'route'>(),
 		relationshipType = $bindable<'inheritance' | 'contact'>(),
 		selectedEdgeId = null,
 		onDeleteEdge
 	}: {
-		activeTool: 'interact' | 'relationship';
+		activeTool: 'interact' | 'relationship' | 'route';
 		relationshipType: 'inheritance' | 'contact';
 		selectedEdgeId?: string | null;
 		onDeleteEdge: () => void;
@@ -28,6 +28,15 @@
 		title={t('moveHint')}
 	>
 		<MousePointer2 class="w-4 h-4 mr-2" />{t('interaction')}
+	</Button>
+	<Button
+		variant={activeTool === 'route' ? 'default' : 'ghost'}
+		size="sm"
+		class="px-3"
+		onclick={() => (activeTool = 'route')}
+		title="Klikáním do mapy kreslí body vybrané obchodní trasy"
+	>
+		<Route class="w-4 h-4 mr-2" />Trasa
 	</Button>
 	<Button
 		variant={activeTool === 'relationship' ? 'default' : 'ghost'}

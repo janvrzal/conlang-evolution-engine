@@ -6,9 +6,10 @@ HTTP požadavky na volání služby a zpátky na JSON.
 """
 
 import os
+import subprocess
 import uuid
 from dataclasses import asdict
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,12 +18,15 @@ from pydantic import BaseModel
 from cee import __version__, projects
 from cee.api.ports import API_REVISION, DEFAULT_PORT, ENGINE_SIGNATURE
 from cee.api.runs import router as run_router
+from cee.engine.empirical import phoible_status, update_phoible_cache
 from cee.engine.parser import YamlParser
-from cee.engine.topology import ContactEdge, EvolutionGraph, VerticalEdge
+from cee.engine.topology import ContactEdge, EvolutionGraph, HistoricalEventSpec, Polity, TradeRoute, VerticalEdge
 from cee.metrics.schema_profiles import available_schema_profiles
+from cee.project_schema import validate_simulation_topology
 from cee.pipeline import (
     DEFAULT_SEED,
     SimulationConfig,
+    build_branch_views,
     load_lexicon_from_records,
     resolve_semantics_path,
     run_simulation,
@@ -68,6 +72,21 @@ def list_schema_profiles():
     return [asdict(profile) for profile in available_schema_profiles()]
 
 
+@app.get("/api/phonology/status")
+def get_phonology_status():
+    """Stav volitelné lokální PHOIBLE cache; nikdy nic nestahuje."""
+    return phoible_status()
+
+
+@app.post("/api/phonology/update-data")
+def update_phonology_data():
+    """Výslovně spuštěná jediná síťová operace fonologické vrstvy."""
+    try:
+        return update_phoible_cache()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise HTTPException(status_code=502, detail=f"Aktualizace PHOIBLE selhala: {exc}") from exc
+
+
 class SimulateRequest(BaseModel):
     topology: str = "scenario_split.yaml"
     proto_csv: str = "fantasy_v1.csv"
@@ -83,6 +102,11 @@ class ProtolangRequest(BaseModel):
     consonants: str = "p t k m n s l r"
     vowels: str = "a e i o u"
     syllable_structure: str = "(C)V(C)"
+    #: Kurátorované jádro je výchozí; tisíce položek z CLICS4 jsou vědomá
+    #: rozšiřující volba, ne nečekaná cena za založení projektu.
+    vocabulary_profile: Literal["core", "full"] = "core"
+    #: Světově specifické významy, které se přidají k jádru daného projektu.
+    custom_concepts: list[str] = []
 
 
 class DynamicSimulateRequest(BaseModel):
@@ -103,10 +127,13 @@ class DynamicSimulateRequest(BaseModel):
     schema_profile_id: str = "heuristic-default"
     #: Prázdné ID založí nový běh; opakování se stejným ID nahradí jen jeho data.
     run_id: Optional[str] = None
+    #: Jednoduché ovladače worldbuildera, uložené spolu s projektem.
+    calibration: dict = {}
 
 
 def _config(req, preset_path: str) -> SimulationConfig:
     preset = YamlParser.parse_preset(preset_path) if preset_path else None
+    calibration = getattr(req, "calibration", {}) or {}
     return SimulationConfig(
         preset=preset,
         semantics_path=req.semantics or None,
@@ -114,27 +141,51 @@ def _config(req, preset_path: str) -> SimulationConfig:
         years=getattr(req, "years", None),
         use_empirical_phonology=getattr(req, "empirical_phonology", False),
         schema_profile_id=getattr(req, "schema_profile_id", "heuristic-default"),
+        macro_overrides={
+            key: float(calibration[key])
+            for key in ("sound_changes_per_millennium", "change_spread_years", "isolation")
+            if key in calibration
+        },
+        lexical_overrides={
+            key: float(calibration[key])
+            for key in ("replacement_rate", "loss_rate", "homophony_resolution_rate")
+            if key in calibration
+        },
     )
 
 
 @app.post("/api/protolang/generate")
 def generate_protolang(req: ProtolangRequest):
+    from cee.data.core_vocabulary import core_concepts
     from cee.engine.protolang import ProtolangGenerator
 
     generator = ProtolangGenerator()
-    graph_path = resolve_semantics_path(None)
-    graph = SemanticGraph(graph_path) if graph_path else None
-    concepts = graph.lexical_entries() if graph else None
+    if req.vocabulary_profile == "full":
+        graph_path = resolve_semantics_path(None)
+        graph = SemanticGraph(graph_path) if graph_path else None
+        concepts = graph.lexical_entries() if graph else core_concepts()
+        # Vlastní významy nesmí plný korpus zahodit; deduplikace chrání i
+        # případ, kdy už je shodný koncept součástí CLICS4.
+        known = {str(concept.get("id", "")).lower() for concept in concepts}
+        concepts.extend(
+            concept
+            for concept in core_concepts(req.custom_concepts)
+            if str(concept["id"]).lower() not in known
+        )
+        source = (
+            "CLICS4 + DatSemShift (plný korpus)"
+            if graph_path and graph_path.endswith(".graphml")
+            else "základní slovní zásoba (plný korpus není lokálně dostupný)"
+        )
+    else:
+        concepts = core_concepts(req.custom_concepts)
+        source = "Swadeshovo jádro + rozšířené koncepty"
     words = generator.generate_lexicon(req.consonants, req.vowels, req.syllable_structure, concepts)
     return {
         "status": "success",
         "words": words,
         "concept_count": sum(1 + len(word["polysemy"]) for word in words),
-        "source": (
-            "CLICS4 + DatSemShift"
-            if graph_path and graph_path.endswith(".graphml")
-            else "zabalený sémantický mock"
-        ),
+        "source": source,
     }
 
 
@@ -177,7 +228,11 @@ def put_project(project_id: str, payload: ProjectPayload):
 
     project.name = payload.name
     project.data = payload.data
-    projects.save(project)
+    try:
+        projects.save(project)
+    except projects.ProjectError as exc:
+        # Neplatná reference je chyba vstupu uživatele, ne selhání serveru.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"status": "success", "project": project.as_dict()}
 
 
@@ -214,10 +269,50 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
     """Spustí simulaci nad celou časovou osou sestavenou v grafovém editoru."""
     from cee.pipeline import get_feature_mapper
 
+    try:
+        # Simulátor má stejnou bránu jako persistentní projekt. Transportní
+        # aliasy se zde jen ověří a přeloží do V3, nikdy se neposílají dál
+        # jako nestrukturovaný vstup bez kontroly.
+        validate_simulation_topology(req.topology_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Neplatná topologie simulace: {exc}") from exc
+
     mapper = get_feature_mapper()
     lexicon = load_lexicon_from_records(req.proto_lexicon, mapper)
 
     graph = EvolutionGraph()
+    for raw in req.topology_data.get("polities", []):
+        if isinstance(raw, dict) and raw.get("id"):
+            graph.polities[str(raw["id"])] = Polity(
+                id=str(raw["id"]), name=str(raw.get("name", raw["id"])),
+                territory=list(raw.get("territory", [])), institutions=dict(raw.get("institutions", {})),
+                language_ids=[str(value) for value in raw.get("languageIds", [])],
+            )
+    for raw in req.topology_data.get("tradeRoutes", []):
+        if isinstance(raw, dict) and raw.get("id"):
+            end_year = raw.get("endYear")
+            graph.trade_routes.append(TradeRoute(
+                str(raw["id"]), str(raw.get("kind", "land")),
+                float(raw.get("intensity", 0.5)),
+                [str(value) for value in raw.get("languageIds", [])],
+                int(raw.get("startYear", 0)),
+                int(end_year) if end_year not in (None, "") else None,
+                [
+                    {"x": float(point["x"]), "y": float(point["y"])}
+                    for point in raw.get("waypoints", [])
+                    if isinstance(point, dict) and "x" in point and "y" in point
+                ],
+            ))
+    for raw in req.topology_data.get("historicalEvents", []):
+        if isinstance(raw, dict) and raw.get("id"):
+            effects = dict(raw.get("effects", {}))
+            if raw.get("kind") == "rename":
+                effects["name_change"] = {
+                    "endonym": str(raw.get("endonym", "")).strip(),
+                    "exonym": str(raw.get("exonym", "")).strip(),
+                    "reason": "political_event",
+                }
+            graph.historical_events.append(HistoricalEventSpec(str(raw["id"]), str(raw.get("kind", "migration")), int(raw.get("startYear", 0)), int(raw.get("duration", 0)), [str(value) for value in raw.get("targetLanguageIds", [])], raw.get("targetPolityId"), effects))
 
     snapshots = req.topology_data.get("snapshots")
     if snapshots:
@@ -232,7 +327,11 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
                 node_id = node["id"]
                 data = node.get("data", {})
                 if node_id not in graph.node_configs:
-                    graph.node_configs[node_id] = {**data, "map": data}
+                    graph.node_configs[node_id] = {
+                        **data,
+                        "map": data,
+                        "position": dict(node.get("position", {})),
+                    }
 
             for edge in snapshot.get("edges", []):
                 if edge.get("type") == "contact":
@@ -259,6 +358,10 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
                             prestige=float(data.get("prestige", 1.0)),
                             calque_rate=float(data.get("calqueRate", 0.0)),
                             adapt=bool(data.get("adapt", True)),
+                            layer=str(data.get("layer", "folk")),
+                            transfer_morphology=bool(data.get("transferMorphology", False)),
+                            resolve_homophony=bool(data.get("resolveHomophony", False)),
+                            construction_ids=[str(value) for value in data.get("constructionIds", [])],
                         )
                     )
                 else:
@@ -290,6 +393,10 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
                         prestige=float(edge.get("prestige", 1.0)),
                         calque_rate=float(edge.get("calque_rate", 0.0)),
                         adapt=bool(edge.get("adapt", False)),
+                        layer=str(edge.get("layer", "folk")),
+                        transfer_morphology=bool(edge.get("transfer_morphology", False)),
+                        resolve_homophony=bool(edge.get("resolve_homophony", False)),
+                        construction_ids=[str(value) for value in edge.get("construction_ids", [])],
                     )
                 )
             else:
@@ -314,7 +421,36 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
     # zdroj pro větvení. Musí tedy dostat vlastní historii zvukových změn.
     cfg.evolve_root = True
 
-    run_simulation(lexicon, graph, mapper, cfg, builder)
+    final_states = run_simulation(lexicon, graph, mapper, cfg, builder)
+    branches = build_branch_views(final_states, mapper, [word["id"] for word in req.proto_lexicon])
+    sound_events = [event for event in builder.events if event.get("kind") == "sound_change"]
+    innovation_events: dict[str, dict] = {}
+    for index, event in enumerate(sound_events):
+        # Fáze jedné šířící se změny nejsou nové inovace. Ruční pravidla,
+        # která change_id nemají, zůstávají samostatné historické události.
+        change_id = str(
+            event.get(
+                "change_id",
+                f"manual:{event.get('language_id')}:{event.get('year')}:{event.get('rule')}:{index}",
+            )
+        )
+        innovation_events.setdefault(change_id, event)
+    schemas: dict[str, int] = {}
+    environments: dict[str, int] = {"unclassified": len(innovation_events)}
+    for event in innovation_events.values():
+        schema_id = str(event.get("schema_id", "manual"))
+        schemas[schema_id] = schemas.get(schema_id, 0) + 1
+    builder.artifacts = {
+        "grammars": {node_id: branch.grammar_md for node_id, branch in branches.items()},
+        "metrics": {
+            "sound_changes": len(innovation_events),
+            "changes_per_millennium": len(innovation_events) * 1000 / max(1, req.years),
+            "sound_change_phases": len(sound_events),
+            "schemas": schemas,
+            "environments": environments,
+            "deleted_segments": sum(int(event.get("deleted_segments", 0) or 0) for event in sound_events),
+        },
+    }
     run_id = req.run_id or uuid.uuid4().hex
     store = get_genealogy_store()
     store.save(run_id, builder)

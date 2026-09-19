@@ -64,7 +64,7 @@ class Word:
     #: inovaci najít i poté, co mezitím proběhla jiná změna nebo odštěpení.
     #: Je na konci kvůli kompatibilitě existujících pozičních konstruktorů.
     lineage_id: Optional[str] = None
-    #: Tón přiřazený slabičnému jádru (index segmentu -> H/L/R). Drží se mimo
+    #: Tón přiřazený slabičnému jádru (index segmentu -> H/L/M/R/F). Drží se mimo
     #: PanPhonovy segmentové rysy, protože tón není samostatný segment.
     tones: Dict[int, str] = field(default_factory=dict)
 
@@ -76,7 +76,7 @@ class Word:
             parsed: Dict[int, str] = {}
             for item in self.grammatical_features["phonology.tones"].split(","):
                 index, separator, tone = item.partition(":")
-                if separator and index.isdigit() and tone in {"H", "L", "R"}:
+                if separator and index.isdigit() and tone in {"H", "L", "M", "R", "F"}:
                     parsed[int(index)] = tone
             self.tones = parsed
         nuclei = [
@@ -158,6 +158,16 @@ class SpeechCommunity:
     domains: Set[str] = field(default_factory=set)
     kind: str = "social"
     variety_id: Optional[str] = None
+    #: Vazby k jiným komunitám (0–1); lehká síť šíření, ne simulace osob.
+    links: Dict[str, float] = field(default_factory=dict)
+    #: Podíl/intenztita bilingvního překryvu s jinou komunitou. Drží se
+    #: odděleně od mobility, protože může přenášet inovaci i bez migrace.
+    bilingualism: Dict[str, float] = field(default_factory=dict)
+    urbanity: float = 0.5
+    generation: str = "mixed"
+    #: Postup kohorty v rámci lehkého modelu (0–1); po obnově vzniká nová
+    #: mladá kohorta, nejde o evidenci jednotlivých mluvčích.
+    cohort_age: float = 0.0
 
 
 @dataclass
@@ -190,6 +200,9 @@ class State:
     population: PopulationProfile = field(default_factory=PopulationProfile)
     communities: Dict[str, SpeechCommunity] = field(default_factory=dict)
     varieties: Dict[str, VarietyState] = field(default_factory=dict)
+    #: Přijetí rozběhnutých významových inovací po komunitách. Nedrží kopii
+    #: lexikonu dialektu; zaznamenává pouze podíl uživatelů konkrétní varianty.
+    semantic_adoptions: Dict[str, Dict[str, float]] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.map is None:
@@ -203,7 +216,11 @@ class State:
             self.social = {
                 key: max(0.0, min(1.0, float(value)))
                 for key, value in raw_social.items()
-                if key in {"prestige", "mobility", "literacy", "standardization", "population"}
+                if key in {
+                    "prestige", "mobility", "literacy", "standardization", "population",
+                    "isolation", "contact_intensity", "institutional_pressure",
+                    "register_pressure", "urbanity", "receptivity",
+                }
             }
         population = self.map.get("population", {})
         if isinstance(population, dict):
@@ -236,6 +253,11 @@ class State:
                     domains={str(value).strip().lower() for value in item.get("domains", []) if str(value).strip()},
                     kind=str(item.get("kind", "social")).strip().lower() or "social",
                     variety_id=(str(item["variety_id"]) if item.get("variety_id") else None),
+                    links={str(key): max(0.0, min(1.0, float(value))) for key, value in dict(item.get("links", {})).items()},
+                    bilingualism={str(key): max(0.0, min(1.0, float(value))) for key, value in dict(item.get("bilingualism", {})).items()},
+                    urbanity=max(0.0, min(1.0, float(item.get("urbanity", 0.5)))),
+                    generation=str(item.get("generation", "mixed")).strip().lower() or "mixed",
+                    cohort_age=max(0.0, min(1.0, float(item.get("cohort_age", 0.0)))),
                 )
             if parsed:
                 total = sum(item.share for item in parsed.values())

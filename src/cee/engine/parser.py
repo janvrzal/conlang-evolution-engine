@@ -25,6 +25,14 @@ class YamlParser:
                 prosody=r_dict.get("prosody"),
                 syllable_part=r_dict.get("syllable_part"),
                 operation=r_dict.get("operation"),
+                chain_steps=r_dict.get("chain_steps"),
+                chain_type=r_dict.get("chain_type"),
+                harmony_direction=r_dict.get("harmony_direction"),
+                harmony_domain=r_dict.get("harmony_domain"),
+                harmony_features=r_dict.get("harmony_features"),
+                harmony_inventory=r_dict.get("harmony_inventory"),
+                tone_rotation=r_dict.get("tone_rotation"),
+                tone_sandhi_map=r_dict.get("tone_sandhi_map"),
                 year=r_dict.get("year"),
             )
             rules.append(rule)
@@ -55,6 +63,14 @@ class YamlParser:
                     prosody=r_data.get("prosody"),
                     syllable_part=r_data.get("syllable_part"),
                     operation=r_data.get("operation"),
+                    chain_steps=r_data.get("chain_steps"),
+                    chain_type=r_data.get("chain_type"),
+                    harmony_direction=r_data.get("harmony_direction"),
+                    harmony_domain=r_data.get("harmony_domain"),
+                    harmony_features=r_data.get("harmony_features"),
+                    harmony_inventory=r_data.get("harmony_inventory"),
+                    tone_rotation=r_data.get("tone_rotation"),
+                    tone_sandhi_map=r_data.get("tone_sandhi_map"),
                     year=r_data.get("year"),
                 )
                 rules.append(rule)

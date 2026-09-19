@@ -99,6 +99,15 @@ class FileGenealogyStore:
         self.directory = directory or Path(configured).expanduser() if configured else directory
         if self.directory is None:
             self.directory = Path.home() / ".cee" / "runs"
+        # Jeden historický řez se v detailu jazyka používá opakovaně při
+        # filtrování, stránkování a otevření historie slova. Cache drží hotový
+        # slovník daného roku, ne celý export ani kopii pro každý filtr.
+        self._language_cache: dict[tuple[str, str, int | None], tuple[dict[str, Any], ...]] = {}
+        self._payload_cache: dict[str, dict[str, Any]] = {}
+
+    def _invalidate_language_cache(self, run_id: str) -> None:
+        for key in [key for key in self._language_cache if key[0] == run_id]:
+            self._language_cache.pop(key, None)
 
     def _path(self, run_id: str) -> Path:
         if not run_id or any(
@@ -110,10 +119,15 @@ class FileGenealogyStore:
         return self.directory / f"{run_id}.json"
 
     def _read(self, run_id: str) -> dict[str, Any]:
+        cached = self._payload_cache.get(run_id)
+        if cached is not None:
+            return cached
         path = self._path(run_id)
         try:
             with path.open(encoding="utf-8") as handle:
-                return json.load(handle)
+                payload = json.load(handle)
+                self._payload_cache[run_id] = payload
+                return payload
         except FileNotFoundError as exc:
             raise RunNotFoundError(run_id) from exc
 
@@ -122,25 +136,34 @@ class FileGenealogyStore:
         assert self.directory is not None
         self.directory.mkdir(parents=True, exist_ok=True)
         payload = {
-            "schema_version": 2,
+            "schema_version": 3,
             "run_id": run_id,
             "nodes": builder.nodes,
             "edges": builder.edges,
             "events": builder.events,
+            "artifacts": builder.artifacts,
         }
         fd, temporary = tempfile.mkstemp(prefix=f".{run_id}-", suffix=".json", dir=self.directory)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
             Path(temporary).replace(path)
+            self._payload_cache[run_id] = payload
+            self._invalidate_language_cache(run_id)
         except Exception:
             Path(temporary).unlink(missing_ok=True)
             raise
 
     def delete(self, run_id: str) -> None:
         self._path(run_id).unlink(missing_ok=True)
+        self._payload_cache.pop(run_id, None)
+        self._invalidate_language_cache(run_id)
 
     def language(self, run_id: str, node_id: str, year: int | None = None) -> list[dict[str, Any]]:
+        cache_key = (run_id, node_id, year)
+        cached = self._language_cache.get(cache_key)
+        if cached is not None:
+            return [dict(word) for word in cached]
         payload = self._read(run_id)
         nodes = payload["nodes"]
         edges = payload["edges"]
@@ -169,7 +192,8 @@ class FileGenealogyStore:
                     "origin_type": word.get("origin_type", "inherited"),
                 }
             )
-        return words
+        self._language_cache[cache_key] = tuple(words)
+        return [dict(word) for word in words]
 
     def isogloss(self, run_id: str, concept_id: str, year: int | None = None) -> dict[str, str]:
         payload = self._read(run_id)
@@ -247,9 +271,10 @@ class Neo4jGenealogyStore:
             nodes.append(node)
         with self.driver.session() as session:
             session.run(
-                "CREATE (:Simulation {id: $run_id, events_json: $events})",
+                "CREATE (:Simulation {id: $run_id, events_json: $events, artifacts_json: $artifacts})",
                 run_id=run_id,
                 events=json.dumps(builder.events, ensure_ascii=False),
+                artifacts=json.dumps(builder.artifacts, ensure_ascii=False),
             ).consume()
             session.run(
                 """
@@ -378,7 +403,7 @@ class Neo4jGenealogyStore:
     def export(self, run_id: str) -> dict[str, Any]:
         with self.driver.session() as session:
             simulation = session.run(
-                "MATCH (simulation:Simulation {id: $run_id}) RETURN simulation.events_json AS events_json",  # noqa: E501
+                "MATCH (simulation:Simulation {id: $run_id}) RETURN simulation.events_json AS events_json, simulation.artifacts_json AS artifacts_json",  # noqa: E501
                 run_id=run_id,
             ).single()
             nodes = [
@@ -409,11 +434,12 @@ class Neo4jGenealogyStore:
             node["grammatical_features"] = json.loads(node.pop("grammatical_features_json") or "{}")
         events = json.loads(simulation["events_json"] or "[]") if simulation else []
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "run_id": run_id,
             "nodes": nodes,
             "edges": edges,
             "events": events,
+            "artifacts": json.loads(simulation["artifacts_json"] or "{}") if simulation else {},
         }
 
 

@@ -37,6 +37,8 @@ class SoundChangeDecision:
     word_coverage: float
     frequency_coverage: float
     contrast_retention: float
+    functional_load: float
+    paradigm_retention: float
     pressure: float
     reason: str
     innovation_group: str | None = None
@@ -178,17 +180,51 @@ class ChangeDecisionEngine:
         # by jeho plošná aplikace slilo.  Nezakazuje běžné neutralizace, jen
         # snižuje jejich prioritu, pokud ničí mnoho častých opozic.
         contrast_retention = 1.0
+        functional_load = 0.0
+        paradigm_retention = 1.0
         if mapper and applicable:
-            rendered_before = {mapper.render_word(word) for word in words}
-            rendered_after = set()
+            rendered_before = {word.id: mapper.render_word(word) for word in words}
+            rendered_after: dict[str, str] = {}
             for word in words:
                 import copy
 
                 candidate = copy.deepcopy(word)
                 rule.apply_to_word(candidate)
-                rendered_after.add(mapper.render_word(candidate))
-            contrast_retention = min(1.0, len(rendered_after) / max(1, len(rendered_before)))
-            pressure *= 0.45 + 0.55 * contrast_retention
+                rendered_after[word.id] = mapper.render_word(candidate)
+            contrast_retention = min(
+                1.0, len(set(rendered_after.values())) / max(1, len(set(rendered_before.values())))
+            )
+            # Funkční zátěž nepočítá jen počet shod: váží kolizi frekvencí a
+            # zvlášť chrání tvary jednoho paradigmatu, kde by neutralizace
+            # zničila gramatický kontrast.
+            collision_mass = 0.0
+            paradigm_mass = 0.0
+            total_mass = sum(max(0.01, word.frequency) for word in words)
+            for index, first in enumerate(words):
+                for second in words[index + 1 :]:
+                    newly_merged = (
+                        rendered_before[first.id] != rendered_before[second.id]
+                        and rendered_after[first.id] == rendered_after[second.id]
+                    )
+                    if not newly_merged:
+                        continue
+                    mass = (max(0.01, first.frequency) * max(0.01, second.frequency)) ** 0.5
+                    collision_mass += mass
+                    if first.paradigm and first.paradigm == second.paradigm:
+                        paradigm_mass += mass
+            functional_load = min(1.0, collision_mass / max(0.01, total_mass))
+            paradigm_retention = max(0.0, 1.0 - paradigm_mass / max(0.01, total_mass))
+            pressure *= (0.45 + 0.55 * contrast_retention) * (1.0 - 0.45 * functional_load)
+            pressure *= 0.65 + 0.35 * paradigm_retention
+
+        # Tónová registrace není vlastnost jednotlivého slova: stabilnější
+        # oporu má v hustší, vícecentrové řečové síti. Jde o malý prior nad
+        # už nastaveným populačním profilem, nikoli o předstíranou demografii
+        # jednotlivých mluvčích.
+        if rule.operation in {"tonogenesis", "tone_shift", "tone_sandhi"}:
+            density = state.population.size / max(1.0, state.population.area or 1.0)
+            network = min(1.0, 0.35 + 0.12 * max(0, state.population.centers - 1) + min(0.35, density / 1_000_000))
+            pressure *= 0.55 + 0.45 * network
 
         # Inovace nevzniká abstraktně „v celém jazyce“. Pokud lexikon nese
         # značku sociální skupiny nebo morfologické třídy, vybereme jako
@@ -207,6 +243,8 @@ class ChangeDecisionEngine:
             word_coverage=round(word_coverage, 6),
             frequency_coverage=round(frequency_coverage, 6),
             contrast_retention=round(contrast_retention, 6),
+            functional_load=round(functional_load, 6),
+            paradigm_retention=round(paradigm_retention, 6),
             innovation_group=dominant("social.group"),
             innovation_class=dominant("phonology.morph_class") or dominant("morph.class"),
             pressure=round(pressure, 6),
@@ -225,6 +263,7 @@ class ChangeDecisionEngine:
         *,
         innovation_group: str | None = None,
         innovation_class: str | None = None,
+        network_bias: float = 0.0,
     ) -> float:
         """Relativní okamžik, kdy lexém přijme aktivní inovaci (0 až 1).
 
@@ -247,4 +286,11 @@ class ChangeDecisionEngine:
         # globální náhody.
         group_bias = -0.18 if innovation_group and group == innovation_group else 0.08 if innovation_group and group else 0.0
         class_bias = -0.12 if innovation_class and lexical_class == innovation_class else 0.06 if innovation_class and lexical_class else 0.0
-        return min(1.0, max(0.0, sample + frequency_bias + boundary_delay + group_bias + class_bias))
+        # Generační a urbánní značky jsou lehké proxy pro sociální síť: nová
+        # městská kohorta šíří inovaci dřív, izolovaný/konzervativní registr
+        # ji přijímá později. Nevyžadují simulaci jednotlivých mluvčích.
+        generation = word.grammatical_features.get("social.generation", "").strip().lower()
+        urbanity = word.grammatical_features.get("social.urbanity", "").strip().lower()
+        cohort_bias = -0.06 if generation in {"young", "new"} else 0.05 if generation in {"elder", "old"} else 0.0
+        urban_bias = -0.05 if urbanity in {"urban", "city"} else 0.05 if urbanity in {"rural", "isolated"} else 0.0
+        return min(1.0, max(0.0, sample + frequency_bias + boundary_delay + group_bias + class_bias + cohort_bias + urban_bias + network_bias))

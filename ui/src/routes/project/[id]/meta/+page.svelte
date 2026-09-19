@@ -195,6 +195,20 @@
 	let generateError = $state('');
 	let generatedSource = $state('');
 	let generatedConceptCount = $state(0);
+	const CORE_CONCEPT_COUNT = 149;
+	let customConceptCount = $derived(
+		new Set(
+			projectState.customConcepts
+				.split(/[\n,]/)
+				.map((concept) => concept.trim().toLowerCase())
+				.filter(Boolean)
+		).size
+	);
+	let vocabularyEstimate = $derived(
+		projectState.vocabularyProfile === 'core'
+			? `Přibližně ${CORE_CONCEPT_COUNT + customConceptCount} konceptů`
+			: 'Několik tisíc konceptů (podle lokálně dostupného korpusu)'
+	);
 
 	async function generateLexicon() {
 		if (activeProto.consonants.size === 0 || activeProto.vowels.size === 0) {
@@ -211,7 +225,12 @@
 			const data = await generateProtolangApi({
 				consonants: cons,
 				vowels: vows,
-				syllable_structure: activeProto.syllable
+				syllable_structure: activeProto.syllable,
+				vocabulary_profile: projectState.vocabularyProfile,
+				custom_concepts: projectState.customConcepts
+					.split(/[\n,]/)
+					.map((concept) => concept.trim())
+					.filter(Boolean)
 			});
 
 			if (data.status === 'success') {
@@ -505,13 +524,55 @@
 									</p>
 								</div>
 
+								<div class="space-y-2 rounded-md border p-3">
+									<Label for="vocabulary-profile">Rozsah slovní zásoby</Label>
+									<Select
+										id="vocabulary-profile"
+										value={projectState.vocabularyProfile}
+										onchange={(event) => {
+											projectState.vocabularyProfile =
+												event.currentTarget.value === 'full' ? 'full' : 'core';
+											scheduleSave();
+										}}
+									>
+										<option value="core">Základní jazyk — doporučeno</option>
+										<option value="full">Komplexní jazyk — plný korpus</option>
+									</Select>
+									<div class="rounded bg-muted px-2 py-1.5 text-xs text-muted-foreground">
+										<strong class="text-foreground">Odhad: {vocabularyEstimate}.</strong>
+										{#if projectState.vocabularyProfile === 'core'}
+											Swadeshovo jádro, důležité světové koncepty a vlastní slova. Rychlé a
+											přehledné pro většinu projektů.
+										{:else}
+											Simulace pracuje s celým lexikonem: lépe zachytí kolize a šíření změn, ale
+											bude náročnější na výpočet i prohlížení.
+										{/if}
+									</div>
+								</div>
+
+								<div class="space-y-2">
+									<Label for="custom-concepts">Slova specifická pro tento svět</Label>
+									<Input
+										id="custom-concepts"
+										placeholder="např. skyship, moonstone, guild (odděl čárkou)"
+										value={projectState.customConcepts}
+										oninput={(event) => {
+											projectState.customConcepts = event.currentTarget.value;
+											scheduleSave();
+										}}
+									/>
+									<p class="text-xs text-muted-foreground">
+										Přidají se automaticky k nové generaci slovníku.
+									</p>
+								</div>
+
 								<Button
 									variant="secondary"
 									class="w-full"
 									onclick={generateLexicon}
 									disabled={isGenerating}
 								>
-									{isGenerating ? 'Generuji...' : 'Vygenerovat slovník z CLICS4'}
+									{isGenerating ? 'Generuji...' : 'Vygenerovat slovník'}
 								</Button>
 
 								{#if generateError}

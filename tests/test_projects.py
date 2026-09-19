@@ -6,10 +6,15 @@ mezi stránkami i po reloadu.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
 from cee import projects
+from cee.project_schema import CURRENT_PROJECT_SCHEMA
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture(autouse=True)
@@ -29,17 +34,64 @@ def test_ulozi_a_nacte():
 
 
 def test_v1_projekt_se_pri_nacteni_migruje_na_verzovane_schema(izolovana_slozka):
-    (izolovana_slozka / "legacy.json").write_text(
-        '{"id":"legacy","name":"Legacy","schema_version":1,'
-        '"data":{"timeSteps":[1000,0,0],"snapshots":{"0":{"nodes":[],"edges":[]}}}}',
-        encoding="utf-8",
+    (izolovana_slozka / "legacy-v1.json").write_text(
+        (FIXTURES / "project_v1.json").read_text(encoding="utf-8"), encoding="utf-8"
     )
 
-    project = projects.load("legacy")
-    assert project.schema_version == 2
+    project = projects.load("legacy-v1")
+    assert project.schema_version == CURRENT_PROJECT_SCHEMA
     assert project.data["timeSteps"] == [0, 1000]
     assert set(project.data["snapshots"]) == {"0"}
     assert project.data["generatedProtoLexicon"] == []
+
+
+def test_v2_projekt_migruje_do_v3_bez_mutace_puvodniho_vstupu():
+    legacy = json.loads((FIXTURES / "project_v2.json").read_text(encoding="utf-8"))["data"]
+    original = json.loads(json.dumps(legacy))
+
+    version, migrated = projects.normalize_data(2, legacy)
+
+    assert version == 3
+    assert legacy == original
+    assert migrated["simulation"]["empiricalPhonology"] is True
+    assert migrated["simulation"]["calibration"]["isolation"] == 0.4
+    assert migrated["schemaProfileId"] == "heuristic-default"  # legacy alias zůstává na hraně
+
+
+def test_jazyk_se_smi_opakovat_v_nasledujicich_casovych_snimcich():
+    """Časová osa drží stav stejného jazyka v každém roce řezu."""
+    project = projects.Project(
+        id="timeline",
+        data={
+            "timeSteps": [0, 100],
+            "snapshots": {
+                "0": {"nodes": [{"id": "proto"}], "edges": []},
+                "100": {"nodes": [{"id": "proto"}, {"id": "child"}], "edges": []},
+            },
+        },
+    )
+
+    projects.save(project)
+    assert projects.load("timeline").data["snapshots"]["100"]["nodes"][0]["id"] == "proto"
+
+
+def test_neplatna_reference_je_srozumitelna_chyba_a_nezapise_se():
+    payload = json.loads((FIXTURES / "project_invalid_reference.json").read_text(encoding="utf-8"))
+    project = projects.Project(id="broken", data=payload["data"])
+
+    with pytest.raises(projects.ProjectError, match="neexistující ID: missing"):
+        projects.save(project)
+    assert not (projects.projects_dir() / "broken.json").exists()
+
+
+def test_budouci_verze_se_neotevre_ani_neprepise(izolovana_slozka):
+    path = izolovana_slozka / "future.json"
+    contents = (FIXTURES / "project_future.json").read_text(encoding="utf-8")
+    path.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(projects.ProjectError, match="novější schéma 999"):
+        projects.load("future")
+    assert path.read_text(encoding="utf-8") == contents
 
 
 def test_prezije_opakovane_ulozeni():

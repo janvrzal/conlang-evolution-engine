@@ -69,7 +69,17 @@ def test_schema_realne_zasahne(mapper, schema_id, bohaty_inventar):
     """Aspoň na jedné sondě musí schéma něco změnit."""
     for rule in _rules(schema_id, bohaty_inventar):
         for sonda in SONDY:
-            if rule.apply_to_word(mapper.parse_word("x", sonda)):
+            word = mapper.parse_word("x", sonda)
+            # Tónové procesy nejsou segmentové: mají smysl až po tonogenezi.
+            # Sonda jim proto dodá minimální historický předpoklad místo toho,
+            # aby test omylem vyžadoval tón z obyčejné netónové formy.
+            if schema_id == "tone_shift":
+                word.tones = {index: "H" for index, segment in enumerate(word.segments) if segment.features.get("syl") == "+"}
+            elif schema_id == "tone_sandhi":
+                nuclei = [index for index, segment in enumerate(word.segments) if segment.features.get("syl") == "+"]
+                if len(nuclei) >= 2:
+                    word.tones = {nuclei[0]: "H", nuclei[1]: "L"}
+            if rule.apply_to_word(word):
                 return
     pytest.fail(f"Schéma '{schema_id}' nikdy nezasáhne — zkontroluj rysy v target/env.")
 

@@ -34,6 +34,7 @@ from cee.engine.simulator import EvolutionSimulator
 from cee.engine.topology import EvolutionGraph
 from cee.metrics.global_baseline import load_global_baseline
 from cee.metrics.retention import LexicalRetention, RetentionResult
+from cee.semantics.retention import ConceptRetentionModel, default_concepticon_retention_path
 from cee.metrics.schema_profiles import load_local_schema_profile, load_schema_profile
 from cee.semantics.builder import default_paths as default_semantics_paths
 from cee.semantics.concepts import (
@@ -69,6 +70,8 @@ class SimulationConfig:
     #: {"hand->eat": {"bridge": "instrument_action"}}.
     semantic_relation_overrides: Dict[str, Dict[str, str]] = field(default_factory=dict)
     concepticon_path: Optional[str] = None
+    #: Volitelná tabulka naměřené retence podle Concepticon ID/glosu.
+    retention_prior_path: Optional[str] = None
     root_id: str = "proto"
     root_year: int = 0
 
@@ -150,6 +153,7 @@ class BranchView:
 
 
 _concepticon_index_cache: Dict[str, Optional[ConcepticonIndex]] = {}
+_retention_model_cache: Dict[str, Optional[ConceptRetentionModel]] = {}
 
 
 def resolve_concepticon_index(path: Optional[str] = None) -> Optional[ConcepticonIndex]:
@@ -166,8 +170,26 @@ def resolve_concepticon_index(path: Optional[str] = None) -> Optional[Conceptico
     return _concepticon_index_cache[resolved]
 
 
+def resolve_retention_model(path: Optional[str] = None) -> Optional[ConceptRetentionModel]:
+    """Načte volitelný retenční korpus; jeho absence nikdy nebortí běh."""
+    default = default_concepticon_retention_path()
+    resolved = path or os.environ.get("CEE_RETENTION_PRIORS_PATH", "") or (
+        str(default) if default.is_file() else ""
+    )
+    if not resolved:
+        return None
+    if resolved not in _retention_model_cache:
+        try:
+            _retention_model_cache[resolved] = ConceptRetentionModel.from_table(resolved)
+        except (OSError, ValueError, csv.Error, UnicodeError) as exc:
+            warnings.warn(f"Retenční korpus se nepodařilo načíst ({exc}); používám heuristiku.", stacklevel=2)
+            _retention_model_cache[resolved] = None
+    return _retention_model_cache[resolved]
+
+
 def load_lexicon_from_csv(
-    path: str, mapper: FeatureMapper, *, concepticon_index: Optional[ConcepticonIndex] = None
+    path: str, mapper: FeatureMapper, *, concepticon_index: Optional[ConcepticonIndex] = None,
+    retention_model: Optional[ConceptRetentionModel] = None,
 ) -> Lexicon:
     """Načte proto-lexikon z CSV se sloupci `id` a `ipa_proto` (nebo `ipa`)."""
     lexicon = Lexicon()
@@ -193,11 +215,16 @@ def load_lexicon_from_csv(
             if row.get("frequency", "").strip():
                 word.frequency = float(row["frequency"])
             lexicon.words.append(word)
+    model = retention_model or resolve_retention_model()
+    if model is not None:
+        model.annotate(lexicon)
     return lexicon
 
 
 def load_lexicon_from_records(
-    records: Iterable[Dict[str, str]], mapper: FeatureMapper, *, concepticon_index: Optional[ConcepticonIndex] = None
+    records: Iterable[Dict[str, str]], mapper: FeatureMapper, *,
+    concepticon_index: Optional[ConcepticonIndex] = None,
+    retention_model: Optional[ConceptRetentionModel] = None,
 ) -> Lexicon:
     """Načte proto-lexikon z JSON záznamů, jak je posílá UI."""
     lexicon = Lexicon()
@@ -218,6 +245,9 @@ def load_lexicon_from_records(
         annotate_basic_lexical_class(word)
         if record.get("frequency") is not None:
             word.frequency = float(record["frequency"])
+    model = retention_model or resolve_retention_model()
+    if model is not None:
+        model.annotate(lexicon)
     return lexicon
 
 

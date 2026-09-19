@@ -22,9 +22,38 @@ export type MapBackground = {
 	opacity: number;
 };
 
+export type CalibrationSettings = {
+	sound_changes_per_millennium: number;
+	change_spread_years: number;
+	isolation: number;
+	replacement_rate: number;
+	loss_rate: number;
+	homophony_resolution_rate: number;
+};
+
+export type HomophonyStrategy =
+	| { kind: 'colexification' }
+	| { kind: 'semantic_shift'; source: string }
+	| { kind: 'derivation'; root: string; affix: string; prefix?: boolean }
+	| { kind: 'compound'; head: string; modifier: string };
+
+export type HomophonyQueueDecision =
+	| 'reviewing'
+	| 'dismissed'
+	| { status: 'resolved'; year: number; strategy: HomophonyStrategy; loserConcept: string };
+
 export type ProjectData = {
+	polities: any[];
+	tradeRoutes: any[];
+	historicalEvents: any[];
 	/** Vygenerovaný proto-slovník z Metaeditace. */
 	generatedProtoLexicon: any[];
+	/** Rozsah výchozí slovní zásoby: malé kurátorované jádro nebo celý korpus. */
+	vocabularyProfile: 'core' | 'full';
+	/** Významy specifické pro daný svět, přidávané při nové generaci. */
+	customConcepts: string;
+	/** Autorský stav položek fronty homofonií mezi načteními projektu. */
+	homophonyQueue: Record<string, HomophonyQueueDecision>;
 	/** Body na časové ose. */
 	timeSteps: number[];
 	/** Uzly a hrany pro každý rok na ose. */
@@ -43,6 +72,11 @@ export type ProjectData = {
 	simulationRunId: string | null;
 	/** Volitelný rastrový podklad mapového editoru. */
 	mapBackground: MapBackground | null;
+	/** Volba vah generátoru; ID pochází z bezpečného seznamu backendu. */
+	schemaProfileId: string;
+	/** PHOIBLE je lokální filtr; bez cache backend bezpečně pokračuje bez něj. */
+	empiricalPhonology: boolean;
+	calibration: CalibrationSettings;
 };
 
 /** Uzel, kterým každý nový projekt začíná. */
@@ -60,13 +94,29 @@ function emptyData(): ProjectData {
 	// Když se sázel až po doběhnutí loadProject(), stihl ho přebít
 	// synchronizační efekt v mapě a do projektu se uložil prázdný snapshot.
 	return {
+		polities: [],
+		tradeRoutes: [],
+		historicalEvents: [],
 		generatedProtoLexicon: [],
+		vocabularyProfile: 'core',
+		customConcepts: '',
+		homophonyQueue: {},
 		timeSteps: [0, 500, 1000, 1500],
 		snapshots: { 0: { nodes: [protoNode(0)], edges: [] } },
 		protoLanguages: [],
 		simulationRunAt: null,
 		simulationRunId: null,
-		mapBackground: null
+		mapBackground: null,
+		schemaProfileId: 'heuristic-default',
+		empiricalPhonology: false,
+		calibration: {
+			sound_changes_per_millennium: 8,
+			change_spread_years: 120,
+			isolation: 0.5,
+			replacement_rate: 0.01,
+			loss_rate: 0.005,
+			homophony_resolution_rate: 0.3
+		}
 	};
 }
 
@@ -80,7 +130,16 @@ export const projectState = $state<{
 	simulationRunAt: string | null;
 	simulationRunId: string | null;
 	mapBackground: MapBackground | null;
+	schemaProfileId: string;
+	empiricalPhonology: boolean;
+	calibration: CalibrationSettings;
+	polities: any[];
+	tradeRoutes: any[];
+	historicalEvents: any[];
 	generatedProtoLexicon: any[];
+	vocabularyProfile: 'core' | 'full';
+	customConcepts: string;
+	homophonyQueue: Record<string, HomophonyQueueDecision>;
 	timeSteps: number[];
 	snapshots: Record<number, { nodes: any[]; edges: any[] }>;
 	protoLanguages: any[];
@@ -101,13 +160,25 @@ let saveAgain = false;
 /** Co se skutečně ukládá — bez odvoditelných a přechodných věcí. */
 function snapshotData(): ProjectData {
 	return {
+		polities: $state.snapshot(projectState.polities) as any[],
+		tradeRoutes: $state.snapshot(projectState.tradeRoutes) as any[],
+		historicalEvents: $state.snapshot(projectState.historicalEvents) as any[],
 		generatedProtoLexicon: $state.snapshot(projectState.generatedProtoLexicon) as any[],
+		vocabularyProfile: projectState.vocabularyProfile,
+		customConcepts: projectState.customConcepts,
+		homophonyQueue: $state.snapshot(projectState.homophonyQueue) as Record<
+			string,
+			HomophonyQueueDecision
+		>,
 		timeSteps: $state.snapshot(projectState.timeSteps) as number[],
 		snapshots: $state.snapshot(projectState.snapshots) as ProjectData['snapshots'],
 		protoLanguages: $state.snapshot(projectState.protoLanguages) as any[],
 		simulationRunAt: projectState.simulationRunAt,
 		simulationRunId: projectState.simulationRunId,
-		mapBackground: $state.snapshot(projectState.mapBackground) as MapBackground | null
+		mapBackground: $state.snapshot(projectState.mapBackground) as MapBackground | null,
+		schemaProfileId: projectState.schemaProfileId,
+		empiricalPhonology: projectState.empiricalPhonology,
+		calibration: $state.snapshot(projectState.calibration) as CalibrationSettings
 	};
 }
 
@@ -153,6 +224,9 @@ export async function loadProject(id: string): Promise<void> {
 			projectState.name = project.name;
 			const data = { ...emptyData(), ...(project.data as Partial<ProjectData>) };
 			projectState.generatedProtoLexicon = data.generatedProtoLexicon;
+			projectState.vocabularyProfile = data.vocabularyProfile ?? 'core';
+			projectState.customConcepts = data.customConcepts ?? '';
+			projectState.homophonyQueue = data.homophonyQueue ?? {};
 			projectState.timeSteps = data.timeSteps;
 			projectState.snapshots = ensureSeed(data.snapshots, data.timeSteps);
 			projectState.protoLanguages = data.protoLanguages;
@@ -160,6 +234,12 @@ export async function loadProject(id: string): Promise<void> {
 			projectState.simulationRunAt = data.simulationRunAt ?? null;
 			projectState.simulationRunId = data.simulationRunId ?? null;
 			projectState.mapBackground = data.mapBackground ?? null;
+			projectState.schemaProfileId = data.schemaProfileId ?? 'heuristic-default';
+			projectState.empiricalPhonology = data.empiricalPhonology ?? false;
+			projectState.calibration = data.calibration ?? emptyData().calibration;
+			projectState.polities = data.polities ?? [];
+			projectState.tradeRoutes = data.tradeRoutes ?? [];
+			projectState.historicalEvents = data.historicalEvents ?? [];
 			projectState.lastSavedAt = project.updated_at;
 			projectState.status = 'saved';
 		} else {

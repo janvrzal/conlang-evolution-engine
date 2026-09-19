@@ -40,6 +40,14 @@ class ContactEdge:
     #: Starší scénáře zachovávají přesný tvar výpůjčky; nový editor může
     #: explicitně zapnout adaptaci do inventáře cílového jazyka.
     adapt: bool = False
+    #: Sociální kanál přejímky; určuje registr přejatého lexému.
+    layer: str = "folk"
+    #: Zda smí kontakt přenášet i gramatické morfémy a jejich produktivitu.
+    transfer_morphology: bool = False
+    #: Zda smí kontakt nabídnout výpůjčku jako řešení funkčně zatížené homofonie.
+    resolve_homophony: bool = False
+    #: ID produktivních konstrukcí z konfigurace zdrojového jazyka.
+    construction_ids: List[str] = field(default_factory=list)
 
     def directions(self):
         """Dvojice (zdroj, cíl) pro každý směr, kterým kontakt působí."""
@@ -47,6 +55,43 @@ class ContactEdge:
         if self.mutual:
             pairs.append((self.target_id, self.source_id))
         return pairs
+
+
+@dataclass
+class Polity:
+    """Autorsky kreslená politická jednotka; neztotožňuje se s jazykem."""
+
+    id: str
+    name: str
+    territory: List[Dict[str, float]] = field(default_factory=list)
+    institutions: Dict[str, float] = field(default_factory=dict)
+    language_ids: List[str] = field(default_factory=list)
+
+
+@dataclass
+class TradeRoute:
+    """Mapový objekt, z něhož se odvozují časované kontakty."""
+
+    id: str
+    kind: str  # sea / land / river
+    intensity: float
+    language_ids: List[str]
+    start_year: int = 0
+    end_year: int | None = None
+    # Světové souřadnice kreslené přímo na plátně. Jsou nepovinné, aby staré
+    # projekty dál fungovaly jako ručně určený seznam zastávek.
+    waypoints: List[Dict[str, float]] = field(default_factory=list)
+
+
+@dataclass
+class HistoricalEventSpec:
+    id: str
+    kind: str
+    start_year: int
+    duration: int = 0
+    target_language_ids: List[str] = field(default_factory=list)
+    target_polity_id: str | None = None
+    effects: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -59,6 +104,9 @@ class EvolutionGraph:
     nodes: Dict[str, State] = field(default_factory=dict)
     vertical_edges: List[VerticalEdge] = field(default_factory=list)
     contact_edges: List[ContactEdge] = field(default_factory=list)
+    polities: Dict[str, Polity] = field(default_factory=dict)
+    trade_routes: List[TradeRoute] = field(default_factory=list)
+    historical_events: List[HistoricalEventSpec] = field(default_factory=list)
 
     def get_children(self, node_id: str) -> List[str]:
         return [e.child_id for e in self.vertical_edges if e.parent_id == node_id]

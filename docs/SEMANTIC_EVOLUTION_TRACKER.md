@@ -1,5 +1,9 @@
 # Tracker sémantického vývoje
 
+> Detailní tracker pro sekci 2 hlavní [evoluční roadmapy](EVOLUTION_ROADMAP.md).
+> Hlavní roadmapa je zdrojem priorit; tento soubor drží přesné omezení
+> sémantického runtime.
+
 Tento tracker sleduje přechod od náhodných stoletých mutací významu ke
 kauzálním, časově rozloženým a auditovatelným změnám. Stav **hotovo** znamená,
 že funkce má implementaci i automatický test.
@@ -40,27 +44,41 @@ kauzálním, časově rozloženým a auditovatelným změnám. Stav **hotovo** z
   jako opis.
 - [x] Zapsat kontextový tlak i registrální přechody do event logu.
 
-## Následuje
+## Zbývá
 
-- [ ] Jemnější tlak prestiže a komunikační potřeby podle řečových komunit.
-- [ ] Sémantické změny vyvolané kontaktem, kalky a přejímáním konstrukcí.
-- [ ] Šíření podle sociálních skupin a regionů, nejen po jedné jazykové větvi.
-- [ ] Ruční schválení či odmítnutí navržené inovace worldbuilderem.
-- [ ] Presety intenzity sémantických změn a jejich ovládání v UI.
+- [~] Šíření podle sociálních skupin a regionů: každá sémantická inovace má
+  volitelné ohnisko komunity, uchovává podíl přijetí po komunitách a síť
+  vazeb/bilingvismu určuje difuzi. Chybí samostatný lexikon a konkurence
+  významových variant pro každou komunitu.
+- [~] Jemnější tlak prestiže a komunikační potřeby podle řečových komunit.
+  Prestiž, mobilita, městskost a domény nyní určují ohnisko a receptivitu;
+  chybí kalibrace proti doloženému sociolingvistickému korpusu.
+- [x] Sémantické změny vyvolané kontaktem: kalkový nebo obchodní kontakt
+  přenese živou, rozběhnutou variantu jako vlastní časovanou změnu v cíli;
+  audit uchová zdroj, sílu kontaktu i obě identity změny.
+- [x] Ruční schválení navržené inovace worldbuilderem: režim „ke schválení“
+  uloží návrh do auditu, autor jej v detailu jazyka schválí pro další běh a
+  může jej ponechat nevyřízený. Zamítnutí je zatím konzervativní: návrh se
+  jednoduše neschválí a nemění historii.
+- [x] Presety intenzity sémantických změn a jejich ovládání v UI: konzervativní,
+  vyvážený a dynamický profil řídí interval sémantických příležitostí.
 - [ ] Kalibrační metriky: polysémie, retence významů, velikost sémantických
   skoků a rozdíly mezi větvemi.
-- [ ] E2E test UI → API → simulace → časový detail významu → export.
+- [x] E2E test UI payload → API → simulace → časový detail významu → export,
+  včetně kontaktního přenosu živé sémantické varianty.
 
 ## Aktuální omezení
 
 První verze vybírá nejvýše jednu novou sémantickou inovaci na jazyk a století.
-Binární `concept_id`/`polysemy` zatím neumějí vyjádřit procento mluvčích, kteří
-nové užití přijali; postupnost je proto zachycena historickými fázemi a
-mezistavem polysémie. Populační rozšíření bude vyžadovat explicitní model
-variant či řečových komunit.
+Podíl přijetí už drží lehká síť komunit, ale `concept_id`/`polysemy` stále patří
+celému jazyku: model neumí samostatné konkurenční lexikony komunit. Plošná
+lexikální změna je proto jen hrubý agregát difuze, nikoli individuální simulace
+mluvčích.
 
-Stabilita je zatím lexémová hodnota z metadat (`semantic.stability` nebo
-`lexical.stability`), nikoli samostatný empiricky kalibrovaný parametr každého
-významu. Pokud hlavní význam polysemního slova zanikne, převezme jeho místo
-deterministicky první zbývající význam; prominence jednotlivých významů bude
-potřebovat vlastní model užití.
+Stabilita je lexémová hodnota z metadat (`semantic.stability` nebo
+`lexical.stability`). Lokální cache CEE ji standardně vyplní z otevřeného
+Concepticonového prioru sestaveného ze seznamů Swadesh 1955 a Peust 2013;
+nepokryté koncepty zůstávají na heuristice. Tento prior není nezávisle
+kalibrovaným univerzálním měřením retence. Pokud hlavní význam polysemního
+slova zanikne, převezme jeho místo deterministicky první zbývající význam;
+prominence jednotlivých významů bude potřebovat vlastní model užití.

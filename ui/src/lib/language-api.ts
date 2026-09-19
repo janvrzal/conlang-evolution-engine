@@ -29,7 +29,11 @@ export async function fetchLanguagePage(
 	filters: LexiconFilters
 ): Promise<LanguagePage> {
 	const base = await resolveApiBase();
-	const parameters = new URLSearchParams({ year: String(year), offset: String(offset), limit: '100' });
+	const parameters = new URLSearchParams({
+		year: String(year),
+		offset: String(offset),
+		limit: '100'
+	});
 	if (filters.query) parameters.set('query', filters.query);
 	if (filters.register !== 'all') parameters.set('register', filters.register);
 	if (filters.community !== 'all') parameters.set('community', filters.community);

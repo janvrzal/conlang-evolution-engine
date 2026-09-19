@@ -92,6 +92,79 @@ def test_navrh_vybira_nejsilneji_dolozeny_posun(mapper):
     assert proposal.duration() == 144
 
 
+def test_rezim_schvaleni_zapise_navrh_a_pusti_jen_potvrzenou_zmenu(mapper):
+    word = mapper.parse_word("sun", "sula")
+    word.frequency = 1.0
+    word.lineage_id = "lexeme-sun"
+    runtime = SemanticChangeRuntime()
+    builder = GraphBuilder()
+    queued = []
+    evaluator = SemanticEvaluator(OneShiftGraph(), shift_prob=1.0, seed=3)
+
+    runtime.schedule_proposals(
+        State("proto", Inventory(), Lexicon([word])), 100, evaluator, evaluator.random,
+        lambda *_args: queued.append(_args[-1]), 2, 500,
+        approval_mode="review", graph_builder=builder,
+    )
+    assert not queued
+    assert any(event["kind"] == "semantic_proposal" for event in builder.events)
+
+    runtime.schedule_proposals(
+        State("proto", Inventory(), Lexicon([word])), 100, evaluator, evaluator.random,
+        lambda *_args: queued.append(_args[-1]), 2, 500,
+        approval_mode="review", approved_changes={"sun->sky"}, graph_builder=builder,
+    )
+    assert any(isinstance(event, SemanticChangeEvent) for event in queued)
+
+
+def test_semanticka_varianta_se_siri_po_vazbach_komunit(mapper):
+    state = State(
+        "proto", Inventory(), Lexicon([mapper.parse_word("sun", "sula")]),
+        map={
+            "communities": [
+                {"id": "city", "share": 0.5, "links": {"rural": 1.0}},
+                {"id": "rural", "share": 0.5, "links": {"city": 1.0}},
+            ]
+        },
+    )
+    change = SemanticChangeEvent(
+        0, "proto", "semantic:1", "", "sun", "sky", "extension", 100,
+        1.0, 1.0, "shift", 0.5, innovation_group="city",
+    )
+
+    progress, adoption = SemanticChangeRuntime._community_progress(state, change, 1.0)
+
+    assert progress == 1.0
+    assert adoption == {"city": 1.0, "rural": 1.0}
+
+
+def test_ziva_semanticka_varianta_se_prenese_pres_kalkovy_kontakt(mapper):
+    source_word = mapper.parse_word("sun", "sula")
+    source_word.lineage_id = "source-sun"
+    source_word.polysemy.add("sky")
+    target_word = mapper.parse_word("sun", "mita")
+    target_word.lineage_id = "target-sun"
+    source = State("source", Inventory(), Lexicon([source_word]))
+    target = State("target", Inventory(), Lexicon([target_word]))
+    runtime = SemanticChangeRuntime()
+    change = SemanticChangeEvent(
+        100, "source", "source:semantic", "source-sun", "sun", "sky", "extension",
+        200, 0.8, 1.0, "shift", 0.5, introduced=True,
+    )
+    runtime.changes[change.change_id] = change
+    queued = []
+
+    transferred = runtime.transfer_contact(
+        source, target, 150, 0.75, lambda *_args: queued.append(_args[-1]), 2
+    )
+
+    assert transferred == 1
+    imported = queued[0]
+    assert imported.branch_id == "target"
+    assert imported.word_lineage_id == "target-sun"
+    assert imported.evidence_type == "contact-calque"
+
+
 def test_komunikacni_tlak_zvysi_jen_dolozeny_cilovy_vyznam(mapper):
     word = mapper.parse_word("sun", "sula")
     word.frequency = 0.5

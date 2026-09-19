@@ -2,6 +2,7 @@ from cee.core.models import Inventory, Lexicon, State
 from cee.semantics.swadesh import (
     SWADESH_100,
     apply_suggestion,
+    automatic_suggestions,
     available_suggestions,
     suggestions_for,
     swadesh_coverage,
@@ -26,3 +27,15 @@ def test_nabidka_a_aplikace_slozeniny_pouziva_soucasny_morfologicky_engine(mappe
     assert rain is not None
     assert mapper.render_word(rain) == "kami"
     assert rain.origin_type == "compound"
+
+
+def test_automaticky_recept_nabidne_jen_chybejici_koncept_se_zdroji(mapper):
+    sky = mapper.parse_word("sky", "mi")
+    water = mapper.parse_word("water", "ka")
+    state = State("proto", Inventory(), Lexicon([sky, water]))
+
+    options = automatic_suggestions(state)
+
+    assert [(option.target, option.head, option.modifier) for option in options] == [
+        ("rain", "sky", "water")
+    ]

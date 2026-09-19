@@ -12,6 +12,9 @@ class GraphBuilder:
         self.nodes: List[Dict[str, Any]] = []
         self.edges: List[Dict[str, Any]] = []
         self.events: List[Dict[str, Any]] = []
+        # Výstupní artefakty větví (gramatiky a souhrn metrik) se ukládají
+        # spolu s genealogickým grafem, aby byly po restartu API stále dostupné.
+        self.artifacts: Dict[str, Any] = {}
 
     def add_word(
         self,

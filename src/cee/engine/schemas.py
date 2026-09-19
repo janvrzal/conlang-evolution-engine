@@ -568,28 +568,52 @@ class StressShiftSchema(Schema):
 
 
 class VowelHarmonySchema(Schema):
-    """Regresivní harmonie: přední vokál přetáhne všechny předchozí zadní."""
+    """Systémová harmonie s volitelným směrem a morfémovou doménou."""
 
     def __init__(self):
         super().__init__("vowel_harmony")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
-        front_mid = inventory.features_for_ipa("e")
-        if not front_mid:
+        # Stabilní výchozí varianta zachovává kompatibilitu ručních projektů;
+        # generátor předává vlastní RNG a vybírá níže z plného systému.
+        if rng is None:
+            front_mid = inventory.features_for_ipa("e")
+            if not front_mid:
+                return None
+            return Rule(
+                name=f"Regresivní vokálová harmonie (gen. v {year})",
+                target={"syl": "+", "back": "+"},
+                action=front_mid,
+                env_after={"_lookahead_vowel": "+", "syl": "+", "back": "-"},
+                year=year,
+            )
+        vowels = [inventory.features_of(ipa) for ipa in inventory.matching({"syl": "+"})]
+        vowel_features = [features for features in vowels if features]
+        # Potřebujeme alespoň dva různé harmonické póly; jinak je pravidlo
+        # jen přejmenované plošné přepsání samohlásek.
+        if len(vowel_features) < 2 or len({features.get("back") for features in vowel_features}) < 2:
             return None
+        choice = rng
+        direction = "progressive" if choice.random() < 0.5 else "regressive"
+        domain = "morpheme" if choice.random() < 0.45 else "word"
+        has_round_poles = len({features.get("round") for features in vowel_features}) > 1
+        features = ["back", "round"] if has_round_poles and choice.random() < 0.35 else ["back"]
+        direction_label = "Progresivní" if direction == "progressive" else "Regresivní"
         return Rule(
-            name=f"Regresivní vokálová harmonie (gen. v {year})",
-            target={"syl": "+", "back": "+"},
-            # Zadní /o/ → přední /e/ není jen přepnutí [back]: bez úpravy
-            # dalších rysů by panphon korektně vybral za výsledek /ø/.
-            action=front_mid,
-            env_after={"_lookahead_vowel": "+", "syl": "+", "back": "-"},
+            name=f"{direction_label} vokálová harmonie ({'+'.join(features)}, {domain}; gen. v {year})",
+            target={"syl": "+"},
+            action={},
+            operation="vowel_harmony",
+            harmony_direction=direction,
+            harmony_domain=domain,
+            harmony_features=features,
+            harmony_inventory=[dict(features) for features in vowel_features],
             year=year,
         )
 
 
 class ChainShiftSchema(Schema):
-    """Souběžná rotace /a e i/; kontrasty se přesouvají, ne mažou."""
+    """Vícekrokový tažný nebo strkový řetězec s explicitním prázdným místem."""
 
     def __init__(self):
         super().__init__("chain_shift")
@@ -608,20 +632,32 @@ class ChainShiftSchema(Schema):
                 ipa,
             ),
         )
-        selected = [ipa for ipa in ("a", "e", "i") if ipa in ipa_vowels]
+        selected = [ipa for ipa in ("a", "e", "i", "u") if ipa in ipa_vowels]
         selected += [ipa for ipa in ranked if ipa not in selected]
-        selected = selected[:3]
+        selected = selected[: min(4, len(selected))]
         vowels = [inventory.features_of(ipa) for ipa in selected]
         if any(features is None for features in vowels):
             return None
-        first, second, third = vowels
-        assert first and second and third
+        assert all(vowels)
+        chain_type = "push" if rng is None or rng.random() < 0.5 else "pull"
+        # Push: nízký člen vyvolá pohyb vzhůru k prázdnému místu. Pull:
+        # uvolněné nízké místo přitáhne řadu dolů. Poslední krok nevytváří
+        # mezitvar: každá mapa čte původní segment.
+        steps = list(zip(vowels, vowels[1:]))
+        if chain_type == "pull":
+            steps = [(source, target) for target, source in reversed(steps)]
+        else:
+            # Řada potřebuje explicitně vytvořit nový okrajový kontrast;
+            # vezmeme rysy posledního členu a upravíme pouze v hranicích
+            # existujících kontrastů. Rotace chrání před kolapsem ve fázi.
+            steps.append((vowels[-1], vowels[0]))
         return Rule(
-            name=f"Řetězový posun {' → '.join((*selected, selected[0]))} (gen. v {year})",
+            name=f"{'Strkový' if chain_type == 'push' else 'Tažný'} řetězový posun {' → '.join(selected)} (gen. v {year})",
             target={"syl": "+"},
             action={},
             operation="chain_shift",
-            chain_steps=[(first, second), (second, third), (third, first)],
+            chain_steps=steps,
+            chain_type=chain_type,
             year=year,
         )
 
@@ -650,11 +686,21 @@ class ToneShiftSchema(Schema):
         super().__init__("tone_shift")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        if rng is None:
+            rotation, label = {"H": "R", "R": "L", "L": "H"}, "H-R-L"
+        else:
+            choice = rng
+            rotations = [
+                ({"H": "M", "M": "L", "L": "H"}, "H-M-L"),
+                ({"H": "F", "F": "L", "L": "R", "R": "H"}, "H-F-L-R"),
+            ]
+            rotation, label = choice.choice(rotations)
         return Rule(
-            name=f"Posun tónové řady (gen. v {year})",
+            name=f"Posun tónové řady {label} (gen. v {year})",
             target={"syl": "+"},
             action={},
             operation="tone_shift",
+            tone_rotation=rotation,
             year=year,
         )
 
@@ -666,11 +712,21 @@ class ToneSandhiSchema(Schema):
         super().__init__("tone_sandhi")
 
     def build(self, inventory: InventoryView, year: int, rng=None) -> Optional[Rule]:
+        if rng is None:
+            mapping, label = {"H>L": "R>L"}, "H-L → R-L"
+        else:
+            sandhis = [
+                ({"H>L": "R>L"}, "H-L → R-L"),
+                ({"L>H": "L>R"}, "L-H → L-R"),
+                ({"H>H": "M>H", "L>L": "M>L"}, "H-H/L-L → M-H/M-L"),
+            ]
+            mapping, label = rng.choice(sandhis)
         return Rule(
-            name=f"Tónové sandhi H-L → R-L (gen. v {year})",
+            name=f"Tónové sandhi {label} (gen. v {year})",
             target={"syl": "+"},
             action={},
             operation="tone_sandhi",
+            tone_sandhi_map=mapping,
             year=year,
         )
 

@@ -39,6 +39,21 @@ class Rule:
     schema_id: Optional[str] = None
     #: Souběžná rotace kontrastů pro systémový řetězový posun.
     chain_steps: Optional[List[tuple[Dict[str, str], Dict[str, str]]]] = None
+    #: Řetězec může být tažný (uvolněné místo přitahuje sousedy) nebo strkový
+    #: (inovace vytlačí sousední kontrast). Operace je v obou případech
+    #: simultánní, aby mezitvar neslil kontrasty.
+    chain_type: Optional[str] = None
+    #: Parametry systémové vokálové harmonie. ``harmony_inventory`` drží
+    #: pouze skutečné vokály konkrétního jazyka; změna proto nevyrábí
+    #: nedoloženou rysovou matici.
+    harmony_direction: Optional[str] = None  # progressive / regressive
+    harmony_domain: Optional[str] = None  # word / morpheme
+    harmony_features: Optional[List[str]] = None
+    harmony_inventory: Optional[List[Dict[str, str]]] = None
+    #: Tónový inventář a mapa jedné historické tónové řady. Hodnoty jsou
+    #: abstraktní kategorie (H/L/M/R/F), ne samostatné segmenty.
+    tone_rotation: Optional[Dict[str, str]] = None
+    tone_sandhi_map: Optional[Dict[str, str]] = None
 
     def matching_indices(self, word: Word) -> List[int]:
         """Najde terče bez mutace tvaru; používá ho generátor i aplikátor."""
@@ -107,6 +122,8 @@ class Rule:
             return bool(targets)
         if self.operation == "tonogenesis":
             return any(i + 1 < len(word.segments) for i in targets)
+        if self.operation == "vowel_harmony":
+            return self._harmony_can_apply(word)
         if self.operation == "tone_shift":
             return any(i in word.tones for i in targets)
         if self.operation == "tone_sandhi":
@@ -220,6 +237,9 @@ class Rule:
             word.ensure_stress()
             return changed
 
+        if self.operation == "vowel_harmony":
+            return self._apply_vowel_harmony(word)
+
         if self.operation == "tonogenesis":
             changed = False
             removed: set[int] = set()
@@ -243,7 +263,7 @@ class Rule:
 
         if self.operation == "tone_shift":
             changed = False
-            rotation = {"H": "R", "R": "L", "L": "H"}
+            rotation = self.tone_rotation or {"H": "R", "R": "L", "L": "H"}
             for i in targets_to_modify:
                 if i in word.tones:
                     word.tones[i] = rotation.get(word.tones[i], "H")
@@ -252,13 +272,17 @@ class Rule:
             return changed
 
         if self.operation == "tone_sandhi":
-            # Jednoduché disimilační sandhi: H následované L se realizuje
-            # jako R-L. Je to pravidlo nad tóny, nikoli přepsání segmentu.
+            # Sandhi je pravidlo nad tóny, nikoli přepsání segmentu. Mapa
+            # používá zápis ``H>L`` pro dvojici vstupních tónů a hodnotu
+            # ``R>L`` pro jejich realizaci.
             nuclei = sorted(index for index in targets_to_modify if index in word.tones)
             changed = False
             for first, second in zip(nuclei, nuclei[1:]):
-                if word.tones.get(first) == "H" and word.tones.get(second) == "L":
-                    word.tones[first] = "R"
+                pair = f"{word.tones.get(first, '')}>{word.tones.get(second, '')}"
+                result = (self.tone_sandhi_map or {"H>L": "R>L"}).get(pair)
+                if result:
+                    first_tone, _, second_tone = result.partition(">")
+                    word.tones[first], word.tones[second] = first_tone, second_tone
                     changed = True
             word.ensure_stress()
             return changed
@@ -389,6 +413,68 @@ class Rule:
         word.ensure_stress()
 
         return True
+
+    def _harmony_domains(self, word: Word) -> List[tuple[int, int]]:
+        """Vrátí intervaly, přes které se smí šířit harmonie."""
+        if self.harmony_domain != "morpheme":
+            return [(0, len(word.segments))]
+        boundaries = [0, *sorted(word.morpheme_boundaries), len(word.segments)]
+        return list(zip(boundaries, boundaries[1:]))
+
+    def _harmonic_replacement(self, source: Segment, controller: Segment) -> Dict[str, str] | None:
+        features = self.harmony_features or ["back"]
+        desired = {feature: controller.features.get(feature) for feature in features}
+        compatible = [
+            candidate for candidate in self.harmony_inventory or []
+            if all(candidate.get(feature) == value for feature, value in desired.items())
+        ]
+        if not compatible:
+            return None
+
+        def distance(candidate: Dict[str, str]) -> tuple[int, tuple[tuple[str, str], ...]]:
+            # Výška je pro harmonii sekundární, ale musí se zachovat nejvíc:
+            # /e/ vedle zadního kontroléru má dát /o/, ne nízké /a/.
+            height_penalty = sum(
+                10 for feature in ("hi", "lo") if candidate.get(feature) != source.features.get(feature)
+            )
+            differences = height_penalty + sum(
+                candidate.get(feature) != value
+                for feature, value in source.features.items()
+                if feature not in features and feature not in {"hi", "lo"}
+            )
+            return differences, tuple(sorted(candidate.items()))
+
+        selected = min(compatible, key=distance)
+        return dict(selected) if selected != source.features else None
+
+    def _harmony_can_apply(self, word: Word) -> bool:
+        for start, end in self._harmony_domains(word):
+            nuclei = [i for i in range(start, end) if word.segments[i].features.get("syl") == "+"]
+            if len(nuclei) < 2:
+                continue
+            controller_index = nuclei[0] if self.harmony_direction == "progressive" else nuclei[-1]
+            targets = nuclei[1:] if self.harmony_direction == "progressive" else nuclei[:-1]
+            if any(self._harmonic_replacement(word.segments[i], word.segments[controller_index]) for i in targets):
+                return True
+        return False
+
+    def _apply_vowel_harmony(self, word: Word) -> bool:
+        changed = False
+        for start, end in self._harmony_domains(word):
+            nuclei = [i for i in range(start, end) if word.segments[i].features.get("syl") == "+"]
+            if len(nuclei) < 2:
+                continue
+            controller_index = nuclei[0] if self.harmony_direction == "progressive" else nuclei[-1]
+            controller = word.segments[controller_index]
+            targets = nuclei[1:] if self.harmony_direction == "progressive" else nuclei[:-1]
+            for index in targets:
+                replacement = self._harmonic_replacement(word.segments[index], controller)
+                if replacement:
+                    word.segments[index].features = replacement
+                    changed = True
+        if changed:
+            word.ensure_stress()
+        return changed
 
     @staticmethod
     def _passes_minimality(word: Word, original: List[Segment], zbyvajici: List[Segment]) -> bool:

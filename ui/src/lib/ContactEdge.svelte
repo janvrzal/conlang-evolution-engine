@@ -19,6 +19,10 @@
 		prestige?: number;
 		calqueRate?: number;
 		adapt?: boolean;
+		layer?: 'folk' | 'elite' | 'written' | 'ritual';
+		transferMorphology?: boolean;
+		resolveHomophony?: boolean;
+		constructionIds?: string[];
 	};
 
 	type $$Props = EdgeProps & { data?: ContactEdgeData };
@@ -40,6 +44,10 @@
 	let prestige = $derived(data.prestige ?? 1);
 	let calqueRate = $derived(data.calqueRate ?? 0);
 	let adapt = $derived(data.adapt ?? true);
+	let layer = $derived(data.layer ?? 'folk');
+	let transferMorphology = $derived(data.transferMorphology ?? false);
+	let resolveHomophony = $derived(data.resolveHomophony ?? false);
+	let constructionIds = $derived(data.constructionIds ?? []);
 
 	let showPicker = $state(false);
 
@@ -77,6 +85,21 @@
 	}
 	function updateAdapt(val: boolean) {
 		data.adapt = val;
+	}
+	function updateLayer(val: 'folk' | 'elite' | 'written' | 'ritual') {
+		data.layer = val;
+	}
+	function updateTransferMorphology(val: boolean) {
+		data.transferMorphology = val;
+	}
+	function updateResolveHomophony(val: boolean) {
+		data.resolveHomophony = val;
+	}
+	function updateConstructionIds(value: string) {
+		data.constructionIds = value
+			.split(',')
+			.map((item) => item.trim())
+			.filter(Boolean);
 	}
 </script>
 
@@ -250,6 +273,43 @@
 							/>
 							{t('loanAdaptation')}
 						</label>
+						<label class="block px-1 text-xs"
+							>Vrstva kontaktu
+							<select
+								class="mt-1 w-full rounded border bg-background p-1"
+								value={layer}
+								onchange={(e) =>
+									updateLayer(e.currentTarget.value as 'folk' | 'elite' | 'written' | 'ritual')}
+							>
+								<option value="folk">Lidová</option><option value="elite">Elitní</option><option
+									value="written">Písemná</option
+								><option value="ritual">Rituální</option>
+							</select>
+						</label>
+						<label class="flex items-center gap-2 px-1 text-xs cursor-pointer"
+							><input
+								type="checkbox"
+								checked={transferMorphology}
+								onchange={(e) => updateTransferMorphology(e.currentTarget.checked)}
+								class="accent-primary"
+							/>Přenášet i gramatické morfémy</label
+						>
+						<label class="flex items-center gap-2 px-1 text-xs cursor-pointer"
+							><input
+								type="checkbox"
+								checked={resolveHomophony}
+								onchange={(e) => updateResolveHomophony(e.currentTarget.checked)}
+								class="accent-primary"
+							/>Povolit výpůjčku jako řešení homofonie</label
+						>
+						<label class="block px-1 text-xs"
+							>Přenést konstrukce (ID, čárkou)<input
+								class="mt-1 w-full rounded border bg-background p-1"
+								value={constructionIds.join(', ')}
+								oninput={(e) => updateConstructionIds(e.currentTarget.value)}
+								placeholder="agentive, trade-compound"
+							/></label
+						>
 					</div>
 
 					<div class="flex justify-end pt-1">

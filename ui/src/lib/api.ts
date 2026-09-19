@@ -283,3 +283,72 @@ export async function fetchRunExport(runId: string) {
 	if (!res.ok) throw new Error(`Export selhal: ${res.status} ${res.statusText}`);
 	return res.json();
 }
+
+export type SchemaProfile = {
+	id: string;
+	label: string;
+	description: string;
+	kind: string;
+	license: string;
+	provenance: string;
+};
+
+export async function fetchSchemaProfiles(): Promise<SchemaProfile[]> {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/schema-profiles`);
+	if (!res.ok) throw new Error(`Načtení profilů selhalo: ${res.status}`);
+	return res.json();
+}
+
+export type PhoibleStatus = {
+	available: boolean;
+	repository_present: boolean;
+	inventories?: number;
+	revision?: string | null;
+	error?: string;
+};
+
+export async function fetchPhoibleStatus(): Promise<PhoibleStatus> {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/phonology/status`);
+	if (!res.ok) throw new Error(`Stav PHOIBLE nelze načíst: ${res.status}`);
+	return res.json();
+}
+
+export async function updatePhoibleData(): Promise<PhoibleStatus> {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/phonology/update-data`, { method: 'POST' });
+	if (!res.ok) throw new Error(`Aktualizace PHOIBLE selhala: ${res.status}`);
+	return res.json();
+}
+
+export async function fetchRunMetrics(runId: string) {
+	const base = await resolveApiBase();
+	const res = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}/metrics`);
+	if (!res.ok) throw new Error(`Metriky nelze načíst: ${res.status}`);
+	return (await res.json()).metrics;
+}
+
+export async function fetchGrammar(runId: string, nodeId: string): Promise<string> {
+	const base = await resolveApiBase();
+	const res = await fetch(
+		`${base}/api/runs/${encodeURIComponent(runId)}/grammars/${encodeURIComponent(nodeId)}`
+	);
+	if (!res.ok) throw new Error(`Gramatiku nelze načíst: ${res.status}`);
+	return (await res.json()).grammar_md;
+}
+
+export async function fetchEdgeRules(runId: string, childId: string) {
+	const base = await resolveApiBase();
+	const res = await fetch(
+		`${base}/api/runs/${encodeURIComponent(runId)}/edges/${encodeURIComponent(childId)}/rules`
+	);
+	if (!res.ok) throw new Error(`Pravidla hrany nelze načíst: ${res.status}`);
+	return (await res.json()).rules as {
+		year: number;
+		rule: string;
+		schema_id: string;
+		hit_count: number;
+		deleted_segments: number;
+	}[];
+}

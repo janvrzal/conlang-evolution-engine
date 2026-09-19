@@ -16,22 +16,29 @@
 
 	import LanguageNode from '$lib/LanguageNode.svelte';
 	import ContactEdge from '$lib/ContactEdge.svelte';
-	import LanguageDetail from '$lib/LanguageDetail.svelte';
 	import TimelineControl from '$lib/TimelineControl.svelte';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
-	import { X, Map } from 'lucide-svelte';
 	import MapToolbar from '$lib/MapToolbar.svelte';
 	import MapProjectPanel from '$lib/MapProjectPanel.svelte';
+	import HomophonyQueue, { type PendingHomophony } from '$lib/HomophonyQueue.svelte';
 
 	import {
 		simulateDynamic,
 		resetApiBase,
-		fetchIsogloss,
 		fetchRunExport,
-		importLegacyNeo4j
+		importLegacyNeo4j,
+		fetchSchemaProfiles,
+		fetchPhoibleStatus,
+		updatePhoibleData,
+		fetchRunMetrics,
+		fetchGrammar,
+		fetchEdgeRules,
+		type SchemaProfile,
+		type PhoibleStatus
 	} from '$lib/api';
 	import { projectState, loadProject, scheduleSave, flushSave } from '$lib/state.svelte';
 	import {
@@ -74,7 +81,16 @@
 	// xyflow v1 nemá vestavěné mazání klávesou, takže si výběr hrany držíme sami.
 	let selectedEdgeId = $state<string | null>(null);
 
-	let activeIsogloss = $state<{ conceptId: string; data: Record<string, string> } | null>(null);
+	let schemaProfiles = $state<SchemaProfile[]>([]);
+	let phoible = $state<PhoibleStatus | null>(null);
+	let metrics = $state<any>(null);
+	let grammar = $state('');
+	let edgeRules = $state<any[]>([]);
+	let pendingHomophones = $state<PendingHomophony[]>([]);
+	let resourceLoading = $state(false);
+	let selectedProfile = $derived(
+		schemaProfiles.find((profile) => profile.id === projectState.schemaProfileId)
+	);
 
 	// Zvýraznění vybrané hrany řeší CSS přes třídu .selected, kterou přidává
 	// sám xyflow. Přepisovat kvůli tomu pole hran by rozbilo bind:edges.
@@ -121,6 +137,7 @@
 		// Protojazyk zakládá store, ne tenhle callback — jinak ho stihne přebít
 		// synchronizační efekt níž a do projektu se uloží prázdný snapshot.
 		void loadProject($page.params.id ?? 'default');
+		void loadSimulationControls();
 
 		const flush = () => void flushSave();
 		window.addEventListener('beforeunload', flush);
@@ -130,6 +147,63 @@
 			window.removeEventListener('keydown', onKeyDown);
 		};
 	});
+
+	async function loadSimulationControls() {
+		try {
+			[schemaProfiles, phoible] = await Promise.all([fetchSchemaProfiles(), fetchPhoibleStatus()]);
+			if (projectState.simulationRunId)
+				metrics = await fetchRunMetrics(projectState.simulationRunId);
+			if (projectState.simulationRunId) await loadHomophonyQueue(projectState.simulationRunId);
+		} catch (e) {
+			errorMessage = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	async function loadHomophonyQueue(runId: string) {
+		const payload = await fetchRunExport(runId);
+		pendingHomophones = (payload.events ?? [])
+			.filter((event: any) => event.kind === 'homophony_pending' && event.status === 'pending')
+			.filter((event: any) => {
+				const decision = projectState.homophonyQueue[event.decision_id];
+				return (
+					decision !== 'dismissed' &&
+					!(typeof decision === 'object' && decision.status === 'resolved')
+				);
+			})
+			.map((event: any) => ({
+				...event,
+				reviewState:
+					projectState.homophonyQueue[event.decision_id] === 'reviewing' ? 'reviewing' : undefined
+			}));
+	}
+
+	function resolveHomophony(item: PendingHomophony, action: 'review' | 'dismiss') {
+		projectState.homophonyQueue = {
+			...projectState.homophonyQueue,
+			[item.decision_id]: action === 'dismiss' ? 'dismissed' : 'reviewing'
+		};
+		scheduleSave();
+		if (action === 'dismiss') {
+			pendingHomophones = pendingHomophones.filter(
+				(candidate) => candidate.decision_id !== item.decision_id
+			);
+			return;
+		}
+		window.location.assign(
+			`/project/${projectState.id}/languages/${item.language_id}?year=${item.year}&homophony=${encodeURIComponent(item.decision_id)}`
+		);
+	}
+
+	async function refreshPhoible() {
+		resourceLoading = true;
+		try {
+			phoible = await updatePhoibleData();
+		} catch (e) {
+			errorMessage = e instanceof Error ? e.message : String(e);
+		} finally {
+			resourceLoading = false;
+		}
+	}
 
 	// Každá změna uzlů, hran nebo osy naplánuje uložení.
 	$effect(() => {
@@ -208,8 +282,14 @@
 	// Hrana je buď dědičnost (rodič -> potomek), nebo kontakt (sousedé, kteří
 	// se navzájem ovlivňují). Bez rozlišení se všechno bralo jako dědičnost
 	// a propojené jazyky na sebe nikdy nepůsobily.
-	let activeTool = $state<'interact' | 'relationship'>('interact');
+	let activeTool = $state<'interact' | 'relationship' | 'route'>('interact');
 	let relationshipType = $state<'inheritance' | 'contact'>('inheritance');
+	let drawingRouteId = $state<string | null>(null);
+	// Kreslení je záměrně modální akce. Když se autor vrátí k běžné interakci
+	// nebo k tvorbě vztahu, nesmí další klik omylem přidat bod do staré trasy.
+	$effect(() => {
+		if (activeTool !== 'route') drawingRouteId = null;
+	});
 
 	/**
 	 * Nová hrana dostane druh podle právě zvoleného nástroje.
@@ -305,9 +385,38 @@
 	function onNodeClick({ node }: { node: Node }) {
 		selectedNodeId = node.id;
 		detailOpen = true;
+		if (projectState.simulationRunId) {
+			void fetchGrammar(projectState.simulationRunId, node.id)
+				.then((value) => (grammar = value))
+				.catch(() => (grammar = ''));
+		}
 	}
 
-	function onPaneClick() {
+	function toggleRouteDrawing(routeId: string) {
+		drawingRouteId = drawingRouteId === routeId ? null : routeId;
+		if (drawingRouteId) activeTool = 'route';
+	}
+
+	function onPaneClick({ event }: { event: MouseEvent }) {
+		if (activeTool === 'route' && drawingRouteId) {
+			const canvas = document.querySelector('.svelte-flow') as HTMLElement | null;
+			const viewport = canvas?.querySelector('.svelte-flow__viewport') as HTMLElement | null;
+			const bounds = canvas?.getBoundingClientRect();
+			if (!bounds || !viewport) return;
+			const matrix = new DOMMatrix(getComputedStyle(viewport).transform);
+			const zoom = matrix.a || 1;
+			const point = {
+				x: Math.round((event.clientX - bounds.left - matrix.e) / zoom),
+				y: Math.round((event.clientY - bounds.top - matrix.f) / zoom)
+			};
+			projectState.tradeRoutes = projectState.tradeRoutes.map((route) =>
+				route.id === drawingRouteId
+					? { ...route, waypoints: [...(route.waypoints ?? []), point] }
+					: route
+			);
+			scheduleSave();
+			return;
+		}
 		selectedNodeId = null;
 		selectedEdgeId = null;
 		detailOpen = false;
@@ -350,38 +459,6 @@
 	// --- Simulation Logic ---
 	let isLoading = $state(false);
 	let errorMessage = $state('');
-	async function handleIsogloss(conceptId: string) {
-		if (!projectState.simulationRunId) return;
-		try {
-			const data = await fetchIsogloss(
-				projectState.simulationRunId,
-				conceptId,
-				timeSteps[currentTimeIndex]
-			);
-			activeIsogloss = { conceptId, data };
-			updateNodesIsogloss();
-		} catch (e) {
-			console.error('Izoglosa failed', e);
-		}
-	}
-
-	function clearIsogloss() {
-		activeIsogloss = null;
-		updateNodesIsogloss();
-	}
-
-	function updateNodesIsogloss() {
-		nodes = nodes.map((n) => {
-			if (activeIsogloss) {
-				return { ...n, data: { ...n.data, isoglossValue: activeIsogloss.data[n.id] || '-' } };
-			} else {
-				const rest = { ...n.data } as Record<string, unknown>;
-				delete rest.isoglossValue;
-				return { ...n, data: rest };
-			}
-		});
-	}
-
 	async function exportSimulation() {
 		if (!projectState.simulationRunId) return;
 		try {
@@ -429,6 +506,9 @@
 			// okamžiku odštěpení; v dalších snímcích se správně mění na kontakt.
 			// Poslat jen aktuálně zobrazený snímek by proto genealogii zahodilo.
 			const topology_data = {
+				polities: projectState.polities,
+				tradeRoutes: projectState.tradeRoutes,
+				historicalEvents: projectState.historicalEvents,
 				snapshots: timeSteps.map((year) => ({
 					year,
 					nodes: projectState.snapshots[year]?.nodes ?? [],
@@ -440,7 +520,10 @@
 				topology_data,
 				proto_lexicon: projectState.generatedProtoLexicon,
 				years: maxYear,
-				run_id: projectState.simulationRunId
+				run_id: projectState.simulationRunId,
+				schema_profile_id: projectState.schemaProfileId,
+				empirical_phonology: projectState.empiricalPhonology,
+				calibration: projectState.calibration
 			});
 
 			await minWait;
@@ -448,6 +531,8 @@
 			if (data.status === 'success') {
 				projectState.simulationRunAt = new Date().toISOString();
 				projectState.simulationRunId = data.run_id;
+				metrics = await fetchRunMetrics(data.run_id);
+				await loadHomophonyQueue(data.run_id);
 				// Uložení je lokální ve výchozím stavu; Neo4j je jen volitelný adaptér.
 				void flushSave();
 
@@ -464,6 +549,17 @@
 			isLoading = false;
 		}
 	}
+
+	$effect(() => {
+		const selected = edges.find((edge) => edge.id === selectedEdgeId);
+		if (!selected || selected.type === 'contact' || !projectState.simulationRunId) {
+			edgeRules = [];
+			return;
+		}
+		void fetchEdgeRules(projectState.simulationRunId, selected.target)
+			.then((rules) => (edgeRules = rules))
+			.catch(() => (edgeRules = []));
+	});
 </script>
 
 <svelte:head>
@@ -519,6 +615,36 @@
 						/>
 					</ViewportPortal>
 				{/if}
+				{#each projectState.tradeRoutes as route (route.id)}
+					{#if (route.waypoints ?? []).length > 1}
+						<ViewportPortal
+							target="back"
+							class="pointer-events-none overflow-visible"
+							aria-hidden="true"
+						>
+							<svg class="absolute left-0 top-0 overflow-visible" width="1" height="1">
+								<polyline
+									points={route.waypoints
+										.map((point: { x: number; y: number }) => `${point.x},${point.y}`)
+										.join(' ')}
+									fill="none"
+									stroke={route.id === drawingRouteId
+										? 'hsl(var(--primary))'
+										: 'hsl(var(--muted-foreground))'}
+									stroke-width="5"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-dasharray={route.kind === 'sea'
+										? '12 8'
+										: route.kind === 'river'
+											? '4 7'
+											: undefined}
+									opacity="0.7"
+								/>
+							</svg>
+						</ViewportPortal>
+					{/if}
+				{/each}
 				<Background variant={BackgroundVariant.Dots} gap={28} size={1} class="opacity-30" />
 				<Controls class="bg-card border-border fill-foreground" />
 			</SvelteFlow>
@@ -532,26 +658,12 @@
 		onDeleteEdge={deleteSelectedEdge}
 	/>
 
-	<!-- Izoglosa Banner -->
-	{#if activeIsogloss}
-		<div
-			class="absolute top-4 left-1/2 ml-[220px] z-10 flex bg-primary text-primary-foreground rounded-md shadow-lg p-1.5 px-3 items-center gap-2 animate-in slide-in-from-top-4"
-		>
-			<Map class="w-4 h-4" />
-			<span class="text-sm font-semibold tracking-tight">Izoglosa: {activeIsogloss.conceptId}</span>
-			<button
-				class="ml-2 hover:bg-primary-foreground/20 p-0.5 rounded transition-colors"
-				onclick={clearIsogloss}
-			>
-				<X size={16} />
-			</button>
-		</div>
-	{/if}
-
 	<!-- Left Panel: Project Settings -->
-	<div class="absolute top-4 left-4 z-10 w-80 flex flex-col gap-4">
+	<div class="absolute top-4 left-4 bottom-4 z-10 w-80 space-y-4 overflow-y-auto pr-1">
 		<MapProjectPanel
 			currentYear={timeSteps[currentTimeIndex]}
+			{drawingRouteId}
+			onDrawRoute={toggleRouteDrawing}
 			{isLoading}
 			{errorMessage}
 			onAddLanguage={addLanguage}
@@ -560,7 +672,155 @@
 			onImportLegacy={importPreviousSimulation}
 		/>
 
-		{#if selectedNodeId && selectedNodeData}
+		<Card class="shadow-sm">
+			<CardHeader class="pb-2"><CardTitle class="text-base">Simulační profil</CardTitle></CardHeader
+			>
+			<CardContent class="space-y-3">
+				<label class="block text-xs font-medium">
+					Váhy zvukových změn
+					<select
+						class="mt-1 w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
+						value={projectState.schemaProfileId}
+						onchange={(event) => {
+							projectState.schemaProfileId = event.currentTarget.value;
+							scheduleSave();
+						}}
+					>
+						{#each schemaProfiles as profile (profile.id)}
+							<option value={profile.id}>{profile.label}</option>
+						{/each}
+					</select>
+				</label>
+				{#if selectedProfile}
+					<p class="text-xs text-muted-foreground">{selectedProfile.description}</p>
+				{/if}
+				<div class="border-t pt-3 space-y-3">
+					<p class="text-xs font-medium">Tempo a šíření</p>
+					<label class="block text-xs text-muted-foreground">
+						Inovace / tisíc let: {projectState.calibration.sound_changes_per_millennium}
+						<Input
+							type="range"
+							min="2"
+							max="24"
+							step="1"
+							bind:value={projectState.calibration.sound_changes_per_millennium}
+							oninput={scheduleSave}
+						/>
+					</label>
+					<label class="block text-xs text-muted-foreground">
+						Šíření změny: {projectState.calibration.change_spread_years} let
+						<Input
+							type="range"
+							min="0"
+							max="240"
+							step="10"
+							bind:value={projectState.calibration.change_spread_years}
+							oninput={scheduleSave}
+						/>
+					</label>
+					<label class="block text-xs text-muted-foreground">
+						Izolovanost: {Math.round(projectState.calibration.isolation * 100)} %
+						<Input
+							type="range"
+							min="0"
+							max="1"
+							step="0.05"
+							bind:value={projectState.calibration.isolation}
+							oninput={scheduleSave}
+						/>
+					</label>
+				</div>
+				<div class="border-t pt-3 space-y-2">
+					<div class="flex items-center justify-between gap-2">
+						<div>
+							<p class="text-xs font-medium">Empirická fonologie (PHOIBLE)</p>
+							<p class="text-xs text-muted-foreground">
+								{phoible?.available
+									? `${phoible.inventories ?? 0} inventářů v lokální cache`
+									: 'Cache zatím není stažená'}
+							</p>
+						</div>
+						<input
+							type="checkbox"
+							checked={projectState.empiricalPhonology}
+							disabled={!phoible?.available}
+							onchange={(event) => {
+								projectState.empiricalPhonology = event.currentTarget.checked;
+								scheduleSave();
+							}}
+						/>
+					</div>
+					<Button
+						variant="outline"
+						size="sm"
+						class="w-full"
+						onclick={refreshPhoible}
+						disabled={resourceLoading}
+					>
+						{resourceLoading
+							? 'Aktualizuji PHOIBLE…'
+							: phoible?.available
+								? 'Aktualizovat PHOIBLE'
+								: 'Stáhnout PHOIBLE'}
+					</Button>
+				</div>
+			</CardContent>
+		</Card>
+
+		{#if metrics}
+			<Card class="shadow-sm">
+				<CardHeader class="pb-2"><CardTitle class="text-base">Validace běhu</CardTitle></CardHeader>
+				<CardContent class="space-y-1 text-xs">
+					<p>Aplicované změny: <strong>{metrics.sound_changes}</strong></p>
+					{#if metrics.sound_change_phases}
+						<p>Fáze šíření: <strong>{metrics.sound_change_phases}</strong></p>
+					{/if}
+					<p>
+						Změny / tisíciletí: <strong
+							>{Number(metrics.changes_per_millennium ?? 0).toFixed(2)}</strong
+						>
+					</p>
+					<p>Smazané segmenty: <strong>{metrics.deleted_segments}</strong></p>
+					{#if Object.keys(metrics.schemas ?? {}).length}
+						<p class="pt-1 text-muted-foreground">
+							{Object.entries(metrics.schemas)
+								.map(([id, count]) => `${id}: ${count}`)
+								.join(' · ')}
+						</p>
+					{/if}
+				</CardContent>
+			</Card>
+		{/if}
+
+		{#if selectedEdgeId && edgeRules.length}
+			<Card class="shadow-sm border-primary">
+				<CardHeader class="pb-2"
+					><CardTitle class="text-base">Pravidla na hraně</CardTitle></CardHeader
+				>
+				<CardContent class="space-y-2 text-xs">
+					{#each edgeRules as rule (rule.year + rule.rule)}
+						<div class="border-b pb-1">
+							<strong>{rule.year}: {rule.rule}</strong>
+							<div class="text-muted-foreground">
+								{rule.schema_id} · zásahy {rule.hit_count} · smazáno {rule.deleted_segments}
+							</div>
+						</div>
+					{/each}
+				</CardContent>
+			</Card>
+		{/if}
+
+		{#if grammar}
+			<Card class="shadow-sm">
+				<CardHeader class="pb-2"
+					><CardTitle class="text-base">Gramatický náčrt</CardTitle></CardHeader
+				>
+				<CardContent><pre class="text-xs whitespace-pre-wrap font-sans">{grammar}</pre></CardContent
+				>
+			</Card>
+		{/if}
+
+		{#if selectedNodeId && selectedNodeData && !detailOpen}
 			<Card class="shadow-sm border-primary">
 				<CardHeader class="pb-3">
 					<CardTitle class="text-base">{t('nodeDetail')}</CardTitle>
@@ -643,19 +903,73 @@
 	</div>
 
 	<!-- Right Panel: Language Detail Sidebar -->
+	{#if projectState.simulationRunId}
+		<div class="absolute right-6 bottom-36 z-20">
+			<HomophonyQueue items={pendingHomophones} onResolve={resolveHomophony} />
+		</div>
+	{/if}
+
 	{#if selectedNodeId && selectedNodeData && detailOpen}
-		<div class="absolute top-0 right-0 bottom-0 z-20 shadow-2xl animate-in slide-in-from-right">
-			<LanguageDetail
-				runId={projectState.simulationRunId}
-				nodeId={selectedNodeId}
-				label={String(selectedNodeData.data.label ?? selectedNodeId)}
-				biome={(selectedNodeData.data as any).biome ?? null}
-				years={Math.max(0, timeSteps[currentTimeIndex] - Number(selectedNodeData.data.year || 0))}
-				currentYear={timeSteps[currentTimeIndex]}
-				embedded={false}
-				onclose={() => (detailOpen = false)}
-				onIsogloss={handleIsogloss}
-			/>
+		<div class="absolute right-4 top-4 z-20 w-72 animate-in slide-in-from-right">
+			<Card class="shadow-lg border-primary">
+				<CardHeader class="pb-2"
+					><CardTitle class="text-base">Nastavení jazyka</CardTitle></CardHeader
+				>
+				<CardContent class="space-y-3">
+					<label class="block text-xs text-muted-foreground"
+						>Název
+						<Input
+							value={selectedNodeData.data.label}
+							oninput={(e) => {
+								nodes = nodes.map((n) =>
+									n.id === selectedNodeId
+										? { ...n, data: { ...n.data, label: e.currentTarget.value } }
+										: n
+								);
+								scheduleSave();
+							}}
+						/>
+					</label>
+					<div class="space-y-2 border rounded-md p-3">
+						<Label class="text-xs font-semibold">Sociální profil</Label>
+						{#each [['prestige', t('prestige')], ['mobility', t('mobility')], ['standardization', t('standardization')]] as [field, label]}
+							<label class="block text-xs text-muted-foreground"
+								>{label}: {Math.round(
+									Number((selectedNodeData.data as any).social?.[field] ?? 0.5) * 100
+								)}%
+								<Input
+									type="range"
+									min="0"
+									max="1"
+									step="0.05"
+									value={Number((selectedNodeData.data as any).social?.[field] ?? 0.5)}
+									oninput={(e) =>
+										updateNodeSocial(
+											selectedNodeId!,
+											field as 'prestige' | 'mobility' | 'standardization',
+											parseFloat(e.currentTarget.value)
+										)}
+								/>
+							</label>
+						{/each}
+					</div>
+					<div class="flex items-center gap-2 rounded-md border p-2">
+						<Checkbox
+							id="node-lexical-history"
+							checked={(selectedNodeData.data as any).lexical?.enabled ?? false}
+							onchange={(e: Event & { currentTarget: HTMLInputElement }) =>
+								setLexicalHistory(selectedNodeId!, e.currentTarget.checked)}
+						/><Label for="node-lexical-history" class="text-sm">{t('enableLexicalHistory')}</Label>
+					</div>
+					<Button
+						variant="outline"
+						class="w-full"
+						href={`/project/${projectState.id}/languages/${selectedNodeId}?year=${timeSteps[currentTimeIndex]}`}
+					>
+						Spravovat jazyk
+					</Button>
+				</CardContent>
+			</Card>
 		</div>
 	{/if}
 

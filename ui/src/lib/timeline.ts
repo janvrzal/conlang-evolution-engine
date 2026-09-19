@@ -321,7 +321,13 @@ export function newEdgeFields(wantsContact: boolean, year: number): Pick<TLEdge,
 	return wantsContact
 		? {
 				type: 'contact',
-				data: { contactType: 'neighborhood', intensity: 50, direction: 'ab', year }
+				data: {
+					contactType: 'neighborhood',
+					intensity: 50,
+					direction: 'ab',
+					resolveHomophony: false,
+					year
+				}
 			}
 		: { type: 'straight', data: { year } };
 }

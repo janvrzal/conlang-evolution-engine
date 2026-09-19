@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional
 
 from cee.engine.inventory import InventoryView
 
+PHOIBLE_REPOSITORY_URL = "https://github.com/phoible/dev.git"
+
 
 def _git_revision(repository: Path) -> Optional[str]:
     """Vrátí lokální commit zdroje, pokud cache vznikla z Git repozitáře."""
@@ -129,3 +131,42 @@ def save_phoible_model(model: PhoibleInventoryModel, path: str | Path) -> None:
 
 def load_phoible_model(path: str | Path) -> PhoibleInventoryModel:
     return PhoibleInventoryModel.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
+
+
+def phoible_status(cache_dir: Optional[str | Path] = None) -> Dict[str, Any]:
+    """Popis lokální offline cache bez přístupu k síti."""
+    paths = default_paths(cache_dir)
+    model_path = paths["phoible_model"]
+    status: Dict[str, Any] = {
+        "available": model_path.is_file(),
+        "repository_present": paths["phoible_repository"].is_dir(),
+        "model_path": str(model_path),
+        "revision": _git_revision(paths["phoible_repository"]),
+    }
+    if model_path.is_file():
+        try:
+            model = load_phoible_model(model_path)
+            status.update({
+                "inventories": len(model.inventories),
+                "provenance": model.provenance,
+            })
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            status.update({"available": False, "error": str(exc)})
+    return status
+
+
+def update_phoible_cache(cache_dir: Optional[str | Path] = None) -> Dict[str, Any]:
+    """Aktualizuje zdroj a vytvoří reprodukovatelný lokální model PHOIBLE."""
+    paths = default_paths(cache_dir)
+    paths["root"].mkdir(parents=True, exist_ok=True)
+    repository = paths["phoible_repository"]
+    if (repository / ".git").is_dir():
+        subprocess.run(["git", "-C", str(repository), "pull", "--ff-only"], check=True)
+    else:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", PHOIBLE_REPOSITORY_URL, str(repository)],
+            check=True,
+        )
+    model = PhoibleInventoryModel.from_csv(paths["phoible_raw"])
+    save_phoible_model(model, paths["phoible_model"])
+    return phoible_status(cache_dir)

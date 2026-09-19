@@ -60,7 +60,9 @@ def test_export_a_mazani_jsou_omezene_na_jeden_beh(tmp_path):
     store.delete("first")
 
     assert store.export("second")["run_id"] == "second"
-    assert store.export("second")["schema_version"] == 2
+    # Verze 3 přidala časový řez a metadata lexému; mazání běhů zůstává
+    # nezávislé na verzi exportu.
+    assert store.export("second")["schema_version"] == 3
     assert store.export("second")["events"] == []
     try:
         store.export("first")

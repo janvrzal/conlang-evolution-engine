@@ -129,6 +129,34 @@ class InventoryView:
         if rule.action.get("delete") == "+":
             return self
 
+        # Systémový řetězec nemá jednu společnou ``action``. Inventář ale
+        # musí při plánování chronologie vidět stejný simultánní posun jako
+        # lexikon, jinak by další kandidát vycházel ze zastaralé řady.
+        if rule.operation == "chain_shift":
+            segments = set(self._features)
+            removed: set[str] = set()
+            added: set[str] = set()
+            for ipa, features in self._features.items():
+                for source, action in rule.chain_steps or []:
+                    probe = Segment(features=features)
+                    if probe.matches(source):
+                        shifted = Segment(features=dict(action))
+                        new_ipa = self._mapper.segment_to_ipa(shifted)
+                        if new_ipa and new_ipa != "?":
+                            added.add(new_ipa)
+                            removed.add(ipa)
+                        break
+            # Až zde: /i/ → /e/ nesmí záviset na tom, zda se /e/ → /a/
+            # v iteraci zpracovalo před ním nebo po něm.
+            segments.difference_update(removed)
+            segments.update(added)
+            return InventoryView(self._mapper, segments)
+
+        # Harmonie pouze přerozděluje existující vokály v konkrétních
+        # lexikálních doménách; sama o sobě proto neimplikuje zánik fonému.
+        if rule.operation == "vowel_harmony":
+            return self
+
         affected = self.matching(rule.target)
         if not affected:
             return self
