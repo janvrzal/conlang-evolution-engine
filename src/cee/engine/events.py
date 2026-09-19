@@ -1,0 +1,152 @@
+"""Typy událostí společné časové osy evoluční simulace.
+
+Oddělení datových nosičů od `EvolutionSimulator` drží samotný orchestrátor
+zaměřený na pořadí a účinky událostí. Události jsou záměrně malé a nemají
+vlastní chování: historická pravidla zůstávají v `rules.py`.
+"""
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
+
+from cee.engine.rules import Rule
+
+
+@dataclass
+class ForkEvent:
+    year: int
+    parent_id: str
+    child_id: str
+
+
+@dataclass
+class PhonologyEvent:
+    """Ručně zapsané, okamžité pravidlo pro zpětnou kompatibilitu."""
+
+    year: int
+    branch_id: str
+    rule: Rule
+
+
+@dataclass
+class SoundChangeEvent:
+    """Začátek generované změny, která se šíří po části časové osy."""
+
+    year: int
+    branch_id: str
+    rule: Rule
+    change_id: str
+    duration: int
+    intensity: float = 1.0
+    pressure: float = 0.0
+    applicable_words: int = 0
+    frequency_coverage: float = 0.0
+    contrast_retention: float = 1.0
+    functional_load: float = 0.0
+    paradigm_retention: float = 1.0
+    innovation_group: Optional[str] = None
+    innovation_class: Optional[str] = None
+
+
+@dataclass
+class SoundChangeSpreadEvent:
+    """Jedna kumulativní fáze šíření dříve vzniklé zvukové inovace."""
+
+    year: int
+    branch_id: str
+    change_id: str
+    progress: float
+
+
+@dataclass
+class PhonologySlotEvent:
+    """Okamžik, kdy se pravidlo vybere z tehdejšího stavu jazyka."""
+
+    year: int
+    branch_id: str
+
+
+@dataclass
+class ContactEvent:
+    year: int
+    source_id: str
+    target_id: str
+    volume: int
+    domain: str = "neighborhood"
+    prestige: float = 1.0
+    calque_rate: float = 0.0
+    adapt: bool = False
+    layer: str = "folk"
+    transfer_morphology: bool = False
+    resolve_homophony: bool = False
+    construction_ids: list[str] = field(default_factory=list)
+
+
+@dataclass
+class SemanticEvent:
+    year: int
+    branch_id: str
+
+
+@dataclass
+class SemanticChangeEvent:
+    """Sémantická inovace, která po určitou dobu koexistuje se starým užitím."""
+
+    year: int
+    branch_id: str
+    change_id: str
+    word_lineage_id: str
+    source_concept: str
+    target_concept: Optional[str]
+    kind: str
+    duration: int
+    pressure: float
+    evidence_weight: float
+    evidence_type: str
+    adoption_threshold: float
+    competitor_lineage_id: Optional[str] = None
+    mechanism: Optional[str] = None
+    mechanism_pressure: float = 1.0
+    mechanism_reason: str = "untyped relation"
+    context_pressure: float = 1.0
+    context_reason: str = "no configured communicative pressure"
+    innovation_group: Optional[str] = None
+    introduced: bool = False
+
+
+@dataclass
+class SemanticChangeSpreadEvent:
+    """Kumulativní fáze šíření jedné sémantické inovace."""
+
+    year: int
+    branch_id: str
+    change_id: str
+    progress: float
+
+
+@dataclass
+class MorphologyEvent:
+    year: int
+    branch_id: str
+
+
+@dataclass
+class LexicalEvent:
+    year: int
+    branch_id: str
+
+
+@dataclass
+class SocialEvent:
+    year: int
+    branch_id: str
+    changes: Dict[str, Any]
+    #: Volitelná stopa autorské události, ze které tlak pochází.
+    history: Dict[str, object] | None = None
+
+
+@dataclass
+class SocialDynamicsEvent:
+    """Pravidelný krok komunit a dialektních variet."""
+
+    year: int
+    branch_id: str

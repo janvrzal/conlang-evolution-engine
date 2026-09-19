@@ -4,9 +4,24 @@ nodes:
   - id: north
     map:
       compound_head: initial
+    # Složeniny se dřív vytvářely natvrdo v simulator.py; teď je řídí topologie.
+    compounds:
+      - head: "město"
+        modifier: "zlatý"
+        id: "zlaté_město"
+      - head: "vlk"
+        modifier: "velký"
+        id: "velký_vlk"
   - id: south
     map:
       compound_head: final
+    compounds:
+      - head: "město"
+        modifier: "zlatý"
+        id: "zlaté_město"
+      - head: "vlk"
+        modifier: "velký"
+        id: "velký_vlk"
 
 vertical_edges:
   - parent: proto

@@ -1,6 +1,11 @@
 name: "Fantasy World Preset"
 description: "Příkladový preset pro fantasy světy se specifickými biomy (hory, prales, temnota)."
 
+macro:
+  # Bez explicitní regulace deletivní zákony v dlouhých simulacích snadno
+  # převáží a systematicky erodují lexikon.
+  deletion_rate: 0.4
+
 schemas:
   lenition:
     base_weight: 100
@@ -12,6 +17,56 @@ schemas:
     base_weight: 40
   vowel_shift:
     base_weight: 60
+  # Protiváha erozi — bez schémat, která slova prodlužují, se lexikon
+  # nutně scvrkne do shluků souhlásek.
+  epenthesis:
+    base_weight: 45
+  diphthongization:
+    base_weight: 35
+  unconditional_fricatization:
+    base_weight: 30
+  unconditional_devoicing:
+    base_weight: 30
+  unconditional_vowel_lowering:
+    base_weight: 40
+  final_devoicing:
+    base_weight: 25
+  umlaut:
+    base_weight: 20
+  nasalization:
+    base_weight: 12
+  monophthongization:
+    base_weight: 18
+  apocope:
+    base_weight: 22
+  assimilation:
+    base_weight: 28
+  palatalization:
+    base_weight: 20
+  intervocalic_spirantization:
+    base_weight: 18
+  prothesis:
+    base_weight: 8
+  paragoge:
+    base_weight: 12
+  gemination:
+    base_weight: 10
+  metathesis:
+    base_weight: 6
+  compensatory_lengthening:
+    base_weight: 12
+  stress_shift:
+    base_weight: 14
+  vowel_harmony:
+    base_weight: 16
+  chain_shift:
+    base_weight: 6
+  tonogenesis:
+    base_weight: 5
+  tone_shift:
+    base_weight: 3
+  tone_sandhi:
+    base_weight: 4
 
 biomes:
   hory:
@@ -21,6 +76,25 @@ biomes:
       syncope: 1.5      # Ztráta nepřízvučných samohlásek (ostré shluky)
       coda_loss: 0.2    # Koncové souhlásky zůstávají
       vowel_shift: 1.0
+      epenthesis: 0.4   # Shluky se v horách nerozpouštějí
+      diphthongization: 0.8
+      unconditional_fricatization: 1.2
+      unconditional_devoicing: 1.5
+      unconditional_vowel_lowering: 0.8
+      final_devoicing: 1.4
+      umlaut: 0.9
+      nasalization: 0.7
+      monophthongization: 0.8
+      apocope: 0.8
+      assimilation: 1.2
+      palatalization: 0.7
+      intervocalic_spirantization: 0.8
+      prothesis: 0.5
+      paragoge: 0.5
+      gemination: 0.8
+      metathesis: 0.7
+      compensatory_lengthening: 1.0
+      stress_shift: 0.8
 
   prales:
     modifiers:
@@ -29,6 +103,25 @@ biomes:
       syncope: 0.1      # Samohlásky nevypadávají, aby nesly zvuk
       coda_loss: 2.5    # Rychlá ztráta koncových souhlásek (slabiky typu CV)
       vowel_shift: 1.5
+      epenthesis: 2.0   # Shluky se rozpadají, převládá otevřená slabika
+      diphthongization: 1.6
+      unconditional_fricatization: 1.5
+      unconditional_devoicing: 0.2
+      unconditional_vowel_lowering: 1.5
+      final_devoicing: 0.4
+      umlaut: 1.3
+      nasalization: 1.4
+      monophthongization: 1.4
+      apocope: 1.8
+      assimilation: 1.3
+      palatalization: 1.1
+      intervocalic_spirantization: 1.5
+      prothesis: 1.2
+      paragoge: 1.8
+      gemination: 1.3
+      metathesis: 0.7
+      compensatory_lengthening: 0.8
+      stress_shift: 1.2
 
   temnota:
     modifiers:
@@ -37,3 +130,22 @@ biomes:
       syncope: 2.0      # Záměrně nepřirozené shluky souhlásek
       coda_loss: 0.5
       vowel_shift: 0.5
+      epenthesis: 0.2
+      diphthongization: 0.4
+      unconditional_fricatization: 0.5
+      unconditional_devoicing: 3.0   # Zlověstně ztrácí znělost plošně
+      unconditional_vowel_lowering: 2.0
+      final_devoicing: 2.0
+      umlaut: 0.5
+      nasalization: 0.5
+      monophthongization: 0.6
+      apocope: 1.2
+      assimilation: 0.8
+      palatalization: 0.6
+      intervocalic_spirantization: 0.5
+      prothesis: 0.3
+      paragoge: 0.4
+      gemination: 1.2
+      metathesis: 1.4
+      compensatory_lengthening: 0.7
+      stress_shift: 0.6

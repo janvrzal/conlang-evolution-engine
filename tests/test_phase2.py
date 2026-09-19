@@ -1,0 +1,440 @@
+"""Regrese pro společné diachronní jádro etapy 2."""
+
+from cee.core.models import Inventory, Lexicon, State
+from cee.engine.lexicon import LexicalEvaluator
+from cee.engine.prosody import syllabify
+from cee.engine.rules import Rule
+from cee.engine.simulator import EvolutionSimulator
+from cee.engine.topology import ContactEdge, EvolutionGraph, VerticalEdge
+from cee.pipeline import load_lexicon_from_csv, load_lexicon_from_records
+
+
+def _root(mapper, words):
+    return State(
+        node_id="proto",
+        year=0,
+        inventory=Inventory(),
+        lexicon=Lexicon([mapper.parse_word(concept, ipa) for concept, ipa in words]),
+    )
+
+
+def test_slabiky_rozlisuji_kodu_a_pravidlo_na_ni_miri(mapper):
+    word = mapper.parse_word("word", "anta")
+    syllables = syllabify(word)
+    assert len(syllables) == 2
+    assert not syllables[0].is_open
+
+    rule = Rule(
+        name="ztráta kody",
+        year=1,
+        target={"cons": "+"},
+        action={"delete": "+"},
+        syllable_part="coda",
+    )
+    assert rule.apply_to_word(word)
+    assert mapper.render_word(word) == "ata"
+
+
+def test_slozenina_vznikne_pred_pozdejsi_fonologii(mapper):
+    graph = EvolutionGraph(
+        node_configs={
+            "proto": {},
+            "child": {
+                "year": 0,
+                "compounds": [{"head": "town", "modifier": "gold", "id": "gold_town"}],
+            },
+        },
+        vertical_edges=[
+            VerticalEdge(
+                "proto",
+                "child",
+                [
+                    Rule(
+                        "finální apokopa",
+                        {"syl": "+"},
+                        {"delete": "+"},
+                        env_after={"_boundary": "+"},
+                        year=50,
+                    ),
+                ],
+            )
+        ],
+    )
+    states = EvolutionSimulator(graph, mapper).simulate(
+        _root(mapper, [("town", "viku"), ("gold", "auru")])
+    )
+    compound = states["child"].lexicon.get_word("gold_town")
+    assert compound is not None
+    assert mapper.render_word(compound).endswith("vik")
+
+
+def test_lexikalni_nahrada_je_volitelna_a_casovana(mapper):
+    graph = EvolutionGraph(
+        node_configs={
+            "proto": {},
+            "child": {"year": 0, "lexical": {"enabled": True, "replacement_rate": 1.0}},
+        },
+        vertical_edges=[VerticalEdge("proto", "child", [])],
+    )
+    state = EvolutionSimulator(graph, mapper, end_year=100).simulate(
+        _root(mapper, [("one", "pata"), ("two", "kumi")])
+    )["child"]
+    replacements = [
+        word for word in state.lexicon.words if word.origin_type == "lexical_replacement"
+    ]
+    assert replacements
+    assert all(word.origin_year == 100 for word in replacements)
+
+
+def test_adaptovana_vypujcka_respektuje_cilovy_inventar(mapper):
+    graph = EvolutionGraph(
+        node_configs={"proto": {}, "a": {"year": 0}, "b": {"year": 0}},
+        vertical_edges=[
+            VerticalEdge(
+                "proto",
+                "a",
+                [
+                    Rule(
+                        "znělá labiala",
+                        {"cons": "+", "lab": "+", "cont": "-", "voi": "-"},
+                        {"voi": "+"},
+                        year=1,
+                    ),
+                ],
+            ),
+            VerticalEdge("proto", "b", []),
+        ],
+        contact_edges=[ContactEdge(10, "a", "b", volume=1, adapt=True)],
+    )
+    states = EvolutionSimulator(graph, mapper).simulate(_root(mapper, [("one", "pata")]))
+    loan = next(word for word in states["b"].lexicon.words if word.source_id == "a")
+    target_inventory = {
+        mapper.segment_to_ipa(segment)
+        for word in states["b"].lexicon.words
+        if word.source_id is None
+        for segment in word.segments
+    }
+    assert all(mapper.segment_to_ipa(segment) in target_inventory for segment in loan.segments)
+
+
+def test_obchodni_kontakt_uprednostni_anotovany_obchodni_lexem(mapper):
+    source_trade = mapper.parse_word("coin", "pata")
+    source_trade.grammatical_features["semantic.domains"] = "commerce,money"
+    source_river = mapper.parse_word("river", "kumi")
+    source_river.grammatical_features["semantic.domains"] = "physical world"
+    source = State("source", Inventory(), Lexicon([source_trade, source_river]))
+    target = State("target", Inventory(), Lexicon([mapper.parse_word("water", "maka")]))
+    simulator = EvolutionSimulator(EvolutionGraph(), mapper)
+
+    simulator._apply_contact(source, target, 100, volume=1, domain="trade")
+
+    loan = next(word for word in target.lexicon.words if word.source_id == "source")
+    assert loan.concept_id == "coin"
+
+
+def test_kontaktni_vrstva_oznaci_registr_vypujcky(mapper):
+    source = State("source", Inventory(), Lexicon([mapper.parse_word("prayer", "pata")]))
+    target = State("target", Inventory(), Lexicon([mapper.parse_word("water", "maka")]))
+    simulator = EvolutionSimulator(EvolutionGraph(), mapper)
+
+    simulator._apply_contact(source, target, 100, volume=1, layer="ritual")
+
+    loan = next(word for word in target.lexicon.words if word.source_id == "source")
+    assert loan.grammatical_features["contact.layer"] == "ritual"
+    assert loan.grammatical_features["lexical.register"] == "ritual"
+
+
+def test_paradigma_gramatikalizuje_afix_a_vznika_v_historickem_case(mapper):
+    graph = EvolutionGraph(
+        node_configs={
+            "proto": {},
+            "child": {
+                "year": 0,
+                "morphology": {
+                    "grammaticalize": ["plural"],
+                    "paradigms": [
+                        {
+                            "id": "noun",
+                            "stem": "tree",
+                            "forms": [
+                                {
+                                    "id": "tree.pl",
+                                    "affix": "plural",
+                                    "features": {"number": "plural"},
+                                }
+                            ],
+                        }
+                    ],
+                },
+            },
+        },
+        vertical_edges=[VerticalEdge("proto", "child", [])],
+    )
+    state = EvolutionSimulator(graph, mapper).simulate(
+        _root(mapper, [("tree", "tara"), ("plural", "mi")])
+    )["child"]
+    plural = state.lexicon.get_word("tree.pl")
+    assert plural is not None
+    assert plural.paradigm == "noun"
+    assert plural.grammatical_features["number"] == "plural"
+    assert plural.grammatical_features["morphology.affix_id"]
+    assert plural.origin_year == 1
+    plural_word = state.lexicon.get_word("plural")
+    assert plural_word is not None
+    assert plural_word.is_grammatical
+
+
+def test_strukturalni_fonologicke_operace(mapper):
+    word = mapper.parse_word("x", "pata")
+    assert Rule("geminace", {"cons": "+"}, {}, operation="geminate").apply_to_word(word)
+    assert mapper.render_word(word) == "ppatta"
+    assert Rule("zkrácení", {"syl": "+"}, {}, operation="lengthen").apply_to_word(word)
+    assert word.long_nuclei
+    assert Rule("metateze", {"cons": "+"}, {}, operation="swap_next").apply_to_word(word)
+    assert Rule("přízvuk", {"syl": "+"}, {}, operation="stress_final").apply_to_word(word)
+    assert word.stress_index == word.syllable_nuclei()[-1]
+
+
+def test_taboo_nahrada_a_rozliseni_homofonie_jsou_volitelne(mapper):
+    graph = EvolutionGraph(
+        node_configs={
+            "proto": {},
+            "child": {
+                "year": 0,
+                "lexical": {
+                    "enabled": True,
+                    "replacement_rate": 0.0,
+                    "taboo_concepts": ["fire"],
+                    "homophony_policy": "audit",
+                },
+            },
+        },
+        vertical_edges=[VerticalEdge("proto", "child", [])],
+    )
+    state = EvolutionSimulator(graph, mapper, end_year=100).simulate(
+        _root(mapper, [("fire", "pata"), ("water", "pata"), ("stone", "kumi")])
+    )["child"]
+    replacements = [
+        word
+        for word in state.lexicon.words
+        if word.origin_type == "taboo_replacement" and word.concept_id == "fire"
+    ]
+    assert replacements
+    assert all(word.grammatical_features["lexical.register"] == "circumlocution" for word in replacements)
+    assert all(word.grammatical_features["lexical.euphemism_for"] == "fire" for word in replacements)
+    # Samotná kolize nesmí generovat náhodný prefix. Tabu má svůj historický
+    # původ; homofonie bez sémantické/morfologické inovace zůstává auditem.
+    assert not any(word.origin_type == "homophony_resolution" for word in state.lexicon.words)
+
+
+def test_homofonie_se_bez_legitimni_inovace_nedeformuje_na_prefix(mapper):
+    graph = EvolutionGraph(
+        node_configs={
+            "proto": {},
+            "child": {
+                "year": 0,
+                "lexical": {"enabled": True, "replacement_rate": 0.0, "homophony_policy": "audit"},
+            },
+        },
+        vertical_edges=[VerticalEdge("proto", "child", [])],
+    )
+    state = EvolutionSimulator(graph, mapper, end_year=100).simulate(
+        _root(mapper, [("one", "pata"), ("two", "pata"), ("three", "kumi")])
+    )["child"]
+    assert not any(word.origin_type == "homophony_resolution" for word in state.lexicon.words)
+    active_forms = [mapper.render_word(word) for word in state.lexicon.words if word.active]
+    assert active_forms.count("pata") == 2
+
+
+def test_kontextova_kolize_ma_nizsi_tlak_nez_stejna_domena(mapper):
+    high_a = mapper.parse_word("a", "pata")
+    high_b = mapper.parse_word("b", "pata")
+    low_a = mapper.parse_word("c", "pata")
+    low_b = mapper.parse_word("d", "pata")
+    for word in (high_a, high_b, low_a, low_b):
+        word.frequency = 0.9
+    high_a.grammatical_features = {"lexical.pos": "noun", "lexical.domains": "body"}
+    high_b.grammatical_features = {"lexical.pos": "noun", "lexical.domains": "body"}
+    low_a.grammatical_features = {"lexical.pos": "noun", "lexical.domains": "body"}
+    low_b.grammatical_features = {"lexical.pos": "verb", "lexical.domains": "motion"}
+
+    assert LexicalEvaluator._collision_pressure(high_a, high_b) == 0.9
+    assert LexicalEvaluator._collision_pressure(low_a, low_b) < 0.2
+
+
+def test_importer_doplni_pruhledne_zakladni_lexikalni_tridy(tmp_path, mapper):
+    proto = tmp_path / "proto.csv"
+    proto.write_text("id,ipa_proto\nsubject_pronoun,mi\nwater,aka\n", encoding="utf-8")
+
+    words = {word.concept_id: word for word in load_lexicon_from_csv(str(proto), mapper).words}
+    assert words["subject_pronoun"].grammatical_features["lexical.class"] == "function"
+    assert words["subject_pronoun"].frequency == 0.75
+    assert words["water"].grammatical_features["lexical.class"] == "content"
+    assert words["water"].frequency == 0.5
+
+
+def test_explicitni_trida_a_frekvence_maji_prednost_pred_heuristikou(mapper):
+    lexicon = load_lexicon_from_records(
+        [
+            {"id": "water", "ipa": "aka", "lexical_class": "function", "frequency": 0.9},
+            {"id": "subject_pronoun", "ipa": "mi", "lexical_class": "content"},
+        ],
+        mapper,
+    )
+    words = {word.concept_id: word for word in lexicon.words}
+    assert words["water"].grammatical_features["lexical.class"] == "function"
+    assert words["water"].frequency == 0.9
+    assert words["subject_pronoun"].grammatical_features["lexical.class"] == "content"
+
+
+def test_motivovany_novy_koren_vstoupi_do_synonymni_souteze(mapper):
+    import random
+
+    old = mapper.parse_word("trade", "pata")
+    old.frequency = 0.2
+    material = mapper.parse_word("river", "kumi")
+    state = State("x", Inventory(), Lexicon([old, material]), social={"mobility": 1.0})
+    evaluator = LexicalEvaluator(replacement_rate=1.0, innovation_rate=1.0, innovation_sources={"trade_slang": 1.0})
+
+    replacements = evaluator.evaluate(state, 100, random.Random(5), render=mapper.render_word)
+
+    innovation = next(word for word in replacements if word.concept_id == "trade")
+    assert innovation.origin_type == "lexical_innovation_trade_slang"
+    assert innovation.grammatical_features["lexical.motivation"] == "trade_slang"
+    assert innovation.grammatical_features["lexical.variant_for"] == old.id
+
+
+def test_funkcni_a_obsahove_slovo_bez_spolecne_role_nema_tlak_na_rozliseni(mapper):
+    function = mapper.parse_word("subject_pronoun", "pata")
+    content = mapper.parse_word("water", "pata")
+    for word, lexical_class in ((function, "function"), (content, "content")):
+        word.frequency = 0.9
+        word.grammatical_features["lexical.class"] = lexical_class
+
+    assert LexicalEvaluator._collision_pressure(function, content) == 0.0
+
+
+def test_socialni_historie_meni_stav_v_konkretnim_roce(mapper):
+    graph = EvolutionGraph(
+        node_configs={
+            "proto": {},
+            "child": {
+                "year": 0,
+                "social_history": [
+                    {"year": 80, "changes": {"prestige": 0.9, "standardization": 0.8}}
+                ],
+            },
+        },
+        vertical_edges=[VerticalEdge("proto", "child", [])],
+    )
+    state = EvolutionSimulator(graph, mapper, end_year=100).simulate(
+        _root(mapper, [("one", "pata")])
+    )["child"]
+    assert state.social["prestige"] == 0.9
+    assert state.social["standardization"] == 0.8
+
+
+def test_analogie_se_nepreleva_mezi_paradigmaty(mapper):
+    from cee.engine.morphology import MorphologyEvaluator
+
+    state = _root(
+        mapper,
+        [("noun.model", "pata"), ("noun.rare", "kumi"), ("verb.rare", "seno")],
+    )
+    noun_model, noun_rare, verb_rare = state.lexicon.words
+    noun_model.paradigm = noun_rare.paradigm = "noun"
+    verb_rare.paradigm = "verb"
+    noun_model.frequency = 0.9
+    noun_rare.frequency = verb_rare.frequency = 0.1
+    for word in state.lexicon.words:
+        word.morpheme_boundaries = {2}
+    verb_before = mapper.render_word(verb_rare)
+
+    changed = MorphologyEvaluator().level_analogies(state)
+
+    assert changed == 1
+    assert mapper.render_word(verb_rare) == verb_before
+
+
+def test_prozodicky_export_zobrazi_prizvuk_i_delku(mapper):
+    word = mapper.parse_word("word", "pata")
+    word.stress_index = 3
+    word.long_nuclei = {3}
+
+    assert mapper.render_word(word) == "pataː"
+    assert mapper.render_word_prosodic(word) == "patˈaː"
+
+
+def test_genealogie_uklada_finalni_tvar_po_prosodicke_oprave(mapper):
+    from cee.engine.graph_builder import GraphBuilder
+
+    graph = EvolutionGraph(
+        node_configs={"proto": {}, "child": {"year": 0}},
+        vertical_edges=[
+            VerticalEdge(
+                "proto",
+                "child",
+                [
+                    Rule(
+                        "synkopa",
+                        {"syl": "+"},
+                        {"delete": "+"},
+                        env_before={"cons": "+"},
+                        env_after={"cons": "+"},
+                        year=50,
+                    )
+                ],
+            )
+        ],
+    )
+    builder = GraphBuilder()
+    state = EvolutionSimulator(graph, mapper, graph_builder=builder).simulate(
+        _root(mapper, [("word", "kapata")])
+    )["child"]
+    final_word = state.lexicon.get_word("word")
+    assert final_word is not None
+    stored = next(node for node in builder.nodes if node["id"] == final_word.id)
+
+    assert stored["ipa"] == mapper.render_word(final_word)
+    assert any(event["kind"] == "sound_change" for event in builder.events)
+
+
+def test_budouci_pravidlo_se_vybira_az_po_vypujcce(mapper):
+    """Nový foném z kontaktu musí ovlivnit ještě nevylosovanou fonologii."""
+    preset = {
+        "schemas": {"final_devoicing": {"base_weight": 1.0}},
+        "biomes": {},
+        "macro": {"change_rate": 1.0, "conservatism": 0.0, "timing_jitter": 0.0},
+    }
+    graph = EvolutionGraph(
+        node_configs={"proto": {}, "source": {"year": 0}, "target": {"year": 0}},
+        vertical_edges=[
+            VerticalEdge(
+                "proto",
+                "source",
+                [
+                    Rule(
+                        "p > b",
+                        {"cons": "+", "lab": "+", "cont": "-", "voi": "-"},
+                        {"voi": "+"},
+                        year=1,
+                    )
+                ],
+            ),
+            VerticalEdge("proto", "target", []),
+        ],
+        contact_edges=[
+            __import__("cee.engine.topology", fromlist=["ContactEdge"]).ContactEdge(
+                30, "source", "target", volume=1
+            )
+        ],
+    )
+
+    state = EvolutionSimulator(graph, mapper, preset=preset, end_year=100).simulate(
+        _root(mapper, [("word", "ap")])
+    )["target"]
+    loan = next(word for word in state.lexicon.words if word.source_id == "source")
+
+    # V roce 30 vstoupí jako /ab/; finální odznělení se vybere až v
+    # pozdějším slotu z inventáře, který už /b/ skutečně obsahuje.
+    assert mapper.render_word(loan) == "ap"

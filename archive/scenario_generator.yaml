@@ -1,0 +1,14 @@
+nodes:
+  - id: proto
+  - id: high_mountains
+    map:
+      biome: "hory"
+  - id: deep_jungle
+    map:
+      biome: "prales"
+
+vertical_edges:
+  - parent: proto
+    child: high_mountains
+  - parent: proto
+    child: deep_jungle

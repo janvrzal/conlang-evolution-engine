@@ -1,0 +1,191 @@
+"""
+Pohled na fonologický inventář jako na dotazovatelnou množinu přirozených tříd.
+
+Podle CEE_master.md 4.3 je cílová třída pravidla *dotaz do aktuálního
+inventáře* — pravidlo mířící na prázdnou třídu se nemá vůbec vygenerovat.
+`Inventory` v core.models drží jen IPA řetězce, takže na rysové dotazy
+nestačí; tahle třída k nim přidává rysové matice z panphonu.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional
+
+from cee.core.models import Inventory, Lexicon, Segment
+
+if TYPE_CHECKING:  # pragma: no cover
+    from cee.engine.phonology import FeatureMapper
+
+
+class InventoryView:
+    """Inventář, kterého se lze ptát na obsazenost přirozené třídy."""
+
+    def __init__(self, mapper: "FeatureMapper", segments: Iterable[str] = ()):
+        self._mapper = mapper
+        self._features: Dict[str, Dict[str, str]] = {}
+
+        for ipa in segments:
+            if not ipa or ipa == "?":
+                continue
+            parsed = mapper.parse_word("_", ipa).segments
+            # Vícesegmentové řetězce do inventáře fonémů nepatří.
+            if len(parsed) == 1:
+                self._features[ipa] = parsed[0].features
+
+    @classmethod
+    def from_lexicon(cls, lexicon: Lexicon, mapper: "FeatureMapper") -> "InventoryView":
+        segments = {
+            mapper.segment_to_ipa(segment)
+            for word in lexicon.words
+            if word.active
+            for segment in word.segments
+        }
+        return cls(mapper, segments)
+
+    @classmethod
+    def from_inventory(cls, inventory: Inventory, mapper: "FeatureMapper") -> "InventoryView":
+        return cls(mapper, inventory.segments)
+
+    def to_inventory(self) -> Inventory:
+        return Inventory(segments=set(self._features))
+
+    def matching(self, target: Dict[str, str]) -> List[str]:
+        """
+        Vrátí fonémy spadající do dané přirozené třídy.
+
+        Klíče začínající podtržítkem jsou řídicí (např. `_boundary` označuje
+        hranici slova, ne rys segmentu) a do porovnání nevstupují.
+        """
+        bundle = {k: v for k, v in target.items() if not k.startswith("_")}
+        if not bundle:
+            return sorted(self._features)
+
+        probe = Segment(features={})
+        found = []
+        for ipa, features in self._features.items():
+            probe.features = features
+            if probe.matches(bundle):
+                found.append(ipa)
+        return sorted(found)
+
+    def features_of(self, ipa: str) -> Optional[Dict[str, str]]:
+        """Úplná rysová matice fonému, nebo None, když v inventáři není."""
+        features = self._features.get(ipa)
+        return dict(features) if features else None
+
+    def features_for_ipa(self, ipa: str) -> Optional[Dict[str, str]]:
+        """Rysy platné IPA hlásky, i když ji inventář zatím neobsahuje.
+
+        Používají to změny, které mohou vytvořit nový foném (např.
+        palatalizace); nenarušuje to samotnou množinu dostupných fonémů.
+        """
+        parsed = self._mapper.parse_word("_", ipa).segments
+        return dict(parsed[0].features) if len(parsed) == 1 else None
+
+    def pick(self, target: Dict[str, str], rng=None) -> Optional[str]:
+        """
+        Vybere jeden foném z dané třídy — pro pravidla, která hlásku vkládají.
+
+        Vkládá se vždy něco, co v jazyce už existuje; epentetický vokál cizí
+        celému inventáři by byl nepravděpodobný.
+        """
+        kandidati = self.matching(target)
+        if not kandidati:
+            return None
+        return kandidati[0] if rng is None else rng.choice(kandidati)
+
+    def has(self, target: Dict[str, str]) -> bool:
+        """True, pokud je třída v inventáři neprázdná."""
+        return bool(self.matching(target))
+
+    def has_all(self, *targets: Dict[str, str] | None) -> bool:
+        """
+        True, pokud je neprázdná každá zadaná třída. `None` se přeskakuje,
+        stejně jako čistě hraniční prostředí — hranice slova existuje vždy.
+        """
+        for target in targets:
+            if target is None:
+                continue
+            if not any(not k.startswith("_") for k in target):
+                continue
+            if not self.has(target):
+                return False
+        return True
+
+    def apply(self, rule) -> "InventoryView":
+        """
+        Vrátí inventář po aplikaci pravidla — bez sahání na lexikon.
+
+        Slouží generátoru, aby při skládání chronologie věděl, co v jazyce
+        po každé změně existuje (CEE_master.md 4.3, stavový fold).
+
+        Model je záměrně konzervativní:
+        - mazací pravidlo inventář nemění; zda foném zanikne, závisí na
+          pozicích ve slovech, a ty inventář nezná;
+        - nové fonémy se přidají vždy;
+        - staré se odeberou jen u pravidla bez prostředí, protože jinak se
+          původní hláska jinde ve slově udrží.
+        """
+        if rule.action.get("delete") == "+":
+            return self
+
+        # Systémový řetězec nemá jednu společnou ``action``. Inventář ale
+        # musí při plánování chronologie vidět stejný simultánní posun jako
+        # lexikon, jinak by další kandidát vycházel ze zastaralé řady.
+        if rule.operation == "chain_shift":
+            segments = set(self._features)
+            removed: set[str] = set()
+            added: set[str] = set()
+            for ipa, features in self._features.items():
+                for source, action in rule.chain_steps or []:
+                    probe = Segment(features=features)
+                    if probe.matches(source):
+                        shifted = Segment(features=dict(action))
+                        new_ipa = self._mapper.segment_to_ipa(shifted)
+                        if new_ipa and new_ipa != "?":
+                            added.add(new_ipa)
+                            removed.add(ipa)
+                        break
+            # Až zde: /i/ → /e/ nesmí záviset na tom, zda se /e/ → /a/
+            # v iteraci zpracovalo před ním nebo po něm.
+            segments.difference_update(removed)
+            segments.update(added)
+            return InventoryView(self._mapper, segments)
+
+        # Harmonie pouze přerozděluje existující vokály v konkrétních
+        # lexikálních doménách; sama o sobě proto neimplikuje zánik fonému.
+        if rule.operation == "vowel_harmony":
+            return self
+
+        affected = self.matching(rule.target)
+        if not affected:
+            return self
+
+        unconditional = not rule.env_before and not rule.env_after
+        segments = set(self._features)
+
+        for ipa in affected:
+            shifted = Segment(features={**self._features[ipa], **rule.action})
+            new_ipa = self._mapper.segment_to_ipa(shifted)
+            if not new_ipa or new_ipa == "?":
+                continue
+            segments.add(new_ipa)
+            if unconditional and new_ipa != ipa:
+                segments.discard(ipa)
+
+        return InventoryView(self._mapper, segments)
+
+    def __contains__(self, ipa: str) -> bool:
+        return ipa in self._features
+
+    def __iter__(self):
+        return iter(sorted(self._features))
+
+    def __len__(self) -> int:
+        return len(self._features)
+
+    def __bool__(self) -> bool:
+        return bool(self._features)
+
+    def __repr__(self) -> str:
+        return f"InventoryView({' '.join(sorted(self._features))})"

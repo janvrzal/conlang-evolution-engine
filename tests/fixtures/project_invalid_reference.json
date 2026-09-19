@@ -1,0 +1,1 @@
+{"id":"invalid-ref","name":"Invalid","schema_version":3,"data":{"timeSteps":[0],"snapshots":{"0":{"nodes":[{"id":"proto"}],"edges":[]}},"historicalEvents":[{"id":"war","targetLanguageIds":["missing"]}]}}

@@ -1,37 +1,61 @@
+# Malý, vždy dostupný náhradní sémantický graf.
+#
+# Skutečná data (CLICS4 + DatSemShift) se stahují a staví mimo repo do
+# ~/.cee/semantics/graph.graphml (viz cee/semantics/builder.py) — podle
+# AGENT.md se necommitují. Tenhle soubor je fallback pro čerstvý klon nebo
+# CI, kde ta cache neexistuje: `pipeline.resolve_semantics_path` na něj
+# spadne automaticky, když reálný graf nenajde.
+#
+# Koncepty odpovídají `id` v src/cee/data/concepts.json (anglicky, malými
+# písmeny) — to je slovník, který `ProtolangGenerator` reálně používá.
+# `SemanticGraph` porovnává case-insensitive (normalizuje na velká
+# písmena), takže tenhle mock funguje beze změny.
 shifts:
-  - source: "slunce"
-    target: "den"
+  - source: "sun"
+    target: "sky"
     weight: 0.8
-    fields: ["Time"]
-  - source: "slunce"
-    target: "bůh"
-    weight: 0.4
-    fields: ["Religion"]
-  - source: "voda"
-    target: "řeka"
+    fields: ["Nature"]
+  - source: "sun"
+    target: "fire"
+    weight: 0.3
+    fields: ["Nature"]
+  - source: "water"
+    target: "river"
     weight: 0.7
     fields: ["Nature"]
-  - source: "voda"
-    target: "život"
+  - source: "water"
+    target: "drink"
     weight: 0.3
     fields: ["Abstract"]
-  - source: "vlk"
-    target: "pes"
+  - source: "tree"
+    target: "stone"
     weight: 0.5
-    fields: ["Animals"]
-  - source: "vlk"
-    target: "nebezpečí"
+    fields: ["Nature"]
+  - source: "stone"
+    target: "mountain"
     weight: 0.6
-    fields: ["Emotions"]
-  - source: "kámen"
-    target: "hora"
-    weight: 0.8
     fields: ["Nature"]
-  - source: "strom"
-    target: "les"
-    weight: 0.9
-    fields: ["Nature"]
-  - source: "strom"
-    target: "dřevo"
-    weight: 0.9
-    fields: ["Materials"]
+  - source: "eye"
+    target: "see"
+    weight: 0.6
+    fields: ["Body"]
+  - source: "hand"
+    target: "eat"
+    weight: 0.3
+    fields: ["Body"]
+  - source: "big"
+    target: "mountain"
+    weight: 0.4
+    fields: ["Abstract"]
+  - source: "small"
+    target: "stone"
+    weight: 0.3
+    fields: ["Abstract"]
+  - source: "heart"
+    target: "good"
+    weight: 0.3
+    fields: ["Abstract"]
+  - source: "fire"
+    target: "sky"
+    weight: 0.2
+    fields: ["Religion"]

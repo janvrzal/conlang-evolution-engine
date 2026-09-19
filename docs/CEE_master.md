@@ -6,15 +6,21 @@
 
 ---
 
+> **Stav implementace k 30. 8. 2026.** Toto je whitepaper a popis cílové
+> architektury, ne doslovný seznam hotových funkcí. Ověřený rozsah, částečné
+> implementace a vědomé mezery jsou v [`CURRENT_STATE.md`](CURRENT_STATE.md).
+> Kalibrace V2a/V2b, content-addressed verzování, CLDF/Lexurgy a prémiové
+> exporty jsou zatím cíle, nikoli současná funkčnost.
+
 ## 0. Shrnutí
 
 **Conlang Evolution Engine (CEE)** je generativní simulátor jazykové změny. Z jednoho protojazyka a sítě historických událostí — štěpení populací, obchodních kontaktů, dobývání, vzniku písemnictví — odvozuje rodinu příbuzných jazyků, u nichž je každé slovo zpětně trasovatelné až ke svému kořeni.
 
 Projekt stojí na jedné technické tezi a jedné z ní odvozené obchodní:
 
-> **Technická teze.** Věrohodnost simulované jazykové rodiny lze měřit objektivně, a tedy i kalibrovat. Konkrétně: pokud standardní nástroje výpočetní historické lingvistiky (detekce kognátů, fylogenetická rekonstrukce) pracují na simulované rodině se srovnatelnou úspěšností jako na reálné rodině stejné časové hloubky, je simulace v relevantním smyslu realistická.
+> **Technická teze.** Důsledky explicitních parametrů jazykové změny lze měřit objektivně a reprodukovatelně. Konkrétně: při kontrolovaném zásahu do scénáře musí být přes více seedů možné určit jeho efekt a rozptyl nad strukturou výsledných jazyků; každá realizace je přitom plně trasovatelná.
 
-> **Obchodní teze.** Tentýž kalibrovaný model má dva odběratele s velmi odlišnou ochotou platit a velmi odlišným časovým horizontem. Worldbuildeři chtějí hotové jazyky a zaplatí hned; výpočetní historická lingvistika potřebuje **syntetická data se známou pravdou** pro benchmarkování vlastních metod a je ochotná spolufinancovat jejich vznik. Wedge je první skupina, dlouhodobě obranyschopné aktivum vzniká pro obě.
+> **Obchodní teze.** Tentýž kontrolovatelný model má dva odběratele s velmi odlišnou ochotou platit a velmi odlišným časovým horizontem. Worldbuildeři chtějí hotové jazyky a zaplatí hned; výpočetní historická lingvistika může využít **syntetická data se známou pravdou** pro benchmarkování vlastních metod a pro kontrafaktuální experimenty. Wedge je první skupina, dlouhodobě obranyschopné aktivum vzniká pro obě.
 
 Klíčové rozhodnutí projektu je v tom, **co se generuje**. Existující nástroje (Lexurgy, Brassica, Zompistova SCA) jsou *aplikátory*: uživatel napíše uspořádaný seznam zvukových změn a nástroj ho spustí na slovník. To předpokládá uživatele, který ta pravidla umí napsat — tedy zkušeného conlangera. CEE naopak staví na *generátoru* pravidel: sadu věrohodných, vzájemně konzistentních zvukových změn navrhne engine sám, na základě typologických priorů z doložených jazykových dějin a s ohledem na aktuální fonologický inventář daného uzlu. Aplikátor je infrastruktura a dá se převzít. **Generátor je vlastní přínos i vlastní obranyschopnost.**
 
@@ -40,7 +46,7 @@ Standardní odpovědí v jiných oborech je simulace: vygeneruj data z modelu, u
 
 ### 1.3 Průnik
 
-Obě mezery vyžadují tutéž věc: **generativní model jazykové změny, kalibrovaný tak, aby jeho výstupy byly statisticky nerozlišitelné od reálných jazykových rodin.** Pro worldbuildera je výstupem hotový jazyk; pro lingvistu je výstupem datová sada s anotovanou pravdou. Je to stejný engine, jen se z něj exportuje něco jiného.
+Obě mezery vyžadují tutéž věc: **generativní model jazykové změny s explicitními, měnitelnými parametry a dohledatelnými důsledky.** Pro worldbuildera je výstupem hotový jazyk; pro lingvistu je výstupem reprodukovatelný experiment a případně datová sada s anotovanou pravdou. Je to stejný engine, jen se z něj exportuje něco jiného.
 
 Tenhle průnik je celá logika projektu. Není to dodatečné ospravedlnění hobby nástroje — je to důvod, proč se do něj vyplatí investovat víc práce než do dalšího generátoru slabik.
 
@@ -50,29 +56,31 @@ Tenhle průnik je celá logika projektu. Není to dodatečné ospravedlnění ho
 
 ### 2.1 Hlavní teze
 
-Věrohodnost simulované jazykové rodiny je **měřitelná veličina**, nikoli věc vkusu. Operacionalizace: rodina je věrohodná v míře, v jaké se na ní standardní metody komparativní lingvistiky chovají stejně jako na reálné rodině srovnatelné časové hloubky a kontaktní historie.
+CEE není replikátor jediné historické Země. Doložené jazyky jsou nutně neúplný, nerovnoměrně popsaný vzorek konkrétních dějin; ani dokonalá shoda s jejich agregátem by nebyla univerzálním cílem pro jiné světy, epochy nebo experimentální hypotézy.
 
-Z toho plyne, že generátor lze **kalibrovat uzavřenou smyčkou**: generuj rodinu → změř ji nástroji oboru → porovnej profil s reálnou referenční rodinou → uprav váhy generátoru. Tenhle cyklus je jádro výzkumné části projektu a zároveň jediná obrana proti tomu, co postihuje všechny existující nástroje — vývojář ladí generátor podle toho, co mu subjektivně „zní dobře".
+Vědecké jádro CEE je **reprodukovatelná simulace důsledků**. Pro explicitně zadaný zásah do modelu — například vyšší intenzitu synkopy, jiný typ kontaktu nebo sílu analogického vyrovnávání — má systém přes mnoho seedů měřit, jak se v čase mění struktura výsledných jazyků: délka slov, shluky, homofonie, retence, kontrasty, genealogický signál a další předem definované ukazatele.
+
+Věrohodnost proto není jedno číslo ani estetický soud. Je to soubor kontrol: derivační správnost, vnitřní konzistence, funkčnost lexikonu a transparentně označené empirické priory. Pozemská data určují rozumné výchozí rozsahy a odhalují patologické chování; nesmějí diktovat jediný správný výsledek.
 
 ### 2.2 Výzkumné otázky
 
 **VO1 — Aplikátor.** Reprodukuje stavový derivační model (rysové svazky, inventář jako stav) doložené vývoje správně? *Testovatelné:* zadej latinský lexikon a publikované sady zvukových zákonů pro francouzštinu, španělštinu a italštinu; změř shodu odvozených forem s doloženými.
 
-**VO2 — Generátor.** Lze z typologických priorů generovat sady zvukových změn, jejichž statistický profil (typ změny, počet, pořadí, výsledná fonetická vzdálenost) je nerozlišitelný od profilu doložených sad? *Testovatelné:* porovnej distribuce generovaných a doložených sad; slepý test s hodnotiteli z oboru.
+**VO2 — Citlivost a kontrolovatelnost.** Vedou explicitní zásahy do parametrů ke stabilním, interpretovatelným a reprodukovatelným rozdílům ve výstupech? *Testovatelné:* pro kontrolní a intervenční scénář proveď soubor běhů přes více seedů, porovnej předem registrované metriky a uveď efekt, rozptyl a interval nejistoty.
 
-**VO3 — Rodina.** Chovají se metody detekce kognátů a fylogenetické rekonstrukce na simulovaných rodinách stejně jako na reálných? *Testovatelné:* spusť `LingPy` a standardní bayesovské fylogenetické postupy na obojím a porovnej křivky úspěšnosti proti časové hloubce.
+**VO3 — Rodina a inference.** Jak se známá struktura simulované rodiny promítá do úspěšnosti detekce kognátů a fylogenetické rekonstrukce? *Testovatelné:* spusť `LingPy` a standardní fylogenetické postupy na simulovaných rodinách a měř přesnost proti pravdě, kterou udává scénář. Srovnání s reálnými rodinami je doplňková externí validace, ne definice úspěchu.
 
 **VO4 — Kontakt.** Reprodukuje model kontaktu (datované výpůjčky, substrát, lingua franca) známé signatury kontaktních situací — zejména to, že výpůjčky vykazují nižší fonetickou erozi než zděděný lexikon a že narušují fylogenetický signál způsobem popsaným v literatuře?
 
-VO1 je nutná podmínka a je nízkorizikový. **VO2 je vlastní vědecké riziko projektu.** VO3 je podmínka pro druhý trh. VO4 je rozšíření.
+VO1 je nutná podmínka a je nízkorizikový. **VO2 je vlastní vědecké jádro projektu.** VO3 je podmínka pro druhý výzkumný trh. VO4 je rozšíření.
 
 ### 2.3 Přínos
 
-*Vědecký:* otevřený, kalibrovaný forward-simulátor jazykové změny a z něj odvozený **benchmarkový korpus syntetických jazykových rodin s anotovanou pravdou** (kognátní třídy, strom, výpůjčky, časová razítka) ve formátu CLDF, tedy přímo použitelný v existující infrastruktuře oboru.
+*Vědecký:* otevřený forward-simulátor jazykové změny pro **kontrafaktuální a citlivostní experimenty**. Umožňuje měnit parametry, opakovat běhy a měřit dopady proti pravdě známé ze scénáře; z něj lze odvodit i benchmarkový korpus syntetických jazykových rodin s anotovanou pravdou (kognátní třídy, strom, výpůjčky, časová razítka) ve formátu CLDF.
 
 *Produktový:* nástroj, který worldbuilderovi vygeneruje rodinu vnitřně konzistentních jazyků za odpoledne místo za měsíce, s exportem do formátů, které skutečně používá.
 
-*Metodický:* protokol pro měření věrohodnosti simulovaných jazyků, který je použitelný i mimo CEE.
+*Metodický:* protokol pro měření stability, funkčnosti a citlivosti simulovaných jazyků, použitelný i mimo CEE.
 
 ---
 
@@ -91,7 +99,7 @@ Projekt je postavitelný **až teď**, a to je podstatné pro časování. Ekosy
 | **Index Diachronica** (a jeho moderní přepracování) | kompilace doložených zvukových změn z historických gramatik | **priory pro generátor pravidel** |
 | **LingPy** | zarovnání, detekce kognátů, fonetické vzdálenosti | měřicí přístroje, nikoli generování |
 
-Poslední řádek je klíčový: Index Diachronica je zdroj, který dělá generátor vůbec možným. Bez něj by váhy typů zvukových změn byly čistě autorský odhad.
+Index Diachronica a podobné zdroje jsou užitečné jako volitelné priory a diagnostiky. Nevytvářejí generátor „objektivně správný“: bez nich lze pracovat s transparentními autorskými presety a s nimi jen lépe ukotvit zvolený pozemský režim.
 
 ### 3.2 Konkurence
 
@@ -111,19 +119,19 @@ Nikdo nespojuje: (a) generování pravidel místo jejich aplikace, (b) graf cel�
 
 ## 4. Architektura
 
-### 4.1 Datový model: graf a verzování po vzoru Gitu
+### 4.1 Cílový datový model: graf a verzování po vzoru Gitu
 
 Jádrem je graf uzlů (jazyk v čase) s dvěma typy hran: **vertikálními** (dědičnost) a **horizontálními** (kontakt).
 
 **Pravidla jsou pravda, slovníky jsou cache.** Každá vertikální hrana drží uspořádaný, neměnný seznam pravidel, kterými z rodiče vznikl potomek. Slovník uzlu je odvozený artefakt vypočtený přehráním pravidel od protoformy. Nejtěžší část historické fonologie je *pořadí* pravidel (feeding, bleeding) a tento model ho činí explicitním a auditovatelným.
 
-**Verzování je Git, ne zamykání.** Uzel je adresován hashem `H(hash rodiče ‖ serializovaný seznam pravidel ‖ seed)`. Z toho plyne:
+**Cílové verzování je Git, ne zamykání.** Uzel má být adresován hashem `H(hash rodiče ‖ serializovaný seznam pravidel ‖ seed)`. Z toho plyne:
 
 - *Invalidace* je triviální — hash nesedí, přepočítej.
 - *Reroll* je vytvoření **paralelní větve**, ne destruktivní přepis. Uživatel neztrácí předchozí variantu a nemusí nic „odmrazovat".
 - *Freeze* je v tomto slovníku prostě **tag** na konkrétním commitu: pojmenovaný, stabilní odkaz, ze kterého se dá dál větvit.
 
-**Cache se persistuje.** Formulace „slovník se fyzicky neukládá" je zavádějící: cache je content-addressed a **musí přežít zavření projektu**. Bez toho se při každém otevření přepočítává celý strom. Řádový odhad: list ve hloubce 30 kroků při ~40 pravidlech na hranu a 2 000 lexémech znamená kolem 2,4 milionu aplikací pravidla, tedy v Pythonu desítky sekund; s memoizací po uzlech jde o poslední hranu, ~80 tisíc aplikací, tedy podsekundový čas. Rozdíl mezi nepoužitelným a interaktivním nástrojem je zde výhradně v klíčování a persistenci cache.
+**Cílová cache se persistuje.** Formulace „slovník se fyzicky neukládá" je zavádějící: cache má být content-addressed a **musí přežít zavření projektu**. Bez toho se při každém otevření přepočítává celý strom. Řádový odhad: list ve hloubce 30 kroků při ~40 pravidlech na hranu a 2 000 lexémech znamená kolem 2,4 milionu aplikací pravidla, tedy v Pythonu desítky sekund; s memoizací po uzlech jde o poslední hranu, ~80 tisíc aplikací, tedy podsekundový čas. Rozdíl mezi nepoužitelným a interaktivním nástrojem je zde výhradně v klíčování a persistenci cache.
 
 **Mapa je aktivní.** Uživatel nahraje obrázek mapy a nad ním ve druhé vrstvě štětcem nakreslí **biomovou masku** (les, step, poušť, hory, pobřeží). Engine čte biom uzlu z jeho XY pozice. Mapa tedy není pasivní plátno — je to vstup do sémantického modulu (4.7).
 
@@ -277,6 +285,14 @@ Rozlišení není formalita. Lze aplikovat drastické zvukové změny a mít př
 
 **Diagnostický list je fixní.** Swadeshův seznam je *měřicí přístroj*, nikoli vlastnost jazyka. Musí být pro všechny měřené uzly identický a neměnný, jinak jsou hodnoty nesrovnatelné. Je proto oddělen od uživatelsky viditelné **odolnosti slova** (spojité skóre dle 4.7), která se naopak vyvíjí.
 
+### 5.1.1 Experimentální protokol a funkčnost
+
+Hlavním experimentem není jeden „nejlepší“ běh. Je to porovnání kontrolního a intervenčního scénáře při stejné topologii, protolexikonu a ostatních parametrech. Každý scénář se opakuje přes více seedů; report uvádí konfiguraci, seed, verzi enginu, efekt mezi scénáři a rozptyl, nikoli jen jednu realizaci.
+
+Základní měřené výstupy jsou délka slova a slabiková struktura, podíl a typ shluků, homofonie ve frekventovaných významech, hustota kontrastů/minimálních párů, lexikální retence, fonetická eroze a genealogický signál. „Informace za minutu“ nelze tvrdit bez fonetického modelu trvání a užívacího korpusu; do té doby se uvádějí jen poctivě pojmenované proxy ukazatele, zejména kontrastivnost, kolize a délka kódu.
+
+Tvrdé kontroly funkčnosti jsou nezávislé na pozemských datech: forma musí projít aktuálním inventářem a fonotaktikou, pravidlo musí být přehratelné z uložené historie a výstup nesmí porušit explicitně zadané strukturální invariance. Empirické profily mohou označit neobvyklý výsledek, ale nemohou jej samy zakázat.
+
 ### 5.2 Validace V1 — aplikátor (VO1)
 
 Nejjednodušší a nejpřísnější test, protože latina je **doložená, nikoli rekonstruovaná** — na rozdíl od praindoevropštiny zde známe vstup s jistotou.
@@ -285,19 +301,21 @@ Nejjednodušší a nejpřísnější test, protože latina je **doložená, niko
 
 *Kritérium úspěchu:* shoda na úrovni srovnatelné s existujícími aplikátory. Neúspěch znamená chybu v derivačním jádru, nikoli v modelu — a je opravitelný.
 
-### 5.3 Validace V2 — generátor (VO2, VO3)
+### 5.3 Validace V2 — účinek parametrů a externí diagnostika (VO2, VO3)
 
-Zde leží skutečné riziko projektu, a proto má dvě nezávislé části.
+Zde leží skutečné riziko projektu, a proto jsou dvě nezávislé části: ověření, že model reaguje na zásahy smysluplně, a volitelné srovnání s doloženým pozemským vzorkem.
 
-**V2a — profilové srovnání.** Nech generátor vyrobit *N* sad pravidel pro zadanou časovou hloubku a výchozí inventář. Porovnej distribuce s doloženými sadami z Index Diachronica: zastoupení typů změn, jejich počet na tisíciletí, typická prostředí, výsledná fonetická vzdálenost. Statisticky odlišné distribuce znamenají špatně nastavené priory.
+**V2a — citlivostní experiment.** Proveď kontrolní a intervenční scénář přes *N* seedů. Například zvyšuj intenzitu synkopy při stejném počátečním stavu a měř po 2 000 letech dopad na délku slov, strukturu slabik, shluky, homofonii, kontrastivnost a retenci. Výsledek je efekt se statistickým rozptylem. Neexistující nebo opačný účinek je informace o modelu, nikoli o selhání podobnosti se Zemí.
 
-**V2b — nerozlišitelnost pro nástroje oboru (klíčový test).** Toto je operacionalizace hlavní teze a zároveň důvod, proč má výstup hodnotu i pro lingvisty:
+**V2a-E — externí profilová diagnostika.** Je-li k dispozici licenčně použitelný a dostatečně popsaný korpus, porovnej distribuce generovaných a doložených sad: zastoupení typů změn, jejich typická prostředí a výslednou fonetickou vzdálenost. Rychlost nebo rodinně vyvážené srovnání se uvádí jen tehdy, když je zdroj skutečně nese. Odchylka ukazuje, že se zvolený *earth-like* preset liší od daného vzorku; nevyvrací univerzální schopnost enginu simulovat jiný, explicitně definovaný svět.
 
-> Spusť standardní automatickou detekci kognátů a fylogenetickou rekonstrukci na (i) simulovaných rodinách a (ii) reálných rodinách srovnatelné časové hloubky a kontaktní historie. Porovnej **křivky úspěšnosti proti časové hloubce**.
+**V2b — inference nad známou pravdou.** Toto je ověření druhého výzkumného použití:
 
-Pokud se metody na syntetických datech chovají jinak než na reálných, simulace je v nějakém měřitelném smyslu nerealistická — a tvar odchylky navíc ukazuje, kde. Pokud se chovají stejně, jsou syntetická data použitelná jako benchmark s anotovanou pravdou, což je přesně produkt pro druhý trh.
+> Spusť standardní automatickou detekci kognátů a fylogenetickou rekonstrukci na simulovaných rodinách a porovnej **křivky úspěšnosti proti časové hloubce, intenzitě kontaktu a dalším parametrům scénáře** s pravdou známou z generativního procesu.
 
-Elegance téhle konstrukce je v tom, že **validační kritérium a vědecký deliverable jsou tatáž věc.**
+Primární metrika je přesnost proti stromu, kognátním třídám a kontaktům známým ze scénáře. Srovnání křivek s reálnými rodinami je užitečná externí diagnostika, ale nelze z něj udělat jediný rozhodčí test: reálná „pravda“ je částečně rekonstruovaná a reprezentuje omezené dějiny.
+
+Hodnota této konstrukce je v tom, že **scénář zná zásah i pravdu**, takže lze přesně měřit dopad parametrů a limity následné inference.
 
 **V2c — slepé hodnocení.** Doplňkově: předlož hodnotitelům se vzděláním v historické lingvistice směs generovaných a reálných sad zvukových změn a změř, zda je rozliší nad úrovní náhody.
 
@@ -306,24 +324,30 @@ Elegance téhle konstrukce je v tom, že **validační kritérium a vědecký de
 Projekt považuji za vyvrácený v příslušné části, pokud:
 
 - **F1:** V1 nedosáhne shody srovnatelné s existujícími aplikátory ani po odladění → chyba derivačního jádra.
-- **F2:** Distribuce v V2a zůstanou statisticky odlišné i po kalibraci priorů → typologické priory z dostupných dat nestačí; generátor vyžaduje jiný zdroj znalosti.
+- **F2:** Předem definovaný zásah ve V2a nemá přes opakované běhy stabilní, interpretovatelný nebo očekávaně směrovaný dopad → model postrádá mechanismus, nebo je parametr neidentifikovatelný.
 - **F3:** Metody v V2b se na syntetických datech chovají systematicky odlišně (typicky: kognáty se detekují *příliš snadno*, protože simulace nevyrábí dost šumu) → model postrádá podstatný zdroj variability, pravděpodobně lexikální difuzi, nepravidelnost a analogii.
 - **F4:** Hodnotitelé v V2c rozliší generované od reálných výrazně nad náhodou a shodnou se na důvodu → identifikovatelná systematická vada.
 
 F3 pokládám za nejpravděpodobnější způsob selhání a zároveň za nejinformativnější.
 
-### 5.5 Reprodukovatelnost
+### 5.5 Cílová reprodukovatelnost
 
 Vlastnost, která je pro vědecké použití nutná, pro produkt je konkurenční výhodou a přitom skoro nic nestojí, je-li zabudována od začátku:
 
-- **Seed** je součástí hashe uzlu. Táž konfigurace dává týž výsledek.
+- **Seed** má být součástí hashe uzlu. Dnešní engine je deterministický, ale
+  content-addressed hash uzlu zatím neimplementuje.
 - **Verze dat.** Projekt si ukládá verze všech použitých datasetů (Concepticon, CLICS, DatSemShift, priory). Simulace z roku 2026 je spustitelná v roce 2030 se stejným výsledkem.
 - **Autorské priory jsou označené.** Kde váha nepochází z dat, je to v souboru priorů explicitně vyznačeno — jinak by nebylo možné oddělit empirický základ od autorského odhadu.
-- **Celá historie je exportovatelná** jako lidsky čitelný soubor pravidel (viz Lexurgy export). Uživatel není uzamčen.
+- **Celá historie má být exportovatelná** jako lidsky čitelný soubor pravidel
+  (viz Lexurgy export). Dnes je k dispozici auditovatelný JSON export.
 
 ---
 
 ## 6. Etapizace
+
+Etapy jsou cílové validační brány; implementace probíhala částečně paralelně.
+Aktuální stav jednotlivých položek je v `CURRENT_STATE.md`, proto tento seznam
+neoznačuje jednotlivé etapy jako dokončené jen podle existence dílčích funkcí.
 
 **Etapa 1 — jádro (MVP).** CLI, žádné GUI, jedna linie bez kontaktu. Rysový derivační engine, ruční sady pravidel, trasovatelnost jednoho slova, obě metriky z 5.1. **Výstupní brána: validace V1.** Dokud aplikátor neprojde latinou, nemá smysl stavět nic nad ním.
 
@@ -441,4 +465,3 @@ Uveden proto, že v předchozích verzích dokumentu se čtyři pojmy vyskytoval
 - Hawkins, J. & Gilligan, G. (1988): *Prefixing and suffixing universals in relation to basic word order* — asymetrie sufixační preference.
 - Williams, E. (1981): *On the notions "lexically related" and "head of a word"* — pravidlo pravé hlavy ve složeninách.
 - List, J.-M. a kol.: publikace k CLICS, Concepticon a CLDF.
-

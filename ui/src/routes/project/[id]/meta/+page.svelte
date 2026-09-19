@@ -1,0 +1,599 @@
+<script lang="ts">
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
+	import {
+		Card,
+		CardContent,
+		CardDescription,
+		CardHeader,
+		CardTitle
+	} from '$lib/components/ui/card';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Select } from '$lib/components/ui/select';
+	import { Label } from '$lib/components/ui/label';
+	import {
+		ipaManners,
+		ipaPlaces,
+		ipaConsonants,
+		ipaVowelsFrontness,
+		ipaVowelsOpenness,
+		ipaVowels,
+		languagePresets
+	} from '$lib/data/languagePresets';
+	import { generateProtolangApi, resetApiBase } from '$lib/api';
+	import { projectState, loadProject, scheduleSave } from '$lib/state.svelte';
+	import { onMount } from 'svelte';
+
+	type ProtoLanguage = {
+		id: string;
+		name: string;
+		presetId: string;
+		consonants: Set<string>;
+		vowels: Set<string>;
+		syllable: string;
+	};
+	type StoredProtoLanguage = Omit<ProtoLanguage, 'consonants' | 'vowels'> & {
+		consonants: string[];
+		vowels: string[];
+	};
+
+	function defaultProto(): ProtoLanguage {
+		const preset = languagePresets.find((item) => item.id === 'pie')!;
+		return {
+			id: 'proto-1',
+			name: 'Protojazyk',
+			presetId: preset.id,
+			consonants: new Set(preset.consonants),
+			vowels: new Set(preset.vowels),
+			syllable: preset.syllable
+		};
+	}
+
+	function hydrateProto(value: unknown): ProtoLanguage[] {
+		if (!Array.isArray(value) || value.length === 0) return [defaultProto()];
+		return value.map((raw, index) => {
+			const item = raw as Partial<StoredProtoLanguage>;
+			return {
+				id: item.id ?? `proto-${index + 1}`,
+				name: item.name ?? `Protojazyk ${index + 1}`,
+				presetId: item.presetId ?? 'empty',
+				consonants: new Set(item.consonants ?? []),
+				vowels: new Set(item.vowels ?? []),
+				syllable: item.syllable ?? '(C)V'
+			};
+		});
+	}
+
+	function serializeProto(languages: ProtoLanguage[]): StoredProtoLanguage[] {
+		return languages.map((language) => ({
+			...language,
+			consonants: [...language.consonants],
+			vowels: [...language.vowels]
+		}));
+	}
+
+	let protoLanguages = $state<ProtoLanguage[]>([defaultProto()]);
+	let activeProtoId = $state('proto-1');
+	let metaReady = $state(false);
+
+	// Načtení projektu i tady — na Metaeditaci se dá přijít přímo odkazem.
+	onMount(() => {
+		void (async () => {
+			await loadProject($page.params.id ?? 'default');
+			if (!projectState.loaded) return;
+			protoLanguages = hydrateProto(projectState.protoLanguages);
+			activeProtoId = protoLanguages[0].id;
+			metaReady = true;
+		})();
+	});
+
+	// Sety nejsou JSON-serializovatelné. Do společného projektu proto ukládáme
+	// vždy obyčejná pole, ze kterých se při návratu na stránku znovu vytvoří.
+	$effect(() => {
+		if (!metaReady || !projectState.loaded) return;
+		projectState.protoLanguages = serializeProto(protoLanguages);
+		scheduleSave();
+	});
+
+	let activeProto = $derived(protoLanguages.find((p) => p.id === activeProtoId)!);
+
+	// Time steps state
+	let timeSteps = $state([{ year: 0, description: 'Základní protojazyk' }]);
+
+	let newYear = $state('');
+	let newDesc = $state('');
+
+	function addProtoLanguage() {
+		const newId = `proto-${Date.now()}`;
+		protoLanguages = [
+			...protoLanguages,
+			{
+				id: newId,
+				name: `Nový Proto-Jazyk`,
+				presetId: 'empty',
+				consonants: new Set(),
+				vowels: new Set(),
+				syllable: '(C)V'
+			}
+		];
+		activeProtoId = newId;
+	}
+
+	function removeProtoLanguage(id: string) {
+		if (protoLanguages.length <= 1) return;
+		protoLanguages = protoLanguages.filter((p) => p.id !== id);
+		if (activeProtoId === id) activeProtoId = protoLanguages[0].id;
+	}
+
+	function handlePresetChange(e: Event) {
+		const select = e.target as HTMLSelectElement;
+		const presetId = select.value;
+		const preset = languagePresets.find((p) => p.id === presetId);
+		if (!preset) return;
+
+		protoLanguages = protoLanguages.map((p) => {
+			if (p.id === activeProtoId) {
+				return {
+					...p,
+					presetId,
+					consonants: new Set(preset.consonants),
+					vowels: new Set(preset.vowels),
+					syllable: preset.syllable
+				};
+			}
+			return p;
+		});
+	}
+
+	function toggleConsonant(symbol: string) {
+		const newSet = new Set(activeProto.consonants);
+		if (newSet.has(symbol)) {
+			newSet.delete(symbol);
+		} else {
+			newSet.add(symbol);
+		}
+
+		protoLanguages = protoLanguages.map((p) =>
+			p.id === activeProtoId ? { ...p, consonants: newSet, presetId: 'empty' } : p
+		);
+	}
+
+	function toggleVowel(symbol: string) {
+		const newSet = new Set(activeProto.vowels);
+		if (newSet.has(symbol)) {
+			newSet.delete(symbol);
+		} else {
+			newSet.add(symbol);
+		}
+
+		protoLanguages = protoLanguages.map((p) =>
+			p.id === activeProtoId ? { ...p, vowels: newSet, presetId: 'empty' } : p
+		);
+	}
+
+	function addTimeStep(e: Event) {
+		e.preventDefault();
+		if (!newYear) return;
+		timeSteps = [...timeSteps, { year: Number(newYear), description: newDesc }].sort(
+			(a, b) => a.year - b.year
+		);
+		newYear = '';
+		newDesc = '';
+	}
+
+	function removeTimeStep(index: number) {
+		timeSteps = timeSteps.filter((_, i) => i !== index);
+	}
+
+	function proceedToMap() {
+		if (metaReady) projectState.protoLanguages = serializeProto(protoLanguages);
+		goto(`/project/${$page.params.id}/map`);
+	}
+
+	let isGenerating = $state(false);
+	let generateError = $state('');
+	let generatedSource = $state('');
+	let generatedConceptCount = $state(0);
+	const CORE_CONCEPT_COUNT = 149;
+	let customConceptCount = $derived(
+		new Set(
+			projectState.customConcepts
+				.split(/[\n,]/)
+				.map((concept) => concept.trim().toLowerCase())
+				.filter(Boolean)
+		).size
+	);
+	let vocabularyEstimate = $derived(
+		projectState.vocabularyProfile === 'core'
+			? `Přibližně ${CORE_CONCEPT_COUNT + customConceptCount} konceptů`
+			: 'Několik tisíc konceptů (podle lokálně dostupného korpusu)'
+	);
+
+	async function generateLexicon() {
+		if (activeProto.consonants.size === 0 || activeProto.vowels.size === 0) {
+			generateError = 'Je potřeba vybrat alespoň jednu souhlásku a samohlásku.';
+			return;
+		}
+
+		isGenerating = true;
+		generateError = '';
+		try {
+			const cons = Array.from(activeProto.consonants).join(' ');
+			const vows = Array.from(activeProto.vowels).join(' ');
+
+			const data = await generateProtolangApi({
+				consonants: cons,
+				vowels: vows,
+				syllable_structure: activeProto.syllable,
+				vocabulary_profile: projectState.vocabularyProfile,
+				custom_concepts: projectState.customConcepts
+					.split(/[\n,]/)
+					.map((concept) => concept.trim())
+					.filter(Boolean)
+			});
+
+			if (data.status === 'success') {
+				projectState.generatedProtoLexicon = data.words;
+				generatedSource = data.source ?? '';
+				generatedConceptCount = data.concept_count ?? data.words.length;
+				scheduleSave();
+			} else {
+				generateError = `Generátor vrátil chybový stav '${data.status}'.`;
+			}
+		} catch (e) {
+			resetApiBase();
+			generateError = e instanceof Error ? e.message : String(e);
+		} finally {
+			isGenerating = false;
+		}
+	}
+</script>
+
+<svelte:head>
+	<title>Metaeditace | Projekt {$page.params.id}</title>
+</svelte:head>
+
+<div class="min-h-screen bg-background flex flex-col p-6 max-w-7xl mx-auto gap-8">
+	<header class="flex items-center justify-between border-b pb-4">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Metaeditace: {projectState.name}</h1>
+			<p class="text-muted-foreground">
+				1. nastav protojazyk a slovník, 2. pokračuj na mapu, 3. spusť simulaci.
+			</p>
+		</div>
+		<div class="flex gap-2">
+			<Button variant="outline" onclick={() => goto(`/project/${$page.params.id}/map`)}
+				>Na mapu</Button
+			>
+			<Button variant="outline" onclick={() => goto('/')}>Zpět do menu</Button>
+		</div>
+	</header>
+
+	<Card>
+		<CardContent class="pt-5 flex items-center gap-3">
+			<Label for="project-name" class="shrink-0">Název projektu</Label>
+			<Input id="project-name" bind:value={projectState.name} oninput={() => scheduleSave()} />
+		</CardContent>
+	</Card>
+
+	<div class="grid lg:grid-cols-4 gap-6 items-start">
+		<!-- Vedlejší nástroje jsou záměrně označené: hlavní cesta pracuje s jedním protojazykem. -->
+		<aside class="lg:col-span-1 space-y-4">
+			<Card>
+				<CardHeader class="pb-3">
+					<CardTitle
+						>Protojazyky <span class="ml-1 text-xs font-normal text-muted-foreground"
+							>experimentální</span
+						></CardTitle
+					>
+					<CardDescription>Plně podporovaná cesta nyní používá první protojazyk.</CardDescription>
+				</CardHeader>
+				<CardContent class="space-y-2">
+					{#each protoLanguages as lang}
+						<div
+							role="button"
+							tabindex="0"
+							class="flex items-center justify-between gap-2 p-2 border rounded-md cursor-pointer {activeProtoId ===
+							lang.id
+								? 'bg-primary text-primary-foreground border-primary'
+								: 'hover:bg-muted'}"
+							onclick={() => (activeProtoId = lang.id)}
+							onkeydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									activeProtoId = lang.id;
+								}
+							}}
+						>
+							<span class="font-medium text-sm truncate">{lang.name}</span>
+							{#if protoLanguages.length > 1}
+								<button
+									class="text-xs opacity-50 hover:opacity-100"
+									onclick={(e) => {
+										e.stopPropagation();
+										removeProtoLanguage(lang.id);
+									}}>✕</button
+								>
+							{/if}
+						</div>
+					{/each}
+					<Button variant="outline" class="w-full mt-2" onclick={addProtoLanguage}
+						>+ Přidat další</Button
+					>
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader class="pb-3">
+					<CardTitle
+						>Časová osa <span class="ml-1 text-xs font-normal text-muted-foreground"
+							>experimentální</span
+						></CardTitle
+					>
+					<CardDescription>Hlavní časová osa se upravuje přímo na mapě.</CardDescription>
+				</CardHeader>
+				<CardContent class="space-y-4">
+					<form onsubmit={addTimeStep} class="space-y-2">
+						<div class="flex gap-2">
+							<Input type="number" bind:value={newYear} placeholder="Rok" class="w-20" />
+							<Input bind:value={newDesc} placeholder="Milník" />
+						</div>
+						<Button type="submit" class="w-full" size="sm">Přidat</Button>
+					</form>
+					<div class="space-y-2 max-h-60 overflow-y-auto">
+						{#each timeSteps as step, i}
+							<div class="flex items-center justify-between text-sm border-b pb-1">
+								<span
+									><strong class="w-10 inline-block">{step.year}</strong> {step.description}</span
+								>
+								{#if i > 0}
+									<button class="text-destructive text-xs" onclick={() => removeTimeStep(i)}
+										>✕</button
+									>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				</CardContent>
+			</Card>
+		</aside>
+
+		<!-- Main Editor for active proto language -->
+		<main class="lg:col-span-3 space-y-6">
+			<Card>
+				<CardHeader class="pb-3 border-b mb-4 flex flex-row items-center justify-between">
+					<div>
+						<Input
+							value={activeProto.name}
+							oninput={(e: Event & { currentTarget: HTMLInputElement }) => {
+								protoLanguages = protoLanguages.map((p) =>
+									p.id === activeProtoId ? { ...p, name: e.currentTarget.value } : p
+								);
+							}}
+							class="text-xl font-bold h-auto border-transparent hover:border-input focus:border-input focus-visible:ring-0 px-0 -ml-2"
+						/>
+						<CardDescription
+							>Definujte fonetický inventář a strukturu slabiky vybraného jazyka.</CardDescription
+						>
+					</div>
+
+					<div class="flex items-center gap-2">
+						<Label for="preset">Předvolba:</Label>
+						<Select id="preset" value={activeProto.presetId} onchange={handlePresetChange}>
+							{#each languagePresets as preset}
+								<option value={preset.id}>{preset.name}</option>
+							{/each}
+						</Select>
+					</div>
+				</CardHeader>
+
+				<CardContent class="space-y-8">
+					<div class="space-y-4">
+						<h3 class="font-semibold border-b pb-1">IPA Souhlásky (Consonants)</h3>
+						<div class="overflow-x-auto pb-4">
+							<table class="w-full text-sm border-collapse">
+								<thead>
+									<tr>
+										<th class="border p-2 text-left bg-muted/30">Způsob \ Místo</th>
+										{#each ipaPlaces as place}
+											<th class="border p-1 text-center font-normal text-xs bg-muted/10">{place}</th
+											>
+										{/each}
+									</tr>
+								</thead>
+								<tbody>
+									{#each ipaManners as manner}
+										<tr>
+											<th class="border p-2 text-left font-normal bg-muted/10">{manner}</th>
+											{#each ipaPlaces as place}
+												<td class="border p-1 text-center min-w-[3.5rem]">
+													{#if ipaConsonants[manner] && ipaConsonants[manner][place]}
+														<div class="flex justify-center gap-1">
+															{#each ipaConsonants[manner][place] as symbol}
+																{#if symbol}
+																	<!-- svelte-ignore a11y_click_events_have_key_events -->
+																	<!-- svelte-ignore a11y_no_static_element_interactions -->
+																	<span
+																		class="inline-block w-5 h-5 text-center leading-5 rounded cursor-pointer select-none transition-colors {activeProto.consonants.has(
+																			symbol
+																		)
+																			? 'bg-primary text-primary-foreground font-bold'
+																			: 'hover:bg-muted'}"
+																		onclick={() => toggleConsonant(symbol)}
+																	>
+																		{symbol}
+																	</span>
+																{:else}
+																	<span class="w-5 h-5"></span>
+																{/if}
+															{/each}
+														</div>
+													{/if}
+												</td>
+											{/each}
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<div class="grid md:grid-cols-2 gap-8">
+						<div class="space-y-4">
+							<h3 class="font-semibold border-b pb-1">IPA Samohlásky (Vowels)</h3>
+							<table class="w-full text-sm border-collapse">
+								<thead>
+									<tr>
+										<th class="border p-1 text-left bg-muted/30">Otevřenost \ Poloha</th>
+										{#each ipaVowelsFrontness as frontness}
+											<th class="border p-1 text-center font-normal bg-muted/10">{frontness}</th>
+										{/each}
+									</tr>
+								</thead>
+								<tbody>
+									{#each ipaVowelsOpenness as openness}
+										<tr>
+											<th class="border p-1 text-left font-normal bg-muted/10 text-xs"
+												>{openness}</th
+											>
+											{#each ipaVowelsFrontness as frontness}
+												<td class="border p-1 text-center">
+													{#if ipaVowels[openness] && ipaVowels[openness][frontness]}
+														<div class="flex justify-center gap-1">
+															{#each ipaVowels[openness][frontness] as symbol}
+																{#if symbol}
+																	<!-- svelte-ignore a11y_click_events_have_key_events -->
+																	<!-- svelte-ignore a11y_no_static_element_interactions -->
+																	<span
+																		class="inline-block w-5 h-5 text-center leading-5 rounded cursor-pointer select-none transition-colors {activeProto.vowels.has(
+																			symbol
+																		)
+																			? 'bg-primary text-primary-foreground font-bold'
+																			: 'hover:bg-muted'}"
+																		onclick={() => toggleVowel(symbol)}
+																	>
+																		{symbol}
+																	</span>
+																{:else}
+																	<span class="w-5 h-5"></span>
+																{/if}
+															{/each}
+														</div>
+													{/if}
+												</td>
+											{/each}
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+
+						<div class="space-y-4">
+							<h3 class="font-semibold border-b pb-1">Struktura slabiky & Slova</h3>
+							<div class="space-y-4">
+								<div class="space-y-2">
+									<Label for="syllable"
+										>Vzorec slabiky (C=Souhláska, V=Samohláska, závorky=volitelné)</Label
+									>
+									<!-- Use value binding instead of two-way bind for derived objects because we mutate via helper -->
+									<Input
+										id="syllable"
+										value={activeProto.syllable}
+										oninput={(e: Event & { currentTarget: HTMLInputElement }) => {
+											protoLanguages = protoLanguages.map((p) =>
+												p.id === activeProtoId
+													? { ...p, syllable: e.currentTarget.value, presetId: 'empty' }
+													: p
+											);
+										}}
+										class="font-mono"
+									/>
+								</div>
+
+								<div class="p-4 bg-muted/30 rounded-md border text-sm text-muted-foreground">
+									<p>
+										Aktivní souhlásky: <strong class="text-foreground"
+											>{Array.from(activeProto.consonants).join(', ') || 'Žádné'}</strong
+										>
+									</p>
+									<p class="mt-2">
+										Aktivní samohlásky: <strong class="text-foreground"
+											>{Array.from(activeProto.vowels).join(', ') || 'Žádné'}</strong
+										>
+									</p>
+								</div>
+
+								<div class="space-y-2 rounded-md border p-3">
+									<Label for="vocabulary-profile">Rozsah slovní zásoby</Label>
+									<Select
+										id="vocabulary-profile"
+										value={projectState.vocabularyProfile}
+										onchange={(event) => {
+											projectState.vocabularyProfile =
+												event.currentTarget.value === 'full' ? 'full' : 'core';
+											scheduleSave();
+										}}
+									>
+										<option value="core">Základní jazyk — doporučeno</option>
+										<option value="full">Komplexní jazyk — plný korpus</option>
+									</Select>
+									<div class="rounded bg-muted px-2 py-1.5 text-xs text-muted-foreground">
+										<strong class="text-foreground">Odhad: {vocabularyEstimate}.</strong>
+										{#if projectState.vocabularyProfile === 'core'}
+											Swadeshovo jádro, důležité světové koncepty a vlastní slova. Rychlé a
+											přehledné pro většinu projektů.
+										{:else}
+											Simulace pracuje s celým lexikonem: lépe zachytí kolize a šíření změn, ale
+											bude náročnější na výpočet i prohlížení.
+										{/if}
+									</div>
+								</div>
+
+								<div class="space-y-2">
+									<Label for="custom-concepts">Slova specifická pro tento svět</Label>
+									<Input
+										id="custom-concepts"
+										placeholder="např. skyship, moonstone, guild (odděl čárkou)"
+										value={projectState.customConcepts}
+										oninput={(event) => {
+											projectState.customConcepts = event.currentTarget.value;
+											scheduleSave();
+										}}
+									/>
+									<p class="text-xs text-muted-foreground">
+										Přidají se automaticky k nové generaci slovníku.
+									</p>
+								</div>
+
+								<Button
+									variant="secondary"
+									class="w-full"
+									onclick={generateLexicon}
+									disabled={isGenerating}
+								>
+									{isGenerating ? 'Generuji...' : 'Vygenerovat slovník'}
+								</Button>
+
+								{#if generateError}
+									<p class="text-destructive text-sm font-medium">{generateError}</p>
+								{/if}
+
+								{#if projectState.generatedProtoLexicon.length > 0}
+									<p class="text-green-600 text-sm font-medium">
+										Úspěšně vygenerováno {projectState.generatedProtoLexicon.length} lexémů pro {generatedConceptCount}
+										významů{generatedSource ? ` (${generatedSource})` : ''}.
+									</p>
+								{/if}
+							</div>
+						</div>
+					</div>
+				</CardContent>
+			</Card>
+		</main>
+	</div>
+
+	<footer class="flex justify-end pt-4 mt-auto">
+		<Button size="lg" onclick={proceedToMap}>Uložit a pokračovat na Fyzickou mapu</Button>
+	</footer>
+</div>
