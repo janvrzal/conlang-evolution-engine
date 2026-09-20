@@ -39,7 +39,7 @@
 			<Card><CardHeader class="pb-3"><CardTitle class="flex items-center gap-2 text-sm"><Layers3 class="h-4 w-4" />Vrstvy</CardTitle></CardHeader><CardContent><WorldLayersPanel {layers} onToggle={(layer, visible) => setWorldMapLayer(layer, visible)} /></CardContent></Card>
 			<Card><CardHeader class="pb-3"><CardTitle class="flex items-center gap-2 text-sm"><MapIcon class="h-4 w-4" />Podklad</CardTitle></CardHeader><CardContent><WorldMapImportPanel onImport={(next) => updateWorldMap({ document: { name: next.name, width: next.width, height: next.height, backgroundDataUrl: next.backgroundDataUrl } })} /></CardContent></Card>
 		</aside>
-		<section class="min-w-0"><WorldMapCanvas {document} {points} selectedId={selected?.id ?? null} onSelect={(point) => (selected = point)} /></section>
+		<section class="min-w-0"><WorldMapCanvas {document} {points} regions={projectState.worldModel.map.regions} settlements={projectState.worldModel.map.settlements} routes={projectState.worldModel.map.routes} politicalEntities={projectState.worldModel.map.politicalEntities} {layers} selectedId={selected?.id ?? null} onSelect={(point) => (selected = point)} /></section>
 		<aside class="space-y-4"><Card><CardHeader class="pb-3"><CardTitle class="text-sm">Inspektor</CardTitle></CardHeader><CardContent><WorldInspector {selected} /></CardContent></Card><Card class="border-dashed"><CardContent class="pt-6"><p class="text-xs leading-relaxed text-muted-foreground">Mapa je záměrně oddělená od rodokmenu. Změna polohy, vrstev nebo podkladu zde nevytváří ani nemaže jazykové vztahy.</p></CardContent></Card></aside>
 	</main>
 </div>
