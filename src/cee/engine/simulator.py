@@ -5,6 +5,7 @@ import math
 import random
 import uuid
 import warnings
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from cee.core.models import Inventory, Lexicon, SpeechCommunity, State, VarietyState
@@ -53,6 +54,19 @@ _PRIO_CONTACT = 6
 SPREAD_PHASE_YEARS = 40
 
 
+@dataclass(frozen=True)
+class WordPressure:
+    """Nezávislé tlaky nad jedním lexémem; záměrně bez souhrnného skóre."""
+
+    segment_length: float
+    syllable_length: float
+    vowel_duration: float
+    repetition: float
+    phonotactics: float
+    homophony: float
+    neighborhood_similarity: float
+
+
 class EvolutionSimulator:
     """
     Řídí globální lockstep simulaci evoluční sítě.
@@ -99,6 +113,7 @@ class EvolutionSimulator:
         self._generated_history: Dict[str, List[Rule]] = {}
         self._sound_changes: Dict[str, SoundChangeEvent] = {}
         self._sound_change_adoptions: Dict[str, set[tuple[str, int, str]]] = {}
+        self._sound_change_exposure: Dict[str, set[tuple[str, int, str]]] = {}
         self._sound_change_sequence = 0
         self.semantic_history = SemanticChangeRuntime()
         self.social_dynamics = SocialDynamicsEngine()
@@ -414,6 +429,7 @@ class EvolutionSimulator:
                 # právě šíří, i když ještě nezasáhla celý lexikon.
                 self._sound_changes[event.change_id] = event
                 self._sound_change_adoptions[event.change_id] = set()
+                self._sound_change_exposure[event.change_id] = set()
                 phases = max(1, math.ceil(event.duration / SPREAD_PHASE_YEARS))
                 self._propagate_sound_change(branch_state, event, 1 / phases, event.year)
                 self._schedule_sound_change_spread(event, push)
@@ -1174,6 +1190,9 @@ class EvolutionSimulator:
             self._sound_change_adoptions[child_change.change_id] = set(
                 self._sound_change_adoptions[change.change_id]
             )
+            self._sound_change_exposure[child_change.change_id] = set(
+                self._sound_change_exposure.get(change.change_id, set())
+            )
             self._schedule_sound_change_spread(child_change, push, after_year=year)
 
     def _schedule_sound_change_spread(
@@ -1228,8 +1247,16 @@ class EvolutionSimulator:
         """Aplikuje dosud neadoptovanou, deterministicky vybranou část lexikonu."""
         state.year = year
         adopted = self._sound_change_adoptions[change.change_id]
+        exposed = self._sound_change_exposure[change.change_id]
         threshold = min(1.0, max(0.0, progress * change.intensity))
         selected = []
+        phonotactic_profile = PhonotacticProfile.learn(state.lexicon.words)
+        pressure_context = [
+            (other.id, other.concept_id, tuple(tuple(sorted(s.features.items())) for s in other.segments))
+            for other in state.lexicon.words
+            if other.active
+        ]
+        ranked_candidates = []
         for word in state.lexicon.words:
             if not word.active:
                 continue
@@ -1242,6 +1269,52 @@ class EvolutionSimulator:
                 # tuto inovaci nepřejme bez kompenzačního mechanismu.
                 adopted.add(key)
                 continue
+            pressure_before, pressure_after = self._word_pressure_transition(
+                state, word, change.rule, phonotactic_profile, pressure_context
+            )
+            if not self._permits_pressure_transition(
+                word, pressure_before, pressure_after
+            ):
+                # Změna není odmítnuta proto, že by byla „neestetická“, ale
+                # protože by už přetížený lexém dál prodloužila či rytmicky
+                # zdvojila. Takové formy jsou historicky mnohem spíš cílem
+                # redukce než dalšího rozšiřování.
+                adopted.add(key)
+                continue
+            ranked_candidates.append((word, key, pressure_before, pressure_after))
+
+        # Pořadí je vysvětlitelné a závislé na konkrétním pravidle. Náhoda
+        # v prahu níže zůstává: vysoká priorita zvyšuje šanci, není rozkazem.
+        ranked_candidates.sort(
+            key=lambda item: self._change_priority(item[2], item[3]), reverse=True
+        )
+        for word, key, pressure_before, pressure_after in ranked_candidates:
+            temperature = self._phonology_temperature(state)
+            if self._has_phonology_temperature(state) and key not in exposed:
+                # Teplota řídí, kdo vůbec vstoupí do procesu. Při 1 vstoupí
+                # každý vhodný lexém; při 0 nikdo. Mezi tím priorita tlaků
+                # pouze probabilisticky mění pořadí expozice.
+                priority = self._change_priority(pressure_before, pressure_after)
+                exposure_probability = (
+                    1.0 if temperature >= 1.0 else temperature * (0.60 + 0.40 * priority)
+                )
+                exposure_sample = random.Random(
+                    derive_seed(self.seed, "sound-change-exposure", change.change_id, *map(str, key))
+                ).random()
+                exposed.add(key)
+                if exposure_sample > exposure_probability:
+                    adopted.add(key)
+                    continue
+                # Expozice spustí proces, ne hotovou změnu. Uchycení je
+                # nezávislý seedovaný pokus, takže ani teplota 1 neznamená
+                # automatickou aplikaci všude.
+                catch_probability = min(0.90, 0.25 + 0.55 * change.pressure + 0.20 * priority)
+                catch_sample = random.Random(
+                    derive_seed(self.seed, "sound-change-catch", change.change_id, *map(str, key))
+                ).random()
+                if catch_sample > catch_probability:
+                    adopted.add(key)
+                    continue
             sample = random.Random(
                 derive_seed(self.seed, "sound-change-adoption", change.change_id, *map(str, key))
             ).random()
@@ -1252,6 +1325,13 @@ class EvolutionSimulator:
                 innovation_group=change.innovation_group,
                 innovation_class=change.innovation_class,
                 network_bias=self._network_adoption_bias(state, change.innovation_group, word),
+            )
+            priority = self._change_priority(pressure_before, pressure_after)
+            adoption_threshold = min(
+                1.0,
+                max(0.0, adoption_threshold + self._complexity_adoption_bias(
+                    pressure_before, pressure_after
+                ) - 0.20 * priority),
             )
             if adoption_threshold <= threshold:
                 selected.append(word)
@@ -1279,6 +1359,31 @@ class EvolutionSimulator:
             },
         )
 
+    def _phonology_temperature(self, state: State) -> float:
+        """Nastavitelná intenzita expozice fonologické inovaci (0 až 1)."""
+        config = self.graph.node_configs.get(state.node_id, {})
+        phonology = config.get("phonology", {})
+        macro = config.get("macro", {})
+        raw = (
+            phonology.get("temperature", macro.get("change_temperature", 1.0))
+            if isinstance(phonology, dict) and isinstance(macro, dict)
+            else 1.0
+        )
+        try:
+            return max(0.0, min(1.0, float(raw)))
+        except (TypeError, ValueError):
+            return 1.0
+
+    def _has_phonology_temperature(self, state: State) -> bool:
+        config = self.graph.node_configs.get(state.node_id, {})
+        phonology = config.get("phonology", {})
+        macro = config.get("macro", {})
+        return (
+            isinstance(phonology, dict) and "temperature" in phonology
+        ) or (
+            isinstance(macro, dict) and "change_temperature" in macro
+        )
+
     @staticmethod
     def _preserves_content_word_shape(word, rule: Rule) -> bool:
         """Chrání lexikální prostor, neexistující zákaz krátkých slov.
@@ -1294,6 +1399,137 @@ class EvolutionSimulator:
         candidate = copy.deepcopy(word)
         rule.apply_to_word(candidate)
         return len(candidate.segments) >= 3
+
+    def word_pressures(self, state: State, word) -> WordPressure:
+        """Vrátí vysvětlitelný vektor tlaků nad aktuálním stavem lexému."""
+        context = [
+            (other.id, other.concept_id, tuple(tuple(sorted(s.features.items())) for s in other.segments))
+            for other in state.lexicon.words
+            if other.active
+        ]
+        return self._word_pressure(state, word, PhonotacticProfile.learn(state.lexicon.words), context)
+
+    def _word_pressure(
+        self, state: State, word, phonotactics: PhonotacticProfile, context: list[tuple]
+    ) -> WordPressure:
+        segments = [tuple(sorted(segment.features.items())) for segment in word.segments]
+        segment_count = len(segments)
+        nuclei = word.syllable_nuclei()
+        adjacent_doubles = sum(segments[index] == segments[index - 1] for index in range(1, segment_count))
+        bigrams = [tuple(segments[index:index + 2]) for index in range(segment_count - 1)]
+        repeated_bigrams = max(0, len(bigrams) - len(set(bigrams)))
+        competitors = [
+            signature for other_id, concept_id, signature in context
+            if other_id != word.id and concept_id != word.concept_id
+        ]
+        exact_collisions = sum(signature == tuple(segments) for signature in competitors)
+        similarities = [
+            self._form_similarity(segments, signature) for signature in competitors
+        ]
+        return WordPressure(
+            segment_length=round(min(1.0, max(0, segment_count - 5) / 5), 6),
+            syllable_length=round(min(1.0, max(0, len(nuclei) - 2) / 3), 6),
+            vowel_duration=round(min(1.0, len(word.long_nuclei) / max(1, len(nuclei))), 6),
+            repetition=round(min(1.0, 0.45 * adjacent_doubles + 0.30 * repeated_bigrams), 6),
+            phonotactics=round(min(1.0, sum(phonotactics.score(word).values()) / 3), 6),
+            homophony=1.0 if exact_collisions else 0.0,
+            neighborhood_similarity=round(max(similarities, default=0.0), 6),
+        )
+
+    @staticmethod
+    def _form_similarity(left: list[tuple], right: list[tuple]) -> float:
+        """Normalizovaná podobnost segmentových podpisů, bez IPA heuristik."""
+        row = list(range(len(right) + 1))
+        for left_index, left_value in enumerate(left, 1):
+            old, row[0] = row[0], left_index
+            for right_index, right_value in enumerate(right, 1):
+                old, row[right_index] = row[right_index], min(
+                    row[right_index] + 1,
+                    row[right_index - 1] + 1,
+                    old + (left_value != right_value),
+                )
+        distance = row[-1]
+        return 1.0 - distance / max(1, len(left), len(right))
+
+    def _word_pressure_transition(
+        self, state: State, word, rule: Rule, phonotactics: PhonotacticProfile, context: list[tuple]
+    ) -> tuple[WordPressure, WordPressure]:
+        before = self._word_pressure(state, word, phonotactics, context)
+        candidate = copy.deepcopy(word)
+        rule.apply_to_word(candidate)
+        return before, self._word_pressure(state, candidate, phonotactics, context)
+
+    @staticmethod
+    def _permits_pressure_transition(word, before: WordPressure, after: WordPressure) -> bool:
+        """Rozhoduje po osách tlaku; žádný součet nezakrývá důvod odmítnutí."""
+        if word.is_grammatical or word.grammatical_features.get("lexical.class") == "function":
+            return True
+        if after.homophony > before.homophony:
+            return False
+        if after.phonotactics > max(0.50, before.phonotactics):
+            return False
+        if after.segment_length > before.segment_length and after.segment_length >= 0.60:
+            return False
+        if after.syllable_length > before.syllable_length and after.syllable_length >= 0.67:
+            return False
+        if after.repetition > before.repetition and after.repetition >= 0.45:
+            return False
+        return True
+
+    @staticmethod
+    def _complexity_adoption_bias(before: WordPressure, after: WordPressure) -> float:
+        """Jemný bias sčítá konkrétní účinky, nikoli skryté celkové skóre."""
+        changes = (
+            (before.segment_length, after.segment_length, 0.10),
+            (before.syllable_length, after.syllable_length, 0.08),
+            (before.vowel_duration, after.vowel_duration, 0.05),
+            (before.repetition, after.repetition, 0.12),
+            (before.phonotactics, after.phonotactics, 0.10),
+            (before.neighborhood_similarity, after.neighborhood_similarity, 0.06),
+        )
+        return max(-0.22, min(0.22, sum((after_value - before_value) * weight for before_value, after_value, weight in changes)))
+
+    @staticmethod
+    def _change_priority(before: WordPressure, after: WordPressure) -> float:
+        """Priorita lexému pro jednu změnu, nikoli globální známka slova.
+
+        Každá osa zůstává odděleně viditelná. Priorita zvýhodní formu, jíž
+        dané pravidlo skutečně ulevuje, a mírně zvýhodní i neutrální změnu v
+        již přetížené formě. Růst kteréhokoli tlaku prioritu odečítá.
+        """
+        axes = (
+            (before.segment_length, after.segment_length, 0.26),
+            (before.syllable_length, after.syllable_length, 0.18),
+            (before.vowel_duration, after.vowel_duration, 0.10),
+            (before.repetition, after.repetition, 0.20),
+            (before.phonotactics, after.phonotactics, 0.16),
+            (before.homophony, after.homophony, 0.30),
+            (before.neighborhood_similarity, after.neighborhood_similarity, 0.08),
+        )
+        relief = sum(max(0.0, before_value - after_value) * weight for before_value, after_value, weight in axes)
+        growth = sum(max(0.0, after_value - before_value) * weight for before_value, after_value, weight in axes)
+        existing = sum(before_value * weight for before_value, _after_value, weight in axes)
+        return round(max(0.0, min(1.0, relief + 0.20 * existing - growth)), 6)
+
+    def rank_words_for_change(self, state: State, rule: Rule) -> list[tuple]:
+        """Vrátí aktivní lexémy od nejvhodnějšího k nejméně vhodnému přijetí.
+
+        Výstup nese oba vektory tlaků i pravděpodobnostní prioritu, aby UI či
+        audit mohly navrhnout změnu s důvodem místo jednoho neprůhledného čísla.
+        """
+        profile = PhonotacticProfile.learn(state.lexicon.words)
+        context = [
+            (other.id, other.concept_id, tuple(tuple(sorted(s.features.items())) for s in other.segments))
+            for other in state.lexicon.words
+            if other.active
+        ]
+        ranked = []
+        for word in state.lexicon.words:
+            if not word.active or not rule.can_apply_to_word(word):
+                continue
+            before, after = self._word_pressure_transition(state, word, rule, profile, context)
+            ranked.append((word, before, after, self._change_priority(before, after)))
+        return sorted(ranked, key=lambda item: item[3], reverse=True)
 
     def _route_reaches_language(self, route, language_id: str) -> bool:
         """Zkontroluje, že zastávka leží poblíž kreslené trasy.

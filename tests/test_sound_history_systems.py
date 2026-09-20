@@ -124,3 +124,53 @@ def test_obsahovy_koren_se_erozi_nesmí_zkrátit_pod_tri_segmenty(mapper):
 
     short = mapper.parse_word("water", "pa")
     assert EvolutionSimulator._preserves_content_word_shape(short, rule) is True
+
+
+def test_tlaky_lexemu_jsou_vektor_a_ne_jedno_skryte_skore(mapper):
+    from cee.engine.phonotactics import PhonotacticProfile
+    from cee.engine.simulator import EvolutionSimulator
+    from cee.engine.topology import EvolutionGraph
+
+    complex_word = mapper.parse_word("complex", "papapapa")
+    neighbour = mapper.parse_word("neighbour", "kamata")
+    state = State("x", Inventory(), Lexicon([complex_word, neighbour]))
+    simulator = EvolutionSimulator(EvolutionGraph(node_configs={"x": {}}), mapper)
+    pressure = simulator.word_pressures(state, complex_word)
+
+    assert pressure.segment_length > 0
+    assert pressure.syllable_length > 0
+    assert pressure.repetition > 0
+    assert pressure.homophony == 0
+    assert pressure.neighborhood_similarity > 0
+
+    gemination = Rule("geminace", {"syl": "+"}, {}, operation="geminate")
+    context = [
+        (word.id, word.concept_id, tuple(tuple(sorted(s.features.items())) for s in word.segments))
+        for word in state.lexicon.words
+    ]
+    before, after = simulator._word_pressure_transition(
+        state, complex_word, gemination, PhonotacticProfile.learn(state.lexicon.words), context
+    )
+    assert after.segment_length > before.segment_length
+    assert simulator._permits_pressure_transition(complex_word, before, after) is False
+    assert simulator.rank_words_for_change(state, gemination)[0][3] >= 0
+
+
+def test_teplota_fonologie_je_volitelna_a_omezená_na_interval(mapper):
+    from cee.engine.simulator import EvolutionSimulator
+    from cee.engine.topology import EvolutionGraph
+
+    state = State("cold", Inventory(), Lexicon([mapper.parse_word("word", "pata")]))
+    cold = EvolutionSimulator(
+        EvolutionGraph(node_configs={"cold": {"phonology": {"temperature": 0}}}), mapper
+    )
+    hot = EvolutionSimulator(
+        EvolutionGraph(node_configs={"cold": {"macro": {"change_temperature": 1.4}}}), mapper
+    )
+    legacy = EvolutionSimulator(EvolutionGraph(node_configs={"cold": {}}), mapper)
+
+    assert cold._has_phonology_temperature(state) is True
+    assert cold._phonology_temperature(state) == 0.0
+    assert hot._phonology_temperature(state) == 1.0
+    assert legacy._has_phonology_temperature(state) is False
+    assert legacy._phonology_temperature(state) == 1.0
