@@ -29,15 +29,19 @@ nodes:
   - id: english
     year: 500
     label: "Angličtina"
+    phonology: {temperature: 0.62}
   - id: german
     year: 500
     label: "Němčina"
+    phonology: {temperature: 0.62}
   - id: french
     year: 500
     label: "Francouzština"
+    phonology: {temperature: 0.58}
   - id: czech
     year: 500
     label: "Čeština"
+    phonology: {temperature: 0.55}
 vertical_edges:
   - {parent: proto_germanic, child: english, rules: []}
   - {parent: proto_germanic, child: german, rules: []}
