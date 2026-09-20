@@ -30,18 +30,26 @@ nodes:
     year: 500
     label: "Angličtina"
     phonology: {temperature: 0.62}
+    divergence: {phonological_rate: 1.45, lexical_rate: 1.80, morphological_rate: 1.25, contact_permeability: 1.25}
+    lexical: {enabled: true, replacement_rate: 0.020, loss_rate: 0.002, innovation_rate: 0.018, innovation_sources: {expressive: 0.45, trade_slang: 0.35, local_substrate: 0.20}}
   - id: german
     year: 500
     label: "Němčina"
     phonology: {temperature: 0.62}
+    divergence: {phonological_rate: 1.10, lexical_rate: 0.90, morphological_rate: 0.90, contact_permeability: 0.70}
+    lexical: {enabled: true, replacement_rate: 0.010, loss_rate: 0.002, innovation_rate: 0.006, innovation_sources: {expressive: 0.50, child_speech: 0.30, local_substrate: 0.20}}
   - id: french
     year: 500
     label: "Francouzština"
     phonology: {temperature: 0.58}
+    divergence: {phonological_rate: 1.30, lexical_rate: 1.10, morphological_rate: 1.15, contact_permeability: 1.10}
+    lexical: {enabled: true, replacement_rate: 0.014, loss_rate: 0.002, innovation_rate: 0.010, innovation_sources: {expressive: 0.45, trade_slang: 0.30, local_substrate: 0.25}}
   - id: czech
     year: 500
     label: "Čeština"
     phonology: {temperature: 0.55}
+    divergence: {phonological_rate: 1.15, lexical_rate: 1.00, morphological_rate: 1.10, contact_permeability: 0.85}
+    lexical: {enabled: true, replacement_rate: 0.012, loss_rate: 0.002, innovation_rate: 0.008, innovation_sources: {expressive: 0.50, child_speech: 0.25, local_substrate: 0.25}}
 vertical_edges:
   - {parent: proto_germanic, child: english, rules: []}
   - {parent: proto_germanic, child: german, rules: []}

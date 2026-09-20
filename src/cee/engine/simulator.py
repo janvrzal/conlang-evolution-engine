@@ -583,9 +583,10 @@ class EvolutionSimulator:
                         **self.profile_lexical,
                         **self.graph.node_configs.get(event.branch_id, {}).get("lexical", {}),
                     }
+                    divergence = self._divergence_profile(event.branch_id)
                     evaluator = LexicalEvaluator(
-                        replacement_rate=float(lexical.get("replacement_rate", 0.015)),
-                        loss_rate=float(lexical.get("loss_rate", 0.01)),
+                        replacement_rate=float(lexical.get("replacement_rate", 0.015)) * divergence["lexical_rate"],
+                        loss_rate=float(lexical.get("loss_rate", 0.01)) * divergence["lexical_rate"],
                         homophony_resolution_rate=float(
                             lexical.get("homophony_resolution_rate", 1.0)
                         ),
@@ -596,7 +597,7 @@ class EvolutionSimulator:
                             )
                         ),
                         homophony_strategies=lexical.get("homophony_strategies", {}),
-                        innovation_rate=float(lexical.get("innovation_rate", 0.0)),
+                        innovation_rate=float(lexical.get("innovation_rate", 0.0)) * divergence["lexical_rate"],
                         innovation_sources=lexical.get("innovation_sources", {}),
                     )
                     evaluator.evaluate(
@@ -799,7 +800,7 @@ class EvolutionSimulator:
                     source_state,
                     target_state,
                     event.year,
-                    event.volume,
+                    max(0, round(event.volume * self._divergence_profile(event.target_id)["contact_permeability"])),
                     event.domain,
                     event.prestige,
                     event.calque_rate,
@@ -992,6 +993,11 @@ class EvolutionSimulator:
 
         if self.graph_builder:
             self.graph_builder.add_event("split", year, child_id, parent_id=parent_state.node_id)
+            self.graph_builder.add_event(
+                "branch_divergence_profile", year, child_id,
+                parent_id=parent_state.node_id,
+                **self._divergence_profile(child_id),
+            )
 
         child_map = self._state_map_config(node_cfg)
         child_state = State(
@@ -1086,6 +1092,7 @@ class EvolutionSimulator:
 
     def _current_macro(self, state: State) -> MacroParams:
         node_cfg = self.graph.node_configs.get(state.node_id, {})
+        divergence = self._divergence_profile(state.node_id)
         standard = state.social.get("standardization", 0.0)
         literacy = state.social.get("literacy", 0.0)
         mobility = state.social.get("mobility", 0.5)
@@ -1095,13 +1102,35 @@ class EvolutionSimulator:
             "isolation": float(node_cfg.get("map", {}).get("isolation", node_cfg.get("isolation", 0.5))),
             "contact_intensity": self._contact_intensity(state.node_id),
         }
-        return MacroParams.from_config(
+        macro = MacroParams.from_config(
             self.preset.get("macro") if self.preset else None,
             self.profile_macro,
             social_macro,
             node_cfg.get("macro"),
             node_cfg.get("map", {}).get("macro"),
         )
+        # Po odštěpení nemají větve jen jiný seed, ale vlastní historické
+        # tempo. Násobitel je záměrně až zde: sociální historie dál upravuje
+        # společný základ a profil ji pouze individualizuje.
+        macro.change_rate *= divergence["phonological_rate"]
+        return macro
+
+    def _divergence_profile(self, node_id: str) -> dict[str, float]:
+        """Normalizovaný profil nezávislého vývoje jedné větve.
+
+        Hodnota 1 zachovává dosavadní chování. Profil nezná cílovou vzdálenost;
+        určuje jen tempo a propustnost procesů, takže běh není účelově tažený
+        k jedné moderní jazykové dvojici.
+        """
+        raw = self.graph.node_configs.get(node_id, {}).get("divergence", {})
+        raw = raw if isinstance(raw, dict) else {}
+        values = {}
+        for key in ("phonological_rate", "lexical_rate", "morphological_rate", "contact_permeability"):
+            try:
+                values[key] = max(0.0, float(raw.get(key, 1.0)))
+            except (TypeError, ValueError):
+                values[key] = 1.0
+        return values
 
     def _generate_and_schedule_slot(self, state: State, year: int, push) -> None:
         generator = self._generator_for(state.node_id)
@@ -1643,13 +1672,16 @@ class EvolutionSimulator:
         analogy_rate = float(morphology.get("analogy_rate", 0.0))
         if has_creation:
             push(start_year + 1, _PRIO_MORPHOLOGY, MorphologyEvent(start_year + 1, node_id))
-        if morphology.get("enabled"):
+        rate = self._divergence_profile(node_id)["morphological_rate"]
+        if morphology.get("enabled") and rate > 0:
             horizon = self._horizon_for(start_year, node_id)
-            for year in range(start_year + 100, horizon + 1, 100):
+            interval = max(25, round(100 / rate))
+            for year in range(start_year + interval, horizon + 1, interval):
                 push(year, _PRIO_MORPHOLOGY, MorphologyEvent(year, node_id))
-        if analogy_rate > 0:
+        if analogy_rate > 0 and rate > 0:
             horizon = self._horizon_for(start_year, node_id)
-            for year in range(start_year + 200, horizon + 1, 200):
+            interval = max(50, round(200 / rate))
+            for year in range(start_year + interval, horizon + 1, interval):
                 push(year, _PRIO_MORPHOLOGY, MorphologyEvent(year, node_id))
 
     def _schedule_lexicon(self, node_id: str, start_year: int, push) -> None:
