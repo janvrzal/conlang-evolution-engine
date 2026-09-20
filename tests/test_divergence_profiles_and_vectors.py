@@ -4,7 +4,7 @@ from cee.engine.simulator import EvolutionSimulator
 from cee.engine.topology import EvolutionGraph
 from cee.metrics.language_distance import compare_languages
 from cee.metrics.divergence_audit import audit_branch_divergence
-from cee.metrics.scenario_calibration import MetricTarget, calibrate_replicates, run_replicates
+from cee.metrics.scenario_calibration import MetricTarget, calibrate_replicates, rank_candidates, run_replicates
 
 
 def _state(mapper, node_id, records):
@@ -79,3 +79,12 @@ def test_replicate_runner_returns_one_vector_per_seed_and_pair():
     report = run_replicates([3, 4], simulate, [("a", "b")], mapper.render_word)
     assert report.seeds == (3, 4)
     assert len(report.vectors["a-b"]) == 2
+
+
+def test_calibrator_ranks_parameter_candidates_from_multiseed_vectors():
+    ranked = rank_candidates(
+        [{"rate": 0.5}, {"rate": 1.0}],
+        lambda params: [{"x": params["rate"]}] * 3,
+        [MetricTarget("x", 1.0, 0.1)],
+    )
+    assert ranked[0].parameters == {"rate": 1.0}

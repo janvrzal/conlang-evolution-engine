@@ -57,6 +57,22 @@ class ReplicateReport:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class CalibratedCandidate:
+    parameters: dict[str, float]
+    result: CalibrationResult
+
+
+def rank_candidates(
+    candidates: Sequence[Mapping[str, float]],
+    evaluate: Callable[[Mapping[str, float]], Sequence[Mapping[str, Any]]],
+    targets: Sequence[MetricTarget],
+) -> list[CalibratedCandidate]:
+    """Deterministicky seřadí parametry podle víceseedového vektoru, ne seedů."""
+    ranked = [CalibratedCandidate(dict(candidate), calibrate_replicates(evaluate(candidate), targets)) for candidate in candidates]
+    return sorted(ranked, key=lambda item: item.result.score)
+
+
 def run_replicates(
     seeds: Sequence[int],
     simulate: Callable[[int], Mapping[str, State]],
