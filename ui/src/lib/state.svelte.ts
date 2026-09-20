@@ -7,6 +7,8 @@
  */
 import { browser } from '$app/environment';
 import { fetchProject, saveProject } from '$lib/api';
+import { migrateLegacyWorldModel } from '$lib/world-model';
+import type { WorldModel } from '$lib/world-model';
 
 /** Jak dlouho po poslední změně se čeká, než se uloží. */
 const AUTOSAVE_DELAY_MS = 800;
@@ -43,6 +45,8 @@ export type HomophonyQueueDecision =
 	| { status: 'resolved'; year: number; strategy: HomophonyStrategy; loserConcept: string };
 
 export type ProjectData = {
+	/** Canonical entity/interval model; legacy snapshots remain for compatibility. */
+	worldModel: WorldModel;
 	polities: any[];
 	tradeRoutes: any[];
 	historicalEvents: any[];
@@ -93,7 +97,10 @@ function emptyData(): ProjectData {
 	// Protojazyk je součástí prázdného projektu, ne něco, co se doplní později.
 	// Když se sázel až po doběhnutí loadProject(), stihl ho přebít
 	// synchronizační efekt v mapě a do projektu se uložil prázdný snapshot.
+	const timeSteps = [0, 500, 1000, 1500];
+	const snapshots = { 0: { nodes: [protoNode(0)], edges: [] } };
 	return {
+		worldModel: migrateLegacyWorldModel({ snapshots, timeSteps }),
 		polities: [],
 		tradeRoutes: [],
 		historicalEvents: [],
@@ -101,8 +108,8 @@ function emptyData(): ProjectData {
 		vocabularyProfile: 'core',
 		customConcepts: '',
 		homophonyQueue: {},
-		timeSteps: [0, 500, 1000, 1500],
-		snapshots: { 0: { nodes: [protoNode(0)], edges: [] } },
+		timeSteps,
+		snapshots,
 		protoLanguages: [],
 		simulationRunAt: null,
 		simulationRunId: null,
@@ -143,6 +150,7 @@ export const projectState = $state<{
 	timeSteps: number[];
 	snapshots: Record<number, { nodes: any[]; edges: any[] }>;
 	protoLanguages: any[];
+	worldModel: WorldModel;
 }>({
 	id: null,
 	name: 'Nový projekt',
@@ -160,6 +168,7 @@ let saveAgain = false;
 /** Co se skutečně ukládá — bez odvoditelných a přechodných věcí. */
 function snapshotData(): ProjectData {
 	return {
+		worldModel: $state.snapshot(projectState.worldModel) as WorldModel,
 		polities: $state.snapshot(projectState.polities) as any[],
 		tradeRoutes: $state.snapshot(projectState.tradeRoutes) as any[],
 		historicalEvents: $state.snapshot(projectState.historicalEvents) as any[],
@@ -230,6 +239,15 @@ export async function loadProject(id: string): Promise<void> {
 			projectState.timeSteps = data.timeSteps;
 			projectState.snapshots = ensureSeed(data.snapshots, data.timeSteps);
 			projectState.protoLanguages = data.protoLanguages;
+			projectState.worldModel =
+				data.worldModel ??
+				migrateLegacyWorldModel({
+					snapshots: projectState.snapshots,
+					timeSteps: data.timeSteps,
+					historicalEvents: data.historicalEvents,
+					polities: data.polities,
+					tradeRoutes: data.tradeRoutes
+				});
 
 			projectState.simulationRunAt = data.simulationRunAt ?? null;
 			projectState.simulationRunId = data.simulationRunId ?? null;
