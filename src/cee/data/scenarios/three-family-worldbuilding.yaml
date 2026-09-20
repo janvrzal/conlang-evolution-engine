@@ -1,0 +1,29 @@
+scenario:
+  id: three-family-worldbuilding
+  archetype: "Tři rodiny: pobřežní obchodní liga, horská konfederace a severní ostrovní řetězec."
+  description: "Dvě rodiny se setkávají přes obchod a dobytí; třetí zůstává mimo jejich kontaktovou síť."
+nodes:
+  - {id: proto_asteric, year: 0, isProto: true, label: "Praasterština", phonology: {temperature: 0.60}}
+  - {id: proto_belaric, year: 0, isProto: true, label: "Prabelarština", phonology: {temperature: 0.57}}
+  - {id: proto_noric, year: 0, isProto: true, label: "Pranorština", phonology: {temperature: 0.54}}
+  - {id: aster_coast, year: 350, label: "Sareli", phonology: {temperature: 0.67}, divergence: {phonological_rate: 1.35, lexical_rate: 1.3, morphological_rate: 1.1, contact_permeability: 1.25}, map: {social: {mobility: 0.85, prestige: 0.75}}}
+  - {id: aster_highland, year: 350, label: "Kardun", phonology: {temperature: 0.48}, divergence: {phonological_rate: 0.75, lexical_rate: 0.75, morphological_rate: 0.9, contact_permeability: 0.25}, map: {social: {mobility: 0.25, prestige: 0.45}}}
+  - {id: aster_east, year: 850, label: "Velari", phonology: {temperature: 0.61}, divergence: {phonological_rate: 1.15, lexical_rate: 1.0, morphological_rate: 1.0, contact_permeability: 0.55}, map: {social: {mobility: 0.55, prestige: 0.58}}}
+  - {id: belar_river, year: 400, label: "Moravai", phonology: {temperature: 0.61}, divergence: {phonological_rate: 1.15, lexical_rate: 1.0, morphological_rate: 1.0, contact_permeability: 1.10}, map: {social: {mobility: 0.72, prestige: 0.60}}}
+  - {id: belar_steppe, year: 400, label: "Tegari", phonology: {temperature: 0.59}, divergence: {phonological_rate: 1.25, lexical_rate: 1.15, morphological_rate: 1.0, contact_permeability: 0.70}, map: {social: {mobility: 0.82, prestige: 0.50}}}
+  - {id: belar_delta, year: 900, label: "Nesali", phonology: {temperature: 0.64}, divergence: {phonological_rate: 1.30, lexical_rate: 1.2, morphological_rate: 1.1, contact_permeability: 1.15}, map: {social: {mobility: 0.88, prestige: 0.68}}}
+  - {id: noric_west, year: 500, label: "Oru", phonology: {temperature: 0.46}, divergence: {phonological_rate: 0.70, lexical_rate: 0.70, morphological_rate: 0.8, contact_permeability: 0.05}, map: {social: {mobility: 0.20, prestige: 0.50}}}
+  - {id: noric_east, year: 500, label: "Ima", phonology: {temperature: 0.52}, divergence: {phonological_rate: 0.85, lexical_rate: 0.8, morphological_rate: 0.9, contact_permeability: 0.05}, map: {social: {mobility: 0.30, prestige: 0.46}}}
+vertical_edges:
+  - {parent: proto_asteric, child: aster_coast, rules: []}
+  - {parent: proto_asteric, child: aster_highland, rules: []}
+  - {parent: aster_coast, child: aster_east, rules: []}
+  - {parent: proto_belaric, child: belar_river, rules: []}
+  - {parent: proto_belaric, child: belar_steppe, rules: []}
+  - {parent: belar_river, child: belar_delta, rules: []}
+  - {parent: proto_noric, child: noric_west, rules: []}
+  - {parent: proto_noric, child: noric_east, rules: []}
+contact_edges:
+  - {year: 900, source: belar_river, target: aster_coast, volume: 8, mutual: true, domain: trade, prestige: 1.1, adapt: true}
+  - {year: 1250, source: aster_coast, target: belar_delta, volume: 6, mutual: false, domain: elite, prestige: 1.4, adapt: true}
+  - {year: 1500, source: belar_steppe, target: aster_east, volume: 5, mutual: false, domain: war, prestige: 1.0, adapt: true}
