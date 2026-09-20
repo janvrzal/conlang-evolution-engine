@@ -66,6 +66,7 @@ vertical_edges:
   - {parent: proto_romance, child: french, rules: []}
   - {parent: proto_slavic, child: czech, rules: []}
 contact_edges:
-  - {year: 1066, source: french, target: english, volume: 4, mutual: false, domain: polity, prestige: 1.5, adapt: true}
-  - {year: 1200, source: german, target: czech, volume: 3, mutual: true, domain: trade, prestige: 1.1, adapt: true}
-  - {year: 1750, source: french, target: german, volume: 2, mutual: false, domain: elite, prestige: 1.2, adapt: true}
+  # Kalibrováno přes tři nezávislé seedy; rozpočet zůstává omezen po doménách.
+  - {year: 1066, source: french, target: english, volume: 12, mutual: false, domain: polity, prestige: 1.5, adapt: true}
+  - {year: 1200, source: german, target: czech, volume: 9, mutual: true, domain: trade, prestige: 1.1, adapt: true}
+  - {year: 1750, source: french, target: german, volume: 6, mutual: false, domain: elite, prestige: 1.2, adapt: true}
