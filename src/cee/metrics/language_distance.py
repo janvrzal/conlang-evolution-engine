@@ -85,12 +85,17 @@ class ContactProfile:
     loan_words: int
     loan_ratio: float
     sources: dict[str, int]
+    domains: dict[str, int]
 
 
 def contact_profile(state: State) -> ContactProfile:
     words = [word for word in state.lexicon.words if word.active]
     sources = Counter(word.source_id for word in words if word.source_id)
-    return ContactProfile(len(words), sum(sources.values()), sum(sources.values()) / len(words) if words else 0.0, dict(sorted(sources.items())))
+    domains = Counter(
+        word.grammatical_features.get("contact.domain", "unspecified")
+        for word in words if word.source_id
+    )
+    return ContactProfile(len(words), sum(sources.values()), sum(sources.values()) / len(words) if words else 0.0, dict(sorted(sources.items())), dict(sorted(domains.items())))
 
 
 @dataclass(frozen=True)

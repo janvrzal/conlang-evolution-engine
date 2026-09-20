@@ -2033,6 +2033,7 @@ class EvolutionSimulator:
 
             layer_register = {"folk": "ordinary", "elite": "formal", "written": "formal", "ritual": "ritual"}
             new_word.grammatical_features["contact.layer"] = layer
+            new_word.grammatical_features["contact.domain"] = domain
             new_word.grammatical_features["lexical.register"] = layer_register.get(layer, "neutral")
 
             target.lexicon.words.append(new_word)

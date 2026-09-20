@@ -5,6 +5,16 @@ scenario:
   description: "Česko–německo–anglicko–francouzský kontrolní scénář s oddělenou dědičností a doloženými typy kontaktu."
   measure: asjp_ldnd
   calibration_targets:
+    # Tyto cíle se vyhodnocují nad mediánem více seedů. Neřídí jednotlivý běh.
+    metric_targets:
+      english-german:
+        - {path: lexical.ldnd, target: 0.702, tolerance: 0.08, weight: 3.0}
+      english-french:
+        - {path: lexical.ldnd, target: 0.917, tolerance: 0.08, weight: 2.0}
+        - {path: contact_left.loan_ratio, target: 0.05, tolerance: 0.03, weight: 1.0}
+      czech-german:
+        - {path: lexical.ldnd, target: 0.925, tolerance: 0.08, weight: 2.0}
+        - {path: contact_left.loan_ratio, target: 0.05, tolerance: 0.03, weight: 1.0}
     cognate_proximity:
       english-german: 0.578
       english-french: 0.236
