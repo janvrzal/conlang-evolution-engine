@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { migrateLegacyWorldModel } from './world-model';
+import { endLanguage, focusBranch, migrateLegacyWorldModel, splitLanguage, validateGenealogy, GenealogyValidationError } from './world-model';
 
 describe('migrateLegacyWorldModel', () => {
 	it('separates languages, presences and relations from snapshots', () => {
@@ -51,7 +51,8 @@ describe('migrateLegacyWorldModel', () => {
 		const input = {
 			timeSteps: [0, 100],
 			snapshots: { 0: { nodes: [{ id: 'a', data: { label: 'A' } }, { id: 'b', data: { label: 'B' } }] } },
-			tradeRoutes: [{ id: 'route-1', languageIds: ['a', 'b'], startYear: 20, intensity: 0.8 }],
+			tradeRoutes: [{ id: 'route-1', languageIds: ['a', 'b'], startYear: 20, intensity: 0.8, geometry: { kind: 'line', points: [{ x: 10, y: 20 }, { x: 30, y: 40 }] } }],
+			polities: [{ id: 'polity-1', name: 'Říční liga', kind: 'confederation', startYear: 10, geometry: { kind: 'polygon', points: [{ x: 1, y: 1 }, { x: 4, y: 1 }, { x: 4, y: 4 }] } }],
 			historicalEvents: [
 				{ id: 'event-1', kind: 'migration', startYear: 40, duration: 10, targetLanguageIds: ['a'] }
 			]
@@ -68,6 +69,15 @@ describe('migrateLegacyWorldModel', () => {
 			kind: 'migration',
 			interval: { startYear: 40, endYear: 50 },
 			participantIds: ['a']
+		});
+		expect(model.map.routes[0]).toMatchObject({
+			label: 'Trasa 1',
+			geometry: { kind: 'line', points: [{ x: 10, y: 20 }, { x: 30, y: 40 }] }
+		});
+		expect(model.map.politicalEntities[0]).toMatchObject({
+			name: 'Říční liga',
+			kind: 'confederation',
+			geometry: { kind: 'polygon' }
 		});
 	});
 
@@ -86,5 +96,43 @@ describe('migrateLegacyWorldModel', () => {
 			historicalEvents: [{ kind: 'war', startYear: 0 }]
 		};
 		expect(migrateLegacyWorldModel(input)).toEqual(migrateLegacyWorldModel(input));
+	});
+});
+
+describe('genealogical editor actions', () => {
+	function model() {
+		return migrateLegacyWorldModel({
+			timeSteps: [0, 100, 200],
+			snapshots: { 0: { nodes: [{ id: 'root', position: { x: 10, y: 20 }, data: { label: 'Root', familyId: 'f' } }] } }
+		});
+	}
+
+	it('splits a language, records an inherited relation and leaves geography untouched', () => {
+		const before = model();
+		const next = splitLanguage(before, { parentId: 'root', year: 100, children: [{ id: 'west', name: 'West' }, { id: 'east', name: 'East' }] });
+		expect(next.languages.find((language) => language.id === 'root')?.interval.endYear).toBe(100);
+		expect(next.languages.find((language) => language.id === 'west')).toMatchObject({ parentLanguageId: 'root', interval: { startYear: 100, endYear: null } });
+		expect(next.relations.filter((relation) => relation.kind === 'inherited')).toHaveLength(2);
+		expect(next.events.at(-1)).toMatchObject({ kind: 'split', participantIds: ['root', 'west', 'east'] });
+		expect(next.presences).toEqual(before.presences);
+		expect(next.map).toEqual(before.map);
+		expect(focusBranch(next, 'root').sort()).toEqual(['east', 'root', 'west']);
+	});
+
+	it('ends a language without removing it or its geographic presence', () => {
+		const before = model();
+		const next = endLanguage(before, { languageId: 'root', year: 50 });
+		expect(next.languages[0]).toMatchObject({ status: 'dead', interval: { startYear: 0, endYear: 50 } });
+		expect(next.events.at(-1)).toMatchObject({ kind: 'death', participantIds: ['root'] });
+		expect(next.presences).toEqual(before.presences);
+	});
+
+	it('rejects cycles, duplicate ids and children born after a dead parent', () => {
+		const broken = model();
+		broken.languages[0].parentLanguageId = 'root';
+		expect(() => validateGenealogy(broken)).toThrow(GenealogyValidationError);
+		expect(() => splitLanguage(model(), { parentId: 'root', year: 100, children: [{ id: 'root', name: 'Duplicate' }] })).toThrow(/už existuje/);
+		const dead = endLanguage(model(), { languageId: 'root', year: 50 });
+		expect(() => splitLanguage(dead, { parentId: 'root', year: 100, children: [{ id: 'late', name: 'Late' }] })).toThrow(/mimo jeho interval/);
 	});
 });

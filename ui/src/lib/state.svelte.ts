@@ -7,8 +7,20 @@
  */
 import { browser } from '$app/environment';
 import { fetchProject, saveProject } from '$lib/api';
-import { defaultWorldMapState, migrateLegacyWorldModel } from '$lib/world-model';
-import type { WorldMapState, WorldModel, WorldLayerId } from '$lib/world-model';
+import { defaultWorldMapState, endLanguage, migrateLegacyWorldModel, splitLanguage } from '$lib/world-model';
+import { draftToHistoricalEvent, historicalEventToLegacy, validateHistoricalEvent, type HistoricalEventDraft } from '$lib/timeline-events';
+import type {
+	HistoricalEvent,
+	PoliticalEntity,
+	Presence,
+	WorldMapState,
+	WorldModel,
+	WorldLayerId,
+	WorldRegion,
+	WorldRoute,
+	WorldSettlement
+} from '$lib/world-model';
+import type { EndLanguageInput, SplitLanguageInput } from '$lib/world-model';
 
 /** Jak dlouho po poslední změně se čeká, než se uloží. */
 const AUTOSAVE_DELAY_MS = 800;
@@ -136,7 +148,11 @@ function normalizeWorldMap(value: unknown): WorldMapState {
 		: fallback.document;
 	const layers = { ...fallback.layers, ...(raw.layers && typeof raw.layers === 'object' ? raw.layers : {}) };
 	const points = Array.isArray(raw.points) ? raw.points : fallback.points;
-	return { document, layers, points };
+	const regions = Array.isArray(raw.regions) ? raw.regions : fallback.regions;
+	const settlements = Array.isArray(raw.settlements) ? raw.settlements : fallback.settlements;
+	const routes = Array.isArray(raw.routes) ? raw.routes : fallback.routes;
+	const politicalEntities = Array.isArray(raw.politicalEntities) ? raw.politicalEntities : fallback.politicalEntities;
+	return { document, layers, points, regions, settlements, routes, politicalEntities };
 }
 
 export const projectState = $state<{
@@ -271,6 +287,15 @@ export async function loadProject(id: string): Promise<void> {
 			projectState.polities = data.polities ?? [];
 			projectState.tradeRoutes = data.tradeRoutes ?? [];
 			projectState.historicalEvents = data.historicalEvents ?? [];
+			// The interval model is canonical. Older projects may only have the
+			// legacy list; migration has already populated events in that case.
+			if (!projectState.worldModel.events.length && projectState.historicalEvents.length) {
+				projectState.worldModel.events = migrateLegacyWorldModel({
+					snapshots: projectState.snapshots,
+					timeSteps: projectState.timeSteps,
+					historicalEvents: projectState.historicalEvents
+				}).events;
+			}
 			projectState.lastSavedAt = project.updated_at;
 			projectState.status = 'saved';
 		} else {
@@ -309,10 +334,130 @@ export function setWorldMapLayer(layer: WorldLayerId, visible: boolean): void {
 	updateWorldMap({ layers: { ...current.layers, [layer]: visible } });
 }
 
+/** Timeline write boundary: events only; no map or genealogy side effects. */
+export function upsertHistoricalEvent(
+	draft: HistoricalEventDraft
+): { ok: true; event: HistoricalEvent } | { ok: false; errors: string[] } {
+	const knownLanguageIds = new Set(projectState.worldModel.languages.map((language) => language.id));
+	const validation = validateHistoricalEvent(draft, knownLanguageIds);
+	if (!validation.valid) return { ok: false, errors: validation.errors };
+	const id = draft.id?.trim() || `event-${Date.now().toString(36)}`;
+	const event = draftToHistoricalEvent(draft, id);
+	const index = projectState.worldModel.events.findIndex((candidate) => candidate.id === id);
+	if (index >= 0) projectState.worldModel.events[index] = event;
+	else projectState.worldModel.events = [...projectState.worldModel.events, event];
+	projectState.historicalEvents = projectState.worldModel.events.map(historicalEventToLegacy);
+	scheduleSave();
+	return { ok: true, event };
+}
+
+export function removeHistoricalEvent(id: string): void {
+	projectState.worldModel.events = projectState.worldModel.events.filter((event) => event.id !== id);
+	projectState.historicalEvents = projectState.worldModel.events.map(historicalEventToLegacy);
+	scheduleSave();
+}
+
+/**
+ * Map-only write: moving a presence changes geography, never language
+ * identity, parentage, relations or historical events.
+ */
+export function updateWorldPresence(
+	presenceId: string,
+	patch: Partial<Pick<Presence, 'regionId' | 'geometry' | 'speakerEstimate' | 'status' | 'interval'>>
+): void {
+	const presence = projectState.worldModel.presences.find((item) => item.id === presenceId);
+	if (!presence) return;
+	Object.assign(presence, patch);
+	scheduleSave();
+}
+
+function updateMapCollection<T extends { id: string }>(
+	key: 'regions' | 'settlements' | 'routes' | 'politicalEntities',
+	item: T
+): void {
+	const map = projectState.worldModel.map ?? defaultWorldMapState();
+	const collection = map[key] as unknown as T[];
+	const index = collection.findIndex((candidate) => candidate.id === item.id);
+	if (index === -1) collection.push(item);
+	else collection[index] = item;
+	projectState.worldModel.map = { ...map, [key]: collection };
+	scheduleSave();
+}
+
+/** Upsert map-owned geometry; none of these actions touch genealogy. */
+export function upsertWorldRegion(region: WorldRegion): void {
+	updateMapCollection('regions', region);
+}
+
+export function upsertWorldSettlement(settlement: WorldSettlement): void {
+	updateMapCollection('settlements', settlement);
+}
+
+export function upsertWorldRoute(route: WorldRoute): void {
+	updateMapCollection('routes', route);
+}
+
+export function upsertPoliticalEntity(entity: PoliticalEntity): void {
+	updateMapCollection('politicalEntities', entity);
+}
+
+export function removeWorldMapEntity(
+	key: 'regions' | 'settlements' | 'routes' | 'politicalEntities',
+	id: string
+): void {
+	const map = projectState.worldModel.map ?? defaultWorldMapState();
+	projectState.worldModel.map = {
+		...map,
+		[key]: (map[key] as Array<{ id: string }>).filter((item) => item.id !== id)
+	};
+	scheduleSave();
+}
+
 export function clearWorldMapBackground(): void {
 	const current = projectState.worldModel.map ?? defaultWorldMapState();
 	const { backgroundDataUrl: _removed, ...document } = current.document;
 	updateWorldMap({ document });
+}
+
+function updateLegacyGenealogy(action: 'split' | 'end', payload: SplitLanguageInput | EndLanguageInput): void {
+	// Snapshots are only a compatibility projection for the old canvas. These
+	// edits intentionally never copy or move map geometry.
+	const years = Object.keys(projectState.snapshots).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+	const year = payload.year;
+	const affectedYears = years.filter((candidate) => candidate >= year);
+	if (!affectedYears.includes(year)) affectedYears.push(year);
+	for (const candidateYear of affectedYears.sort((a, b) => a - b)) {
+		const source = projectState.snapshots[candidateYear] ?? { nodes: [], edges: [] };
+		const nodes = source.nodes.map((node) => ({ ...node, data: node.data ? { ...node.data } : {} }));
+		const edges = source.edges.map((edge) => ({ ...edge, data: edge.data ? { ...edge.data } : {} }));
+		if (action === 'split') {
+			const split = payload as SplitLanguageInput;
+			for (const child of split.children) {
+				if (!nodes.some((node) => node.id === child.id)) nodes.push({ id: child.id, type: 'language', position: { x: 0, y: 0 }, data: { label: child.name || child.id, year, parentLanguageId: split.parentId } });
+				const edgeId = `inherit-${split.parentId}-${child.id}-${year}`;
+				if (!edges.some((edge) => edge.id === edgeId)) edges.push({ id: edgeId, source: split.parentId, target: child.id, data: { year, relation: 'inheritance' } });
+			}
+		} else {
+			const end = payload as EndLanguageInput;
+			const node = nodes.find((candidate) => candidate.id === end.languageId);
+			if (node) node.data = { ...(node.data ?? {}), isDead: true, deathYear: year };
+		}
+		projectState.snapshots[candidateYear] = { nodes, edges };
+	}
+}
+
+/** Apply an explicit genealogical split and persist both modern and legacy views. */
+export function splitProjectLanguage(input: SplitLanguageInput): void {
+	projectState.worldModel = splitLanguage(projectState.worldModel, input);
+	updateLegacyGenealogy('split', input);
+	scheduleSave();
+}
+
+/** End a language while retaining its history and all geographic presences. */
+export function endProjectLanguage(input: EndLanguageInput): void {
+	projectState.worldModel = endLanguage(projectState.worldModel, input);
+	updateLegacyGenealogy('end', input);
+	scheduleSave();
 }
 
 /** Uloží okamžitě, bez čekání na debounce. */
