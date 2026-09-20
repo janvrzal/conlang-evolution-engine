@@ -1,0 +1,23 @@
+scenario:
+  id: slavic-divergence-calibration
+  description: "Kontrola jemné vnitro-slovanské divergence bez silného mezijazykového kontaktu."
+  measure: asjp_ldnd
+  calibration_targets:
+    metric_targets:
+      czech-slovak:
+        - {path: lexical.ldnd, target: 0.30, tolerance: 0.12, weight: 3.0}
+      czech-polish:
+        - {path: lexical.ldnd, target: 0.55, tolerance: 0.15, weight: 2.0}
+nodes:
+  - {id: proto_slavic, year: 0, isProto: true, phonology: {temperature: 0.56}}
+  - {id: czech, year: 500, phonology: {temperature: 0.55}, divergence: {phonological_rate: 1.10, lexical_rate: 1.0, morphological_rate: 1.0, contact_permeability: 0.35}}
+  - {id: slovak, year: 650, phonology: {temperature: 0.52}, divergence: {phonological_rate: 0.90, lexical_rate: 0.8, morphological_rate: 0.9, contact_permeability: 0.35}}
+  - {id: polish, year: 550, phonology: {temperature: 0.60}, divergence: {phonological_rate: 1.25, lexical_rate: 1.1, morphological_rate: 1.0, contact_permeability: 0.30}}
+  - {id: ukrainian, year: 600, phonology: {temperature: 0.58}, divergence: {phonological_rate: 1.20, lexical_rate: 1.0, morphological_rate: 1.0, contact_permeability: 0.25}}
+vertical_edges:
+  - {parent: proto_slavic, child: czech, rules: []}
+  - {parent: proto_slavic, child: slovak, rules: []}
+  - {parent: proto_slavic, child: polish, rules: []}
+  - {parent: proto_slavic, child: ukrainian, rules: []}
+contact_edges:
+  - {year: 1500, source: czech, target: slovak, volume: 1, mutual: true, domain: neighborhood, prestige: 1.0, adapt: true}

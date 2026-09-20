@@ -1,0 +1,17 @@
+scenario:
+  id: western-contact-calibration
+  description: "Kontrola silného, doménově omezeného kontaktu bez falešné genealogie."
+  measure: asjp_ldnd
+nodes:
+  - {id: proto_germanic, year: 0, isProto: true, phonology: {temperature: 0.60}}
+  - {id: proto_romance, year: 0, isProto: true, phonology: {temperature: 0.58}}
+  - {id: english, year: 500, phonology: {temperature: 0.64}, divergence: {phonological_rate: 1.45, lexical_rate: 1.7, morphological_rate: 1.1, contact_permeability: 1.35}}
+  - {id: dutch, year: 500, phonology: {temperature: 0.57}, divergence: {phonological_rate: 1.0, lexical_rate: 0.9, morphological_rate: 0.9, contact_permeability: 0.7}}
+  - {id: french, year: 500, phonology: {temperature: 0.58}, divergence: {phonological_rate: 1.3, lexical_rate: 1.1, morphological_rate: 1.1, contact_permeability: 1.2}}
+vertical_edges:
+  - {parent: proto_germanic, child: english, rules: []}
+  - {parent: proto_germanic, child: dutch, rules: []}
+  - {parent: proto_romance, child: french, rules: []}
+contact_edges:
+  - {year: 1066, source: french, target: english, volume: 12, mutual: false, domain: polity, prestige: 1.5, adapt: true}
+  - {year: 1450, source: dutch, target: english, volume: 5, mutual: true, domain: trade, prestige: 1.1, adapt: true}

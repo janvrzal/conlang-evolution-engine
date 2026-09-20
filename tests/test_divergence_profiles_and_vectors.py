@@ -5,6 +5,7 @@ from cee.engine.topology import EvolutionGraph
 from cee.metrics.language_distance import compare_languages
 from cee.metrics.divergence_audit import audit_branch_divergence
 from cee.metrics.scenario_calibration import MetricTarget, calibrate_replicates, rank_candidates, run_replicates
+from cee.metrics.scenario_suite import compare_scenarios
 
 
 def _state(mapper, node_id, records):
@@ -88,3 +89,10 @@ def test_calibrator_ranks_parameter_candidates_from_multiseed_vectors():
         [MetricTarget("x", 1.0, 0.1)],
     )
     assert ranked[0].parameters == {"rate": 1.0}
+
+
+def test_suite_compares_named_scenarios_and_keeps_pair_reports():
+    reports = {"a": {"x-y": [{"lexical": {"ldnd": 0.7}}]}, "b": {"x-y": [{"lexical": {"ldnd": 0.4}}]}}
+    targets = {"a": {"x-y": [MetricTarget("lexical.ldnd", 0.7, 0.1)]}, "b": {"x-y": [MetricTarget("lexical.ldnd", 0.7, 0.1)]}}
+    comparison = compare_scenarios(reports, targets)
+    assert comparison[0].scenario_id == "a"
