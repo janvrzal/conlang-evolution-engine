@@ -7,8 +7,8 @@
  */
 import { browser } from '$app/environment';
 import { fetchProject, saveProject } from '$lib/api';
-import { migrateLegacyWorldModel } from '$lib/world-model';
-import type { WorldModel } from '$lib/world-model';
+import { defaultWorldMapState, migrateLegacyWorldModel } from '$lib/world-model';
+import type { WorldMapState, WorldModel, WorldLayerId } from '$lib/world-model';
 
 /** Jak dlouho po poslední změně se čeká, než se uloží. */
 const AUTOSAVE_DELAY_MS = 800;
@@ -125,6 +125,18 @@ function emptyData(): ProjectData {
 			homophony_resolution_rate: 0.3
 		}
 	};
+}
+
+function normalizeWorldMap(value: unknown): WorldMapState {
+	const fallback = defaultWorldMapState();
+	if (!value || typeof value !== 'object') return fallback;
+	const raw = value as Partial<WorldMapState>;
+	const document = raw.document && typeof raw.document === 'object'
+		? { ...fallback.document, ...(raw.document as WorldMapState['document']) }
+		: fallback.document;
+	const layers = { ...fallback.layers, ...(raw.layers && typeof raw.layers === 'object' ? raw.layers : {}) };
+	const points = Array.isArray(raw.points) ? raw.points : fallback.points;
+	return { document, layers, points };
 }
 
 export const projectState = $state<{
@@ -248,6 +260,7 @@ export async function loadProject(id: string): Promise<void> {
 					polities: data.polities,
 					tradeRoutes: data.tradeRoutes
 				});
+			projectState.worldModel.map = normalizeWorldMap(projectState.worldModel.map);
 
 			projectState.simulationRunAt = data.simulationRunAt ?? null;
 			projectState.simulationRunId = data.simulationRunId ?? null;
@@ -277,6 +290,29 @@ export async function loadProject(id: string): Promise<void> {
 			projectState.loaded = true;
 		}
 	}
+}
+
+/** Update persistent map state without touching languages or genealogical relations. */
+export function updateWorldMap(patch: Partial<Omit<WorldMapState, 'layers'>> & { layers?: Partial<WorldMapState['layers']> }): void {
+	const current = projectState.worldModel.map ?? defaultWorldMapState();
+	projectState.worldModel.map = {
+		...current,
+		...patch,
+		document: { ...current.document, ...(patch.document ?? {}) },
+		layers: { ...current.layers, ...(patch.layers ?? {}) }
+	};
+	scheduleSave();
+}
+
+export function setWorldMapLayer(layer: WorldLayerId, visible: boolean): void {
+	const current = projectState.worldModel.map ?? defaultWorldMapState();
+	updateWorldMap({ layers: { ...current.layers, [layer]: visible } });
+}
+
+export function clearWorldMapBackground(): void {
+	const current = projectState.worldModel.map ?? defaultWorldMapState();
+	const { backgroundDataUrl: _removed, ...document } = current.document;
+	updateWorldMap({ document });
 }
 
 /** Uloží okamžitě, bez čekání na debounce. */

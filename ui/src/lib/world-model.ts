@@ -84,12 +84,48 @@ export type HistoricalEvent = {
 	metadata: Record<string, unknown>;
 };
 
+export type WorldLayerId = 'languages' | 'regions' | 'settlements' | 'routes' | 'politics';
+
+export type WorldMapPoint = {
+	id: EntityId;
+	label: string;
+	x: number;
+	y: number;
+	family?: string;
+	languageId?: EntityId;
+	kind?: 'language' | 'settlement' | 'region';
+};
+
+/** Persistent geographic state. It is deliberately not part of genealogy. */
+export type WorldMapState = {
+	document: {
+		name: string;
+		width: number;
+		height: number;
+		/** A data URL keeps imported maps portable and survives a reload. */
+		backgroundDataUrl?: string;
+	};
+	points: WorldMapPoint[];
+	layers: Record<WorldLayerId, boolean>;
+};
+
+export const defaultWorldMapState = (): WorldMapState => ({
+	document: { name: 'Prázdný svět', width: 2400, height: 1400 },
+	points: [
+		{ id: 'north-coast', label: 'Severní pobřeží', x: 24, y: 29, family: 'Asterická', languageId: 'asteric-coast', kind: 'language' },
+		{ id: 'river-delta', label: 'Říční delta', x: 62, y: 52, family: 'Belarická', languageId: 'belaric-delta', kind: 'language' },
+		{ id: 'island-west', label: 'Západní ostrovy', x: 80, y: 27, family: 'Norická', languageId: 'noric-west', kind: 'language' }
+	],
+	layers: { languages: true, regions: true, settlements: true, routes: false, politics: false }
+});
+
 export type WorldModel = {
 	schemaVersion: 1;
 	languages: LanguageEntity[];
 	presences: Presence[];
 	relations: Relation[];
 	events: HistoricalEvent[];
+	map: WorldMapState;
 };
 
 type LegacyNode = {
@@ -308,5 +344,5 @@ export function migrateLegacyWorldModel(input: LegacyWorldInput): WorldModel {
 		}
 	}
 
-	return { schemaVersion: 1, languages, presences, relations, events };
+	return { schemaVersion: 1, languages, presences, relations, events, map: defaultWorldMapState() };
 }

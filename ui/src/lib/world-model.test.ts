@@ -24,6 +24,8 @@ describe('migrateLegacyWorldModel', () => {
 		});
 
 		expect(model.schemaVersion).toBe(1);
+		expect(model.map.layers).toMatchObject({ languages: true, routes: false });
+		expect(model.map.document).toMatchObject({ width: 2400, height: 1400 });
 		expect(model.languages.map((language) => language.id)).toEqual(['child', 'proto']);
 		expect(model.languages.find((language) => language.id === 'child')).toMatchObject({
 		name: 'Child',
@@ -35,6 +37,7 @@ describe('migrateLegacyWorldModel', () => {
 		x: 3,
 		y: 4
 	});
+
 		expect(model.relations[0]).toMatchObject({
 		id: 'split',
 		kind: 'inherited',
@@ -66,6 +69,14 @@ describe('migrateLegacyWorldModel', () => {
 			interval: { startYear: 40, endYear: 50 },
 			participantIds: ['a']
 		});
+	});
+
+	it('keeps geographic defaults separate from genealogy', () => {
+		const model = migrateLegacyWorldModel({ timeSteps: [0], snapshots: { 0: { nodes: [{ id: 'a' }] } } });
+		model.map.layers.languages = false;
+		model.map.points[0].x = 99;
+		expect(model.languages).toHaveLength(1);
+		expect(model.relations).toHaveLength(0);
 	});
 
 	it('is deterministic when imported records have no ids', () => {

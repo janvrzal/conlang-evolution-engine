@@ -17,8 +17,8 @@
 <section class="relative min-h-[560px] overflow-hidden rounded-xl border bg-slate-950 text-white" aria-label="World map canvas">
 	<div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_#253047_0%,_#101522_62%,_#080b12_100%)]"></div>
 	<div class="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.12)_1px,transparent_1px)] [background-size:48px_48px]"></div>
-	{#if document?.backgroundUrl}
-		<img class="absolute inset-0 h-full w-full object-cover opacity-50" src={document.backgroundUrl} alt="Importovaný podklad světa" />
+	{#if document?.backgroundDataUrl ?? document?.backgroundUrl}
+		<img class="absolute inset-0 h-full w-full object-cover opacity-50" src={document.backgroundDataUrl ?? document.backgroundUrl} alt="Importovaný podklad světa" />
 	{/if}
 	<div class="absolute inset-0 transition-transform duration-200" style={`transform: translate(${offsetX}px,${offsetY}px) scale(${zoom})`}>
 		<div class="absolute left-[12%] top-[22%] h-[38%] w-[26%] rounded-[45%] bg-emerald-950/50 blur-[1px]"></div>

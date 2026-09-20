@@ -1,13 +1,12 @@
 /** Read-only world-map contract. Geography is intentionally separate from genealogy. */
-export type WorldLayerId = 'languages' | 'regions' | 'settlements' | 'routes' | 'politics';
-
-export type WorldMapPoint = {
-	id: string;
-	label: string;	x: number;	 y: number;	family?: string;	languageId?: string;	kind?: 'language' | 'settlement' | 'region';
-};
+import type { WorldLayerId, WorldMapPoint } from '$lib/world-model';
+export type { WorldLayerId, WorldMapPoint } from '$lib/world-model';
 
 export type WorldMapDocument = {
-	name: string;	width: number;	height: number;	backgroundUrl?: string;
+	name: string;	width: number;	height: number;
+	/** Legacy renderer alias; persisted imports use backgroundDataUrl. */
+	backgroundUrl?: string;
+	backgroundDataUrl?: string;
 };
 
 export type WorldMapAdapter = {
@@ -21,7 +20,7 @@ export const defaultWorldMapDocument: WorldMapDocument = {
 };
 
 export const defaultWorldMapPoints: WorldMapPoint[] = [
-	{ id: 'north-coast', label: 'Severní pobřeží', x: 24, y: 29, family: 'Asterická', languageId: 'asteric-coast' },
-	{ id: 'river-delta', label: 'Říční delta', x: 62, y: 52, family: 'Belarická', languageId: 'belaric-delta' },
-	{ id: 'island-west', label: 'Západní ostrovy', x: 80, y: 27, family: 'Norická', languageId: 'noric-west' }
+	{ id: 'north-coast', label: 'Severní pobřeží', x: 24, y: 29, family: 'Asterická', languageId: 'asteric-coast', kind: 'language' },
+	{ id: 'river-delta', label: 'Říční delta', x: 62, y: 52, family: 'Belarická', languageId: 'belaric-delta', kind: 'language' },
+	{ id: 'island-west', label: 'Západní ostrovy', x: 80, y: 27, family: 'Norická', languageId: 'noric-west', kind: 'language' }
 ];
