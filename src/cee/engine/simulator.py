@@ -107,6 +107,10 @@ class EvolutionSimulator:
         # zrušit účinek jiné překrývající se události.
         self._historical_baselines: Dict[tuple[str, str], float] = {}
         self._historical_event_changes: Dict[str, Dict[str, Any]] = {}
+        # Paměť přenosů je součástí simulovaného historického procesu. Brání
+        # tomu, aby stoletý administrativní kontakt pokaždé znovu importoval
+        # tutéž část slovní zásoby jako novou vrstvu.
+        self._contact_loan_ledger: Dict[tuple[str, str, str, int], set[str]] = {}
 
     def _generator_for(self, node_id: str) -> Optional[SoundChangeGenerator]:
         """
@@ -156,36 +160,56 @@ class EvolutionSimulator:
         return self._generators[node_id]
 
     def simulate(self, root_state: State) -> Dict[str, State]:
-        """
-        Odsimuluje celou síť od root_state a vrátí finální stavy (uzly).
+        """Zpětně kompatibilní varianta pro jeden protojazyk."""
+        # Zachováme i diagnostiku staršího jednorodinného rozhraní.
+        self._collect_tree(root_state.node_id)
+        return self.simulate_many([root_state])
 
-        Prochází strom do libovolné hloubky: každý uzel se odštěpí od svého
-        rodiče v roce prvního pravidla na příslušné hraně.
+    def simulate_many(self, root_states: List[State]) -> Dict[str, State]:
         """
-        root_config = self.graph.node_configs.get(root_state.node_id, {})
-        root_state.map = self._state_map_config(root_config)
-        root_state.__post_init__()
-        for index, word in enumerate(root_state.lexicon.words):
-            word.id = self._deterministic_word_id(
-                "root", root_state.node_id, str(root_state.year), str(index), word.concept_id
-            )
-            word.lineage_id = word.lineage_id or word.id
-            word.parent_word_id = None
-        parent_of = self._collect_tree(root_state.node_id)
+        Odsimuluje společnou historii více nezávislých protojazyků.
+
+        Kořeny nesdílejí dědičnost, ale sdílejí jednu časovou frontu; kontakt,
+        stát a obchod proto mohou působit i mezi rodinami.
+        """
+        if not root_states:
+            raise ValueError("Simulace potřebuje alespoň jeden protojazyk.")
+        root_by_id = {state.node_id: state for state in root_states}
+        if len(root_by_id) != len(root_states):
+            raise ValueError("Protojazyky musí mít jedinečná ID.")
+        for root_state in root_states:
+            root_config = self.graph.node_configs.get(root_state.node_id, {})
+            root_state.map = self._state_map_config(root_config)
+            root_state.__post_init__()
+            for index, word in enumerate(root_state.lexicon.words):
+                word.id = self._deterministic_word_id(
+                    "root", root_state.node_id, str(root_state.year), str(index), word.concept_id
+                )
+                word.lineage_id = word.lineage_id or word.id
+                word.parent_word_id = None
+
+        parent_of: Dict[str, str] = {}
+        for root_state in root_states:
+            for child_id, parent_id in self._collect_tree(root_state.node_id, warn_unreachable=False).items():
+                if child_id in parent_of:
+                    raise ValueError(f"Uzel '{child_id}' patří do více protojazykových rodin.")
+                parent_of[child_id] = parent_id
+        global_start = min(state.year for state in root_states)
 
         if self.graph_builder:
-            for w in root_state.lexicon.words:
-                self._record_word(w, root_state.year, root_state.node_id)
-            self.graph_builder.add_event("simulation_start", root_state.year, root_state.node_id)
+            for root_state in root_states:
+                for w in root_state.lexicon.words:
+                    self._record_word(w, root_state.year, root_state.node_id)
+                self.graph_builder.add_event("simulation_start", root_state.year, root_state.node_id)
 
         if not parent_of and not self.evolve_root:
-            return {root_state.node_id: root_state}
+            return dict(root_by_id)
 
         # Rodič musí existovat dřív než dítě, proto řadíme podle hloubky.
-        fork_years = self._compute_fork_years(root_state, parent_of)
+        fork_years = self._compute_fork_years(root_by_id, parent_of)
 
         # Root žije jen jako zdroj pro odštěpení, do výsledku se nevrací.
-        states: Dict[str, State] = {root_state.node_id: root_state}
+        states: Dict[str, State] = dict(root_by_id)
 
         queue: List = []
         counter = 0
@@ -203,11 +227,12 @@ class EvolutionSimulator:
             )
 
         if self.evolve_root:
-            self._schedule_phonology_slots(root_state.node_id, root_state.year, push)
-            self._schedule_semantics(root_state.node_id, root_state.year, push)
-            self._schedule_morphology(root_state.node_id, root_state.year, push)
-            self._schedule_lexicon(root_state.node_id, root_state.year, push)
-            self._schedule_social(root_state.node_id, root_state.year, push)
+            for root_state in root_states:
+                self._schedule_phonology_slots(root_state.node_id, root_state.year, push)
+                self._schedule_semantics(root_state.node_id, root_state.year, push)
+                self._schedule_morphology(root_state.node_id, root_state.year, push)
+                self._schedule_lexicon(root_state.node_id, root_state.year, push)
+                self._schedule_social(root_state.node_id, root_state.year, push)
 
         for edge in self.graph.vertical_edges:
             bez_roku = [r.name for r in edge.rules if r.year is None]
@@ -252,16 +277,25 @@ class EvolutionSimulator:
         for polity in self.graph.polities.values():
             institution_contact = max(0.0, min(1.0, float(polity.institutions.get("internal_contact", 0.35))))
             standardization = polity.institutions.get("standardization")
-            for year in range(root_state.year, self.end_year + 1, 100):
-                for index, source_id in enumerate(polity.language_ids):
-                    for target_id in polity.language_ids[index + 1 :]:
+            # Kontakt má smysl až od okamžiku, kdy existují oba jazyky.
+            # Předtím se dnes správně přeskočil, ale zanechal hlučné varování.
+            for index, source_id in enumerate(polity.language_ids):
+                for target_id in polity.language_ids[index + 1 :]:
+                    first_year = max(
+                        global_start,
+                        fork_years.get(source_id, global_start),
+                        fork_years.get(target_id, global_start),
+                    )
+                    for year in range(first_year, self.end_year + 1, 100):
                         volume = max(1, round(2 + institution_contact * 6))
                         push(year, _PRIO_CONTACT, ContactEvent(
                             year, source_id, target_id, volume, "polity", 1.0,
                             0.0, True, "folk", False,
                         ))
-                if standardization is not None:
-                    for language_id in polity.language_ids:
+            if standardization is not None:
+                for language_id in polity.language_ids:
+                    first_year = max(global_start, fork_years.get(language_id, global_start))
+                    for year in range(first_year, self.end_year + 1, 100):
                         push(year, _PRIO_SOCIAL, SocialEvent(
                             year, language_id, {"standardization": float(standardization)}
                         ))
@@ -270,7 +304,7 @@ class EvolutionSimulator:
         # aktivní epoše propojí sousední jazyky uvedené worldbuilderem.
         for route in self.graph.trade_routes:
             stop = min(route.end_year if route.end_year is not None else self.end_year, self.end_year)
-            for year in range(max(root_state.year, route.start_year), stop + 1, 100):
+            for year in range(max(global_start, route.start_year), stop + 1, 100):
                 # Pokud má autor trasu nakreslenou, jazyk musí skutečně ležet
                 # u jejího průběhu. Staré seznamové trasy bez geometrie tím
                 # nezměníme: zůstávají plně kompatibilní.
@@ -279,6 +313,8 @@ class EvolutionSimulator:
                     if self._route_reaches_language(route, language_id)
                 ]
                 for source_id, target_id in zip(route_languages, route_languages[1:]):
+                    if year < max(fork_years.get(source_id, global_start), fork_years.get(target_id, global_start)):
+                        continue
                     volume = max(1, round(max(0.0, min(1.0, route.intensity)) * 10))
                     push(year, _PRIO_CONTACT, ContactEvent(
                         year, source_id, target_id, volume, "trade", 1.0,
@@ -312,7 +348,7 @@ class EvolutionSimulator:
             self._historical_event_changes[event.id] = changes
             for target in targets:
                 for effect_year, phase in self._historical_checkpoints(event, changes):
-                    if root_state.year <= effect_year <= self.end_year:
+                    if global_start <= effect_year <= self.end_year:
                         push(effect_year, _PRIO_SOCIAL, SocialEvent(
                             effect_year, target, changes,
                             {
@@ -326,7 +362,7 @@ class EvolutionSimulator:
                             },
                         ))
 
-        last_year = root_state.year
+        last_year = global_start
 
         while queue:
             year, _prio, _seq, event = heapq.heappop(queue)
@@ -762,7 +798,7 @@ class EvolutionSimulator:
         result = {
             node_id: state
             for node_id, state in states.items()
-            if node_id in parent_of or (self.evolve_root and node_id == root_state.node_id)
+            if node_id in parent_of or (self.evolve_root and node_id in root_by_id)
         }
         final_year = max(last_year, self.end_year or last_year)
 
@@ -863,7 +899,7 @@ class EvolutionSimulator:
                 state.social[parameter] = baseline
         return audit
 
-    def _collect_tree(self, root_id: str) -> Dict[str, str]:
+    def _collect_tree(self, root_id: str, *, warn_unreachable: bool = True) -> Dict[str, str]:
         """
         Vrátí mapu {potomek: rodič} pro všechny uzly dosažitelné z rootu,
         v pořadí od nejmělčích. Na hrany mimo strom upozorní.
@@ -889,7 +925,7 @@ class EvolutionSimulator:
             frontier = next_frontier
 
         unreachable = {e.child_id for e in self.graph.vertical_edges} - seen
-        if unreachable:
+        if unreachable and warn_unreachable:
             warnings.warn(
                 f"Uzly {sorted(unreachable)} nejsou z '{root_id}' dosažitelné "
                 f"a nebudou simulovány.",
@@ -898,14 +934,15 @@ class EvolutionSimulator:
 
         return parent_of
 
-    def _compute_fork_years(self, root_state: State, parent_of: Dict[str, str]) -> Dict[str, int]:
+    def _compute_fork_years(self, roots: Dict[str, State], parent_of: Dict[str, str]) -> Dict[str, int]:
         """Uzel se odštěpí v roce svého prvního pravidla, jinak spolu s rodičem."""
-        fork_years: Dict[str, int] = {root_state.node_id: root_state.year}
+        fork_years: Dict[str, int] = {node_id: state.year for node_id, state in roots.items()}
+        default_year = min(fork_years.values())
 
         for child_id, parent_id in parent_of.items():
             rules = self.graph.get_rules_for_edge(parent_id, child_id)
             years = [r.year for r in rules if r.year is not None]
-            parent_year = fork_years.get(parent_id, root_state.year)
+            parent_year = fork_years.get(parent_id, default_year)
             # Dynamické UI hrany nemají vlastní pravidla, ale uzel zná svůj
             # rok vzniku. Bez něj by se jazyk odštěpil hned v roce 0 a
             # kontakty na časové ose nedávaly smysl.
@@ -1199,6 +1236,12 @@ class EvolutionSimulator:
             key = self._sound_change_word_key(word)
             if key in adopted or not change.rule.can_apply_to_word(word):
                 continue
+            if not self._preserves_content_word_shape(word, change.rule):
+                # Lexikální difuze dovoluje výjimky. Obsahový kořen, který by
+                # opakovanou erozí klesl do miniaturního prostoru CV/V, však
+                # tuto inovaci nepřejme bez kompenzačního mechanismu.
+                adopted.add(key)
+                continue
             sample = random.Random(
                 derive_seed(self.seed, "sound-change-adoption", change.change_id, *map(str, key))
             ).random()
@@ -1235,6 +1278,22 @@ class EvolutionSimulator:
                 "innovation_class": change.innovation_class,
             },
         )
+
+    @staticmethod
+    def _preserves_content_word_shape(word, rule: Rule) -> bool:
+        """Chrání lexikální prostor, neexistující zákaz krátkých slov.
+
+        Funkční a původně krátké lexémy smějí zůstat krátké. Ochrana se týká
+        jen obsahového slova, které má alespoň tři segmenty a nová pravidelná
+        změna by ho stáhla pod tuto hranici.
+        """
+        if word.is_grammatical or word.grammatical_features.get("lexical.class") == "function":
+            return True
+        if len(word.segments) < 3:
+            return True
+        candidate = copy.deepcopy(word)
+        rule.apply_to_word(candidate)
+        return len(candidate.segments) >= 3
 
     def _route_reaches_language(self, route, language_id: str) -> bool:
         """Zkontroluje, že zastávka leží poblíž kreslené trasy.
@@ -1628,11 +1687,30 @@ class EvolutionSimulator:
             * (1.25 - target_standard)
             * (0.75 + source_prestige)
         )
-        num_borrow = min(max(1, round(volume * multiplier)), len(source.lexicon.words))
+        requested = min(max(1, round(volume * multiplier)), len(source.lexicon.words))
+        # Politická sounáležitost vytváří opakované příležitosti ke kontaktu,
+        # ne automatický přísun nových slov v každém století. Rozpočet je
+        # společný pro čtyřsetletou vrstvu a pamatuje si již přenesené
+        # koncepty. Ostatní kanály jsou také chráněny před duplicitou, ale
+        # mají štědřejší rozpočet.
+        period = year // 400
+        ledger_key = (source.node_id, target.node_id, domain, period)
+        borrowed_concepts = self._contact_loan_ledger.setdefault(ledger_key, set())
+        channel_cap = {
+            "polity": max(1, min(3, round(volume * 0.35))),
+            "trade": max(1, min(4, round(volume * 0.50))),
+            "war": max(1, min(3, round(volume * 0.40))),
+            "religion": max(1, min(3, round(volume * 0.40))),
+        }.get(domain, max(1, min(4, round(volume * 0.55))))
+        remaining_budget = max(0, channel_cap - len(borrowed_concepts))
+        num_borrow = min(requested, remaining_budget)
         rng = random.Random(
             derive_seed(self.seed, "contact", source.node_id, target.node_id, str(year), domain)
         )
-        candidates = [word for word in source.lexicon.words if word.active]
+        candidates = [
+            word for word in source.lexicon.words
+            if word.active and word.concept_id not in borrowed_concepts
+        ]
         domain_candidates = [word for word in candidates if self._matches_contact_domain(word, domain)]
         # Doména je preference, ne absolutní zákaz: malý či neanotovaný
         # lexikon stále dovolí kontakt, ale anotovaný korpus dostane přednost.
@@ -1646,18 +1724,20 @@ class EvolutionSimulator:
         # okrajové položky; bez domény je kontakt neutrální.
         exponent = 1.8 if domain in {"trade", "religion"} else 0.65 if domain == "war" else 1.0
         weights = [max(0.02, word.frequency) ** exponent for word in candidates]
-        words_to_borrow = rng.choices(candidates, weights=weights, k=num_borrow)
+        words_to_borrow = []
+        while candidates and len(words_to_borrow) < num_borrow:
+            selected = rng.choices(candidates, weights=weights, k=1)[0]
+            selected_index = candidates.index(selected)
+            words_to_borrow.append(selected)
+            candidates.pop(selected_index)
+            weights.pop(selected_index)
         target_view = InventoryView.from_lexicon(target.lexicon, self.mapper)
 
         borrowed_count = 0
         calque_count = 0
         homophony_replacements = 0
         for borrow_index, w in enumerate(words_to_borrow):
-            # Zabráníme zbytečným duplicitám: Pokud už cílový jazyk má pro tento koncept
-            # slovo, které zní úplně stejně, výpůjčku přeskočíme.
             existing_words = target.lexicon.get_words(w.concept_id)
-            if any(x.segments == w.segments for x in existing_words):
-                continue
 
             # Kalk přenáší významovou asociaci bez importu cizího tvaru.
             if existing_words and rng.random() < max(0.0, min(1.0, calque_rate)):
@@ -1689,6 +1769,7 @@ class EvolutionSimulator:
 
             target.lexicon.words.append(new_word)
             borrowed_count += 1
+            borrowed_concepts.add(w.concept_id)
 
             if self.graph_builder:
                 self._record_word(new_word, year, target.node_id)
@@ -1779,6 +1860,9 @@ class EvolutionSimulator:
                 source_id=source.node_id,
                 domain=domain,
                 requested_volume=volume,
+                requested_borrows=requested,
+                channel_cap=channel_cap,
+                remaining_budget=remaining_budget,
                 borrowed_count=borrowed_count,
                 calque_count=calque_count,
                 prestige=prestige,

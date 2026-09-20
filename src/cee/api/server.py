@@ -29,6 +29,7 @@ from cee.pipeline import (
     build_branch_views,
     load_lexicon_from_records,
     resolve_semantics_path,
+    run_multiroot_simulation,
     run_simulation,
 )
 from cee.semantics.graph import SemanticGraph
@@ -113,7 +114,10 @@ class DynamicSimulateRequest(BaseModel):
     """Topologie sestavená v UI: uzly jako mapa id -> konfigurace, hrany jako seznam."""
 
     topology_data: dict
-    proto_lexicon: list
+    proto_lexicon: list = []
+    #: Nezávislé kořeny: [{"id": "proto-a", "lexicon": [...]}]. Pokud
+    #: chybí, zachová se dosavadní jednojazyčný vstup `proto_lexicon`.
+    proto_languages: list[dict] = []
     preset: str = "src/cee/data/presets/fantasy_preset.yaml"
     #: Prázdné = engine sám zkusí skutečný CLICS4+DatSemShift graf, a když
     #: chybí (čerstvý klon, CI), spadne na zabalený YAML mock — viz
@@ -421,8 +425,34 @@ def run_dynamic_simulation(req: DynamicSimulateRequest):
     # zdroj pro větvení. Musí tedy dostat vlastní historii zvukových změn.
     cfg.evolve_root = True
 
-    final_states = run_simulation(lexicon, graph, mapper, cfg, builder)
-    branches = build_branch_views(final_states, mapper, [word["id"] for word in req.proto_lexicon])
+    if req.proto_languages:
+        proto_lexicons = {}
+        for language in req.proto_languages:
+            language_id = str(language.get("id", "")).strip()
+            records = language.get("lexicon")
+            if not language_id or not isinstance(records, list):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Každý protojazyk potřebuje `id` a seznam `lexicon`.",
+                )
+            proto_lexicons[language_id] = load_lexicon_from_records(records, mapper)
+        unknown = sorted(set(proto_lexicons) - set(root_candidates))
+        if unknown:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Protojazyky musí být kořenové uzly topologie: {', '.join(unknown)}.",
+            )
+        final_states = run_multiroot_simulation(proto_lexicons, graph, mapper, cfg, builder)
+        diagnostic = [
+            str(word["id"])
+            for language in req.proto_languages
+            for word in language["lexicon"]
+            if "id" in word
+        ]
+    else:
+        final_states = run_simulation(lexicon, graph, mapper, cfg, builder)
+        diagnostic = [word["id"] for word in req.proto_lexicon]
+    branches = build_branch_views(final_states, mapper, diagnostic)
     sound_events = [event for event in builder.events if event.get("kind") == "sound_change"]
     innovation_events: dict[str, dict] = {}
     for index, event in enumerate(sound_events):

@@ -56,3 +56,21 @@ def test_contact_transfers_selected_productive_construction(mapper):
     assert trader.grammatical_features["morphology.borrowed_construction"] == "agentive"
     assert graph.node_configs["target"]["morphology"]["borrowed_constructions"][0]["id"] == "agentive"
     assert any(event["kind"] == "construction_transfer" for event in builder.events)
+
+
+def test_opakovany_politicky_kontakt_ma_rozpocet_a_nepujcuje_tentyz_koncept(mapper):
+    source_words = [mapper.parse_word(f"concept-{index}", f"pa{vowel}ta") for index, vowel in enumerate("eiou")]
+    for word in source_words:
+        word.frequency = 1.0
+    target_word = mapper.parse_word("local", "kumi")
+    graph = EvolutionGraph(node_configs={"source": {}, "target": {}})
+    simulator = EvolutionSimulator(graph, mapper)
+    source = State("source", Inventory(), Lexicon(source_words))
+    target = State("target", Inventory(), Lexicon([target_word]))
+
+    for year in (100, 200, 300):
+        simulator._apply_contact(source, target, year, 8, domain="polity")
+
+    loans = [word for word in target.lexicon.words if word.source_id == "source"]
+    assert len(loans) == 3
+    assert len({word.concept_id for word in loans}) == 3

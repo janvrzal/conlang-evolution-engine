@@ -145,6 +145,7 @@ class LexicalEvaluator:
         taboo_concepts: Sequence[str] = (),
         render: Optional[Callable[[Word], str]] = None,
     ) -> list[Word]:
+        self.last_homophony_decisions = []
         active = [word for word in state.lexicon.words if word.active]
         if not active:
             return []
@@ -196,6 +197,12 @@ class LexicalEvaluator:
             word.active = False
 
         if self.homophony_policy != "off" and render:
+            # Jedna živá kolize nemá při každém stoletém lexikálním kroku
+            # vytvářet novou položku autorovy fronty. Identitu drží lineage,
+            # zatímco tvar je součástí podpisu: po skutečné změně výslovnosti
+            # se případ může oprávněně otevřít znovu.
+            homophony_history = state.map.setdefault("_homophony_history", {})
+            cooldown_years = int(state.map.get("homophony_cooldown_years", 250))
             groups: dict[str, list[Word]] = {}
             for word in [*active, *replacements]:
                 if word.active:
@@ -209,6 +216,20 @@ class LexicalEvaluator:
                 # náhradu smí provést až reálná událost (sémantika, morfologie
                 # nebo kontakt), která dodá její historický původ.
                 for decision in self.decision_engine.assess_homophones(forms):
+                    if decision.action != "needs_legitimate_innovation":
+                        continue
+                    first = next(word for word in forms if word.id == decision.winner_id)
+                    second = next(word for word in forms if word.id == decision.loser_id)
+                    lineage_key = ":".join(sorted((first.lineage_id or first.id, second.lineage_id or second.id)))
+                    signature = f"{render(first)}\x1f{render(second)}"
+                    previous = homophony_history.get(lineage_key)
+                    if (
+                        isinstance(previous, dict)
+                        and previous.get("signature") == signature
+                        and year - int(previous.get("year", year)) < cooldown_years
+                    ):
+                        continue
+                    homophony_history[lineage_key] = {"year": year, "signature": signature}
                     if self.homophony_policy != "resolve" or decision.action != "needs_legitimate_innovation":
                         self.last_homophony_decisions.append(decision)
                         continue

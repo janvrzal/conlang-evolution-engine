@@ -15,7 +15,7 @@ import os
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from cee.core.models import Inventory, Lexicon, State
 from cee.engine.empirical import (
@@ -444,6 +444,52 @@ def run_simulation(
         profile_lexical=profile_lexical,
     )
     return simulator.simulate(root_state)
+
+
+def run_multiroot_simulation(
+    proto_lexicons: Mapping[str, Lexicon],
+    graph: EvolutionGraph,
+    mapper: FeatureMapper,
+    config: Optional[SimulationConfig] = None,
+    graph_builder: Optional[GraphBuilder] = None,
+) -> Dict[str, State]:
+    """Spustí jednu časovou osu pro několik nezávislých protojazyků.
+
+    Každý klíč je ID kořenového uzlu v topologii. Kořeny mají vlastní
+    lexikony a dědičnost; setkat se mohou pouze explicitním kontaktem,
+    politickým útvarem nebo obchodní trasou.
+    """
+    if not proto_lexicons:
+        raise ValueError("Je potřeba zadat alespoň jeden protolexikon.")
+    config = config or SimulationConfig()
+    missing = sorted(set(proto_lexicons) - set(graph.node_configs))
+    if missing:
+        raise ValueError(f"Kořeny nejsou součástí topologie: {', '.join(missing)}.")
+
+    root_states = [
+        State(
+            node_id=node_id,
+            year=int(graph.node_configs[node_id].get("year", config.root_year)),
+            inventory=Inventory(),
+            lexicon=lexicon,
+        )
+        for node_id, lexicon in proto_lexicons.items()
+    ]
+    simulator = EvolutionSimulator(
+        graph,
+        mapper,
+        preset=config.preset or {},
+        seed=config.seed,
+        semantic_evaluator=build_semantic_evaluator(config),
+        end_year=config.years,
+        graph_builder=graph_builder,
+        evolve_root=config.evolve_root,
+        inventory_validator=build_empirical_phonology(config),
+        schema_multipliers=build_global_schema_multipliers(config),
+        profile_macro=build_profile_macro(config),
+        profile_lexical=build_profile_lexical(config),
+    )
+    return simulator.simulate_many(root_states)
 
 
 def grammar_sketch(

@@ -104,3 +104,19 @@ def test_produktivni_afix_je_legitimni_automaticka_reakce_na_homofonii(mapper):
     assert resolved is not None
     assert resolved.origin_type == "homophony_productive_derivation"
     assert mapper.render_word(resolved) == "patami"
+
+
+def test_stejna_ziva_homofonie_se_behem_cooldownu_nehlasi_znovu(mapper):
+    import random
+
+    first = _word(mapper, "hand", "pata", 0.95)
+    second = _word(mapper, "arm", "pata", 0.80)
+    state = State("x", Inventory(), Lexicon([first, second]))
+    evaluator = LexicalEvaluator(homophony_policy="audit")
+
+    evaluator.evaluate(state, 100, random.Random(1), render=mapper.render_word)
+    assert len(evaluator.last_homophony_decisions) == 1
+    evaluator.evaluate(state, 200, random.Random(2), render=mapper.render_word)
+    assert evaluator.last_homophony_decisions == []
+    evaluator.evaluate(state, 400, random.Random(3), render=mapper.render_word)
+    assert len(evaluator.last_homophony_decisions) == 1

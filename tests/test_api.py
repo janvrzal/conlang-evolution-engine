@@ -105,6 +105,37 @@ def test_biom_z_ui_ovlivni_vysledek(monkeypatch):
     assert captured_graph.node_configs["prales"]["map"]["biome"] == "prales"
 
 
+def test_api_prijme_dva_nezavisle_protojazyky(monkeypatch):
+    captured = None
+
+    def mock_run_multiroot(proto_lexicons, graph, mapper, config, builder):
+        nonlocal captured
+        captured = (proto_lexicons, graph)
+        return {}
+
+    monkeypatch.setattr("cee.api.server.run_multiroot_simulation", mock_run_multiroot)
+    result = run_dynamic_simulation(
+        DynamicSimulateRequest(
+            topology_data={
+                "nodes": {
+                    "proto-a": {"isProto": True, "year": 0},
+                    "proto-b": {"isProto": True, "year": 0},
+                },
+                "edges": [],
+            },
+            proto_languages=[
+                {"id": "proto-a", "lexicon": [{"id": "sun", "ipa": "sula"}]},
+                {"id": "proto-b", "lexicon": [{"id": "moon", "ipa": "miko"}]},
+            ],
+            semantics="",
+        )
+    )
+
+    assert result["status"] == "success"
+    assert captured is not None
+    assert set(captured[0]) == {"proto-a", "proto-b"}
+
+
 def test_dynamicka_topologie_respektuje_map_i_primo(monkeypatch):
     """Kanonický tvar z YAML (`map`) musí fungovat stejně jako plochý z UI."""
     captured_graph = None

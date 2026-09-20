@@ -108,3 +108,19 @@ def test_funkcni_zatez_chrani_i_kontrast_v_ramci_paradigmatu(mapper):
     decision = ChangeDecisionEngine.assess_sound_change(state, rule, mapper)
     assert decision.functional_load > 0
     assert decision.paradigm_retention < 1
+
+
+def test_obsahovy_koren_se_erozi_nesmí_zkrátit_pod_tri_segmenty(mapper):
+    from cee.engine.simulator import EvolutionSimulator
+
+    class ErodeOneSegment:
+        def apply_to_word(self, word):
+            word.segments.pop()
+            return True
+
+    rule = ErodeOneSegment()
+    word = mapper.parse_word("water", "pat")
+    assert EvolutionSimulator._preserves_content_word_shape(word, rule) is False
+
+    short = mapper.parse_word("water", "pa")
+    assert EvolutionSimulator._preserves_content_word_shape(short, rule) is True
