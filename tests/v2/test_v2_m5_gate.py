@@ -48,7 +48,7 @@ def test_s2_zjednoduseni_pusobi_l2_mluvci(seed):
     """Kontrolovaný pokus: totéž město bez přistěhovalců a s nimi."""
     native, _ = _run(island_and_city(seed, immigration=0.0), 2000)
     mixed, _ = _run(island_and_city(seed, immigration=0.6), 2000)
-    assert morphological_complexity(mixed, "city") < morphological_complexity(native, "city") - 0.05
+    assert morphological_complexity(mixed, "city") < morphological_complexity(native, "city") / 2
 
 
 # --- S3: přechod na jiný jazyk ---------------------------------------------
@@ -91,10 +91,14 @@ def test_s3_v_novem_jazyce_zustane_stavba_a_vyslovnost_ale_malo_slov(shifted):
             code = world.groups[group].main_code
             written = sum(bool(code.phonology.restructured.get(variable)) for variable in processes)
             assert written >= 0.8 * len(processes)
-            native = sum(
-                world.morphemes[root].language == "x" for root in code.phonology.dominant.values()
-            )
-            assert native / len(code.phonology.dominant) < 0.05
+            native = [concept for concept, root in code.phonology.dominant.items()
+                      if world.morphemes[root].language == "x"]
+            # Zůstane jen pár slov, a to vzácných (místní a odvozená slova).
+            assert len(native) / len(code.phonology.dominant) < 0.08
+            if native:
+                assert statistics.mean(world.concept_frequency(concept) for concept in native) < (
+                    statistics.mean(world.concept_frequencies.values())
+                )
         # Jádro většinového jazyka si svou stavbu drží.
         assert syntax.dominant(world, "y2", "NEG").kind == "pre"
         assert trace_shares(world, "y2", substrate)["construction"] < 0.1
@@ -163,6 +167,16 @@ def test_metrika_11_slozitost_klesa_s_l2_mluvcimi_a_populaci(seed):
         for column, population in enumerate(POPULATIONS) for row, share in enumerate(L2_SHARES)
     )
     world, _ = _run(contact_world([Language("proto", places)], seed=seed), 1500)
-    complexity = [morphological_complexity(world, place.id) for place in places]
-    assert spearman([place.immigration for place in places], complexity) < -0.6
-    assert spearman([place.population for place in places], complexity) < 0.0
+    complexity = {place.id: morphological_complexity(world, place.id) for place in places}
+
+    def within(fixed, varied):
+        """Průměrná korelace s ``varied`` při pevné hodnotě ``fixed``."""
+        levels = sorted({getattr(place, fixed) for place in places})
+        return statistics.mean(
+            spearman([getattr(place, varied) for place in places if getattr(place, fixed) == level],
+                     [complexity[place.id] for place in places if getattr(place, fixed) == level])
+            for level in levels
+        )
+
+    assert within("population", "immigration") < -0.6
+    assert within("immigration", "population") < -0.6

@@ -34,7 +34,15 @@ class SimulationConfig:
     #: Síla driftu. Hodnota nad 1 vyjadřuje, že na jazyk nemají všichni mluvčí
     #: stejný vliv: efektivní populace je menší než skutečná (N / σ²).
     sigma: float = 2.0
+    #: Počáteční podíl inovace ve skupině o ``reference_population``
+    #: obyvatelích. Inovace začíná u jednoho mluvčího, takže v menší skupině
+    #: má větší podíl a ve větší menší (viz :meth:`Simulation.innovation_scale`).
     p0: float = 0.02
+    reference_population: float = 500.0
+    #: Meze počátečního podílu: pod spodní by inovaci hned smazal práh zániku,
+    #: nad horní by jedna inovace přeskočila celé šíření.
+    p0_min: float = 0.002
+    p0_max: float = 0.2
     adult_rate: float = 0.05
     #: Spodní mez frekvence; pod ní (nebo pod půl mluvčího kohorty) varianta zaniká.
     loss_threshold: float = 0.001
@@ -136,11 +144,26 @@ class Simulation:
             for change in self.changes:
                 self._innovate_with(change, context, renewal)
 
+    def innovation_scale(self, group_id: str) -> tuple[float, float]:
+        """Počáteční podíl inovace a násobek četnosti inovací ve skupině.
+
+        Inovace vzniká u jednoho mluvčího: ve skupině s ``N`` lidmi má podíl
+        úměrný ``1 / N`` a inovací je úměrně ``N``. Součin obou, tedy tempo
+        neutrálních změn, na velikosti nezávisí (Kimura 1968); malá skupina
+        ale víc podléhá driftu a velká víc selekci. Skupina o referenční
+        velikosti dostane přesně ``p0`` a násobek 1.
+        """
+        config = self.config
+        size = config.reference_population / self.world.groups[group_id].population
+        share = min(config.p0_max, max(config.p0_min, config.p0 * size))
+        return share, config.p0 / share
+
     def _innovate_with(self, change: Change, context: InnovationContext, renewal: float) -> None:
         sites = change.sites(context)
         if not sites:
             return
-        tempo = renewal if change.rate_basis == "generation" else self.config.dt
+        share, frequency = self.innovation_scale(context.group.id)
+        tempo = (renewal if change.rate_basis == "generation" else self.config.dt) * frequency
         rng = generator(self.world.seed, "innovation", self.tick, context.group.id,
                         context.code.id, change.kind)
         if change.uses_uniform_rate():
@@ -167,7 +190,7 @@ class Simulation:
             if variant.id in (self.world.distribution(context.group.id, site) or _EMPTY).variants:
                 continue  # tutéž změnu už skupina má (paralelní inovace jinde)
             self.world.variants[variant.id] = variant
-            live.innovate(site, context.group.id, variant.id, self.config.p0)
+            live.innovate(site, context.group.id, variant.id, share)
             self.history.record(
                 "innovation", self.tick, context.year,
                 group=context.group.id, code=context.code.id, change=change.kind,

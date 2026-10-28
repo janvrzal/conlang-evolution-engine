@@ -225,6 +225,11 @@ p'_g(x)   = (1 − r_g) · dosp(x) + r_g · dítě(x)
 - Startovní hodnoty konstant: `α = 1`, `s = 1`, `κ = 0,3`, `σ = 2`,
   `p0 = 0,02`, `a = 0,05`, otevřenost venkovské skupiny `o = 0,1`. Všechny
   se kalibrují (M7).
+- `p0` platí pro skupinu o 500 obyvatelích. Inovace začíná u jednoho
+  mluvčího, takže skupina s `N` obyvateli dostane počáteční podíl
+  `p0 · 500 / N` (v mezích 0,002 až 0,2) a inovací v poměru `p0` ku tomuto
+  podílu. Tempo neutrálních změn tak na velikosti nezávisí (Kimura 1968);
+  malá skupina víc podléhá driftu, velká selekci.
 
 ### Souhrnné skupiny a přiblížení
 
@@ -690,6 +695,37 @@ Naměřeno (seedy 1 a 2, není-li uvedeno jinak):
   ale slabý; v reálném světě jde z velké části přes podíl L2 mluvčích (velké
   jazyky jich mají víc), který scénář nastavuje nezávisle.
 
+### Inovace podle velikosti skupiny (doplněk M5, 2026-10-28)
+
+Splněno, brány M1 až M5 prošly. Vesnice o 500 obyvatelích dávají bitově
+stejnou historii jako před změnou (ověřeno otisky logu), takže se čísla
+bran M1 až M4b nezměnila.
+
+- Inovace vzniká u jednoho mluvčího: počáteční podíl `p0 · 500 / N`
+  (0,002 až 0,2) a četnost inovací převrácená, aby součin zůstal stejný.
+  Do teď měla každá skupina stejný počet inovací a stejný počáteční podíl
+  bez ohledu na velikost, takže velikost působila jen driftem.
+- **Metrika 11** (seedy 1–3): složitost s velikostí skupiny (při pevném
+  podílu L2) Spearman −0,95 až −1,0; s podílem L2 (při pevné velikosti)
+  −0,76 až −1,0. Skupina o 100 lidech má složitost 0,34–0,36, o 10 000
+  lidech 0,07–0,09. Ve velké skupině selekce pro jednotnost vzorů funguje
+  účinně, malá drží menšinové vzory driftem. Test brány měří obě souvislosti
+  při pevné hodnotě té druhé; přes všech 20 skupin dohromady velikost
+  přebije vliv L2 (korelace s podílem L2 klesla na −0,57 až −0,63).
+- **S2**: rozdíl ostrova a města se zvětšil, velké město nepravidelnosti
+  vzácných slov odstraní úplně (0 % proti 30–31 % na ostrově). Totéž město
+  bez přistěhovalců má složitost 0,07–0,11, se 60 % přistěhovalců
+  0,016–0,019; test proto porovnává poměr, ne rozdíl.
+- **S3**: konstrukce původního jazyka ve vnitrozemských vesnicích 0,52–0,88;
+  zůstane 4–8 kořenů původního jazyka ze 154 (2,6–5,2 %), všechny pro vzácné
+  pojmy (frekvence 0,08–0,15), většinou odvozeniny a složeniny vzniklé
+  v původním jazyce. Práh brány je proto 8 % a výpůjčky musí být vzácnější
+  než průměr.
+- **Alternace kmene** zůstává ve velkých skupinách vyšší (Spearman s
+  velikostí +0,31 až +0,39). Velká skupina účinněji přijme i přirozené
+  zvukové změny zvýhodněné tlaky (oslabování, zkracování) a ty alternace
+  vytvářejí. Viz Známé mezery.
+
 ## Známé mezery a kam patří
 
 Sepsáno 2026-10-28 při revizi plánu po M3.
@@ -707,7 +743,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | Další funkce katalogu: vid, shoda, osoba, rod a jmenné třídy; víc dárců exaptace | rozšíření katalogu (data), kdykoli |
 | Člen (a obecně funkce `zero`) do 3 000 let vznikne ve všech jazycích; chybí tlak, který by jazyk bez kategorie dlouho udržel (např. norma) | M6 (instituce), tempo M7 |
 | Přirozená četnost eroze konkrétní koncovky je nízká (zvukové inovace se dělí mezi stovky kandidátů); analytizace je proto doložena kontrolovanými pokusy | M7 (kalibrace tempa zvukových změn) |
-| Ostrov má méně alternací kmene než město: izolovaná vesnice přijme méně zvukových změn. Trudgillovo pozorování, že malé izolované komunity hromadí morfofonologickou složitost, model nereprodukuje (zvyšuje jen nepravidelnost koncovek) | M7, případně tlak sítí s hustými vazbami |
+| Malé izolované komunity podle Trudgilla hromadí morfofonologickou složitost díky husté síti silných vazeb, která udrží i neobvyklé změny. Model to nereprodukuje: alternace kmene roste s velikostí skupiny, protože velká skupina účinněji přijme přirozené zvukové změny. Nepravidelnost koncovek už velikost sleduje správně | M6 (hustota sítě, silné a slabé vazby), M7 |
 | Stabilní dvojjazyčnost bez přechodu (diglosie, obchodní lingua franca) a obrácený směr (elita přejde na jazyk většiny, superstrát) nejsou ověřené; Abrams–Strogatz s nerovným statusem vždy končí přechodem | M6 (instituce, prestiž kódů) |
 | Výpůjčka nového pojmu nebo kategorie (změna `Výpůjčka`): všechny jazyky mají stejnou sadu pojmů | až budou pojmy přibývat (M6, události) |
 | Příbuzné jazyky se po rozpadu mísí bez filtru, protože mají stejnou linii; filtr by měl záviset na pozorované vzdálenosti | M6 (linie jazyků) |
