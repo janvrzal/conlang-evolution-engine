@@ -1,0 +1,69 @@
+# Katalog gramatických funkcí enginu v2 (milník M4b).
+#
+# Funkce není modul v kódu, ale řádek zde. Jestli ji jazyk „má“, se
+# nenastavuje: vyplývá z toho, čím ji právě vyjadřuje. Varianta „zero“
+# (nevyjadřuje se) existuje u každé funkce šablony inflection, takže
+# kategorie může vzniknout gramatikalizací i zaniknout erozí.
+#
+# Pole:
+#   template     inflection (koncovka / opis / nic), negation (Jespersenův
+#                cyklus), order (slovosled)
+#   domain       noun | verb | clause
+#   cell         buňka paradigmatu při syntetickém vyjádření
+#   weight       váha buňky v užívání (frekvence tvaru = lexém × váha)
+#   need         jak moc funkci komunikace potřebuje (0 až 1); řídí tlak
+#                k obnově zeslabeného vyjádření
+#   sources      zdroje gramatikalizace: autorský výběr nejčastějších cest
+#                podle Heine & Kuteva 2002 a Hopper & Traugott 2003
+#   compensates  funkce, jejichž roli může tato funkce převzít
+#   donors       funkce téže třídy slov, jejichž zbytkovou koncovku si tato
+#                funkce může vzít (exaptace, Lass 1990)
+#   orders       možné pevné slovosledy (šablona order)
+functions:
+  PAST:
+    template: inflection
+    domain: verb
+    cell: PAST
+    weight: 0.5
+    need: 1.0
+    sources: [have, finish, come]
+  FUTURE:
+    template: inflection
+    domain: verb
+    cell: FUT
+    weight: 0.3
+    need: 0.4
+    sources: [go, want]
+  PL:
+    template: inflection
+    domain: noun
+    cell: PL
+    weight: 0.4
+    need: 0.6
+    sources: [many, all]
+  OBJ:
+    template: inflection
+    domain: noun
+    cell: OBJ
+    weight: 0.5
+    need: 1.0
+    sources: []
+  DEFINITE:
+    template: inflection
+    domain: noun
+    cell: DEF
+    weight: 0.6
+    need: 0.25
+    sources: [that, this]
+    donors: [OBJ]
+  NEG:
+    template: negation
+    domain: clause
+    need: 0.5
+    sources: [thing, step, one]
+  ORDER:
+    template: order
+    domain: clause
+    need: 0.0
+    orders: [SOV, SVO]
+    compensates: [OBJ]

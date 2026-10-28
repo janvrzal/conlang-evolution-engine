@@ -80,6 +80,12 @@ class Clarity(Pressure):
         )
 
 
+#: Jak silně zvýhodňuje funkční zátěž zachování kontrastu. Je to sklon, ne
+#: zákaz (Wedel a kol. 2013): eroze pádových koncovek se v reálných jazycích
+#: děje i přes splynutí tvarů (latinské koncové -m).
+FUNCTIONAL_LOAD_SCALE = 5.0
+
+
 class FunctionalLoad(Pressure):
     """Splynutí, které vyrobí mnoho častých homofonů, je nevýhodné (Martinet)."""
 
@@ -87,7 +93,7 @@ class FunctionalLoad(Pressure):
 
     def scores(self, batch: PressureBatch) -> FloatArray:
         return _process_scores(
-            batch, lambda _, assessment: -float(min(1.0, 12.0 * assessment.merge_mass))
+            batch, lambda _, assessment: -float(min(1.0, FUNCTIONAL_LOAD_SCALE * assessment.merge_mass))
         )
 
 

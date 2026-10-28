@@ -14,7 +14,10 @@ from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
 
 SEEDS = (1, 2)
-ORIGINS = {"shift", "derivation", "compound", "circumlocution", "contamination", "back_formation", "coinage"}
+ORIGINS = {
+    "shift", "conversion", "derivation", "compound", "circumlocution", "contamination",
+    "back_formation", "coinage",
+}
 
 
 @pytest.fixture(scope="module")
@@ -61,7 +64,7 @@ def test_nova_slova_maji_doloditelny_puvod(runs):
                 if variant.origin.change is not None:
                     origins.append(variant.payload["origin"])
     assert origins and set(origins) <= ORIGINS
-    motivated = sum(origin in {"shift", "derivation", "compound"} for origin in origins)
+    motivated = sum(origin in {"shift", "conversion", "derivation", "compound"} for origin in origins)
     assert motivated / len(origins) >= 0.6
     assert origins.count("coinage") / len(origins) < 0.3
 

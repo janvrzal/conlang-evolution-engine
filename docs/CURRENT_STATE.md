@@ -1,8 +1,27 @@
 # CEE: ověřený stav implementace
 
-Aktualizováno: 2026-08-30. Tento dokument je provozní doplněk k whitepaperu
+Aktualizováno: 2026-10-28. Tento dokument je provozní doplněk k whitepaperu
 `CEE_master.md`: whitepaper popisuje směr a výzkumné hypotézy, kdežto zde je
 výhradně to, co je v repozitáři implementované a kryté testy.
+
+## Engine v2 (větev `engine-v2`)
+
+Nové simulační jádro `src/cee/v2/` podle `docs/engine-v2/`. Zatím není
+napojené na CLI, API ani UI; spouští se z testů a skriptů.
+
+| Milník | Stav |
+|---|---|
+| M1 jádro: svět, území, skupiny, síť, přenos, dialekty | hotovo (sublinearita vzdálenosti odložena do M6) |
+| M2 zvuk: hlásky, 20 rodin změn, fonologizace, reliktní výjimky | hotovo |
+| M3 morfologie: paradigmata, morfologizace, analogie | hotovo |
+| M3b lexikon a význam: graf pojmů, posun, odvození, složeniny, tabu | hotovo |
+| M4 syntax: konstrukce, gramatikalizace, analytizace, Jespersenův cyklus | hotovo |
+| M4b modulární gramatika: katalog funkcí, profil protojazyka, exaptace | hotovo |
+| M5 kontakt, M6 společnost, M7 kalibrace | plán |
+
+Naměřené hodnoty a známé mezery jsou v `docs/engine-v2/05-specifikace.md`.
+
+## Legacy jádro
 
 ## Funguje dnes
 

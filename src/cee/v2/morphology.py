@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, cast
 
 from cee.v2.history import History
 from cee.v2.language.lexicon import Morpheme, UnitForm
-from cee.v2.language.morphology import FormChange, extend, level, unit_id
+from cee.v2.language.morphology import FormChange, extend, level, rebracket, unit_id
 from cee.v2.language.segments import Form
 from cee.v2.repertoire import Origin, Variable, Variant
 
@@ -130,6 +130,9 @@ def citation_form(world: World, code: Code, unit: str) -> Form:
 def apply_form_change(world: World, code: Code, change: FormChange) -> UnitForm | None:
     """Analogický tvar podle dnešního stavu kódu, nebo ``None``, když nic nezmění."""
     unit = world.unit_of(code, change.unit)
+    if change.lexeme_wide:
+        assert change.segment is not None
+        return rebracket(unit, change.operation, change.segment)
     if change.operation == "level":
         citation = citation_form(world, code, change.unit)
         return None if unit.stem == citation else level(citation, unit)
@@ -160,15 +163,25 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
         if share < ANALOGY_THRESHOLD:
             continue
         change = world.form_changes[variable_id]
-        new = apply_form_change(world, code, change)
         del state.morph_active[variable_id]
         state.morph_closed.add(variable_id)
-        if new is None:
+        targets = units_of(world, code, unit) if change.lexeme_wide else [unit]
+        rewritten = False
+        for target in targets:
+            new = (
+                rebracket(world.unit_of(code, target), change.operation, change.segment)
+                if change.lexeme_wide and change.segment is not None
+                else apply_form_change(world, code, change)
+            )
+            if new is None:
+                continue
+            code.forms.set(target, new)
+            rewritten = True
+            for process in active_processes(state, world):
+                requeue(world, code, process, target)
+        if not rewritten:
             continue
-        code.forms.set(unit, new)
         state.version += 1
-        for process in active_processes(state, world):
-            requeue(world, code, process, unit)
         morpheme = world.morphemes[unit]
         history.record(
             "analogy", tick, year, group=group_id, variable=variable_id,
@@ -203,6 +216,8 @@ def assess(world: World, group_id: str, variable_id: str) -> FormAssessment | No
         current = world.unit_of(code, change.unit)
         if change.operation == "level":
             gain = 1.0
+        elif change.lexeme_wide:
+            gain = 0.0
         else:
             stats = class_stats(world, code)
             assert morpheme.word_class is not None and morpheme.cell is not None

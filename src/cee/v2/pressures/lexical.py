@@ -18,7 +18,7 @@ from cee.v2.pressures.social import Actuation
 TABOO_GENERATIONS = 10
 
 _MOTIVATION = {
-    "derivation": 0.15, "compound": 0.15, "circumlocution": 0.1, "shift": 0.05,
+    "derivation": 0.15, "compound": 0.15, "circumlocution": 0.1, "shift": 0.05, "conversion": 0.05,
     "back_formation": 0.0, "contamination": -0.05, "coinage": -0.15,
 }
 

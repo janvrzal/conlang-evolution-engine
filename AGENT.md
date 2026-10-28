@@ -8,6 +8,40 @@ Tento soubor slouží jako vstupní bod a referenční manuál pro budoucí LLM 
 3. **Data nepatří na Git:** Složky jako `runs/`, výstupní `.csv` soubory a vygenerovaná velká data necommitujeme.
 4. **Vlastnosti slova (`origin_year` atd.):** Slova musí nést historii. Například výpůjčky dostávají `origin_year`, díky kterému unikají starším zvukovým změnám. Tento systém se používá místo psaní složitých `IF` bloků a udržuje kód elegantní.
 
+## 1b. Engine v2 (nové jádro, vzniká od 2026-10)
+
+Vedle legacy jádra (`src/cee/engine/`, popsané níže) vzniká od nuly nové
+jádro **`src/cee/v2/`**. Návrh a závazná specifikace jsou v
+`docs/engine-v2/` (README → iterace 1–5; pro kód platí
+`05-specifikace.md`, včetně stavu milníků a známých mezer). Legacy zůstává
+funkční, dokud ho v2 nepřekoná v metrikách; v2 z něj nesmí importovat
+simulační logiku (jen data: `FeatureMapper`/PanPhon, `cee.semantics`).
+
+Pravidla v2, která se snadno poruší:
+
+* **Jazyk není homogenní.** Základní jednotkou je skupina mluvčích; jazyk
+  kódu je jeho repertoár (proměnné → varianty s frekvencemi). Dialekty a
+  jazyky se počítají až v `observe.py`.
+* **Každá změna = inovace + selekce (tlaky) + šíření.** Nic se neaplikuje
+  plošně. Nová změna je podtřída `Change`, nový tlak podtřída `Pressure`;
+  šíření (`transmission.py`) je jedno pro všechno.
+* **Čti stav jen přes `World.distribution()`.** Proměnné, ve kterých se
+  skupiny liší, leží ve sloupcovém skladu `World.live` (`pools.py`), ne v
+  repertoárech.
+* **Determinismus i při přiblížení mapy.** Náhoda jen z `rng.py` se
+  stabilními ID (nikdy indexy, `uuid4`, `hash()` ani iterace přes `set`);
+  míšení po komponentách sítě, součty přes sloty seřazené. Testy hlídají,
+  že zjemnění jedné oblasti nezmění historii nepropojené oblasti ani v
+  posledním bitu.
+* **Tvary slov** jsou `UnitForm` (tvar, hranice kmen | koncovka, koncovka)
+  ve `FormStore` kódu; zvukové procesy se aplikují dvoufázově a výstup je
+  vždy skutečná „obyčejná“ hláska (`SegmentTable.changed`).
+* **Gramatické funkce jsou data.** Minulý čas, člen, pád, zápor apod. jsou
+  řádky `cee/data/v2_grammar.yaml`; jazyk je má podle profilu protojazyka.
+  Do kódu změn a tlaků nepiš jména konkrétních funkcí, čti katalog.
+* **Kalibrační konstanty** mají ve specifikaci zdůvodnění a naměřené
+  hodnoty; při změně je přeměř a aktualizuj oddíl „Stav Mx“.
+
 ## 2. Architektura Projektu
 
 Projekt je rozdělen do několika logických bloků (uvnitř `src/cee`):

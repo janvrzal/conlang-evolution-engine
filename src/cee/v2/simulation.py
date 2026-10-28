@@ -7,7 +7,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from cee.v2 import morphology, phonology
+from cee.v2 import morphology, phonology, syntax
 from cee.v2.changes import DEFAULT_CHANGES, Change, InnovationContext, pressures_by_kind
 from cee.v2.events import WorldEvent
 from cee.v2.history import History
@@ -81,6 +81,7 @@ class Simulation:
         self.tick = 0
         self.tracker = LineageTracker()
         world.live.sync_groups(world)
+        self._grammar = any(variable.kind == "construction" for variable in world.variables.values())
         if world.table is not None:
             for group_id in world.group_ids():
                 self._seed_vocabulary(group_id)
@@ -176,14 +177,24 @@ class Simulation:
             for block in live.iter_blocks()
         ]
         records: list[tuple[Any, ...]] = []
+        activations: list[tuple[str, str]] = []
         for block, updated, baseline in results:
             records.extend(self._changes(block, block.freqs, updated))
             if self.config.record_trajectories:
                 self._trace(block, block.freqs, updated)
             if self.world.table is not None:
                 self._follow_vocabulary(block, block.freqs, updated)
-                self._activate_processes(block, updated)
+                activations.extend(self._activations(block, updated))
             block.freqs, block.previous = updated, baseline
+        # Kanonické pořadí: pořadí aktivací určuje chronologii změn kódu a
+        # nesmí záviset na tom, ve kterém řádku skladu proměnná leží (to
+        # ovlivňují i inovace v nepropojených oblastech).
+        for group_id, variable_id in sorted(activations):
+            code = self.world.groups[group_id].main_code
+            if variable_id in self.world.processes:
+                phonology.activate(self.world, code, variable_id)
+            else:
+                morphology.activate(self.world, code, variable_id)
         # Kanonické pořadí nezávisí na tom, ve kterém bloku proměnná leží.
         for kind, payload in sorted(records, key=lambda item: (item[0], sorted(item[1].items()))):
             self.history.record(kind, self.tick, year, **payload)
@@ -200,6 +211,8 @@ class Simulation:
                     )
                 if state.morph_active:
                     morphology.restructure(self.world, group_id, self.tick, self.history, year)
+                if self._grammar:
+                    syntax.restructure(self.world, group_id, self.tick, self.history, year)
 
     def _changes(
         self, block: PoolBlock, before: np.ndarray, after: np.ndarray
@@ -287,23 +300,20 @@ class Simulation:
                     else:
                         phonology.leave_vocabulary(code, unit)
 
-    def _activate_processes(self, block: PoolBlock, after: np.ndarray) -> None:
-        """Proces, který ve skupině překročil malý podíl, začne působit na slova."""
+    def _activations(self, block: PoolBlock, after: np.ndarray) -> list[tuple[str, str]]:
+        """Procesy a analogie, které ve skupině překročily malý podíl a začnou působit."""
         group_ids = self.world.live.group_ids
+        found = []
         for row, variable_id in enumerate(block.variable_ids):
-            is_process = variable_id in self.world.processes
-            if not is_process and variable_id not in self.world.form_changes:
+            if variable_id not in self.world.processes and variable_id not in self.world.form_changes:
                 continue
             changed = phonology.changed_id(variable_id)
             if changed not in block.slots[row]:
                 continue
             slot = block.slots[row].index(changed)
             for column in np.flatnonzero(after[row, :, slot] >= phonology.ACTIVATION_SHARE):
-                code = self.world.groups[group_ids[column]].main_code
-                if is_process:
-                    phonology.activate(self.world, code, variable_id)
-                else:
-                    morphology.activate(self.world, code, variable_id)
+                found.append((group_ids[column], variable_id))
+        return found
 
     def _trace(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
         variants = self.world.variants

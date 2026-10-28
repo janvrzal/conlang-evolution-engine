@@ -35,7 +35,7 @@ src/cee/v2/
     lexicon.py        Morpheme, UnitForm, FormStore, PhonologyState
     morphology.py     Paradigm, FormChange (vyrovnání, rozšíření vzoru)
     protoforms.py     protojazyk a nové kořeny podle fonotaktiky
-    constructions.py  Construction (M4)
+    constructions.py  Construction, zdroje gramatikalizace
   changes/
     base.py           Change (rodič)
     sound.py          rodiny A
@@ -51,6 +51,7 @@ src/cee/v2/
   phonology.py        procesní proměnné, fonologizace, uzavření, povrch
   morphology.py       tvary buněk, produktivita, analogie, její zápis
   semantics.py        graf pojmů (výřez CLICS⁴ + DatSemShift), recepty složenin
+  syntax.py           konstrukční proměnné, slabost vyjádření, zápis nové koncovky
   assessment.py       hodnocení procesu nad slovní zásobou (pro tlaky)
   events.py           WorldEvent a jeho podtřídy
   observe.py          vzdálenosti, shluky, linie jazyků
@@ -360,6 +361,7 @@ Každý milník je svislý řez: musí splnit svou bránu, než začne další.
 | **M3 morfologie** | alomorfy, paradigmata, změny B, `Uniformita`, `Frekvence` | emergentní morfologizace, Sturtevantův paradox v testu |
 | **M3b lexikon a význam** | sémantický graf pojmů (výřez CLICS⁴ + DatSemShift), posun významu, odvozování, skládání, expresivní tvoření, tabu a opis, kontaminace, zpětné tvoření; lexikální tlaky místo dočasného `Appeal` | metrika 1 (retence 70–95 % za tisíciletí), metrika 2 (častá slova se nahrazují pomaleji), nová slova mají doložitelný původ, erodovaná a homofonní slova se nahrazují častěji |
 | **M4 syntax** | konstrukce, změny C, velký cyklus | emergentní analytizace při erozi |
+| **M4b modulární gramatika** | katalog gramatických funkcí (data), profil gramatiky protojazyka, varianta `zero`, buňky paradigmatu vznikající za běhu, exaptace | brána M4 beze změny prahů; vznik členu z ukazovacího zájmena, exaptace zbytkové koncovky, jazyk bez kategorie |
 | **M5 kontakt** | kódy, L1/L2, interference, výpůjčky, přechod | S2, S3, metrika 11 |
 | **M6 společnost** | instituce, události, linie jazyků, export pro UI | S4, stabilní emergentní strom, metrika 9 (sublineární) |
 | **M7 kalibrace** | hledání vah a konstant proti metrikám | S5, metriky 1, 2, 10 |
@@ -516,6 +518,110 @@ Zpřesnění návrhu při implementaci:
 - Homofonie v metrikách počítá jen různé kořeny se stejným tvarem; posun
   významu je polysémie.
 
+### Stav M4 (2026-10-28)
+
+Splněno, testy v `tests/v2/test_v2_m4_gate.py` a `test_v2_syntax.py`.
+Scénář se syntaxí: podstatná jména mají i tvar předmětu (-m 60 %, -ne 40 %),
+minulý čas je syntetický, zápor částice před slovesem, slovosled volný.
+Přirozená eroze konkrétní koncovky je vzácná (viz Známé mezery), proto se
+odpověď syntaxe ověřuje kontrolovanými pokusy na kontinuu 6 vesnic:
+
+- **Analytizace**: po erozi pádu předmětu přejde na pevný slovosled všech
+  6 vesnic do 1 500 let; bez eroze zůstane volný ve všech.
+- **Velký cyklus**: po erozi minulého času převezme funkci do 500 let opis
+  (*dokončit* + sloveso), ten se stane přiklonkou a v letech 1 250–1 900
+  sroste v novou koncovku v 6 vesnicích; slabost vyjádření klesne ze 100 %
+  na 3–4 %. Nejčastější slovesa si ponechají starý tvar (silná slovesa).
+- **Jespersenův cyklus**: po obroušení záporky přejde 4 z 6 vesnic do 500
+  let na *ne … zesilovač* a do 1 000 let na samotný zesilovač; cyklus pak
+  může začít znovu.
+- Bez eroze zůstává syntax beze změny a zvukové metriky drží.
+
+Zpřesnění návrhu při implementaci:
+
+- **Gramatická funkce je konstrukční proměnná** (`PAST`, `NEG`, `ORDER`).
+  Změny navrhují jen další krok od konstrukce, která ve skupině převažuje,
+  takže gramatikalizace je jednosměrná. Zdroje (`have`, `finish`, `come`
+  pro minulý čas; `thing`, `step`, `one` pro zápor) jsou autorský výběr
+  podle Heine & Kuteva 2002.
+- **Tlaky**: `Expressivity` (opis a nová koncovka získají tolik, kolik tvarů
+  minulého času splynulo; zápor je tak silný jako jeho neobroušené slovo),
+  `Economy` (−0,15 za každé slovo navíc), `Fusion` (+0,25 pro další krok
+  gramatikalizace), `Ambiguity` (volný slovosled −podíl splynulých tvarů
+  předmětu).
+- **Slabost slova = eroze, ne krátkost**: krátká záporka odjakživa (*ne*)
+  slabá není.
+- **Zpětná vazba syntax → zvuk**: splynutí pádu předmětu s citačním tvarem
+  stojí ve funkční zátěži jen 30 %, když skupina už má pevný slovosled.
+  Funkční zátěž zvukových změn byla zmírněna (násobek 5 místo 12, splynutí
+  buněk paradigmatu stojí jako běžný homofon), protože eroze koncovek se v
+  reálných jazycích děje i přes splynutí tvarů.
+- **Nová koncovka** z pomocného slova se zkrátí na první slabiku (fonetická
+  redukce při gramatikalizaci) a zapíše se do tvarů minulého času, kromě
+  lexémů s frekvencí aspoň 0,7.
+- **Reanalýza hranice** mezi záporkou a slovesem (*a napron → an apron*) a
+  **konverze** mezi slovními druhy jsou doplněné; exaptace odložena.
+- **Přeměřeno po zmírnění funkční zátěže**: metriky M2 drží (63–67 %
+  souhláskových změn, délka slova 4,45–4,55, relikty 5,7–6,6 %), homofonie
+  klesla na nejvýš 0,7 %; v M3 má s vyrovnáním alternaci 47–48 % tvarů,
+  bez něj 71–72 %.
+- **Pořadí aktivace procesů** v jednom kroku je nově kanonické (podle ID).
+  Dřív záviselo na pořadí řádků skladu, které ovlivňují i nepropojené
+  oblasti; test izolace z M2 to zachytil.
+
+### Stav M4b (2026-10-28)
+
+Splněno, testy v `tests/v2/test_v2_m4b_gate.py`; brána M4 prošla po přepisu
+beze změny prahů.
+
+- **Katalog gramatických funkcí** `cee/data/v2_grammar.yaml`: funkce je
+  řádek dat, ne kód. Pole: šablona (`inflection` koncovka/opis/nic,
+  `negation` Jespersenův cyklus, `order` slovosled), třída slov, buňka a
+  její váha, potřeba `need` (0 až 1), zdroje gramatikalizace, `compensates`
+  (čí roli funkce převezme) a `donors` (čí zbytkovou koncovku si může vzít).
+  Katalog má minulý čas, budoucí čas, plurál, pád předmětu, určenost, zápor
+  a slovosled. Změny, tlaky, hodnocení funkční zátěže i reanalýza hranice
+  čtou jen katalog.
+- **Profil gramatiky protojazyka** (`village_grid(grammar=…)`, výchozí
+  `SYNTAX_GRAMMAR`): funkce → výchozí konstrukce. Funkce mimo profil jazyk
+  nemá a nevyvine; funkce s konstrukcí `zero` nevyjadřuje, ale vyvinout ji
+  může. Buňky paradigmatu se odvodí z funkcí vyjádřených koncovkou; nová
+  buňka vznikne, až funkce poprvé sroste v koncovku nebo ji převezme
+  exaptací.
+- **Tlaky obecně**: `Expressivity` = potřeba × síla vyjádření (nic 0, opis
+  a přiklonka 1, koncovka 1 − slabost buňky, nová nezapsaná koncovka 1,
+  zápor 1, má-li neobroušené slovo). S `need` 1,0 pro minulý čas a 0,5 pro
+  zápor dává stejné rozdíly jako M4. Nově slábne i zapsaná nová koncovka,
+  takže druhé kolo velkého cyklu má stejnou hnací sílu jako první.
+  `Ambiguity` platí pro každou funkci s `compensates`. Funkce bez buňky má
+  slabost 1: jazyk bez pádu dostane pevný slovosled (6 vesnic z 6 ve 3
+  seedech).
+- **Vznik členu**: v jazyce bez pádu a s určeností jako `zero` (`need`
+  0,25) vznikne člen z *that*/*this*. V 8 seedech převládá ve většině
+  vesnic do 1 000 let ve 3 jazycích, do 2 000 let v 7 a do 3 000 let ve
+  všech; často pak sroste v koncovku (typ skandinávského a rumunského
+  postponovaného členu). Řádově to odpovídá románským jazykům (asi 800 let),
+  jenže člen nakonec vznikne všude (viz Známé mezery). S `need` 0,4 vznikal
+  ještě dřív, proto zůstává 0,25.
+- **Opis jako obnova**: opis vedle koncovky se navrhuje, jen když koncovka
+  aspoň trochu zeslábla (slabost > 0). Funkci `zero` se navrhuje vždy.
+  Opis vedle neporušené koncovky tlaky stejně vždy zahodily (Expressivity
+  0, Economy −0,15). Navíc by bral náhodná čísla opisům jiných funkcí: když
+  plurál dostal vlastní proměnnou, klesl počet vesnic s novou koncovkou
+  minulého času v 11 seedech v průměru z 5,4 na 4,3. S pravidlem obnovy
+  jsou čísla stejná jako v M4 (6, 5, 6, 6, 6, 6, 5, 6, 6, 1, 6).
+- **Exaptace**: koncovka funkce, jejíž roli nese jiná konstrukce (pád vedle
+  pevného slovosledu), přejde na funkci téže třídy slov, kterou jazyk
+  nevyjadřoval. V pokusu s pevným slovosledem od začátku přejde koncovka
+  předmětu na určenost ve všech 6 vesnicích v letech 925–1 250 (60–64
+  slov). Při volném slovosledu se do 1 500 let nestane nic.
+- **Jazyk bez kategorie**: bez minulého času v profilu nemají slovesa
+  buňku PAST ani po 1 000 letech. S minulým časem jako `zero` ho do 2 000
+  let vytvoří opis s *finish* ve všech vesnicích a v 5 z 6 už sroste
+  v koncovku; buňka PAST přitom vznikne.
+- **Klíč konstrukce** se prodlouží o dárce jen u exaptace, takže ID variant
+  z M4 zůstala stejná.
+
 ## Známé mezery a kam patří
 
 Sepsáno 2026-10-28 při revizi plánu po M3.
@@ -527,8 +633,12 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | ~~Frekvence užití se nevyvíjí~~ | vyřešeno v M3b |
 | Rodokmen slova: log nese jen počty přepsaných slov, ne historii jednotlivého slova | před napojením UI |
 | Spuštění enginu mimo testy: CLI, API, převod projektu z UI na svět v2 | před napojením UI (dřív než M6) |
-| `AGENT.md` a `CURRENT_STATE.md` engine v2 nezmiňují | hned po M3b |
-| Konverze mezi slovními druhy (posun významu sloveso ↔ jméno) | s M4 (konstrukce) |
+| ~~`AGENT.md` a `CURRENT_STATE.md` engine v2 nezmiňují~~ | vyřešeno po M3b |
+| ~~Konverze mezi slovními druhy~~ | vyřešeno v M4 |
+| ~~Exaptace a jazyky bez některých kategorií~~ | vyřešeno v M4b |
+| Další funkce katalogu: vid, shoda, osoba, rod a jmenné třídy; víc dárců exaptace | rozšíření katalogu (data), kdykoli |
+| Člen (a obecně funkce `zero`) do 3 000 let vznikne ve všech jazycích; chybí tlak, který by jazyk bez kategorie dlouho udržel (např. kontakt nebo norma) | M5/M6 (kontakt, instituce), tempo M7 |
+| Přirozená četnost eroze konkrétní koncovky je nízká (zvukové inovace se dělí mezi stovky kandidátů); analytizace je proto doložena kontrolovanými pokusy | M7 (kalibrace tempa zvukových změn) |
 | CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |
 | Výkon režimů region a výš s fonologií a morfologií neměřen | M6 (výkonová brána) |
 

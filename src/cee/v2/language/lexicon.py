@@ -146,6 +146,8 @@ class PhonologyState:
     #: které už si kód zapsal.
     morph_active: dict[str, str] = field(default_factory=dict)
     morph_closed: set[str] = field(default_factory=set)
+    #: Syntetické konstrukce (nové koncovky), které už kód zapsal do tvarů.
+    grammar_applied: set[str] = field(default_factory=set)
     #: Odvozené údaje (statistiky prostředí, hodnocení procesů) s verzí, ze
     #: které vznikly. Nejsou součástí stavu jazyka.
     cache: dict[object, tuple[int, object]] = field(default_factory=dict)

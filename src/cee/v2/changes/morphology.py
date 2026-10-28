@@ -109,4 +109,51 @@ class Extension(AnalogicalChange):
         return found
 
 
-MORPHOLOGICAL_CHANGES: tuple[AnalogicalChange, ...] = (Leveling(), Extension())
+class Rebracketing(AnalogicalChange):
+    """Reanalýza hranice mezi záporkou a slovesem (typ *a napron → an apron*).
+
+    Záporka stojí před slovesem a vyslovuje se s ním dohromady. Končí-li na
+    souhlásku a sloveso začíná samohláskou, může si generace souhlásku
+    přiřadit ke slovesu; končí-li záporka samohláskou, může naopak počáteční
+    souhlásku slovesa připsat záporce.
+    """
+
+    kind = "rebracketing"
+    # Sporadický jev: jednotky případů na jazyk za tisíciletí.
+    base_rate = 0.0002
+
+    def candidates(self, context: InnovationContext) -> dict[str, FormChange]:
+        from cee.v2 import syntax
+
+        world, code = context.world, context.code
+        if world.table is None:
+            return {}
+        # Záporka před slovesem (šablona negation katalogu gramatických funkcí).
+        negations = [
+            current for entry in syntax.functions(world, "negation")
+            if (current := syntax.dominant(world, context.group.id, entry.id)) is not None
+            and current.kind == "pre"
+        ]
+        if not negations:
+            return {}
+        particle = syntax.particle_form(world, code, negations[0].source)
+        if not particle:
+            return {}
+        found = {}
+        for root in sorted(set(code.phonology.dominant.values())):
+            if world.morphemes[root].word_class != "verb":
+                continue
+            form = world.form_of(code, root)
+            if not form:
+                continue
+            if not world.table.is_vowel(particle[-1]) and world.table.is_vowel(form[0]):
+                change = FormChange("prepend", root, segment=particle[-1])
+            elif world.table.is_vowel(particle[-1]) and not world.table.is_vowel(form[0]) and len(form) >= 3:
+                change = FormChange("drop_initial", root, segment=form[0])
+            else:
+                continue
+            found[Variable("form", change.key).id] = change
+        return found
+
+
+MORPHOLOGICAL_CHANGES: tuple[AnalogicalChange, ...] = (Leveling(), Extension(), Rebracketing())

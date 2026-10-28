@@ -53,13 +53,18 @@ class Conservation(Pressure):
     """Častá slova si drží nepravidelnost, vzácná podléhají analogii (Bybee).
 
     Proto jsou nepravidelná právě *být, mít, jít*: jejich tvary se učí z
-    tolika výskytů, že je analogie nepřepíše.
+    tolika výskytů, že je analogie nepřepíše. Reanalýza hranice není
+    analogie k pravidelnosti, proto na ni tento tlak nepůsobí.
     """
 
     name = "conservation"
 
     def scores(self, batch: PressureBatch) -> FloatArray:
-        return _form_scores(batch, lambda _, assessment: -0.6 * (2.0 * assessment.frequency - 1.0))
+        return _form_scores(
+            batch,
+            lambda change, assessment: 0.0 if change.lexeme_wide
+            else -0.6 * (2.0 * assessment.frequency - 1.0),
+        )
 
 
 class Distinctiveness(Pressure):

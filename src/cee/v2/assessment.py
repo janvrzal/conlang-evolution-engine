@@ -18,6 +18,7 @@ from cee.v2.language.processes import Process
 from cee.v2.language.segments import Form, SegmentTable
 
 if TYPE_CHECKING:
+    from cee.v2.language.lexicon import Morpheme
     from cee.v2.world import World
 
 #: Hodnocení se přepočítá nejdřív po tolika krocích, i když se slovní zásoba mění.
@@ -155,16 +156,32 @@ def assess(world: World, group_id: str, variable_id: str, tick: int) -> ProcessA
     return result
 
 
-#: Splynutí dvou buněk téhož paradigmatu (synkretismus) je dražší než
-#: náhodný homofon dvou různých slov: ničí gramatický kontrast.
-PARADIGM_MERGE_WEIGHT = 2.0
+#: Splynutí dvou buněk téhož paradigmatu (synkretismus) stojí stejně jako
+#: náhodný homofon; tvary téhož slova od sebe často odliší kontext.
+PARADIGM_MERGE_WEIGHT = 1.0
+#: Splynutí buňky s jiným tvarem téhož slova, když roli její funkce už nese
+#: jiná konstrukce (pád vedle pevného slovosledu): funkce je nadbytečná a její
+#: ztráta skoro nic nestojí.
+REDUNDANT_MERGE_WEIGHT = 0.3
 
 
-def _pair(world: World, frequency: dict[str, float], first: str, second: str) -> float:
+def _pair(world: World, frequency: dict[str, float], first: str, second: str, group_id: str) -> float:
     mass = math.sqrt(frequency[first] * frequency[second])
-    if world.morphemes[first].lexeme_id == world.morphemes[second].lexeme_id:
+    a, b = world.morphemes[first], world.morphemes[second]
+    if a.lexeme_id == b.lexeme_id:
         mass *= PARADIGM_MERGE_WEIGHT
+        if _redundant_cell(world, group_id, a) or _redundant_cell(world, group_id, b):
+            mass *= REDUNDANT_MERGE_WEIGHT
     return mass
+
+
+def _redundant_cell(world: World, group_id: str, morpheme: Morpheme) -> bool:
+    from cee.v2 import syntax
+
+    if morpheme.cell is None:
+        return False
+    entry = syntax.function_of_cell(morpheme.word_class, morpheme.cell)
+    return entry is not None and syntax.compensated(world, group_id, entry.id)
 
 
 def _assess(world: World, group_id: str, variable_id: str) -> ProcessAssessment:
@@ -195,11 +212,11 @@ def _assess(world: World, group_id: str, variable_id: str) -> ProcessAssessment:
         # nezasáhla, nebo s jiným zasaženým slovem s jiným původním tvarem.
         stayers = [other for other in vocabulary.owners.get(form, []) if other not in affected]
         for morpheme in movers:
-            merge += sum(_pair(world, frequency, morpheme, other) for other in stayers)
+            merge += sum(_pair(world, frequency, morpheme, other, group_id) for other in stayers)
         for index, first in enumerate(movers):
             for second in movers[index + 1 :]:
                 if vocabulary.forms[first] != vocabulary.forms[second]:
-                    merge += _pair(world, frequency, first, second)
+                    merge += _pair(world, frequency, first, second, group_id)
 
     short = sum(
         frequency[morpheme] for morpheme, form in affected.items()

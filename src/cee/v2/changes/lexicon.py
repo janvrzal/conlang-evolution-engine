@@ -4,6 +4,7 @@ Nové slovo pro pojem má vždy doložitelný původ:
 
 - **posun významu**: slovo jiného pojmu se začne užívat i pro tento
   (*tongue → language*); dokladem jsou posuny a kolexifikace v grafu pojmů,
+- **konverze**: totéž přes hranici slovního druhu (M4),
 - **odvození**: kořen příbuzného pojmu + odvozovací přípona,
 - **složenina**: dva kořeny podle receptu (*sky + water → rain*),
 - **opis za tabu**: náhrada tabuizovaného slova příbuzným výrazem,
@@ -17,6 +18,7 @@ O tom, které nové slovo se prosadí, rozhodují lexikální tlaky
 
 from __future__ import annotations
 
+import math
 from abc import abstractmethod
 from typing import Mapping, Sequence, cast
 
@@ -240,6 +242,33 @@ class SemanticShift(SemanticChange):
         return Variant(shared, variant.variable, variant.payload, variant.origin)
 
 
+class Conversion(SemanticChange):
+    """Slovo přejde do jiného slovního druhu beze změny tvaru (*a run → to run*).
+
+    Posun významu mezi slovesem a jménem by jinak potřeboval odvození;
+    konverze vezme tvar kořene a dá mu třídu cílového pojmu.
+    """
+
+    kind = "conversion"
+    base_rate = 1.5e-4
+
+    def options(self, context, concept):
+        assert context.world.semantics is not None
+        found = []
+        for relation in context.world.semantics.into(concept):
+            source = dominant_root(context, relation.source)
+            if source is None or _compatible(context, relation.source, concept):
+                continue
+            if relation.polysemy >= 1:
+                found.append((math.log1p(relation.polysemy), {"root": source, "from": relation.source}))
+        return found
+
+    def build(self, context, site, option, parts, rng):
+        form = context.world.form_of(context.code, str(option["root"]))
+        morpheme = _new_root(context, site, form, self.kind, parts, sources=(str(option["from"]),))
+        return {"morpheme": morpheme, "origin": "conversion", "from": [option["from"]]}
+
+
 class Derivation(SemanticChange):
     """Kořen příbuzného pojmu + odvozovací přípona (*péct → pekař*)."""
 
@@ -381,6 +410,6 @@ class BackFormation(SemanticChange):
 
 
 LEXICAL_CHANGES: tuple[Change, ...] = (
-    LexicalCoinage(), SemanticShift(), Derivation(), Compounding(), TabooReplacement(),
-    Contamination(), BackFormation(),
+    LexicalCoinage(), SemanticShift(), Conversion(), Derivation(), Compounding(),
+    TabooReplacement(), Contamination(), BackFormation(),
 )
