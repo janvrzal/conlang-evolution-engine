@@ -18,15 +18,18 @@ from cee.v2.world import World
 FloatArray = npt.NDArray[np.float64]
 
 
-def distance_matrix(world: World, chunk: int = 4_000_000) -> FloatArray:
+def distance_matrix(
+    world: World, chunk: int = 4_000_000, kinds: Sequence[str] = ("lexical",)
+) -> FloatArray:
     """Průměrná variační vzdálenost hlavních kódů přes všechny proměnné.
 
     Pro jednu proměnnou je vzdálenost ½ Σ |p − q|: 0 pro shodné rozdělení,
     1 pro zcela odlišné varianty. Proměnné, které jsou všude stejné, by
     přispěly nulou, proto se počítá jen nad živými proměnnými. Průměr se bere
     přes všechny lexikální proměnné, aby vzdálenost nezávisela na tom, kolik
-    jich je zrovna živých. Zvukové procesy se zatím nezapočítávají: mrtvé
-    inovace by vzdálenost ředily (srovnání tvarů kognátů přijde v M6). Výpočet běží po blocích proměnných, aby
+    jich je zrovna živých. Zvukové procesy se nezapočítávají: mrtvé inovace
+    by vzdálenost ředily a jejich výsledek zachycuje srovnání tvarů
+    (:func:`cognate_matrix`). Výpočet běží po blocích proměnných, aby
     paměť nerostla se čtvercem počtu skupin krát počet proměnných.
     """
     live = world.live
@@ -36,7 +39,7 @@ def distance_matrix(world: World, chunk: int = 4_000_000) -> FloatArray:
                if variable.kind == "lexical"]
     for pool in live.iter_blocks():
         rows = [row for row, variable_id in enumerate(pool.variable_ids)
-                if world.variables[variable_id].kind == "lexical"]
+                if world.variables[variable_id].kind in kinds]
         if not rows:
             continue
         # float32 stačí: vzdálenost slouží ke shlukování, ne k dalšímu výpočtu.
@@ -47,6 +50,86 @@ def distance_matrix(world: World, chunk: int = 4_000_000) -> FloatArray:
             total += 0.5 * np.abs(part[:, :, None, :] - part[:, None, :, :]).sum(axis=(0, 3))
     result: FloatArray = total / max(1, len(lexical))
     return result
+
+
+#: Kolik váží rozdíl tvaru příbuzného slova proti rozdílu slova samého.
+FORM_WEIGHT = 1.0
+#: Záměna hlásky stojí podíl odlišných rysů, nejvýš 1; odlišných rysů je u
+#: běžných záměn (znělost, místo) jen pár, proto se dělí tímto počtem.
+FEATURE_SCALE = 6.0
+
+
+def segment_cost(world: World, first: int, second: int) -> float:
+    """Cena záměny dvou hlásek podle počtu odlišných rysů (PanPhon)."""
+    if first == second:
+        return 0.0
+    assert world.table is not None
+    vectors = world.table.vectors
+    return min(1.0, float((vectors[first] != vectors[second]).sum()) / FEATURE_SCALE)
+
+
+def form_distance(world: World, first: tuple[int, ...], second: tuple[int, ...]) -> float:
+    """Normalizovaná editační vzdálenost dvou tvarů (0 shodné, 1 zcela jiné)."""
+    if first == second:
+        return 0.0
+    if not first or not second:
+        return 1.0
+    previous = [float(index) for index in range(len(second) + 1)]
+    for row, a in enumerate(first, 1):
+        current = [float(row)]
+        for column, b in enumerate(second, 1):
+            current.append(min(
+                previous[column] + 1.0, current[column - 1] + 1.0,
+                previous[column - 1] + segment_cost(world, a, b),
+            ))
+        previous = current
+    return min(1.0, previous[-1] / max(len(first), len(second)))
+
+
+def cognate_matrix(world: World, group_ids: Sequence[str]) -> FloatArray:
+    """Součet rozdílů tvarů příbuzných slov přes pojmy (jen převládající slova).
+
+    Pojem, pro který mají dvě skupiny stejné převládající slovo (tentýž
+    morfém), přispěje vzdáleností jejich dnešních tvarů. Rozdíl slova samého
+    počítá :func:`distance_matrix`. Tvary se porovnávají jen mezi různými
+    podobami téhož slova, kterých je v jednom pojmu málo.
+    """
+    total = np.zeros((len(group_ids), len(group_ids)))
+    if world.table is None:
+        return total
+    codes = [world.groups[group_id].main_code for group_id in group_ids]
+    concepts = sorted({concept for code in codes for concept in code.phonology.dominant})
+    cache: dict[tuple[tuple[int, ...], tuple[int, ...]], float] = {}
+    for concept in concepts:
+        by_root: dict[str, dict[tuple[int, ...], list[int]]] = {}
+        for index, code in enumerate(codes):
+            root = code.phonology.dominant.get(concept)
+            if root is not None:
+                by_root.setdefault(root, {}).setdefault(world.form_of(code, root), []).append(index)
+        for shapes in by_root.values():
+            forms = sorted(shapes)
+            for position, first in enumerate(forms):
+                for second in forms[position + 1 :]:
+                    key = (first, second)
+                    if key not in cache:
+                        cache[key] = form_distance(world, first, second)
+                    a, b = np.array(shapes[first]), np.array(shapes[second])
+                    total[np.ix_(a, b)] += cache[key]
+                    total[np.ix_(b, a)] += cache[key]
+    return total
+
+
+def code_distances(world: World) -> FloatArray:
+    """Vzdálenost kódů pro pozorování: slova, tvary příbuzných slov, konstrukce.
+
+    Vše se dělí počtem lexikálních proměnných, takže svět bez hláskových
+    tvarů (M1) má stejnou vzdálenost jako :func:`distance_matrix`.
+    """
+    lexical = sum(variable.kind == "lexical" for variable in world.variables.values())
+    distances = distance_matrix(world, kinds=("lexical", "construction"))
+    if world.table is not None:
+        distances = distances + FORM_WEIGHT * cognate_matrix(world, world.live.group_ids) / max(1, lexical)
+    return distances
 
 
 def average_linkage(distances: FloatArray, threshold: float) -> list[list[int]]:
@@ -139,6 +222,27 @@ class LineageTracker:
         return {lineage: tuple(sorted(members)) for lineage, members in sorted(assigned.items())}, events
 
 
+#: Hystereze rozpoznání jazyků jako podíl prahu: dvojice, která byla jedním
+#: jazykem, se rozdělí až nad prahem + rezerva, oddělená se spojí až pod
+#: prahem − rezerva. Bez ní strom kmitá, když se vzdálenost drží u prahu.
+HYSTERESIS = 0.1
+
+
+def _with_hysteresis(
+    distances: FloatArray, group_ids: Sequence[str], tracker: LineageTracker, margin: float
+) -> FloatArray:
+    if not tracker.lineages or margin == 0:
+        return distances
+    member_of = {group: lineage for lineage, members in tracker.lineages.items() for group in members}
+    labels = [member_of.get(group_id) for group_id in group_ids]
+    known = np.array([label is not None for label in labels])
+    same = np.array([[a is not None and a == b for b in labels] for a in labels])
+    shift = np.where(same, -margin, np.where(known[:, None] & known[None, :], margin, 0.0))
+    adjusted: FloatArray = np.maximum(0.0, distances + shift)
+    np.fill_diagonal(adjusted, 0.0)
+    return adjusted
+
+
 def observe(
     world: World,
     tick: int,
@@ -153,7 +257,7 @@ def observe(
     spoken = [index for index, group_id in enumerate(world.live.group_ids)
               if not world.groups[group_id].written and world.groups[group_id].domain == "home"]
     group_ids = [world.live.group_ids[index] for index in spoken]
-    distances = distance_matrix(world)
+    distances = code_distances(world)
     if len(spoken) != len(world.live.group_ids):
         distances = distances[np.ix_(spoken, spoken)]
     dialects = tuple(
@@ -162,7 +266,10 @@ def observe(
     )
     language_clusters = [
         [group_ids[index] for index in cluster]
-        for cluster in average_linkage(distances, language_threshold)
+        for cluster in average_linkage(
+            _with_hysteresis(distances, group_ids, tracker, HYSTERESIS * language_threshold),
+            language_threshold,
+        )
     ]
     languages, events = tracker.update(language_clusters, tick)
     return (

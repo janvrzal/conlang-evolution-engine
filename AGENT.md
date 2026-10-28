@@ -45,6 +45,10 @@ Pravidla v2, která se snadno poruší:
 * **Gramatické funkce jsou data.** Minulý čas, člen, pád, zápor apod. jsou
   řádky `cee/data/v2_grammar.yaml`; jazyk je má podle profilu protojazyka.
   Do kódu změn a tlaků nepiš jména konkrétních funkcí, čti katalog.
+* **Testy v2**: rychlá sada `pytest -m "not slow"` (asi 17 s); brány
+  milníků (`*_gate.py`) jsou `slow` a celá sada trvá asi 8 minut. Optimalizace
+  nesmí změnit výsledek: ověř otisk logu (`History.digest`) proti předchozímu
+  commitu.
 * **Kalibrační konstanty** mají ve specifikaci zdůvodnění a naměřené
   hodnoty; při změně je přeměř a aktualizuj oddíl „Stav Mx“.
 

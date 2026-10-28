@@ -196,8 +196,7 @@ class World:
         výchozí stav) platí statická frekvence morfému.
         """
         morpheme = self.morphemes[morpheme_id]
-        lexeme = morpheme.lexeme_id
-        concepts = [concept for concept, root in code.phonology.dominant.items() if root == lexeme]
+        concepts = _concepts_by_root(code).get(morpheme.lexeme_id)
         if not concepts:
             return morpheme.frequency
         total = min(1.0, sum(self.concept_frequency(concept) for concept in concepts))
@@ -391,6 +390,19 @@ class World:
             self.variants[variant.id] = variant
             repertoire.set(variable.id, Distribution.fixed(variant.id))
         return repertoire.freeze()
+
+
+def _concepts_by_root(code: Code) -> dict[str, list[str]]:
+    """Kořen → pojmy, pro které je dominantní (v pořadí slovníku kódu)."""
+    state = code.phonology
+    cached = state.cache.get("concepts-by-root")
+    if cached is not None and cached[0] == state.version:
+        return cached[1]  # type: ignore[return-value]
+    index: dict[str, list[str]] = {}
+    for concept, root in state.dominant.items():
+        index.setdefault(root, []).append(concept)
+    state.cache["concepts-by-root"] = (state.version, index)
+    return index
 
 
 def _choose(options: Sequence[tuple[str, float]], key: str) -> str:

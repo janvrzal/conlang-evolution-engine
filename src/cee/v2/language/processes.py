@@ -9,6 +9,7 @@ teprve potom se změní najednou, takže změna nemůže živit sama sebe.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Literal
 
 from cee.v2.language.segments import Form, Pattern, SegmentTable
@@ -31,6 +32,12 @@ def stressed_nucleus(form: Form, table: SegmentTable, rule: StressRule) -> int |
     if rule == "final":
         return found[-1]
     return found[-2] if len(found) >= 2 else found[0]
+
+
+_MISSING = object()
+#: Paměť aplikací procesů; při zaplnění se vyprázdní (výsledek se nemění).
+_APPLIED: dict[tuple[object, ...], object] = {}
+_APPLIED_LIMIT = 1 << 18
 
 
 @dataclass(frozen=True)
@@ -57,7 +64,7 @@ class Process:
     #: Čitelný popis pro audit.
     label: str = field(default="", compare=False)
 
-    @property
+    @cached_property
     def key(self) -> str:
         """Kanonický klíč: stejná změna ve dvou skupinách je tatáž proměnná."""
         parts = [
@@ -106,6 +113,22 @@ class Process:
         return None if result is None else result[0]
 
     def apply_tracked(
+        self, form: Form, table: SegmentTable, rule: StressRule, boundary: int | None
+    ) -> tuple[Form, int | None] | None:
+        """Totéž co :meth:`_apply`, ale zapamatované: proces je čistá funkce tvaru.
+
+        Stejné tvary se opakují napříč skupinami i kroky, takže paměť ušetří
+        většinu výpočtu. Výsledek je bitově stejný.
+        """
+        key = (self.key, form, rule, boundary, id(table))
+        found = _APPLIED.get(key, _MISSING)
+        if found is _MISSING:
+            if len(_APPLIED) >= _APPLIED_LIMIT:
+                _APPLIED.clear()
+            found = _APPLIED[key] = self._apply(form, table, rule, boundary)
+        return found  # type: ignore[return-value]
+
+    def _apply(
         self, form: Form, table: SegmentTable, rule: StressRule, boundary: int | None
     ) -> tuple[Form, int | None] | None:
         """Nový tvar, nebo ``None``, když se nic nezmění či by slovo zaniklo.

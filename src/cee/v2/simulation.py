@@ -292,6 +292,7 @@ class Simulation:
                 code.phonology.dominant[variable.key] = morpheme
                 code.phonology.uses[morpheme] = code.phonology.uses.get(morpheme, 0) + 1
                 code.phonology.vocabulary.update(morphology.units_of(self.world, code, morpheme))
+                code.phonology.version += 1
 
     def _follow_vocabulary(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
         """Slovo, které se stane dominantním, vstoupí do fonologie kódu."""

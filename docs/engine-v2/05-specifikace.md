@@ -55,7 +55,8 @@ src/cee/v2/
   contact.py          filtry přenositelnosti, adaptace výpůjček, přechod jazyka
   institutions.py     psaný kód, kanály čtení a školy
   events.py           WorldEvent a jeho podtřídy
-  observe.py          vzdálenosti, shluky, linie jazyků
+  observe.py          vzdálenosti (slova, tvary příbuzných slov, konstrukce), shluky, linie jazyků
+  export.py           export běhu pro UI (JSON)
   history.py          log událostí, snímky
   rng.py              deterministické generátory
   simulation.py       hlavní smyčka
@@ -371,7 +372,7 @@ Každý milník je svislý řez: musí splnit svou bránu, než začne další.
 | **M5 kontakt** | kódy, L1/L2, interference, výpůjčky, přechod | S2, S3, metrika 11 |
 | **M6a instituce** | písmo jako zmrazený psaný kód, gramotnost, škola, tisk, tlak `Norma` | S4 |
 | **M6b společnost** | události (migrace, dobytí, válka, epidemie, kolaps, obchod, náboženská změna), podíl L2 z migrace, domény a vitalita jazyka (stabilní dvojjazyčnost, přechod elity a superstrát, Fergusonova diglosie) | metrika 9 (sublineární), stabilní dvojjazyčnost, superstrát, diglosie, liturgické výpůjčky |
-| **M6c linie a export** | vzdálenost i podle tvarů kognátů, emergentní strom jazyků, export pro UI, výkon větších režimů | stabilní emergentní strom, výkonový rozpočet |
+| **M6c linie a export** | vzdálenost i podle tvarů kognátů, emergentní strom jazyků, export pro UI, změření výkonu | stabilní emergentní strom se známou historií |
 | **M7 kalibrace** | hledání vah a konstant proti metrikám | S5, metriky 1, 2, 10 |
 
 ### Stav M1 (2026-10-28)
@@ -842,6 +843,44 @@ Naměřeno (seedy 1 a 2, není-li uvedeno jinak):
   0,49–0,86, na hranici 0,23–0,42, v jádru většinového jazyka 0,01–0,03; práh
   brány M5 je proto 0,4.
 
+### Stav M6c (2026-10-28)
+
+Splněno, testy v `tests/v2/test_v2_m6c_gate.py` a `test_v2_observe.py`.
+
+- **Vzdálenost kódů** (`observe.code_distances`): variační vzdálenost slov
+  a konstrukcí plus **tvary příbuzných slov**. U pojmu, kde mají oba kódy
+  stejné převládající slovo, se přičte normalizovaná editační vzdálenost
+  dnešních tvarů; záměna hlásky stojí podíl odlišných rysů PanPhonu (šest
+  rysů = plná cena), takže *t → d* je levnější než *t → a*. Vše se dělí
+  počtem lexikálních proměnných, svět bez tvarů (M1) má vzdálenost beze
+  změny. Zvukové procesy se nepočítají zvlášť; jejich výsledek je v tvarech.
+- **Hystereze jazyků**: dvojice skupin, která byla jedním jazykem, se
+  rozdělí až nad prahem + 10 %, oddělená se spojí až pod prahem − 10 %. V
+  kontinuu 5×5 vesnic (3 000 let, seedy 2 a 3) klesl počet zpětných
+  sloučení z 10–11 na 0–1 a rozštěpení z 33–35 na 19–23.
+- **Strom jazyků** se známou historií (`known_tree`: řada devíti vesnic, C
+  oddělena hranicí v roce 300, A a B v roce 1800): ve třech seedech vždy
+  vyjde ((A, B), C), C se oddělí 1 600–2 000 let po hranici a B od A 1 000–1 700
+  let po druhé hranici, právě dvě rozštěpení a žádný zánik linie. Do
+  jazykového prahu 0,25 trvá oddělení zhruba tolik, kolik odpovídá asi 70 %
+  sdílené základní slovní zásoby.
+- **Export pro UI** (`export.export`, `write_json`, formát `cee-v2/1`): území,
+  skupiny (poloha, populace, jazyková linie kódu i pozorovaný jazyk, podíl
+  L2, gramotnost, škola, liturgie), vazby, snímky dialektů a jazyků, strom
+  linií (rodič, začátek, konec, skupiny), dnešní slova každé skupiny (tvar
+  IPA, lexém, jazyk původu, výpůjčka, původ: zděděné, posun, odvozenina,
+  složenina, gramatikalizace…), gramatika skupin a události pro časovou osu.
+- **Rozdělení testů**: brány milníků (`*_gate.py`) mají značku `slow`.
+  Rychlá sada `pytest -m "not slow"` trvá asi 17 s, celá sada asi 8 minut.
+- **Výkon** (bez změny výsledků, ověřeno otisky logu): zapamatovaná
+  aplikace zvukových procesů, index kořen → pojmy pro frekvenci užití a
+  index odvozenin pro zpětné tvoření zrychlily plný model asi o 27 %.
+  Rozpočet ale plný model nesplňuje: údolí (50 skupin, 2 000 let) 67 s proti
+  rozpočtu 5 s, region odhadem 280 s proti 60 s (100 skupin za 1 000 let:
+  47 s). Svět jen se slovy (M1) zvládne údolí za 1,6 s. Profil je teď
+  plochý (miliony drobných operací nad tvary slov); další řádové zrychlení
+  potřebuje jiné uložení tvarů nebo paralelní běh nezávislých oblastí.
+
 ## Známé mezery a kam patří
 
 Sepsáno 2026-10-28 při revizi plánu po M3.
@@ -851,8 +890,8 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | Přízvuk jako proměnná (změna pravidla přízvuku), délka a kompenzační prodloužení, tónová perturbace → tonogeneze | doplněk M2 (po M3b) |
 | Sporadické změny: metateze, disimilace, nepravidelné zkracování velmi častých slov | doplněk M2 |
 | ~~Frekvence užití se nevyvíjí~~ | vyřešeno v M3b |
-| Rodokmen slova: log nese jen počty přepsaných slov, ne historii jednotlivého slova | před napojením UI |
-| Spuštění enginu mimo testy: CLI, API, převod projektu z UI na svět v2 | před napojením UI (dřív než M6) |
+| ~~Rodokmen slova (původ)~~ | původ slova je v exportu (M6c); historie tvarů viz níže |
+| Spuštění enginu mimo testy: CLI, API, převod projektu z UI na svět v2 (export do JSON už je) | před napojením UI |
 | ~~`AGENT.md` a `CURRENT_STATE.md` engine v2 nezmiňují~~ | vyřešeno po M3b |
 | ~~Konverze mezi slovními druhy~~ | vyřešeno v M4 |
 | ~~Exaptace a jazyky bez některých kategorií~~ | vyřešeno v M4b |
@@ -871,7 +910,9 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | Učené výpůjčky se vracejí jako stará slova s dnešní výslovností; skutečné učené dublety (*fragile* vedle *frêle*) mají tvar psaného kódu | M6c nebo později |
 | Pravopisná výslovnost a revize pravopisu: psané tvary slov se nemění ani s tiskem | později |
 | CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |
-| Výkon režimů region a výš s fonologií a morfologií neměřen | M6 (výkonová brána) |
+| Výkon plného modelu je 5–13× nad rozpočtem (údolí 67 s místo 5 s, region odhadem 280 s místo 60 s); profil je plochý | samostatný výkonový milník: sloupcové uložení tvarů, paralelní běh propojených komponent, případně Numba |
+| Sousední vesnice se v plném modelu liší příliš (kontinuum 5×5, 3 000 let: sousedé 0,29, nejvzdálenější 0,38; v nářečních atlasech sousedé asi 0,05–0,15). Prahy dialektu a jazyka proto dávají skoro každou vesnici jako jazyk. Místní mísení je slabé proti tempu změn | M7 (otevřenost, tempo změn, prahy dialektu a jazyka) |
+| Rodokmen slova: export nese původ dnešního slova, ne historii jeho tvarů | později (snímky tvarů v exportu) |
 
 ## Co převzít z legacy
 

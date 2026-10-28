@@ -7,6 +7,7 @@ from typing import Mapping, Sequence
 
 from cee.data.core_vocabulary import CORE_EXTENSION, SWADESH_CORE
 from cee.v2.events import (
+    Border,
     Codification,
     Conquest,
     Contact,
@@ -445,5 +446,26 @@ def conversion(seed: int = 1, *, year: float = 500.0, devotion: float = 0.3) -> 
     events: list[WorldEvent] = [
         Codification(100.0, "r0", ("r0",), 0.1),
         ReligiousChange(year, "written:r0", villages, devotion),
+    ]
+    return world, events
+
+
+def known_tree(seed: int = 1, *, first: float = 300.0, second: float = 1800.0) -> tuple[World, list[WorldEvent]]:
+    """Rozpad jazyka se známou historií pro ověření stromu jazyků.
+
+    Řada devíti vesnic jednoho protojazyka, rozdělená na skupinky A, B a C.
+    V roce ``first`` hranice oddělí C od ostatních, v roce ``second`` se
+    oddělí A a B. Strom jazyků má vyjít ((A, B), C).
+    """
+    places = tuple(
+        Place(f"{cluster}{index}", ((3 * position + index) * 10.0, 0.0))
+        for position, cluster in enumerate("abc")
+        for index in range(3)
+    )
+    world = contact_world([Language("proto", places)], seed=seed)
+    side = {cluster: tuple(f"{cluster}{index}" for index in range(3)) for cluster in "abc"}
+    events: list[WorldEvent] = [
+        Border(first, side["a"] + side["b"], side["c"], factor=0.0),
+        Border(second, side["a"], side["b"], factor=0.0),
     ]
     return world, events

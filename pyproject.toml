@@ -42,6 +42,9 @@ packages = ["src/cee"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: brány milníků enginu v2 (dlouhé simulace); rychlá sada: pytest -m \"not slow\"",
+]
 
 [tool.ruff]
 target-version = "py311"

@@ -392,11 +392,8 @@ class BackFormation(SemanticChange):
     def options(self, context, concept):
         world = context.world
         found = []
-        for other, root in sorted(context.code.phonology.dominant.items()):
-            morpheme = world.morphemes[root]
-            if other == concept or morpheme.etymology != "derivation" or morpheme.sources != (concept,):
-                continue
-            if dominant_root(context, concept) != morpheme.base:
+        for other, root in _derivations(context).get(concept, ()):
+            if other != concept and dominant_root(context, concept) != world.morphemes[root].base:
                 found.append((1.0, {"root": root, "from": other}))
         return found
 
@@ -408,6 +405,21 @@ class BackFormation(SemanticChange):
             return None
         return {"morpheme": _new_root(context, site, form[: -len(suffix)], self.kind, parts),
                 "origin": "back_formation", "from": [option["from"]]}
+
+
+def _derivations(context: InnovationContext) -> dict[str, list[tuple[str, str]]]:
+    """Základní pojem → (pojem, kořen) odvozenin z něj, seřazeno podle pojmu."""
+    state = context.code.phonology
+    cached = state.cache.get("derivations")
+    if cached is not None and cached[0] == state.version:
+        return cast(dict[str, list[tuple[str, str]]], cached[1])
+    index: dict[str, list[tuple[str, str]]] = {}
+    for other, root in sorted(state.dominant.items()):
+        morpheme = context.world.morphemes[root]
+        if morpheme.etymology == "derivation" and len(morpheme.sources) == 1:
+            index.setdefault(morpheme.sources[0], []).append((other, root))
+    state.cache["derivations"] = (state.version, index)
+    return index
 
 
 LEXICAL_CHANGES: tuple[Change, ...] = (
