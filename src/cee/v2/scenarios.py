@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from cee.data.core_vocabulary import CORE_EXTENSION, SWADESH_CORE
+from cee.v2.language.protoforms import protolanguage
 from cee.v2.world import Code, SpeechGroup, Territory, World, gravity_links
 
 DEFAULT_CONCEPTS: tuple[str, ...] = tuple(dict.fromkeys((*SWADESH_CORE, *CORE_EXTENSION)))
@@ -25,12 +26,14 @@ def village_grid(
     generation_years: float = 25.0,
     openness: float = 0.1,
     link_reach: float = 2.0,
+    phonology: bool = False,
 ) -> World:
     """Mřížka stejných vesnic s gravitačními vazbami na nejbližší sousedy.
 
     S jedním řádkem je to scénář S1 (dialektové kontinuum). Vazby sahají jen
     do ``link_reach`` násobku rozestupu, takže vzdálené vesnice spolu mluví
-    jen přes prostředníky.
+    jen přes prostředníky. S ``phonology`` dostanou slova hláskové tvary
+    vygenerovaného protojazyka (M2).
     """
     world = World(seed=seed)
     world.add_territory(Territory("world", "world"))
@@ -38,7 +41,11 @@ def village_grid(
         Territory("valley", "area", parent="world",
                   position=((columns - 1) * spacing / 2, (rows - 1) * spacing / 2))
     )
-    base = world.seed_lexicon(concepts)
+    if phonology:
+        forms, frequencies = protolanguage(concepts, seed=seed)
+        base = world.seed_lexicon(concepts, forms, frequencies)
+    else:
+        base = world.seed_lexicon(concepts)
     for row in range(rows):
         for column in range(columns):
             village = f"v{row:02d}-{column:02d}"

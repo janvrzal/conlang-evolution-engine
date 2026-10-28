@@ -187,6 +187,7 @@ def transmit(
             freqs=current[rows],
             slots=[block.slots[row] for row in rows],
             tick=inputs.tick,
+            heard=heard[rows],
         )
         for pressure, strength in weighted:
             fitness[rows] += strength * pressure.scores(batch)

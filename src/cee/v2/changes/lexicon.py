@@ -7,6 +7,8 @@ from typing import Sequence
 import numpy as np
 
 from cee.v2.changes.base import Change, InnovationContext
+from cee.v2.language.lexicon import Morpheme
+from cee.v2.language.protoforms import coin
 from cee.v2.pressures import Appeal, Conformity
 from cee.v2.repertoire import Origin, Variant
 from cee.v2.rng import stable_id
@@ -36,6 +38,34 @@ class LexicalCoinage(Change):
     appeal_mean = -0.05
     appeal_sd = 0.15
 
+    def _coin(
+        self, context: InnovationContext, site: str, rng: np.random.Generator, parts: tuple
+    ) -> str | None:
+        """Morfém nového slova složený podle fonotaktiky jazyka (M2)."""
+        world, code = context.world, context.code
+        assert world.table is not None
+        vocabulary = {
+            morpheme: world.form_of(code, morpheme) for morpheme in code.phonology.vocabulary
+        }
+        form = coin(world.table, vocabulary, rng, set(vocabulary.values()))
+        if form is None:
+            return None
+        concept = site.split(":", 1)[1]
+        incumbent = [
+            world.morphemes[morpheme].frequency for morpheme in sorted(code.phonology.vocabulary)
+            if world.morphemes[morpheme].meaning == concept
+        ]
+        morpheme = Morpheme(
+            id=stable_id("morpheme", self.kind, *parts),
+            meaning=concept,
+            form=form,
+            frequency=incumbent[0] if incumbent else 0.3,
+            origin_group=context.group.id,
+            origin_tick=context.tick,
+        )
+        world.morphemes[morpheme.id] = morpheme
+        return morpheme.id
+
     def sites(self, context: InnovationContext) -> Sequence[str]:
         return context.code.repertoire.variable_ids_of("lexical")
 
@@ -43,13 +73,20 @@ class LexicalCoinage(Change):
         self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
     ) -> Variant | None:
         parts = (context.group.id, context.code.id, site, context.tick, index)
+        payload: dict[str, object] = {
+            "lexeme": stable_id("lexeme", self.kind, *parts),
+            "appeal": float(rng.normal(self.appeal_mean, self.appeal_sd)),
+        }
+        world = context.world
+        if world.table is not None:
+            morpheme = self._coin(context, site, rng, parts)
+            if morpheme is None:
+                return None
+            payload["morpheme"] = morpheme
         return Variant(
             id=stable_id("variant", self.kind, *parts),
             variable=site,
-            payload={
-                "lexeme": stable_id("lexeme", self.kind, *parts),
-                "appeal": float(rng.normal(self.appeal_mean, self.appeal_sd)),
-            },
+            payload=payload,
             origin=Origin(
                 change=self.kind,
                 tick=context.tick,

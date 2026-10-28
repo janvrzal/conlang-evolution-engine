@@ -202,16 +202,21 @@ class LivePools:
         """Nová varianta v jedné skupině s podílem ``share``, bez trendu."""
         block = self.blocks[self._block_of[variable_id]]
         row = block.row_of(variable_id)
-        if None not in block.slots[row]:
+        # Stejnou variantu už může mít jiná skupina (paralelní inovace téže
+        # zvukové změny); pak sdílí její slot, jinak dostane volný.
+        if variant_id not in block.slots[row] and None not in block.slots[row]:
             self._move(variable_id, block.capacity * 2)
             block = self.blocks[self._block_of[variable_id]]
             row = block.row_of(variable_id)
-        slot = block.slots[row].index(None)
+        if variant_id in block.slots[row]:
+            slot = block.slots[row].index(variant_id)
+        else:
+            slot = block.slots[row].index(None)
+            block.slots[row][slot] = variant_id
+            block.slot_keys[row, slot] = self._key(variant_id)
         column = self.group_index[group_id]
-        block.slots[row][slot] = variant_id
-        block.slot_keys[row, slot] = self._key(variant_id)
         block.freqs[row, column] *= 1.0 - share
-        block.freqs[row, column, slot] = share
+        block.freqs[row, column, slot] += share
         block.previous[row, column] = block.freqs[row, column]
 
     def release(self) -> list[tuple[str, list[Distribution | None]]]:
@@ -267,9 +272,7 @@ class LivePools:
         self.group_index = {group_id: index for index, group_id in enumerate(group_ids)}
         self.blocks, self._block_of = {}, {}
         for variable_id in variable_ids:
-            self.load(variable_id, [
-                world.groups[group_id].main_code.repertoire.get(variable_id) for group_id in group_ids
-            ])
+            self.load(variable_id, [world.stored(group_id, variable_id) for group_id in group_ids])
 
     # --- pomocné ------------------------------------------------------
 

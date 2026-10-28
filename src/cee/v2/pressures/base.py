@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Sequence
 
 import numpy as np
@@ -31,6 +31,10 @@ class PressureBatch:
     freqs: FloatArray
     slots: Sequence[Sequence[str | None]]
     tick: int
+    #: Co skupiny slyší od sebe i sousedů (stejný tvar jako ``freqs``).
+    heard: FloatArray
+    #: Mezivýsledky sdílené tlaky v rámci jednoho kroku.
+    memo: dict[Any, Any] = field(default_factory=dict)
 
     def slot_values(self, value: Callable[[Variant], float], empty: float = 0.0) -> FloatArray:
         """Vlastnost varianty v každém slotu, tvar (proměnné, 1, sloty)."""

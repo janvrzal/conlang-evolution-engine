@@ -7,16 +7,19 @@ from typing import Any, Sequence
 
 import numpy as np
 
+from cee.v2 import phonology
 from cee.v2.changes import DEFAULT_CHANGES, Change, InnovationContext, pressures_by_kind
 from cee.v2.events import WorldEvent
 from cee.v2.history import History
 from cee.v2.observe import LineageTracker, Snapshot, observe
 from cee.v2.pools import PoolBlock
+from cee.v2.repertoire import Distribution
 from cee.v2.rng import generator
 from cee.v2.transmission import TransmissionParams, prepare, transmit
 from cee.v2.world import World
 
 _MILESTONES = (0.1, 0.5, 0.9)
+_EMPTY = Distribution((), np.zeros(0))
 
 
 @dataclass(frozen=True)
@@ -77,8 +80,10 @@ class Simulation:
         self.history = History()
         self.tick = 0
         self.tracker = LineageTracker()
-        self._total_variables = len(world.variables)
         world.live.sync_groups(world)
+        if world.table is not None:
+            for group_id in world.group_ids():
+                self._seed_vocabulary(group_id)
 
     @property
     def year(self) -> float:
@@ -147,11 +152,12 @@ class Simulation:
             if site in live:
                 if not live.holds(context.group.id, site):
                     continue
-            elif context.code.repertoire.get(site) is None:
+            elif self.world.stored(context.group.id, site) is None:
                 continue
             else:
-                live.load(site, [self.world.groups[group_id].main_code.repertoire.get(site)
-                                 for group_id in live.group_ids])
+                live.load(site, [self.world.stored(group_id, site) for group_id in live.group_ids])
+            if variant.id in (self.world.distribution(context.group.id, site) or _EMPTY).variants:
+                continue  # tutéž změnu už skupina má (paralelní inovace jinde)
             self.world.variants[variant.id] = variant
             live.innovate(site, context.group.id, variant.id, self.config.p0)
             self.history.record(
@@ -174,6 +180,9 @@ class Simulation:
             records.extend(self._changes(block, block.freqs, updated))
             if self.config.record_trajectories:
                 self._trace(block, block.freqs, updated)
+            if self.world.table is not None:
+                self._follow_vocabulary(block, block.freqs, updated)
+                self._activate_processes(block, updated)
             block.freqs, block.previous = updated, baseline
         # Kanonické pořadí nezávisí na tom, ve kterém bloku proměnná leží.
         for kind, payload in sorted(records, key=lambda item: (item[0], sorted(item[1].items()))):
@@ -182,6 +191,12 @@ class Simulation:
             for group_id, distribution in zip(live.group_ids, distributions):
                 if distribution is not None:
                     self.world.groups[group_id].main_code.repertoire.set(variable_id, distribution)
+        if self.world.table is not None:
+            for group_id in live.group_ids:
+                if self.world.groups[group_id].main_code.phonology.pending:
+                    phonology.restructure(
+                        self.world, group_id, self.tick, self.config.dt, self.history, year
+                    )
 
     def _changes(
         self, block: PoolBlock, before: np.ndarray, after: np.ndarray
@@ -212,6 +227,56 @@ class Simulation:
             records.append(("extinct", describe(row, slot)))
         return records
 
+    def _seed_vocabulary(self, group_id: str) -> None:
+        code = self.world.groups[group_id].main_code
+        if code.phonology.vocabulary:
+            return
+        for variable_id, variable in sorted(self.world.variables.items()):
+            if variable.kind != "lexical":
+                continue
+            distribution = self.world.distribution(group_id, variable_id)
+            if distribution is None:
+                continue
+            morpheme = self.world.variants[distribution.dominant()[0]].payload.get("morpheme")
+            if isinstance(morpheme, str):
+                code.phonology.vocabulary.add(morpheme)
+
+    def _follow_vocabulary(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
+        """Slovo, které se stane dominantním, vstoupí do fonologie kódu."""
+        variants = self.world.variants
+        group_ids = self.world.live.group_ids
+        lexical = np.array(
+            [self.world.variables[variable_id].kind == "lexical" for variable_id in block.variable_ids],
+            dtype=bool,
+        )[:, None, None]
+        for direction, mask in (
+            ("enter", (before < 0.5) & (after >= 0.5) & lexical),
+            ("leave", (before >= 0.5) & (after < 0.5) & lexical),
+        ):
+            for row, column, slot in zip(*np.nonzero(mask)):
+                variant = block.slots[row][slot]
+                morpheme = variants[variant].payload.get("morpheme") if variant else None
+                if not isinstance(morpheme, str):
+                    continue
+                code = self.world.groups[group_ids[column]].main_code
+                if direction == "enter":
+                    phonology.enter_vocabulary(self.world, code, morpheme)
+                else:
+                    phonology.leave_vocabulary(code, morpheme)
+
+    def _activate_processes(self, block: PoolBlock, after: np.ndarray) -> None:
+        """Proces, který ve skupině překročil malý podíl, začne působit na slova."""
+        group_ids = self.world.live.group_ids
+        for row, variable_id in enumerate(block.variable_ids):
+            if variable_id not in self.world.processes:
+                continue
+            changed = phonology.changed_id(variable_id)
+            if changed not in block.slots[row]:
+                continue
+            slot = block.slots[row].index(changed)
+            for column in np.flatnonzero(after[row, :, slot] >= phonology.ACTIVATION_SHARE):
+                phonology.activate(self.world, self.world.groups[group_ids[column]].main_code, variable_id)
+
     def _trace(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
         variants = self.world.variants
         group_ids = self.world.live.group_ids
@@ -225,7 +290,7 @@ class Simulation:
 
     def _observe(self, year: float) -> None:
         snapshot, events = observe(
-            self.world, self.tick, year, self._total_variables, self.tracker,
+            self.world, self.tick, year, self.tracker,
             dialect_threshold=self.config.dialect_threshold,
             language_threshold=self.config.language_threshold,
         )

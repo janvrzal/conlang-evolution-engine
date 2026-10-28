@@ -28,11 +28,13 @@ Nový engine žije vedle legacy v `src/cee/v2/` a nesdílí s ním stav.
 src/cee/v2/
   world.py            World, Settlement, SpeechGroup, Link, Code
   repertoire.py       Variable, Variant, Distribution, Repertoire
+  pools.py            živé proměnné po sloupcích (LivePools)
   language/
-    segments.py       tabulka segmentů nad FeatureMapper (převzato)
-    morphemes.py      Morpheme, Allomorph
-    constructions.py  Construction, paradigmata
-    surface.py        výpočet povrchu + cache
+    segments.py       tabulka hlásek nad PanPhonem, přirozené třídy
+    processes.py      Process: jedna zvuková změna v jednom prostředí
+    lexicon.py        Morpheme, FormStore, PhonologyState
+    protoforms.py     protojazyk a nové kořeny podle fonotaktiky
+    constructions.py  Construction, paradigmata (M3)
   changes/
     base.py           Change (rodič)
     sound.py          rodiny A
@@ -45,7 +47,8 @@ src/cee/v2/
     linguistic.py     artikulace … expresivita
     social.py         učitelnost … tabu
   transmission.py     děti, dospělí, L2, inkrementace, drift, prahy
-  restructure.py      fonologizace, ustálení, zánik
+  phonology.py        procesní proměnné, fonologizace, uzavření, povrch
+  assessment.py       hodnocení procesu nad slovní zásobou (pro tlaky)
   events.py           WorldEvent a jeho podtřídy
   observe.py          vzdálenosti, shluky, linie jazyků
   history.py          log událostí, snímky
@@ -377,6 +380,52 @@ Splněno, testy v `tests/v2/test_v2_m1_gate.py`:
   notebooku.
 - Retence slovní zásoby v S1 vychází kolem 80 % za tisíciletí (metrika 1 se
   hodnotí až v M7).
+
+### Stav M2 (2026-10-28)
+
+Splněno, testy v `tests/v2/test_v2_m2_gate.py` a `test_v2_phonology.py`.
+Měřeno na kontinuu 10 vesnic, 3 seedy, 3 000 let:
+
+- Metrika 3: průměrná délka slova 4,5–4,6 hlásky po celou dobu.
+- Metrika 4: 22–26 souhlásek a 6–9 samohlásek (pásma WALS 1A/2A).
+- Metrika 5: homofonie nejvýš 2,7 % základní slovní zásoby.
+- Metrika 6: ustálené změny 63 % souhláskové a 37 % samohláskové proti
+  prioru 58 % / 33 % / 9 % (stavba slabiky); Hellingerova vzdálenost
+  0,22. Ustálí se 11 rodin. Jazyky z různých seedů sdílejí jen 37–45 %
+  ustálených změn.
+- Fonologizace: 5–8 % zasažených slov zůstane reliktní výjimkou; častá slova
+  vedou v redukčních změnách; dřívější změna připraví půdu pozdější.
+- Řetězový posun: posun do uvolněného místa nemá cenu funkční zátěže,
+  splynutí s obsazeným vokálem ano (test mechanismu, ne scénáře).
+- Zjemnění jedné oblasti nezmění ani zvukovou historii nepropojené oblasti.
+- Výkon: 10 vesnic × 150 pojmů × 3 000 let ≈ 4,7 s. Režim údolí bez
+  hláskových tvarů (brána M1) ≈ 4,9 s.
+
+Zpřesnění návrhu při implementaci:
+
+- **Životní cyklus změny** (`phonology.py`): proces začne působit na slova
+  od 5 % ve skupině; slovo si změnu zapíše při `p_slovo > 0,85`, kde
+  `p_slovo = σ(logit p + β·(2f − 1) + b)`, `β = 1` jen u redukčních změn a
+  sklon slova `b ~ N(0; 1,5)`. Po dvou generacích na 100 % se proces
+  uzavře: nové slovo jím už neprojde a nepřepsaná slova jsou relikty.
+- **Chronologii změn drží každý kód sám** (pořadí, ve kterém ho změny
+  zasáhly). Globální pořadí vzniku by svázalo nepropojené oblasti.
+- **Paralelní inovace** téže změny ve dvou skupinách je tatáž proměnná i
+  tatáž varianta a ve skladu sdílí slot.
+- **Výstup změny je vždy obyčejná hláska** (bez sekundární artikulace),
+  nejbližší k požadovaným rysům; jinak by z /o/ se zvýšeným jazykem vzniklo
+  /oˠ/, ne /u/.
+- **Tlak `Actuation`** (sociální ocenění změny podle skupiny a epochy, viz
+  iterace 3) doplněn: bez něj prošly všechny jazyky stejnými, typologicky
+  nejvýhodnějšími změnami (lenice všude).
+- **Úspora artikulace je jen mírná** (typicky 0,15). Silnější
+  deterministická výhoda převálcovala nahodilost spuštění.
+- Tlaky hodnotí změnu nad 120 nejčastějšími slovy kódu a hodnocení
+  drží 8 kroků; je to přibližné, ale cena nezávisí na velikosti slovníku.
+- Vzdálenost dialektů zatím jen z lexikálních proměnných; mrtvé zvukové
+  inovace by ji ředily. Srovnání tvarů kognátů přijde v M6.
+- Slovo převzaté od sousedů vstupuje ve výchozím tvaru; adaptace podle
+  tvaru u zdroje přijde s kontaktem v M5.
 
 ## Co převzít z legacy
 

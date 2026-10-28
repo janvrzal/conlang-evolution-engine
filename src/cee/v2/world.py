@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Literal, Sequence
+from typing import Literal, Mapping, Sequence
 
+from cee.v2.language.lexicon import FormStore, Morpheme, PhonologyState
+from cee.v2.language.processes import Process, StressRule
+from cee.v2.language.segments import SegmentTable, default_table
 from cee.v2.pools import LivePools
 from cee.v2.repertoire import Distribution, Origin, Repertoire, Variable, Variant
 from cee.v2.rng import stable_id
@@ -39,6 +42,17 @@ class Code:
     usage_share: float = 1.0
     acquisition: Literal["L1", "L2"] = "L1"
     l1_source: str | None = None
+    #: Podkladové tvary morfémů, které se od výchozích liší.
+    forms: FormStore = field(default_factory=FormStore)
+    phonology: PhonologyState = field(default_factory=PhonologyState)
+    stress_rule: StressRule = "penult"
+
+    def branch(self) -> Code:
+        """Nezávislá kopie kódu (zjemnění, odštěpení)."""
+        return Code(
+            self.id, self.repertoire.branch(), self.usage_share, self.acquisition,
+            self.l1_source, self.forms.branch(), self.phonology.branch(), self.stress_rule,
+        )
 
 
 @dataclass(slots=True)
@@ -99,12 +113,30 @@ class World:
     variants: dict[str, Variant] = field(default_factory=dict)
     #: Proměnné, ve kterých se skupiny liší; viz :mod:`cee.v2.pools`.
     live: LivePools = field(default_factory=LivePools)
+    morphemes: dict[str, Morpheme] = field(default_factory=dict)
+    #: ID procesní proměnné → proces. Chronologii změn drží každý kód sám.
+    processes: dict[str, Process] = field(default_factory=dict)
+    #: Tabulka hlásek; svět bez hláskových tvarů (M1) ji nepotřebuje.
+    table: SegmentTable | None = None
 
     def distribution(self, group_id: str, variable_id: str) -> Distribution | None:
         """Jediné správné čtení stavu: živá proměnná má přednost před repertoárem."""
         if variable_id in self.live and group_id in self.live.group_index:
             return self.live.get(group_id, variable_id)
-        return self.groups[group_id].main_code.repertoire.get(variable_id)
+        return self.stored(group_id, variable_id)
+
+    def stored(self, group_id: str, variable_id: str) -> Distribution | None:
+        """Stav z repertoáru (bez živého skladu), včetně výchozí varianty."""
+        found = self.groups[group_id].main_code.repertoire.get(variable_id)
+        if found is None:
+            variable = self.variables.get(variable_id)
+            if variable is not None and variable.default is not None:
+                return Distribution.fixed(variable.default)
+        return found
+
+    def form_of(self, code: Code, morpheme_id: str) -> tuple[int, ...]:
+        """Aktuální podkladový tvar morfému v daném kódu."""
+        return code.forms.get(morpheme_id) or self.morphemes[morpheme_id].form
 
     def materialize(self, group_id: str) -> None:
         """Zapíše živé proměnné skupiny do jejího repertoáru (před odebráním či kopií)."""
@@ -172,19 +204,37 @@ class World:
         """Nejkratší délka generace; krok simulace nesmí být delší."""
         return min(group.generation_years for group in self.groups.values())
 
-    def seed_lexicon(self, concepts: Sequence[str]) -> Repertoire:
+    def seed_lexicon(
+        self,
+        concepts: Sequence[str],
+        forms: Mapping[str, str] | None = None,
+        frequencies: Mapping[str, float] | None = None,
+    ) -> Repertoire:
         """Zmrazený protojazyk: každý pojem má jedno zděděné slovo.
 
-        Slovo je v M1 jen identifikátor lexému. Hláskovou podobu dostane až
-        s fonologií v milníku M2.
+        Bez ``forms`` je slovo jen identifikátor lexému (svět M1). S nimi
+        dostane každý pojem morfém s hláskovou podobou a svět tabulku hlásek.
         """
         repertoire = Repertoire()
+        if forms is not None and self.table is None:
+            self.table = default_table()
         for concept in dict.fromkeys(concepts):
             variable = Variable("lexical", concept)
+            payload: dict[str, object] = {"lexeme": stable_id("lexeme", "proto", concept)}
+            if forms is not None:
+                assert self.table is not None
+                morpheme = Morpheme(
+                    id=stable_id("morpheme", "proto", concept),
+                    meaning=concept,
+                    form=self.table.parse(forms[concept]),
+                    frequency=float((frequencies or {}).get(concept, 0.5)),
+                )
+                self.morphemes[morpheme.id] = morpheme
+                payload["morpheme"] = morpheme.id
             variant = Variant(
                 id=stable_id("variant", "proto", variable.id),
                 variable=variable.id,
-                payload={"lexeme": stable_id("lexeme", "proto", concept)},
+                payload=payload,
                 origin=Origin(change=None, tick=0, year=self.start_year, group=None),
             )
             self.variables[variable.id] = variable

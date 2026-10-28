@@ -127,6 +127,7 @@ připojené. Váhy se kalibrují (iterace 5).
 | `Učitelnost` | trest za nepravidelnost úměrný podílu dospělých nerodilých mluvčích; děti zesilují většinovou variantu | Trudgill; Hudson Kam & Newport 2005 |
 | `Prestiž` | varianta zdroje s vyšší prestiží má výhodu | Labov |
 | `Identita` | odměna za variantu, která odlišuje skupinu od soupeřícího souseda | Labov (Martha's Vineyard) |
+| `Actuation` | seedované sociální ocenění změny podle skupiny a epochy: proč tady a teď, a jinde ne (doplněno v M2) | Weinreich, Labov & Herzog 1968 |
 | `Konformita` | výhoda většinové varianty ve skupině (zrychluje dokončení S-křivky) | — |
 | `Norma` | brzda změny a výhoda kodifikované varianty; působí jen přes gramotnost a školu | instituce (iterace 4) |
 | `Potřeba` | nové věci a pojmy zvyšují poptávku po výrazu; zaniklé ji snižují | — |

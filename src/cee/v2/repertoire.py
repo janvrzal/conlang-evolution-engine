@@ -23,6 +23,9 @@ class Variable:
 
     kind: VariableKind
     key: str
+    #: Varianta, kterou má skupina, jež proměnnou nikdy neslyšela (u procesu
+    #: „žádná změna“). Bez ní skupina proměnnou nemá vůbec.
+    default: str | None = None
 
     @property
     def id(self) -> str:

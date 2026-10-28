@@ -18,27 +18,34 @@ from cee.v2.world import World
 FloatArray = npt.NDArray[np.float64]
 
 
-def distance_matrix(world: World, total_variables: int, chunk: int = 4_000_000) -> FloatArray:
+def distance_matrix(world: World, chunk: int = 4_000_000) -> FloatArray:
     """Průměrná variační vzdálenost hlavních kódů přes všechny proměnné.
 
     Pro jednu proměnnou je vzdálenost ½ Σ |p − q|: 0 pro shodné rozdělení,
     1 pro zcela odlišné varianty. Proměnné, které jsou všude stejné, by
     přispěly nulou, proto se počítá jen nad živými proměnnými. Průměr se bere
-    přes ``total_variables``, aby vzdálenost nezávisela na tom, kolik
-    proměnných je zrovna živých. Výpočet běží po blocích proměnných, aby
+    přes všechny lexikální proměnné, aby vzdálenost nezávisela na tom, kolik
+    jich je zrovna živých. Zvukové procesy se zatím nezapočítávají: mrtvé
+    inovace by vzdálenost ředily (srovnání tvarů kognátů přijde v M6). Výpočet běží po blocích proměnných, aby
     paměť nerostla se čtvercem počtu skupin krát počet proměnných.
     """
     live = world.live
     count = len(live.group_ids)
     total = np.zeros((count, count))
+    lexical = [variable_id for variable_id, variable in world.variables.items()
+               if variable.kind == "lexical"]
     for pool in live.iter_blocks():
+        rows = [row for row, variable_id in enumerate(pool.variable_ids)
+                if world.variables[variable_id].kind == "lexical"]
+        if not rows:
+            continue
         # float32 stačí: vzdálenost slouží ke shlukování, ne k dalšímu výpočtu.
-        freqs = np.where(pool.present[:, :, None], pool.freqs, 0.0).astype(np.float32)
+        freqs = np.where(pool.present[rows, :, None], pool.freqs[rows], 0.0).astype(np.float32)
         step = max(1, chunk // max(1, count * count * pool.capacity))
-        for start in range(0, len(pool), step):
+        for start in range(0, len(rows), step):
             part = freqs[start : start + step]
             total += 0.5 * np.abs(part[:, :, None, :] - part[:, None, :, :]).sum(axis=(0, 3))
-    result: FloatArray = total / max(1, total_variables)
+    result: FloatArray = total / max(1, len(lexical))
     return result
 
 
@@ -136,14 +143,13 @@ def observe(
     world: World,
     tick: int,
     year: float,
-    total_variables: int,
     tracker: LineageTracker,
     *,
     dialect_threshold: float,
     language_threshold: float,
 ) -> tuple[Snapshot, list[dict[str, object]]]:
     group_ids = world.live.group_ids
-    distances = distance_matrix(world, total_variables)
+    distances = distance_matrix(world)
     dialects = tuple(
         tuple(group_ids[index] for index in cluster)
         for cluster in average_linkage(distances, dialect_threshold)

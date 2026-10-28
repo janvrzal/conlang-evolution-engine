@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from cee.v2.history import History
-from cee.v2.world import TERRITORY_LEVELS, Code, SpeechGroup, Territory, TerritoryLevel, World
+from cee.v2.world import TERRITORY_LEVELS, SpeechGroup, Territory, TerritoryLevel, World
 
 
 class WorldEvent(ABC):
@@ -100,11 +100,7 @@ class RefineTerritory(WorldEvent):
                     id=spec.id,
                     territory=spec.id,
                     population=max(1, round(aggregate.population * spec.share / total_share)),
-                    codes=[
-                        Code(code.id, code.repertoire.branch(), code.usage_share,
-                             code.acquisition, code.l1_source)
-                        for code in aggregate.codes
-                    ],
+                    codes=[code.branch() for code in aggregate.codes],
                     generation_years=aggregate.generation_years,
                     prestige=aggregate.prestige,
                     openness=aggregate.openness,

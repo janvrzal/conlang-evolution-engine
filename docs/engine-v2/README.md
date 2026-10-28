@@ -40,6 +40,9 @@ Pozdější iterace upravují dřívější. Platí:
   UI nabízí režimy údolí, region, země, kontinent, svět.
 - **Délka generace je vlastnost skupiny** (iterace 4), výchozí 25 let.
   Krok simulace obnoví podíl `Δt / G` populace.
+- **Tlak `Actuation`** (iterace 3, doplněno v M2): nahodilost spuštění změny
+  podle skupiny a epochy.
+- **Chronologii zvukových změn drží každý kód sám** (M2).
 - **Závazná pro kód je [specifikace](05-specifikace.md)**; iterace 1–4
   vysvětlují důvody.
 
