@@ -10,7 +10,11 @@ Na mluvčí působí dvěma kanály:
   zvýhodní kodifikovanou variantu úměrně školní docházce. Rozdíl mezi
   mluvenou a psanou řečí se pak zmenšuje.
 
-Bez písma a školy jsou oba kanály i tlak nulové.
+Třetí kanál je **liturgie** (náboženská změna, M6b): věřící slyší a čtou
+liturgický kód, často cizí (latina, církevní slovanština, arabština,
+sanskrt), a přejímají z něj učená slova, spíš vzácná než základní.
+
+Bez písma, školy a liturgie jsou všechny kanály i tlak nulové.
 """
 
 from __future__ import annotations
@@ -28,6 +32,17 @@ READING = {"lexical": 1.0}
 #: podle písma se mění jen výjimečně (výslovnost podle pravopisu).
 SCHOOL_WEIGHT = 0.3
 SCHOOL = {"lexical": 1.0, "process": 0.1, "construction": 1.0, "form": 1.0}
+
+
+#: Jak velkou část vstupu věřícího tvoří liturgický kód (jen slova).
+LITURGY_WEIGHT = 0.1
+
+
+def liturgy_factor(world: World, variable_id: str) -> float:
+    variable = world.variables[variable_id]
+    if variable.kind != "lexical":
+        return 0.0
+    return 1.0 - world.concept_frequency(variable.key)
 
 
 def reading_factor(world: World, variable_id: str) -> float:

@@ -148,9 +148,10 @@ def observe(
     dialect_threshold: float,
     language_threshold: float,
 ) -> tuple[Snapshot, list[dict[str, object]]]:
-    # Psaný kód nemá mluvčí: do dialektů a jazyků se nepočítá.
+    # Do dialektů a jazyků se počítá jen řeč z domova: psaný kód nemá
+    # mluvčí a kód trhu, úřadu nebo školy (veřejná doména) je druhý jazyk.
     spoken = [index for index, group_id in enumerate(world.live.group_ids)
-              if not world.groups[group_id].written]
+              if not world.groups[group_id].written and world.groups[group_id].domain == "home"]
     group_ids = [world.live.group_ids[index] for index in spoken]
     distances = distance_matrix(world)
     if len(spoken) != len(world.live.group_ids):

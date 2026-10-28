@@ -79,25 +79,7 @@ def test_metrika_8_vetsina_inovaci_zanikne(continuum):
     assert len(history.of_kind("extinct")) > len(history.of_kind("innovation")) / 2
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Brána M6: v M1 má výhodná inovace výhodu ve všech skupinách (Appeal), "
-        "takže úspěšné změny časem projdou celým kontinuem a vzdálenost roste "
-        "lineárně. Místní výhodu přinese tlak identity, dálkové slabé vazby města."
-    ),
-    strict=False,
-)
-def test_metrika_9_vzdalenost_je_sublinearni_v_rovnovaze():
-    """Séguyho zákon: jazyková vzdálenost roste se zeměpisnou zpomaleně."""
-    world = village_grid(20, seed=2)
-    simulation = Simulation(world)
-    simulation.run(6000)
-    snapshot = simulation.history.snapshots[-1]
-    fit = isolation_by_distance(
-        snapshot.distances, [world.position_of(group) for group in snapshot.group_ids]
-    )
-    assert fit.correlation > 0.7
-    assert fit.sublinear
+# Metrika 9 (Séguyho zákon) se ověřuje v plném modelu na mapě: test_v2_m6b_gate.py.
 
 
 def test_metrika_12_stejny_seed_da_stejny_log_a_jiny_seed_jiny():

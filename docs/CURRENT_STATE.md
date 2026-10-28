@@ -19,7 +19,8 @@ napojené na CLI, API ani UI; spouští se z testů a skriptů.
 | M4b modulární gramatika: katalog funkcí, profil protojazyka, exaptace | hotovo |
 | M5 kontakt: víc jazyků, výpůjčky, L2 mluvčí, přechod jazyka a substrát | hotovo |
 | M6a instituce: písmo, škola, tisk, diglosie a standardizace | hotovo |
-| M6b společnost, M6c linie a export, M7 kalibrace | plán |
+| M6b společnost: migrace, události, vitalita a domény jazyka, diglosie, náboženství, Séguyho zákon | hotovo |
+| M6c linie a export, M7 kalibrace | plán |
 
 Naměřené hodnoty a známé mezery jsou v `docs/engine-v2/05-specifikace.md`.
 

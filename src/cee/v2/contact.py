@@ -36,6 +36,9 @@ INTERFERENCE = {"lexical": 0.05, "process": 1.0, "construction": 1.0, "form": 0.
 #: Jak velkou část vstupu L2 kódu tvoří první jazyk jeho mluvčích, když se
 #: ho učí všichni až v dospělosti (``l2_share`` = 1).
 INTERFERENCE_WEIGHT = 0.5
+#: O kolik školní výuka (opravování podle normy) interferenci tlumí: kdo se
+#: kód učí ve škole, nese do něj svůj první jazyk méně než kdo na ulici.
+SCHOOL_CORRECTION = 0.8
 
 #: Abrams & Strogatz (2003): rychlost přechodu je úměrná statusu cílového
 #: jazyka a podílu jeho mluvčích na ``SHIFT_EXPONENT``.
@@ -103,8 +106,9 @@ def donor_form(world: World, group_id: str, morpheme_id: str) -> Form:
     language = world.morphemes[morpheme_id].language
     group = world.groups[group_id]
     candidates = [(link.strength, link.target) for link in world.neighbors(group_id)]
-    if group.main_code.l1_source in world.groups:
-        candidates.append((1.0, group.main_code.l1_source))
+    for source in (group.main_code.l1_source, group.standard, group.liturgy):
+        if source in world.groups:
+            candidates.append((1.0, source))
     for _, donor in sorted(candidates, key=lambda item: (-item[0], item[1])):
         code = world.groups[donor].main_code
         if code.language == language and morpheme_id in code.phonology.vocabulary:
@@ -128,19 +132,27 @@ def adopt(world: World, group_id: str, morpheme_id: str) -> None:
     code.forms.set(morpheme_id, UnitForm(adapt(world, code, donor_form(world, group_id, morpheme_id)), None, None))
 
 
-# --- komunity: přistěhovalectví a přechod na jiný jazyk ------------------
+# --- komunity: migrace, přistěhovalectví a přechod na jiný jazyk ------------
 
 
 def community_step(world: World, dt: float, tick: int, year: float, history: History) -> bool:
     """Jeden krok demografie kódů; vrací ``True``, když nějaká skupina zanikla."""
+    if world.migration > 0:
+        _migrate(world, dt)
     removed = False
     for group_id in world.group_ids():
+        if group_id not in world.groups:
+            continue
         group = world.groups[group_id]
         if group.written:
             continue
         code = group.main_code
         renewal = min(1.0, dt / group.generation_years)
         source = code.l1_source if code.l1_source in world.groups else None
+        if group.domain == "public":
+            # Veřejný kód se každá generace učí znovu v dospělosti.
+            code.l2_share = 1.0
+            continue
         if source is None:
             # Stárnoucí L2 mluvčí nahradí děti, které se kód učí od narození;
             # přistěhovalci podíl drží.
@@ -150,15 +162,76 @@ def community_step(world: World, dt: float, tick: int, year: float, history: His
     return removed
 
 
+def _migrate(world: World, dt: float) -> None:
+    """Gravitační migrace: podíl přistěhovalců každé skupiny za generaci.
+
+    Ze skupiny odchází podíl ``world.migration`` lidí za generaci k
+    sousedům, úměrně síle vazby, velikosti a prestiži cíle (Ravenstein 1885;
+    města přitahují). Populace se nemění: úbytek doplní přirozený přírůstek.
+    Přistěhovalci se místní řeč učí v dospělosti (Trudgill: koineizace).
+    """
+    inflow = {group_id: 0.0 for group_id in world.groups}
+    for group_id in world.group_ids():
+        group = world.groups[group_id]
+        if group.written or group.domain == "public":
+            continue
+        targets = [
+            (link.target, link.strength * world.groups[link.target].population * world.groups[link.target].prestige)
+            for link in world.neighbors(group_id)
+            if not world.groups[link.target].written and world.groups[link.target].domain == "home"
+        ]
+        total = sum(weight for _, weight in targets)
+        if total <= 0:
+            continue
+        leaving = world.migration * group.population
+        for target, weight in targets:
+            inflow[target] += leaving * weight / total
+    for group_id, arriving in sorted(inflow.items()):
+        group = world.groups[group_id]
+        if not group.written and group.domain == "home":
+            group.immigration = min(1.0, arriving / group.population)
+
+
+def demographic_share(world: World, source_id: str, target_id: str) -> float:
+    """Podíl mluvčích cílového jazyka mezi lidmi, se kterými komunita mluví.
+
+    Počítá se komunita sama a její sousedé vážení silou vazby. Elita uprostřed
+    poddaných tak slyší jazyk většiny, i když ho v ní zatím mluví málokdo.
+    """
+    language = world.groups[target_id].main_code.language
+    weights = [(1.0, source_id), (1.0, target_id)]
+    for member in (source_id, target_id):
+        weights += [(link.strength, link.target) for link in world.neighbors(member)
+                    if link.target not in (source_id, target_id)]
+    speakers = total = 0.0
+    seen: set[str] = set()
+    for weight, group_id in sorted(weights, key=lambda item: (item[1], -item[0])):
+        if group_id in seen or world.groups[group_id].written:
+            continue
+        seen.add(group_id)
+        people = weight * world.groups[group_id].population
+        total += people
+        if world.groups[group_id].main_code.language == language:
+            speakers += people
+    return speakers / total if total else 0.0
+
+
 def _shift(
     world: World, target_id: str, source_id: str, renewal: float, tick: int, year: float, history: History
 ) -> bool:
-    """Mluvčí skupiny ``source`` přecházejí na kód skupiny ``target``."""
+    """Mluvčí skupiny ``source`` přecházejí na kód skupiny ``target``.
+
+    Abrams & Strogatz (2003): za generaci přejde podíl ``status ×
+    podíl^1,31``, kde status plyne z prestiže a podíl je demografie
+    (:func:`demographic_share`). Loajalita komunity přechod zpomalí.
+    """
     source, target = world.groups[source_id], world.groups[target_id]
     total = source.population + target.population
-    share = target.population / total
     status = target.prestige / (target.prestige + source.prestige)
-    moving = source.population * renewal * SHIFT_RATE * status * share**SHIFT_EXPONENT
+    share = demographic_share(world, source_id, target_id)
+    moving = (
+        source.population * renewal * SHIFT_RATE * (1.0 - source.loyalty) * status * share**SHIFT_EXPONENT
+    )
     births = 0.0
     if source.population / total < CHILD_THRESHOLD:
         # Děti se starý kód už neučí: rodí se do nového.

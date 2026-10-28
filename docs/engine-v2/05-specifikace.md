@@ -370,7 +370,7 @@ Každý milník je svislý řez: musí splnit svou bránu, než začne další.
 | **M4b modulární gramatika** | katalog gramatických funkcí (data), profil gramatiky protojazyka, varianta `zero`, buňky paradigmatu vznikající za běhu, exaptace | brána M4 beze změny prahů; vznik členu z ukazovacího zájmena, exaptace zbytkové koncovky, jazyk bez kategorie |
 | **M5 kontakt** | kódy, L1/L2, interference, výpůjčky, přechod | S2, S3, metrika 11 |
 | **M6a instituce** | písmo jako zmrazený psaný kód, gramotnost, škola, tisk, tlak `Norma` | S4 |
-| **M6b společnost** | události (migrace, dobytí, válka, epidemie, kolaps, obchod), podíl L2 z migrace, domény a vitalita jazyka (stabilní dvojjazyčnost, přechod elity a superstrát), hustota sítě a místní identita | metrika 9 (sublineární), stabilní dvojjazyčnost, superstrát |
+| **M6b společnost** | události (migrace, dobytí, válka, epidemie, kolaps, obchod, náboženská změna), podíl L2 z migrace, domény a vitalita jazyka (stabilní dvojjazyčnost, přechod elity a superstrát, Fergusonova diglosie) | metrika 9 (sublineární), stabilní dvojjazyčnost, superstrát, diglosie, liturgické výpůjčky |
 | **M6c linie a export** | vzdálenost i podle tvarů kognátů, emergentní strom jazyků, export pro UI, výkon větších režimů | stabilní emergentní strom, výkonový rozpočet |
 | **M7 kalibrace** | hledání vah a konstant proti metrikám | S5, metriky 1, 2, 10 |
 
@@ -765,6 +765,83 @@ seedy 1 a 2):
   škola přišla až s tiskem; kde byla psaná norma zmrazená (latina,
   klasická arabština), učila se jen elita a lidová řeč se měnila dál.
 
+### Stav M6b (2026-10-28)
+
+Splněno, testy v `tests/v2/test_v2_m6b_gate.py` a `test_v2_society.py`.
+Světy M1 až M4b a S2 dávají bitově stejnou historii jako před M6b. Přechod
+jazyka (S3) se změnil záměrně, protože demografie se teď počítá ze sítě.
+
+- **Metrika 9 (Séguyho zákon)** vzniká v plném modelu na mapě sama: mřížka
+  5×5 vesnic s morfologií a významem po 2 500 letech, seedy 2–4, korelace
+  vzdálenosti nářečí se zeměpisnou 0,78–0,84 a logaritmus sedí lépe než
+  přímka (R² 0,68–0,73 proti 0,61–0,70). Očekávané selhání z M1 mělo dvě
+  příčiny: řadu vesnic (1D), kde teorie (stepping-stone model, Malécot a
+  Kimura) dává lineární růst až do nasycení, a svět M1, kde má inovace
+  stejnou výhodu všude (`Appeal`), takže její vlna projde celým územím.
+  Test v bráně M1 je proto nahrazen testem v bráně M6b.
+- **Tlak místní identity** (výhoda varianty častější doma než u sousedů,
+  Labov a Milroy) byl vyzkoušen a vyřazen. Při síle do 0,2 průběh nezmění, od
+  0,35 rozbije kontinuum (sousední vesnice se liší víc než vzdálené) a pro
+  Séguyho zákon není potřeba.
+- **Migrace** (`World.migration`, podíl lidí, kteří se za generaci
+  přestěhují): z každé skupiny odchází k sousedům úměrně síle vazby,
+  velikosti a prestiži cíle (Ravenstein 1885). Populace se nemění (úbytek
+  doplní přirozený přírůstek); příchozí určují `immigration`, a tím podíl L2
+  mluvčích. Ve scénáři s městem, čtyřmi městečky a osmi vesnicemi (migrace
+  0,1, seed 1) má město 13 % L2 mluvčích, městečka 10 %, vesnice 1–7 %.
+  Korelace podílu L2 s populací +0,89, složitosti s populací −0,64 a
+  s podílem L2 −0,70: hypotéza jazykové niky (Lupyan & Dale 2010) vzniká bez
+  ručního nastavení.
+- **Události**: `Migration` (přesun do sídla, nebo založení nového), `Conquest`
+  (elita s prestiží 2 a dálkovou vazbou domů), `War` (oslabí vazby přes
+  frontu, ztráty), `Epidemic`, `StateCollapse` (zruší dálkové vazby, školy
+  a většinu gramotnosti) a dříve `Contact`, `Border`.
+- **Vitalita jazyka** (Giles, Bourhis & Taylor 1977) v přechodu: status
+  z prestiže, **demografie ze sítě** (podíl mluvčích cílového jazyka mezi
+  lidmi, se kterými komunita mluví, vážený silou vazby, ne jen podíl uvnitř
+  komunity) a **loajalita** (přechod se zpomalí na `1 − loyalty`).
+- **Domény**: `LanguageShift(domain="public")` znamená kód jen pro trh nebo
+  úřad. Dvojjazyční se neodečtou z komunity, děti se doma učí dál svůj
+  jazyk a veřejný kód se každá generace učí znovu v dospělosti (podíl L2 je
+  stále 1). Výsledek je stabilní dvojjazyčnost.
+
+Naměřeno (seedy 1 a 2, není-li uvedeno jinak):
+
+- **Superstrát**: elita (sto lidí, prestiž 2) mezi čtyřmi vesnicemi poddaných
+  přejde na jejich jazyk za 150–500 let (seed 1: 250 let, řádově jako
+  Normané v Anglii). V jazyce poddaných zůstane 4–6 slov elity ze 154 a
+  stavba elity jen 0,01; superstrát je slovní, opak substrátu v S3.
+- **Stabilní dvojjazyčnost**: pohraniční vesnice s třetinou dvojjazyčných
+  zůstane po 1 500 letech celá u svého jazyka (přes 80 % vlastních slov),
+  výpůjčky z jazyka trhu přibývají postupně.
+- **Loajalita** (S3, seed 1): bez ní přejdou vesnice v letech 1600–1700, s
+  0,6 v letech 1725–1900, s 0,9 přejde do roku 2500 jen pohraniční.
+- **S3 s novou demografií**: pohraniční vesnice přejde 100 let po kontaktu
+  (dřív 200), vnitrozemí 175–200 let po kontaktu.
+- **Fergusonova diglosie** (`Schooling(diglossic=True)`): každá vesnice
+  dostane skupinu veřejné domény, která mluví psaným kódem naučeným ve škole
+  (vysoká varieta, ~ škola × populace lidí), s interferencí z lidové řeči.
+  Lidová řeč školou neprochází, jen čtením přejímá učená slova. Vysoké
+  variety sousedních vesnic spolu mluví. Školní výuka tlumí interferenci o
+  80 % (`SCHOOL_CORRECTION`): bez toho se vysoká varieta během pár století
+  přiblížila lidové řeči víc než psanému kódu. Naměřeno (S4 s diglosní
+  školou v roce 1500, seedy 1 a 2): vysoká varieta je od psaného kódu
+  0,02–0,06 a vzdaluje se jen pomalu, lidová řeč 0,13–0,18 a dál se
+  vzdaluje, vzdálenost vysoké a lidové variety 0,10–0,13. Při standardizaci
+  (S4 s tiskem) splyne lidová řeč s psanou na 0,01.
+- **Náboženská změna** (`ReligiousChange`): skupiny dostanou liturgický kód
+  (psaný kód, často cizího jazyka) a kanál liturgie (váha 0,1 × podíl
+  věřících, jen slova, vzácné pojmy víc než základní). Volitelně je propojí
+  slabé vazby církevní správy. Naměřeno (čtyři vesnice, liturgie v cizím
+  jazyce od roku 500, podíl věřících 0,3, seedy 1 a 2): za 1 500 let 2–6
+  učených slov v krajních vesnicích, průměrná frekvence jejich pojmů 0,07–0,14
+  (všech pojmů 0,35), adaptovaných do hlásek příjemce; bez náboženství
+  žádná.
+- **Veřejná doména se nepočítá do dialektů ani jazyků**: kód trhu, úřadu
+  nebo školy je druhý jazyk, jazyk komunity určuje řeč z domova. Konstrukce původního jazyka ve vnitrozemí
+  0,49–0,86, na hranici 0,23–0,42, v jádru většinového jazyka 0,01–0,03; práh
+  brány M5 je proto 0,4.
+
 ## Známé mezery a kam patří
 
 Sepsáno 2026-10-28 při revizi plánu po M3.
@@ -782,12 +859,15 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | Další funkce katalogu: vid, shoda, osoba, rod a jmenné třídy; víc dárců exaptace | rozšíření katalogu (data), kdykoli |
 | Člen (a obecně funkce `zero`) do 3 000 let vznikne ve všech jazycích; chybí tlak, který by jazyk bez kategorie dlouho udržel (např. norma) | M6 (instituce), tempo M7 |
 | Přirozená četnost eroze konkrétní koncovky je nízká (zvukové inovace se dělí mezi stovky kandidátů); analytizace je proto doložena kontrolovanými pokusy | M7 (kalibrace tempa zvukových změn) |
-| Malé izolované komunity podle Trudgilla hromadí morfofonologickou složitost díky husté síti silných vazeb, která udrží i neobvyklé změny. Model to nereprodukuje: alternace kmene roste s velikostí skupiny, protože velká skupina účinněji přijme přirozené zvukové změny. Nepravidelnost koncovek už velikost sleduje správně | M6 (hustota sítě, silné a slabé vazby), M7 |
-| Stabilní dvojjazyčnost bez přechodu (diglosie, obchodní lingua franca) a obrácený směr (elita přejde na jazyk většiny, superstrát) nejsou ověřené; Abrams–Strogatz s nerovným statusem vždy končí přechodem | M6 (instituce, prestiž kódů) |
+| Malé izolované komunity podle Trudgilla hromadí morfofonologickou složitost díky husté síti silných vazeb, která udrží i neobvyklé změny. Model to nereprodukuje: alternace kmene roste s velikostí skupiny, protože velká skupina účinněji přijme přirozené zvukové změny. Nepravidelnost koncovek už velikost sleduje správně. Tlak místní identity (M6b) to nevyřešil | M7 (tempo a váhy zvukových změn), případně výzkum |
+| ~~Stabilní dvojjazyčnost a superstrát~~ | vyřešeno v M6b (domény, demografie ze sítě) |
+| Prestižní asymetrie výpůjček je slabá: ve stabilní dvojjazyčnosti si i město s prestiží 1 vypůjčí od vesnice s prestiží 0,5 skoro stejně slov, jako vesnice od něj (vážení prestiží jen na `α` = 1) | M7 |
+| ~~Náboženská změna~~ | vyřešeno v M6b (`ReligiousChange`) |
+| Migrace nemění velikost sídel (populace jsou stacionární) | podle potřeby UI |
 | Výpůjčka nového pojmu nebo kategorie (změna `Výpůjčka`): všechny jazyky mají stejnou sadu pojmů | až budou pojmy přibývat (M6, události) |
 | Příbuzné jazyky se po rozpadu mísí bez filtru, protože mají stejnou linii; filtr by měl záviset na pozorované vzdálenosti | M6 (linie jazyků) |
 | Konstanty kontaktu (filtry, váha interference, rychlost přechodu) jsou odhad | M7 |
-| Stabilní diglosie (Ferguson 1959): škola tu psaný kód vždy vlévá do mluvené řeči. Chybí varianta, kdy se ve škole učí psaný kód jako samostatný druhý kód (vysoká varieta) a lidová řeč zůstane | M6b (domény a kódy) |
+| ~~Stabilní diglosie (Ferguson 1959)~~ | vyřešeno v M6b (`Schooling(diglossic=True)`) |
 | Učené výpůjčky se vracejí jako stará slova s dnešní výslovností; skutečné učené dublety (*fragile* vedle *frêle*) mají tvar psaného kódu | M6c nebo později |
 | Pravopisná výslovnost a revize pravopisu: psané tvary slov se nemění ani s tiskem | později |
 | CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |

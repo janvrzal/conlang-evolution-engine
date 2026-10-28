@@ -100,6 +100,16 @@ class SpeechGroup:
     written: bool = False
     #: ID psaného kódu, který skupina čte (gramotnost) a učí se ve škole.
     standard: str | None = None
+    #: Liturgický kód (psaný kód náboženství, M6b) a podíl lidí, kteří ho čtou
+    #: nebo slyší při bohoslužbě.
+    liturgy: str | None = None
+    devotion: float = 0.0
+    #: Odpor komunity ke změně jazyka (0 až 1): zpomalí přechod na jiný kód.
+    loyalty: float = 0.0
+    #: Kde skupina kód užívá: ``home`` (doma; přechod na něj vytlačí starý
+    #: jazyk) nebo ``public`` (trh, úřad, církev; stabilní dvojjazyčnost,
+    #: děti se doma učí dál svůj jazyk).
+    domain: Literal["home", "public"] = "home"
 
     def __post_init__(self) -> None:
         if self.population <= 0:
@@ -155,6 +165,9 @@ class World:
     concept_frequencies: dict[str, float] = field(default_factory=dict)
     #: Odvozovací přípona protojazyka (M3b).
     derivational_suffix: tuple[int, ...] = ()
+    #: Podíl lidí, kteří se za generaci přestěhují k sousedům (M6b). Nula
+    #: vypne migraci; podíl přistěhovalců pak určuje ``immigration`` skupin.
+    migration: float = 0.0
 
     def distribution(self, group_id: str, variable_id: str) -> Distribution | None:
         """Jediné správné čtení stavu: živá proměnná má přednost před repertoárem."""

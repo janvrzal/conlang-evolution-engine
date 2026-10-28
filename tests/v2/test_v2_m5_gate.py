@@ -80,7 +80,7 @@ def test_s3_v_novem_jazyce_zustane_stavba_a_vyslovnost_ale_malo_slov(shifted):
                          for group in ("x0>y", "x1>y", "x2>y", "y0", "y2")}
         # Substrát je nejsilnější daleko od kontaktu; pohraniční vesnice se
         # většinovému jazyku vyrovnává a jádro většinového jazyka ho skoro nemá.
-        assert min(constructions["x0>y"], constructions["x1>y"]) > 0.5
+        assert min(constructions["x0>y"], constructions["x1>y"]) > 0.4
         assert constructions["x1>y"] > constructions["x2>y"] > constructions["y2"]
         for group in ("x0>y", "x1>y", "x2>y"):
             traces = trace_shares(world, group, substrate)

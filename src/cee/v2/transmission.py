@@ -112,7 +112,7 @@ class StepInputs:
     loss_floor: FloatArray
     row_keys: npt.NDArray[np.uint64]
     tick: int
-    #: Interference, čtení a škola, v tomto pořadí; jen neprázdné.
+    #: Interference, čtení, škola a liturgie, v tomto pořadí; jen neprázdné.
     channels: Sequence[Channel]
 
 
@@ -175,7 +175,8 @@ def prepare(world: World, group_ids: Sequence[str], params: TransmissionParams, 
     index = {group_id: position for position, group_id in enumerate(group_ids)}
     learners = [
         (index[group.id], index[group.main_code.l1_source],
-         contact.INTERFERENCE_WEIGHT * group.main_code.l2_share)
+         contact.INTERFERENCE_WEIGHT * group.main_code.l2_share
+         * (1.0 - contact.SCHOOL_CORRECTION * group.schooling))
         for group in groups
         if group.main_code.l1_source in index and group.main_code.l2_share > 0
     ]
@@ -187,12 +188,17 @@ def prepare(world: World, group_ids: Sequence[str], params: TransmissionParams, 
         (index[group.id], index[group.standard], institutions.SCHOOL_WEIGHT * group.schooling)
         for group in groups if group.standard in index and group.schooling > 0
     ]
+    worshippers = [
+        (index[group.id], index[group.liturgy], institutions.LITURGY_WEIGHT * group.devotion)
+        for group in groups if group.liturgy in index and group.devotion > 0
+    ]
     channels = [
         _channel(items, factor)
         for items, factor in (
             (learners, contact.interference_factor),
             (readers, institutions.reading_factor),
             (pupils, institutions.school_factor),
+            (worshippers, institutions.liturgy_factor),
         )
         if items
     ]

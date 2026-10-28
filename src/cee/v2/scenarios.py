@@ -6,7 +6,16 @@ from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
 from cee.data.core_vocabulary import CORE_EXTENSION, SWADESH_CORE
-from cee.v2.events import Codification, Contact, LanguageShift, Printing, Schooling, WorldEvent
+from cee.v2.events import (
+    Codification,
+    Conquest,
+    Contact,
+    LanguageShift,
+    Printing,
+    ReligiousChange,
+    Schooling,
+    WorldEvent,
+)
 from cee.v2.language.constructions import GRAMMATICAL_SOURCES, Construction, catalog
 from cee.v2.language.morphology import Paradigm
 from cee.v2.language.protoforms import DEFAULT_CONSONANTS, DEFAULT_VOWELS, protolanguage
@@ -338,7 +347,7 @@ def language_shift(seed: int = 1, *, start: float = 1500.0) -> tuple[World, list
 
 def diglossia(
     seed: int = 1, *, writing: float = 500.0, school: float | None = 1500.0, printing: bool = True,
-    literacy: float = 0.05,
+    literacy: float = 0.05, diglossic: bool = False,
 ) -> tuple[World, list[WorldEvent]]:
     """Scénář S4: písmo v roce ``writing``, škola (a tisk) v roce ``school``.
 
@@ -346,13 +355,95 @@ def diglossia(
     se zapíše. Do zavedení školy čte jen ``literacy`` lidí a psaný kód stojí.
     Škola zasáhne všechny vesnice; s ``printing`` se psaná norma od té doby
     obnovuje podle řeči elity, jak to bylo u moderních spisovných jazyků.
+    S ``diglossic`` se psaný kód ve škole učí jako samostatná vysoká varieta
+    a nikdy se neobnovuje (typ arabské diglosie, Ferguson 1959).
     """
     world = village_grid(6, seed=seed, syntax=True, semantics=True)
     groups = tuple(world.group_ids())
     elite = groups[2]
     events: list[WorldEvent] = [Codification(writing, elite, groups, literacy)]
     if school is not None:
-        events.append(Schooling(school, groups))
-        if printing:
+        events.append(Schooling(school, groups, diglossic=diglossic))
+        if printing and not diglossic:
             events.append(Printing(school, f"written:{elite}"))
+    return world, events
+
+
+def conquest(seed: int = 1, *, year: float = 1000.0) -> tuple[World, list[WorldEvent]]:
+    """Dobytí a přechod elity: superstrát (typ Normané v Anglii).
+
+    Čtyři vesnice jazyka ``l`` (prestiž 0,5). V roce ``year`` se mezi nimi
+    usadí elita jazyka ``e`` (sto lidí, prestiž 2) a o sto let později se
+    začne učit jazyk poddaných. Elita je v menšině, takže nakonec přejde
+    sama; v jazyce poddaných po ní zůstanou hlavně slova.
+    """
+    world = contact_world([
+        Language("l", tuple(Place(f"l{index}", ((index % 2) * 10.0, (index // 2) * 10.0),
+                                  population=1000, prestige=0.5) for index in range(4))),
+        Language("e", (Place("e0", (300.0, 0.0), population=2000, prestige=1.0),),
+                 grammar=SUBSTRATE_GRAMMAR,
+                 consonants=("t", "k", "s", "n", "m", "l", "ʃ", "f", "x", "v", "r", "j")),
+    ], seed=seed)
+    events: list[WorldEvent] = [
+        Conquest(year, "e0", "l0", ("l0", "l1", "l2", "l3")),
+        LanguageShift(year + 100.0, "l0+e0", "l0"),
+    ]
+    return world, events
+
+
+def market_town(seed: int = 1, *, start: float = 500.0) -> tuple[World, list[WorldEvent]]:
+    """Stabilní dvojjazyčnost: vesnice užívá jazyk trhu jen mimo domov.
+
+    Dvě vesnice jazyka ``a`` a trhové město jazyka ``b``. Od roku ``start``
+    se třetina dospělých z pohraniční vesnice ``a1`` domlouvá na trhu jazykem
+    ``b``; děti se doma dál učí ``a``.
+    """
+    world = contact_world([
+        Language("a", tuple(Place(f"a{index}", (index * 10.0, 0.0), population=500, prestige=0.5)
+                            for index in range(2))),
+        Language("b", (Place("b0", (30.0, 0.0), population=3000, prestige=1.0),)),
+    ], seed=seed)
+    events: list[WorldEvent] = [
+        Contact(start, (("a1", "b0"),), 0.5),
+        LanguageShift(start, "a1", "b0", initial_share=0.3, domain="public"),
+    ]
+    return world, events
+
+
+def migration_region(seed: int = 1, *, migration: float = 0.1) -> World:
+    """Město, čtyři trhová městečka a osm vesnic s gravitační migrací.
+
+    Podíl přistěhovalců (a tedy L2 mluvčích) se nenastavuje: vyplyne z toho,
+    kam lidé za generaci táhnou.
+    """
+    places = [Place("city", (0.0, 0.0), population=5000, prestige=1.0)]
+    directions = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    places += [Place(f"t{index}", (25.0 * x, 25.0 * y), population=1500, prestige=0.7)
+               for index, (x, y) in enumerate(directions)]
+    offsets = [(offset, direction) for offset in ((1, 1), (-1, -1)) for direction in directions]
+    places += [Place(f"v{index}", (12.0 * dx + 25.0 * x, 12.0 * dy + 25.0 * y), population=300)
+               for index, ((dx, dy), (x, y)) in enumerate(offsets)]
+    world = contact_world([Language("proto", tuple(places))], seed=seed)
+    world.migration = migration
+    return world
+
+
+def conversion(seed: int = 1, *, year: float = 500.0, devotion: float = 0.3) -> tuple[World, list[WorldEvent]]:
+    """Náboženská změna: vesnice přijmou víru s cizím liturgickým jazykem.
+
+    Čtyři vesnice jazyka ``v`` a vzdálené náboženské centrum jazyka ``r``,
+    jehož řeč se v roce 100 zapíše. V roce ``year`` vesnice přijmou
+    náboženství s liturgií v jazyce ``r`` (typ latiny ve střední Evropě);
+    přímý kontakt s mluvčími ``r`` nemají.
+    """
+    world = contact_world([
+        Language("v", tuple(Place(f"v{index}", (index * 10.0, 0.0), population=600) for index in range(4))),
+        Language("r", (Place("r0", (500.0, 0.0), population=5000, prestige=1.0),),
+                 consonants=("t", "k", "s", "n", "m", "l", "r", "f", "x", "kʷ", "j", "d")),
+    ], seed=seed)
+    villages = tuple(f"v{index}" for index in range(4))
+    events: list[WorldEvent] = [
+        Codification(100.0, "r0", ("r0",), 0.1),
+        ReligiousChange(year, "written:r0", villages, devotion),
+    ]
     return world, events
