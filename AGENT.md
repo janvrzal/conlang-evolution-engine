@@ -39,7 +39,9 @@ Pravidla v2, která se snadno poruší:
 * **Kód je uzel sítě.** Vícejazyčná komunita jsou skupiny se společným
   `community`, jedna na kód; kontakt mezi liniemi jazyků (`Code.language`)
   prochází filtry v `contact.py`. Nový morfém nese `language` kódu, ve
-  kterém vznikl.
+  kterém vznikl. Psaný kód je skupina s `written=True` bez mluvčích:
+  nesmí inovovat ani se počítat do dialektů; mluvčí ho slyší jen kanály
+  čtení a školy (`institutions.py`).
 * **Gramatické funkce jsou data.** Minulý čas, člen, pád, zápor apod. jsou
   řádky `cee/data/v2_grammar.yaml`; jazyk je má podle profilu protojazyka.
   Do kódu změn a tlaků nepiš jména konkrétních funkcí, čti katalog.

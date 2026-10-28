@@ -94,6 +94,12 @@ class SpeechGroup:
     #: Učí se kód ještě děti? Kód pod prahem užívání v komunitě se nepředává
     #: a jeho skupina jen stárne.
     transmitted: bool = True
+    #: Psaný kód (M6): obraz řeči elity v roce kodifikace. Nemá mluvčí a
+    #: nevznikají v něm inovace. S nulovou otevřeností stojí (klasický psaný
+    #: jazyk), s kladnou pomalu sleduje řeč svého zdroje (tisk, revize normy).
+    written: bool = False
+    #: ID psaného kódu, který skupina čte (gramotnost) a učí se ve škole.
+    standard: str | None = None
 
     def __post_init__(self) -> None:
         if self.population <= 0:
@@ -263,7 +269,9 @@ class World:
     def renewal(self, group_id: str, dt: float) -> float:
         """Podíl skupiny, který se za krok učí jazyk znovu (0 bez dětí)."""
         group = self.groups[group_id]
-        return min(1.0, dt / group.generation_years) if group.transmitted else 0.0
+        if not group.transmitted or (group.written and group.openness == 0.0):
+            return 0.0
+        return min(1.0, dt / group.generation_years)
 
     def generation_ceiling(self) -> float:
         """Nejkratší délka generace; krok simulace nesmí být delší."""

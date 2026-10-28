@@ -9,7 +9,7 @@ from cee.v2.pressures.linguistic import (
     FunctionalLoad,
     Phonotactics,
 )
-from cee.v2.pressures.social import Actuation, Conformity
+from cee.v2.pressures.social import Actuation, Conformity, Norm
 
 __all__ = [
     "Actuation",
@@ -19,6 +19,7 @@ __all__ = [
     "Conformity",
     "Dispersion",
     "FunctionalLoad",
+    "Norm",
     "Phonotactics",
     "Pressure",
     "PressureBatch",

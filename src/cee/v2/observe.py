@@ -148,8 +148,13 @@ def observe(
     dialect_threshold: float,
     language_threshold: float,
 ) -> tuple[Snapshot, list[dict[str, object]]]:
-    group_ids = world.live.group_ids
+    # Psaný kód nemá mluvčí: do dialektů a jazyků se nepočítá.
+    spoken = [index for index, group_id in enumerate(world.live.group_ids)
+              if not world.groups[group_id].written]
+    group_ids = [world.live.group_ids[index] for index in spoken]
     distances = distance_matrix(world)
+    if len(spoken) != len(world.live.group_ids):
+        distances = distances[np.ix_(spoken, spoken)]
     dialects = tuple(
         tuple(group_ids[index] for index in cluster)
         for cluster in average_linkage(distances, dialect_threshold)

@@ -10,6 +10,7 @@ from cee.v2.changes.morphology import MORPHOLOGICAL_CHANGES, AnalogicalChange
 from cee.v2.changes.sound import SOUND_CHANGES, SoundChange
 from cee.v2.changes.syntax import SYNTACTIC_CHANGES, SyntacticChange
 from cee.v2.pressures.base import Pressure
+from cee.v2.pressures.social import Norm
 
 #: Pevné pořadí registru je součástí determinismu. Ve světě bez hláskových
 #: tvarů (M1) zvukové změny nenajdou žádné místo a nic nestojí.
@@ -23,11 +24,13 @@ def pressures_by_kind(changes: Sequence[Change]) -> dict[str, tuple[tuple[Pressu
 
     Všechny varianty jedné proměnné se musí hodnotit stejnými tlaky, i když
     je vyrobily různé změny. Tlaky se proto sdružují podle cílového typu;
-    deklaruje-li tentýž tlak víc změn, platí nejvyšší váha.
+    deklaruje-li tentýž tlak víc změn, platí nejvyšší váha. `Norm` (škola)
+    působí na každý typ proměnné.
     """
     weights: dict[str, dict[type[Pressure], float]] = {}
     for change in changes:
         target = weights.setdefault(change.target, {})
+        target.setdefault(Norm, 1.0)
         for pressure, weight in change.pressures.items():
             target[pressure] = max(weight, target.get(pressure, weight))
     return {

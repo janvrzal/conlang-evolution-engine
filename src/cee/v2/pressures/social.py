@@ -65,3 +65,40 @@ class Actuation(Pressure):
 
     def applies(self, payload: Mapping[str, object]) -> bool:
         return True
+
+
+class Norm(Pressure):
+    """Škola zvýhodní variantu, kterou má psaný kód (kodifikovanou).
+
+    Působí jen tam, kde děti chodí do školy, a úměrně docházce; bez písma a
+    školy je nulový (standardizace je pozdní, iterace 4). Zvukovou změnu,
+    kterou už si kód uzavřel do podkladových tvarů, škola nevrátí: tvary
+    slov se nepřepisují zpět.
+    """
+
+    name = "norm"
+    #: Spisovné jazyky se mění dál, jen pomaleji: norma inovaci brzdí, ale
+    #: nepřebije každý jiný tlak.
+    strength = 0.3
+
+    def scores(self, batch: PressureBatch) -> FloatArray:
+        from cee.v2.institutions import standard_of
+
+        world = batch.world
+        result = np.zeros_like(batch.freqs)
+        for column, group_id in enumerate(batch.group_ids):
+            group = world.groups[group_id]
+            standard = standard_of(world, group_id) if group.schooling > 0 else None
+            if standard is None:
+                continue
+            closed = group.main_code.phonology.closed
+            for row, variable_id in enumerate(batch.variable_ids):
+                key = ("codified", standard, variable_id)
+                if key not in batch.memo:
+                    distribution = world.distribution(standard, variable_id)
+                    batch.memo[key] = None if distribution is None else distribution.dominant()[0]
+                codified = batch.memo[key]
+                if codified is None or codified not in batch.slots[row] or variable_id in closed:
+                    continue
+                result[row, column, list(batch.slots[row]).index(codified)] = self.strength * group.schooling
+        return result

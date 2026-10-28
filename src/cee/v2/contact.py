@@ -136,6 +136,8 @@ def community_step(world: World, dt: float, tick: int, year: float, history: His
     removed = False
     for group_id in world.group_ids():
         group = world.groups[group_id]
+        if group.written:
+            continue
         code = group.main_code
         renewal = min(1.0, dt / group.generation_years)
         source = code.l1_source if code.l1_source in world.groups else None

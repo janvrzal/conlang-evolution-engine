@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
 from cee.data.core_vocabulary import CORE_EXTENSION, SWADESH_CORE
-from cee.v2.events import Contact, LanguageShift, WorldEvent
+from cee.v2.events import Codification, Contact, LanguageShift, Printing, Schooling, WorldEvent
 from cee.v2.language.constructions import GRAMMATICAL_SOURCES, Construction, catalog
 from cee.v2.language.morphology import Paradigm
 from cee.v2.language.protoforms import DEFAULT_CONSONANTS, DEFAULT_VOWELS, protolanguage
@@ -333,4 +333,26 @@ def language_shift(seed: int = 1, *, start: float = 1500.0) -> tuple[World, list
     ], seed=seed)
     events: list[WorldEvent] = [Contact(start, (("x2", "y0"),), 0.5)]
     events += [LanguageShift(start + 25.0 * step, f"x{2 - step}", "y0") for step in range(3)]
+    return world, events
+
+
+def diglossia(
+    seed: int = 1, *, writing: float = 500.0, school: float | None = 1500.0, printing: bool = True,
+    literacy: float = 0.05,
+) -> tuple[World, list[WorldEvent]]:
+    """Scénář S4: písmo v roce ``writing``, škola (a tisk) v roce ``school``.
+
+    Šest vesnic jednoho jazyka; prostřední vesnice je sídlo elity, jejíž řeč
+    se zapíše. Do zavedení školy čte jen ``literacy`` lidí a psaný kód stojí.
+    Škola zasáhne všechny vesnice; s ``printing`` se psaná norma od té doby
+    obnovuje podle řeči elity, jak to bylo u moderních spisovných jazyků.
+    """
+    world = village_grid(6, seed=seed, syntax=True, semantics=True)
+    groups = tuple(world.group_ids())
+    elite = groups[2]
+    events: list[WorldEvent] = [Codification(writing, elite, groups, literacy)]
+    if school is not None:
+        events.append(Schooling(school, groups))
+        if printing:
+            events.append(Printing(school, f"written:{elite}"))
     return world, events

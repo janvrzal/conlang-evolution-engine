@@ -138,6 +138,8 @@ class Simulation:
     def _innovate(self, year: float) -> None:
         for group_id in self.world.group_ids():
             group = self.world.groups[group_id]
+            if group.written:
+                continue  # psaný kód se nemění
             renewal = self.world.renewal(group_id, self.config.dt)
             # Do M5 (vícejazyčnost) se simuluje jen hlavní kód skupiny.
             context = InnovationContext(self.world, group, group.main_code, self.tick, year)
@@ -234,6 +236,8 @@ class Simulation:
                     self.world.groups[group_id].main_code.repertoire.set(variable_id, distribution)
         if self.world.table is not None:
             for group_id in live.group_ids:
+                if self.world.groups[group_id].written:
+                    continue
                 state = self.world.groups[group_id].main_code.phonology
                 if state.pending:
                     phonology.restructure(

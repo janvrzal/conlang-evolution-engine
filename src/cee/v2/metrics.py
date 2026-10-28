@@ -283,3 +283,26 @@ def trace_shares(world: World, group_id: str, variants: dict[str, tuple[str, str
             share = float(distribution.freqs[distribution.variants.index(variant)])
         shares.setdefault(kind, []).append(share)
     return {kind: float(np.mean(values)) for kind, values in shares.items()}
+
+
+def code_distance(
+    world: World, first: str, second: str, kinds: Sequence[str] = ("lexical", "process", "construction")
+) -> dict[str, float]:
+    """Vzdálenost dvou kódů podle typu proměnné (scénář S4).
+
+    Pro každou proměnnou je to variační vzdálenost ½ Σ |p − q|; součet za
+    typ se dělí počtem lexikálních proměnných, aby typy byly srovnatelné a
+    vzdálenost nezávisela na tom, kolik mrtvých inovací svět nasbíral.
+    Proměnná, kterou jeden z kódů nemá, se vynechá.
+    """
+    lexical = sum(variable.kind == "lexical" for variable in world.variables.values())
+    totals = {kind: 0.0 for kind in kinds}
+    for variable_id, variable in sorted(world.variables.items()):
+        if variable.kind not in totals:
+            continue
+        a, b = world.distribution(first, variable_id), world.distribution(second, variable_id)
+        if a is None or b is None:
+            continue
+        variants = sorted(set(a.variants) | set(b.variants))
+        totals[variable.kind] += 0.5 * sum(abs(a.frequency(v) - b.frequency(v)) for v in variants)
+    return {kind: total / max(1, lexical) for kind, total in totals.items()}

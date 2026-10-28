@@ -9,12 +9,12 @@ vektorově nad :class:`cee.v2.pools.LivePools`.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 import numpy as np
 import numpy.typing as npt
 
-from cee.v2 import contact
+from cee.v2 import contact, institutions
 from cee.v2.pools import PoolBlock
 from cee.v2.pressures.base import Pressure, PressureBatch
 from cee.v2.rng import hash_normal, stable_int
@@ -71,6 +71,30 @@ def _normalized(array: FloatArray, fallback: FloatArray) -> FloatArray:
 
 
 @dataclass(frozen=True, slots=True)
+class Channel:
+    """Vstup, který skupina dostává mimo vazby sítě.
+
+    Skupina ``learners[i]`` přebírá podíl ``weights[i] × factor(proměnná)``
+    svého vstupu od ``sources[i]``: interference prvního jazyka, čtení a
+    škola z psaného kódu.
+    """
+
+    learners: npt.NDArray[np.intp]
+    sources: npt.NDArray[np.intp]
+    weights: FloatArray
+    factor: Callable[[World, str], float]
+
+
+def _channel(items: Sequence[tuple[int, int, float]], factor: Callable[[World, str], float]) -> Channel:
+    return Channel(
+        learners=np.array([item[0] for item in items], dtype=np.intp),
+        sources=np.array([item[1] for item in items], dtype=np.intp),
+        weights=np.array([item[2] for item in items], dtype=np.float64),
+        factor=factor,
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class StepInputs:
     """Vstupy jednoho kroku sdílené všemi bloky živých proměnných."""
 
@@ -88,10 +112,8 @@ class StepInputs:
     loss_floor: FloatArray
     row_keys: npt.NDArray[np.uint64]
     tick: int
-    #: Interference: L2 skupina (index), skupina jejího prvního jazyka a váha.
-    learners: npt.NDArray[np.intp]
-    sources: npt.NDArray[np.intp]
-    interference: FloatArray
+    #: Interference, čtení a škola, v tomto pořadí; jen neprázdné.
+    channels: Sequence[Channel]
 
 
 def _components(mixing: FloatArray) -> list[npt.NDArray[np.intp]]:
@@ -157,6 +179,23 @@ def prepare(world: World, group_ids: Sequence[str], params: TransmissionParams, 
         for group in groups
         if group.main_code.l1_source in index and group.main_code.l2_share > 0
     ]
+    readers = [
+        (index[group.id], index[group.standard], institutions.READING_WEIGHT * group.literacy)
+        for group in groups if group.standard in index and group.literacy > 0
+    ]
+    pupils = [
+        (index[group.id], index[group.standard], institutions.SCHOOL_WEIGHT * group.schooling)
+        for group in groups if group.standard in index and group.schooling > 0
+    ]
+    channels = [
+        _channel(items, factor)
+        for items, factor in (
+            (learners, contact.interference_factor),
+            (readers, institutions.reading_factor),
+            (pupils, institutions.school_factor),
+        )
+        if items
+    ]
     return StepInputs(
         group_ids=group_ids,
         members=linked,
@@ -179,9 +218,7 @@ def prepare(world: World, group_ids: Sequence[str], params: TransmissionParams, 
             dtype=np.uint64,
         ),
         tick=tick,
-        learners=np.array([item[0] for item in learners], dtype=np.intp),
-        sources=np.array([item[1] for item in learners], dtype=np.intp),
-        interference=np.array([item[2] for item in learners], dtype=np.float64),
+        channels=channels,
     )
 
 
@@ -209,13 +246,13 @@ def transmit(
         weight = weight + factor[:, None] * _mix(inputs, present.astype(np.float64), cross=True)
     # Skupiny bez této proměnné se z míšení vyřadí a zbytek vstupu se převáží.
     heard = np.where(weight[:, :, None] > 0, heard / np.where(weight > 0, weight, 1.0)[:, :, None], 0)
-    if len(inputs.learners):
-        # Dospělí, kteří se kód naučili jako druhý, do něj nesou svůj první jazyk.
-        factor = np.array([contact.interference_factor(world, variable_id) for variable_id in block.variable_ids])
-        share = factor[:, None] * inputs.interference[None, :]
-        share = np.where(present[:, inputs.sources], share, 0.0)[:, :, None]
-        heard[:, inputs.learners] = (
-            (1.0 - share) * heard[:, inputs.learners] + share * current[:, inputs.sources]
+    for channel in inputs.channels:
+        # Interference (L2 mluvčí nesou svůj první jazyk), čtení a škola.
+        factor = np.array([channel.factor(world, variable_id) for variable_id in block.variable_ids])
+        share = factor[:, None] * channel.weights[None, :]
+        share = np.where(present[:, channel.sources], share, 0.0)[:, :, None]
+        heard[:, channel.learners] = (
+            (1.0 - share) * heard[:, channel.learners] + share * current[:, channel.sources]
         )
 
     fitness = np.zeros_like(current)

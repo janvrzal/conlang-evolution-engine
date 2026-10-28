@@ -53,6 +53,7 @@ src/cee/v2/
   syntax.py           konstrukční proměnné, slabost vyjádření, zápis nové koncovky
   assessment.py       hodnocení procesu nad slovní zásobou (pro tlaky)
   contact.py          filtry přenositelnosti, adaptace výpůjček, přechod jazyka
+  institutions.py     psaný kód, kanály čtení a školy
   events.py           WorldEvent a jeho podtřídy
   observe.py          vzdálenosti, shluky, linie jazyků
   history.py          log událostí, snímky
@@ -368,7 +369,9 @@ Každý milník je svislý řez: musí splnit svou bránu, než začne další.
 | **M4 syntax** | konstrukce, změny C, velký cyklus | emergentní analytizace při erozi |
 | **M4b modulární gramatika** | katalog gramatických funkcí (data), profil gramatiky protojazyka, varianta `zero`, buňky paradigmatu vznikající za běhu, exaptace | brána M4 beze změny prahů; vznik členu z ukazovacího zájmena, exaptace zbytkové koncovky, jazyk bez kategorie |
 | **M5 kontakt** | kódy, L1/L2, interference, výpůjčky, přechod | S2, S3, metrika 11 |
-| **M6 společnost** | instituce, události, linie jazyků, export pro UI | S4, stabilní emergentní strom, metrika 9 (sublineární) |
+| **M6a instituce** | písmo jako zmrazený psaný kód, gramotnost, škola, tisk, tlak `Norma` | S4 |
+| **M6b společnost** | události (migrace, dobytí, válka, epidemie, kolaps, obchod), podíl L2 z migrace, domény a vitalita jazyka (stabilní dvojjazyčnost, přechod elity a superstrát), hustota sítě a místní identita | metrika 9 (sublineární), stabilní dvojjazyčnost, superstrát |
+| **M6c linie a export** | vzdálenost i podle tvarů kognátů, emergentní strom jazyků, export pro UI, výkon větších režimů | stabilní emergentní strom, výkonový rozpočet |
 | **M7 kalibrace** | hledání vah a konstant proti metrikám | S5, metriky 1, 2, 10 |
 
 ### Stav M1 (2026-10-28)
@@ -726,6 +729,42 @@ bran M1 až M4b nezměnila.
   zvukové změny zvýhodněné tlaky (oslabování, zkracování) a ty alternace
   vytvářejí. Viz Známé mezery.
 
+### Stav M6a (2026-10-28)
+
+Splněno, testy v `tests/v2/test_v2_m6a_gate.py` a `test_v2_institutions.py`.
+Svět bez písma dává bitově stejnou historii jako před M6a (ověřeno otisky
+logu pro světy M1 až M5).
+
+- **Psaný kód** (událost `Codification`) je skupina bez mluvčích: kopie
+  řeči zdroje (elity), ve které má každá proměnná jen variantu převládající
+  v roce kodifikace. Nevznikají v něm inovace, neprochází fonologizací a do
+  dialektů ani jazyků se nepočítá. Bez tisku stojí.
+- **Tisk** (událost `Printing`): psaná norma se jednou za 100 let reviduje a
+  převezme podíl `update` (0,3) řeči zdroje. Nové psané tvary slov se ale
+  nezapisují (pravopis zaostává za výslovností).
+- **Kanály mimo síť** (`transmission.Channel`): interference z M5, **čtení**
+  (gramotní dospělí, váha 0,1 × gramotnost, jen slova) a **škola** (děti,
+  0,3 × docházka; slova, konstrukce a tvary plně, zvukové změny jen 0,1,
+  protože výslovnost si děti nesou z domova).
+- **`Norm`** zvýhodní kodifikovanou variantu o 0,3 × školní docházka. Působí
+  na všechny typy proměnných, kromě zvukových změn, které si kód už uzavřel
+  do podkladových tvarů: ty škola nevrátí. Silnější norma (0,8) srovnala řeč
+  s psanou úplně a každou inovaci přebila.
+
+Naměřeno (S4: šest vesnic, písmo v roce 500, škola a tisk v roce 1500,
+seedy 1 a 2):
+
+- Vzdálenost mluvené řeči od psané roste do zavedení školy (rok 1000:
+  0,08–0,10, rok 1500: 0,11–0,12) a pak klesne (rok 2000: 0,011–0,014, rok
+  2500: 0,006–0,008). Bez školy roste dál až na 0,35–0,36 v roce 3000.
+- Škola s tiskem sjednotí dialekty (vzájemná vzdálenost vesnic 0,004–0,007
+  proti 0,12–0,13 bez školy), ale jazyk se mění dál: za 500 let se ustálí
+  135–560 inovací (bez školy 560–750).
+- **Kontrafaktuál**: masová škola se zmrazenou normou (bez tisku) změnu
+  prakticky zastaví (1–25 ustálených inovací za 500 let). Historicky masová
+  škola přišla až s tiskem; kde byla psaná norma zmrazená (latina,
+  klasická arabština), učila se jen elita a lidová řeč se měnila dál.
+
 ## Známé mezery a kam patří
 
 Sepsáno 2026-10-28 při revizi plánu po M3.
@@ -748,6 +787,9 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | Výpůjčka nového pojmu nebo kategorie (změna `Výpůjčka`): všechny jazyky mají stejnou sadu pojmů | až budou pojmy přibývat (M6, události) |
 | Příbuzné jazyky se po rozpadu mísí bez filtru, protože mají stejnou linii; filtr by měl záviset na pozorované vzdálenosti | M6 (linie jazyků) |
 | Konstanty kontaktu (filtry, váha interference, rychlost přechodu) jsou odhad | M7 |
+| Stabilní diglosie (Ferguson 1959): škola tu psaný kód vždy vlévá do mluvené řeči. Chybí varianta, kdy se ve škole učí psaný kód jako samostatný druhý kód (vysoká varieta) a lidová řeč zůstane | M6b (domény a kódy) |
+| Učené výpůjčky se vracejí jako stará slova s dnešní výslovností; skutečné učené dublety (*fragile* vedle *frêle*) mají tvar psaného kódu | M6c nebo později |
+| Pravopisná výslovnost a revize pravopisu: psané tvary slov se nemění ani s tiskem | později |
 | CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |
 | Výkon režimů region a výš s fonologií a morfologií neměřen | M6 (výkonová brána) |
 
