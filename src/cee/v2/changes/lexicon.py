@@ -46,20 +46,24 @@ class LexicalCoinage(Change):
         assert world.table is not None
         vocabulary = {
             morpheme: world.form_of(code, morpheme) for morpheme in code.phonology.vocabulary
+            if world.morphemes[morpheme].kind == "root"
         }
         form = coin(world.table, vocabulary, rng, set(vocabulary.values()))
         if form is None:
             return None
         concept = site.split(":", 1)[1]
         incumbent = [
-            world.morphemes[morpheme].frequency for morpheme in sorted(code.phonology.vocabulary)
-            if world.morphemes[morpheme].meaning == concept
+            world.morphemes[morpheme] for morpheme in sorted(code.phonology.vocabulary)
+            if world.morphemes[morpheme].meaning == concept and world.morphemes[morpheme].kind == "root"
         ]
         morpheme = Morpheme(
             id=stable_id("morpheme", self.kind, *parts),
             meaning=concept,
             form=form,
-            frequency=incumbent[0] if incumbent else 0.3,
+            frequency=incumbent[0].frequency if incumbent else 0.3,
+            # Nové slovo patří do třídy slova, které nahrazuje; tvary buněk
+            # dostane podle produktivního vzoru, až bude potřeba.
+            word_class=incumbent[0].word_class if incumbent else None,
             origin_group=context.group.id,
             origin_tick=context.tick,
         )

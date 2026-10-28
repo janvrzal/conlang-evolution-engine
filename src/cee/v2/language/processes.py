@@ -102,6 +102,12 @@ class Process:
         return found
 
     def apply(self, form: Form, table: SegmentTable, rule: StressRule) -> Form | None:
+        result = self.apply_tracked(form, table, rule, None)
+        return None if result is None else result[0]
+
+    def apply_tracked(
+        self, form: Form, table: SegmentTable, rule: StressRule, boundary: int | None
+    ) -> tuple[Form, int | None] | None:
         """Nový tvar, nebo ``None``, když se nic nezmění či by slovo zaniklo.
 
         Obsahové slovo nesmí klesnout pod dvě hlásky ani ztratit poslední
@@ -114,7 +120,13 @@ class Process:
         result: list[int] = []
         skip = -1
         targets = set(sites)
+        # Hranice kmen | koncovka: kolik výstupních hlásek vzniklo z kmene.
+        # Vložená hláska na hranici patří ke koncovce, splynutí přes hranici
+        # ke kmeni.
+        new_boundary = boundary
         for index, segment in enumerate(form):
+            if boundary is not None and index == boundary:
+                new_boundary = len(result)
             if index == skip:
                 continue
             if index not in targets:
@@ -139,7 +151,9 @@ class Process:
                 assert self.segment is not None
                 result.append(self.segment)
                 skip = index + 1
+        if boundary is not None and boundary >= len(form):
+            new_boundary = len(result)
         new = tuple(result)
         if new == form or len(new) < 2 or not any(table.is_vowel(segment) for segment in new):
             return None
-        return new
+        return new, new_boundary

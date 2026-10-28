@@ -6,12 +6,13 @@ import math
 from dataclasses import dataclass, field
 from typing import Literal, Mapping, Sequence
 
-from cee.v2.language.lexicon import FormStore, Morpheme, PhonologyState
+from cee.v2.language.lexicon import FormStore, Morpheme, PhonologyState, UnitForm
+from cee.v2.language.morphology import FormChange, Paradigm, unit_id
 from cee.v2.language.processes import Process, StressRule
 from cee.v2.language.segments import SegmentTable, default_table
 from cee.v2.pools import LivePools
 from cee.v2.repertoire import Distribution, Origin, Repertoire, Variable, Variant
-from cee.v2.rng import stable_id
+from cee.v2.rng import stable_id, stable_int
 
 TerritoryLevel = Literal["world", "continent", "region", "area", "settlement"]
 TERRITORY_LEVELS: tuple[TerritoryLevel, ...] = ("world", "continent", "region", "area", "settlement")
@@ -116,6 +117,9 @@ class World:
     morphemes: dict[str, Morpheme] = field(default_factory=dict)
     #: ID procesní proměnné → proces. Chronologii změn drží každý kód sám.
     processes: dict[str, Process] = field(default_factory=dict)
+    #: Třída slova → paradigma; ID formové proměnné → analogická změna.
+    paradigms: dict[str, Paradigm] = field(default_factory=dict)
+    form_changes: dict[str, FormChange] = field(default_factory=dict)
     #: Tabulka hlásek; svět bez hláskových tvarů (M1) ji nepotřebuje.
     table: SegmentTable | None = None
 
@@ -134,9 +138,17 @@ class World:
                 return Distribution.fixed(variable.default)
         return found
 
+    def unit_of(self, code: Code, morpheme_id: str) -> UnitForm:
+        """Aktuální stav tvaru slova (tvar, hranice koncovky, koncovka) v kódu."""
+        stored = code.forms.get(morpheme_id)
+        if stored is not None:
+            return stored
+        morpheme = self.morphemes[morpheme_id]
+        return UnitForm(morpheme.form, morpheme.boundary, morpheme.exponent)
+
     def form_of(self, code: Code, morpheme_id: str) -> tuple[int, ...]:
         """Aktuální podkladový tvar morfému v daném kódu."""
-        return code.forms.get(morpheme_id) or self.morphemes[morpheme_id].form
+        return self.unit_of(code, morpheme_id).form
 
     def materialize(self, group_id: str) -> None:
         """Zapíše živé proměnné skupiny do jejího repertoáru (před odebráním či kopií)."""
@@ -204,16 +216,51 @@ class World:
         """Nejkratší délka generace; krok simulace nesmí být delší."""
         return min(group.generation_years for group in self.groups.values())
 
+    def _seed_paradigm(
+        self, root: Morpheme, endings: Mapping[tuple[str, str], Sequence[tuple[str, float]]]
+    ) -> None:
+        assert self.table is not None and root.word_class is not None
+        paradigm = self.paradigms[root.word_class]
+        for cell in paradigm.cells[1:]:
+            options = endings.get((root.word_class, cell))
+            if not options:
+                raise ValueError(f"Chybí koncovky pro {root.word_class}/{cell}.")
+            ending = _choose(options, root.id + cell)
+            affix = stable_id("affix", root.word_class, cell, ending)
+            if affix not in self.morphemes:
+                self.morphemes[affix] = Morpheme(
+                    affix, f"{root.word_class}.{cell}", self.table.parse(ending), kind="affix",
+                    word_class=root.word_class, cell=cell,
+                )
+            unit = Morpheme(
+                id=unit_id(root.id, cell, paradigm),
+                meaning=root.meaning,
+                form=root.form + self.morphemes[affix].form,
+                frequency=root.frequency * paradigm.weight(cell),
+                kind="word",
+                word_class=root.word_class,
+                lexeme=root.id,
+                cell=cell,
+                exponent=affix,
+                boundary=len(root.form),
+            )
+            self.morphemes[unit.id] = unit
+
     def seed_lexicon(
         self,
         concepts: Sequence[str],
         forms: Mapping[str, str] | None = None,
         frequencies: Mapping[str, float] | None = None,
+        classes: Mapping[str, str] | None = None,
+        endings: Mapping[tuple[str, str], Sequence[tuple[str, float]]] | None = None,
     ) -> Repertoire:
         """Zmrazený protojazyk: každý pojem má jedno zděděné slovo.
 
         Bez ``forms`` je slovo jen identifikátor lexému (svět M1). S nimi
         dostane každý pojem morfém s hláskovou podobou a svět tabulku hlásek.
+        Pojmy s třídou z ``classes``, pro kterou má svět paradigma, dostanou
+        také tvary ostatních buněk: kmen + koncovka vybraná z ``endings``
+        podle vah (např. plurál na -i u 65 % a -an u 35 % podstatných jmen).
         """
         repertoire = Repertoire()
         if forms is not None and self.table is None:
@@ -223,14 +270,20 @@ class World:
             payload: dict[str, object] = {"lexeme": stable_id("lexeme", "proto", concept)}
             if forms is not None:
                 assert self.table is not None
+                word_class = (classes or {}).get(concept)
+                if word_class not in self.paradigms:
+                    word_class = None
                 morpheme = Morpheme(
                     id=stable_id("morpheme", "proto", concept),
                     meaning=concept,
                     form=self.table.parse(forms[concept]),
                     frequency=float((frequencies or {}).get(concept, 0.5)),
+                    word_class=word_class,
                 )
                 self.morphemes[morpheme.id] = morpheme
                 payload["morpheme"] = morpheme.id
+                if word_class is not None:
+                    self._seed_paradigm(morpheme, endings or {})
             variant = Variant(
                 id=stable_id("variant", "proto", variable.id),
                 variable=variable.id,
@@ -241,6 +294,17 @@ class World:
             self.variants[variant.id] = variant
             repertoire.set(variable.id, Distribution.fixed(variant.id))
         return repertoire.freeze()
+
+
+def _choose(options: Sequence[tuple[str, float]], key: str) -> str:
+    """Deterministická volba podle vah (bez stavu generátoru)."""
+    total = sum(weight for _, weight in options)
+    point = (stable_int("ending", key) % 1_000_000) / 1_000_000 * total
+    for value, weight in options:
+        point -= weight
+        if point < 0:
+            return value
+    return options[-1][0]
 
 
 def gravity_links(

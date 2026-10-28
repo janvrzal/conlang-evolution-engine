@@ -155,6 +155,18 @@ def assess(world: World, group_id: str, variable_id: str, tick: int) -> ProcessA
     return result
 
 
+#: Splynutí dvou buněk téhož paradigmatu (synkretismus) je dražší než
+#: náhodný homofon dvou různých slov: ničí gramatický kontrast.
+PARADIGM_MERGE_WEIGHT = 2.0
+
+
+def _pair(world: World, frequency: dict[str, float], first: str, second: str) -> float:
+    mass = math.sqrt(frequency[first] * frequency[second])
+    if world.morphemes[first].lexeme_id == world.morphemes[second].lexeme_id:
+        mass *= PARADIGM_MERGE_WEIGHT
+    return mass
+
+
 def _assess(world: World, group_id: str, variable_id: str) -> ProcessAssessment:
     table = world.table
     if table is None:
@@ -183,11 +195,11 @@ def _assess(world: World, group_id: str, variable_id: str) -> ProcessAssessment:
         # nezasáhla, nebo s jiným zasaženým slovem s jiným původním tvarem.
         stayers = [other for other in vocabulary.owners.get(form, []) if other not in affected]
         for morpheme in movers:
-            merge += sum(math.sqrt(frequency[morpheme] * frequency[other]) for other in stayers)
+            merge += sum(_pair(world, frequency, morpheme, other) for other in stayers)
         for index, first in enumerate(movers):
             for second in movers[index + 1 :]:
                 if vocabulary.forms[first] != vocabulary.forms[second]:
-                    merge += math.sqrt(frequency[first] * frequency[second])
+                    merge += _pair(world, frequency, first, second)
 
     short = sum(
         frequency[morpheme] for morpheme, form in affected.items()

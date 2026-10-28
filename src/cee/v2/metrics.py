@@ -133,3 +133,56 @@ def hellinger(observed: dict[str, float], expected: dict[str, float]) -> float:
     q = np.array([expected.get(key, 0.0) for key in keys], dtype=np.float64)
     p, q = p / p.sum(), q / q.sum()
     return float(np.sqrt(0.5 * ((np.sqrt(p) - np.sqrt(q)) ** 2).sum()))
+
+
+# --- morfologie (M3) ------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class MorphologyProfile:
+    """Stav paradigmat jedné skupiny."""
+
+    #: Podíl buněk, jejichž kmen se liší od citačního tvaru (alternace).
+    alternation: float
+    #: Podíl buněk bez koncovky, které se od citačního tvaru liší jen kmenem.
+    morphologized: float
+    #: Podíl buněk, které zní stejně jako citační tvar (synkretismus).
+    syncretism: float
+    #: Průměrný podíl produktivní koncovky v buňkách tříd.
+    productive_share: float
+    #: Podíl buněk s menšinovou koncovkou u častých (≥ 0,5) a vzácných lexémů.
+    irregular_frequent: float
+    irregular_rare: float
+
+
+def morphology_profile(world: World, group_id: str) -> MorphologyProfile:
+    from cee.v2.morphology import citation_form, class_stats
+
+    code = world.groups[group_id].main_code
+    stats = class_stats(world, code)
+    cells = alternating = morphologized = syncretic = 0
+    irregular: dict[bool, list[bool]] = {True: [], False: []}
+    for unit in sorted(code.phonology.vocabulary):
+        morpheme = world.morphemes[unit]
+        if morpheme.kind != "word" or morpheme.word_class is None or morpheme.cell is None:
+            continue
+        state = world.unit_of(code, unit)
+        citation = citation_form(world, code, unit)
+        cells += 1
+        alternating += state.stem != citation
+        syncretic += state.form == citation
+        morphologized += not state.ending and state.form != citation
+        frequent = world.morphemes[morpheme.lexeme_id].frequency >= 0.5
+        irregular[frequent].append(state.exponent != stats.productive(morpheme.word_class, morpheme.cell))
+    shares = [
+        counts.most_common(1)[0][1] / sum(counts.values())
+        for counts in stats.exponents.values() if counts
+    ]
+    return MorphologyProfile(
+        alternation=alternating / cells if cells else 0.0,
+        morphologized=morphologized / cells if cells else 0.0,
+        syncretism=syncretic / cells if cells else 0.0,
+        productive_share=float(np.mean(shares)) if shares else 0.0,
+        irregular_frequent=float(np.mean(irregular[True])) if irregular[True] else 0.0,
+        irregular_rare=float(np.mean(irregular[False])) if irregular[False] else 0.0,
+    )

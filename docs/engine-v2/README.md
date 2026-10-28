@@ -43,6 +43,9 @@ Pozdější iterace upravují dřívější. Platí:
 - **Tlak `Actuation`** (iterace 3, doplněno v M2): nahodilost spuštění změny
   podle skupiny a epochy.
 - **Chronologii zvukových změn drží každý kód sám** (M2).
+- **Slovo a paradigma** (M3, mění iteraci 2): buňka paradigmatu je uložený
+  tvar s hranicí kmen | koncovka; alomorfie a synkretismus jsou rozdíly
+  mezi tvary, ne zvláštní struktura.
 - **Závazná pro kód je [specifikace](05-specifikace.md)**; iterace 1–4
   vysvětlují důvody.
 

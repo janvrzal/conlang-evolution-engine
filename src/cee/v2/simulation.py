@@ -7,7 +7,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from cee.v2 import phonology
+from cee.v2 import morphology, phonology
 from cee.v2.changes import DEFAULT_CHANGES, Change, InnovationContext, pressures_by_kind
 from cee.v2.events import WorldEvent
 from cee.v2.history import History
@@ -193,10 +193,13 @@ class Simulation:
                     self.world.groups[group_id].main_code.repertoire.set(variable_id, distribution)
         if self.world.table is not None:
             for group_id in live.group_ids:
-                if self.world.groups[group_id].main_code.phonology.pending:
+                state = self.world.groups[group_id].main_code.phonology
+                if state.pending:
                     phonology.restructure(
                         self.world, group_id, self.tick, self.config.dt, self.history, year
                     )
+                if state.morph_active:
+                    morphology.restructure(self.world, group_id, self.tick, self.history, year)
 
     def _changes(
         self, block: PoolBlock, before: np.ndarray, after: np.ndarray
@@ -239,7 +242,7 @@ class Simulation:
                 continue
             morpheme = self.world.variants[distribution.dominant()[0]].payload.get("morpheme")
             if isinstance(morpheme, str):
-                code.phonology.vocabulary.add(morpheme)
+                code.phonology.vocabulary.update(morphology.units_of(self.world, code, morpheme))
 
     def _follow_vocabulary(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
         """Slovo, které se stane dominantním, vstoupí do fonologie kódu."""
@@ -259,23 +262,29 @@ class Simulation:
                 if not isinstance(morpheme, str):
                     continue
                 code = self.world.groups[group_ids[column]].main_code
-                if direction == "enter":
-                    phonology.enter_vocabulary(self.world, code, morpheme)
-                else:
-                    phonology.leave_vocabulary(code, morpheme)
+                for unit in morphology.units_of(self.world, code, morpheme):
+                    if direction == "enter":
+                        phonology.enter_vocabulary(self.world, code, unit)
+                    else:
+                        phonology.leave_vocabulary(code, unit)
 
     def _activate_processes(self, block: PoolBlock, after: np.ndarray) -> None:
         """Proces, který ve skupině překročil malý podíl, začne působit na slova."""
         group_ids = self.world.live.group_ids
         for row, variable_id in enumerate(block.variable_ids):
-            if variable_id not in self.world.processes:
+            is_process = variable_id in self.world.processes
+            if not is_process and variable_id not in self.world.form_changes:
                 continue
             changed = phonology.changed_id(variable_id)
             if changed not in block.slots[row]:
                 continue
             slot = block.slots[row].index(changed)
             for column in np.flatnonzero(after[row, :, slot] >= phonology.ACTIVATION_SHARE):
-                phonology.activate(self.world, self.world.groups[group_ids[column]].main_code, variable_id)
+                code = self.world.groups[group_ids[column]].main_code
+                if is_process:
+                    phonology.activate(self.world, code, variable_id)
+                else:
+                    morphology.activate(self.world, code, variable_id)
 
     def _trace(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
         variants = self.world.variants

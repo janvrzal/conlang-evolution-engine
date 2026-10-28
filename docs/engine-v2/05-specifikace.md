@@ -32,9 +32,10 @@ src/cee/v2/
   language/
     segments.py       tabulka hlásek nad PanPhonem, přirozené třídy
     processes.py      Process: jedna zvuková změna v jednom prostředí
-    lexicon.py        Morpheme, FormStore, PhonologyState
+    lexicon.py        Morpheme, UnitForm, FormStore, PhonologyState
+    morphology.py     Paradigm, FormChange (vyrovnání, rozšíření vzoru)
     protoforms.py     protojazyk a nové kořeny podle fonotaktiky
-    constructions.py  Construction, paradigmata (M3)
+    constructions.py  Construction (M4)
   changes/
     base.py           Change (rodič)
     sound.py          rodiny A
@@ -48,6 +49,7 @@ src/cee/v2/
     social.py         učitelnost … tabu
   transmission.py     děti, dospělí, L2, inkrementace, drift, prahy
   phonology.py        procesní proměnné, fonologizace, uzavření, povrch
+  morphology.py       tvary buněk, produktivita, analogie, její zápis
   assessment.py       hodnocení procesu nad slovní zásobou (pro tlaky)
   events.py           WorldEvent a jeho podtřídy
   observe.py          vzdálenosti, shluky, linie jazyků
@@ -426,6 +428,46 @@ Zpřesnění návrhu při implementaci:
   inovace by ji ředily. Srovnání tvarů kognátů přijde v M6.
 - Slovo převzaté od sousedů vstupuje ve výchozím tvaru; adaptace podle
   tvaru u zdroje přijde s kontaktem v M5.
+
+### Stav M3 (2026-10-28)
+
+Splněno, testy v `tests/v2/test_v2_m3_gate.py` a `test_v2_morphology.py`.
+Měřeno na kontinuu 8 vesnic, 2 seedy, 3 000 let; podstatná jména mají
+singulár a plurál (koncovky -i 65 %, -an 35 %), slovesa prézens a
+préteritum (-ta 70 %, -u 30 %):
+
+- **Sturtevantův paradox**: bez vyrovnání má po 3 000 letech 67–70 % buněk
+  alternaci kmene, s vyrovnáním 46–47 %.
+- **Morfologizace vzniká sama**: 6–15 % buněk ztratilo koncovku a od
+  citačního tvaru se liší jen kmenem (typ přehlásky). Synkretismus zůstává
+  pod 2 %.
+- **Produktivita**: většinová koncovka se rozšíří z 65 % na 93–99 %.
+- **Častá slova si drží nepravidelnost**: menšinovou koncovku má 6–19 %
+  buněk častých lexémů a 0–1 % vzácných; analogie zasahuje spíš vzácná slova.
+- Zvukové metriky (délka slova, homofonie) drží i s paradigmaty.
+- Výkon: 8 vesnic × 150 pojmů (240 tvarů buněk) × 3 000 let ≈ 6 s.
+
+Zpřesnění návrhu při implementaci (mění iteraci 2):
+
+- **Slovo a paradigma místo alomorfů**: každá buňka paradigmatu je
+  samostatný uložený tvar s hranicí kmen | koncovka a odkazem na koncovku
+  (`UnitForm`). Zvukové změny z M2 tak pracují s celými tvary beze změny a
+  alomorfie, eroze koncovek i synkretismus jsou jen rozdíly mezi tvary.
+  Hranice se při každé změně přepočítá (vložení na hranici patří ke
+  koncovce, splynutí přes hranici ke kmeni).
+- **Sklon slova vůči zvukové změně patří lexému**, ne tvaru: všechny
+  buňky změnu přijmou nebo odmítnou společně a výjimka nevyrobí falešnou
+  alternaci.
+- **Analogie je formová proměnná** jednoho tvaru (`level`, `extend`). Když
+  ve skupině převáží (85 %), tvar se zapíše a změna se uzavře. Nový lexém
+  dostane tvary buněk podle produktivní koncovky kódu.
+- **Tlaky** `Uniformity` (vyrovnání +0,4, rozšíření 0,35 × zisk
+  produktivity), `Conservation` (−0,6 × (2f − 1); jména podle iterace 3
+  „Frekvence“) a `Distinctiveness` (−0,8 za vznik synkretismu, +0,6 za jeho
+  odstranění). Funkční zátěž zvukových změn počítá splynutí buněk téhož
+  paradigmatu dvojnásobně.
+- **Odloženo**: gramatikalizace (potřebuje konstrukce, M4), odvozování a
+  skládání, reanalýza hranice, kontaminace, zpětné tvoření a exaptace.
 
 ## Co převzít z legacy
 

@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from cee.v2.history import History
-from cee.v2.language.lexicon import PhonologyState
+from cee.v2.language.lexicon import PhonologyState, UnitForm
 from cee.v2.language.processes import Process
 from cee.v2.language.segments import Form
 from cee.v2.repertoire import Distribution, Origin, Variable, Variant
@@ -91,7 +91,12 @@ _BIASES: dict[tuple[int, str, str], float] = {}
 
 
 def word_bias(world: World, variable_id: str, morpheme_id: str) -> float:
-    """Seedovaný sklon slova vůči změně; stejný ve všech skupinách."""
+    """Seedovaný sklon slova vůči změně; stejný ve všech skupinách.
+
+    Patří lexému, ne jednotlivému tvaru: všechny buňky paradigmatu tak změnu
+    přijmou (nebo odmítnou) společně a výjimka nevyrobí falešnou alternaci.
+    """
+    morpheme_id = world.morphemes[morpheme_id].lexeme_id
     key = (world.seed, variable_id, morpheme_id)
     bias = _BIASES.get(key)
     if bias is None:
@@ -102,7 +107,7 @@ def word_bias(world: World, variable_id: str, morpheme_id: str) -> float:
 
 
 def _lead(world: World, process: Process, morpheme_id: str) -> float:
-    frequency = world.morphemes[morpheme_id].frequency
+    frequency = world.morphemes[world.morphemes[morpheme_id].lexeme_id].frequency
     return FREQUENCY_LEAD * (2.0 * frequency - 1.0) if process.reductive else 0.0
 
 
@@ -133,6 +138,11 @@ def _queue(world: World, code: Code, variable_id: str, morpheme_id: str) -> None
         return
     if _applies(world, code, variable_id, morpheme_id):
         bisect.insort(queue, (_needed(world, variable_id, morpheme_id), morpheme_id))
+
+
+def requeue(world: World, code: Code, variable_id: str, morpheme_id: str) -> None:
+    """Tvar se změnil (analogie, jiný proces): ať ho živý proces znovu posoudí."""
+    _queue(world, code, variable_id, morpheme_id)
 
 
 def active_processes(state: PhonologyState, world: World) -> list[str]:
@@ -192,10 +202,11 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
         while queue and queue[0][0] < level:
             _, morpheme_id = queue.pop(0)
             process = world.processes[variable_id]
-            new = process.apply(world.form_of(code, morpheme_id), world.table, code.stress_rule)
+            unit = world.unit_of(code, morpheme_id)
+            new = process.apply_tracked(unit.form, world.table, code.stress_rule, unit.boundary)
             if new is None:
                 continue  # dřívější přepis jinou změnou mu vzal půdu
-            code.forms.set(morpheme_id, new)
+            code.forms.set(morpheme_id, UnitForm(new[0], new[1], unit.exponent))
             state.restructured.setdefault(variable_id, set()).add(morpheme_id)
             state.version += 1
             rewritten.append(morpheme_id)
@@ -227,7 +238,7 @@ def surface(world: World, group_id: str, morpheme_id: str) -> Form:
     assert world.table is not None
     code = world.groups[group_id].main_code
     state = code.phonology
-    form = world.form_of(code, morpheme_id)
+    form = analogical(world, group_id, morpheme_id).form
     for variable_id in active_processes(state, world):
         if morpheme_id in state.restructured.get(variable_id, ()):
             continue
@@ -238,6 +249,20 @@ def surface(world: World, group_id: str, morpheme_id: str) -> Form:
         if changed is not None:
             form = changed
     return form
+
+
+def analogical(world: World, group_id: str, morpheme_id: str) -> UnitForm:
+    """Podkladový tvar, nebo analogický tvar, který ve skupině převažuje."""
+    code = world.groups[group_id].main_code
+    unit = world.unit_of(code, morpheme_id)
+    for variable_id, target in sorted(code.phonology.morph_active.items()):
+        if target == morpheme_id and changed_share(world, group_id, variable_id) >= 0.5:
+            from cee.v2.morphology import apply_form_change
+
+            changed = apply_form_change(world, code, world.form_changes[variable_id])
+            if changed is not None:
+                unit = changed
+    return unit
 
 
 def lexicon(world: World, group_id: str) -> dict[str, Form]:
