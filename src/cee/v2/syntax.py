@@ -208,6 +208,7 @@ def new_affix(world: World, code: Code, construction: Construction, group_id: st
             affix, f"{entry.word_class}.{entry.cell}", reduced, kind="affix",
             word_class=entry.word_class, cell=entry.cell, origin_group=group_id, origin_tick=tick,
             etymology="grammaticalization", sources=(construction.source or "",),
+            language=code.language,
         )
     return affix
 
@@ -277,7 +278,7 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
                     frequency=lexeme.frequency * entry.weight, kind="word",
                     word_class=entry.word_class, lexeme=root, cell=entry.cell,
                     exponent=new.exponent, boundary=new.boundary,
-                    origin_group=group_id, origin_tick=tick,
+                    origin_group=group_id, origin_tick=tick, language=lexeme.language,
                 )
             code.forms.set(unit, new)
             rewritten += 1

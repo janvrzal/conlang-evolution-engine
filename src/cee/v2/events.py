@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from cee.v2.history import History
-from cee.v2.world import TERRITORY_LEVELS, SpeechGroup, Territory, TerritoryLevel, World
+from cee.v2.world import TERRITORY_LEVELS, LinkKind, SpeechGroup, Territory, TerritoryLevel, World
 
 
 class WorldEvent(ABC):
@@ -40,6 +40,82 @@ class Border(WorldEvent):
             "border", tick, self.year,
             side_a=sorted(self.side_a), side_b=sorted(self.side_b),
             factor=self.factor, weakened_links=weakened,
+        )
+
+
+@dataclass(frozen=True)
+class Contact(WorldEvent):
+    """Skupiny začnou spolu mluvit (obchod, sousedství, dobytí)."""
+
+    year: float
+    pairs: tuple[tuple[str, str], ...]
+    strength: float = 0.5
+    kind: LinkKind = "weak"
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        for first, second in self.pairs:
+            world.connect(first, second, self.strength, self.kind)
+        history.record("contact", tick, self.year, pairs=[list(pair) for pair in self.pairs],
+                       strength=self.strength)
+
+
+@dataclass(frozen=True)
+class LanguageShift(WorldEvent):
+    """Dospělí ze skupiny ``group`` se začnou učit kód skupiny ``target``.
+
+    Vznikne nová skupina téže komunity: mluví kódem cílového jazyka, který
+    se její členové naučili jako druhý (``l2_share`` = 1), a do kterého proto
+    nesou svůj první jazyk. Další průběh (kolik mluvčích přejde, kdy se
+    starý kód přestanou učit děti, zda vymře) řídí
+    :func:`cee.v2.contact.community_step`.
+    """
+
+    year: float
+    group: str
+    target: str
+    #: Podíl komunity, který se cílový kód naučí hned na začátku.
+    initial_share: float = 0.1
+    #: Jak velkou část vstupu bere nová skupina od rodilých mluvčích cílového
+    #: jazyka. Komunita, která jazyk mění, se ho učí hlavně sama od sebe.
+    openness: float = 0.2
+    internal_strength: float = 0.8
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        source, target = world.groups[self.group], world.groups[self.target]
+        world.materialize(target.id)
+        code = target.main_code.branch()
+        code.acquisition, code.l1_source, code.l2_share = "L2", source.id, 1.0
+        community = source.community or source.id
+        source.community = community
+        population = max(1, round(source.population * self.initial_share))
+        source.population = max(1, source.population - population)
+        group = world.add_group(
+            SpeechGroup(
+                id=f"{source.id}>{code.language}",
+                territory=source.territory,
+                population=population,
+                codes=[code],
+                generation_years=source.generation_years,
+                prestige=target.prestige,
+                openness=self.openness,
+                community=community,
+            )
+        )
+        # Novým kódem mluví s těmi sousedy, kteří ho už umějí: s rodilými
+        # mluvčími i se sousedními komunitami, které na něj přecházejí také.
+        for link in world.neighbors(source.id):
+            neighbor = world.groups[link.target]
+            for other in world.group_ids():
+                peer = world.groups[other]
+                same_community = other == neighbor.id or (
+                    neighbor.community is not None and peer.community == neighbor.community
+                )
+                if same_community and other != group.id and peer.main_code.language == code.language:
+                    world.connect(group.id, other, link.strength, link.kind)
+        world.connect(group.id, source.id, self.internal_strength, "strong")
+        history.record(
+            "bilingualism", tick, self.year, group=source.id, learners=group.id,
+            language=code.language, population=population,
         )
 
 

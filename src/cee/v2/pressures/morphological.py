@@ -67,6 +67,28 @@ class Conservation(Pressure):
         )
 
 
+class Teachability(Pressure):
+    """Dospělí, kteří se jazyk učí jako druhý, nepravidelnosti neudrží.
+
+    Pravidelný tvar (vyrovnání, rozšíření vzoru) má výhodu úměrnou podílu
+    L2 mluvčích ve skupině (Trudgill 2011; Lupyan & Dale 2010). Bez nich je
+    tlak nulový. Reanalýza hranice regularizace není.
+    """
+
+    name = "teachability"
+    strength = 1.0
+
+    def scores(self, batch: PressureBatch) -> FloatArray:
+        world = batch.world
+        shares = np.array([world.groups[group_id].main_code.l2_share for group_id in batch.group_ids])
+        if not shares.any():
+            return np.zeros_like(batch.freqs)
+        return _form_scores(
+            batch,
+            lambda change, _: 0.0 if change.lexeme_wide else self.strength,
+        ) * shares[None, :, None]
+
+
 class Distinctiveness(Pressure):
     """Tvar buňky má zůstat odlišný od citačního tvaru.
 

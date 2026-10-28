@@ -48,12 +48,19 @@ class Code:
     forms: FormStore = field(default_factory=FormStore)
     phonology: PhonologyState = field(default_factory=PhonologyState)
     stress_rule: StressRule = "penult"
+    #: Linie jazyka (protojazyk, ze kterého kód pochází). Kontakt mezi kódy
+    #: různých linií prochází filtrem přenositelnosti (M5).
+    language: str = "proto"
+    #: Podíl mluvčích, kteří se kód naučili až v dospělosti (0 až 1). Řídí
+    #: interferenci z ``l1_source`` a tlak `Teachability`.
+    l2_share: float = 0.0
 
     def branch(self) -> Code:
         """Nezávislá kopie kódu (zjemnění, odštěpení)."""
         return Code(
             self.id, self.repertoire.branch(), self.usage_share, self.acquisition,
             self.l1_source, self.forms.branch(), self.phonology.branch(), self.stress_rule,
+            self.language, self.l2_share,
         )
 
 
@@ -78,6 +85,15 @@ class SpeechGroup:
     #: Souhrnná skupina zastupuje celé nerozepsané území.
     aggregate: bool = False
     internal_diversity: float = 0.0
+    #: Vícejazyčná komunita je v simulaci víc skupin, jedna na kód; mají
+    #: společné ``community`` (``None`` = skupina je komunitou sama).
+    community: str | None = None
+    #: Podíl dospělých přistěhovalců na generaci, kteří se kód učí jako druhý
+    #: jazyk (obchodní město). Drží ``l2_share`` hlavního kódu.
+    immigration: float = 0.0
+    #: Učí se kód ještě děti? Kód pod prahem užívání v komunitě se nepředává
+    #: a jeho skupina jen stárne.
+    transmitted: bool = True
 
     def __post_init__(self) -> None:
         if self.population <= 0:
@@ -244,25 +260,36 @@ class World:
     def position_of(self, group_id: str) -> tuple[float, float] | None:
         return self.territories[self.groups[group_id].territory].position
 
+    def renewal(self, group_id: str, dt: float) -> float:
+        """Podíl skupiny, který se za krok učí jazyk znovu (0 bez dětí)."""
+        group = self.groups[group_id]
+        return min(1.0, dt / group.generation_years) if group.transmitted else 0.0
+
     def generation_ceiling(self) -> float:
         """Nejkratší délka generace; krok simulace nesmí být delší."""
         return min(group.generation_years for group in self.groups.values())
 
     def _seed_paradigm(
-        self, root: Morpheme, endings: Mapping[tuple[str, str], Sequence[tuple[str, float]]]
+        self, root: Morpheme, endings: Mapping[tuple[str, str], Sequence[tuple[str, float]]],
+        cells: Sequence[str] | None = None,
     ) -> None:
         assert self.table is not None and root.word_class is not None
         paradigm = self.paradigms[root.word_class]
         for cell in paradigm.cells[1:]:
+            if cells is not None and cell not in cells:
+                continue
             options = endings.get((root.word_class, cell))
             if not options:
                 raise ValueError(f"Chybí koncovky pro {root.word_class}/{cell}.")
             ending = _choose(options, root.id + cell)
-            affix = stable_id("affix", root.word_class, cell, ending)
+            parts = (root.word_class, cell, ending)
+            affix = stable_id("affix", *parts) if root.language == "proto" else stable_id(
+                "affix", root.language, *parts
+            )
             if affix not in self.morphemes:
                 self.morphemes[affix] = Morpheme(
                     affix, f"{root.word_class}.{cell}", self.table.parse(ending), kind="affix",
-                    word_class=root.word_class, cell=cell,
+                    word_class=root.word_class, cell=cell, language=root.language,
                 )
             unit = Morpheme(
                 id=unit_id(root.id, cell, paradigm),
@@ -275,6 +302,7 @@ class World:
                 cell=cell,
                 exponent=affix,
                 boundary=len(root.form),
+                language=root.language,
             )
             self.morphemes[unit.id] = unit
 
@@ -285,6 +313,9 @@ class World:
         frequencies: Mapping[str, float] | None = None,
         classes: Mapping[str, str] | None = None,
         endings: Mapping[tuple[str, str], Sequence[tuple[str, float]]] | None = None,
+        *,
+        language: str = "proto",
+        cells: Mapping[str, Sequence[str]] | None = None,
     ) -> Repertoire:
         """Zmrazený protojazyk: každý pojem má jedno zděděné slovo.
 
@@ -293,34 +324,44 @@ class World:
         Pojmy s třídou z ``classes``, pro kterou má svět paradigma, dostanou
         také tvary ostatních buněk: kmen + koncovka vybraná z ``endings``
         podle vah (např. plurál na -i u 65 % a -an u 35 % podstatných jmen).
+
+        Svět může mít víc protojazyků (M5): každý má vlastní ``language``,
+        ze kterého se odvozují ID jeho slov a variant, a ``cells`` omezí
+        buňky paradigmat, které jazyk má (paradigmata světa jsou sjednocení).
+        Pojmy, jejich frekvence a třídy jsou vlastnost významu a určí je
+        první zasetý jazyk.
         """
         repertoire = Repertoire()
         if forms is not None and self.table is None:
             self.table = default_table()
         for concept in dict.fromkeys(concepts):
             variable = Variable("lexical", concept)
-            payload: dict[str, object] = {"lexeme": stable_id("lexeme", "proto", concept)}
+            payload: dict[str, object] = {"lexeme": stable_id("lexeme", language, concept)}
             if forms is not None:
                 assert self.table is not None
                 word_class = (classes or {}).get(concept)
                 if word_class not in self.paradigms:
                     word_class = None
-                self.concept_classes[concept] = word_class
+                self.concept_classes.setdefault(concept, word_class)
                 morpheme = Morpheme(
-                    id=stable_id("morpheme", "proto", concept),
+                    id=stable_id("morpheme", language, concept),
                     meaning=concept,
                     form=self.table.parse(forms[concept]),
-                    frequency=float((frequencies or {}).get(concept, 0.5)),
+                    frequency=self.concept_frequencies.setdefault(
+                        concept, float((frequencies or {}).get(concept, 0.5))
+                    ),
                     word_class=word_class,
+                    language=language,
                 )
-                self.concept_frequencies[concept] = morpheme.frequency
                 self.morphemes[morpheme.id] = morpheme
                 payload["morpheme"] = morpheme.id
                 payload["origin"] = "inherited"
                 if word_class is not None:
-                    self._seed_paradigm(morpheme, endings or {})
+                    self._seed_paradigm(
+                        morpheme, endings or {}, None if cells is None else cells.get(word_class, ())
+                    )
             variant = Variant(
-                id=stable_id("variant", "proto", variable.id),
+                id=stable_id("variant", language, variable.id),
                 variable=variable.id,
                 payload=payload,
                 origin=Origin(change=None, tick=0, year=self.start_year, group=None),
@@ -349,17 +390,19 @@ def gravity_links(
     reference_population: float = 1_000.0,
     reference_distance: float = 10.0,
     max_distance: float | None = None,
+    groups: Sequence[str] | None = None,
 ) -> int:
     """Doplní vazby podle gravitačního modelu (Trudgill 1974).
 
     Síla roste s geometrickým průměrem populací a klesá se čtvercem
     vzdálenosti; saturace ``x / (1 + x)`` ji drží v intervalu 0 až 1.
     Referenční populace a vzdálenost jsou výchozí odhad, ne kalibrace.
-    Vrací počet vytvořených oboustranných vazeb.
+    Vrací počet vytvořených oboustranných vazeb. S ``groups`` jen mezi
+    vybranými skupinami (např. uvnitř jednoho jazyka).
     """
     placed = [
         (group_id, world.position_of(group_id))
-        for group_id in world.group_ids()
+        for group_id in (world.group_ids() if groups is None else sorted(groups))
         if world.position_of(group_id) is not None
     ]
     created = 0

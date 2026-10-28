@@ -36,6 +36,10 @@ Pravidla v2, která se snadno poruší:
 * **Tvary slov** jsou `UnitForm` (tvar, hranice kmen | koncovka, koncovka)
   ve `FormStore` kódu; zvukové procesy se aplikují dvoufázově a výstup je
   vždy skutečná „obyčejná“ hláska (`SegmentTable.changed`).
+* **Kód je uzel sítě.** Vícejazyčná komunita jsou skupiny se společným
+  `community`, jedna na kód; kontakt mezi liniemi jazyků (`Code.language`)
+  prochází filtry v `contact.py`. Nový morfém nese `language` kódu, ve
+  kterém vznikl.
 * **Gramatické funkce jsou data.** Minulý čas, člen, pád, zápor apod. jsou
   řádky `cee/data/v2_grammar.yaml`; jazyk je má podle profilu protojazyka.
   Do kódu změn a tlaků nepiš jména konkrétních funkcí, čti katalog.

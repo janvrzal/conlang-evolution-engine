@@ -42,7 +42,6 @@ src/cee/v2/
     morphology.py     B
     syntax.py         C
     lexicon.py        D
-    contact.py        Výpůjčka, Kalk
   pressures/
     base.py           Pressure
     linguistic.py     artikulace … expresivita
@@ -53,6 +52,7 @@ src/cee/v2/
   semantics.py        graf pojmů (výřez CLICS⁴ + DatSemShift), recepty složenin
   syntax.py           konstrukční proměnné, slabost vyjádření, zápis nové koncovky
   assessment.py       hodnocení procesu nad slovní zásobou (pro tlaky)
+  contact.py          filtry přenositelnosti, adaptace výpůjček, přechod jazyka
   events.py           WorldEvent a jeho podtřídy
   observe.py          vzdálenosti, shluky, linie jazyků
   history.py          log událostí, snímky
@@ -622,6 +622,74 @@ beze změny prahů.
 - **Klíč konstrukce** se prodlouží o dárce jen u exaptace, takže ID variant
   z M4 zůstala stejná.
 
+### Stav M5 (2026-10-28)
+
+Splněno, testy v `tests/v2/test_v2_m5_gate.py` a `test_v2_contact.py`.
+Svět s jedním jazykem dává po M5 bitově stejnou historii jako před ním
+(ověřeno porovnáním otisků logu s předchozím commitem pro světy M1 až M4b).
+
+- **Kód je uzel sítě.** Vícejazyčná komunita je v simulaci víc skupin, jedna
+  na kód, se společným `community`. Přenos, sklad živých proměnných i
+  všechny změny tak dál pracují se skupinou a jejím hlavním kódem. Iterace 4
+  s víc skupinami v jednom sídle počítá; datový model `SpeechGroup.codes`
+  zůstává, ale simuluje se jen první kód.
+- **Linie jazyka**: `Code.language` a `Morpheme.language`. Svět může mít víc
+  protojazyků (`contact_world`); ID slov a variant výchozí linie `proto`
+  se nezměnila. Paradigmata světa jsou sjednocení buněk všech jazyků, každý
+  jazyk má koncovky jen ve svých buňkách.
+- **Filtr přenositelnosti** (Thomason & Kaufman 1988) v míšení: vazba mezi
+  skupinami různých linií přenáší proměnnou jen s vahou podle typu.
+  Výpůjčka: slova 0,5 × (1 − frekvence pojmu), procesy a konstrukce 0,1,
+  analogie 0. Interference L2 kódu z prvního jazyka jeho mluvčích (váha
+  0,5 × podíl L2 mluvčích): procesy a konstrukce 1, slova 0,05, analogie 0.
+  Konstrukce jsou popsané pojmy, ne morfémy, takže převzatá konstrukce je
+  rovnou kalk (vyjádří se domácím slovem pro *step*).
+- **Adaptace výpůjčky**: cizí kořen dostane při vstupu do slovní zásoby
+  tvar od nejbližšího mluvčího dárcovského jazyka a cizí hlásky se nahradí
+  nejbližší hláskou příjemce podle rysů PanPhonu (samohláska zůstane
+  samohláskou). Tvary buněk dostane podle produktivních koncovek příjemce a
+  jen v buňkách, které příjemce má.
+- **Proměnné, ve kterých se jazyky liší od začátku**, se při startu a po
+  každé události načtou do živého skladu (`LivePools.load_differing`);
+  jinak by se slova dvou jazyků nikdy nesetkala.
+- **`Teachability`** (Trudgill 2011): vyrovnání a rozšíření vzoru mají ve
+  skupině výhodu rovnou podílu L2 mluvčích a L2 mluvčí je navrhují až
+  pětkrát častěji (přehnané zobecnění). Podíl drží přistěhovalectví
+  (`immigration`, podíl dospělých nováčků na generaci) nebo přechod jazyka.
+- **Přechod jazyka** (událost `LanguageShift`): vznikne skupina téže
+  komunity, která mluví kódem cílového jazyka jako druhým (`l2_share` 1,
+  otevřenost 0,2, protože komunita se jazyk učí hlavně sama od sebe). Mluvčí
+  přecházejí podle Abramse a Strogatze (2003): za generaci podíl `status ×
+  podíl_cíle^1,31` (status z prestiže). Pod 20 % užívání se starý kód
+  nepředává dětem a skupina jen stárne; pod jednoho mluvčího zaniká
+  (`transmission_stopped`, `language_shift`). Pak má skupina zase svou
+  dřívější otevřenost.
+
+Naměřeno (seedy 1 a 2, není-li uvedeno jinak):
+
+- **Výpůjčky**: po 1 500 letech kontaktu dvou jazyků přes jednu vazbu má
+  každá vesnice 8–15 přejatých slov z asi 200 pojmů a výpůjčky se rozšíří i
+  do vnitrozemí. Přejaté pojmy mají průměrnou frekvenci 0,13–0,14, všechny
+  pojmy 0,34–0,36. Konstrukce ani koncovky se nepřejímají.
+- **S2**: po 2 000 letech má město s 30 % přistěhovalců 7,5–8,2 %
+  nepravidelných tvarů vzácných slov, ostrov 27–31 %; podíl produktivní
+  koncovky 0,87–0,89 proti 0,68–0,73. Častá slova si nepravidelnost drží i
+  ve městě. Totéž město bez přistěhovalců má složitost 0,15–0,17, se 60 %
+  přistěhovalců 0,05–0,06.
+- **S3**: tři vesnice jazyka s prestiží 0,3 přejdou na sousední jazyk
+  s prestiží 1 za 200–250 let (děti přestanou starý jazyk učit 200–250 let po
+  kontaktu, hned potom vymře). O 800 let později mají vnitrozemské vesnice
+  0,63–0,86 podílu konstrukcí původního jazyka (zápor za slovesem, SOV),
+  pohraniční 0,25–0,41, sousední vesnice většinového jazyka 0,04–0,10 a jeho
+  jádro 0,01. Všechny zvukové změny původního jazyka jsou zapsané v tvarech
+  nového a slov původního jazyka je pod 1,5 %.
+- **Metrika 11** (20 izolovaných skupin, populace 100–10 000 × podíl L2
+  0–0,45, 1 500 let, seedy 1–3): Spearmanova korelace složitosti s podílem L2
+  −0,77 až −0,86, s populací −0,12 až −0,36. Malá skupina drží menšinové
+  vzory driftem, ve velké vítězí selekce pro jednotnost. Vliv populace je
+  ale slabý; v reálném světě jde z velké části přes podíl L2 mluvčích (velké
+  jazyky jich mají víc), který scénář nastavuje nezávisle.
+
 ## Známé mezery a kam patří
 
 Sepsáno 2026-10-28 při revizi plánu po M3.
@@ -637,8 +705,13 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | ~~Konverze mezi slovními druhy~~ | vyřešeno v M4 |
 | ~~Exaptace a jazyky bez některých kategorií~~ | vyřešeno v M4b |
 | Další funkce katalogu: vid, shoda, osoba, rod a jmenné třídy; víc dárců exaptace | rozšíření katalogu (data), kdykoli |
-| Člen (a obecně funkce `zero`) do 3 000 let vznikne ve všech jazycích; chybí tlak, který by jazyk bez kategorie dlouho udržel (např. kontakt nebo norma) | M5/M6 (kontakt, instituce), tempo M7 |
+| Člen (a obecně funkce `zero`) do 3 000 let vznikne ve všech jazycích; chybí tlak, který by jazyk bez kategorie dlouho udržel (např. norma) | M6 (instituce), tempo M7 |
 | Přirozená četnost eroze konkrétní koncovky je nízká (zvukové inovace se dělí mezi stovky kandidátů); analytizace je proto doložena kontrolovanými pokusy | M7 (kalibrace tempa zvukových změn) |
+| Ostrov má méně alternací kmene než město: izolovaná vesnice přijme méně zvukových změn. Trudgillovo pozorování, že malé izolované komunity hromadí morfofonologickou složitost, model nereprodukuje (zvyšuje jen nepravidelnost koncovek) | M7, případně tlak sítí s hustými vazbami |
+| Stabilní dvojjazyčnost bez přechodu (diglosie, obchodní lingua franca) a obrácený směr (elita přejde na jazyk většiny, superstrát) nejsou ověřené; Abrams–Strogatz s nerovným statusem vždy končí přechodem | M6 (instituce, prestiž kódů) |
+| Výpůjčka nového pojmu nebo kategorie (změna `Výpůjčka`): všechny jazyky mají stejnou sadu pojmů | až budou pojmy přibývat (M6, události) |
+| Příbuzné jazyky se po rozpadu mísí bez filtru, protože mají stejnou linii; filtr by měl záviset na pozorované vzdálenosti | M6 (linie jazyků) |
+| Konstanty kontaktu (filtry, váha interference, rychlost přechodu) jsou odhad | M7 |
 | CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |
 | Výkon režimů region a výš s fonologií a morfologií neměřen | M6 (výkonová brána) |
 

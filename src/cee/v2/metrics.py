@@ -222,3 +222,64 @@ def morphology_profile(world: World, group_id: str) -> MorphologyProfile:
         irregular_frequent=float(np.mean(irregular[True])) if irregular[True] else 0.0,
         irregular_rare=float(np.mean(irregular[False])) if irregular[False] else 0.0,
     )
+
+
+def morphological_complexity(world: World, group_id: str) -> float:
+    """Podíl tvarů s menšinovou (nepravidelnou) koncovkou buňky (metrika 11).
+
+    Analogie počtu vzorů a nepravidelností, které musí mluvčí znát; s ní
+    pracují Lupyan & Dale 2010 a Trudgill 2011.
+    """
+    return 1.0 - morphology_profile(world, group_id).productive_share
+
+
+def spearman(first: Sequence[float], second: Sequence[float]) -> float:
+    """Spearmanova pořadová korelace (shody dostanou průměrné pořadí)."""
+
+    def ranks(values: Sequence[float]) -> FloatArray:
+        array = np.asarray(values, dtype=np.float64)
+        order = np.argsort(array, kind="stable")
+        result = np.empty(len(array))
+        result[order] = np.arange(len(array), dtype=np.float64)
+        for value in np.unique(array):
+            tied = array == value
+            result[tied] = result[tied].mean()
+        return result
+
+    a, b = ranks(first), ranks(second)
+    if np.ptp(a) == 0 or np.ptp(b) == 0:
+        return 0.0
+    return float(np.corrcoef(a, b)[0, 1])
+
+
+def distinctive_variants(
+    world: World, group_id: str, reference_id: str, kinds: Sequence[str] = ("lexical", "process", "construction")
+) -> dict[str, tuple[str, str]]:
+    """Proměnné, ve kterých má skupina jinou převládající variantu než reference.
+
+    Vrací proměnná → (typ, převládající varianta skupiny). Slouží k měření
+    stop jazyka po kontaktu (substrát, výpůjčky).
+    """
+    found: dict[str, tuple[str, str]] = {}
+    for variable_id, variable in sorted(world.variables.items()):
+        if variable.kind not in kinds:
+            continue
+        own, other = world.distribution(group_id, variable_id), world.distribution(reference_id, variable_id)
+        if own is None or other is None:
+            continue
+        leader = own.dominant()[0]
+        if leader != other.dominant()[0]:
+            found[variable_id] = (variable.kind, leader)
+    return found
+
+
+def trace_shares(world: World, group_id: str, variants: dict[str, tuple[str, str]]) -> dict[str, float]:
+    """Průměrný podíl daných variant ve skupině podle typu proměnné."""
+    shares: dict[str, list[float]] = {}
+    for variable_id, (kind, variant) in sorted(variants.items()):
+        distribution = world.distribution(group_id, variable_id)
+        share = 0.0
+        if distribution is not None and variant in distribution.variants:
+            share = float(distribution.freqs[distribution.variants.index(variant)])
+        shares.setdefault(kind, []).append(share)
+    return {kind: float(np.mean(values)) for kind, values in shares.items()}

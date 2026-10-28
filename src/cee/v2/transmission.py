@@ -14,6 +14,7 @@ from typing import Mapping, Sequence
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2 import contact
 from cee.v2.pools import PoolBlock
 from cee.v2.pressures.base import Pressure, PressureBatch
 from cee.v2.rng import hash_normal, stable_int
@@ -74,9 +75,12 @@ class StepInputs:
     """Vstupy jednoho kroku sdílené všemi bloky živých proměnných."""
 
     group_ids: Sequence[str]
-    #: Míšení po komponentách sítě, viz :func:`_mix`.
+    #: Míšení po komponentách sítě, viz :func:`_mix`. ``blocks`` jsou vazby
+    #: uvnitř jazyka (a vlastní skupina), ``cross`` vazby mezi jazyky; ty
+    #: procházejí filtrem přenositelnosti (prázdné, když žádné nejsou).
     members: Sequence[npt.NDArray[np.intp]]
     blocks: Sequence[FloatArray]
+    cross: Sequence[FloatArray]
     alone: npt.NDArray[np.intp]
     alone_weight: FloatArray
     renewal: FloatArray
@@ -84,6 +88,10 @@ class StepInputs:
     loss_floor: FloatArray
     row_keys: npt.NDArray[np.uint64]
     tick: int
+    #: Interference: L2 skupina (index), skupina jejího prvního jazyka a váha.
+    learners: npt.NDArray[np.intp]
+    sources: npt.NDArray[np.intp]
+    interference: FloatArray
 
 
 def _components(mixing: FloatArray) -> list[npt.NDArray[np.intp]]:
@@ -106,7 +114,7 @@ def _components(mixing: FloatArray) -> list[npt.NDArray[np.intp]]:
     return [np.array(items, dtype=np.intp) for _, items in sorted(members.items())]
 
 
-def _mix(inputs: StepInputs, values: FloatArray) -> FloatArray:
+def _mix(inputs: StepInputs, values: FloatArray, cross: bool = False) -> FloatArray:
     """Vážený vstup od sousedů: ``values`` má skupiny na ose 1.
 
     Násobí se zvlášť každá propojená komponenta. Knihovna BLAS totiž sčítá v
@@ -115,10 +123,10 @@ def _mix(inputs: StepInputs, values: FloatArray) -> FloatArray:
     Osamocené skupiny (učí se jen samy od sebe) se vyřídí najednou.
     """
     result = np.zeros_like(values)
-    if len(inputs.alone):
+    if len(inputs.alone) and not cross:
         shape = (1, -1) + (1,) * (values.ndim - 2)
         result[:, inputs.alone] = inputs.alone_weight.reshape(shape) * values[:, inputs.alone]
-    for members, matrix in zip(inputs.members, inputs.blocks):
+    for members, matrix in zip(inputs.members, inputs.cross if cross else inputs.blocks):
         part = values[:, members]
         flat = np.moveaxis(part, 1, 0).reshape(len(members), -1)
         mixed = (matrix @ flat).reshape((len(members), part.shape[0], *part.shape[2:]))
@@ -128,16 +136,36 @@ def _mix(inputs: StepInputs, values: FloatArray) -> FloatArray:
 
 def prepare(world: World, group_ids: Sequence[str], params: TransmissionParams, tick: int) -> StepInputs:
     groups = [world.groups[group_id] for group_id in group_ids]
-    renewal = np.array([min(1.0, params.dt / group.generation_years) for group in groups])
+    renewal = np.array([world.renewal(group_id, params.dt) for group_id in group_ids])
     cohort = np.maximum(1.0, renewal * np.array([group.population for group in groups]))
     mixing = mixing_matrix(world, group_ids, params.alpha)
     components = _components(mixing)
     linked = [members for members in components if len(members) > 1]
     alone = np.array([members[0] for members in components if len(members) == 1], dtype=np.intp)
+    languages = np.array([group.main_code.language for group in groups])
+    foreign = languages[:, None] != languages[None, :]
+    cross = [] if not foreign.any() else [
+        np.where(foreign[np.ix_(members, members)], mixing[np.ix_(members, members)], 0.0)
+        for members in linked
+    ]
+    if cross and not any(block.any() for block in cross):
+        cross = []
+    index = {group_id: position for position, group_id in enumerate(group_ids)}
+    learners = [
+        (index[group.id], index[group.main_code.l1_source],
+         contact.INTERFERENCE_WEIGHT * group.main_code.l2_share)
+        for group in groups
+        if group.main_code.l1_source in index and group.main_code.l2_share > 0
+    ]
     return StepInputs(
         group_ids=group_ids,
         members=linked,
-        blocks=[mixing[np.ix_(members, members)] for members in linked],
+        blocks=[
+            np.where(foreign[np.ix_(members, members)], 0.0, mixing[np.ix_(members, members)])
+            if cross else mixing[np.ix_(members, members)]
+            for members in linked
+        ],
+        cross=cross,
         alone=alone,
         alone_weight=mixing[alone, alone],
         renewal=renewal,
@@ -151,6 +179,9 @@ def prepare(world: World, group_ids: Sequence[str], params: TransmissionParams, 
             dtype=np.uint64,
         ),
         tick=tick,
+        learners=np.array([item[0] for item in learners], dtype=np.intp),
+        sources=np.array([item[1] for item in learners], dtype=np.intp),
+        interference=np.array([item[2] for item in learners], dtype=np.float64),
     )
 
 
@@ -171,8 +202,21 @@ def transmit(
     current, previous, present = block.freqs, block.previous, block.present
     heard = _mix(inputs, current)
     weight = _mix(inputs, present.astype(np.float64))
+    if inputs.cross:
+        # Vazby mezi jazyky: jen tolik, kolik filtr přenositelnosti propustí.
+        factor = np.array([contact.borrowing_factor(world, variable_id) for variable_id in block.variable_ids])
+        heard = heard + factor[:, None, None] * _mix(inputs, current, cross=True)
+        weight = weight + factor[:, None] * _mix(inputs, present.astype(np.float64), cross=True)
     # Skupiny bez této proměnné se z míšení vyřadí a zbytek vstupu se převáží.
     heard = np.where(weight[:, :, None] > 0, heard / np.where(weight > 0, weight, 1.0)[:, :, None], 0)
+    if len(inputs.learners):
+        # Dospělí, kteří se kód naučili jako druhý, do něj nesou svůj první jazyk.
+        factor = np.array([contact.interference_factor(world, variable_id) for variable_id in block.variable_ids])
+        share = factor[:, None] * inputs.interference[None, :]
+        share = np.where(present[:, inputs.sources], share, 0.0)[:, :, None]
+        heard[:, inputs.learners] = (
+            (1.0 - share) * heard[:, inputs.learners] + share * current[:, inputs.sources]
+        )
 
     fitness = np.zeros_like(current)
     kinds = np.array([world.variables[variable_id].kind for variable_id in block.variable_ids])

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Mapping, Sequence, cast
+from typing import ClassVar, Mapping, Sequence, cast
 
 import numpy as np
 
@@ -10,13 +10,14 @@ from cee.v2 import morphology
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.morphology import FormChange
 from cee.v2.pressures import Actuation, Conformity, Pressure
-from cee.v2.pressures.morphological import Conservation, Distinctiveness, Uniformity
+from cee.v2.pressures.morphological import Conservation, Distinctiveness, Teachability, Uniformity
 from cee.v2.repertoire import Origin, Variable, Variant
 
 MORPH_PRESSURES: Mapping[type[Pressure], float] = {
     Uniformity: 1.0,
     Conservation: 1.0,
     Distinctiveness: 1.0,
+    Teachability: 1.0,
     Conformity: 0.1,
     Actuation: 1.0,
 }
@@ -29,8 +30,14 @@ class AnalogicalChange(Change):
     rate_basis = "generation"
     pressures = MORPH_PRESSURES
 
+    #: Kolikrát častěji navrhují regularizaci L2 mluvčí (přehnané zobecnění).
+    l2_boost: ClassVar[float] = 4.0
+
     def candidates(self, context: InnovationContext) -> dict[str, FormChange]:
         raise NotImplementedError
+
+    def rate_scale(self, context: InnovationContext) -> float:
+        return 1.0 + self.l2_boost * context.code.l2_share
 
     def _sites(self, context: InnovationContext) -> dict[str, FormChange]:
         state = context.code.phonology
@@ -121,6 +128,7 @@ class Rebracketing(AnalogicalChange):
     kind = "rebracketing"
     # Sporadický jev: jednotky případů na jazyk za tisíciletí.
     base_rate = 0.0002
+    l2_boost = 0.0  # reanalýza hranice není regularizace
 
     def candidates(self, context: InnovationContext) -> dict[str, FormChange]:
         from cee.v2 import syntax

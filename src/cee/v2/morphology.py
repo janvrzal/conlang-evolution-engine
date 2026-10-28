@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, cast
 
 from cee.v2.history import History
 from cee.v2.language.lexicon import Morpheme, UnitForm
-from cee.v2.language.morphology import FormChange, extend, level, rebracket, unit_id
+from cee.v2.language.morphology import FormChange, Paradigm, extend, level, rebracket, unit_id
 from cee.v2.language.segments import Form
 from cee.v2.repertoire import Origin, Variable, Variant
 
@@ -80,12 +80,16 @@ def units_of(world: World, code: Code, root_id: str) -> list[str]:
     """Tvary slova (citační tvar a buňky paradigmatu) pro lexém.
 
     Lexém, který vznikl až během simulace, dostane tvary buněk podle
-    produktivní koncovky kódu, kde je poprvé potřeba.
+    produktivní koncovky kódu, kde je poprvé potřeba. Výpůjčka (kořen jiné
+    linie jazyka) dostane v kódu jen buňky, které kód má, a to s jeho
+    produktivními koncovkami, ne s koncovkami dárce.
     """
     root = world.morphemes[root_id]
     if root.word_class is None or root.word_class not in world.paradigms:
         return [root_id]
     paradigm = world.paradigms[root.word_class]
+    if root.language != code.language:
+        return [root_id, *_loan_units(world, code, root_id, paradigm)]
     result = [root_id]
     for cell in paradigm.cells[1:]:
         unit = unit_id(root_id, cell, paradigm)
@@ -101,7 +105,34 @@ def units_of(world: World, code: Code, root_id: str) -> list[str]:
                 frequency=root.frequency * paradigm.weight(cell), kind="word",
                 word_class=root.word_class, lexeme=root_id, cell=cell, exponent=exponent,
                 boundary=len(stem), origin_group=root.origin_group, origin_tick=root.origin_tick,
+                language=root.language,
             )
+        result.append(unit)
+    return result
+
+
+def _loan_units(world: World, code: Code, root_id: str, paradigm: Paradigm) -> list[str]:
+    root = world.morphemes[root_id]
+    assert root.word_class is not None
+    stats = class_stats(world, code)
+    result = []
+    for cell in paradigm.cells[1:]:
+        exponent = stats.productive(root.word_class, cell)
+        if exponent is None:
+            continue
+        unit = unit_id(root_id, cell, paradigm)
+        if code.forms.get(unit) is None:
+            ending = stats.endings.get(exponent, world.morphemes[exponent].form)
+            stem = world.form_of(code, root_id)
+            if unit not in world.morphemes:
+                world.morphemes[unit] = Morpheme(
+                    id=unit, meaning=root.meaning, form=stem + ending,
+                    frequency=root.frequency * paradigm.weight(cell), kind="word",
+                    word_class=root.word_class, lexeme=root_id, cell=cell, exponent=exponent,
+                    boundary=len(stem), origin_group=root.origin_group, origin_tick=root.origin_tick,
+                    language=root.language,
+                )
+            code.forms.set(unit, UnitForm(stem + ending, len(stem), exponent))
         result.append(unit)
     return result
 

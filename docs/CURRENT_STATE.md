@@ -17,7 +17,8 @@ napojené na CLI, API ani UI; spouští se z testů a skriptů.
 | M3b lexikon a význam: graf pojmů, posun, odvození, složeniny, tabu | hotovo |
 | M4 syntax: konstrukce, gramatikalizace, analytizace, Jespersenův cyklus | hotovo |
 | M4b modulární gramatika: katalog funkcí, profil protojazyka, exaptace | hotovo |
-| M5 kontakt, M6 společnost, M7 kalibrace | plán |
+| M5 kontakt: víc jazyků, výpůjčky, L2 mluvčí, přechod jazyka a substrát | hotovo |
+| M6 společnost, M7 kalibrace | plán |
 
 Naměřené hodnoty a známé mezery jsou v `docs/engine-v2/05-specifikace.md`.
 

@@ -7,7 +7,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from cee.v2 import morphology, phonology, syntax
+from cee.v2 import contact, morphology, phonology, syntax
 from cee.v2.changes import DEFAULT_CHANGES, Change, InnovationContext, pressures_by_kind
 from cee.v2.events import WorldEvent
 from cee.v2.history import History
@@ -81,6 +81,7 @@ class Simulation:
         self.tick = 0
         self.tracker = LineageTracker()
         world.live.sync_groups(world)
+        world.live.load_differing(world)
         self._grammar = any(variable.kind == "construction" for variable in world.variables.values())
         if world.table is not None:
             for group_id in world.group_ids():
@@ -105,6 +106,8 @@ class Simulation:
         self._apply_events(year)
         self._innovate(year)
         self._transmit(year)
+        if contact.community_step(self.world, self.config.dt, self.tick, year, self.history):
+            self.world.live.sync_groups(self.world)
         if self.tick % self.config.observe_every == 0:
             self._observe(year)
 
@@ -119,11 +122,15 @@ class Simulation:
         if applied:
             self._check_step()
             self.world.live.sync_groups(self.world)
+            self.world.live.load_differing(self.world)
+            if self.world.table is not None:
+                for group_id in self.world.group_ids():
+                    self._seed_vocabulary(group_id)
 
     def _innovate(self, year: float) -> None:
         for group_id in self.world.group_ids():
             group = self.world.groups[group_id]
-            renewal = min(1.0, self.config.dt / group.generation_years)
+            renewal = self.world.renewal(group_id, self.config.dt)
             # Do M5 (vícejazyčnost) se simuluje jen hlavní kód skupiny.
             context = InnovationContext(self.world, group, group.main_code, self.tick, year)
             for change in self.changes:
@@ -294,6 +301,7 @@ class Simulation:
                     state.uses[morpheme] = state.uses.get(morpheme, 0) + 1
                     if state.uses[morpheme] > 1:
                         continue
+                    contact.adopt(self.world, group_ids[column], morpheme)
                 for unit in morphology.units_of(self.world, code, morpheme):
                     if direction == "enter":
                         phonology.enter_vocabulary(self.world, code, unit)

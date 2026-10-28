@@ -47,6 +47,9 @@ class Morpheme:
     etymology: str | None = None
     sources: tuple[str, ...] = ()
     base: str | None = None
+    #: Linie jazyka, ve které morfém vznikl (protojazyk a jeho potomci).
+    #: Morfém z jiné linie je v kódu výpůjčka a jeho tvar se adaptuje.
+    language: str = "proto"
 
     @property
     def lexeme_id(self) -> str:

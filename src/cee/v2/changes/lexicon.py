@@ -138,6 +138,7 @@ def _new_root(
         word_class=world.concept_classes.get(concept),
         origin_group=context.group.id,
         origin_tick=context.tick,
+        language=context.code.language,
         etymology=kind,
         sources=sources,
         base=base,

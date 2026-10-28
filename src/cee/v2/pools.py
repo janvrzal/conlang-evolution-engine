@@ -274,6 +274,26 @@ class LivePools:
         for variable_id in variable_ids:
             self.load(variable_id, [world.stored(group_id, variable_id) for group_id in group_ids])
 
+    def load_differing(self, world: World) -> list[str]:
+        """Načte proměnné, ve kterých se repertoáry skupin liší, ač nejsou živé.
+
+        V jednom protojazyce se skupiny začnou lišit jen inovací, a ta
+        proměnnou načte sama. Svět s víc jazyky (M5) se liší od začátku a
+        jazyky po navázání kontaktu: bez načtení by se jejich slova nikdy
+        nesetkala. Vrací seřazená ID načtených proměnných.
+        """
+        loaded = []
+        for variable_id in sorted(world.variables):
+            if variable_id in self._block_of:
+                continue
+            distributions = [world.stored(group_id, variable_id) for group_id in self.group_ids]
+            held = {item.variants for item in distributions if item is not None}
+            if len(held) <= 1 and all(item is None or item.is_fixed for item in distributions):
+                continue
+            self.load(variable_id, distributions)
+            loaded.append(variable_id)
+        return loaded
+
     # --- pomocné ------------------------------------------------------
 
     def _place(self, capacity: int, row: Row) -> None:
