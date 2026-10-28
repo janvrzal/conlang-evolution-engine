@@ -61,5 +61,9 @@ class Change(ABC):
         """Restrukturalizace po ustálení (fonologizace od M2); v M1 nic."""
         return []
 
+    def rate_scale(self, context: InnovationContext) -> float:
+        """Násobek míry pro celou skupinu, když se místa neliší (výchozí 1)."""
+        return 1.0
+
     def uses_uniform_rate(self) -> bool:
         return type(self).rate is Change.rate

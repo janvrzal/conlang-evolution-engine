@@ -13,6 +13,7 @@ from cee.v2.language.segments import SegmentTable, default_table
 from cee.v2.pools import LivePools
 from cee.v2.repertoire import Distribution, Origin, Repertoire, Variable, Variant
 from cee.v2.rng import stable_id, stable_int
+from cee.v2.semantics import ConceptGraph
 
 TerritoryLevel = Literal["world", "continent", "region", "area", "settlement"]
 TERRITORY_LEVELS: tuple[TerritoryLevel, ...] = ("world", "continent", "region", "area", "settlement")
@@ -72,6 +73,8 @@ class SpeechGroup:
     openness: float = 0.1
     literacy: float = 0.0
     schooling: float = 0.0
+    #: Pojmy, o kterých se ve skupině nemluví přímo (tabu); vynucují opis.
+    taboo: frozenset[str] = frozenset()
     #: Souhrnná skupina zastupuje celé nerozepsané území.
     aggregate: bool = False
     internal_diversity: float = 0.0
@@ -122,6 +125,14 @@ class World:
     form_changes: dict[str, FormChange] = field(default_factory=dict)
     #: Tabulka hlásek; svět bez hláskových tvarů (M1) ji nepotřebuje.
     table: SegmentTable | None = None
+    #: Graf pojmů pro posun významu, odvozování a skládání (M3b).
+    semantics: ConceptGraph | None = None
+    #: Pojem → třída slova (``None`` = neohebné).
+    concept_classes: dict[str, str | None] = field(default_factory=dict)
+    #: Pojem → jak často se o něm mluví (0 až 1); vlastnost významu, ne slova.
+    concept_frequencies: dict[str, float] = field(default_factory=dict)
+    #: Odvozovací přípona protojazyka (M3b).
+    derivational_suffix: tuple[int, ...] = ()
 
     def distribution(self, group_id: str, variable_id: str) -> Distribution | None:
         """Jediné správné čtení stavu: živá proměnná má přednost před repertoárem."""
@@ -137,6 +148,27 @@ class World:
             if variable is not None and variable.default is not None:
                 return Distribution.fixed(variable.default)
         return found
+
+    def concept_frequency(self, concept: str) -> float:
+        return self.concept_frequencies.get(concept, 0.3)
+
+    def usage_frequency(self, code: Code, morpheme_id: str) -> float:
+        """Jak často kód tvar užívá: součet frekvencí pojmů, které vyjadřuje.
+
+        Slovo, které posunem významu získá další pojem, se tím stane
+        častějším; slovo, které pojem ztratí, vzácnějším. Tvar buňky
+        paradigmatu má navíc váhu své buňky. Bez dominantních pojmů (svět M1,
+        výchozí stav) platí statická frekvence morfému.
+        """
+        morpheme = self.morphemes[morpheme_id]
+        lexeme = morpheme.lexeme_id
+        concepts = [concept for concept, root in code.phonology.dominant.items() if root == lexeme]
+        if not concepts:
+            return morpheme.frequency
+        total = min(1.0, sum(self.concept_frequency(concept) for concept in concepts))
+        if morpheme.kind == "word" and morpheme.word_class in self.paradigms and morpheme.cell:
+            total *= self.paradigms[morpheme.word_class].weight(morpheme.cell)
+        return total
 
     def unit_of(self, code: Code, morpheme_id: str) -> UnitForm:
         """Aktuální stav tvaru slova (tvar, hranice koncovky, koncovka) v kódu."""
@@ -273,6 +305,7 @@ class World:
                 word_class = (classes or {}).get(concept)
                 if word_class not in self.paradigms:
                     word_class = None
+                self.concept_classes[concept] = word_class
                 morpheme = Morpheme(
                     id=stable_id("morpheme", "proto", concept),
                     meaning=concept,
@@ -280,8 +313,10 @@ class World:
                     frequency=float((frequencies or {}).get(concept, 0.5)),
                     word_class=word_class,
                 )
+                self.concept_frequencies[concept] = morpheme.frequency
                 self.morphemes[morpheme.id] = morpheme
                 payload["morpheme"] = morpheme.id
+                payload["origin"] = "inherited"
                 if word_class is not None:
                     self._seed_paradigm(morpheme, endings or {})
             variant = Variant(

@@ -137,7 +137,7 @@ class Simulation:
                         context.code.id, change.kind)
         if change.uses_uniform_rate():
             weights = None
-            expected = change.base_rate * tempo * len(sites)
+            expected = change.base_rate * tempo * len(sites) * change.rate_scale(context)
         else:
             rates = [change.rate(context, site) for site in sites]
             expected = sum(rates) * tempo
@@ -242,6 +242,8 @@ class Simulation:
                 continue
             morpheme = self.world.variants[distribution.dominant()[0]].payload.get("morpheme")
             if isinstance(morpheme, str):
+                code.phonology.dominant[variable.key] = morpheme
+                code.phonology.uses[morpheme] = code.phonology.uses.get(morpheme, 0) + 1
                 code.phonology.vocabulary.update(morphology.units_of(self.world, code, morpheme))
 
     def _follow_vocabulary(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
@@ -252,16 +254,33 @@ class Simulation:
             [self.world.variables[variable_id].kind == "lexical" for variable_id in block.variable_ids],
             dtype=bool,
         )[:, None, None]
+        # Nejdřív odchody, potom příchody: kořen, který jeden pojem opouští a
+        # druhý (posunem) přebírá, tak ze slovní zásoby na okamžik nevypadne.
         for direction, mask in (
-            ("enter", (before < 0.5) & (after >= 0.5) & lexical),
             ("leave", (before >= 0.5) & (after < 0.5) & lexical),
+            ("enter", (before < 0.5) & (after >= 0.5) & lexical),
         ):
             for row, column, slot in zip(*np.nonzero(mask)):
                 variant = block.slots[row][slot]
                 morpheme = variants[variant].payload.get("morpheme") if variant else None
                 if not isinstance(morpheme, str):
                     continue
+                concept = block.variable_ids[row].split(":", 1)[1]
                 code = self.world.groups[group_ids[column]].main_code
+                state = code.phonology
+                state.version += 1
+                if direction == "leave":
+                    if state.dominant.get(concept) == morpheme:
+                        del state.dominant[concept]
+                    state.uses[morpheme] = state.uses.get(morpheme, 1) - 1
+                    if state.uses[morpheme] > 0:
+                        continue
+                    del state.uses[morpheme]
+                else:
+                    state.dominant[concept] = morpheme
+                    state.uses[morpheme] = state.uses.get(morpheme, 0) + 1
+                    if state.uses[morpheme] > 1:
+                        continue
                 for unit in morphology.units_of(self.world, code, morpheme):
                     if direction == "enter":
                         phonology.enter_vocabulary(self.world, code, unit)

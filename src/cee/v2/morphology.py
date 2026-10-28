@@ -211,7 +211,7 @@ def assess(world: World, group_id: str, variable_id: str) -> FormAssessment | No
             )
         result = FormAssessment(
             gain=gain,
-            frequency=world.morphemes[morpheme.lexeme_id].frequency,
+            frequency=world.usage_frequency(code, morpheme.lexeme_id),
             syncretic_before=current.form == citation,
             syncretic_after=new.form == citation,
         )

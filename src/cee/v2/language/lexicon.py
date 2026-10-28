@@ -42,6 +42,11 @@ class Morpheme:
     cell: str | None = None
     exponent: str | None = None
     boundary: int | None = None
+    #: Původ kořene, který vznikl za běhu: změna, pojmy, ze kterých vzešel, a
+    #: u odvozeniny kořen základu (pro zpětné tvoření).
+    etymology: str | None = None
+    sources: tuple[str, ...] = ()
+    base: str | None = None
 
     @property
     def lexeme_id(self) -> str:
@@ -121,6 +126,11 @@ class PhonologyState:
 
     #: Morfémy, které kód právě užívá jako dominantní slova pro své pojmy.
     vocabulary: set[str] = field(default_factory=set)
+    #: Pojem → jeho dominantní kořen; kořen → pro kolik pojmů je dominantní.
+    #: Posun významu dá jednomu kořeni víc pojmů, a ten pak ze slovní zásoby
+    #: nesmí vypadnout, dokud ho užívá aspoň jeden z nich.
+    dominant: dict[str, str] = field(default_factory=dict)
+    uses: dict[str, int] = field(default_factory=dict)
     restructured: dict[str, set[str]] = field(default_factory=dict)
     #: Kdy dosáhl změněný tvar procesu 100 %.
     fixed_since: dict[str, int] = field(default_factory=dict)

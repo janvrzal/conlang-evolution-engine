@@ -91,6 +91,37 @@ class LexiconProfile:
     homophony: float
 
 
+def lexicon_roots(world: World, group_id: str) -> dict[str, tuple[str, tuple[int, ...]]]:
+    """Pojem → (dominantní kořen, povrchový tvar)."""
+    from cee.v2.phonology import surface
+
+    result = {}
+    for variable_id, variable in sorted(world.variables.items()):
+        if variable.kind != "lexical":
+            continue
+        distribution = world.distribution(group_id, variable_id)
+        if distribution is None:
+            continue
+        morpheme = world.variants[distribution.dominant()[0]].payload.get("morpheme")
+        if isinstance(morpheme, str):
+            result[variable.key] = (morpheme, surface(world, group_id, morpheme))
+    return result
+
+
+def retention(world: World, group_id: str) -> float:
+    """Podíl pojmů, které skupina pořád vyjadřuje zděděným slovem (metrika 1)."""
+    kept = total = 0
+    for variable_id, variable in world.variables.items():
+        if variable.kind != "lexical":
+            continue
+        distribution = world.distribution(group_id, variable_id)
+        if distribution is None:
+            continue
+        total += 1
+        kept += world.variants[distribution.dominant()[0]].origin.change is None
+    return kept / total if total else 0.0
+
+
 def lexicon_profile(world: World, group_id: str) -> LexiconProfile:
     from cee.v2.phonology import lexicon
 
@@ -99,10 +130,15 @@ def lexicon_profile(world: World, group_id: str) -> LexiconProfile:
     forms = list(lexicon(world, group_id).values())
     inventory = {segment for form in forms for segment in form}
     vowels = sum(1 for segment in inventory if table.is_vowel(segment))
-    counts: dict[tuple[int, ...], int] = {}
+    # Homofonie = stejný tvar *různých* kořenů; posun významu (jeden kořen
+    # pro dva pojmy) je polysémie, ne homofonie.
+    owners: dict[tuple[int, ...], set[str]] = {}
+    for concept, (morpheme, form) in lexicon_roots(world, group_id).items():
+        owners.setdefault(form, set()).add(morpheme)
+    by_form: dict[tuple[int, ...], int] = {}
     for form in forms:
-        counts[form] = counts.get(form, 0) + 1
-    shared = sum(count for count in counts.values() if count > 1)
+        by_form[form] = by_form.get(form, 0) + 1
+    shared = sum(count for form, count in by_form.items() if len(owners.get(form, ())) > 1)
     return LexiconProfile(
         mean_length=float(np.mean([len(form) for form in forms])) if forms else 0.0,
         consonants=len(inventory) - vowels,

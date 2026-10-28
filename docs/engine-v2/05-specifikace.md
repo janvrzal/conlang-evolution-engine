@@ -50,6 +50,7 @@ src/cee/v2/
   transmission.py     děti, dospělí, L2, inkrementace, drift, prahy
   phonology.py        procesní proměnné, fonologizace, uzavření, povrch
   morphology.py       tvary buněk, produktivita, analogie, její zápis
+  semantics.py        graf pojmů (výřez CLICS⁴ + DatSemShift), recepty složenin
   assessment.py       hodnocení procesu nad slovní zásobou (pro tlaky)
   events.py           WorldEvent a jeho podtřídy
   observe.py          vzdálenosti, shluky, linie jazyků
@@ -357,6 +358,7 @@ Každý milník je svislý řez: musí splnit svou bránu, než začne další.
 | **M1 jádro** | svět, strom území, skupiny (i souhrnné), síť, délka generace, lexikální proměnné, přenos, pozorování; bez fonologie | S1, metrika 7, 8, 9 (rostoucí), 12, režim údolí ≤ 5 s, přiblížení zachová determinismus |
 | **M2 zvuk** | segmenty, morfémy, procesní proměnné, fonologizace, povrch, rodiny A, jazykové tlaky | metrika 3–6, emergentní řetězový posun |
 | **M3 morfologie** | alomorfy, paradigmata, změny B, `Uniformita`, `Frekvence` | emergentní morfologizace, Sturtevantův paradox v testu |
+| **M3b lexikon a význam** | sémantický graf pojmů (výřez CLICS⁴ + DatSemShift), posun významu, odvozování, skládání, expresivní tvoření, tabu a opis, kontaminace, zpětné tvoření; lexikální tlaky místo dočasného `Appeal` | metrika 1 (retence 70–95 % za tisíciletí), metrika 2 (častá slova se nahrazují pomaleji), nová slova mají doložitelný původ, erodovaná a homofonní slova se nahrazují častěji |
 | **M4 syntax** | konstrukce, změny C, velký cyklus | emergentní analytizace při erozi |
 | **M5 kontakt** | kódy, L1/L2, interference, výpůjčky, přechod | S2, S3, metrika 11 |
 | **M6 společnost** | instituce, události, linie jazyků, export pro UI | S4, stabilní emergentní strom, metrika 9 (sublineární) |
@@ -468,6 +470,67 @@ Zpřesnění návrhu při implementaci (mění iteraci 2):
   paradigmatu dvojnásobně.
 - **Odloženo**: gramatikalizace (potřebuje konstrukce, M4), odvozování a
   skládání, reanalýza hranice, kontaminace, zpětné tvoření a exaptace.
+
+### Stav M3b (2026-10-28)
+
+Splněno, testy v `tests/v2/test_v2_m3b_gate.py` a `test_v2_lexicon.py`.
+Měřeno na kontinuu 8 vesnic, 3 seedy, 3 000 let:
+
+- **Metrika 1**: retence základní slovní zásoby 90,6–91,1 % za tisíciletí
+  (pásmo 70–95 %; průměr glottochronologie ~86 % doladí M7).
+- **Metrika 2**: nahrazeno 0,8–1,6 % častých a 33–37 % vzácných pojmů.
+- **Původ nových slov**: posun významu ~40 %, odvození ~40 %, složenina
+  ~17 %, nový kořen ~1 %. Příklady doložených cest: „den“ ze „slunce“,
+  „vědět“ z „vidět“, „červený“ z „krve“.
+- **Eroze**: v kontrolovaném pokusu se slova zkrácená na dvě hlásky
+  za 1 500 let nahradí v 71 % případů, kontrolní slova v 16 %.
+- **Tabu**: za 2 500 let se u tabuizovaného pojmu vystřídají aspoň dva
+  opisy (eufemistický koloběh); bez tabu žádný.
+- Výkon: 8 vesnic s fonologií, paradigmaty a významem × 3 000 let ≈ 9 s.
+
+Zpřesnění návrhu při implementaci:
+
+- **Graf pojmů je přibalený** (`cee/data/v2_core_semantics.json`, 425 vztahů
+  mezi 132 pojmy, CC BY 4.0, citace a SHA-256 vstupů uvnitř) a vzniká
+  skriptem `scripts/build_v2_core_semantics.py` z lokální cache. DatSemShift
+  dává orientované posuny a odvození zvlášť (počty rodin), CLICS⁴
+  kolexifikace (aspoň 5 jazyků). Recepty složenin jsou převzaté z legacy
+  (`docs/SWADESH_COMPOUNDS.md`).
+- **Každý kód vede, který kořen je dominantní pro který pojem.** Posun
+  významu dá jednomu kořeni víc pojmů; ze slovní zásoby vypadne, až když ho
+  neužívá žádný.
+- **Frekvence užití se vyvíjí** (dříve známá mezera): tvar je tak častý,
+  jak časté jsou pojmy, které právě vyjadřuje. Frekvence je vlastnost
+  významu; slovo, které posunem získá pojem, zčastění.
+- **Lexikální tlaky** místo dočasného `Appeal` (ten zůstává jen ve světě
+  bez hláskových tvarů, M1): `LexicalClarity` (−0,5 za erozi na dvě hlásky,
+  −0,4 za homofon s nepříbuzným pojmem; krátké slovo odjakživa se netrestá),
+  `Entrenchment` (+0,3 × frekvence pojmu pro dominantní slovo; Pagel),
+  `Motivation` (průhledná odvozenina či složenina +0,15, posun +0,05, nový
+  kořen −0,15), `Taboo` (−0,6 pro slovo užívané déle než 10 generací),
+  `LexicalActuation`.
+- **Posun významu jen mezi pojmy stejné třídy slov**; konverze (sloveso →
+  jméno) zatím chybí.
+- Odvozovací přípona se nemění zvukovými změnami (nežije ve slovní zásobě
+  sama); změnami prochází až odvozené slovo jako celek.
+- Homofonie v metrikách počítá jen různé kořeny se stejným tvarem; posun
+  významu je polysémie.
+
+## Známé mezery a kam patří
+
+Sepsáno 2026-10-28 při revizi plánu po M3.
+
+| Mezera | Kam |
+|---|---|
+| Přízvuk jako proměnná (změna pravidla přízvuku), délka a kompenzační prodloužení, tónová perturbace → tonogeneze | doplněk M2 (po M3b) |
+| Sporadické změny: metateze, disimilace, nepravidelné zkracování velmi častých slov | doplněk M2 |
+| ~~Frekvence užití se nevyvíjí~~ | vyřešeno v M3b |
+| Rodokmen slova: log nese jen počty přepsaných slov, ne historii jednotlivého slova | před napojením UI |
+| Spuštění enginu mimo testy: CLI, API, převod projektu z UI na svět v2 | před napojením UI (dřív než M6) |
+| `AGENT.md` a `CURRENT_STATE.md` engine v2 nezmiňují | hned po M3b |
+| Konverze mezi slovními druhy (posun významu sloveso ↔ jméno) | s M4 (konstrukce) |
+| CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |
+| Výkon režimů region a výš s fonologií a morfologií neměřen | M6 (výkonová brána) |
 
 ## Co převzít z legacy
 

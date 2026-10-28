@@ -126,7 +126,7 @@ def _vocabulary(world: World, group_id: str) -> _Vocabulary:
         return cast(_Vocabulary, cached[1])
     assert world.table is not None
     chosen = sorted(
-        state.vocabulary, key=lambda morpheme: (-world.morphemes[morpheme].frequency, morpheme)
+        state.vocabulary, key=lambda morpheme: (-world.usage_frequency(code, morpheme), morpheme)
     )[:SAMPLE_WORDS]
     forms = {morpheme: world.form_of(code, morpheme) for morpheme in sorted(chosen)}
     owners: dict[Form, list[str]] = {}
@@ -134,7 +134,7 @@ def _vocabulary(world: World, group_id: str) -> _Vocabulary:
     for morpheme, form in forms.items():
         owners.setdefault(form, []).append(morpheme)
         vowels.update(segment for segment in form if world.table.is_vowel(segment))
-    frequency = {morpheme: max(0.01, world.morphemes[morpheme].frequency) for morpheme in forms}
+    frequency = {morpheme: max(0.01, world.usage_frequency(code, morpheme)) for morpheme in forms}
     vocabulary = _Vocabulary(forms, frequency, owners, sum(frequency.values()) or 1.0, vowels)
     state.cache["vocabulary"] = (state.version, vocabulary)
     return vocabulary

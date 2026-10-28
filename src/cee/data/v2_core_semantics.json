@@ -1,0 +1,2296 @@
+{
+ "description": "Sémantické vztahy mezi pojmy základní slovní zásoby enginu v2.",
+ "sources": [
+  {
+   "name": "DatSemShift",
+   "license": "CC-BY-4.0",
+   "file": "cldf/parameters.csv",
+   "sha256": "be81eab80b04d0f7b6ff7e8c7ebc3e274fe79dc2b95e760b11a9f057d21f6e20",
+   "citation": "Zalizniak A. et al. (2024). Database of Semantic Shifts. Moscow: Institute of Linguistics, Russian Academy of Sciences."
+  },
+  {
+   "name": "CLICS4",
+   "license": "CC-BY-4.0",
+   "file": "clics4-graph.gml via graph.graphml",
+   "sha256": "17783864b6d2cf9085bedd76760a944f31350a93de16695fb907476b7f3133b0",
+   "citation": "Tjuka A., Forkel R., Rzymski C., List J.-M. (2024). CLICS⁴: Database of Cross-Linguistic Colexifications."
+  }
+ ],
+ "concepts": {
+  "i": "I",
+  "you": "YOU",
+  "we": "WE (INCLUSIVE)",
+  "this": "THIS",
+  "that": "THAT",
+  "who": "WHO",
+  "what": "WHAT",
+  "not": "NOT",
+  "all": "ALL",
+  "many": "MANY",
+  "two": "TWO",
+  "big": "BIG",
+  "long": "LONG",
+  "small": "SMALL",
+  "woman": "WOMAN",
+  "person": "PERSON",
+  "fish": "FISH",
+  "bird": "BIRD",
+  "dog": "DOG",
+  "louse": "LOUSE",
+  "tree": "TREE",
+  "seed": "SEED",
+  "leaf": "LEAF",
+  "root": "ROOT",
+  "bark": "BARK",
+  "skin": "SKIN",
+  "flesh": "FLESH",
+  "blood": "BLOOD",
+  "bone": "BONE",
+  "grease": "FAT (ORGANIC SUBSTANCE)",
+  "egg": "EGG",
+  "horn": "HORN (ANATOMY)",
+  "tail": "TAIL",
+  "feather": "FEATHER",
+  "hair": "HAIR",
+  "head": "HEAD",
+  "ear": "EAR",
+  "eye": "EYE",
+  "nose": "NOSE",
+  "mouth": "MOUTH",
+  "tooth": "TOOTH",
+  "tongue": "TONGUE",
+  "fingernail": "FINGERNAIL",
+  "foot": "FOOT",
+  "leg": "LEG",
+  "hand": "HAND",
+  "belly": "BELLY",
+  "neck": "NECK",
+  "breasts": "BREAST",
+  "heart": "HEART",
+  "liver": "LIVER",
+  "drink": "DRINK",
+  "eat": "EAT",
+  "bite": "BITE",
+  "see": "SEE",
+  "hear": "HEAR",
+  "know": "KNOW",
+  "sleep": "SLEEP",
+  "die": "DIE",
+  "kill": "KILL",
+  "fly": "FLY (MOVE THROUGH AIR)",
+  "walk": "WALK",
+  "come": "COME",
+  "lie": "LIE (REST)",
+  "give": "GIVE",
+  "say": "SAY",
+  "sun": "SUN",
+  "moon": "MOON",
+  "star": "STAR",
+  "water": "WATER",
+  "rain": "RAIN (PRECIPITATION)",
+  "stone": "STONE",
+  "sand": "SAND",
+  "earth": "EARTH (SOIL)",
+  "cloud": "CLOUD",
+  "smoke": "SMOKE (EXHAUST)",
+  "fire": "FIRE",
+  "ash": "ASH",
+  "burn": "BURN (SOMETHING)",
+  "path": "PATH",
+  "mountain": "MOUNTAIN",
+  "red": "RED",
+  "green": "GREEN",
+  "yellow": "YELLOW",
+  "white": "WHITE",
+  "black": "BLACK",
+  "night": "NIGHT",
+  "hot": "HOT",
+  "cold": "COLD",
+  "full": "FULL",
+  "new": "NEW",
+  "good": "GOOD",
+  "dry": "DRY",
+  "name": "NAME",
+  "father": "FATHER",
+  "mother": "MOTHER",
+  "child": "CHILD",
+  "family": "FAMILY",
+  "house": "HOUSE",
+  "village": "VILLAGE",
+  "town": "TOWN",
+  "road": "ROAD",
+  "river": "RIVER",
+  "sea": "SEA",
+  "forest": "FOREST",
+  "field": "FIELD",
+  "wind": "WIND",
+  "thunder": "THUNDER",
+  "day": "DAY (NOT NIGHT)",
+  "year": "YEAR",
+  "morning": "MORNING",
+  "food": "FOOD",
+  "grain": "GRAIN",
+  "salt": "SALT",
+  "animal": "ANIMAL",
+  "horse": "HORSE",
+  "war": "WAR",
+  "god": "GOD",
+  "spirit": "SPIRIT",
+  "read": "READ",
+  "speak": "SPEAK",
+  "language": "LANGUAGE",
+  "friend": "FRIEND",
+  "enemy": "ENEMY",
+  "work": "WORK (LABOUR)",
+  "make": "MAKE",
+  "open": "OPEN",
+  "far": "FAR",
+  "old": "OLD (AGED)",
+  "young": "YOUNG",
+  "fast": "FAST",
+  "slow": "SLOW"
+ },
+ "relations": [
+  {
+   "source": "all",
+   "target": "many",
+   "colexification": 11
+  },
+  {
+   "source": "animal",
+   "target": "bird",
+   "colexification": 8
+  },
+  {
+   "source": "animal",
+   "target": "flesh",
+   "colexification": 13
+  },
+  {
+   "source": "ash",
+   "target": "fire",
+   "colexification": 5
+  },
+  {
+   "source": "bark",
+   "target": "skin",
+   "colexification": 174
+  },
+  {
+   "source": "belly",
+   "target": "drink",
+   "colexification": 11
+  },
+  {
+   "source": "belly",
+   "target": "heart",
+   "colexification": 10
+  },
+  {
+   "source": "big",
+   "target": "father",
+   "colexification": 13
+  },
+  {
+   "source": "big",
+   "target": "grease",
+   "colexification": 13
+  },
+  {
+   "source": "big",
+   "target": "long",
+   "colexification": 16
+  },
+  {
+   "source": "big",
+   "target": "many",
+   "polysemy": 1
+  },
+  {
+   "source": "big",
+   "target": "mother",
+   "colexification": 5
+  },
+  {
+   "source": "big",
+   "target": "old",
+   "colexification": 27
+  },
+  {
+   "source": "bird",
+   "target": "animal",
+   "colexification": 8
+  },
+  {
+   "source": "bird",
+   "target": "fish",
+   "colexification": 6
+  },
+  {
+   "source": "bird",
+   "target": "flesh",
+   "colexification": 5
+  },
+  {
+   "source": "bird",
+   "target": "fly",
+   "derivation": 1
+  },
+  {
+   "source": "bird",
+   "target": "new",
+   "colexification": 10
+  },
+  {
+   "source": "bird",
+   "target": "tooth",
+   "colexification": 8
+  },
+  {
+   "source": "bird",
+   "target": "tree",
+   "colexification": 5
+  },
+  {
+   "source": "bite",
+   "target": "burn",
+   "polysemy": 1
+  },
+  {
+   "source": "bite",
+   "target": "drink",
+   "colexification": 8
+  },
+  {
+   "source": "bite",
+   "target": "eat",
+   "colexification": 35
+  },
+  {
+   "source": "bite",
+   "target": "water",
+   "colexification": 7
+  },
+  {
+   "source": "bite",
+   "target": "year",
+   "colexification": 8
+  },
+  {
+   "source": "black",
+   "target": "green",
+   "colexification": 7
+  },
+  {
+   "source": "black",
+   "target": "many",
+   "polysemy": 1
+  },
+  {
+   "source": "black",
+   "target": "night",
+   "colexification": 10
+  },
+  {
+   "source": "blood",
+   "target": "die",
+   "colexification": 16
+  },
+  {
+   "source": "blood",
+   "target": "flesh",
+   "colexification": 6
+  },
+  {
+   "source": "blood",
+   "target": "liver",
+   "colexification": 9
+  },
+  {
+   "source": "blood",
+   "target": "red",
+   "derivation": 4
+  },
+  {
+   "source": "blood",
+   "target": "say",
+   "colexification": 7
+  },
+  {
+   "source": "blood",
+   "target": "year",
+   "colexification": 9
+  },
+  {
+   "source": "bone",
+   "target": "leg",
+   "colexification": 18
+  },
+  {
+   "source": "bone",
+   "target": "seed",
+   "colexification": 5
+  },
+  {
+   "source": "bone",
+   "target": "tooth",
+   "colexification": 13
+  },
+  {
+   "source": "breasts",
+   "target": "heart",
+   "colexification": 5
+  },
+  {
+   "source": "breasts",
+   "target": "water",
+   "colexification": 7
+  },
+  {
+   "source": "burn",
+   "target": "bite",
+   "colexification": 6
+  },
+  {
+   "source": "burn",
+   "target": "eat",
+   "colexification": 11
+  },
+  {
+   "source": "burn",
+   "target": "fire",
+   "colexification": 8
+  },
+  {
+   "source": "burn",
+   "target": "hot",
+   "colexification": 10
+  },
+  {
+   "source": "child",
+   "target": "friend",
+   "polysemy": 1
+  },
+  {
+   "source": "child",
+   "target": "small",
+   "colexification": 18
+  },
+  {
+   "source": "cloud",
+   "target": "day",
+   "colexification": 9
+  },
+  {
+   "source": "cloud",
+   "target": "night",
+   "colexification": 7
+  },
+  {
+   "source": "cloud",
+   "target": "rain",
+   "colexification": 11
+  },
+  {
+   "source": "cloud",
+   "target": "smoke",
+   "colexification": 49
+  },
+  {
+   "source": "cloud",
+   "target": "thunder",
+   "colexification": 6
+  },
+  {
+   "source": "cloud",
+   "target": "white",
+   "colexification": 5
+  },
+  {
+   "source": "cold",
+   "target": "slow",
+   "polysemy": 1
+  },
+  {
+   "source": "cold",
+   "target": "wind",
+   "colexification": 19
+  },
+  {
+   "source": "come",
+   "target": "father",
+   "colexification": 9
+  },
+  {
+   "source": "come",
+   "target": "give",
+   "colexification": 5
+  },
+  {
+   "source": "come",
+   "target": "tongue",
+   "colexification": 6
+  },
+  {
+   "source": "come",
+   "target": "walk",
+   "colexification": 17
+  },
+  {
+   "source": "come",
+   "target": "yellow",
+   "colexification": 5
+  },
+  {
+   "source": "day",
+   "target": "cloud",
+   "colexification": 9
+  },
+  {
+   "source": "day",
+   "target": "night",
+   "colexification": 7
+  },
+  {
+   "source": "day",
+   "target": "red",
+   "colexification": 5
+  },
+  {
+   "source": "day",
+   "target": "sun",
+   "polysemy": 5,
+   "derivation": 24
+  },
+  {
+   "source": "day",
+   "target": "two",
+   "colexification": 5
+  },
+  {
+   "source": "die",
+   "target": "blood",
+   "colexification": 16
+  },
+  {
+   "source": "die",
+   "target": "kill",
+   "colexification": 29
+  },
+  {
+   "source": "die",
+   "target": "louse",
+   "colexification": 9
+  },
+  {
+   "source": "dog",
+   "target": "horse",
+   "polysemy": 1,
+   "derivation": 1
+  },
+  {
+   "source": "dog",
+   "target": "moon",
+   "colexification": 9
+  },
+  {
+   "source": "drink",
+   "target": "belly",
+   "colexification": 11
+  },
+  {
+   "source": "drink",
+   "target": "bite",
+   "colexification": 8
+  },
+  {
+   "source": "drink",
+   "target": "eat",
+   "colexification": 88
+  },
+  {
+   "source": "drink",
+   "target": "mouth",
+   "colexification": 7
+  },
+  {
+   "source": "drink",
+   "target": "river",
+   "colexification": 10
+  },
+  {
+   "source": "drink",
+   "target": "water",
+   "colexification": 12
+  },
+  {
+   "source": "dry",
+   "target": "liver",
+   "colexification": 26
+  },
+  {
+   "source": "ear",
+   "target": "hear",
+   "colexification": 13
+  },
+  {
+   "source": "ear",
+   "target": "leaf",
+   "colexification": 13
+  },
+  {
+   "source": "ear",
+   "target": "name",
+   "colexification": 19
+  },
+  {
+   "source": "earth",
+   "target": "field",
+   "colexification": 9
+  },
+  {
+   "source": "earth",
+   "target": "sand",
+   "colexification": 53
+  },
+  {
+   "source": "eat",
+   "target": "bite",
+   "colexification": 35
+  },
+  {
+   "source": "eat",
+   "target": "burn",
+   "colexification": 11
+  },
+  {
+   "source": "eat",
+   "target": "drink",
+   "colexification": 88
+  },
+  {
+   "source": "eat",
+   "target": "food",
+   "colexification": 27
+  },
+  {
+   "source": "eat",
+   "target": "i",
+   "colexification": 6
+  },
+  {
+   "source": "eat",
+   "target": "make",
+   "colexification": 5
+  },
+  {
+   "source": "eat",
+   "target": "village",
+   "colexification": 9
+  },
+  {
+   "source": "egg",
+   "target": "seed",
+   "colexification": 15
+  },
+  {
+   "source": "egg",
+   "target": "stone",
+   "colexification": 7
+  },
+  {
+   "source": "egg",
+   "target": "tooth",
+   "colexification": 11
+  },
+  {
+   "source": "egg",
+   "target": "water",
+   "colexification": 6
+  },
+  {
+   "source": "enemy",
+   "target": "war",
+   "polysemy": 2,
+   "derivation": 1
+  },
+  {
+   "source": "eye",
+   "target": "fire",
+   "colexification": 5
+  },
+  {
+   "source": "eye",
+   "target": "grain",
+   "colexification": 9
+  },
+  {
+   "source": "eye",
+   "target": "name",
+   "colexification": 7
+  },
+  {
+   "source": "eye",
+   "target": "see",
+   "colexification": 7
+  },
+  {
+   "source": "eye",
+   "target": "seed",
+   "colexification": 20
+  },
+  {
+   "source": "eye",
+   "target": "sun",
+   "polysemy": 1,
+   "derivation": 2
+  },
+  {
+   "source": "family",
+   "target": "house",
+   "colexification": 30
+  },
+  {
+   "source": "far",
+   "target": "long",
+   "colexification": 82
+  },
+  {
+   "source": "far",
+   "target": "that",
+   "colexification": 6
+  },
+  {
+   "source": "fast",
+   "target": "good",
+   "polysemy": 1
+  },
+  {
+   "source": "fast",
+   "target": "hot",
+   "colexification": 15
+  },
+  {
+   "source": "father",
+   "target": "big",
+   "polysemy": 1,
+   "derivation": 1
+  },
+  {
+   "source": "father",
+   "target": "come",
+   "colexification": 9
+  },
+  {
+   "source": "father",
+   "target": "god",
+   "polysemy": 4
+  },
+  {
+   "source": "father",
+   "target": "mother",
+   "colexification": 13
+  },
+  {
+   "source": "feather",
+   "target": "hair",
+   "colexification": 121
+  },
+  {
+   "source": "feather",
+   "target": "leaf",
+   "polysemy": 1
+  },
+  {
+   "source": "feather",
+   "target": "skin",
+   "colexification": 7
+  },
+  {
+   "source": "field",
+   "target": "earth",
+   "colexification": 9
+  },
+  {
+   "source": "field",
+   "target": "year",
+   "polysemy": 1
+  },
+  {
+   "source": "fingernail",
+   "target": "star",
+   "colexification": 7
+  },
+  {
+   "source": "fire",
+   "target": "ash",
+   "colexification": 5
+  },
+  {
+   "source": "fire",
+   "target": "burn",
+   "colexification": 8
+  },
+  {
+   "source": "fire",
+   "target": "eye",
+   "colexification": 5
+  },
+  {
+   "source": "fire",
+   "target": "hot",
+   "colexification": 10
+  },
+  {
+   "source": "fire",
+   "target": "name",
+   "colexification": 7
+  },
+  {
+   "source": "fire",
+   "target": "red",
+   "colexification": 7
+  },
+  {
+   "source": "fire",
+   "target": "tail",
+   "colexification": 10
+  },
+  {
+   "source": "fire",
+   "target": "tree",
+   "colexification": 47
+  },
+  {
+   "source": "fire",
+   "target": "walk",
+   "colexification": 5
+  },
+  {
+   "source": "fire",
+   "target": "war",
+   "polysemy": 1
+  },
+  {
+   "source": "fish",
+   "target": "animal",
+   "polysemy": 1
+  },
+  {
+   "source": "fish",
+   "target": "bird",
+   "colexification": 6
+  },
+  {
+   "source": "fish",
+   "target": "flesh",
+   "colexification": 16
+  },
+  {
+   "source": "fish",
+   "target": "i",
+   "colexification": 5
+  },
+  {
+   "source": "fish",
+   "target": "mountain",
+   "colexification": 6
+  },
+  {
+   "source": "flesh",
+   "target": "animal",
+   "colexification": 13
+  },
+  {
+   "source": "flesh",
+   "target": "bird",
+   "colexification": 5
+  },
+  {
+   "source": "flesh",
+   "target": "blood",
+   "colexification": 6
+  },
+  {
+   "source": "flesh",
+   "target": "fish",
+   "colexification": 16
+  },
+  {
+   "source": "flesh",
+   "target": "skin",
+   "colexification": 9
+  },
+  {
+   "source": "fly",
+   "target": "bird",
+   "colexification": 8
+  },
+  {
+   "source": "fly",
+   "target": "cloud",
+   "derivation": 1
+  },
+  {
+   "source": "food",
+   "target": "eat",
+   "colexification": 27
+  },
+  {
+   "source": "foot",
+   "target": "hand",
+   "colexification": 5
+  },
+  {
+   "source": "foot",
+   "target": "horn",
+   "colexification": 8
+  },
+  {
+   "source": "foot",
+   "target": "leg",
+   "colexification": 993
+  },
+  {
+   "source": "foot",
+   "target": "tail",
+   "colexification": 7
+  },
+  {
+   "source": "forest",
+   "target": "mountain",
+   "colexification": 23
+  },
+  {
+   "source": "forest",
+   "target": "tree",
+   "colexification": 27
+  },
+  {
+   "source": "full",
+   "target": "many",
+   "colexification": 9
+  },
+  {
+   "source": "give",
+   "target": "come",
+   "colexification": 5
+  },
+  {
+   "source": "give",
+   "target": "make",
+   "colexification": 11
+  },
+  {
+   "source": "give",
+   "target": "we",
+   "colexification": 10
+  },
+  {
+   "source": "god",
+   "target": "sun",
+   "colexification": 16
+  },
+  {
+   "source": "good",
+   "target": "new",
+   "colexification": 8
+  },
+  {
+   "source": "good",
+   "target": "salt",
+   "derivation": 1
+  },
+  {
+   "source": "grain",
+   "target": "eye",
+   "colexification": 9
+  },
+  {
+   "source": "grain",
+   "target": "seed",
+   "colexification": 45
+  },
+  {
+   "source": "grain",
+   "target": "tooth",
+   "colexification": 9
+  },
+  {
+   "source": "grease",
+   "target": "big",
+   "colexification": 13
+  },
+  {
+   "source": "green",
+   "target": "black",
+   "colexification": 7
+  },
+  {
+   "source": "green",
+   "target": "yellow",
+   "polysemy": 1
+  },
+  {
+   "source": "green",
+   "target": "young",
+   "polysemy": 4,
+   "derivation": 1
+  },
+  {
+   "source": "hair",
+   "target": "feather",
+   "polysemy": 2
+  },
+  {
+   "source": "hair",
+   "target": "head",
+   "colexification": 16
+  },
+  {
+   "source": "hair",
+   "target": "leaf",
+   "colexification": 16
+  },
+  {
+   "source": "hand",
+   "target": "foot",
+   "colexification": 5
+  },
+  {
+   "source": "head",
+   "target": "hair",
+   "polysemy": 1
+  },
+  {
+   "source": "hear",
+   "target": "ear",
+   "colexification": 13
+  },
+  {
+   "source": "hear",
+   "target": "see",
+   "colexification": 10
+  },
+  {
+   "source": "heart",
+   "target": "belly",
+   "polysemy": 2
+  },
+  {
+   "source": "heart",
+   "target": "breasts",
+   "colexification": 5
+  },
+  {
+   "source": "heart",
+   "target": "grain",
+   "polysemy": 1
+  },
+  {
+   "source": "heart",
+   "target": "liver",
+   "polysemy": 1
+  },
+  {
+   "source": "heart",
+   "target": "new",
+   "colexification": 34
+  },
+  {
+   "source": "horn",
+   "target": "foot",
+   "colexification": 8
+  },
+  {
+   "source": "horn",
+   "target": "tooth",
+   "colexification": 12
+  },
+  {
+   "source": "hot",
+   "target": "burn",
+   "colexification": 10
+  },
+  {
+   "source": "hot",
+   "target": "fast",
+   "polysemy": 2
+  },
+  {
+   "source": "hot",
+   "target": "fire",
+   "colexification": 10
+  },
+  {
+   "source": "hot",
+   "target": "sun",
+   "colexification": 7
+  },
+  {
+   "source": "house",
+   "target": "family",
+   "polysemy": 3,
+   "derivation": 1
+  },
+  {
+   "source": "house",
+   "target": "leg",
+   "colexification": 7
+  },
+  {
+   "source": "house",
+   "target": "village",
+   "colexification": 13
+  },
+  {
+   "source": "i",
+   "target": "eat",
+   "colexification": 6
+  },
+  {
+   "source": "i",
+   "target": "fish",
+   "colexification": 5
+  },
+  {
+   "source": "i",
+   "target": "smoke",
+   "colexification": 16
+  },
+  {
+   "source": "i",
+   "target": "we",
+   "colexification": 19
+  },
+  {
+   "source": "kill",
+   "target": "die",
+   "colexification": 29
+  },
+  {
+   "source": "kill",
+   "target": "say",
+   "colexification": 6
+  },
+  {
+   "source": "language",
+   "target": "mouth",
+   "colexification": 26
+  },
+  {
+   "source": "language",
+   "target": "say",
+   "colexification": 5
+  },
+  {
+   "source": "language",
+   "target": "speak",
+   "colexification": 21
+  },
+  {
+   "source": "language",
+   "target": "tongue",
+   "colexification": 117
+  },
+  {
+   "source": "leaf",
+   "target": "ear",
+   "polysemy": 1
+  },
+  {
+   "source": "leaf",
+   "target": "feather",
+   "colexification": 39
+  },
+  {
+   "source": "leaf",
+   "target": "green",
+   "derivation": 2
+  },
+  {
+   "source": "leaf",
+   "target": "hair",
+   "colexification": 16
+  },
+  {
+   "source": "leaf",
+   "target": "tooth",
+   "colexification": 19
+  },
+  {
+   "source": "leg",
+   "target": "bone",
+   "colexification": 18
+  },
+  {
+   "source": "leg",
+   "target": "foot",
+   "colexification": 993
+  },
+  {
+   "source": "leg",
+   "target": "house",
+   "colexification": 7
+  },
+  {
+   "source": "leg",
+   "target": "tail",
+   "colexification": 6
+  },
+  {
+   "source": "lie",
+   "target": "sleep",
+   "colexification": 36
+  },
+  {
+   "source": "liver",
+   "target": "belly",
+   "polysemy": 1
+  },
+  {
+   "source": "liver",
+   "target": "blood",
+   "colexification": 9
+  },
+  {
+   "source": "liver",
+   "target": "dry",
+   "colexification": 26
+  },
+  {
+   "source": "liver",
+   "target": "heart",
+   "derivation": 2
+  },
+  {
+   "source": "long",
+   "target": "big",
+   "colexification": 16
+  },
+  {
+   "source": "long",
+   "target": "far",
+   "polysemy": 1,
+   "derivation": 1
+  },
+  {
+   "source": "long",
+   "target": "road",
+   "colexification": 6
+  },
+  {
+   "source": "long",
+   "target": "yellow",
+   "colexification": 9
+  },
+  {
+   "source": "louse",
+   "target": "die",
+   "colexification": 9
+  },
+  {
+   "source": "louse",
+   "target": "name",
+   "colexification": 5
+  },
+  {
+   "source": "louse",
+   "target": "this",
+   "colexification": 5
+  },
+  {
+   "source": "louse",
+   "target": "tree",
+   "colexification": 7
+  },
+  {
+   "source": "make",
+   "target": "eat",
+   "colexification": 5
+  },
+  {
+   "source": "make",
+   "target": "give",
+   "colexification": 11
+  },
+  {
+   "source": "make",
+   "target": "root",
+   "colexification": 5
+  },
+  {
+   "source": "make",
+   "target": "say",
+   "colexification": 15
+  },
+  {
+   "source": "make",
+   "target": "speak",
+   "colexification": 6
+  },
+  {
+   "source": "make",
+   "target": "work",
+   "colexification": 16
+  },
+  {
+   "source": "many",
+   "target": "all",
+   "colexification": 11
+  },
+  {
+   "source": "many",
+   "target": "big",
+   "polysemy": 1
+  },
+  {
+   "source": "many",
+   "target": "full",
+   "colexification": 9
+  },
+  {
+   "source": "moon",
+   "target": "dog",
+   "colexification": 9
+  },
+  {
+   "source": "moon",
+   "target": "sun",
+   "colexification": 61
+  },
+  {
+   "source": "moon",
+   "target": "white",
+   "polysemy": 1
+  },
+  {
+   "source": "morning",
+   "target": "day",
+   "polysemy": 1
+  },
+  {
+   "source": "mother",
+   "target": "big",
+   "colexification": 5
+  },
+  {
+   "source": "mother",
+   "target": "father",
+   "colexification": 13
+  },
+  {
+   "source": "mother",
+   "target": "woman",
+   "colexification": 15
+  },
+  {
+   "source": "mountain",
+   "target": "cloud",
+   "polysemy": 1
+  },
+  {
+   "source": "mountain",
+   "target": "fish",
+   "colexification": 6
+  },
+  {
+   "source": "mountain",
+   "target": "forest",
+   "polysemy": 1
+  },
+  {
+   "source": "mountain",
+   "target": "nose",
+   "colexification": 11
+  },
+  {
+   "source": "mountain",
+   "target": "stone",
+   "colexification": 44
+  },
+  {
+   "source": "mouth",
+   "target": "drink",
+   "colexification": 7
+  },
+  {
+   "source": "mouth",
+   "target": "language",
+   "polysemy": 3
+  },
+  {
+   "source": "mouth",
+   "target": "tongue",
+   "colexification": 8
+  },
+  {
+   "source": "mouth",
+   "target": "tooth",
+   "colexification": 39
+  },
+  {
+   "source": "name",
+   "target": "ear",
+   "colexification": 19
+  },
+  {
+   "source": "name",
+   "target": "eye",
+   "colexification": 7
+  },
+  {
+   "source": "name",
+   "target": "fire",
+   "colexification": 7
+  },
+  {
+   "source": "name",
+   "target": "louse",
+   "colexification": 5
+  },
+  {
+   "source": "name",
+   "target": "tail",
+   "colexification": 5
+  },
+  {
+   "source": "name",
+   "target": "tooth",
+   "colexification": 6
+  },
+  {
+   "source": "name",
+   "target": "what",
+   "colexification": 9
+  },
+  {
+   "source": "neck",
+   "target": "rain",
+   "colexification": 14
+  },
+  {
+   "source": "new",
+   "target": "bird",
+   "colexification": 10
+  },
+  {
+   "source": "new",
+   "target": "good",
+   "colexification": 8
+  },
+  {
+   "source": "new",
+   "target": "heart",
+   "colexification": 34
+  },
+  {
+   "source": "new",
+   "target": "moon",
+   "derivation": 1
+  },
+  {
+   "source": "new",
+   "target": "young",
+   "colexification": 40
+  },
+  {
+   "source": "night",
+   "target": "black",
+   "colexification": 10
+  },
+  {
+   "source": "night",
+   "target": "cloud",
+   "colexification": 7
+  },
+  {
+   "source": "night",
+   "target": "day",
+   "colexification": 7
+  },
+  {
+   "source": "night",
+   "target": "sea",
+   "colexification": 8
+  },
+  {
+   "source": "nose",
+   "target": "mountain",
+   "colexification": 11
+  },
+  {
+   "source": "not",
+   "target": "old",
+   "colexification": 6
+  },
+  {
+   "source": "not",
+   "target": "we",
+   "colexification": 5
+  },
+  {
+   "source": "old",
+   "target": "big",
+   "colexification": 27
+  },
+  {
+   "source": "old",
+   "target": "not",
+   "colexification": 6
+  },
+  {
+   "source": "open",
+   "target": "white",
+   "colexification": 5
+  },
+  {
+   "source": "path",
+   "target": "road",
+   "colexification": 1099
+  },
+  {
+   "source": "path",
+   "target": "skin",
+   "colexification": 6
+  },
+  {
+   "source": "person",
+   "target": "who",
+   "colexification": 16
+  },
+  {
+   "source": "person",
+   "target": "woman",
+   "derivation": 1
+  },
+  {
+   "source": "rain",
+   "target": "cloud",
+   "colexification": 11
+  },
+  {
+   "source": "rain",
+   "target": "many",
+   "polysemy": 1
+  },
+  {
+   "source": "rain",
+   "target": "neck",
+   "colexification": 14
+  },
+  {
+   "source": "rain",
+   "target": "river",
+   "colexification": 11
+  },
+  {
+   "source": "rain",
+   "target": "salt",
+   "colexification": 9
+  },
+  {
+   "source": "rain",
+   "target": "star",
+   "colexification": 5
+  },
+  {
+   "source": "rain",
+   "target": "water",
+   "colexification": 96
+  },
+  {
+   "source": "rain",
+   "target": "year",
+   "colexification": 10
+  },
+  {
+   "source": "read",
+   "target": "see",
+   "colexification": 7
+  },
+  {
+   "source": "read",
+   "target": "speak",
+   "polysemy": 2
+  },
+  {
+   "source": "red",
+   "target": "blood",
+   "derivation": 2
+  },
+  {
+   "source": "red",
+   "target": "day",
+   "colexification": 5
+  },
+  {
+   "source": "red",
+   "target": "fire",
+   "colexification": 7
+  },
+  {
+   "source": "red",
+   "target": "yellow",
+   "colexification": 24
+  },
+  {
+   "source": "river",
+   "target": "drink",
+   "colexification": 10
+  },
+  {
+   "source": "river",
+   "target": "rain",
+   "colexification": 11
+  },
+  {
+   "source": "river",
+   "target": "sea",
+   "colexification": 15
+  },
+  {
+   "source": "river",
+   "target": "water",
+   "colexification": 168
+  },
+  {
+   "source": "road",
+   "target": "long",
+   "colexification": 6
+  },
+  {
+   "source": "road",
+   "target": "path",
+   "colexification": 1099
+  },
+  {
+   "source": "road",
+   "target": "skin",
+   "colexification": 5
+  },
+  {
+   "source": "road",
+   "target": "walk",
+   "colexification": 5
+  },
+  {
+   "source": "root",
+   "target": "family",
+   "polysemy": 1,
+   "derivation": 1
+  },
+  {
+   "source": "root",
+   "target": "make",
+   "colexification": 5
+  },
+  {
+   "source": "root",
+   "target": "town",
+   "colexification": 5
+  },
+  {
+   "source": "salt",
+   "target": "good",
+   "polysemy": 1
+  },
+  {
+   "source": "salt",
+   "target": "rain",
+   "colexification": 9
+  },
+  {
+   "source": "salt",
+   "target": "sea",
+   "polysemy": 2,
+   "derivation": 1
+  },
+  {
+   "source": "sand",
+   "target": "earth",
+   "colexification": 53
+  },
+  {
+   "source": "sand",
+   "target": "many",
+   "derivation": 1
+  },
+  {
+   "source": "say",
+   "target": "blood",
+   "colexification": 7
+  },
+  {
+   "source": "say",
+   "target": "kill",
+   "colexification": 6
+  },
+  {
+   "source": "say",
+   "target": "language",
+   "colexification": 5
+  },
+  {
+   "source": "say",
+   "target": "make",
+   "colexification": 15
+  },
+  {
+   "source": "say",
+   "target": "speak",
+   "colexification": 159
+  },
+  {
+   "source": "sea",
+   "target": "many",
+   "polysemy": 4
+  },
+  {
+   "source": "sea",
+   "target": "night",
+   "colexification": 8
+  },
+  {
+   "source": "sea",
+   "target": "river",
+   "colexification": 15
+  },
+  {
+   "source": "sea",
+   "target": "salt",
+   "colexification": 86
+  },
+  {
+   "source": "sea",
+   "target": "water",
+   "colexification": 12
+  },
+  {
+   "source": "see",
+   "target": "eye",
+   "colexification": 7
+  },
+  {
+   "source": "see",
+   "target": "hear",
+   "colexification": 10
+  },
+  {
+   "source": "see",
+   "target": "know",
+   "polysemy": 5,
+   "derivation": 1
+  },
+  {
+   "source": "see",
+   "target": "read",
+   "colexification": 7
+  },
+  {
+   "source": "see",
+   "target": "water",
+   "colexification": 5
+  },
+  {
+   "source": "see",
+   "target": "we",
+   "colexification": 9
+  },
+  {
+   "source": "seed",
+   "target": "bone",
+   "colexification": 5
+  },
+  {
+   "source": "seed",
+   "target": "egg",
+   "colexification": 15
+  },
+  {
+   "source": "seed",
+   "target": "eye",
+   "colexification": 20
+  },
+  {
+   "source": "seed",
+   "target": "grain",
+   "colexification": 45
+  },
+  {
+   "source": "seed",
+   "target": "tail",
+   "colexification": 5
+  },
+  {
+   "source": "seed",
+   "target": "tooth",
+   "colexification": 6
+  },
+  {
+   "source": "skin",
+   "target": "bark",
+   "colexification": 174
+  },
+  {
+   "source": "skin",
+   "target": "feather",
+   "colexification": 7
+  },
+  {
+   "source": "skin",
+   "target": "flesh",
+   "colexification": 9
+  },
+  {
+   "source": "skin",
+   "target": "path",
+   "colexification": 6
+  },
+  {
+   "source": "skin",
+   "target": "road",
+   "colexification": 5
+  },
+  {
+   "source": "sleep",
+   "target": "lie",
+   "polysemy": 2
+  },
+  {
+   "source": "slow",
+   "target": "cold",
+   "colexification": 11
+  },
+  {
+   "source": "small",
+   "target": "child",
+   "polysemy": 11,
+   "derivation": 6
+  },
+  {
+   "source": "small",
+   "target": "slow",
+   "derivation": 1
+  },
+  {
+   "source": "small",
+   "target": "young",
+   "polysemy": 3
+  },
+  {
+   "source": "smoke",
+   "target": "cloud",
+   "colexification": 49
+  },
+  {
+   "source": "smoke",
+   "target": "house",
+   "polysemy": 2,
+   "derivation": 1
+  },
+  {
+   "source": "smoke",
+   "target": "i",
+   "colexification": 16
+  },
+  {
+   "source": "speak",
+   "target": "language",
+   "colexification": 21
+  },
+  {
+   "source": "speak",
+   "target": "make",
+   "colexification": 6
+  },
+  {
+   "source": "speak",
+   "target": "read",
+   "colexification": 11
+  },
+  {
+   "source": "speak",
+   "target": "say",
+   "colexification": 159
+  },
+  {
+   "source": "spirit",
+   "target": "wind",
+   "colexification": 5
+  },
+  {
+   "source": "star",
+   "target": "fingernail",
+   "colexification": 7
+  },
+  {
+   "source": "star",
+   "target": "rain",
+   "colexification": 5
+  },
+  {
+   "source": "stone",
+   "target": "egg",
+   "colexification": 7
+  },
+  {
+   "source": "stone",
+   "target": "mountain",
+   "colexification": 44
+  },
+  {
+   "source": "sun",
+   "target": "day",
+   "polysemy": 10,
+   "derivation": 5
+  },
+  {
+   "source": "sun",
+   "target": "eye",
+   "colexification": 12
+  },
+  {
+   "source": "sun",
+   "target": "father",
+   "polysemy": 1
+  },
+  {
+   "source": "sun",
+   "target": "god",
+   "colexification": 16
+  },
+  {
+   "source": "sun",
+   "target": "hot",
+   "colexification": 7
+  },
+  {
+   "source": "sun",
+   "target": "moon",
+   "colexification": 61
+  },
+  {
+   "source": "sun",
+   "target": "mother",
+   "derivation": 1
+  },
+  {
+   "source": "sun",
+   "target": "year",
+   "colexification": 21
+  },
+  {
+   "source": "tail",
+   "target": "fire",
+   "colexification": 10
+  },
+  {
+   "source": "tail",
+   "target": "foot",
+   "colexification": 7
+  },
+  {
+   "source": "tail",
+   "target": "leg",
+   "colexification": 6
+  },
+  {
+   "source": "tail",
+   "target": "name",
+   "colexification": 5
+  },
+  {
+   "source": "tail",
+   "target": "seed",
+   "colexification": 5
+  },
+  {
+   "source": "that",
+   "target": "far",
+   "colexification": 6
+  },
+  {
+   "source": "that",
+   "target": "this",
+   "colexification": 74
+  },
+  {
+   "source": "that",
+   "target": "you",
+   "colexification": 7
+  },
+  {
+   "source": "this",
+   "target": "louse",
+   "colexification": 5
+  },
+  {
+   "source": "this",
+   "target": "that",
+   "colexification": 74
+  },
+  {
+   "source": "this",
+   "target": "tooth",
+   "colexification": 9
+  },
+  {
+   "source": "thunder",
+   "target": "cloud",
+   "colexification": 6
+  },
+  {
+   "source": "tongue",
+   "target": "come",
+   "colexification": 6
+  },
+  {
+   "source": "tongue",
+   "target": "language",
+   "polysemy": 6
+  },
+  {
+   "source": "tongue",
+   "target": "mouth",
+   "colexification": 8
+  },
+  {
+   "source": "tooth",
+   "target": "bird",
+   "colexification": 8
+  },
+  {
+   "source": "tooth",
+   "target": "bone",
+   "colexification": 13
+  },
+  {
+   "source": "tooth",
+   "target": "egg",
+   "colexification": 11
+  },
+  {
+   "source": "tooth",
+   "target": "grain",
+   "colexification": 9
+  },
+  {
+   "source": "tooth",
+   "target": "horn",
+   "polysemy": 2
+  },
+  {
+   "source": "tooth",
+   "target": "leaf",
+   "colexification": 19
+  },
+  {
+   "source": "tooth",
+   "target": "mouth",
+   "colexification": 39
+  },
+  {
+   "source": "tooth",
+   "target": "name",
+   "colexification": 6
+  },
+  {
+   "source": "tooth",
+   "target": "seed",
+   "colexification": 6
+  },
+  {
+   "source": "tooth",
+   "target": "this",
+   "colexification": 9
+  },
+  {
+   "source": "tooth",
+   "target": "walk",
+   "colexification": 7
+  },
+  {
+   "source": "town",
+   "target": "root",
+   "colexification": 5
+  },
+  {
+   "source": "town",
+   "target": "village",
+   "colexification": 52
+  },
+  {
+   "source": "tree",
+   "target": "bird",
+   "colexification": 5
+  },
+  {
+   "source": "tree",
+   "target": "fire",
+   "polysemy": 1,
+   "derivation": 3
+  },
+  {
+   "source": "tree",
+   "target": "forest",
+   "colexification": 27
+  },
+  {
+   "source": "tree",
+   "target": "louse",
+   "colexification": 7
+  },
+  {
+   "source": "two",
+   "target": "day",
+   "colexification": 5
+  },
+  {
+   "source": "village",
+   "target": "eat",
+   "colexification": 9
+  },
+  {
+   "source": "village",
+   "target": "house",
+   "colexification": 13
+  },
+  {
+   "source": "village",
+   "target": "town",
+   "colexification": 52
+  },
+  {
+   "source": "walk",
+   "target": "come",
+   "colexification": 17
+  },
+  {
+   "source": "walk",
+   "target": "fire",
+   "colexification": 5
+  },
+  {
+   "source": "walk",
+   "target": "road",
+   "colexification": 5
+  },
+  {
+   "source": "walk",
+   "target": "tooth",
+   "colexification": 7
+  },
+  {
+   "source": "water",
+   "target": "bite",
+   "colexification": 7
+  },
+  {
+   "source": "water",
+   "target": "breasts",
+   "colexification": 7
+  },
+  {
+   "source": "water",
+   "target": "drink",
+   "colexification": 12
+  },
+  {
+   "source": "water",
+   "target": "egg",
+   "colexification": 6
+  },
+  {
+   "source": "water",
+   "target": "rain",
+   "colexification": 96
+  },
+  {
+   "source": "water",
+   "target": "river",
+   "polysemy": 1
+  },
+  {
+   "source": "water",
+   "target": "sea",
+   "colexification": 12
+  },
+  {
+   "source": "water",
+   "target": "see",
+   "colexification": 5
+  },
+  {
+   "source": "we",
+   "target": "give",
+   "colexification": 10
+  },
+  {
+   "source": "we",
+   "target": "i",
+   "colexification": 19
+  },
+  {
+   "source": "we",
+   "target": "not",
+   "colexification": 5
+  },
+  {
+   "source": "we",
+   "target": "see",
+   "colexification": 9
+  },
+  {
+   "source": "we",
+   "target": "you",
+   "colexification": 9
+  },
+  {
+   "source": "what",
+   "target": "name",
+   "colexification": 9
+  },
+  {
+   "source": "what",
+   "target": "who",
+   "colexification": 63
+  },
+  {
+   "source": "white",
+   "target": "cloud",
+   "colexification": 5
+  },
+  {
+   "source": "white",
+   "target": "good",
+   "polysemy": 2
+  },
+  {
+   "source": "white",
+   "target": "open",
+   "colexification": 5
+  },
+  {
+   "source": "white",
+   "target": "salt",
+   "polysemy": 1
+  },
+  {
+   "source": "white",
+   "target": "yellow",
+   "colexification": 9
+  },
+  {
+   "source": "who",
+   "target": "person",
+   "colexification": 16
+  },
+  {
+   "source": "who",
+   "target": "what",
+   "colexification": 63
+  },
+  {
+   "source": "wind",
+   "target": "cold",
+   "colexification": 19
+  },
+  {
+   "source": "wind",
+   "target": "fast",
+   "polysemy": 1,
+   "derivation": 1
+  },
+  {
+   "source": "wind",
+   "target": "spirit",
+   "colexification": 5
+  },
+  {
+   "source": "woman",
+   "target": "mother",
+   "colexification": 15
+  },
+  {
+   "source": "woman",
+   "target": "person",
+   "colexification": 5
+  },
+  {
+   "source": "work",
+   "target": "make",
+   "colexification": 16
+  },
+  {
+   "source": "year",
+   "target": "bite",
+   "colexification": 8
+  },
+  {
+   "source": "year",
+   "target": "blood",
+   "colexification": 9
+  },
+  {
+   "source": "year",
+   "target": "rain",
+   "colexification": 10
+  },
+  {
+   "source": "year",
+   "target": "sun",
+   "colexification": 21
+  },
+  {
+   "source": "yellow",
+   "target": "come",
+   "colexification": 5
+  },
+  {
+   "source": "yellow",
+   "target": "green",
+   "colexification": 57
+  },
+  {
+   "source": "yellow",
+   "target": "long",
+   "colexification": 9
+  },
+  {
+   "source": "yellow",
+   "target": "red",
+   "colexification": 24
+  },
+  {
+   "source": "yellow",
+   "target": "white",
+   "colexification": 9
+  },
+  {
+   "source": "you",
+   "target": "that",
+   "colexification": 7
+  },
+  {
+   "source": "you",
+   "target": "we",
+   "colexification": 9
+  },
+  {
+   "source": "young",
+   "target": "green",
+   "colexification": 8
+  },
+  {
+   "source": "young",
+   "target": "new",
+   "colexification": 40
+  },
+  {
+   "source": "young",
+   "target": "small",
+   "colexification": 31
+  }
+ ]
+}

@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import Sequence
 
 from cee.v2.changes.base import Change, InnovationContext, RateBasis
-from cee.v2.changes.lexicon import LexicalCoinage
+from cee.v2.changes.lexicon import LEXICAL_CHANGES, LexicalCoinage
 from cee.v2.changes.morphology import MORPHOLOGICAL_CHANGES, AnalogicalChange
 from cee.v2.changes.sound import SOUND_CHANGES, SoundChange
 from cee.v2.pressures.base import Pressure
 
 #: Pevné pořadí registru je součástí determinismu. Ve světě bez hláskových
 #: tvarů (M1) zvukové změny nenajdou žádné místo a nic nestojí.
-DEFAULT_CHANGES: tuple[Change, ...] = (LexicalCoinage(), *SOUND_CHANGES, *MORPHOLOGICAL_CHANGES)
+DEFAULT_CHANGES: tuple[Change, ...] = (*LEXICAL_CHANGES, *SOUND_CHANGES, *MORPHOLOGICAL_CHANGES)
 
 
 def pressures_by_kind(changes: Sequence[Change]) -> dict[str, tuple[tuple[Pressure, float], ...]]:
@@ -37,6 +37,7 @@ def pressures_by_kind(changes: Sequence[Change]) -> dict[str, tuple[tuple[Pressu
 
 
 __all__ = [
+    "LEXICAL_CHANGES",
     "MORPHOLOGICAL_CHANGES",
     "AnalogicalChange",
     "DEFAULT_CHANGES",

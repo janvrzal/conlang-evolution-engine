@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Mapping
+
 import numpy as np
 
 from cee.v2.pressures.base import FloatArray, Pressure, PressureBatch
@@ -39,16 +41,27 @@ class Actuation(Pressure):
 
     def scores(self, batch: PressureBatch) -> FloatArray:
         result = np.zeros_like(batch.freqs)
+        variants = batch.world.variants
+        cells = [
+            (row, slot, variant)
+            for row, slots in enumerate(batch.slots)
+            for slot, variant in enumerate(slots)
+            if variant is not None and variants[variant].origin.change is not None
+            and self.applies(variants[variant].payload)
+        ]
+        if not cells:
+            return result
         epoch = batch.tick // self.epoch_ticks
         seed = batch.world.seed
-        rows = np.array(
+        groups = np.array(
             [stable_int(seed, "actuation", epoch, group) for group in batch.group_ids], dtype=np.uint64
         )
-        for row, slots in enumerate(batch.slots):
-            for slot, variant in enumerate(slots):
-                if variant is None or batch.world.variants[variant].origin.change is None:
-                    continue
-                key = np.array([stable_int("actuation", variant)], dtype=np.uint64)
-                values = hash_normal(rows, key)[:, 0]
-                result[row, :, slot] = np.clip(self.spread * values, -1.0, 1.0)
+        keys = np.array([stable_int("actuation", variant) for _, _, variant in cells], dtype=np.uint64)
+        values = np.clip(self.spread * hash_normal(groups, keys), -1.0, 1.0)
+        rows = np.array([row for row, _, _ in cells])
+        slots = np.array([slot for _, slot, _ in cells])
+        result[rows, :, slots] = values.T
         return result
+
+    def applies(self, payload: Mapping[str, object]) -> bool:
+        return True

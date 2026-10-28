@@ -7,6 +7,7 @@ from typing import Sequence
 from cee.data.core_vocabulary import CORE_EXTENSION, SWADESH_CORE
 from cee.v2.language.morphology import Paradigm
 from cee.v2.language.protoforms import protolanguage
+from cee.v2.semantics import core_graph
 from cee.v2.world import Code, SpeechGroup, Territory, World, gravity_links
 
 DEFAULT_CONCEPTS: tuple[str, ...] = tuple(dict.fromkeys((*SWADESH_CORE, *CORE_EXTENSION)))
@@ -34,6 +35,10 @@ PROTO_ENDINGS = {
 }
 
 
+#: Odvozovací přípona protojazyka (jmenná, typ *-ka*).
+DERIVATIONAL_SUFFIX = "ka"
+
+
 def word_class(concept: str) -> str | None:
     if concept in UNINFLECTED or concept.startswith("concept-"):
         return None
@@ -57,6 +62,8 @@ def village_grid(
     link_reach: float = 2.0,
     phonology: bool = False,
     morphology: bool = False,
+    semantics: bool = False,
+    taboo: Sequence[str] = (),
 ) -> World:
     """Mřížka stejných vesnic s gravitačními vazbami na nejbližší sousedy.
 
@@ -64,7 +71,8 @@ def village_grid(
     do ``link_reach`` násobku rozestupu, takže vzdálené vesnice spolu mluví
     jen přes prostředníky. S ``phonology`` dostanou slova hláskové tvary
     vygenerovaného protojazyka (M2), s ``morphology`` navíc podstatná jména
-    plurál a slovesa minulý čas (M3).
+    plurál a slovesa minulý čas (M3), se ``semantics`` graf pojmů pro posun
+    významu, odvozování a skládání (M3b).
     """
     world = World(seed=seed)
     world.add_territory(Territory("world", "world"))
@@ -74,7 +82,9 @@ def village_grid(
     )
     if morphology:
         world.paradigms.update(PROTO_PARADIGMS)
-    if phonology or morphology:
+    if semantics:
+        world.semantics = core_graph()
+    if phonology or morphology or semantics:
         forms, frequencies = protolanguage(concepts, seed=seed)
         classes = (
             {concept: found for concept in concepts if (found := word_class(concept)) is not None}
@@ -83,6 +93,8 @@ def village_grid(
         base = world.seed_lexicon(
             concepts, forms, frequencies, classes, PROTO_ENDINGS if morphology else None
         )
+        if semantics and world.table is not None:
+            world.derivational_suffix = world.table.parse(DERIVATIONAL_SUFFIX)
     else:
         base = world.seed_lexicon(concepts)
     for row in range(rows):
@@ -100,6 +112,7 @@ def village_grid(
                     codes=[Code("main", base.branch())],
                     generation_years=generation_years,
                     openness=openness,
+                    taboo=frozenset(taboo),
                 )
             )
     gravity_links(world, max_distance=spacing * link_reach)

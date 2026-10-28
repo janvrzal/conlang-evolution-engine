@@ -43,6 +43,12 @@ Pozdější iterace upravují dřívější. Platí:
 - **Tlak `Actuation`** (iterace 3, doplněno v M2): nahodilost spuštění změny
   podle skupiny a epochy.
 - **Chronologii zvukových změn drží každý kód sám** (M2).
+- **Milník M3b: lexikon a význam** (doplněn po M3): tvorba slov a posun
+  významu neměly v milnících M1–M7 vlastní místo; lexikální změnu nesl jen
+  dočasný tlak `Appeal`. M3b předchází syntaxi, protože gramatikalizace
+  začíná vyblednutím významu.
+- **Graf pojmů je přibalený** (M3b): výřez CLICS⁴ a DatSemShift pro
+  základní slovní zásobu, aby simulace běžela bez sítě a lokální cache.
 - **Slovo a paradigma** (M3, mění iteraci 2): buňka paradigmatu je uložený
   tvar s hranicí kmen | koncovka; alomorfie a synkretismus jsou rozdíly
   mezi tvary, ne zvláštní struktura.

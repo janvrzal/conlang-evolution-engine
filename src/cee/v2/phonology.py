@@ -106,21 +106,27 @@ def word_bias(world: World, variable_id: str, morpheme_id: str) -> float:
     return bias
 
 
-def _lead(world: World, process: Process, morpheme_id: str) -> float:
-    frequency = world.morphemes[world.morphemes[morpheme_id].lexeme_id].frequency
+def _lead(world: World, process: Process, morpheme_id: str, code: Code | None = None) -> float:
+    lexeme = world.morphemes[morpheme_id].lexeme_id
+    frequency = world.usage_frequency(code, lexeme) if code is not None else world.morphemes[lexeme].frequency
     return FREQUENCY_LEAD * (2.0 * frequency - 1.0) if process.reductive else 0.0
 
 
-def word_probability(world: World, variable_id: str, morpheme_id: str, share: float) -> float:
+def word_probability(
+    world: World, variable_id: str, morpheme_id: str, share: float, code: Code | None = None
+) -> float:
     process = world.processes[variable_id]
-    value = _logit(share) + _lead(world, process, morpheme_id) + word_bias(world, variable_id, morpheme_id)
+    value = _logit(share) + _lead(world, process, morpheme_id, code) + word_bias(world, variable_id, morpheme_id)
     return 1.0 / (1.0 + math.exp(-value))
 
 
-def _needed(world: World, variable_id: str, morpheme_id: str) -> float:
+def _needed(world: World, variable_id: str, morpheme_id: str, code: Code | None = None) -> float:
     """Logit sdíleného podílu, při kterém si slovo změnu zapíše."""
     process = world.processes[variable_id]
-    return _LOGIT_THRESHOLD - _lead(world, process, morpheme_id) - word_bias(world, variable_id, morpheme_id)
+    return (
+        _LOGIT_THRESHOLD - _lead(world, process, morpheme_id, code)
+        - word_bias(world, variable_id, morpheme_id)
+    )
 
 
 def _applies(world: World, code: Code, variable_id: str, morpheme_id: str) -> bool:
@@ -137,7 +143,7 @@ def _queue(world: World, code: Code, variable_id: str, morpheme_id: str) -> None
     if any(item[1] == morpheme_id for item in queue):
         return
     if _applies(world, code, variable_id, morpheme_id):
-        bisect.insort(queue, (_needed(world, variable_id, morpheme_id), morpheme_id))
+        bisect.insort(queue, (_needed(world, variable_id, morpheme_id, code), morpheme_id))
 
 
 def requeue(world: World, code: Code, variable_id: str, morpheme_id: str) -> None:
@@ -243,7 +249,7 @@ def surface(world: World, group_id: str, morpheme_id: str) -> Form:
         if morpheme_id in state.restructured.get(variable_id, ()):
             continue
         share = changed_share(world, group_id, variable_id)
-        if share <= 0 or word_probability(world, variable_id, morpheme_id, share) < 0.5:
+        if share <= 0 or word_probability(world, variable_id, morpheme_id, share, code) < 0.5:
             continue
         changed = world.processes[variable_id].apply(form, world.table, code.stress_rule)
         if changed is not None:
