@@ -144,9 +144,15 @@ class Change(ABC):
 class Pressure(ABC):
     name: ClassVar[str]
     @abstractmethod
-    def score(self, variant: Variant, ctx: CodeContext) -> float: ...   # [-1, 1]
+    def scores(self, batch: PressureBatch) -> FloatArray: ...   # [-1, 1]
 ```
 
+- Tlak hodnotí celý výřez živých proměnných jednoho typu naráz
+  (`PressureBatch.freqs` má tvar proměnné × skupiny × sloty). Po
+  jednotlivých variantách by to bylo řádově pomalejší.
+- Všechny varianty jedné proměnné se hodnotí stejnými tlaky, i když je
+  vyrobily různé změny. Tlaky se proto sdružují podle **typu cílové
+  proměnné**; deklaruje-li tentýž tlak víc změn, platí nejvyšší váha.
 - `CodeView` je jen pro čtení. `CodeContext` drží indexy, které se počítají
   jednou za tick a kód, a to líně: povrchové formy, index homofonů,
   inventář, fonotaktický profil, typové frekvence vzorů.
@@ -185,7 +191,7 @@ vstup(x)  = (1 − o_g) · p_g(x) + o_g · Σ_h  ŵ_gh · p_h(x)
             ŵ_gh = síla_gh · prestiž_h^α / Σ
 sel(x)    = vstup(x) · exp(s · fitness_g(x))
 inc(x)    = κ · (p_g(x) − p_g^{t−1}(x))           # jen u L1
-drift(x)  ~ N(0, σ / √(r_g · populace_g))          # velikost učící se kohorty
+drift(x)  = z · σ · √(sel(x)(1 − sel(x)) / (r_g · populace_g)),  z ~ N(0, 1)
 dítě(x)   = normalizuj(max(0, sel(x) + inc(x) + drift(x)))
 dosp(x)   = p_g(x) + a · (vstup(x) − p_g(x))       # malé přizpůsobení dospělých
 p'_g(x)   = (1 − r_g) · dosp(x) + r_g · dítě(x)
@@ -196,14 +202,22 @@ p'_g(x)   = (1 − r_g) · dosp(x) + r_g · dítě(x)
   generace skupiny. Při `G = Δt` se obnoví celá generace, při `G = 500` jen
   5 % populace za krok.
 - `inc` se počítá vůči stavu o jednu generaci zpět, ne o jeden krok.
+  Skupina s jedinou variantou trend nemá.
+- `sel` se před přičtením `inc` a `drift` normalizuje.
+- Drift je Wright–Fisherův: varianta, kterou kohorta vůbec neslyší, driftem
+  vzniknout nemůže. `σ` nad 1 vyjadřuje, že na jazyk nemají všichni mluvčí
+  stejný vliv (efektivní populace `N / σ²`).
 
 - U L2 kódu se `vstup` doplní o interferenci: varianty stejné proměnné z
   `l1_source` s vahou úměrnou podílu L2 mluvčích.
-- Pod prahem `ε_zánik` (výchozí 0,005) varianta zaniká. Nad `θ_ustálení`
-  (0,95) se proměnná zjednoduší na jednu variantu a zavolá se
-  `on_established`.
-- Startovní hodnoty konstant: `α = 1`, `s = 1`, `κ = 0,3`, `σ = 0,5`,
-  `p0 = 0,02`, `a = 0,05`. Všechny se kalibrují (M7).
+- Varianta zaniká pod `max(ε, 0,5 / (r_g · populace_g))`, tedy když na ni v
+  učící se kohortě nepřipadá ani půl mluvčího (`ε = 0,001`).
+- Vedoucí varianta nad `θ = 0,999` se stane jedinou. Je to jen úklid zbytků:
+  ustálení vzniká tím, že ostatní varianty vymřou. (Původní `θ = 0,95`
+  okamžitě vracelo každou novou inovaci na 2 % zpět na starou variantu.)
+- Startovní hodnoty konstant: `α = 1`, `s = 1`, `κ = 0,3`, `σ = 2`,
+  `p0 = 0,02`, `a = 0,05`, otevřenost venkovské skupiny `o = 0,1`. Všechny
+  se kalibrují (M7).
 
 ### Souhrnné skupiny a přiblížení
 
@@ -220,7 +234,14 @@ p'_g(x)   = (1 − r_g) · dosp(x) + r_g · dítě(x)
 ## Determinismus
 
 - Každý náhodný tah: `np.random.Generator(PCG64(SeedSequence([seed_světa,
-  tick, index_skupiny, index_kódu, index_změny])))`.
+  otisk(tick, ID_skupiny, ID_kódu, druh_změny)])))`. Používají se stabilní
+  ID, ne indexy, aby přidání skupiny jinde nezměnilo tahy ostatních.
+- Drift je hashovaný šum závislý jen na (seed, tick, skupina, varianta), ne
+  generátor na každou dvojici.
+- Míšení se násobí zvlášť pro každou propojenou komponentu sítě: BLAS
+  sčítá v pořadí podle velikosti matice. Součty přes sloty se řadí, aby
+  nezáležely na pořadí slotů. Díky tomu zjemnění oblasti nezmění ani
+  poslední bity v nepropojené oblasti.
 - Identifikátory variant, morfémů a linií jsou hashe (`blake2b`) jejich
   původu. Žádné `uuid4`, žádná iterace přes `set`.
 - Registr změn a tlaků má pevné pořadí. Redukce přes skupiny běží v pevném
@@ -248,8 +269,10 @@ Jak toho dosáhnout:
   změnily (index segment → morfémy).
 - Homofonie a funkční zátěž přes hashovací index povrchových tvarů a
   sousedů s jednou záměnou, nikdy porovnáním všech dvojic.
-- Přenos jedné proměnné přes všechny skupiny je řídké maticové násobení
-  (`numpy` / `scipy.sparse`).
+- Živé proměnné leží po sloupcích v `LivePools` (proměnné × skupiny ×
+  sloty) a celý krok se počítá vektorově. Bloky podle kapacity slotů
+  (2, 4, 8, …) brání tomu, aby jedna proměnná s mnoha variantami
+  nafoukla pole všem ostatním.
 - Copy-on-write repertoáry: skupina kopíruje jen to, co se u ní liší.
 
 ## Historie a export
@@ -326,13 +349,34 @@ Každý milník je svislý řez: musí splnit svou bránu, než začne další.
 
 | Milník | Obsah | Brána |
 |---|---|---|
-| **M1 jádro** | svět, strom území, skupiny (i souhrnné), síť, délka generace, lexikální proměnné, přenos, pozorování; bez fonologie | S1, metrika 7–9, 12, režim údolí ≤ 5 s, přiblížení zachová determinismus |
+| **M1 jádro** | svět, strom území, skupiny (i souhrnné), síť, délka generace, lexikální proměnné, přenos, pozorování; bez fonologie | S1, metrika 7, 8, 9 (rostoucí), 12, režim údolí ≤ 5 s, přiblížení zachová determinismus |
 | **M2 zvuk** | segmenty, morfémy, procesní proměnné, fonologizace, povrch, rodiny A, jazykové tlaky | metrika 3–6, emergentní řetězový posun |
 | **M3 morfologie** | alomorfy, paradigmata, změny B, `Uniformita`, `Frekvence` | emergentní morfologizace, Sturtevantův paradox v testu |
 | **M4 syntax** | konstrukce, změny C, velký cyklus | emergentní analytizace při erozi |
 | **M5 kontakt** | kódy, L1/L2, interference, výpůjčky, přechod | S2, S3, metrika 11 |
-| **M6 společnost** | instituce, události, linie jazyků, export pro UI | S4, stabilní emergentní strom |
+| **M6 společnost** | instituce, události, linie jazyků, export pro UI | S4, stabilní emergentní strom, metrika 9 (sublineární) |
 | **M7 kalibrace** | hledání vah a konstant proti metrikám | S5, metriky 1, 2, 10 |
+
+### Stav M1 (2026-10-28)
+
+Splněno, testy v `tests/v2/test_v2_m1_gate.py`:
+
+- S1: plynulé kontinuum bez ostré hranice; hranice státu vytvoří svazek
+  izoglos (vzdálenost přes hranici víc než dvojnásobná oproti ostatním
+  sousedům).
+- Metrika 7: medián R² logistické křivky ustálených změn ≈ 0,98.
+- Metrika 8: ustálí se zhruba 2 % inovací.
+- Metrika 9: vzdálenost roste se zeměpisnou vzdáleností (korelace > 0,9).
+  **Sublinearita zatím ne:** v M1 má výhodná inovace výhodu ve všech
+  skupinách (dočasný tlak `Appeal`), takže úspěšná změna časem projde celým
+  kontinuem. Přesunuto do brány M6 (tlak identity, města jako uzly slabých
+  vazeb); test je označený jako očekávané selhání.
+- Metrika 12 a přiblížení: stejný seed dá stejný log; zjemnění jedné
+  oblasti nezmění historii nepropojené oblasti ani v posledním bitu.
+- Výkon: režim údolí (50 skupin, 500 pojmů, 2 000 let) ≈ 4,6 s na vývojovém
+  notebooku.
+- Retence slovní zásoby v S1 vychází kolem 80 % za tisíciletí (metrika 1 se
+  hodnotí až v M7).
 
 ## Co převzít z legacy
 
