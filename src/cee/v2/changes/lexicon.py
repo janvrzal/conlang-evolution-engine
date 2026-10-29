@@ -189,10 +189,26 @@ class SemanticChange(Change):
     def sites(self, context: InnovationContext) -> Sequence[str]:
         if context.world.semantics is None or context.world.table is None:
             return ()
-        return sorted(self._sites(context))
+        state = context.code.phonology
+        key = ("lexical-sites-sorted", self.kind)
+        cached = state.cache.get(key)
+        if cached is None or cached[0] != state.lexicon_version:
+            cached = state.cache[key] = (state.lexicon_version, sorted(self._sites(context)))
+        return cast(list[str], cached[1])
 
     def rate(self, context: InnovationContext, site: str) -> float:
         return self.base_rate * sum(weight for weight, _ in self._sites(context)[site])
+
+    def rates(self, context: InnovationContext, sites: Sequence[str]) -> list[float]:
+        # Míry závisí jen na slovní zásobě: drží se spolu s místy.
+        state = context.code.phonology
+        key = ("lexical-rates", self.kind)
+        cached = state.cache.get(key)
+        if cached is not None and cached[0] == state.lexicon_version:
+            return cast(list[float], cached[1])
+        found = [self.rate(context, site) for site in sites]
+        state.cache[key] = (state.lexicon_version, found)
+        return found
 
     def propose(
         self, context: InnovationContext, site: str, rng: np.random.Generator, index: int

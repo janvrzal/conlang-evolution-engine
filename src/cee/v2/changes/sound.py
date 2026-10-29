@@ -137,7 +137,44 @@ def context_stats(context: InnovationContext) -> ContextStats | None:
     return stats
 
 
-_CANDIDATES: dict[tuple[str, int, tuple[int, ...]], list[Process]] = {}
+class _Candidates:
+    """Kandidáti rodiny pro jeden inventář a jejich masky složené do matic."""
+
+    def __init__(self, processes: list[Process], table: SegmentTable):
+        self.processes = processes
+        size = len(table.vowel_mask)
+        everything = np.ones(size, dtype=bool)
+        self.target = np.array([process.target.mask for process in processes]).reshape(-1, size)
+        self.left = np.array([
+            everything if process.left is None else process.left.mask for process in processes
+        ]).reshape(-1, size)
+        self.right = np.array([
+            everything if process.right is None else process.right.mask for process in processes
+        ]).reshape(-1, size)
+        # Identifikátor proměnné a jen první kandidát se stejnou změnou.
+        self.variable_ids = [Variable("process", process.key).id for process in processes]
+        seen: set[str] = set()
+        self.first = []
+        for index, variable_id in enumerate(self.variable_ids):
+            if variable_id not in seen:
+                seen.add(variable_id)
+                self.first.append(index)
+        self.stressed = np.array([process.stress == "stressed" for process in processes], dtype=bool)
+        self.unstressed = np.array([process.stress == "unstressed" for process in processes], dtype=bool)
+
+    def supports(self, stats: ContextStats, table: SegmentTable) -> npt.NDArray[np.float64]:
+        """Totéž co :meth:`ContextStats.support` pro všechny kandidáty naráz."""
+        if not self.processes:
+            return np.zeros(0)
+        mask = self.target[:, stats.segment] & self.left[:, stats.previous] & self.right[:, stats.following]
+        mask &= np.where(self.stressed[:, None], stats.stressed[None, :], True)
+        unstressed = ~stats.stressed & table.vowel_mask[stats.segment]
+        mask &= np.where(self.unstressed[:, None], unstressed[None, :], True)
+        result: npt.NDArray[np.float64] = mask.astype(np.float64) @ stats.count
+        return result
+
+
+_CANDIDATES: dict[tuple[str, int, tuple[int, ...]], _Candidates] = {}
 _CANDIDATES_LIMIT = 1 << 12
 
 
@@ -169,29 +206,38 @@ class SoundChange(Change):
             # Kandidáti závisí jen na inventáři, a ten mají vesnice většinou
             # společný a mění se zřídka: sestaví se jednou pro každý inventář.
             memo_key = (self.kind, id(table), stats.inventory)
-            candidates = _CANDIDATES.get(memo_key)
-            if candidates is None:
+            prepared = _CANDIDATES.get(memo_key)
+            if prepared is None:
                 if len(_CANDIDATES) >= _CANDIDATES_LIMIT:
                     _CANDIDATES.clear()
-                candidates = _CANDIDATES[memo_key] = self.candidates(table, stats.inventory)
-            for process in candidates:
-                support = stats.support(process, table)
-                variable_id = Variable("process", process.key).id
-                if support >= MIN_SUPPORT and variable_id not in found:
-                    found[variable_id] = (process, support)
+                prepared = _CANDIDATES[memo_key] = _Candidates(self.candidates(table, stats.inventory), table)
+            # Opory všech kandidátů jedním maticovým násobením nad počty
+            # prostředí (počty jsou celá čísla, součet je přesný).
+            supports = prepared.supports(stats, table)
+            for index in prepared.first:
+                support = float(supports[index])
+                if support >= MIN_SUPPORT:
+                    found[prepared.variable_ids[index]] = (prepared.processes[index], support)
         state.cache[cache_key] = (state.version, found)
+        state.cache[("sound-sites-sorted", self.kind)] = (state.version, sorted(found))
         return found
 
     def sites(self, context: InnovationContext) -> Sequence[str]:
         if context.world.table is None:
             return ()  # svět bez hláskových tvarů (M1)
-        return sorted(self._supported(context))
+        self._supported(context)
+        return cast(list[str], context.code.phonology.cache[("sound-sites-sorted", self.kind)][1])
 
     def rate(self, context: InnovationContext, site: str) -> float:
         supported = self._supported(context)
         share = self.prior / _total_prior()
         _, support = supported[site]
         return SOUND_INNOVATIONS_PER_GENERATION * share * min(1.0, support / FULL_SUPPORT) / len(supported)
+
+    def rates(self, context: InnovationContext, sites: Sequence[str]) -> list[float]:
+        supported = self._supported(context)
+        scale = SOUND_INNOVATIONS_PER_GENERATION * (self.prior / _total_prior())
+        return [scale * min(1.0, supported[site][1] / FULL_SUPPORT) / len(supported) for site in sites]
 
     def propose(
         self, context: InnovationContext, site: str, rng: np.random.Generator, index: int

@@ -42,6 +42,8 @@ class FormBank:
         self.forms: list[Form] = []
         self._ids: dict[Form, int] = {}
         self._derived: dict[str, list[float | None]] = {}
+        self._arrays: dict[str, FloatArray] = {}
+        self._lengths = np.zeros(64, dtype=np.int64)
         self._tables: dict[tuple[str, StressRule], ProcessTable] = {}
         #: Tabulky v pořadí vzniku a jejich masky (cíl, levý a pravý soused)
         #: složené do matic pro hromadný předfiltr.
@@ -61,6 +63,28 @@ class FormBank:
         if found is None:
             found = self._ids[form] = len(self.forms)
             self.forms.append(form)
+            if found >= len(self._lengths):
+                self._lengths = np.concatenate([self._lengths, np.zeros(len(self._lengths), dtype=np.int64)])
+            self._lengths[found] = len(form)
+        return found
+
+    def lengths(self, form_ids: IntArray) -> IntArray:
+        return self._lengths[form_ids]
+
+    def values(self, name: str, form_ids: IntArray, compute: Callable[[Form], float]) -> FloatArray:
+        """Vlastnost tvarů jako pole; chybějící hodnoty se dopočítají jednou za běh."""
+        array = self._arrays.get(name)
+        if array is None or len(array) < len(self.forms):
+            grown = np.full(max(64, 2 * len(self.forms)), np.nan)
+            if array is not None:
+                grown[: len(array)] = array
+            array = self._arrays[name] = grown
+        found = array[form_ids]
+        missing = np.isnan(found)
+        if missing.any():
+            for form_id in np.unique(form_ids[missing]).tolist():
+                array[form_id] = compute(self.forms[form_id])
+            found = array[form_ids]
         return found
 
     def ids_of(self, forms: list[Form]) -> IntArray:

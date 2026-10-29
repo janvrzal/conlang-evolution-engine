@@ -6,7 +6,7 @@ from typing import Callable
 
 import numpy as np
 
-from cee.v2.assessment import ProcessAssessment, assess
+from cee.v2.assessment import ProcessAssessment, assess_many
 from cee.v2.language.processes import Process
 from cee.v2.phonology import changed_id
 from cee.v2.pressures.base import FloatArray, Pressure, PressureBatch
@@ -46,14 +46,15 @@ def _process_scores(
             continue
         slot = list(batch.slots[row]).index(changed)
         reached = (batch.freqs[row, :, slot] > 0) | (batch.heard[row, :, slot] > 0)
-        for column in (int(index) for index in np.flatnonzero(reached)):
-            key = (variable_id, column)
-            assessment = batch.memo.get(key)
-            if assessment is None:
-                assessment = batch.memo[key] = assess(
-                    world, batch.group_ids[column], variable_id, batch.tick
-                )
-            result[row, column, slot] = value(process, assessment)
+        columns = np.flatnonzero(reached).tolist()
+        missing = [column for column in columns if (variable_id, column) not in batch.memo]
+        if missing:
+            # Všechny skupiny, kam změna dolehla, se hodnotí naráz.
+            fresh = assess_many(world, [batch.group_ids[column] for column in missing], variable_id, batch.tick)
+            for column, assessment in zip(missing, fresh):
+                batch.memo[(variable_id, column)] = assessment
+        for column in columns:
+            result[row, column, slot] = value(process, batch.memo[(variable_id, column)])
     return result
 
 

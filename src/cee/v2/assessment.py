@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import numpy.typing as npt
 
-from cee.v2.language.processes import Process
+from cee.v2.language.processes import Process, StressRule
 from cee.v2.language.segments import Form, SegmentTable
 
 if TYPE_CHECKING:
@@ -129,8 +129,10 @@ class _Vocabulary:
     owners: dict[Form, list[str]]
     total: float
     vowels: Counter[int]
-    #: Čísla tvarů v bance, ve stejném pořadí jako ``forms``.
+    #: Čísla tvarů v bance, morfémy a frekvence, ve stejném pořadí jako ``forms``.
     ids: npt.NDArray[np.int64]
+    morphemes: list[str]
+    weights: npt.NDArray[np.float64]
 
 
 def _vocabulary(world: World, group_id: str) -> _Vocabulary:
@@ -157,7 +159,11 @@ def _vocabulary(world: World, group_id: str) -> _Vocabulary:
         vowels.update(segment for segment in form if world.table.is_vowel(segment))
     frequency = {morpheme: max(0.01, world.usage_frequency(code, morpheme)) for morpheme in forms}
     ids = world.form_bank().ids_of(list(forms.values()))
-    vocabulary = _Vocabulary(forms, frequency, owners, sum(frequency.values()) or 1.0, vowels, ids)
+    morphemes = list(forms)
+    weights = np.array([frequency[morpheme] for morpheme in morphemes], dtype=np.float64)
+    vocabulary = _Vocabulary(
+        forms, frequency, owners, sum(frequency.values()) or 1.0, vowels, ids, morphemes, weights
+    )
     state.cache["vocabulary"] = (state.version, vocabulary)
     return vocabulary
 
@@ -175,6 +181,118 @@ def assess(world: World, group_id: str, variable_id: str, tick: int) -> ProcessA
     result = _assess(world, group_id, variable_id)
     state.cache[key] = (state.version, (tick, result))
     return result
+
+
+def assess_many(world: World, group_ids: list[str], variable_id: str, tick: int) -> list[ProcessAssessment]:
+    """Hodnocení jednoho procesu ve více skupinách; zastaralá se spočítají naráz."""
+    found: list[ProcessAssessment | None] = []
+    stale: list[int] = []
+    key = ("assessment", variable_id)
+    for position, group_id in enumerate(group_ids):
+        state = world.groups[group_id].main_code.phonology
+        cached = state.cache.get(key)
+        if cached is not None:
+            version, value = cached
+            stored_tick, stored = cast(tuple[int, ProcessAssessment], value)
+            if version == state.version or tick - stored_tick < STALE_TICKS:
+                found.append(stored)
+                continue
+        found.append(None)
+        stale.append(position)
+    if stale:
+        fresh = _assess_batch(world, [group_ids[position] for position in stale], variable_id)
+        for position, result in zip(stale, fresh):
+            found[position] = result
+            state = world.groups[group_ids[position]].main_code.phonology
+            state.cache[key] = (state.version, (tick, result))
+    return cast(list[ProcessAssessment], found)
+
+
+def _assess_batch(world: World, group_ids: list[str], variable_id: str) -> list[ProcessAssessment]:
+    """Hodnocení procesu ve více skupinách jako operace nad maticí (skupiny × slova vzorku)."""
+    table = world.table
+    if table is None:
+        return [NEUTRAL] * len(group_ids)
+    process = world.processes[variable_id]
+    bank = world.form_bank()
+    results: list[ProcessAssessment] = [NEUTRAL] * len(group_ids)
+    by_rule: dict[str, list[int]] = {}
+    for position, group_id in enumerate(group_ids):
+        by_rule.setdefault(world.groups[group_id].main_code.stress_rule, []).append(position)
+    for rule, positions in sorted(by_rule.items()):
+        vocabularies = [_vocabulary(world, group_ids[position]) for position in positions]
+        width = max((len(vocabulary.ids) for vocabulary in vocabularies), default=0)
+        if width == 0:
+            continue
+        rows = len(positions)
+        ids = np.full((rows, width), -1, dtype=np.int64)
+        weights = np.zeros((rows, width))
+        for row, vocabulary in enumerate(vocabularies):
+            ids[row, : len(vocabulary.ids)] = vocabulary.ids
+            weights[row, : len(vocabulary.ids)] = vocabulary.weights
+        valid = ids >= 0
+        changed = np.full((rows, width), -1, dtype=np.int64)
+        changed[valid] = bank.process_table(process, cast(StressRule, rule)).results(ids[valid])
+        hit = changed >= 0
+        if not hit.any():
+            continue
+        mass = (weights * hit).sum(axis=1)
+        safe_ids, safe_new = np.where(valid, ids, 0), np.where(hit, changed, 0)
+        old_lengths, new_lengths = bank.lengths(safe_ids), bank.lengths(safe_new)
+        short = (weights * (hit & (new_lengths <= 2) & (new_lengths < old_lengths))).sum(axis=1)
+
+        def compute(form: Form) -> float:
+            return markedness(form, table)
+
+        marked_new = np.zeros((rows, width))
+        marked_old = np.zeros((rows, width))
+        marked_new[hit] = bank.values("markedness", changed[hit], compute)
+        marked_old[hit] = bank.values("markedness", ids[hit], compute)
+        marked = (weights * (marked_new - marked_old)).sum(axis=1)
+        # Nový homofon: dvojice, která po změně zní stejně a předtím nezněla.
+        # Výplň řádků dostane různá záporná čísla, aby se za homofony nepočítala.
+        final = np.where(hit, changed, ids)
+        final = np.where(valid, final, -1 - np.arange(width)[None, :])
+        ordered = np.sort(final, axis=1)
+        collides = (ordered[:, 1:] == ordered[:, :-1]).any(axis=1) & hit.any(axis=1)
+        vowels = _shapes_vowels(process, table)
+        for row, (position, vocabulary) in enumerate(zip(positions, vocabularies)):
+            if mass[row] <= 0:
+                continue
+            group_id = group_ids[position]
+            merge = 0.0
+            if collides[row]:
+                values, counts = np.unique(final[row], return_counts=True)
+                for value in values[counts > 1].tolist():
+                    members = np.flatnonzero(final[row] == value).tolist()
+                    for index, first in enumerate(members):
+                        for second in members[index + 1 :]:
+                            if ids[row, first] != ids[row, second]:
+                                merge += _pair(
+                                    world, vocabulary.frequency, vocabulary.morphemes[first],
+                                    vocabulary.morphemes[second], group_id,
+                                )
+            before = {vowel for vowel, count in vocabulary.vowels.items() if count > 0}
+            after = before
+            if vowels:
+                vowels_after = Counter(vocabulary.vowels)
+                for index in np.flatnonzero(hit[row]).tolist():
+                    morpheme = vocabulary.morphemes[index]
+                    vowels_after.subtract(
+                        segment for segment in vocabulary.forms[morpheme] if table.is_vowel(segment)
+                    )
+                    vowels_after.update(
+                        segment for segment in bank.forms[int(changed[row, index])] if table.is_vowel(segment)
+                    )
+                after = {vowel for vowel, count in vowels_after.items() if count > 0}
+            results[position] = ProcessAssessment(
+                coverage=float(mass[row]) / vocabulary.total,
+                merge_mass=merge / vocabulary.total,
+                short_share=float(short[row]) / float(mass[row]),
+                markedness_delta=float(marked[row]) / float(mass[row]),
+                dispersion_delta=_dispersion_gain(process, before, after, table),
+            )
+    return results
 
 
 #: Splynutí dvou buněk téhož paradigmatu (synkretismus) stojí stejně jako
@@ -214,47 +332,45 @@ def _assess(world: World, group_id: str, variable_id: str) -> ProcessAssessment:
     vocabulary = _vocabulary(world, group_id)
     if not vocabulary.forms:
         return NEUTRAL
-    # Výsledek procesu pro každý tvar vzorku jedním vyhledáním v tabulce
-    # procesu; proces se na každý různý tvar aplikuje jednou za celý běh.
+    # Celý vzorek naráz jako pole: výsledek procesu jedním vyhledáním v
+    # tabulce procesu (proces se na každý různý tvar aplikuje jednou za běh),
+    # součty jako operace nad poli.
     bank = world.form_bank()
-    results = bank.process_table(process, code.stress_rule).results(vocabulary.ids)
-    affected: dict[str, Form] = {}
-    affected_ids: dict[str, tuple[int, int]] = {}
-    for (morpheme, old), new in zip(zip(vocabulary.forms, vocabulary.ids.tolist()), results.tolist()):
-        if new >= 0:
-            affected[morpheme] = bank.forms[new]
-            affected_ids[morpheme] = (old, new)
-    if not affected:
+    ids = vocabulary.ids
+    results = bank.process_table(process, code.stress_rule).results(ids)
+    hit = results >= 0
+    if not hit.any():
         return NEUTRAL
-    frequency = vocabulary.frequency
-    affected_mass = sum(frequency[morpheme] for morpheme in affected)
+    weights = vocabulary.weights[hit]
+    old, new = ids[hit], results[hit]
+    affected_mass = float(weights.sum())
 
+    # Nový homofon je dvojice, která po změně zní stejně a předtím nezněla.
+    final = ids.copy()
+    final[hit] = new
     merge = 0.0
-    new_owners: dict[Form, list[str]] = {}
-    for morpheme, form in affected.items():
-        new_owners.setdefault(form, []).append(morpheme)
-    for form, movers in new_owners.items():
-        # Dvojice, která dřív zněla různě a teď splyne: se slovem, které změna
-        # nezasáhla, nebo s jiným zasaženým slovem s jiným původním tvarem.
-        stayers = [other for other in vocabulary.owners.get(form, []) if other not in affected]
-        for morpheme in movers:
-            merge += sum(_pair(world, frequency, morpheme, other, group_id) for other in stayers)
-        for index, first in enumerate(movers):
-            for second in movers[index + 1 :]:
-                if vocabulary.forms[first] != vocabulary.forms[second]:
-                    merge += _pair(world, frequency, first, second, group_id)
+    values, counts = np.unique(final, return_counts=True)
+    for value in values[counts > 1].tolist():
+        members = np.flatnonzero(final == value).tolist()
+        for index, first in enumerate(members):
+            for second in members[index + 1 :]:
+                if ids[first] != ids[second]:
+                    merge += _pair(
+                        world, vocabulary.frequency, vocabulary.morphemes[first],
+                        vocabulary.morphemes[second], group_id,
+                    )
 
-    short = sum(
-        frequency[morpheme] for morpheme, form in affected.items()
-        if len(form) <= 2 and len(form) < len(vocabulary.forms[morpheme])
-    )
-    def marked_of(form_id: int) -> float:
-        return bank.derived("markedness", form_id, lambda form: markedness(form, table))
+    new_lengths, old_lengths = bank.lengths(new), bank.lengths(old)
+    short = float(weights[(new_lengths <= 2) & (new_lengths < old_lengths)].sum())
 
-    marked = sum(
-        frequency[morpheme] * (marked_of(affected_ids[morpheme][1]) - marked_of(affected_ids[morpheme][0]))
-        for morpheme in affected
-    )
+    def compute(form: Form) -> float:
+        return markedness(form, table)
+
+    marked = float((weights * (bank.values("markedness", new, compute) - bank.values("markedness", old, compute))).sum())
+    affected = {
+        vocabulary.morphemes[index]: bank.forms[result]
+        for index, result in zip(np.flatnonzero(hit).tolist(), new.tolist())
+    } if _shapes_vowels(process, table) else {}
     before = {vowel for vowel, count in vocabulary.vowels.items() if count > 0}
     after = before
     if _shapes_vowels(process, table):

@@ -947,13 +947,24 @@ Celá sada testů 7 min 40 s → 4 min 47 s.
   a nově aktivní změna posoudí celou slovní zásobu jedním vyhledáním v
   tabulce. Skutečných aplikací změn v pozdní fázi ubylo z 266 000 na 46 000
   na 250 let a fonologizace zlevnila asi o třetinu.
-- **Kam jde čas teď** (celý běh 2 000 let pod profilerem): hodnocení
-  funkční zátěže 17 %, místa lexikálních změn 11 %, lexikální jasnost 9 %,
-  fonologizace 8 %, kandidáti zvukových změn 7 %, místa analogie 6 %,
-  pozorování 5 %, místa syntaxe 4 %. Úpravy se zaručeně stejným výsledkem
-  jsou skoro vyčerpané. Další krok (hodnocení pro všechny vesnice naráz
-  vektorově) by sčítal v jiném pořadí, takže historie by se lišila v
-  posledních bitech a ověřovala by se jen bránami.
+- **Hromadně napříč skupinami** (výsledky pořád bitově stejné): hodnocení
+  funkční zátěže pro všechny skupiny, kam změna dolehla, jako operace nad
+  maticí (skupiny × slova vzorku); opory kandidátů zvukových změn jedním
+  maticovým násobením (počty jsou celá čísla, součet je přesný); míry
+  lexikálních změn podle verze slovníku; oprava kvadratického výpočtu vah
+  míst v inovaci.
+- **Proč to dál nezrychluje** (měřeno stopkami, ne profilerem, celý běh
+  2 000 let za asi 36 s): přenos 55 % (z toho tlaky hlavně Articulation s
+  hodnocením procesů 14 %, lexikální jasnost 8 %), hledání míst inovací 39 %
+  (zvukové 15 %, lexikální 13 %, analogické 6 %, syntaktické 4 %),
+  fonologizace 8 %, pozorování 7 %. To je 4 000 výpočtů skupina × krok po
+  zhruba 9 ms; rozpočet 5 s by potřeboval asi 1 ms. Python, který v každém
+  kroku prochází stovky slov každé skupiny, na to nestačí. Přepočet kandidátů
+  jednou za 4 kroky (bez bitové shody) ušetřil jen 5 %, proto se nepoužil.
+- **Co by pomohlo řádově**: datově orientovaná architektura, kde stav všech
+  skupin (slovní zásoba, tvary, fronty, statistiky) leží v polích a horké
+  smyčky běží jako kompilovaná jádra (Numba), nebo průběžně udržované
+  součty i pro zbývající statistiky. Obojí je velký zásah do jádra.
 
 ## Známé mezery a kam patří
 
@@ -984,7 +995,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | Učené výpůjčky se vracejí jako stará slova s dnešní výslovností; skutečné učené dublety (*fragile* vedle *frêle*) mají tvar psaného kódu | M6c nebo později |
 | Pravopisná výslovnost a revize pravopisu: psané tvary slov se nemění ani s tiskem | později |
 | CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |
-| Výkon plného modelu je pořád nad rozpočtem (údolí 35,6 s místo 5 s po bance tvarů, indexech a předfiltru). Další zrychlení vyžaduje vektorové hodnocení napříč vesnicemi bez bitové shody, nebo přibližnější keše | rozhodnutí: vzdát se bitové shody (ověřovat bránami), nebo přijmout |
+| Výkon plného modelu je pořád nad rozpočtem (údolí asi 36 s místo 5 s). Python po skupinách je na hranici; řádově rychlejší je jen datově orientovaná architektura s kompilovanými jádry (Numba) | rozhodnutí: přepis jádra, nebo přijmout a jít na M7 |
 | Sousední vesnice se v plném modelu liší příliš (kontinuum 5×5, 3 000 let: sousedé 0,29, nejvzdálenější 0,38; v nářečních atlasech sousedé asi 0,05–0,15). Prahy dialektu a jazyka proto dávají skoro každou vesnici jako jazyk. Místní mísení je slabé proti tempu změn | M7 (otevřenost, tempo změn, prahy dialektu a jazyka) |
 | Rodokmen slova: export nese původ dnešního slova, ne historii jeho tvarů | později (snímky tvarů v exportu) |
 

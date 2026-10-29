@@ -254,9 +254,10 @@ class Simulation:
             weights = None
             expected = change.base_rate * tempo * len(sites) * change.rate_scale(context)
         else:
-            rates = [change.rate(context, site) for site in sites]
-            expected = sum(rates) * tempo
-            weights = [rate / sum(rates) for rate in rates] if expected > 0 else None
+            rates = change.rates(context, sites)
+            total = sum(rates)
+            expected = total * tempo
+            weights = [rate / total for rate in rates] if expected > 0 else None
         count = int(rng.poisson(expected)) if expected > 0 else 0
         live = self.world.live
         for index in range(count):

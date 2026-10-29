@@ -65,5 +65,9 @@ class Change(ABC):
         """Násobek míry pro celou skupinu, když se místa neliší (výchozí 1)."""
         return 1.0
 
+    def rates(self, context: InnovationContext, sites: Sequence[str]) -> list[float]:
+        """Míry všech míst; podtřída je může počítat naráz."""
+        return [self.rate(context, site) for site in sites]
+
     def uses_uniform_rate(self) -> bool:
         return type(self).rate is Change.rate
