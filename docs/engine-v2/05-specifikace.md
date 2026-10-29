@@ -916,7 +916,8 @@ Splněno, testy v `tests/v2/test_v2_checkpoints.py`.
 
 Rozpracováno. Všechny kroky dávají bitově stejnou historii (ověřeno otisky
 logu pro světy M2 až M4b a údolí s 50 vesnicemi). Údolí s 50 vesnicemi
-(syntax, význam) za 1 000 let: 20,4 s → 10,7 s; za 2 000 let: 66 s → 38 s.
+(syntax, význam) za 1 000 let: 20,4 s → 10,7 s; za 2 000 let: 66 s → 35,6 s.
+Celá sada testů 7 min 40 s → 4 min 47 s.
 
 - **Banka tvarů** (`language/bank.py`): každý různý tvar má číslo a jeho
   odvozené vlastnosti (příznakovost) se počítají jednou za běh. **Tabulka
@@ -939,11 +940,20 @@ logu pro světy M2 až M4b a údolí s 50 vesnicemi). Údolí s 50 vesnicemi
   lexikální jasnost jen ve skupinách, ke kterým varianta dolehla, a s mapou
   homofonů napříč dávkami, rozložení vokálů jen u změn, které tvoří vokál,
   paměť vzdáleností tvarů pro pozorování.
-- **Co zbývá**: v pozdní fázi běhu je největší položkou posuzování nových
-  tvarů všemi živými změnami (každé přepsané slovo je nový tvar a zhruba
-  100 živých změn ho musí posoudit). Zrychlit to jde dávkově: jedna změna na
-  všechny nové tvary naráz nad maticí banky (fáze 4). Dále průběžné indexy
-  pro kandidáty analogie a slabost koncovek v syntaxi.
+- **Hromadný předfiltr** (fáze 4): pro nový tvar banka jednou operací nad
+  maticemi masek (změny × hlásky tvaru) zjistí, které změny v něm nemají
+  žádné místo (cílová hláska se správnými sousedy), a zapíše jim „nemění“.
+  Přepsané slovo se pak řadí jen do front změn, které v něm místo mít mohou,
+  a nově aktivní změna posoudí celou slovní zásobu jedním vyhledáním v
+  tabulce. Skutečných aplikací změn v pozdní fázi ubylo z 266 000 na 46 000
+  na 250 let a fonologizace zlevnila asi o třetinu.
+- **Kam jde čas teď** (celý běh 2 000 let pod profilerem): hodnocení
+  funkční zátěže 17 %, místa lexikálních změn 11 %, lexikální jasnost 9 %,
+  fonologizace 8 %, kandidáti zvukových změn 7 %, místa analogie 6 %,
+  pozorování 5 %, místa syntaxe 4 %. Úpravy se zaručeně stejným výsledkem
+  jsou skoro vyčerpané. Další krok (hodnocení pro všechny vesnice naráz
+  vektorově) by sčítal v jiném pořadí, takže historie by se lišila v
+  posledních bitech a ověřovala by se jen bránami.
 
 ## Známé mezery a kam patří
 
@@ -974,7 +984,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | Učené výpůjčky se vracejí jako stará slova s dnešní výslovností; skutečné učené dublety (*fragile* vedle *frêle*) mají tvar psaného kódu | M6c nebo později |
 | Pravopisná výslovnost a revize pravopisu: psané tvary slov se nemění ani s tiskem | později |
 | CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |
-| Výkon plného modelu je pořád nad rozpočtem (údolí 38 s místo 5 s po bance tvarů a indexech). Zbývá dávková aplikace změn nad maticí banky a indexy analogie a syntaxe | pokračování výkonové práce |
+| Výkon plného modelu je pořád nad rozpočtem (údolí 35,6 s místo 5 s po bance tvarů, indexech a předfiltru). Další zrychlení vyžaduje vektorové hodnocení napříč vesnicemi bez bitové shody, nebo přibližnější keše | rozhodnutí: vzdát se bitové shody (ověřovat bránami), nebo přijmout |
 | Sousední vesnice se v plném modelu liší příliš (kontinuum 5×5, 3 000 let: sousedé 0,29, nejvzdálenější 0,38; v nářečních atlasech sousedé asi 0,05–0,15). Prahy dialektu a jazyka proto dávají skoro každou vesnici jako jazyk. Místní mísení je slabé proti tempu změn | M7 (otevřenost, tempo změn, prahy dialektu a jazyka) |
 | Rodokmen slova: export nese původ dnešního slova, ne historii jeho tvarů | později (snímky tvarů v exportu) |
 

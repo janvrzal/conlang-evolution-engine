@@ -170,8 +170,16 @@ def activate(world: World, code: Code, variable_id: str) -> None:
     state.pending[variable_id] = []
     state.queued[variable_id] = set()
     state.order[variable_id] = len(state.order)
-    for morpheme_id in sorted(state.vocabulary):
-        _queue(world, code, variable_id, morpheme_id)
+    # Celá slovní zásoba se posoudí jedním vyhledáním v tabulce procesu;
+    # do fronty jdou jen slova, která změna opravdu mění.
+    words = sorted(state.vocabulary)
+    bank = world.form_bank()
+    results = bank.process_table(world.processes[variable_id], code.stress_rule).results(
+        bank.ids_of([world.form_of(code, morpheme_id) for morpheme_id in words])
+    )
+    for morpheme_id, result in zip(words, results.tolist()):
+        if result >= 0:
+            _queue(world, code, variable_id, morpheme_id)
 
 
 def enter_vocabulary(world: World, code: Code, morpheme_id: str) -> None:
@@ -223,8 +231,12 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
             state.restructured.setdefault(variable_id, set()).add(morpheme_id)
             state.version += 1
             rewritten.append(morpheme_id)
+            # Nový tvar posoudí jen změny, které v něm podle předfiltru banky
+            # mohou mít místo; u ostatních by fronta nic neudělala.
+            bank = world.form_bank()
+            possible = bank.possible(bank.id_of(new[0]), code.stress_rule)
             for other in active_processes(state, world):
-                if other != variable_id:
+                if other != variable_id and world.processes[other].key in possible:
                     _queue(world, code, other, morpheme_id)
         if rewritten:
             history.record(

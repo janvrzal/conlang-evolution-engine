@@ -43,6 +43,15 @@ class FormBank:
         self._ids: dict[Form, int] = {}
         self._derived: dict[str, list[float | None]] = {}
         self._tables: dict[tuple[str, StressRule], ProcessTable] = {}
+        #: Tabulky v pořadí vzniku a jejich masky (cíl, levý a pravý soused)
+        #: složené do matic pro hromadný předfiltr.
+        self._order: list[ProcessTable] = []
+        self._masks: tuple[npt.NDArray[np.bool_], ...] | None = None
+        #: Pro kolik tabulek (od začátku ``_order``) už byl tvar předfiltrován
+        #: a které z nich v něm mohou mít místo.
+        self._screened: list[int] = []
+        self._rows: dict[int, list[int]] = {}
+        self._possible: dict[tuple[int, StressRule], tuple[int, set[str]]] = {}
 
     def __len__(self) -> int:
         return len(self.forms)
@@ -72,7 +81,57 @@ class FormBank:
         table = self._tables.get(key)
         if table is None:
             table = self._tables[key] = ProcessTable(self, process, rule)
+            self._order.append(table)
+            self._masks = None
         return table
+
+    def possible(self, form_id: int, rule: StressRule) -> set[str]:
+        """Klíče změn (s pravidlem přízvuku ``rule``), které v tvaru mohou mít místo."""
+        self.screen(form_id)
+        cached = self._possible.get((form_id, rule))
+        if cached is not None and cached[0] == len(self._order):
+            return cached[1]
+        found = {
+            self._order[row].process.key for row in self._rows.get(form_id, ())
+            if self._order[row].rule == rule
+        }
+        self._possible[(form_id, rule)] = (len(self._order), found)
+        return found
+
+    def screen(self, form_id: int) -> None:
+        """Hromadný předfiltr: které změny v tvaru nemají žádné místo.
+
+        Změna může tvar zasáhnout jen tam, kde je její cílová hláska se
+        správným levým a pravým sousedem. Pro všechny tabulky najednou se to
+        ověří jednou operací nad maticemi masek (tabulky × hlásky tvaru);
+        změnám bez místa se rovnou zapíše „nemění“. Podmínky přízvuku a pozice
+        místa jen dál zužují, takže předfiltr nic neodmítne neprávem.
+        """
+        if len(self._screened) <= form_id:
+            self._screened.extend([0] * (form_id + 1 - len(self._screened)))
+        start = self._screened[form_id]
+        if start >= len(self._order):
+            return
+        if self._masks is None:
+            size = len(self.table.vowel_mask)
+            everything = np.ones(size, dtype=bool)
+            self._masks = tuple(
+                np.stack([
+                    (getattr(table.process, side).mask if getattr(table.process, side) is not None else everything)
+                    for table in self._order
+                ])
+                for side in ("target", "left", "right")
+            )
+        target, left, right = (matrix[start:] for matrix in self._masks)
+        form = np.array(self.forms[form_id], dtype=np.int64)
+        boundary = np.array([self.table.boundary], dtype=np.int64)
+        previous = np.concatenate([boundary, form[:-1]])
+        following = np.concatenate([form[1:], boundary])
+        possible = (target[:, form] & left[:, previous] & right[:, following]).any(axis=1)
+        for offset in np.flatnonzero(~possible).tolist():
+            self._order[start + offset].mark_unchanged(form_id)
+        self._rows.setdefault(form_id, []).extend((start + np.flatnonzero(possible)).tolist())
+        self._screened[form_id] = len(self._order)
 
 
 class ProcessTable:
@@ -84,13 +143,27 @@ class ProcessTable:
         self.rule = rule
         self._results = np.full(max(64, len(bank)), UNKNOWN, dtype=np.int64)
 
-    def result(self, form_id: int) -> int:
-        """Totéž co :meth:`results` pro jeden tvar (bez režie polí)."""
-        if form_id >= len(self._results):
-            grown = np.full(max(form_id + 1, 2 * len(self._results)), UNKNOWN, dtype=np.int64)
+    def _grow(self, top: int) -> None:
+        if top >= len(self._results):
+            grown = np.full(max(top + 1, 2 * len(self._results)), UNKNOWN, dtype=np.int64)
             grown[: len(self._results)] = self._results
             self._results = grown
+
+    def known_unchanged(self, form_id: int) -> bool:
+        return form_id < len(self._results) and self._results[form_id] == UNCHANGED
+
+    def mark_unchanged(self, form_id: int) -> None:
+        self._grow(form_id)
+        if self._results[form_id] == UNKNOWN:
+            self._results[form_id] = UNCHANGED
+
+    def result(self, form_id: int) -> int:
+        """Totéž co :meth:`results` pro jeden tvar (bez režie polí)."""
+        self._grow(form_id)
         found = int(self._results[form_id])
+        if found == UNKNOWN:
+            self.bank.screen(form_id)
+            found = int(self._results[form_id])
         if found == UNKNOWN:
             changed = self.process.apply(self.bank.forms[form_id], self.bank.table, self.rule)
             found = UNCHANGED if changed is None else self.bank.id_of(changed)
