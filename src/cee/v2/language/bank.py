@@ -22,7 +22,6 @@ from typing import Callable
 import numpy as np
 import numpy.typing as npt
 
-from cee.v2.language import kernels
 from cee.v2.language.processes import Process, StressRule
 from cee.v2.language.segments import Form, SegmentTable
 
@@ -45,7 +44,6 @@ class FormBank:
         self._derived: dict[str, list[float | None]] = {}
         self._arrays: dict[str, FloatArray] = {}
         self._lengths = np.zeros(64, dtype=np.int64)
-        self._matrix = np.full((64, 8), -1, dtype=np.int64)
         self._tables: dict[tuple[str, StressRule], ProcessTable] = {}
         #: Tabulky v pořadí vzniku a jejich masky (cíl, levý a pravý soused)
         #: složené do matic pro hromadný předfiltr.
@@ -67,14 +65,6 @@ class FormBank:
             self.forms.append(form)
             if found >= len(self._lengths):
                 self._lengths = np.concatenate([self._lengths, np.zeros(len(self._lengths), dtype=np.int64)])
-            rows, width = self._matrix.shape
-            if found >= rows or len(form) > width:
-                grown = np.full((max(found + 1, rows * 2) if found >= rows else rows,
-                                 max(len(form), width * 2) if len(form) > width else width),
-                                -1, dtype=np.int64)
-                grown[:rows, :width] = self._matrix
-                self._matrix = grown
-            self._matrix[found, :len(form)] = form
             self._lengths[found] = len(form)
         return found
 
@@ -215,16 +205,9 @@ class ProcessTable:
             self._results = grown
         found = self._results[form_ids]
         missing = np.unique(form_ids[found == UNKNOWN])
-        if len(missing):
-            forms = self.bank._matrix[missing]
-            lengths = self.bank._lengths[missing]
-            args = self.process.kernel_args(self.bank.table, self.rule, forms.ravel())
-            output, output_lengths, _, changed = kernels.apply_process_batch(
-                forms, lengths, np.full(len(missing), -1, dtype=np.int64), *args
-            )
-            for row, form_id in enumerate(missing.tolist()):
-                result = tuple(output[row, :output_lengths[row]].tolist()) if changed[row] else None
-                self._results[form_id] = UNCHANGED if result is None else self.bank.id_of(result)
+        for form_id in missing.tolist():
+            changed = self.process.apply(self.bank.forms[form_id], self.bank.table, self.rule)
+            self._results[form_id] = UNCHANGED if changed is None else self.bank.id_of(changed)
         if len(missing):
             found = self._results[form_ids]
         return found

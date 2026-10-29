@@ -12,14 +12,7 @@ from __future__ import annotations
 import copy
 import itertools
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, NamedTuple
-
-import numpy as np
-
-from cee.v2.language.registry import IdRegistry
-
-if TYPE_CHECKING:
-    from cee.v2.language.bank import FormBank
+from typing import Literal, NamedTuple
 
 from cee.v2.language.segments import Form
 
@@ -93,8 +86,7 @@ class FormStore:
     v M5.
     """
 
-    __slots__ = ("_base", "_own", "_frozen", "token", "log", "_registry", "_bank",
-                 "_exponents", "form_ids", "boundaries", "exponent_ids")
+    __slots__ = ("_base", "_own", "_frozen", "token", "log")
 
     def __init__(self, base: FormStore | None = None):
         self._base = base
@@ -104,57 +96,6 @@ class FormStore:
         #: (:mod:`cee.v2.language.index`) podle nich dorovnají jen změny.
         self.token = next(_TOKENS)
         self.log: list[str] = []
-        self._registry: IdRegistry | None = None
-        self._bank: FormBank | None = None
-        self._exponents: IdRegistry | None = None
-        self.form_ids = np.full(0, -1, dtype=np.int64)
-        self.boundaries = np.full(0, -1, dtype=np.int64)
-        self.exponent_ids = np.full(0, -1, dtype=np.int64)
-
-    def bind(self, registry: IdRegistry, bank: FormBank, exponents: IdRegistry) -> None:
-        """Naváže číselné sloupce na svět; existující zápisy převede beze změny deníku."""
-        if self._registry is not None:
-            if self._registry is not registry or self._bank is not bank or self._exponents is not exponents:
-                raise ValueError("Úložiště je již navázáno na jiný registr nebo banku.")
-            return
-        if self._base is not None:
-            self._base.bind(registry, bank, exponents)
-        self._registry, self._bank, self._exponents = registry, bank, exponents
-        for morpheme_id, unit in self._own.items():
-            self._write_columns(morpheme_id, unit)
-        if self._frozen:
-            self._freeze_columns()
-
-    def _freeze_columns(self) -> None:
-        for array in (self.form_ids, self.boundaries, self.exponent_ids):
-            array.flags.writeable = False
-
-    def _write_columns(self, morpheme_id: str, unit: UnitForm) -> None:
-        assert self._registry is not None and self._bank is not None and self._exponents is not None
-        index = self._registry.register(morpheme_id)
-        if index >= len(self.form_ids):
-            size = max(index + 1, max(8, len(self.form_ids) * 2))
-            for name in ("form_ids", "boundaries", "exponent_ids"):
-                old = getattr(self, name)
-                grown = np.full(size, -1, dtype=np.int64)
-                grown[:len(old)] = old
-                setattr(self, name, grown)
-        self.form_ids[index] = self._bank.id_of(unit.form)
-        self.boundaries[index] = -1 if unit.boundary is None else unit.boundary
-        self.exponent_ids[index] = -1 if unit.exponent is None else self._exponents.register(unit.exponent)
-
-    def form_id(self, index: int) -> int:
-        """Číslo přepsaného tvaru, nebo −1 pro výchozí tvar."""
-        if index < 0:
-            raise IndexError(index)
-        layer: FormStore | None = self
-        while layer is not None:
-            if index < len(layer.form_ids):
-                found = int(layer.form_ids[index])
-                if found >= 0:
-                    return found
-            layer = layer._base
-        return -1
 
     def get(self, morpheme_id: str) -> UnitForm | None:
         layer: FormStore | None = self
@@ -169,40 +110,21 @@ class FormStore:
         if self._frozen:
             raise RuntimeError("Zmrazené tvary nelze měnit; použij branch().")
         self._own[morpheme_id] = unit
-        if self._registry is not None:
-            self._write_columns(morpheme_id, unit)
         self.log.append(morpheme_id)
 
     def freeze(self) -> FormStore:
         self._frozen = True
-        self._freeze_columns()
         return self
 
     def branch(self) -> FormStore:
         if self._frozen:
-            child = FormStore(self)
-            if self._registry is not None:
-                assert self._bank is not None and self._exponents is not None
-                child.bind(self._registry, self._bank, self._exponents)
-            return child
+            return FormStore(self)
         snapshot = FormStore(self._base)
         snapshot._own = self._own
-        snapshot._registry, snapshot._bank, snapshot._exponents = self._registry, self._bank, self._exponents
-        snapshot.form_ids, snapshot.boundaries, snapshot.exponent_ids = (
-            self.form_ids, self.boundaries, self.exponent_ids
-        )
         snapshot._frozen = True
-        snapshot._freeze_columns()
         self._base = snapshot
         self._own = {}
-        self.form_ids = np.full(0, -1, dtype=np.int64)
-        self.boundaries = np.full(0, -1, dtype=np.int64)
-        self.exponent_ids = np.full(0, -1, dtype=np.int64)
-        child = FormStore(snapshot)
-        if self._registry is not None:
-            assert self._bank is not None and self._exponents is not None
-            child.bind(self._registry, self._bank, self._exponents)
-        return child
+        return FormStore(snapshot)
 
 
 @dataclass

@@ -6,14 +6,10 @@ import math
 from dataclasses import dataclass, field
 from typing import Literal, Mapping, Sequence
 
-import numpy as np
-import numpy.typing as npt
-
 from cee.v2.language.bank import FormBank
 from cee.v2.language.lexicon import FormStore, Morpheme, PhonologyState, UnitForm
 from cee.v2.language.morphology import FormChange, Paradigm, unit_id
 from cee.v2.language.processes import Process, StressRule
-from cee.v2.language.registry import IdRegistry
 from cee.v2.language.segments import SegmentTable, default_table
 from cee.v2.pools import LivePools
 from cee.v2.repertoire import Distribution, Origin, Repertoire, Variable, Variant
@@ -177,8 +173,6 @@ class World:
     bank: FormBank | None = None
     #: Výchozí tvar každého morfému (neměnný), aby se netvořil při každém čtení.
     default_units: dict[str, UnitForm] = field(default_factory=dict)
-    morpheme_registry: IdRegistry = field(default_factory=IdRegistry)
-    exponent_registry: IdRegistry = field(default_factory=IdRegistry)
 
     def distribution(self, group_id: str, variable_id: str) -> Distribution | None:
         """Jediné správné čtení stavu: živá proměnná má přednost před repertoárem."""
@@ -237,35 +231,6 @@ class World:
     def form_of(self, code: Code, morpheme_id: str) -> tuple[int, ...]:
         """Aktuální podkladový tvar morfému v daném kódu."""
         return self.unit_of(code, morpheme_id).form
-
-    def form_ids(self, code: Code, ordered_ids: Sequence[str]) -> npt.NDArray[np.int64]:
-        """Čísla tvarů ve stejném pořadí jako požadovaná ID morfémů."""
-        bank = self.form_bank()
-        code.forms.bind(self.morpheme_registry, bank, self.exponent_registry)
-        result = np.empty(len(ordered_ids), dtype=np.int64)
-        for position, morpheme_id in enumerate(ordered_ids):
-            index = self.morpheme_registry.register(morpheme_id)
-            form_id = code.forms.form_id(index)
-            result[position] = (
-                bank.id_of(self.unit_of(code, morpheme_id).form) if form_id < 0 else form_id
-            )
-        return result
-
-    def vocabulary_ids(self, code: Code) -> npt.NDArray[np.int64]:
-        """Číselný snímek slovní zásoby v pořadí řetězcových ID."""
-        state = code.phonology
-        key = "vocabulary_ids"
-        cached = state.cache.get(key)
-        if cached is None or cached[0] != state.lexicon_version:
-            ids = np.array([
-                self.morpheme_registry.register(item) for item in sorted(state.vocabulary)
-            ], dtype=np.int64)
-            ids.flags.writeable = False
-            state.cache[key] = (state.lexicon_version, ids)
-            return ids
-        result = cached[1]
-        assert isinstance(result, np.ndarray)
-        return result
 
     def materialize(self, group_id: str) -> None:
         """Zapíše živé proměnné skupiny do jejího repertoáru (před odebráním či kopií)."""
