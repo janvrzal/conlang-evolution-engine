@@ -100,4 +100,3 @@ def test_nezmeneny_kandidat_se_znovu_necte_ani_neposuzuje(monkeypatch):
     relations.clear()
     assert score(root, concept) == expected
     assert reads == [] and relations == []
-
