@@ -28,6 +28,7 @@ from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.lexicon import Morpheme
 from cee.v2.language.protoforms import coin
 from cee.v2.language.segments import Form
+from cee.v2.language.semantic_index import SemanticSitesIndex
 from cee.v2.pressures import Appeal, Conformity, Pressure
 from cee.v2.pressures.lexical import (
     Entrenchment,
@@ -173,7 +174,17 @@ class SemanticChange(Change):
 
     def _sites(self, context: InnovationContext) -> dict[str, list[tuple[float, dict[str, object]]]]:
         state = context.code.phonology
-        key = ("lexical-sites", self.kind)
+        key = ("semantic-index", self.kind)
+        cached = state.cache.get(key)
+        index = SemanticSitesIndex() if cached is None else cast(SemanticSitesIndex, cached[1])
+        found = index.sync(context, self)
+        state.cache[key] = (state.lexicon_version, index)
+        return found
+
+    def _sites_reference(self, context: InnovationContext) -> dict[str, list[tuple[float, dict[str, object]]]]:
+        """Původní úplné sestavení, nezávislé na produkční keši míst."""
+        state = context.code.phonology
+        key = ("lexical-sites-reference", self.kind)
         cached = state.cache.get(key)
         # Možnosti závisí jen na slovní zásobě (dominantní kořeny), ne na tvarech.
         if cached is not None and cached[0] == state.lexicon_version:
