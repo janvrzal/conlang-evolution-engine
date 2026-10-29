@@ -61,3 +61,11 @@ Všech sedm otisků zůstalo shodných. Orientační běh po změně: mřížka 
 údolí 38,9 s; nejde o průkazné zrychlení. Do závěru tohoto běhu zasáhlo
 ověření nových jader, proto jeho čas není podkladem pro srovnání výkonu.
 Průkazné závěrečné porovnání musí běžet postupně proti výchozí kopii.
+
+Celá sada po fázi 1 s povoleným lokálním socketem: **618 prošlo za
+290,04 s**. Zahrnuje i do té doby připravené izolované testy jader;
+produkční simulace v tomto běhu ještě používala původní aplikátor.
+
+Výchozí kopie s měřičem: údolí 37,700 s, stejný otisk. Inovace
+14,244 s, přenos 21,102 s (uvnitř artikulace 5,167 s, lexikální jasnost
+3,331 s, fonologizace 2,689 s), pozorování 2,352 s. Údaje jsou inkluzivní.

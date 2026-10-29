@@ -172,10 +172,10 @@ def activate(world: World, code: Code, variable_id: str) -> None:
     state.order[variable_id] = len(state.order)
     # Celá slovní zásoba se posoudí jedním vyhledáním v tabulce procesu;
     # do fronty jdou jen slova, která změna opravdu mění.
-    words = sorted(state.vocabulary)
+    words = [world.morpheme_registry.id_of(int(index)) for index in world.vocabulary_ids(code)]
     bank = world.form_bank()
     results = bank.process_table(world.processes[variable_id], code.stress_rule).results(
-        bank.ids_of([world.form_of(code, morpheme_id) for morpheme_id in words])
+        world.form_ids(code, words)
     )
     for morpheme_id, result in zip(words, results.tolist()):
         if result >= 0:
