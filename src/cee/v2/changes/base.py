@@ -69,5 +69,30 @@ class Change(ABC):
         """Míry všech míst; podtřída je může počítat naráz."""
         return [self.rate(context, site) for site in sites]
 
+    def total_rate(self, context: InnovationContext) -> float:
+        """Celková míra všech míst ve skupině; indexované změny ji vrátí bez stavby seznamu míst."""
+        sites = self.sites(context)
+        if not sites:
+            return 0.0
+        if self.uses_uniform_rate():
+            return float(self.base_rate * len(sites) * self.rate_scale(context))
+        rates_arr = np.asarray(self.rates(context, sites), dtype=np.float64)
+        return float(np.sum(rates_arr))
+
+    def weighted_sites(
+        self, context: InnovationContext
+    ) -> tuple[Sequence[str], np.ndarray | None]:
+        """Seřazená místa a normalizované váhy pro nenulový počet inovací."""
+        sites = self.sites(context)
+        if not sites:
+            return (), None
+        if self.uses_uniform_rate():
+            return sites, None
+        rates_arr = np.asarray(self.rates(context, sites), dtype=np.float64)
+        total = float(np.sum(rates_arr))
+        if total <= 0.0:
+            return (), None
+        return sites, rates_arr / total
+
     def uses_uniform_rate(self) -> bool:
         return type(self).rate is Change.rate

@@ -255,14 +255,9 @@ class Simulation:
         for change_idx, change in enumerate(self.changes):
             tempos = (renewals if change.rate_basis == "generation" else self.config.dt) * frequencies
             for group_idx, (ctx, _, _, _) in enumerate(entries):
-                sites = change.sites(ctx)
-                if sites:
-                    if change.uses_uniform_rate():
-                        rate_sum = change.base_rate * len(sites) * change.rate_scale(ctx)
-                        expected[group_idx, change_idx] = float(rate_sum) * float(tempos[group_idx])
-                    else:
-                        rates_arr = np.asarray(change.rates(ctx, sites), dtype=np.float64)
-                        expected[group_idx, change_idx] = float(np.sum(rates_arr)) * float(tempos[group_idx])
+                rate_sum = change.total_rate(ctx)
+                if rate_sum > 0.0:
+                    expected[group_idx, change_idx] = float(rate_sum) * float(tempos[group_idx])
 
         if not np.any(expected > 0.0):
             return
@@ -293,17 +288,9 @@ class Simulation:
     def _apply_innovations(
         self, change: Change, context: InnovationContext, share: float, count: int
     ) -> None:
-        sites = change.sites(context)
+        sites, weights = change.weighted_sites(context)
         if not sites:
             return
-        if change.uses_uniform_rate():
-            weights = None
-        else:
-            rates_arr = np.asarray(change.rates(context, sites), dtype=np.float64)
-            total = float(np.sum(rates_arr))
-            if total <= 0.0:
-                return
-            weights = rates_arr / total
         rng = generator(
             self.world.seed,
             "innovation",
@@ -341,16 +328,12 @@ class Simulation:
             )
 
     def _innovate_with(self, change: Change, context: InnovationContext, renewal: float) -> None:
-        sites = change.sites(context)
-        if not sites:
+        rate_sum = change.total_rate(context)
+        if rate_sum <= 0.0:
             return
         share, frequency = self.innovation_scale(context.group.id)
         tempo = (renewal if change.rate_basis == "generation" else self.config.dt) * frequency
-        if change.uses_uniform_rate():
-            expected = float(change.base_rate * len(sites) * change.rate_scale(context)) * tempo
-        else:
-            rates_arr = np.asarray(change.rates(context, sites), dtype=np.float64)
-            expected = float(np.sum(rates_arr)) * tempo
+        expected = float(rate_sum * tempo)
         group_key = np.uint64(
             stable_int(
                 self.world.seed,

@@ -115,6 +115,7 @@ class MorphologyCandidateIndex:
         self.descriptors: dict[Cell, tuple[str | None, bool]] = {}
         self.contributions: dict[str, dict[str, FormChange]] = {"leveling": {}, "extension": {}}
         self.results: dict[str, dict[str, FormChange]] = {"leveling": {}, "extension": {}}
+        self.sorted_sites: dict[str, list[str] | None] = {"leveling": None, "extension": None}
 
     def sync(self, context: InnovationContext, kind: str) -> dict[str, FormChange]:
         from cee.v2.changes.morphology import Extension, Leveling
@@ -127,6 +128,8 @@ class MorphologyCandidateIndex:
             self.descriptors.clear()
             for values in (*self.contributions.values(), *self.results.values()):
                 values.clear()
+            self.sorted_sites["leveling"] = None
+            self.sorted_sites["extension"] = None
             dirty = set(words.units)
         else:
             dirty = set(words.changes[self.cursor:])
@@ -144,6 +147,7 @@ class MorphologyCandidateIndex:
                 old = self.contributions[name].pop(unit, None)
                 if old is not None:
                     self.results[name].pop(Variable("form", old.key).id, None)
+                    self.sorted_sites[name] = None
             if unit not in words.units:
                 continue
             for name, change in (("leveling", leveling._candidate(context, unit)),
@@ -151,9 +155,16 @@ class MorphologyCandidateIndex:
                 if change is not None:
                     self.contributions[name][unit] = change
                     self.results[name][Variable("form", change.key).id] = change
+                    self.sorted_sites[name] = None
         self.generation, self.cursor = words.generation, len(words.changes)
         self.version = state.version
         return self.results[kind]
+
+    def sites_sorted(self, kind: str) -> list[str]:
+        cached = self.sorted_sites.get(kind)
+        if cached is None:
+            cached = self.sorted_sites[kind] = sorted(self.results[kind])
+        return cached
 
 
 class WeaknessIndex:

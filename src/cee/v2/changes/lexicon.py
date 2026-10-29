@@ -74,6 +74,12 @@ class LexicalCoinage(Change):
     def rate_scale(self, context: InnovationContext) -> float:
         return self.expressive_share if context.world.semantics is not None else 1.0
 
+    def total_rate(self, context: InnovationContext) -> float:
+        count = len(context.code.repertoire.variable_ids_of("lexical"))
+        if count == 0:
+            return 0.0
+        return float(self.base_rate * count * self.rate_scale(context))
+
     def sites(self, context: InnovationContext) -> Sequence[str]:
         return context.code.repertoire.variable_ids_of("lexical")
 
@@ -172,14 +178,17 @@ class SemanticChange(Change):
     ) -> dict[str, object] | None:
         """Payload nové varianty, nebo ``None``, když cesta dnes nejde."""
 
-    def _sites(self, context: InnovationContext) -> dict[str, list[tuple[float, dict[str, object]]]]:
+    def _index(self, context: InnovationContext) -> SemanticSitesIndex:
         state = context.code.phonology
         key = ("semantic-index", self.kind)
         cached = state.cache.get(key)
         index = SemanticSitesIndex() if cached is None else cast(SemanticSitesIndex, cached[1])
-        found = index.sync(context, self)
+        index.sync(context, self)
         state.cache[key] = (state.lexicon_version, index)
-        return found
+        return index
+
+    def _sites(self, context: InnovationContext) -> dict[str, list[tuple[float, dict[str, object]]]]:
+        return self._index(context).found
 
     def _sites_reference(self, context: InnovationContext) -> dict[str, list[tuple[float, dict[str, object]]]]:
         """Původní úplné sestavení, nezávislé na produkční keši míst."""
@@ -200,26 +209,41 @@ class SemanticChange(Change):
     def sites(self, context: InnovationContext) -> Sequence[str]:
         if context.world.semantics is None or context.world.table is None:
             return ()
-        state = context.code.phonology
-        key = ("lexical-sites-sorted", self.kind)
-        cached = state.cache.get(key)
-        if cached is None or cached[0] != state.lexicon_version:
-            cached = state.cache[key] = (state.lexicon_version, sorted(self._sites(context)))
-        return cast(list[str], cached[1])
+        index = self._index(context)
+        index.ensure_ready()
+        return index.sorted_sites
 
     def rate(self, context: InnovationContext, site: str) -> float:
-        return self.base_rate * sum(weight for weight, _ in self._sites(context)[site])
+        return self._index(context).site_rates[site]
 
     def rates(self, context: InnovationContext, sites: Sequence[str]) -> list[float]:
-        # Míry závisí jen na slovní zásobě: drží se spolu s místy.
-        state = context.code.phonology
-        key = ("lexical-rates", self.kind)
-        cached = state.cache.get(key)
-        if cached is not None and cached[0] == state.lexicon_version:
-            return cast(list[float], cached[1])
-        found = [self.rate(context, site) for site in sites]
-        state.cache[key] = (state.lexicon_version, found)
-        return found
+        if context.world.semantics is None or context.world.table is None:
+            return []
+        index = self._index(context)
+        index.ensure_ready()
+        if sites is index.sorted_sites or sites == index.sorted_sites:
+            return index.rates_array.tolist()
+        return [self.rate(context, site) for site in sites]
+
+    def total_rate(self, context: InnovationContext) -> float:
+        if context.world.semantics is None or context.world.table is None:
+            return 0.0
+        index = self._index(context)
+        index.ensure_ready()
+        return index._total
+
+    def weighted_sites(
+        self, context: InnovationContext
+    ) -> tuple[Sequence[str], np.ndarray | None]:
+        if context.world.semantics is None or context.world.table is None:
+            return (), None
+        index = self._index(context)
+        index.ensure_ready()
+        if not index.sorted_sites or index._total <= 0.0:
+            return (), None
+        if index._weights is None:
+            index._weights = index.rates_array / index._total
+        return index.sorted_sites, index._weights
 
     def propose(
         self, context: InnovationContext, site: str, rng: np.random.Generator, index: int

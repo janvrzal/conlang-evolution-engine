@@ -57,10 +57,31 @@ class AnalogicalChange(Change):
         state.cache[key] = (state.version, found)
         return found
 
+    def total_rate(self, context: InnovationContext) -> float:
+        if context.world.table is None or not context.world.paradigms:
+            return 0.0
+        count = len(self._sites(context))
+        if count == 0:
+            return 0.0
+        return float(self.base_rate * count * self.rate_scale(context))
+
     def sites(self, context: InnovationContext) -> Sequence[str]:
         if context.world.table is None or not context.world.paradigms:
             return ()
-        return sorted(self._sites(context))
+        state = context.code.phonology
+        if self.kind in ("leveling", "extension"):
+            from cee.v2.language.morphology_index import MorphologyCandidateIndex
+
+            entry = state.cache.get("morphology-candidate-index")
+            index = cast(MorphologyCandidateIndex, entry[1]) if entry else MorphologyCandidateIndex()
+            index.sync(context, self.kind)
+            state.cache["morphology-candidate-index"] = (state.version, index)
+            return index.sites_sorted(self.kind)
+        key = ("form-sites-sorted", self.kind)
+        cached = state.cache.get(key)
+        if cached is None or cached[0] != state.version:
+            cached = state.cache[key] = (state.version, sorted(self._sites(context)))
+        return cast(list[str], cached[1])
 
     def propose(
         self, context: InnovationContext, site: str, rng: np.random.Generator, index: int

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
+import numpy.typing as npt
+
 if TYPE_CHECKING:
     from cee.v2.changes.base import InnovationContext
     from cee.v2.changes.lexicon import SemanticChange
@@ -71,13 +74,19 @@ class SemanticDependencies:
 
 
 class SemanticSitesIndex:
-    """Místa jedné rodiny a kurzor sdílených změn."""
+    """Místa jedné rodiny, jejich míry a součet pro rychlý dotaz."""
 
     def __init__(self) -> None:
         self.version = -1
         self.config_generation = -1
         self.cursor = 0
         self.found: dict[str, Options] = {}
+        self.site_rates: dict[str, float] = {}
+        self.sorted_sites: list[str] = []
+        self.rates_array: npt.NDArray[np.float64] = np.array([], dtype=np.float64)
+        self._total: float = 0.0
+        self._weights: npt.NDArray[np.float64] | None = None
+        self._dirty: bool = False
 
     def sync(self, context: InnovationContext, change: SemanticChange) -> dict[str, Options]:
         state = context.code.phonology
@@ -89,10 +98,18 @@ class SemanticSitesIndex:
         assert isinstance(dependencies, SemanticDependencies)
         dependencies.sync(context)
         state.cache[key] = (state.lexicon_version, dependencies)
-        if self.config_generation != dependencies.config_generation or self.cursor > len(dependencies.changes):
-            self.found = {}
+        reset = (
+            self.version < 0
+            or self.config_generation != dependencies.config_generation
+            or self.cursor > len(dependencies.changes)
+        )
+        if reset:
+            had_items = bool(self.found)
+            self.found.clear()
+            self.site_rates.clear()
             dirty = set(dependencies.sites.values())
         else:
+            had_items = False
             dirty_concepts: set[str] = set()
             for concept, old, new in dependencies.changes[self.cursor:]:
                 if change.kind in ("semantic_shift", "taboo_replacement", "contamination", "back_formation"):
@@ -110,13 +127,42 @@ class SemanticSitesIndex:
                                 dirty_concepts.add(morpheme.sources[0])
             dirty = {dependencies.sites[concept] for concept in dirty_concepts
                      if concept in dependencies.sites}
+
+        changed = had_items
         for site in sorted(dirty):
             options = change.options(context, site.split(":", 1)[1])
             if options:
+                new_rate = change.base_rate * sum(weight for weight, _ in options)
+                old_rate = self.site_rates.get(site)
                 self.found[site] = options
+                self.site_rates[site] = new_rate
+                if old_rate is None or old_rate != new_rate:
+                    changed = True
             else:
-                self.found.pop(site, None)
+                if site in self.found:
+                    del self.found[site]
+                    del self.site_rates[site]
+                    changed = True
+
+        if changed:
+            self._dirty = True
+            self._weights = None
+
         self.version = state.lexicon_version
         self.cursor = len(dependencies.changes)
         self.config_generation = dependencies.config_generation
         return self.found
+
+    def ensure_ready(self) -> None:
+        """Přepočítá seřazená místa, pole měr a jejich součet jen po skutečné změně indexu."""
+        if not self._dirty:
+            return
+        self.sorted_sites = sorted(self.found)
+        self.rates_array = np.fromiter(
+            (self.site_rates[s] for s in self.sorted_sites),
+            dtype=np.float64,
+            count=len(self.sorted_sites),
+        )
+        self._total = float(np.sum(self.rates_array)) if len(self.rates_array) else 0.0
+        self._weights = None
+        self._dirty = False

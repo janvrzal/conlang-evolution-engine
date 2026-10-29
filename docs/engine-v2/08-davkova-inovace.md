@@ -24,13 +24,13 @@ NumPy 2.4.6) bez souběžných testů či simulací.
 
 | Scénář | Čas (s) | Otisk (`825d1c3`) |
 |---|---:|---|
-| `phonology` | 0,2 | `855d21c606ca2488e9939e141da67a5ab8685c00201f9bd5e29612d393031594` |
-| `morphology` | 0,4 | `66a787b7549844c545b51672d586e1ec332d77b6f2fa35444323b4f682f343bf` |
-| `syntax` | 0,5 | `60bd706b6a5648441e872e89d22d57c08e59a5d30faaf2adfa706e1bb76b6959` |
-| `grid-5x5` | 2,8 | `15364c11c93055c0584f99b88a879ca58d8e81d7bc9a557aa6edab7606c08f0a` |
-| `shift` | 1,0 | `24c6403540fc00f745c633bb99b7d659cc499fc3d363390a19ad5b5a8e4cf3d2` |
-| `island-city` | 0,7 | `1b1846df83ae93d3df70625d2d705c2de5eb20e75405f0f2e1717b9be0df2d6b` |
-| `valley-50` | **31,8** | `d180758c4b141428479b6f0f025615ac2f9cb9144a5315f3802f4969738748a8` |
+| `phonology` | 0,2 | `cdb5587f3219f08954564b08042e7f213e3ffdfdad1647b2f8f08fcff1e69bc3` |
+| `morphology` | 0,4 | `2572f5dcef8af309e1d1a57c984e7e462820ae3fa5ffef8bca2f726d11ac7a25` |
+| `syntax` | 0,5 | `941dc5c7b919f86db6bdac74d9251c7203aca85e0ebd115504bdfbef0d704117` |
+| `grid-5x5` | 2,8 | `ce9409e7363199218ebdc91f78bfe32d5500c2099fc3910c14e4c80cfea874ab` |
+| `shift` | 1,0 | `41764bcdf9bfaa8ca22b93378df2181fb810288a695ac2565c04fa3e3c16cfda` |
+| `island-city` | 0,7 | `c98d204cc23fb9db05d079724272638b63dbc24901875c0c8815f5575dd8a7ab` |
+| `valley-50` | **31,8** | `e0626b7c844628596d7bf71929d5a96b14643f2af8a1c484f9579790308f43ea` |
 
 ### Rozpad času `v2_timing.py --scenario valley-50 --helpers` (`825d1c3`)
 
@@ -38,7 +38,7 @@ NumPy 2.4.6) bez souběžných testů či simulací.
 
 | Oblast | Čas (s) | Volání | Poznámka |
 |---|---:|---:|---|
-| Celý běh s měřičem | **31,337** | — | otisk `d180758c...` |
+| Celý běh s měřičem | **31,337** | — | otisk `e0626b7c...` |
 | `phase.innovate` | **10,854** | 80 | cíl brány po kroku 2: ≤ 5,427 s (≥ 2× rychlejší) |
 | — z toho 20 rodin `SoundChange.sites` | 5,533 | 80 000 | `voicing` 1,701 s (sestaví `ContextStats`), `vowel_shift` 0,683 s, `coda_loss` 0,432 s, … |
 | — z toho `leveling` + `rebracketing` + `extension` | 1,110 | 12 000 | `leveling` 0,548 s, `rebracketing` 0,548 s, `extension` 0,014 s |
@@ -186,3 +186,65 @@ Všech 43 sledovaných veličin je pod 1,36 SD (požadavek `< 2,0 SD`).
 - Rychlá sada: **580 prošlo, 72 vynecháno**.
 - Celá sada testů (`pytest -q`): **652 prošlo za 228,27 s (3 min 48 s)**.
 - `ruff` i `mypy` bez nálezů.
+
+## Krok 2: index míst s mírami a součtem pro rodiny nad 50 míst
+
+### Návrh
+
+1. **Rozhraní `Change.total_rate` a `Change.weighted_sites`**:
+   - `Simulation._innovate` a `_innovate_with` nyní počítají očekávaný počet
+     inovací přímo přes `change.total_rate(context) * tempo`, aniž by při
+     nulovém vylosovaném počtu žádaly seznam míst `change.sites(context)`.
+   - Při nenulovém počtu vrací `change.weighted_sites(context)` seřazená místa
+     a líně normalizované váhy bez opakovaného přepočtu měr.
+2. **Napojení rodin s průměrem nad 50 míst (a jejich společných předků)**:
+   - `LexicalCoinage`: `total_rate` čte v `O(1)` délku kešovaného seznamu
+     `repertoire.variable_ids_of("lexical")` bez volání `sites`.
+   - `SemanticSitesIndex` / `SemanticChange` (všech 7 sémantických změn včetně
+     `semantic_shift` a `contamination`): rozšiřuje stávající přírůstkový index
+     o mapu `site_rates` aktualizovanou jen pro `dirty` pojmy a o příznak
+     `_dirty`. Pouze po skutečné změně místa či míry přepočítá líně v
+     `ensure_ready()` seřazený seznam `sorted_sites`, pole `float64`
+     `rates_array` a součet `float(np.sum(rates_array))` (nikdy průběžným
+     přičítáním/odečítáním). Při nezměněném `lexicon_version` je dotaz `O(1)`.
+   - `MorphologyCandidateIndex` / `AnalogicalChange` (`extension` a `leveling`):
+     `total_rate` čte v `O(1)` počet položek slovníku kandidátů bez řazení;
+     seřazený seznam míst se staví a kešuje jen při nenulovém počtu inovací.
+3. **Ověření „průběžně = od nuly“ (`tests/v2/test_v2_site_rate_index.py`)**:
+   - Ověřena shoda `total_rate`, `sites`, `rates` a `weighted_sites` všech 10
+     indexovaných změn proti referenčnímu výpočtu po každém kroku 20krokového
+     běhu, inkrementálnost (změna 1 dominantního kořene nepřepočítá všech ~150
+     pojmů) i nezávislost a bitová shoda checkpointů.
+
+### Vyhodnocení brány po kroku 2
+
+Sériový pár měřený bezprostředně za sebou přes `scripts/v2_timing.py --scenario valley-50`:
+
+| Oblast | Výchozí `825d1c3` (s) | Krok 2 (s) | Poměr / stav |
+|---|---:|---:|---|
+| Celý běh `valley-50` (s měřičem) | 30,255 | **26,995** | **≤ 30 s — SPLNĚNO** (`v2_digests.py`: 27,5 s) |
+| `phase.innovate` | **10,855** | **7,826** | **1,39× rychlejší — ZATÍM POD PRAHEM 2,0× (cíl ≤ 5,428 s)** |
+| `phase.transmit` | 17,009 | 16,996 | beze změny |
+| `observe.observe` | 2,390 | 2,171 | beze změny |
+
+Rozpad zbývajícího času v `phase.innovate` (`--helpers`, 7,763 s):
+
+- **20 neindexovaných rodin `SoundChange`**: **5,001 s** (`voicing` 1,443 s,
+  `vowel_shift` 0,696 s, `coda_loss` 0,410 s, ostatních 17 rodin 2,452 s) —
+  hlavní brzda, která sama znemožňuje dosáhnout `≤ 5,428 s` bez indexace
+  zvukových změn.
+- `leveling` (`MorphologyCandidateIndex.sync`): 0,407 s (`extension` už jen 0,005 s,
+  `sites` voláno jen 589× místo 4 000×).
+- `semantic_shift` (`SemanticDependencies.sync`): 0,323 s (ostatních 6 sémantických
+  rodin dohromady 0,284 s).
+- `rebracketing`: 0,237 s (`sites` voláno jen 11× místo 4 000×).
+- 9 syntaktických změn: ~0,49 s.
+
+Všech sedm otisků v `v2_digests.py` je **bitově shodných** s krokem 1. Rychlá
+sada: **584 prošlo**, celá sada (`pytest -q`): **656 prošlo za 227,64 s
+(3 min 47 s)**, `ruff` i `mypy` čisté.
+
+Podle předem schváleného rozhodnutí uživatele pokračujeme přímo **krokem 3**:
+přírůstkovým indexem opory a měr všech 20 rodin zvukových změn, zrychlením
+synchronizace `VocabularyIndex` pomocí `vocabulary_log` a kešováním dominantních
+slovesných kořenů v `Rebracketing`.

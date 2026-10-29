@@ -202,3 +202,34 @@ def test_optional_helper_instrumentation_restores_all_functions_on_error(
     for (module, name, label), original in zip(helpers, originals):
         assert getattr(module, name) is original
         assert timing.calls[label] == 1
+
+
+def test_instrument_helpers_measure_total_rate_when_present() -> None:
+    class RateChange:
+        kind = "rate-kind"
+
+        def sites(self, context: object) -> list[int]:
+            return [1]
+
+        def total_rate(self, context: object) -> float:
+            return 0.5
+
+    class FakeSimulation:
+        changes = [RateChange()]
+        pressures: dict[str, tuple[tuple[object, float], ...]] = {}
+
+        def _innovate(self, year: float) -> None:
+            return None
+
+        def _transmit(self, year: float) -> None:
+            return None
+
+    original_total_rate = RateChange.total_rate
+    simulation = FakeSimulation()
+    timing = Timing.create()
+    with instrument(simulation, timing, include_helpers=True):  # type: ignore[arg-type]
+        simulation.changes[0].total_rate(None)
+
+    assert timing.calls["change.total_rate.rate-kind"] == 1
+    assert RateChange.total_rate is original_total_rate
+
