@@ -49,18 +49,21 @@ Pravidla v2, která se snadno poruší:
   milníků (`*_gate.py`) jsou `slow` a celá sada trvá asi 5 minut. Optimalizace
   nesmí změnit výsledek: ověř otisk logu (`History.digest`) proti předchozímu
   commitu.
-* **M6e: průběžné indexy**: neúspěšná Numba integrace a číselné zrcadlo
-  tvarů byly vráceny na žádost uživatele; měřič `scripts/v2_timing.py`
-  zůstává. Aktuální audit a plán jsou v `docs/engine-v2/07-prubezne-indexy.md`.
-  Přepočítávej příspěvky změněných slov podle deníků, float agregace dělej
-  v původním pořadí. První dva výpočty jsou lexikální jasnost a hodnocení
-  procesů. První brána **valley-50 ≤ 25 s neprošla** (37,3 → 39,0 s).
-  Po uživatelově „Pokračuj“ byla regresní procesní cache vrácena a přibyly
-  další indexy a dávkové tlaky: druhá iterace **37,6 → 31,0 s**, stále nad
-  25 s. Jádro losování se nezměnilo; dodatek fáze 5 měnící otisky čeká na
-  vyjasnění vůči předchozímu přímému požadavku bitové shody. Všech sedm
-  otisků a checkpointy musí souhlasit. Neprezentuj M6e ani původní cíle
-  údolí ≤ 8 s / mřížka ≤ 1 s jako dokončené.
+* **M6e: průběžné indexy a dávková inovace**: neúspěšná Numba integrace a
+  číselné zrcadlo tvarů byly vráceny (`06-denik-numba.md`); měřič
+  `scripts/v2_timing.py` zůstává. Audit závislostí a výsledky indexů tlaků jsou
+  v `docs/engine-v2/07-prubezne-indexy.md`, dávkové losování počtu inovací přes
+  `rng.hash_poisson` a indexy míst s mírami (`SemanticSitesIndex`,
+  `MorphologyCandidateIndex`, `SoundSupportIndex`, `VocabularyIndex`) v
+  `docs/engine-v2/08-davkova-inovace.md`. Příspěvky slov dorovnávej přírůstkově
+  podle deníků, float agregace (`np.sum`) počítej vždy jednorázově v kanonickém
+  pořadí (nikdy průběžným přičítáním/odečítáním) a v `transmission._normalized`
+  drž sekvenční součet slotů zleva doprava. Ve fázi 5 proběhla schválená
+  jednorázová obměna referenčních otisků v `scripts/v2_digests.py` (ověřeno na
+  5 seedech `< 1,36 SD`); od té chvíle opět platí bitová shoda všech 7 otisků i
+  checkpointů. Scénář `valley-50` běží za ~23,6 s (fáze inovace 2,12× rychlejší)
+  a `grid-5x5` za ~2,2 s; neprezentuj původní orientační cíle údolí ≤ 5–8 s /
+  mřížka ≤ 1 s jako splněné.
 * **Kalibrační konstanty** mají ve specifikaci zdůvodnění a naměřené
   hodnoty; při změně je přeměř a aktualizuj oddíl „Stav Mx“.
 

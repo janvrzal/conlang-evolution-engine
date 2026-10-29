@@ -1,6 +1,6 @@
 # CEE: ověřený stav implementace
 
-Aktualizováno: 2026-10-28. Tento dokument je provozní doplněk k whitepaperu
+Aktualizováno: 2026-10-29. Tento dokument je provozní doplněk k whitepaperu
 `CEE_master.md`: whitepaper popisuje směr a výzkumné hypotézy, kdežto zde je
 výhradně to, co je v repozitáři implementované a kryté testy.
 
@@ -22,7 +22,7 @@ napojené na CLI, API ani UI; spouští se z testů a skriptů.
 | M6b společnost: migrace, události, vitalita a domény jazyka, diglosie, náboženství, Séguyho zákon | hotovo |
 | M6c linie jazyků a export pro UI | hotovo (výkon plného modelu nad rozpočtem) |
 | M6d odezva: průběžné výsledky, checkpointy, přepočet od změny | hotovo (výpočet sám zůstává pomalý) |
-| M6e průběžné indexy | Numba a regresní procesní cache vráceny; druhá iterace zachovává otisky, údolí 37,6 → 31,0 s a mřížka 3,5 → 2,7 s; limit 25 s stále nesplněn, změna losování fáze 5 čeká na vyjasnění |
+| M6e průběžné indexy a dávková inovace | na větvi `engine-v2-numba` hotovo po fázi 5 (`07-prubezne-indexy.md`, `08-davkova-inovace.md`): dávkové `hash_poisson` losování inovací a přírůstkové indexy míst a měr zrychlily `valley-50` na 23,6 s (z 37,6 s; inovace 2,12× rychlejší) a `grid-5x5` na 2,2 s (z 3,5 s); původní orientační rozpočet ≤ 5–8 s zůstává mimo dosah bez změny modelu (M7) či paralelismu |
 | M7 kalibrace | plán |
 
 Naměřené hodnoty a známé mezery jsou v `docs/engine-v2/05-specifikace.md`.

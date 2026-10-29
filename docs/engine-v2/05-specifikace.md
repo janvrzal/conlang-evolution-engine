@@ -249,15 +249,21 @@ p'_g(x)   = (1 − r_g) · dosp(x) + r_g · dítě(x)
 
 ## Determinismus
 
-- Každý náhodný tah: `np.random.Generator(PCG64(SeedSequence([seed_světa,
-  otisk(tick, ID_skupiny, ID_kódu, druh_změny)])))`. Používají se stabilní
-  ID, ne indexy, aby přidání skupiny jinde nezměnilo tahy ostatních.
+- Počet inovací v kroku se losuje dávkově přes `rng.hash_poisson` pouze ze
+  stabilního klíče `(seed_světa, "innovation", tick, ID_skupiny, ID_kódu)` a
+  druhu změny (SplitMix64 + inverzní distribuční funkce pro `λ ≤ 30`, lokální
+  `PCG64` z hashe buňky pro `λ > 30`). Plný `np.random.Generator(PCG64(...))`
+  pro výběr místa a návrh varianty se vytváří jen při nenulovém vylosovaném
+  počtu. Používají se stabilní ID, ne indexy, aby přidání skupiny jinde
+  nezměnilo tahy ostatních.
 - Drift je hashovaný šum závislý jen na (seed, tick, skupina, varianta), ne
   generátor na každou dvojici.
 - Míšení se násobí zvlášť pro každou propojenou komponentu sítě: BLAS
-  sčítá v pořadí podle velikosti matice. Součty přes sloty se řadí, aby
-  nezáležely na pořadí slotů. Díky tomu zjemnění oblasti nezmění ani
-  poslední bity v nepropojené oblasti.
+  sčítá v pořadí podle velikosti matice. Součty přes sloty v normalizaci se
+  řadí a sčítají striktně sekvenčně zleva doprava, aby výsledek nezáležel ani
+  na pořadí slotů, ani na počtu nulových slotů v blocích různé kapacity
+  (4 vs. 8 vs. 16). Díky tomu zjemnění oblasti nezmění ani poslední bity v
+  nepropojené oblasti.
 - Identifikátory variant, morfémů a linií jsou hashe (`blake2b`) jejich
   původu. Žádné `uuid4`, žádná iterace přes `set`.
 - Registr změn a tlaků má pevné pořadí. Redukce přes skupiny běží v pevném
@@ -966,42 +972,55 @@ Celá sada testů 7 min 40 s → 4 min 47 s.
   smyčky běží jako kompilovaná jádra (Numba), nebo průběžně udržované
   součty i pro zbývající statistiky. Obojí je velký zásah do jádra.
 
-### Stav M6e: průběžné indexy (2026-10-29)
+### Stav M6e: průběžné indexy a dávková inovace (2026-10-29)
 
-**Rozpracováno; výkonová brána nesplněna.** Numba experiment ani další
-navrženou číselnou cestu uživatel nepřijal. Produkční integrace, číselné
-zrcadlo tvarů, nepotřebné registry a závislost Numba byly vráceny;
-zachován je stopkový měřič `scripts/v2_timing.py` včetně `--helpers`.
-Historie pokusu je v [`06-denik-numba.md`](06-denik-numba.md).
+**Brána fáze 5 splněna; původní orientační rozpočet UI (≤ 5–8 s) zůstává mimo
+dosah čistého Pythonu po skupinách.** Numba experiment ani další navrženou
+číselnou cestu uživatel nepřijal; produkční integrace, číselné zrcadlo tvarů a
+závislost Numba byly vráceny, zachován zůstal měřič `scripts/v2_timing.py`
+včetně `--helpers` ([`06-denik-numba.md`](06-denik-numba.md)).
 
-Nový plán, úplný audit závislostí a měření jsou v
-[`07-prubezne-indexy.md`](07-prubezne-indexy.md). Doplněny jsou deníky
-změn dominantních konceptů, užití kořenů, členství slov, konceptových
-frekvencí, aktivací/uzavírání a konstrukční gramatiky. Nemění původní
-počty verzí ani okamžiky záměrně zastaralého hodnocení.
+První dvě iterace průběžných indexů ([`07-prubezne-indexy.md`](07-prubezne-indexy.md))
+doplnily deníky změn dominantních konceptů, užití kořenů, členství slov,
+konceptových frekvencí, aktivací/uzavírání a konstrukční gramatiky, převedly
+mapu lexikální jasnosti, přípravu vzorku hodnocení procesů, sémantická a
+morfologická místa, morfologické hodnocení a syntaktickou slabost a snížily
+čas scénáře `valley-50` ze **37,6 s na 31,0 s** (`grid-5x5` **3,5 → 2,7 s**)
+při bitové shodě všech sedmi původních otisků.
 
-První dva inkrementální výpočty jsou mapa lexikální jasnosti a podklady
-hodnocení procesů. Příspěvky slov se dorovnávají podle deníku tvarů;
-float agregace zůstávají v původním pořadí a NumPy redukcích. Testy
-porovnávají průběžný výsledek s referencí, hlídají skutečně nepřepočítaná
-slova, změny frekvencí, syntaktickou kompenzaci i checkpointy.
+Následující **fáze 5** ([`08-davkova-inovace.md`](08-davkova-inovace.md))
+zaměřená na jádro `Simulation._innovate` proběhla se schválenou jednorázovou
+změnou otisků v kroku 1 a následnou bitovou shodou v krocích 2 a 3:
 
-První brána po dvou výpočtech neprošla (údolí 37,3 → 39,0 s).
-Po výslovném uživatelově „Pokračuj“ byla regresní procesní cache vrácena;
-zůstala přírůstková příprava vzorku nad původním vektorovým assessmentem.
-Přibyly indexy sémantických míst, morfologických kandidátů a hodnocení,
-sdílené členství slov pro kandidáty a syntaktickou slabost a dávkové
-sestavení skóre tlaků. Neúspěšný prototyp delt podpory kandidátů byl
-samostatným porovnáním odhalen a vrácen.
-
-Závěrečné sériové měření druhé iterace: **údolí 37,6 → 31,0 s**, mřížka
-**3,5 → 2,7 s**, všech sedm původních otisků přesně souhlasí. **Limit
-25 s stále není splněn.** Celá sada včetně bran a checkpointů: 642 testů
-prošlo za 241,75 s; Ruff a mypy čisté. Model i náhodné losování zůstaly
-beze změny. Nově doplněná fáze 5 v zadání naopak dovoluje změnu otisků;
-vyjasnění tohoto rozdílu vůči předchozí přímé instrukci uživatele je
-otevřené, proto nové losování zatím není implementováno. Do `engine-v2`
-se nic neslučuje. Původní cíle ≤ 8 s / ≤ 1 s nejsou splněné.
+- **Dávkové losování počtů (`rng.hash_poisson`)**: očekávané počty inovací se
+  spočítají přes `Change.total_rate` bez stavby seznamu míst a vylosují naráz
+  pro všechny skupiny; `PCG64` generátor, váhy z `Change.weighted_sites` a
+  `propose` se spouštějí jen u nenulových počtů (~4,6 % volání) při zachování
+  pořadí `(group_ids(), self.changes)`. Zároveň byla opravena 1-ULP citlivost
+  `transmission._normalized` na kapacitu bloků `LivePools`.
+- **Statistická shoda a brány**: skript `scripts/v2_innovation_stats.py` ověřil
+  na 5 seedech × 1 000 let shodu všech 43 sledovaných veličin proti `825d1c3`
+  (vše `< 1,36 SD` oproti limitu `2,0 SD`). Všech 83 testů milníkových bran
+  (`tests/v2/*_gate.py`) prochází beze změny prahů i seedů.
+- **Indexy míst a měr s líným součtem**: `SemanticSitesIndex` drží míry míst a
+  přepočítává `np.sum` jednorázově jen po skutečné změně; `LexicalCoinage` a
+  `AnalogicalChange` vracejí celkovou míru v `O(1)`; `VocabularyIndex.sync`
+  přeskakuje množinové rozdíly při nezměněném `vocabulary_log`; `Rebracketing`
+  kešuje dominantní slovesné kořeny; sdružený `SoundSupportIndex` aktualizuje
+  přesné `int64` opory všech 20 rodin zvukových změn jediným malým maticovým
+  součinem nad deltou `ContextIndex` a přepočítává míry jen u rodin se změněnou
+  efektivní oporou.
+- **Výsledné sériové měření** (`825d1c3` → konec fáze 5):
+  - `v2_digests.py`: **`valley-50` 30,9 → 23,6 s** (proti `3d1016c` 37,6 →
+    23,6 s, −37 %; splňuje i mez **≤ 25 s**), **`grid-5x5` 2,7 → 2,2 s**
+    (proti `3d1016c` 3,5 → 2,2 s).
+  - `v2_timing.py --scenario valley-50`: celkem **30,049 → 23,273 s**, fáze
+    inovace **`phase.innovate` 10,771 → 5,091 s (2,12× rychlejší)** — brána
+    fáze 5 (`≥ 2×` rychlejší inovace a `valley-50 ≤ 30 s`) je splněna.
+  - Celá sada testů (`pytest -q`): **657 testů prošlo za 192,79 s (3 min 12 s)**;
+    `ruff` a `mypy` čisté. Nové referenční otisky jsou zapsané v
+    `scripts/v2_digests.py`. Do `engine-v2` se větev sloučí až po schválení
+    uživatelem.
 
 ## Známé mezery a kam patří
 
@@ -1032,7 +1051,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | Učené výpůjčky se vracejí jako stará slova s dnešní výslovností; skutečné učené dublety (*fragile* vedle *frêle*) mají tvar psaného kódu | M6c nebo později |
 | Pravopisná výslovnost a revize pravopisu: psané tvary slov se nemění ani s tiskem | později |
 | CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |
-| Výkon plného modelu je pořád nad rozpočtem (údolí asi 36 s místo 5 s). Python po skupinách je na hranici; řádově rychlejší je jen datově orientovaná architektura s kompilovanými jádry (Numba) | rozhodnutí: přepis jádra, nebo přijmout a jít na M7 |
+| Výkon plného modelu je nad původním rozpočtem UI (`valley-50` 23,6 s místo 5 s, `grid-5x5` 2,2 s; z toho přenos ~16 s). Další výrazné zrychlení vyžaduje buď přesnější drift pro malé skupiny v M7, nebo paralelní běh oblastí | M7 (kalibrace driftu) / architektura |
 | Sousední vesnice se v plném modelu liší příliš (kontinuum 5×5, 3 000 let: sousedé 0,29, nejvzdálenější 0,38; v nářečních atlasech sousedé asi 0,05–0,15). Prahy dialektu a jazyka proto dávají skoro každou vesnici jako jazyk. Místní mísení je slabé proti tempu změn | M7 (otevřenost, tempo změn, prahy dialektu a jazyka) |
 | Rodokmen slova: export nese původ dnešního slova, ne historii jeho tvarů | později (snímky tvarů v exportu) |
 
