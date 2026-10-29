@@ -220,3 +220,31 @@ def test_frekvence_se_projevi_az_pri_zmene_verze_i_u_noveho_procesu():
     assert (updated.weights == reference.weights).all()
     assert (updated.weights != old_weights).any()
     assert _assess_batch(world, [group], variable) == _assess_batch_reference(world, [group], variable)
+
+
+def test_zmena_tvaru_cte_jen_dotcene_slovo(monkeypatch):
+    from cee.v2.assessment import _vocabulary
+    from cee.v2.world import World
+
+    world = village_grid(1, seed=4, phonology=True, semantics=True)
+    group = next(iter(world.groups))
+    code = world.groups[group].main_code
+    code.phonology.vocabulary.update(world.morphemes)
+    code.phonology.lexicon_version += 1
+    sample = _vocabulary(world, group)
+    word = sample.morphemes[0]
+    old = world.unit_of(code, word)
+    replacement = old.form + (old.form[0],)
+    code.forms.set(word, UnitForm(replacement, old.boundary, old.exponent))
+    code.phonology.version += 1
+    calls = []
+    original = World.form_of
+
+    def recorded(self, code_arg, morpheme_id):
+        calls.append(morpheme_id)
+        return original(self, code_arg, morpheme_id)
+
+    monkeypatch.setattr(World, "form_of", recorded)
+    updated = _vocabulary(world, group)
+    assert calls == [word]
+    assert updated.forms[word] == replacement

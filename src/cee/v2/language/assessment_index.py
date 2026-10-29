@@ -100,21 +100,3 @@ class AssessmentVocabularyIndex:
         self.frequency_token = frequency_key
         assert self.vocabulary is not None
         return self.vocabulary
-
-
-class ProcessWordIndex:
-    """Pole výsledků procesu pro pozice vzorku; dorovnává jen změněné pozice."""
-
-    def __init__(self) -> None:
-        self.generation = -1
-        self.cursor = 0
-        self.reset(0, -1)
-
-    def reset(self, size: int, generation: int) -> None:
-        self.generation = generation
-        self.cursor = 0
-        self.changed = np.full(size, -1, dtype=np.int64)
-        self.old_lengths = np.zeros(size, dtype=np.int64)
-        self.new_lengths = np.zeros(size, dtype=np.int64)
-        self.marked_old = np.zeros(size)
-        self.marked_new = np.zeros(size)

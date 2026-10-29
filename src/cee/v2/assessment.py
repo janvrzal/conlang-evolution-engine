@@ -336,61 +336,23 @@ def _assess_batch(world: World, group_ids: list[str], variable_id: str) -> list[
             ids[row, : len(vocabulary.ids)] = vocabulary.ids
             weights[row, : len(vocabulary.ids)] = vocabulary.weights
         valid = ids >= 0
-        from cee.v2.language.assessment_index import AssessmentVocabularyIndex, ProcessWordIndex
-
         changed = np.full((rows, width), -1, dtype=np.int64)
-        old_lengths = np.zeros((rows, width), dtype=np.int64)
-        new_lengths = np.zeros((rows, width), dtype=np.int64)
-        marked_new = np.zeros((rows, width))
-        marked_old = np.zeros((rows, width))
-        dirty: list[tuple[int, int]] = []
-        indices: list[ProcessWordIndex] = []
-        for row, (position, vocabulary) in enumerate(zip(positions, vocabularies)):
-            state = world.groups[group_ids[position]].main_code.phonology
-            vocab_index = cast(AssessmentVocabularyIndex, state.cache["assessment-vocabulary-index"][1])
-            key = ("assessment-words", variable_id, rule)
-            entry = state.cache.get(key)
-            word_index = cast(ProcessWordIndex, entry[1]) if entry is not None else ProcessWordIndex()
-            indices.append(word_index)
-            state.cache[key] = (state.version, word_index)
-            if word_index.generation != vocab_index.generation or word_index.cursor > len(vocab_index.changes):
-                word_index.reset(len(vocabulary.ids), vocab_index.generation)
-                dirty.extend((row, column) for column in range(len(vocabulary.ids)))
-            else:
-                dirty.extend((row, column) for column in sorted(set(vocab_index.changes[word_index.cursor:])))
-            word_index.cursor = len(vocab_index.changes)
-        if dirty:
-            old = np.array([ids[row, column] for row, column in dirty], dtype=np.int64)
-            new = bank.process_table(process, cast(StressRule, rule)).results(old)
-            hit_dirty = new >= 0
-            old_len = bank.lengths(old)
-            new_len = np.zeros(len(old), dtype=np.int64)
-            marked_before = np.zeros(len(old))
-            marked_after = np.zeros(len(old))
-            if hit_dirty.any():
-                new_len[hit_dirty] = bank.lengths(new[hit_dirty])
-                marked_before[hit_dirty] = bank.values("markedness", old[hit_dirty], lambda f: markedness(f, table))
-                marked_after[hit_dirty] = bank.values("markedness", new[hit_dirty], lambda f: markedness(f, table))
-            for i, (row, column) in enumerate(dirty):
-                word_index = indices[row]
-                word_index.changed[column] = new[i]
-                word_index.old_lengths[column] = old_len[i]
-                word_index.new_lengths[column] = new_len[i]
-                word_index.marked_old[column] = marked_before[i]
-                word_index.marked_new[column] = marked_after[i]
-        for row, word_index in enumerate(indices):
-            size = len(word_index.changed)
-            changed[row, :size] = word_index.changed
-            old_lengths[row, :size] = word_index.old_lengths
-            new_lengths[row, :size] = word_index.new_lengths
-            marked_old[row, :size] = word_index.marked_old
-            marked_new[row, :size] = word_index.marked_new
+        changed[valid] = bank.process_table(process, cast(StressRule, rule)).results(ids[valid])
         hit = changed >= 0
         if not hit.any():
             continue
         mass = (weights * hit).sum(axis=1)
+        safe_ids, safe_new = np.where(valid, ids, 0), np.where(hit, changed, 0)
+        old_lengths, new_lengths = bank.lengths(safe_ids), bank.lengths(safe_new)
         short = (weights * (hit & (new_lengths <= 2) & (new_lengths < old_lengths))).sum(axis=1)
 
+        def compute(form: Form) -> float:
+            return markedness(form, table)
+
+        marked_new = np.zeros((rows, width))
+        marked_old = np.zeros((rows, width))
+        marked_new[hit] = bank.values("markedness", changed[hit], compute)
+        marked_old[hit] = bank.values("markedness", ids[hit], compute)
         marked = (weights * (marked_new - marked_old)).sum(axis=1)
         # Nový homofon: dvojice, která po změně zní stejně a předtím nezněla.
         # Výplň řádků dostane různá záporná čísla, aby se za homofony nepočítala.
@@ -436,7 +398,6 @@ def _assess_batch(world: World, group_ids: list[str], variable_id: str) -> list[
                 dispersion_delta=_dispersion_gain(process, before, after, table),
             )
     return results
-
 
 #: Splynutí dvou buněk téhož paradigmatu (synkretismus) stojí stejně jako
 #: náhodný homofon; tvary téhož slova od sebe často odliší kontext.
