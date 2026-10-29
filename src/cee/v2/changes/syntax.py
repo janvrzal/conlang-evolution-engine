@@ -61,7 +61,7 @@ class SyntacticChange(Change):
         self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
     ) -> Variant | None:
         current = syntax.dominant(context.world, context.group.id, site.split(":", 1)[1])
-        if current is None:
+        if current is None or not self.applies(context, current):
             return None
         construction = self.next(context, current, rng)
         if construction is None:

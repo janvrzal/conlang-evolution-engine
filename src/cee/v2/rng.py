@@ -72,3 +72,79 @@ def hash_normal(
         2.0 * np.pi * uniform_b
     )
     return normal
+
+
+def hash_poisson(
+    row_keys: npt.NDArray[np.uint64],
+    column_keys: npt.NDArray[np.uint64],
+    expected: npt.NDArray[np.float64],
+    *,
+    pairwise: bool = False,
+) -> npt.NDArray[np.int64]:
+    """Celočíselné náhodné tahy Poissonova rozdělení závislé jen na svých klíčích.
+
+    Podobně jako :func:`hash_normal` nevyžaduje sdílený stav generátoru napříč
+    skupinami ani postupné volání. Bez ``pairwise`` vrací matici všech kombinací
+    řádek × sloupec, s ním hodnoty pro dvojice na stejné pozici.
+    Pro malé a střední střední hodnoty (do 30) využívá inverzní CDF transformaci
+    s 53bitovou rovnoměrnou náhodou odvozenou ze SplitMix64. Pro vyšší střední
+    hodnoty sestaví lokální generátor inicializovaný hashem daného prvku.
+    """
+    lam = np.asarray(expected, dtype=np.float64)
+    rows = np.asarray(row_keys, dtype=np.uint64)
+    columns = np.asarray(column_keys, dtype=np.uint64)
+
+    if np.any(np.isnan(lam)) or np.any(lam < 0.0) or np.any(np.isinf(lam)):
+        raise ValueError("Střední hodnoty Poissonova rozdělení musí být nezáporná konečná čísla.")
+
+    if not pairwise:
+        rows, columns = rows[:, None], columns[None, :]
+        mixed_shape = (rows.shape[0], columns.shape[1])
+        if mixed_shape != lam.shape:
+            raise ValueError(
+                f"Výsledný tvar klíčů {mixed_shape} neodpovídá tvaru očekávaných hodnot {lam.shape}."
+            )
+    else:
+        if not (rows.shape == columns.shape == lam.shape):
+            raise ValueError(
+                f"V režimu pairwise musí mít klíče i expected stejný tvar: "
+                f"{rows.shape} vs. {columns.shape} vs. {lam.shape}."
+            )
+
+    counts = np.zeros(lam.shape, dtype=np.int64)
+    positive = lam > 0.0
+    if not np.any(positive):
+        return counts
+
+    with np.errstate(over="ignore"):
+        first = _splitmix64(rows ^ _splitmix64(columns))
+
+    small = positive & (lam <= 30.0)
+    if np.any(small):
+        sub_lam = lam[small]
+        sub_u = ((first[small] >> np.uint64(11)).astype(np.float64) + 0.5) / _FLOAT53
+        sub_counts = np.zeros(sub_lam.shape, dtype=np.int64)
+        p = np.exp(-sub_lam)
+        cdf = p.copy()
+        for k in range(1, 121):
+            still = (sub_u > cdf) & ((cdf + p > cdf) | (k <= sub_lam))
+            if not np.any(still):
+                break
+            sub_counts[still] = k
+            p = p * (sub_lam / k)
+            cdf = cdf + p
+        counts[small] = sub_counts
+
+    large = lam > 30.0
+    if np.any(large):
+        first_flat = first.reshape(-1)
+        lam_flat = lam.reshape(-1)
+        counts_flat = counts.reshape(-1)
+        for idx in np.flatnonzero(large):
+            with np.errstate(over="ignore"):
+                seed64 = int(_splitmix64(first_flat[idx : idx + 1])[0])
+            local_rng = np.random.Generator(np.random.PCG64(seed64))
+            counts_flat[idx] = int(local_rng.poisson(float(lam_flat[idx])))
+
+    return counts
+

@@ -64,8 +64,15 @@ def _normalized(array: FloatArray, fallback: FloatArray) -> FloatArray:
     # leží. Pořadí slotů ovlivňují i inovace v nepropojených skupinách, a bez
     # toho by tak přes poslední bity zaokrouhlení měnily výsledek jinde.
     # Součet dvou čísel je komutativní i v plovoucí čárce, řadit stačí od tří.
+    # Sčítání provádíme striktně sekvenčně zleva doprava po seřazených slotech:
+    # vestavěný np.sum() používá pro různé délky (např. 4 vs. 8) odlišné
+    # párové/SIMD redukce. V IEEE-754 platí +0.0 + x == x pro x >= 0, takže
+    # sekvenční součet zleva doprava zajistí bitovou shodu bez ohledu na to,
+    # kolika úvodními nulami je řádek doplněn v blocích různé kapacity.
     ordered = array if array.shape[-1] <= 2 else np.sort(array, axis=-1)
-    totals = ordered.sum(axis=-1, keepdims=True)
+    totals = ordered[..., :1] + 0.0
+    for slot in range(1, ordered.shape[-1]):
+        totals = totals + ordered[..., slot : slot + 1]
     result: FloatArray = np.where(totals > 0, array / np.where(totals > 0, totals, 1.0), fallback)
     return result
 

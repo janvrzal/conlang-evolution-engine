@@ -15,7 +15,7 @@ from cee.v2.history import History
 from cee.v2.observe import LineageTracker, Snapshot, observe
 from cee.v2.pools import PoolBlock
 from cee.v2.repertoire import Distribution
-from cee.v2.rng import generator
+from cee.v2.rng import generator, hash_poisson, stable_int
 from cee.v2.transmission import TransmissionParams, prepare, transmit
 from cee.v2.world import World
 
@@ -98,6 +98,9 @@ class Simulation:
 
     def _configure(self, changes: Sequence[Change], events: Sequence[WorldEvent]) -> None:
         self.changes = tuple(changes)
+        self._change_keys = np.array(
+            [stable_int("innovation-change-34", change.kind) for change in self.changes], dtype=np.uint64
+        )
         self.events = tuple(events)
         self.checkpoints: dict[int, Checkpoint] = {}
         self.pressures = pressures_by_kind(self.changes)
@@ -218,15 +221,60 @@ class Simulation:
                     self._seed_vocabulary(group_id)
 
     def _innovate(self, year: float) -> None:
+        entries: list[tuple[InnovationContext, float, float, float]] = []
         for group_id in self.world.group_ids():
             group = self.world.groups[group_id]
             if group.written:
                 continue  # psaný kód se nemění
             renewal = self.world.renewal(group_id, self.config.dt)
+            share, frequency = self.innovation_scale(group_id)
             # Do M5 (vícejazyčnost) se simuluje jen hlavní kód skupiny.
             context = InnovationContext(self.world, group, group.main_code, self.tick, year)
-            for change in self.changes:
-                self._innovate_with(change, context, renewal)
+            entries.append((context, renewal, share, frequency))
+
+        if not entries or not self.changes:
+            return
+
+        group_keys = np.array(
+            [
+                stable_int(
+                    self.world.seed,
+                    "innovation",
+                    self.tick,
+                    ctx.group.id,
+                    ctx.code.id,
+                )
+                for ctx, _, _, _ in entries
+            ],
+            dtype=np.uint64,
+        )
+        renewals = np.array([renewal for _, renewal, _, _ in entries], dtype=np.float64)
+        frequencies = np.array([frequency for _, _, _, frequency in entries], dtype=np.float64)
+
+        expected = np.zeros((len(entries), len(self.changes)), dtype=np.float64)
+        for change_idx, change in enumerate(self.changes):
+            tempos = (renewals if change.rate_basis == "generation" else self.config.dt) * frequencies
+            for group_idx, (ctx, _, _, _) in enumerate(entries):
+                sites = change.sites(ctx)
+                if sites:
+                    if change.uses_uniform_rate():
+                        rate_sum = change.base_rate * len(sites) * change.rate_scale(ctx)
+                        expected[group_idx, change_idx] = float(rate_sum) * float(tempos[group_idx])
+                    else:
+                        rates_arr = np.asarray(change.rates(ctx, sites), dtype=np.float64)
+                        expected[group_idx, change_idx] = float(np.sum(rates_arr)) * float(tempos[group_idx])
+
+        if not np.any(expected > 0.0):
+            return
+
+        counts = hash_poisson(group_keys, self._change_keys, expected)
+
+        for group_idx, (context, _, share, _) in enumerate(entries):
+            for change_idx, change in enumerate(self.changes):
+                count = int(counts[group_idx, change_idx])
+                if count <= 0:
+                    continue
+                self._apply_innovations(change, context, share, count)
 
     def innovation_scale(self, group_id: str) -> tuple[float, float]:
         """Počáteční podíl inovace a násobek četnosti inovací ve skupině.
@@ -242,23 +290,28 @@ class Simulation:
         share = min(config.p0_max, max(config.p0_min, config.p0 * size))
         return share, config.p0 / share
 
-    def _innovate_with(self, change: Change, context: InnovationContext, renewal: float) -> None:
+    def _apply_innovations(
+        self, change: Change, context: InnovationContext, share: float, count: int
+    ) -> None:
         sites = change.sites(context)
         if not sites:
             return
-        share, frequency = self.innovation_scale(context.group.id)
-        tempo = (renewal if change.rate_basis == "generation" else self.config.dt) * frequency
-        rng = generator(self.world.seed, "innovation", self.tick, context.group.id,
-                        context.code.id, change.kind)
         if change.uses_uniform_rate():
             weights = None
-            expected = change.base_rate * tempo * len(sites) * change.rate_scale(context)
         else:
-            rates = change.rates(context, sites)
-            total = sum(rates)
-            expected = total * tempo
-            weights = [rate / total for rate in rates] if expected > 0 else None
-        count = int(rng.poisson(expected)) if expected > 0 else 0
+            rates_arr = np.asarray(change.rates(context, sites), dtype=np.float64)
+            total = float(np.sum(rates_arr))
+            if total <= 0.0:
+                return
+            weights = rates_arr / total
+        rng = generator(
+            self.world.seed,
+            "innovation",
+            self.tick,
+            context.group.id,
+            context.code.id,
+            change.kind,
+        )
         live = self.world.live
         for index in range(count):
             site = sites[int(rng.choice(len(sites), p=weights))]
@@ -277,10 +330,47 @@ class Simulation:
             self.world.variants[variant.id] = variant
             live.innovate(site, context.group.id, variant.id, share)
             self.history.record(
-                "innovation", self.tick, context.year,
-                group=context.group.id, code=context.code.id, change=change.kind,
-                variable=site, variant=variant.id,
+                "innovation",
+                self.tick,
+                context.year,
+                group=context.group.id,
+                code=context.code.id,
+                change=change.kind,
+                variable=site,
+                variant=variant.id,
             )
+
+    def _innovate_with(self, change: Change, context: InnovationContext, renewal: float) -> None:
+        sites = change.sites(context)
+        if not sites:
+            return
+        share, frequency = self.innovation_scale(context.group.id)
+        tempo = (renewal if change.rate_basis == "generation" else self.config.dt) * frequency
+        if change.uses_uniform_rate():
+            expected = float(change.base_rate * len(sites) * change.rate_scale(context)) * tempo
+        else:
+            rates_arr = np.asarray(change.rates(context, sites), dtype=np.float64)
+            expected = float(np.sum(rates_arr)) * tempo
+        group_key = np.uint64(
+            stable_int(
+                self.world.seed,
+                "innovation",
+                self.tick,
+                context.group.id,
+                context.code.id,
+            )
+        )
+        change_key = np.uint64(stable_int("innovation-change-34", change.kind))
+        count = int(
+            hash_poisson(
+                np.array([group_key], dtype=np.uint64),
+                np.array([change_key], dtype=np.uint64),
+                np.array([expected], dtype=np.float64),
+                pairwise=True,
+            )[0]
+        )
+        if count > 0:
+            self._apply_innovations(change, context, share, count)
 
     def _transmit(self, year: float) -> None:
         live = self.world.live
