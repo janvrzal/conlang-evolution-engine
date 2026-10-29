@@ -20,8 +20,10 @@ from cee.v2.metrics import (
 )
 from cee.v2.scenarios import Language, Place, contact_world, island_and_city, language_shift
 from cee.v2.simulation import Simulation
+from tests.v2.gate_checks import evaluate_seeds
 
 SEEDS = (1, 2)
+SHIFTED_SEEDS = tuple(range(1, 13))
 
 
 def _run(world, until, events=()):
@@ -189,8 +191,13 @@ def test_s2_zjednoduseni_pusobi_l2_mluvci(seed):
 
 
 @pytest.fixture(scope="module")
-def shifted():
-    return [run_shifted(seed) for seed in SEEDS]
+def shifted_by_seed():
+    return {seed: run_shifted(seed) for seed in SHIFTED_SEEDS}
+
+
+@pytest.fixture(scope="module")
+def shifted(shifted_by_seed):
+    return [shifted_by_seed[seed] for seed in SEEDS]
 
 
 def test_s3_region_prejde_na_prestizni_jazyk(shifted):
@@ -198,9 +205,13 @@ def test_s3_region_prejde_na_prestizni_jazyk(shifted):
         check_s3_prechod(world, history)
 
 
-def test_s3_v_novem_jazyce_zustane_stavba_a_vyslovnost_ale_malo_slov(shifted):
-    for world, _, substrate in shifted:
-        check_s3_substrat(world, substrate)
+def test_s3_v_novem_jazyce_zustane_stavba_a_vyslovnost_ale_malo_slov(shifted_by_seed):
+    # Brána existence (otevřená otázka do M7). Audit 101..120: 11/20, Wilson 95 % [0.342, 0.742], N=12, k=1, negativní kontrola (INTERFERENCE_WEIGHT=0) 0/12.
+    evaluate_seeds(
+        shifted_by_seed,
+        lambda run: check_s3_substrat(run[0], run[2]),
+        k=1,
+    )
 
 
 @pytest.fixture(scope="module")

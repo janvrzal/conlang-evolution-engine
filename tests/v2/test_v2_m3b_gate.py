@@ -12,8 +12,10 @@ from cee.v2.language.lexicon import UnitForm
 from cee.v2.metrics import lexicon_profile, retention
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
+from tests.v2.gate_checks import evaluate_seeds
 
 SEEDS = (1, 2)
+TABOO_SEEDS = tuple(range(1, 13))
 ORIGINS = {
     "shift", "conversion", "derivation", "compound", "circumlocution", "contamination",
     "back_formation", "coinage",
@@ -140,9 +142,14 @@ def test_erodovana_slova_se_nahrazuji_casteji():
     check_erodovana_slova(world, eroded)
 
 
-def test_tabu_vyvola_kolobeh_opisu():
-    with_taboo, without_taboo = run_taboo_pair(5)
-    check_tabu(with_taboo, without_taboo)
+@pytest.fixture(scope="module")
+def taboo_runs():
+    return {seed: run_taboo_pair(seed) for seed in TABOO_SEEDS}
+
+
+def test_tabu_vyvola_kolobeh_opisu(taboo_runs):
+    # Brána existence (otevřená otázka do M7). Audit 101..120: 11/20, Wilson 95 % [0.342, 0.742], N=12, k=1, negativní kontrola (taboo=()) 0/12.
+    evaluate_seeds(taboo_runs, lambda pair: check_tabu(*pair), k=1)
 
 
 def test_zvukove_metriky_drzi_i_s_lexikalni_zmenou(runs):

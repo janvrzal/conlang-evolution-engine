@@ -14,6 +14,7 @@ from cee.v2 import syntax
 from cee.v2.language.constructions import Construction, catalog
 from cee.v2.scenarios import SYNTAX_GRAMMAR, village_grid
 from cee.v2.simulation import Simulation
+from tests.v2.gate_checks import evaluate_seeds
 
 #: Jazyk bez pádu a bez členu, který ho ale může vyvinout.
 NO_CASE = {
@@ -21,6 +22,7 @@ NO_CASE = {
     "DEFINITE": Construction("DEFINITE", "zero"),
 }
 ARTICLE_SEEDS = (1, 2, 3)
+EXAPTATION_SEEDS = tuple(range(1, 11))
 
 
 def _kinds(world, function):
@@ -125,10 +127,19 @@ def test_bez_padu_se_slovosled_ustali(no_case):
         check_bez_padu(world)
 
 
-def test_exaptace_zbytkove_koncovky():
+@pytest.fixture(scope="module")
+def exaptation_runs():
+    return {seed: run_exaptation_pair(seed) for seed in EXAPTATION_SEEDS}
+
+
+def test_exaptace_zbytkove_koncovky(exaptation_runs):
     """Pád vedle pevného slovosledu nic nenese; jeho koncovka se stane členem."""
-    (world, history), (control, control_history) = run_exaptation_pair(3)
-    check_exaptace(world, history, control, control_history)
+    # Audit 101..120: 15/20, Wilson 95 % [0.531, 0.888], N=10, k=2, negativní kontrola (volný slovosled) 0/10.
+    evaluate_seeds(
+        exaptation_runs,
+        lambda pair: check_exaptace(pair[0][0], pair[0][1], pair[1][0], pair[1][1]),
+        k=2,
+    )
 
 
 def test_jazyk_bez_kategorie_ji_nema_dokud_ji_nevyvine():

@@ -182,36 +182,36 @@ GATE_REGISTRY: tuple[GateInfo, ...] = (
 
     # m3 (5 bran)
     GateInfo("m3::sturtevantuv_paradox", "test_v2_m3_gate.py", "test_sturtevantuv_paradox_zvuk_tvori_nepravidelnost_analogie_ji_opravuje", "2", "m3_morphology"),
-    GateInfo("m3::morfologizace", "test_v2_m3_gate.py", "test_morfologizace_vznikne_sama", "2", "m3_morphology"),
+    GateInfo("m3::morfologizace", "test_v2_m3_gate.py", "test_morfologizace_vznikne_sama", "10 (aspoň 4)", "m3_morphology"),
     GateInfo("m3::produktivni_vzor", "test_v2_m3_gate.py", "test_produktivni_vzor_se_siri_a_caste_slova_si_drzi_nepravidelnost", "2", "m3_morphology"),
     GateInfo("m3::analogie", "test_v2_m3_gate.py", "test_analogie_zasahuje_spis_vzacna_slova", "2", "m3_morphology"),
-    GateInfo("m3::zvukove_metriky", "test_v2_m3_gate.py", "test_zvukove_metriky_drzi_i_s_paradigmaty", "2", "m3_morphology"),
+    GateInfo("m3::zvukove_metriky", "test_v2_m3_gate.py", "test_zvukove_metriky_drzi_i_s_paradigmaty", "10 (aspoň 5)", "m3_morphology"),
 
     # m3b (6 bran)
     GateInfo("m3b::metrika_1", "test_v2_m3b_gate.py", "test_metrika_1_retence_zakladni_slovni_zasoby_v_pasmu", "2", "m3b_lexicon"),
     GateInfo("m3b::metrika_2", "test_v2_m3b_gate.py", "test_metrika_2_caste_pojmy_se_nahrazuji_pomaleji", "2", "m3b_lexicon"),
     GateInfo("m3b::nova_slova", "test_v2_m3b_gate.py", "test_nova_slova_maji_doloditelny_puvod", "2", "m3b_lexicon"),
     GateInfo("m3b::erodovana_slova", "test_v2_m3b_gate.py", "test_erodovana_slova_se_nahrazuji_casteji", "1", "m3b_eroded"),
-    GateInfo("m3b::tabu", "test_v2_m3b_gate.py", "test_tabu_vyvola_kolobeh_opisu", "1", "m3b_taboo"),
+    GateInfo("m3b::tabu", "test_v2_m3b_gate.py", "test_tabu_vyvola_kolobeh_opisu", "12 (aspoň 1)", "m3b_taboo"),
     GateInfo("m3b::zvukove_metriky", "test_v2_m3b_gate.py", "test_zvukove_metriky_drzi_i_s_lexikalni_zmenou", "2", "m3b_lexicon"),
 
     # m4 (4 brány)
     GateInfo("m4::analytizace", "test_v2_m4_gate.py", "test_analytizace_po_erozi_padu_se_ustali_slovosled", "1", "m4_control_eroded"),
-    GateInfo("m4::velky_cyklus", "test_v2_m4_gate.py", "test_velky_cyklus_eroze_opis_priklonka_nova_koncovka", "1", "m4_velky_cyklus"),
-    GateInfo("m4::jespersen", "test_v2_m4_gate.py", "test_jespersenuv_cyklus_ne_ne_pas_pas", "1", "m4_jespersen"),
+    GateInfo("m4::velky_cyklus", "test_v2_m4_gate.py", "test_velky_cyklus_eroze_opis_priklonka_nova_koncovka", "10 (aspoň 2)", "m4_velky_cyklus"),
+    GateInfo("m4::jespersen", "test_v2_m4_gate.py", "test_jespersenuv_cyklus_ne_ne_pas_pas", "19 (aspoň 1)", "m4_jespersen"),
     GateInfo("m4::bez_eroze", "test_v2_m4_gate.py", "test_bez_eroze_syntax_zustava_a_zvukove_metriky_drzi", "1", "m4_control_eroded"),
 
     # m4b (4 brány)
     GateInfo("m4b::clen_vznikne", "test_v2_m4b_gate.py", "test_clen_vznikne_z_ukazovaciho_zajmena", "3 (aspoň 2)", "m4b_no_case"),
     GateInfo("m4b::bez_padu", "test_v2_m4b_gate.py", "test_bez_padu_se_slovosled_ustali", "3", "m4b_no_case"),
-    GateInfo("m4b::exaptace", "test_v2_m4b_gate.py", "test_exaptace_zbytkove_koncovky", "1", "m4b_exaptation"),
+    GateInfo("m4b::exaptace", "test_v2_m4b_gate.py", "test_exaptace_zbytkove_koncovky", "10 (aspoň 2)", "m4b_exaptation"),
     GateInfo("m4b::jazyk_bez_kategorie", "test_v2_m4b_gate.py", "test_jazyk_bez_kategorie_ji_nema_dokud_ji_nevyvine", "1", "m4b_tenseless"),
 
     # m5 (7 bran)
     GateInfo("m5::s2_mesto", "test_v2_m5_gate.py", "test_s2_mesto_s_pristehovalci_zjednodusuje_ostrov_drzi", "2", "m5_s2_city"),
     GateInfo("m5::s2_l2", "test_v2_m5_gate.py", "test_s2_zjednoduseni_pusobi_l2_mluvci", "2", "m5_s2_l2"),
     GateInfo("m5::s3_prechod", "test_v2_m5_gate.py", "test_s3_region_prejde_na_prestizni_jazyk", "2", "m5_shifted"),
-    GateInfo("m5::s3_substrat", "test_v2_m5_gate.py", "test_s3_v_novem_jazyce_zustane_stavba_a_vyslovnost_ale_malo_slov", "2", "m5_shifted"),
+    GateInfo("m5::s3_substrat", "test_v2_m5_gate.py", "test_s3_v_novem_jazyce_zustane_stavba_a_vyslovnost_ale_malo_slov", "12 (aspoň 1)", "m5_shifted"),
     GateInfo("m5::vypujcky", "test_v2_m5_gate.py", "test_vypujcky_jsou_vzacne_pojmy_adaptovane_hlaskami_prijemce", "2", "m5_borrowing"),
     GateInfo("m5::bez_dvojjazycnosti", "test_v2_m5_gate.py", "test_bez_dvojjazycnosti_se_stavba_nepujcuje", "2", "m5_borrowing"),
     GateInfo("m5::metrika_11", "test_v2_m5_gate.py", "test_metrika_11_slozitost_klesa_s_l2_mluvcimi_a_populaci", "2", "m5_metrika_11"),
@@ -226,10 +226,10 @@ GATE_REGISTRY: tuple[GateInfo, ...] = (
     # m6b (8 bran)
     GateInfo("m6b::metrika_9", "test_v2_m6b_gate.py", "test_metrika_9_vzdalenost_roste_se_zemepisnou_zpomalene", "2", "m6b_metrika_9"),
     GateInfo("m6b::elita_prejde", "test_v2_m6b_gate.py", "test_elita_v_mensine_prejde_na_jazyk_poddanych", "2", "m6b_conquered"),
-    GateInfo("m6b::superstrat", "test_v2_m6b_gate.py", "test_superstrat_je_hlavne_slovni", "2", "m6b_conquered"),
-    GateInfo("m6b::jazyk_trhu", "test_v2_m6b_gate.py", "test_jazyk_trhu_jen_mimo_domov_je_stabilni_dvojjazycnost", "2", "m6b_market_town"),
+    GateInfo("m6b::superstrat", "test_v2_m6b_gate.py", "test_superstrat_je_hlavne_slovni", "10 (aspoň 2)", "m6b_conquered"),
+    GateInfo("m6b::jazyk_trhu", "test_v2_m6b_gate.py", "test_jazyk_trhu_jen_mimo_domov_je_stabilni_dvojjazycnost", "10 (aspoň 2)", "m6b_market_town"),
     GateInfo("m6b::loajalita", "test_v2_m6b_gate.py", "test_loajalita_prechod_zpomali_nebo_zastavi", "1", "m6b_loyalty"),
-    GateInfo("m6b::migrace", "test_v2_m6b_gate.py", "test_podil_l2_mluvcich_vyplyne_z_migrace_a_slozitost_klesa", "2", "m6b_migration"),
+    GateInfo("m6b::migrace", "test_v2_m6b_gate.py", "test_podil_l2_mluvcich_vyplyne_z_migrace_a_slozitost_klesa", "10 (aspoň 2)", "m6b_migration"),
     GateInfo("m6b::ferguson", "test_v2_m6b_gate.py", "test_fergusonova_diglosie_vysoka_varieta_stoji_lidova_rec_se_vzdaluje", "2", "m6b_ferguson"),
     GateInfo("m6b::nabozenstvi", "test_v2_m6b_gate.py", "test_nabozenstvi_prinese_ucena_slova_z_liturgickeho_jazyka", "2", "m6b_conversion"),
 

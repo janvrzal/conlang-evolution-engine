@@ -29,8 +29,12 @@ from cee.v2.scenarios import (
     village_grid,
 )
 from cee.v2.simulation import Simulation
+from tests.v2.gate_checks import evaluate_seeds
 
 SEEDS = (1, 2)
+SUPERSTRAT_SEEDS = tuple(range(1, 11))
+MARKET_SEEDS = tuple(range(1, 11))
+MIGRATION_SEEDS = tuple(range(1, 11))
 
 
 def _loans(world, group, language):
@@ -213,8 +217,13 @@ def test_metrika_9_vzdalenost_roste_se_zemepisnou_zpomalene(seed):
 
 
 @pytest.fixture(scope="module")
-def conquered():
-    return [run_conquered(seed) for seed in SEEDS]
+def conquered_by_seed():
+    return {seed: run_conquered(seed) for seed in SUPERSTRAT_SEEDS}
+
+
+@pytest.fixture(scope="module")
+def conquered(conquered_by_seed):
+    return [conquered_by_seed[seed] for seed in SEEDS]
 
 
 def test_elita_v_mensine_prejde_na_jazyk_poddanych(conquered):
@@ -222,15 +231,26 @@ def test_elita_v_mensine_prejde_na_jazyk_poddanych(conquered):
         check_elita_prejde(world, history)
 
 
-def test_superstrat_je_hlavne_slovni(conquered):
-    for world, _, elite in conquered:
-        check_superstrat(world, elite)
+def test_superstrat_je_hlavne_slovni(conquered_by_seed):
+    # Audit 101..120: 16/20, Wilson 95 % [0.584, 0.919], N=10, k=2, negativní kontrola (bez dobytí) 0/10.
+    evaluate_seeds(
+        conquered_by_seed,
+        lambda run: check_superstrat(run[0], run[2]),
+        k=2,
+    )
 
 
-@pytest.mark.parametrize("seed", SEEDS)
-def test_jazyk_trhu_jen_mimo_domov_je_stabilni_dvojjazycnost(seed):
-    world, history = run_market_town(seed)
-    check_jazyk_trhu(world, history)
+# --- stabilní dvojjazyčnost a loajalita -------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def market_runs():
+    return {seed: run_market_town(seed) for seed in MARKET_SEEDS}
+
+
+def test_jazyk_trhu_jen_mimo_domov_je_stabilni_dvojjazycnost(market_runs):
+    # Audit 101..120: 16/20, Wilson 95 % [0.584, 0.919], N=10, k=2, negativní kontrola (domain='home') 0/10.
+    evaluate_seeds(market_runs, lambda data: check_jazyk_trhu(*data), k=2)
 
 
 def test_loajalita_prechod_zpomali_nebo_zastavi():
@@ -238,10 +258,17 @@ def test_loajalita_prechod_zpomali_nebo_zastavi():
     check_loajalita(free, loyal, steadfast)
 
 
-@pytest.mark.parametrize("seed", SEEDS)
-def test_podil_l2_mluvcich_vyplyne_z_migrace_a_slozitost_klesa(seed):
-    world = run_migration(seed)
-    check_migrace(world)
+# --- migrace ----------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def migration_runs():
+    return {seed: run_migration(seed) for seed in MIGRATION_SEEDS}
+
+
+def test_podil_l2_mluvcich_vyplyne_z_migrace_a_slozitost_klesa(migration_runs):
+    # Audit 101..120: 15/20, Wilson 95 % [0.531, 0.888], N=10, k=2, negativní kontrola (migration=0.0) 0/10.
+    evaluate_seeds(migration_runs, check_migrace, k=2)
 
 
 @pytest.mark.parametrize("seed", SEEDS)

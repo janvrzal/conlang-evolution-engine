@@ -257,3 +257,37 @@ def test_audit_save_and_resume(tmp_path: Path):
     )
     # Spustí se a nevypíše chybu
     run_audit(args3)
+
+
+def test_converted_gates_thresholds_match_formula():
+    """Ověří, že prahy k převedených bran přesně odpovídají vzorci threshold_k."""
+    # (úspěchů v auditu x, celkem v auditu total, N seedů brány, k práh brány)
+    cases = (
+        (11, 20, 12, 1),  # m3b::tabu, m5::s3_substrat
+        (15, 20, 10, 2),  # m4::velky_cyklus, m4b::exaptace, m6b::migrace
+        (16, 20, 10, 2),  # m6b::superstrat, m6b::jazyk_trhu
+        (8, 20, 19, 1),   # m4::jespersen
+        (35, 40, 10, 4),  # m3::morfologizace
+        (20, 20, 10, 5),  # m3::zvukove_metriky
+    )
+    for x, total, n, expected_k in cases:
+        p_lower, _ = wilson_interval(x, total)
+        k = threshold_k(n, p_lower)
+        assert k == expected_k, f"Pro x={x}, total={total}, n={n} vyšlo k={k}, očekáváno {expected_k}"
+
+
+def test_evaluate_seeds_helper():
+    """Ověří pomocnou funkci evaluate_seeds."""
+    from tests.v2.gate_checks import evaluate_seeds
+
+    runs = {1: 10, 2: 5, 3: 20}
+
+    def check(val: int):
+        assert val >= 10, "příliš nízká hodnota"
+
+    evaluate_seeds(runs, check, k=2)
+
+    with pytest.raises(AssertionError) as exc_info:
+        evaluate_seeds(runs, check, k=3)
+    assert "2/3" in str(exc_info.value)
+    assert "seed 2: příliš nízká hodnota" in str(exc_info.value)

@@ -16,6 +16,10 @@ from cee.v2.language.lexicon import UnitForm
 from cee.v2.metrics import lexicon_profile
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
+from tests.v2.gate_checks import evaluate_seeds
+
+VELKY_CYKLUS_SEEDS = tuple(range(1, 11))
+JESPERSEN_SEEDS = tuple(range(1, 20))
 
 
 def _experiment(seed=3, *, cell=None, particle=None):
@@ -109,19 +113,30 @@ def control():
     return run_control(3)
 
 
+@pytest.fixture(scope="module")
+def velky_cyklus_runs():
+    return {seed: run_velky_cyklus(seed) for seed in VELKY_CYKLUS_SEEDS}
+
+
+@pytest.fixture(scope="module")
+def jespersen_runs():
+    return {seed: run_jespersen(seed) for seed in JESPERSEN_SEEDS}
+
+
 def test_analytizace_po_erozi_padu_se_ustali_slovosled(control):
     eroded, _ = run_obj_eroded(3)
     check_analytizace(eroded, control[0])
 
 
-def test_velky_cyklus_eroze_opis_priklonka_nova_koncovka():
-    world, history, kinds_500 = run_velky_cyklus(3)
-    check_velky_cyklus(world, history, kinds_500)
+def test_velky_cyklus_eroze_opis_priklonka_nova_koncovka(velky_cyklus_runs):
+    # Audit 101..120: 15/20, Wilson 95 % [0.531, 0.888], N=10, k=2, negativní kontrola (bez eroze PAST) 0/10.
+    evaluate_seeds(velky_cyklus_runs, lambda data: check_velky_cyklus(*data), k=2)
 
 
-def test_jespersenuv_cyklus_ne_ne_pas_pas():
-    world, history = run_jespersen(3)
-    check_jespersenuv_cyklus(world, history)
+def test_jespersenuv_cyklus_ne_ne_pas_pas(jespersen_runs):
+    # Audit 101..120: 8/20, Wilson 95 % [0.219, 0.613], N=19, k=1, negativní kontrola (bez oslabení záporky) 0/19.
+    # Poznámka do M7: ověřit, zda má embraced dosáhnout established dřív, než ho post vytlačí (NegationReduction od podílu 0,5).
+    evaluate_seeds(jespersen_runs, lambda data: check_jespersenuv_cyklus(*data), k=1)
 
 
 def test_bez_eroze_syntax_zustava_a_zvukove_metriky_drzi(control):

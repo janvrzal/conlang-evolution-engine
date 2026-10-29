@@ -127,3 +127,22 @@ def assert_k_of_n(
             ]
             msg += f" Selhání: {', '.join(details)}"
         raise AssertionError(msg)
+
+
+def evaluate_seeds(
+    runs_by_seed: Mapping[int, Any],
+    check_one: Callable[[Any], None],
+    k: int,
+) -> None:
+    """Vyhodnotí kontrolu check_one pro každý seed a ověří průchod alespoň k seedů."""
+    seeds = list(runs_by_seed.keys())
+    passed_seeds: list[int] = []
+    failures: dict[int, str] = {}
+    for seed in seeds:
+        data = runs_by_seed[seed]
+        passed, err = passes(check_one, data)
+        if passed:
+            passed_seeds.append(seed)
+        else:
+            failures[seed] = err or "AssertionError"
+    assert_k_of_n(seeds, passed_seeds, k=k, failures=failures)

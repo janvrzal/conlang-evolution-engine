@@ -14,8 +14,10 @@ from cee.v2.changes import DEFAULT_CHANGES
 from cee.v2.metrics import lexicon_profile, morphology_profile
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
+from tests.v2.gate_checks import evaluate_seeds
 
 SEEDS = (1, 2)
+M3_SEEDS = tuple(range(1, 11))
 
 
 def _run(seed, changes=DEFAULT_CHANGES):
@@ -31,8 +33,13 @@ def _run_without_leveling(seed):
 
 
 @pytest.fixture(scope="module")
-def runs():
-    return [_run(seed) for seed in SEEDS]
+def runs_by_seed():
+    return {seed: _run(seed) for seed in M3_SEEDS}
+
+
+@pytest.fixture(scope="module")
+def runs(runs_by_seed):
+    return [runs_by_seed[seed] for seed in SEEDS]
 
 
 @pytest.fixture(scope="module")
@@ -92,10 +99,10 @@ def test_sturtevantuv_paradox_zvuk_tvori_nepravidelnost_analogie_ji_opravuje(run
         check_sturtevantuv_paradox(world, unleveled)
 
 
-def test_morfologizace_vznikne_sama(runs):
+def test_morfologizace_vznikne_sama(runs_by_seed):
     """Plurál nesený jen kmenem: koncovka zanikla, alternace zůstala."""
-    for world, _ in runs:
-        check_morfologizace(world)
+    # Audit 101..120: 19/20 (101..140: 35/40, Wilson 95 % [0.739, 0.945]), N=10, k=4, negativní kontrola (bez SoundChange) 0/10.
+    evaluate_seeds(runs_by_seed, lambda run: check_morfologizace(run[0]), k=4)
 
 
 def test_produktivni_vzor_se_siri_a_caste_slova_si_drzi_nepravidelnost(runs):
@@ -107,9 +114,9 @@ def test_analogie_zasahuje_spis_vzacna_slova(runs):
         check_analogie(world, history)
 
 
-def test_zvukove_metriky_drzi_i_s_paradigmaty(runs):
-    for world, _ in runs:
-        check_zvukove_metriky(world)
+def test_zvukove_metriky_drzi_i_s_paradigmaty(runs_by_seed):
+    # Audit 101..120: 20/20, Wilson 95 % [0.839, 1.000] (před/po na 1..20 + 101..120: 39/40 vs. 37/40), N=10, k=5, negativní kontrola (bez Clarity a FunctionalLoad) 3/10.
+    evaluate_seeds(runs_by_seed, lambda run: check_zvukove_metriky(run[0]), k=5)
 
 
 def test_determinismus_s_morfologii():
