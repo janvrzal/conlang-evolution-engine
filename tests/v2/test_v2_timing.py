@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+import cee.v2.assessment as assessment_module
+import cee.v2.pressures.lexical as lexical_pressure_module
+import cee.v2.pressures.linguistic as linguistic_pressure_module
+import cee.v2.pressures.morphological as morphological_pressure_module
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
 from scripts.v2_timing import Timing, instrument, patched, timed_wrapper
@@ -156,3 +160,45 @@ def test_instrument_measures_inherited_methods_per_concrete_type() -> None:
     assert "scores" not in SecondPressure.__dict__
     assert ChangeBase.sites is original_sites
     assert PressureBase.scores is original_scores
+
+
+def test_optional_helper_instrumentation_restores_all_functions_on_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helpers = (
+        (assessment_module, "_assess_batch", "assessment._assess_batch"),
+        (linguistic_pressure_module, "_process_scores", "pressure.linguistic._process_scores"),
+        (morphological_pressure_module, "_form_scores", "pressure.morphological._form_scores"),
+        (lexical_pressure_module, "_clarity_map", "pressure.lexical._clarity_map"),
+    )
+    originals = []
+
+    def fake(*args, **kwargs):
+        return "ok"
+
+    for module, name, _ in helpers:
+        monkeypatch.setattr(module, name, fake)
+        originals.append(fake)
+
+    class FakeSimulation:
+        changes: list[object] = []
+        pressures: dict[str, tuple[tuple[object, float], ...]] = {}
+
+        def _innovate(self, year: float) -> None:
+            return None
+
+        def _transmit(self, year: float) -> None:
+            return None
+
+    simulation = FakeSimulation()
+    timing = Timing.create()
+    with pytest.raises(RuntimeError, match="expected"):
+        with instrument(simulation, timing, include_helpers=True):  # type: ignore[arg-type]
+            for index, (module, name, _) in enumerate(helpers):
+                assert getattr(module, name) is not originals[index]
+                assert getattr(module, name)() == "ok"
+            raise RuntimeError("expected")
+
+    for (module, name, label), original in zip(helpers, originals):
+        assert getattr(module, name) is original
+        assert timing.calls[label] == 1
