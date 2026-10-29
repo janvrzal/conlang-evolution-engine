@@ -135,10 +135,10 @@ class _Vocabulary:
     weights: npt.NDArray[np.float64]
 
 
-def _vocabulary(world: World, group_id: str) -> _Vocabulary:
+def _vocabulary_reference(world: World, group_id: str) -> _Vocabulary:
     code = world.groups[group_id].main_code
     state = code.phonology
-    cached = state.cache.get("vocabulary")
+    cached = state.cache.get("vocabulary-reference")
     if cached is not None and cached[0] == state.version:
         return cast(_Vocabulary, cached[1])
     assert world.table is not None
@@ -164,9 +164,27 @@ def _vocabulary(world: World, group_id: str) -> _Vocabulary:
     vocabulary = _Vocabulary(
         forms, frequency, owners, sum(frequency.values()) or 1.0, vowels, ids, morphemes, weights
     )
-    state.cache["vocabulary"] = (state.version, vocabulary)
+    state.cache["vocabulary-reference"] = (state.version, vocabulary)
     return vocabulary
 
+
+def _vocabulary(world: World, group_id: str) -> _Vocabulary:
+    """Vzorek s přírůstkovým dorovnáním změněných tvarů podle deníku."""
+    code = world.groups[group_id].main_code
+    state = code.phonology
+    cached = state.cache.get("vocabulary")
+    from cee.v2.language.assessment_index import AssessmentVocabularyIndex
+
+    item = state.cache.get("assessment-vocabulary-index")
+    index = (cast(AssessmentVocabularyIndex, item[1]) if item is not None
+             else AssessmentVocabularyIndex())
+    if cached is not None and cached[0] == state.version:
+        return cast(_Vocabulary, cached[1])
+    assert world.table is not None
+    result = index.sync(world, code)
+    state.cache["assessment-vocabulary-index"] = (state.version, index)
+    state.cache["vocabulary"] = (state.version, result)
+    return result
 
 def assess(world: World, group_id: str, variable_id: str, tick: int) -> ProcessAssessment:
     code = world.groups[group_id].main_code
@@ -208,7 +226,7 @@ def assess_many(world: World, group_ids: list[str], variable_id: str, tick: int)
     return cast(list[ProcessAssessment], found)
 
 
-def _assess_batch(world: World, group_ids: list[str], variable_id: str) -> list[ProcessAssessment]:
+def _assess_batch_reference(world: World, group_ids: list[str], variable_id: str) -> list[ProcessAssessment]:
     """Hodnocení procesu ve více skupinách jako operace nad maticí (skupiny × slova vzorku)."""
     table = world.table
     if table is None:
@@ -220,7 +238,7 @@ def _assess_batch(world: World, group_ids: list[str], variable_id: str) -> list[
     for position, group_id in enumerate(group_ids):
         by_rule.setdefault(world.groups[group_id].main_code.stress_rule, []).append(position)
     for rule, positions in sorted(by_rule.items()):
-        vocabularies = [_vocabulary(world, group_ids[position]) for position in positions]
+        vocabularies = [_vocabulary_reference(world, group_ids[position]) for position in positions]
         width = max((len(vocabulary.ids) for vocabulary in vocabularies), default=0)
         if width == 0:
             continue
@@ -248,6 +266,131 @@ def _assess_batch(world: World, group_ids: list[str], variable_id: str) -> list[
         marked_old = np.zeros((rows, width))
         marked_new[hit] = bank.values("markedness", changed[hit], compute)
         marked_old[hit] = bank.values("markedness", ids[hit], compute)
+        marked = (weights * (marked_new - marked_old)).sum(axis=1)
+        # Nový homofon: dvojice, která po změně zní stejně a předtím nezněla.
+        # Výplň řádků dostane různá záporná čísla, aby se za homofony nepočítala.
+        final = np.where(hit, changed, ids)
+        final = np.where(valid, final, -1 - np.arange(width)[None, :])
+        ordered = np.sort(final, axis=1)
+        collides = (ordered[:, 1:] == ordered[:, :-1]).any(axis=1) & hit.any(axis=1)
+        vowels = _shapes_vowels(process, table)
+        for row, (position, vocabulary) in enumerate(zip(positions, vocabularies)):
+            if mass[row] <= 0:
+                continue
+            group_id = group_ids[position]
+            merge = 0.0
+            if collides[row]:
+                values, counts = np.unique(final[row], return_counts=True)
+                for value in values[counts > 1].tolist():
+                    members = np.flatnonzero(final[row] == value).tolist()
+                    for index, first in enumerate(members):
+                        for second in members[index + 1 :]:
+                            if ids[row, first] != ids[row, second]:
+                                merge += _pair(
+                                    world, vocabulary.frequency, vocabulary.morphemes[first],
+                                    vocabulary.morphemes[second], group_id,
+                                )
+            before = {vowel for vowel, count in vocabulary.vowels.items() if count > 0}
+            after = before
+            if vowels:
+                vowels_after = Counter(vocabulary.vowels)
+                for index in np.flatnonzero(hit[row]).tolist():
+                    morpheme = vocabulary.morphemes[index]
+                    vowels_after.subtract(
+                        segment for segment in vocabulary.forms[morpheme] if table.is_vowel(segment)
+                    )
+                    vowels_after.update(
+                        segment for segment in bank.forms[int(changed[row, index])] if table.is_vowel(segment)
+                    )
+                after = {vowel for vowel, count in vowels_after.items() if count > 0}
+            results[position] = ProcessAssessment(
+                coverage=float(mass[row]) / vocabulary.total,
+                merge_mass=merge / vocabulary.total,
+                short_share=float(short[row]) / float(mass[row]),
+                markedness_delta=float(marked[row]) / float(mass[row]),
+                dispersion_delta=_dispersion_gain(process, before, after, table),
+            )
+    return results
+
+
+def _assess_batch(world: World, group_ids: list[str], variable_id: str) -> list[ProcessAssessment]:
+    """Hodnocení procesu ve více skupinách jako operace nad maticí (skupiny × slova vzorku)."""
+    table = world.table
+    if table is None:
+        return [NEUTRAL] * len(group_ids)
+    process = world.processes[variable_id]
+    bank = world.form_bank()
+    results: list[ProcessAssessment] = [NEUTRAL] * len(group_ids)
+    by_rule: dict[str, list[int]] = {}
+    for position, group_id in enumerate(group_ids):
+        by_rule.setdefault(world.groups[group_id].main_code.stress_rule, []).append(position)
+    for rule, positions in sorted(by_rule.items()):
+        vocabularies = [_vocabulary(world, group_ids[position]) for position in positions]
+        width = max((len(vocabulary.ids) for vocabulary in vocabularies), default=0)
+        if width == 0:
+            continue
+        rows = len(positions)
+        ids = np.full((rows, width), -1, dtype=np.int64)
+        weights = np.zeros((rows, width))
+        for row, vocabulary in enumerate(vocabularies):
+            ids[row, : len(vocabulary.ids)] = vocabulary.ids
+            weights[row, : len(vocabulary.ids)] = vocabulary.weights
+        valid = ids >= 0
+        from cee.v2.language.assessment_index import AssessmentVocabularyIndex, ProcessWordIndex
+
+        changed = np.full((rows, width), -1, dtype=np.int64)
+        old_lengths = np.zeros((rows, width), dtype=np.int64)
+        new_lengths = np.zeros((rows, width), dtype=np.int64)
+        marked_new = np.zeros((rows, width))
+        marked_old = np.zeros((rows, width))
+        dirty: list[tuple[int, int]] = []
+        indices: list[ProcessWordIndex] = []
+        for row, (position, vocabulary) in enumerate(zip(positions, vocabularies)):
+            state = world.groups[group_ids[position]].main_code.phonology
+            vocab_index = cast(AssessmentVocabularyIndex, state.cache["assessment-vocabulary-index"][1])
+            key = ("assessment-words", variable_id, rule)
+            entry = state.cache.get(key)
+            word_index = cast(ProcessWordIndex, entry[1]) if entry is not None else ProcessWordIndex()
+            indices.append(word_index)
+            state.cache[key] = (state.version, word_index)
+            if word_index.generation != vocab_index.generation or word_index.cursor > len(vocab_index.changes):
+                word_index.reset(len(vocabulary.ids), vocab_index.generation)
+                dirty.extend((row, column) for column in range(len(vocabulary.ids)))
+            else:
+                dirty.extend((row, column) for column in sorted(set(vocab_index.changes[word_index.cursor:])))
+            word_index.cursor = len(vocab_index.changes)
+        if dirty:
+            old = np.array([ids[row, column] for row, column in dirty], dtype=np.int64)
+            new = bank.process_table(process, cast(StressRule, rule)).results(old)
+            hit_dirty = new >= 0
+            old_len = bank.lengths(old)
+            new_len = np.zeros(len(old), dtype=np.int64)
+            marked_before = np.zeros(len(old))
+            marked_after = np.zeros(len(old))
+            if hit_dirty.any():
+                new_len[hit_dirty] = bank.lengths(new[hit_dirty])
+                marked_before[hit_dirty] = bank.values("markedness", old[hit_dirty], lambda f: markedness(f, table))
+                marked_after[hit_dirty] = bank.values("markedness", new[hit_dirty], lambda f: markedness(f, table))
+            for i, (row, column) in enumerate(dirty):
+                word_index = indices[row]
+                word_index.changed[column] = new[i]
+                word_index.old_lengths[column] = old_len[i]
+                word_index.new_lengths[column] = new_len[i]
+                word_index.marked_old[column] = marked_before[i]
+                word_index.marked_new[column] = marked_after[i]
+        for row, word_index in enumerate(indices):
+            size = len(word_index.changed)
+            changed[row, :size] = word_index.changed
+            old_lengths[row, :size] = word_index.old_lengths
+            new_lengths[row, :size] = word_index.new_lengths
+            marked_old[row, :size] = word_index.marked_old
+            marked_new[row, :size] = word_index.marked_new
+        hit = changed >= 0
+        if not hit.any():
+            continue
+        mass = (weights * hit).sum(axis=1)
+        short = (weights * (hit & (new_lengths <= 2) & (new_lengths < old_lengths))).sum(axis=1)
+
         marked = (weights * (marked_new - marked_old)).sum(axis=1)
         # Nový homofon: dvojice, která po změně zní stejně a předtím nezněla.
         # Výplň řádků dostane různá záporná čísla, aby se za homofony nepočítala.
