@@ -6,7 +6,7 @@ Ve světě M1 vracejí nulu a jeho kalibrace zůstává beze změny.
 
 from __future__ import annotations
 
-from typing import Callable, Mapping, cast
+from typing import Any, Callable, Mapping, cast
 
 import numpy as np
 
@@ -43,27 +43,56 @@ class LexicalClarity(Pressure):
         result = np.zeros_like(batch.freqs)
         if world.table is None:
             return result
-        per_group: dict[int, Callable[[str, str], float]] = {}
         # Skupiny, ke kterým varianta nedolehla, se nehodnotí: s nulovým
         # vstupem ji selekce stejně nevybere.
         reached = (batch.freqs > 0) | (batch.heard > 0)
-        for row, variable_id in enumerate(batch.variable_ids):
+        candidate_indices = np.full(
+            (batch.freqs.shape[0], batch.freqs.shape[2]), -1, dtype=np.int64
+        )
+        candidate_pairs: list[tuple[str, str]] = []
+        for row, (variable_id, variants) in enumerate(zip(batch.variable_ids, batch.slots)):
             concept = variable_id.split(":", 1)[1]
-            for slot, variant in enumerate(batch.slots[row]):
+            for slot, variant in enumerate(variants):
                 if variant is None:
                     continue
                 morpheme = world.variants[variant].payload.get("morpheme")
                 if not isinstance(morpheme, str):
                     continue
-                for column in np.flatnonzero(reached[row, :, slot]).tolist():
-                    scores = per_group.get(column)
-                    if scores is None:
-                        scores = per_group[column] = _clarity_map(batch, batch.group_ids[column])
-                    result[row, column, slot] = scores(morpheme, concept)
+                candidate_indices[row, slot] = len(candidate_pairs)
+                candidate_pairs.append((morpheme, concept))
+
+        valid_candidates = candidate_indices >= 0
+        per_group: dict[str, _ClarityScorer] = {}
+        for column, group_id in enumerate(batch.group_ids):
+            rows, slots = np.nonzero(valid_candidates & reached[:, column, :])
+            if not len(rows):
+                continue
+            scorer = per_group.get(group_id)
+            if scorer is None:
+                scorer = per_group[group_id] = _clarity_map(batch, group_id)
+            candidate_ids = candidate_indices[rows, slots]
+            pairs = [candidate_pairs[int(index)] for index in candidate_ids]
+            values = scorer.scores_many(pairs)
+            result[rows, column, slots] = values
         return result
 
 
-def _clarity_map(batch: PressureBatch, group_id: str) -> Callable[[str, str], float]:
+class _ClarityScorer:
+    """Volání skóre pro jednu skupinu nad sdíleným indexem."""
+
+    def __init__(self, index: LexicalClarityIndex, world: Any, code: Any):
+        self.index = index
+        self.world = world
+        self.code = code
+
+    def __call__(self, morpheme: str, concept: str) -> float:
+        return self.index.score(self.world, self.code, morpheme, concept)
+
+    def scores_many(self, pairs: list[tuple[str, str]]) -> list[float]:
+        return self.index.scores_many(self.world, self.code, pairs)
+
+
+def _clarity_map(batch: PressureBatch, group_id: str) -> _ClarityScorer:
     """Průběžná mapa jasnosti pro jednu skupinu."""
     world = batch.world
     code = world.groups[group_id].main_code
@@ -75,7 +104,7 @@ def _clarity_map(batch: PressureBatch, group_id: str) -> Callable[[str, str], fl
     else:
         index = cast(LexicalClarityIndex, stored[1])
     index.sync(world, code)
-    return lambda morpheme, concept: index.score(world, code, morpheme, concept)
+    return _ClarityScorer(index, world, code)
 
 
 def _clarity_map_reference(batch: PressureBatch, group_id: str) -> Callable[[str, str], float]:

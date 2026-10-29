@@ -153,3 +153,9 @@ class LexicalClarityIndex:
         self.by_form.setdefault(form, set()).add(key)
         self.by_root.setdefault(morpheme, set()).add(key)
         return value
+
+    def scores_many(
+        self, world: World, code: Code, pairs: list[Pair]
+    ) -> list[float]:
+        """Načte skóre více dvojic ve stejném pořadí, včetně duplicit."""
+        return [self.score(world, code, morpheme, concept) for morpheme, concept in pairs]
