@@ -101,7 +101,7 @@ def cell_units(world: World, code: Code, entry: GrammaticalFunction) -> list[str
     ]
 
 
-def weakness(world: World, code: Code, function: str) -> float:
+def _weakness_reference(world: World, code: Code, function: str) -> float:
     """Podíl tvarů buňky, které splynuly s citačním tvarem (0 = koncovka drží).
 
     Funkce bez buňky v paradigmatu má slabost 1: koncovkou ji jazyk
@@ -112,14 +112,30 @@ def weakness(world: World, code: Code, function: str) -> float:
     entry = catalog().get(function)
     if entry is None or entry.cell is None:
         return 0.0
+    units = cell_units(world, code, entry)
+    merged = sum(world.form_of(code, unit) == citation_form(world, code, unit) for unit in units)
+    value = merged / len(units) if units else 1.0
+    return value
+
+
+
+def weakness(world: World, code: Code, function: str) -> float:
+    """Podíl splynulých tvarů v gramatické buňce, průběžně udržovaný."""
+    from cee.v2.language.morphology_index import WeaknessIndex
+
+    entry = catalog().get(function)
+    if entry is None or entry.cell is None:
+        return 0.0
     state = code.phonology
     key = ("weakness", function)
     cached = state.cache.get(key)
     if cached is not None and cached[0] == state.version:
         return cast(float, cached[1])
-    units = cell_units(world, code, entry)
-    merged = sum(world.form_of(code, unit) == citation_form(world, code, unit) for unit in units)
-    value = merged / len(units) if units else 1.0
+    held = state.cache.get("weakness-index")
+    index = cast(WeaknessIndex, held[1]) if held else WeaknessIndex()
+    state.cache["weakness-index"] = (state.version, index)
+    index.sync(world, code)
+    value = index.value((entry.word_class, entry.cell)) if entry.word_class is not None else 1.0
     state.cache[key] = (state.version, value)
     return value
 

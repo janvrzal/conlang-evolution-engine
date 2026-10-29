@@ -45,7 +45,15 @@ class AnalogicalChange(Change):
         cached = state.cache.get(key)
         if cached is not None and cached[0] == state.version:
             return cast(dict[str, FormChange], cached[1])
-        found = self.candidates(context)
+        if self.kind in ("leveling", "extension"):
+            from cee.v2.language.morphology_index import MorphologyCandidateIndex
+
+            entry = state.cache.get("morphology-candidate-index")
+            index = cast(MorphologyCandidateIndex, entry[1]) if entry else MorphologyCandidateIndex()
+            found = index.sync(context, self.kind)
+            state.cache["morphology-candidate-index"] = (state.version, index)
+        else:
+            found = self.candidates(context)
         state.cache[key] = (state.version, found)
         return found
 
@@ -78,12 +86,18 @@ class Leveling(AnalogicalChange):
     kind = "leveling"
     base_rate = 0.004
 
+    def _candidate(self, context: InnovationContext, unit: str) -> FormChange | None:
+        if context.world.unit_of(context.code, unit).stem != morphology.citation_form(
+            context.world, context.code, unit
+        ):
+            return FormChange("level", unit)
+        return None
+
     def candidates(self, context: InnovationContext) -> dict[str, FormChange]:
-        world, code = context.world, context.code
         found = {}
         for unit in _word_units(context):
-            if world.unit_of(code, unit).stem != morphology.citation_form(world, code, unit):
-                change = FormChange("level", unit)
+            change = self._candidate(context, unit)
+            if change is not None:
                 found[Variable("form", change.key).id] = change
         return found
 
@@ -98,20 +112,27 @@ class Extension(AnalogicalChange):
     kind = "extension"
     base_rate = 0.004
 
-    def candidates(self, context: InnovationContext) -> dict[str, FormChange]:
+    def _candidate(
+        self, context: InnovationContext, unit: str, stats: morphology.ClassStats
+    ) -> FormChange | None:
         world, code = context.world, context.code
-        stats = morphology.class_stats(world, code)
+        morpheme = world.morphemes[unit]
+        assert morpheme.word_class is not None and morpheme.cell is not None
+        productive = stats.productive(morpheme.word_class, morpheme.cell)
+        if productive is None or not stats.endings.get(productive):
+            return None
+        current = world.unit_of(code, unit)
+        syncretic = current.form == morphology.citation_form(world, code, unit)
+        if current.exponent != productive or syncretic:
+            return FormChange("extend", unit, productive)
+        return None
+
+    def candidates(self, context: InnovationContext) -> dict[str, FormChange]:
+        stats = morphology.class_stats(context.world, context.code)
         found = {}
         for unit in _word_units(context):
-            morpheme = world.morphemes[unit]
-            assert morpheme.word_class is not None and morpheme.cell is not None
-            productive = stats.productive(morpheme.word_class, morpheme.cell)
-            if productive is None or not stats.endings.get(productive):
-                continue
-            current = world.unit_of(code, unit)
-            syncretic = current.form == morphology.citation_form(world, code, unit)
-            if current.exponent != productive or syncretic:
-                change = FormChange("extend", unit, productive)
+            change = self._candidate(context, unit, stats)
+            if change is not None:
                 found[Variable("form", change.key).id] = change
         return found
 
