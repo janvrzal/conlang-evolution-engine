@@ -21,6 +21,7 @@ from cee.v2.world import World
 
 _MILESTONES = (0.1, 0.5, 0.9)
 _EMPTY = Distribution((), np.zeros(0))
+_INNOVATION_CHANGE_DOMAIN = "innovation-change"
 
 
 @dataclass(frozen=True)
@@ -99,7 +100,7 @@ class Simulation:
     def _configure(self, changes: Sequence[Change], events: Sequence[WorldEvent]) -> None:
         self.changes = tuple(changes)
         self._change_keys = np.array(
-            [stable_int("innovation-change-34", change.kind) for change in self.changes], dtype=np.uint64
+            [stable_int(_INNOVATION_CHANGE_DOMAIN, change.kind) for change in self.changes], dtype=np.uint64
         )
         self.events = tuple(events)
         self.checkpoints: dict[int, Checkpoint] = {}
@@ -343,7 +344,7 @@ class Simulation:
                 context.code.id,
             )
         )
-        change_key = np.uint64(stable_int("innovation-change-34", change.kind))
+        change_key = np.uint64(stable_int(_INNOVATION_CHANGE_DOMAIN, change.kind))
         count = int(
             hash_poisson(
                 np.array([group_key], dtype=np.uint64),
