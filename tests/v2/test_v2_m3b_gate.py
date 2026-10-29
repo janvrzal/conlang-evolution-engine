@@ -20,16 +20,6 @@ ORIGINS = {
 }
 
 
-@pytest.fixture(scope="module")
-def runs():
-    result = []
-    for seed in SEEDS:
-        world = village_grid(8, seed=seed, phonology=True, morphology=True, semantics=True)
-        Simulation(world).run(3000)
-        result.append(world)
-    return result
-
-
 def _dominant(world, group_id, variable_id):
     return world.variants[world.distribution(group_id, variable_id).dominant()[0]]
 
@@ -39,39 +29,15 @@ def _lexical(world):
             if variable.kind == "lexical"]
 
 
-def test_metrika_1_retence_zakladni_slovni_zasoby_v_pasmu(runs):
-    for world in runs:
-        per_millennium = statistics.mean(retention(world, group) for group in world.group_ids()) ** (1 / 3)
-        assert 0.70 <= per_millennium <= 0.95
+def run_m3b(seed: int):
+    world = village_grid(8, seed=seed, phonology=True, morphology=True, semantics=True)
+    Simulation(world).run(3000)
+    return world
 
 
-def test_metrika_2_caste_pojmy_se_nahrazuji_pomaleji(runs):
-    frequent, rare = [], []
-    for world in runs:
-        for group in world.group_ids():
-            for variable_id, concept in _lexical(world):
-                replaced = _dominant(world, group, variable_id).origin.change is not None
-                (frequent if world.concept_frequency(concept) >= 0.5 else rare).append(replaced)
-    assert statistics.mean(frequent) < statistics.mean(rare) / 2
-
-
-def test_nova_slova_maji_doloditelny_puvod(runs):
-    origins = []
-    for world in runs:
-        for group in world.group_ids():
-            for variable_id, _ in _lexical(world):
-                variant = _dominant(world, group, variable_id)
-                if variant.origin.change is not None:
-                    origins.append(variant.payload["origin"])
-    assert origins and set(origins) <= ORIGINS
-    motivated = sum(origin in {"shift", "conversion", "derivation", "compound"} for origin in origins)
-    assert motivated / len(origins) >= 0.6
-    assert origins.count("coinage") / len(origins) < 0.3
-
-
-def test_erodovana_slova_se_nahrazuji_casteji():
+def run_eroded(seed: int = 7):
     """Kontrolovaný pokus: polovině pojmů se zděděné slovo zkrátí na dvě hlásky."""
-    world = village_grid(6, seed=7, phonology=True, morphology=True, semantics=True)
+    world = village_grid(6, seed=seed, phonology=True, morphology=True, semantics=True)
     eroded = set()
     for index, (variable_id, concept) in enumerate(_lexical(world)):
         if index % 2:
@@ -86,6 +52,51 @@ def test_erodovana_slova_se_nahrazuji_casteji():
             group.main_code.forms.set(morpheme, UnitForm(form[:2], None, None))
             group.main_code.phonology.version += 1
     Simulation(world).run(1500)
+    return world, eroded
+
+
+def _taboo_replacements(taboo, seed: int = 5):
+    world = village_grid(4, seed=seed, phonology=True, morphology=True, semantics=True, taboo=taboo)
+    simulation = Simulation(world)
+    simulation.run(2500)
+    return {event["variant"] for event in simulation.history.of_kind("established")
+            if event["variable"] == "lexical:dog"}
+
+
+def run_taboo_pair(seed: int = 5):
+    return _taboo_replacements(("dog",), seed=seed), _taboo_replacements((), seed=seed)
+
+
+def check_metrika_1(world):
+    per_millennium = statistics.mean(retention(world, group) for group in world.group_ids()) ** (1 / 3)
+    assert 0.70 <= per_millennium <= 0.95
+
+
+def check_metrika_2(worlds_seq):
+    frequent, rare = [], []
+    for world in worlds_seq:
+        for group in world.group_ids():
+            for variable_id, concept in _lexical(world):
+                replaced = _dominant(world, group, variable_id).origin.change is not None
+                (frequent if world.concept_frequency(concept) >= 0.5 else rare).append(replaced)
+    assert statistics.mean(frequent) < statistics.mean(rare) / 2
+
+
+def check_nova_slova(worlds_seq):
+    origins = []
+    for world in worlds_seq:
+        for group in world.group_ids():
+            for variable_id, _ in _lexical(world):
+                variant = _dominant(world, group, variable_id)
+                if variant.origin.change is not None:
+                    origins.append(variant.payload["origin"])
+    assert origins and set(origins) <= ORIGINS
+    motivated = sum(origin in {"shift", "conversion", "derivation", "compound"} for origin in origins)
+    assert motivated / len(origins) >= 0.6
+    assert origins.count("coinage") / len(origins) < 0.3
+
+
+def check_erodovana_slova(world, eroded):
     hit, control = [], []
     for group in world.group_ids():
         for variable_id, _ in _lexical(world):
@@ -94,24 +105,49 @@ def test_erodovana_slova_se_nahrazuji_casteji():
     assert statistics.mean(hit) > 2 * statistics.mean(control)
 
 
-def test_tabu_vyvola_kolobeh_opisu():
-    def replacements(taboo):
-        world = village_grid(4, seed=5, phonology=True, morphology=True, semantics=True, taboo=taboo)
-        simulation = Simulation(world)
-        simulation.run(2500)
-        return {event["variant"] for event in simulation.history.of_kind("established")
-                if event["variable"] == "lexical:dog"}
+def check_tabu(with_taboo, without_taboo):
+    assert len(with_taboo) >= 2
+    assert not without_taboo
 
-    assert len(replacements(("dog",))) >= 2
-    assert not replacements(())
+
+def check_zvukove_metriky(world):
+    for group in world.group_ids():
+        profile = lexicon_profile(world, group)
+        assert 3.0 <= profile.mean_length <= 8.0
+        assert profile.homophony < 0.05
+
+
+@pytest.fixture(scope="module")
+def runs():
+    return [run_m3b(seed) for seed in SEEDS]
+
+
+def test_metrika_1_retence_zakladni_slovni_zasoby_v_pasmu(runs):
+    for world in runs:
+        check_metrika_1(world)
+
+
+def test_metrika_2_caste_pojmy_se_nahrazuji_pomaleji(runs):
+    check_metrika_2(runs)
+
+
+def test_nova_slova_maji_doloditelny_puvod(runs):
+    check_nova_slova(runs)
+
+
+def test_erodovana_slova_se_nahrazuji_casteji():
+    world, eroded = run_eroded(7)
+    check_erodovana_slova(world, eroded)
+
+
+def test_tabu_vyvola_kolobeh_opisu():
+    with_taboo, without_taboo = run_taboo_pair(5)
+    check_tabu(with_taboo, without_taboo)
 
 
 def test_zvukove_metriky_drzi_i_s_lexikalni_zmenou(runs):
     for world in runs:
-        for group in world.group_ids():
-            profile = lexicon_profile(world, group)
-            assert 3.0 <= profile.mean_length <= 8.0
-            assert profile.homophony < 0.05
+        check_zvukove_metriky(world)
 
 
 def test_determinismus_s_vyznamem():

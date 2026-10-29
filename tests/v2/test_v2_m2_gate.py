@@ -26,42 +26,35 @@ SEEDS = (1, 2, 3)
 DOMAIN = {change.kind: change.domain for change in SOUND_CHANGES}
 
 
-@pytest.fixture(scope="module")
-def runs():
-    """Pro každý seed svět, historii a profily slovní zásoby po 1 000 letech."""
-    result = []
-    for seed in SEEDS:
-        world = village_grid(10, seed=seed, phonology=True)
-        simulation = Simulation(world)
-        profiles = []
-        for year in (1000, 2000, 3000):
-            simulation.run(year)
-            profiles.append([lexicon_profile(world, group) for group in world.group_ids()])
-        result.append((world, simulation.history, profiles))
-    return result
+def run_phonology(seed: int):
+    """Pro daný seed svět, historii a profily slovní zásoby po 1 000 letech."""
+    world = village_grid(10, seed=seed, phonology=True)
+    simulation = Simulation(world)
+    profiles = []
+    for year in (1000, 2000, 3000):
+        simulation.run(year)
+        profiles.append([lexicon_profile(world, group) for group in world.group_ids()])
+    return world, simulation.history, profiles
 
 
-def test_metrika_3_delka_slov_zustava_v_pasmu(runs):
-    for _, _, profiles in runs:
-        for snapshot in profiles:
-            for profile in snapshot:
-                assert 3.0 <= profile.mean_length <= 8.0
+def check_metrika_3(profiles):
+    for snapshot in profiles:
+        for profile in snapshot:
+            assert 3.0 <= profile.mean_length <= 8.0
 
 
-def test_metrika_4_inventare_lezi_v_pasmu_realnych_jazyku(runs):
-    for _, _, profiles in runs:
-        for profile in profiles[-1]:
-            assert CONSONANT_BAND[0] <= profile.consonants <= CONSONANT_BAND[1]
-            assert VOWEL_BAND[0] <= profile.vowels <= VOWEL_BAND[1]
+def check_metrika_4(profiles):
+    for profile in profiles[-1]:
+        assert CONSONANT_BAND[0] <= profile.consonants <= CONSONANT_BAND[1]
+        assert VOWEL_BAND[0] <= profile.vowels <= VOWEL_BAND[1]
 
 
-def test_metrika_5_homofonie_zustava_nizka(runs):
-    for _, _, profiles in runs:
-        for profile in profiles[-1]:
-            assert profile.homophony < 0.05
+def check_metrika_5(profiles):
+    for profile in profiles[-1]:
+        assert profile.homophony < 0.05
 
 
-def test_metrika_6_ustalene_zmeny_odpovidaji_prioru_a_nejsou_jednostranne(runs):
+def check_metrika_6(runs):
     """Legacy jádro ustálilo jen samohláskové změny; tady nesmí převážit žádná doména."""
     domains: Counter[str] = Counter()
     families: Counter[str] = Counter()
@@ -81,7 +74,7 @@ def test_metrika_6_ustalene_zmeny_odpovidaji_prioru_a_nejsou_jednostranne(runs):
     assert hellinger(dict(domains), dict(prior)) < 0.25
 
 
-def test_jazyky_z_ruznych_seedu_se_lisi(runs):
+def check_jazyky_z_ruznych_seedu_se_lisi(runs):
     """Bez nahodilosti spuštění by každý jazyk prošel stejnými změnami."""
     histories = [
         {world.processes[variable].key for variable in established_processes(history)}
@@ -93,17 +86,50 @@ def test_jazyky_z_ruznych_seedu_se_lisi(runs):
             assert overlap < 0.6
 
 
+def check_zvukove_zmeny_se_siri(world, history):
+    groups_per_change = Counter(
+        event["variable"] for event in history.of_kind("established")
+        if str(event["variable"]).startswith("process:")
+    )
+    assert groups_per_change and statistics.median(groups_per_change.values()) >= 2
+    closed = history.of_kind("process_closed")
+    relics = sum(event["relics"] for event in closed)
+    rewritten = sum(event["restructured"] for event in closed)
+    assert relics + rewritten > 0 and 0.01 < relics / (relics + rewritten) < 0.15
+
+
+@pytest.fixture(scope="module")
+def runs():
+    """Pro každý seed svět, historii a profily slovní zásoby po 1 000 letech."""
+    return [run_phonology(seed) for seed in SEEDS]
+
+
+def test_metrika_3_delka_slov_zustava_v_pasmu(runs):
+    for _, _, profiles in runs:
+        check_metrika_3(profiles)
+
+
+def test_metrika_4_inventare_lezi_v_pasmu_realnych_jazyku(runs):
+    for _, _, profiles in runs:
+        check_metrika_4(profiles)
+
+
+def test_metrika_5_homofonie_zustava_nizka(runs):
+    for _, _, profiles in runs:
+        check_metrika_5(profiles)
+
+
+def test_metrika_6_ustalene_zmeny_odpovidaji_prioru_a_nejsou_jednostranne(runs):
+    check_metrika_6(runs)
+
+
+def test_jazyky_z_ruznych_seedu_se_lisi(runs):
+    check_jazyky_z_ruznych_seedu_se_lisi(runs)
+
+
 def test_zvukove_zmeny_se_siri_arealne_a_maji_male_vyjimky(runs):
     for world, history, _ in runs:
-        groups_per_change = Counter(
-            event["variable"] for event in history.of_kind("established")
-            if str(event["variable"]).startswith("process:")
-        )
-        assert statistics.median(groups_per_change.values()) >= 2
-        closed = history.of_kind("process_closed")
-        relics = sum(event["relics"] for event in closed)
-        rewritten = sum(event["restructured"] for event in closed)
-        assert 0.01 < relics / (relics + rewritten) < 0.15
+        check_zvukove_zmeny_se_siri(world, history)
 
 
 def test_determinismus_s_fonologii():

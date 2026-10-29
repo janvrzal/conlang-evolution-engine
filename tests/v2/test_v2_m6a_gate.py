@@ -45,60 +45,86 @@ def _course(seed, **options):
     return world, course, len(established)
 
 
+def run_diglossia_courses(seed: int):
+    return {
+        "school": _course(seed),
+        "none": _course(seed, school=None),
+        "frozen": _course(seed, printing=False),
+    }
+
+
+def check_s4_skola(courses):
+    _, course, _ = courses["school"]
+    assert course[1000][0] < course[1475][0]  # diglosie: psaný kód stojí, řeč ne
+    assert course[2000][0] < course[1475][0] / 3
+    assert course[2500][0] < course[1475][0] / 3
+
+
+def check_s4_bez_skoly(courses):
+    _, course, _ = courses["none"]
+    assert course[1000][0] < course[1475][0] < course[2000][0] < course[2500][0]
+
+
+def check_skola_sjednoti(courses):
+    _, school, changes = courses["school"]
+    _, none, control = courses["none"]
+    assert school[2500][1] < none[2500][1] / 5  # dialekty splynou se standardem
+    assert changes > control / 5  # norma se obnovuje podle řeči elity
+
+
+def check_skola_zmrazena(courses):
+    _, _, frozen = courses["frozen"]
+    _, _, printed = courses["school"]
+    assert frozen < printed / 3
+
+
+def run_codification(seed: int = 4):
+    world = village_grid(3, seed=seed, syntax=True, semantics=True)
+    simulation = Simulation(world, events=[Codification(100.0, "v00-01", tuple(world.group_ids()))])
+    simulation.run(100.0)
+    written = WRITTEN.replace("v00-02", "v00-01")
+    before = {variable: world.distribution(written, variable)
+              for variable in sorted(world.variables)}
+    simulation.run(800.0)
+    return world, simulation, before, written
+
+
+def check_psany_kod_bez_tisku_stoji(world, simulation, before, written):
+    for variable, distribution in before.items():
+        if distribution is not None:
+            assert world.distribution(written, variable).variants == distribution.variants
+    assert all(len(snapshot.group_ids) == 3 for snapshot in simulation.history.snapshots)
+
+
 @pytest.fixture(scope="module")
 def runs():
-    return {
-        seed: {
-            "school": _course(seed),
-            "none": _course(seed, school=None),
-            "frozen": _course(seed, printing=False),
-        }
-        for seed in SEEDS
-    }
+    return {seed: run_diglossia_courses(seed) for seed in SEEDS}
 
 
 def test_s4_rozdil_roste_do_skoly_pak_se_zmensuje(runs):
     for seed in SEEDS:
-        _, course, _ = runs[seed]["school"]
-        assert course[1000][0] < course[1475][0]  # diglosie: psaný kód stojí, řeč ne
-        assert course[2000][0] < course[1475][0] / 3
-        assert course[2500][0] < course[1475][0] / 3
+        check_s4_skola(runs[seed])
 
 
 def test_s4_bez_skoly_rozdil_roste_dal(runs):
     for seed in SEEDS:
-        _, course, _ = runs[seed]["none"]
-        assert course[1000][0] < course[1475][0] < course[2000][0] < course[2500][0]
+        check_s4_bez_skoly(runs[seed])
 
 
 def test_skola_sjednoti_dialekty_ale_jazyk_se_meni_dal(runs):
     for seed in SEEDS:
-        _, school, changes = runs[seed]["school"]
-        _, none, control = runs[seed]["none"]
-        assert school[2500][1] < none[2500][1] / 5  # dialekty splynou se standardem
-        assert changes > control / 5  # norma se obnovuje podle řeči elity
+        check_skola_sjednoti(runs[seed])
 
 
 def test_skola_se_zmrazenou_normou_zmenu_zastavi(runs):
     """Kontrafaktuál: masová škola bez tisku drží řeč u jazyka z doby kodifikace."""
     for seed in SEEDS:
-        _, _, frozen = runs[seed]["frozen"]
-        _, _, printed = runs[seed]["school"]
-        assert frozen < printed / 3
+        check_skola_zmrazena(runs[seed])
 
 
 def test_psany_kod_bez_tisku_stoji():
-    world = village_grid(3, seed=4, syntax=True, semantics=True)
-    simulation = Simulation(world, events=[Codification(100.0, "v00-01", tuple(world.group_ids()))])
-    simulation.run(100.0)
-    before = {variable: world.distribution(WRITTEN.replace("v00-02", "v00-01"), variable)
-              for variable in sorted(world.variables)}
-    simulation.run(800.0)
-    written = WRITTEN.replace("v00-02", "v00-01")
-    for variable, distribution in before.items():
-        if distribution is not None:
-            assert world.distribution(written, variable).variants == distribution.variants
-    assert all(len(snapshot.group_ids) == 3 for snapshot in simulation.history.snapshots)
+    world, simulation, before, written = run_codification(4)
+    check_psany_kod_bez_tisku_stoji(world, simulation, before, written)
 
 
 def test_determinismus_s_pismem():

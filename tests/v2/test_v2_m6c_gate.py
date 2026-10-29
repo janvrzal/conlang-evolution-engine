@@ -11,9 +11,8 @@ from cee.v2.scenarios import known_tree
 from cee.v2.simulation import Simulation
 
 
-@pytest.fixture(scope="module", params=(1, 2))
-def run(request):
-    world, events = known_tree(request.param)
+def run_known_tree(seed: int):
+    world, events = known_tree(seed)
     simulation = Simulation(world, events=events)
     simulation.run(4000)
     return simulation
@@ -23,7 +22,7 @@ def _cluster(groups):
     return {group[0] for group in groups}
 
 
-def test_strom_jazyku_odpovida_historii_rozpadu(run):
+def check_strom_odpovida(run):
     splits = run.history.of_kind("language_split")
     assert [_cluster(event["groups"]) for event in splits] in ([{"c"}, {"b"}], [{"c"}, {"a"}])
     first, second = splits
@@ -37,7 +36,20 @@ def test_strom_jazyku_odpovida_historii_rozpadu(run):
     assert sorted("".join(sorted(_cluster(groups))) for groups in final.values()) == ["a", "b", "c"]
 
 
-def test_strom_je_stabilni(run):
+def check_strom_stabilni(run):
     assert len(run.history.of_kind("language_split")) == 2
     assert not run.history.of_kind("language_ended")
     assert len(run.history.of_kind("language_emerged")) == 1
+
+
+@pytest.fixture(scope="module", params=(1, 2))
+def run(request):
+    return run_known_tree(request.param)
+
+
+def test_strom_jazyku_odpovida_historii_rozpadu(run):
+    check_strom_odpovida(run)
+
+
+def test_strom_je_stabilni(run):
+    check_strom_stabilni(run)

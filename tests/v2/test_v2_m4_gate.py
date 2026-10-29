@@ -41,26 +41,40 @@ def _kinds(world, function):
     return Counter(syntax.dominant(world, group, function).kind for group in world.group_ids())
 
 
-@pytest.fixture(scope="module")
-def control():
-    world, simulation = _experiment()
+def run_control(seed: int = 3):
+    world, simulation = _experiment(seed=seed)
     simulation.run(1500)
     return world, simulation.history
 
 
-def test_analytizace_po_erozi_padu_se_ustali_slovosled(control):
-    eroded, simulation = _experiment(cell="OBJ")
+def run_obj_eroded(seed: int = 3):
+    eroded, simulation = _experiment(seed=seed, cell="OBJ")
     simulation.run(1500)
-    assert _kinds(eroded, "ORDER")["fixed"] >= 5
-    assert _kinds(control[0], "ORDER")["free"] >= 5
+    return eroded, simulation.history
 
 
-def test_velky_cyklus_eroze_opis_priklonka_nova_koncovka():
-    world, simulation = _experiment(cell="PAST")
+def run_velky_cyklus(seed: int = 3):
+    world, simulation = _experiment(seed=seed, cell="PAST")
     simulation.run(500)
-    assert _kinds(world, "PAST")["periphrastic"] >= 4  # opis převzal funkci
+    kinds_500 = _kinds(world, "PAST")
     simulation.run(2500)
-    events = simulation.history.of_kind("grammaticalized")
+    return world, simulation.history, kinds_500
+
+
+def run_jespersen(seed: int = 3):
+    world, simulation = _experiment(seed=seed, particle="not")
+    simulation.run(3000)
+    return world, simulation.history
+
+
+def check_analytizace(eroded, control_world):
+    assert _kinds(eroded, "ORDER")["fixed"] >= 5
+    assert _kinds(control_world, "ORDER")["free"] >= 5
+
+
+def check_velky_cyklus(world, history, kinds_500):
+    assert kinds_500["periphrastic"] >= 4  # opis převzal funkci
+    events = history.of_kind("grammaticalized")
     groups = {event["group"] for event in events}
     assert len(groups) >= 4  # opis srostl v novou koncovku
     assert {event["source"] for event in events} <= set(PATHWAYS["PAST"])
@@ -70,12 +84,10 @@ def test_velky_cyklus_eroze_opis_priklonka_nova_koncovka():
     assert weakness < 0.4  # nová koncovka minulý čas zase rozlišuje
 
 
-def test_jespersenuv_cyklus_ne_ne_pas_pas():
-    world, simulation = _experiment(particle="not")
-    simulation.run(3000)
+def check_jespersenuv_cyklus(world, history):
     established = [
         syntax.construction_of(world, event["variant"]).kind
-        for event in simulation.history.of_kind("established")
+        for event in history.of_kind("established")
         if event["variable"] == "construction:NEG"
     ]
     assert "embraced" in established and "post" in established
@@ -83,14 +95,37 @@ def test_jespersenuv_cyklus_ne_ne_pas_pas():
     assert _kinds(world, "NEG")["post"] >= 4
 
 
-def test_bez_eroze_syntax_zustava_a_zvukove_metriky_drzi(control):
-    world, _ = control
-    assert _kinds(world, "PAST")["synthetic"] >= 5
-    assert _kinds(world, "NEG")["pre"] >= 5
-    for group in world.group_ids():
-        profile = lexicon_profile(world, group)
+def check_bez_eroze(control_world):
+    assert _kinds(control_world, "PAST")["synthetic"] >= 5
+    assert _kinds(control_world, "NEG")["pre"] >= 5
+    for group in control_world.group_ids():
+        profile = lexicon_profile(control_world, group)
         assert 3.0 <= profile.mean_length <= 8.0
         assert profile.homophony < 0.05
+
+
+@pytest.fixture(scope="module")
+def control():
+    return run_control(3)
+
+
+def test_analytizace_po_erozi_padu_se_ustali_slovosled(control):
+    eroded, _ = run_obj_eroded(3)
+    check_analytizace(eroded, control[0])
+
+
+def test_velky_cyklus_eroze_opis_priklonka_nova_koncovka():
+    world, history, kinds_500 = run_velky_cyklus(3)
+    check_velky_cyklus(world, history, kinds_500)
+
+
+def test_jespersenuv_cyklus_ne_ne_pas_pas():
+    world, history = run_jespersen(3)
+    check_jespersenuv_cyklus(world, history)
+
+
+def test_bez_eroze_syntax_zustava_a_zvukove_metriky_drzi(control):
+    check_bez_eroze(control[0])
 
 
 def test_determinismus_se_syntaxi():

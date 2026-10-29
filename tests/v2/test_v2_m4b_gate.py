@@ -27,49 +27,48 @@ def _kinds(world, function):
     return Counter(syntax.dominant(world, group, function).kind for group in world.group_ids())
 
 
-@pytest.fixture(scope="module")
-def no_case():
-    result = []
-    for seed in ARTICLE_SEEDS:
-        world = village_grid(6, seed=seed, grammar=NO_CASE, semantics=True)
-        simulation = Simulation(world)
-        simulation.run(3000)
-        result.append((world, simulation.history))
-    return result
+def run_no_case(seed: int):
+    world = village_grid(6, seed=seed, grammar=NO_CASE, semantics=True)
+    simulation = Simulation(world)
+    simulation.run(3000)
+    return world, simulation.history
 
 
-def test_clen_vznikne_z_ukazovaciho_zajmena(no_case):
-    with_article = 0
-    for world, history in no_case:
-        kinds = _kinds(world, "DEFINITE")
-        with_article += kinds["zero"] <= 2
-        for group in world.group_ids():
-            construction = syntax.dominant(world, group, "DEFINITE")
-            assert construction.source in (None, *catalog()["DEFINITE"].sources)
-        if any(event["function"] == "DEFINITE" for event in history.of_kind("grammaticalized")):
-            # Člen srostl v koncovku: jazyk dostal buňku, kterou dřív neměl.
-            assert "DEF" in world.paradigms["noun"].cells
-    # Člen není univerzála: vznikne ve většině jazyků, ne nutně ve všech.
-    assert with_article >= 2
+def check_clen_invariants(world, history) -> bool:
+    kinds = _kinds(world, "DEFINITE")
+    for group in world.group_ids():
+        construction = syntax.dominant(world, group, "DEFINITE")
+        assert construction.source in (None, *catalog()["DEFINITE"].sources)
+    if any(event["function"] == "DEFINITE" for event in history.of_kind("grammaticalized")):
+        # Člen srostl v koncovku: jazyk dostal buňku, kterou dřív neměl.
+        assert "DEF" in world.paradigms["noun"].cells
+    return bool(kinds["zero"] <= 2)
 
 
-def test_bez_padu_se_slovosled_ustali(no_case):
-    for world, _ in no_case:
-        assert "OBJ" not in world.paradigms["noun"].cells
-        assert _kinds(world, "ORDER")["fixed"] >= 5
+def check_clen_jeden_seed(world, history) -> None:
+    assert check_clen_invariants(world, history)
 
 
-def _exaptation(order):
+def check_bez_padu(world):
+    assert "OBJ" not in world.paradigms["noun"].cells
+    assert _kinds(world, "ORDER")["fixed"] >= 5
+
+
+def _exaptation(order, seed: int = 3):
     grammar = {**SYNTAX_GRAMMAR, "DEFINITE": Construction("DEFINITE", "zero"), "ORDER": order}
-    world = village_grid(6, seed=3, grammar=grammar, semantics=True)
+    world = village_grid(6, seed=seed, grammar=grammar, semantics=True)
     simulation = Simulation(world)
     simulation.run(1500)
     return world, simulation.history
 
 
-def test_exaptace_zbytkove_koncovky():
-    """Pád vedle pevného slovosledu nic nenese; jeho koncovka se stane členem."""
-    world, history = _exaptation(Construction("ORDER", "fixed", order="SVO"))
+def run_exaptation_pair(seed: int = 3):
+    target = _exaptation(Construction("ORDER", "fixed", order="SVO"), seed=seed)
+    control = _exaptation(Construction("ORDER", "free"), seed=seed)
+    return target, control
+
+
+def check_exaptace(world, history, control, control_history):
     events = history.of_kind("exapted")
     assert len({event["group"] for event in events}) >= 4
     assert {(event["function"], event["donor"]) for event in events} == {("DEFINITE", "OBJ")}
@@ -81,29 +80,60 @@ def test_exaptace_zbytkove_koncovky():
         world.morphemes[unit].lexeme_id + "#OBJ" in code.phonology.vocabulary for unit in definite
     )
     # Kontrola: dokud pád nese role, koncovka nic nového neznamená.
-    control, control_history = _exaptation(Construction("ORDER", "free"))
     assert not control_history.of_kind("exapted")
     assert "DEF" not in control.paradigms["noun"].cells
 
 
-def test_jazyk_bez_kategorie_ji_nema_dokud_ji_nevyvine():
+def run_tenseless_pair(seed: int = 3):
     tenseless = {name: construction for name, construction in SYNTAX_GRAMMAR.items() if name != "PAST"}
-    world = village_grid(6, seed=3, grammar=tenseless, semantics=True)
-    Simulation(world).run(1000)
-    assert world.paradigms["verb"].cells == ("PRES",)
-    assert syntax.variable_id("PAST") not in world.variables
-    assert not any(world.morphemes[unit].cell == "PAST"
-                   for group in world.groups.values() for unit in group.main_code.phonology.vocabulary)
+    tenseless_world = village_grid(6, seed=seed, grammar=tenseless, semantics=True)
+    Simulation(tenseless_world).run(1000)
 
     # Stejný jazyk s minulým časem jako prázdnou funkcí si ho vytvoří opisem.
-    world = village_grid(6, seed=3, grammar={**tenseless, "PAST": Construction("PAST", "zero")}, semantics=True)
-    simulation = Simulation(world)
+    zero_world = village_grid(6, seed=seed, grammar={**tenseless, "PAST": Construction("PAST", "zero")}, semantics=True)
+    simulation = Simulation(zero_world)
     simulation.run(2000)
-    assert _kinds(world, "PAST")["zero"] <= 1
-    sources = {syntax.dominant(world, group, "PAST").source for group in world.group_ids()}
+    return tenseless_world, (zero_world, simulation.history)
+
+
+def check_jazyk_bez_kategorie(tenseless_world, zero_world, zero_history):
+    assert tenseless_world.paradigms["verb"].cells == ("PRES",)
+    assert syntax.variable_id("PAST") not in tenseless_world.variables
+    assert not any(tenseless_world.morphemes[unit].cell == "PAST"
+                   for group in tenseless_world.groups.values() for unit in group.main_code.phonology.vocabulary)
+
+    assert _kinds(zero_world, "PAST")["zero"] <= 1
+    sources = {syntax.dominant(zero_world, group, "PAST").source for group in zero_world.group_ids()}
     assert sources <= set(catalog()["PAST"].sources)
-    if simulation.history.of_kind("grammaticalized"):
-        assert "PAST" in world.paradigms["verb"].cells
+    if zero_history.of_kind("grammaticalized"):
+        assert "PAST" in zero_world.paradigms["verb"].cells
+
+
+@pytest.fixture(scope="module")
+def no_case():
+    return [run_no_case(seed) for seed in ARTICLE_SEEDS]
+
+
+def test_clen_vznikne_z_ukazovaciho_zajmena(no_case):
+    with_article = sum(check_clen_invariants(world, history) for world, history in no_case)
+    # Člen není univerzála: vznikne ve většině jazyků, ne nutně ve všech.
+    assert with_article >= 2
+
+
+def test_bez_padu_se_slovosled_ustali(no_case):
+    for world, _ in no_case:
+        check_bez_padu(world)
+
+
+def test_exaptace_zbytkove_koncovky():
+    """Pád vedle pevného slovosledu nic nenese; jeho koncovka se stane členem."""
+    (world, history), (control, control_history) = run_exaptation_pair(3)
+    check_exaptace(world, history, control, control_history)
+
+
+def test_jazyk_bez_kategorie_ji_nema_dokud_ji_nevyvine():
+    tenseless_world, (zero_world, zero_history) = run_tenseless_pair(3)
+    check_jazyk_bez_kategorie(tenseless_world, zero_world, zero_history)
 
 
 def test_determinismus_s_profilem():

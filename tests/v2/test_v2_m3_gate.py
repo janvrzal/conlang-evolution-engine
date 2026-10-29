@@ -25,6 +25,11 @@ def _run(seed, changes=DEFAULT_CHANGES):
     return world, simulation.history
 
 
+def _run_without_leveling(seed):
+    changes = tuple(change for change in DEFAULT_CHANGES if change.kind != "leveling")
+    return _run(seed, changes=changes)
+
+
 @pytest.fixture(scope="module")
 def runs():
     return [_run(seed) for seed in SEEDS]
@@ -32,8 +37,7 @@ def runs():
 
 @pytest.fixture(scope="module")
 def without_leveling():
-    changes = tuple(change for change in DEFAULT_CHANGES if change.kind != "leveling")
-    return [_run(seed, changes) for seed in SEEDS]
+    return [_run_without_leveling(seed) for seed in SEEDS]
 
 
 def _mean(world, attribute):
@@ -42,20 +46,18 @@ def _mean(world, attribute):
     )
 
 
-def test_sturtevantuv_paradox_zvuk_tvori_nepravidelnost_analogie_ji_opravuje(runs, without_leveling):
-    for (world, _), (unleveled, _) in zip(runs, without_leveling):
-        assert _mean(unleveled, "alternation") > 0.3  # zvukové změny vyrobily alternace
-        assert _mean(world, "alternation") < _mean(unleveled, "alternation") - 0.1
+def check_sturtevantuv_paradox(world, unleveled):
+    assert _mean(unleveled, "alternation") > 0.3  # zvukové změny vyrobily alternace
+    assert _mean(world, "alternation") < _mean(unleveled, "alternation") - 0.1
 
 
-def test_morfologizace_vznikne_sama(runs):
-    """Plurál nesený jen kmenem: koncovka zanikla, alternace zůstala."""
-    assert all(_mean(world, "morphologized") > 0.02 for world, _ in runs)
+def check_morfologizace(world):
+    assert _mean(world, "morphologized") > 0.02
 
 
-def test_produktivni_vzor_se_siri_a_caste_slova_si_drzi_nepravidelnost(runs):
+def check_produktivni_vzor(runs_seq):
     frequent, rare = [], []
-    for world, _ in runs:
+    for world, _ in runs_seq:
         assert _mean(world, "productive_share") > 0.8  # z výchozích 65 %
         for group in world.group_ids():
             profile = morphology_profile(world, group)
@@ -64,27 +66,50 @@ def test_produktivni_vzor_se_siri_a_caste_slova_si_drzi_nepravidelnost(runs):
     assert statistics.mean(frequent) > statistics.mean(rare)
 
 
+def check_analogie(world, history):
+    analogized = [
+        world.morphemes[world.morphemes[unit].lexeme_id].frequency
+        for unit in (
+            world.form_changes[event["variable"]].unit for event in history.of_kind("analogy")
+        )
+    ]
+    vocabulary = [
+        morpheme.frequency for morpheme in world.morphemes.values()
+        if morpheme.kind == "root" and morpheme.word_class is not None
+    ]
+    assert analogized and statistics.mean(analogized) < statistics.mean(vocabulary)
+
+
+def check_zvukove_metriky(world):
+    for group in world.group_ids():
+        profile = lexicon_profile(world, group)
+        assert 3.0 <= profile.mean_length <= 8.0
+        assert profile.homophony < 0.05
+
+
+def test_sturtevantuv_paradox_zvuk_tvori_nepravidelnost_analogie_ji_opravuje(runs, without_leveling):
+    for (world, _), (unleveled, _) in zip(runs, without_leveling):
+        check_sturtevantuv_paradox(world, unleveled)
+
+
+def test_morfologizace_vznikne_sama(runs):
+    """Plurál nesený jen kmenem: koncovka zanikla, alternace zůstala."""
+    for world, _ in runs:
+        check_morfologizace(world)
+
+
+def test_produktivni_vzor_se_siri_a_caste_slova_si_drzi_nepravidelnost(runs):
+    check_produktivni_vzor(runs)
+
+
 def test_analogie_zasahuje_spis_vzacna_slova(runs):
     for world, history in runs:
-        analogized = [
-            world.morphemes[world.morphemes[unit].lexeme_id].frequency
-            for unit in (
-                world.form_changes[event["variable"]].unit for event in history.of_kind("analogy")
-            )
-        ]
-        vocabulary = [
-            morpheme.frequency for morpheme in world.morphemes.values()
-            if morpheme.kind == "root" and morpheme.word_class is not None
-        ]
-        assert statistics.mean(analogized) < statistics.mean(vocabulary)
+        check_analogie(world, history)
 
 
 def test_zvukove_metriky_drzi_i_s_paradigmaty(runs):
     for world, _ in runs:
-        for group in world.group_ids():
-            profile = lexicon_profile(world, group)
-            assert 3.0 <= profile.mean_length <= 8.0
-            assert profile.homophony < 0.05
+        check_zvukove_metriky(world)
 
 
 def test_determinismus_s_morfologii():
