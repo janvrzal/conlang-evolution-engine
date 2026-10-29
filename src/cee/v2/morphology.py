@@ -233,13 +233,8 @@ class FormAssessment:
     syncretic_after: bool
 
 
-def assess(world: World, group_id: str, variable_id: str) -> FormAssessment | None:
+def _assess_reference(world: World, group_id: str, variable_id: str) -> FormAssessment | None:
     code = world.groups[group_id].main_code
-    state = code.phonology
-    key = ("form-assessment", variable_id)
-    cached = state.cache.get(key)
-    if cached is not None and cached[0] == state.version:
-        return cast(FormAssessment | None, cached[1])
     change = world.form_changes[variable_id]
     result = None
     new = apply_form_change(world, code, change)
@@ -263,5 +258,15 @@ def assess(world: World, group_id: str, variable_id: str) -> FormAssessment | No
             syncretic_before=current.form == citation,
             syncretic_after=new.form == citation,
         )
-    state.cache[key] = (state.version, result)
     return result
+
+
+def assess(world: World, group_id: str, variable_id: str) -> FormAssessment | None:
+    """Hodnocení s invalidací podle závislostí změněných jednotek."""
+    from cee.v2.language.form_assessment_index import FormAssessmentIndex
+
+    state = world.groups[group_id].main_code.phonology
+    entry = state.cache.get("form-assessment-index")
+    index = cast(FormAssessmentIndex, entry[1]) if entry is not None else FormAssessmentIndex()
+    state.cache["form-assessment-index"] = (state.version, index)
+    return index.assess(world, group_id, variable_id)
