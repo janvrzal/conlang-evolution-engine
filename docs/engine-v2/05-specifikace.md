@@ -986,14 +986,22 @@ float agregace zůstávají v původním pořadí a NumPy redukcích. Testy
 porovnávají průběžný výsledek s referencí, hlídají skutečně nepřepočítaná
 slova, změny frekvencí, syntaktickou kompenzaci i checkpointy.
 
-Sériové měření: **údolí 37,3 → 39,0 s**, mřížka 3,5 → 3,7 s;
-všech sedm otisků přesně souhlasí. **Brána po dvou výpočtech ≤ 25 s
-neprošla, další převody se zastavují k přehodnocení s uživatelem.**
-Rozpad času ukazuje zlepšení lexikální jasnosti (3,154 → 1,761 s), ale
-regresi assessment (4,469 → 6,375 s). Druhý index duplikuje část již
-levných vektorových lookupů banky a stále připravuje celé dávkové matice.
-Tyto dva prototypy nejsou přijatá výkonová etapa a do `engine-v2` se
-neslučují. Původní cíle ≤ 8 s / ≤ 1 s nejsou splněné.
+První brána po dvou výpočtech neprošla (údolí 37,3 → 39,0 s).
+Po výslovném uživatelově „Pokračuj“ byla regresní procesní cache vrácena;
+zůstala přírůstková příprava vzorku nad původním vektorovým assessmentem.
+Přibyly indexy sémantických míst, morfologických kandidátů a hodnocení,
+sdílené členství slov pro kandidáty a syntaktickou slabost a dávkové
+sestavení skóre tlaků. Neúspěšný prototyp delt podpory kandidátů byl
+samostatným porovnáním odhalen a vrácen.
+
+Závěrečné sériové měření druhé iterace: **údolí 37,6 → 31,0 s**, mřížka
+**3,5 → 2,7 s**, všech sedm původních otisků přesně souhlasí. **Limit
+25 s stále není splněn.** Celá sada včetně bran a checkpointů: 642 testů
+prošlo za 241,75 s; Ruff a mypy čisté. Model i náhodné losování zůstaly
+beze změny. Nově doplněná fáze 5 v zadání naopak dovoluje změnu otisků;
+vyjasnění tohoto rozdílu vůči předchozí přímé instrukci uživatele je
+otevřené, proto nové losování zatím není implementováno. Do `engine-v2`
+se nic neslučuje. Původní cíle ≤ 8 s / ≤ 1 s nejsou splněné.
 
 ## Známé mezery a kam patří
 

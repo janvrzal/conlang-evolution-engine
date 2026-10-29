@@ -147,3 +147,94 @@ Nové indexy jsou zatím experiment na pracovní větvi; brána je nepřijala
 jako úspěšnou výkonovou etapu. Do `engine-v2` se nic neslučuje. K dalšímu
 rozhodnutí patří oddělené ponechání první optimalizace a vrácení druhé;
 bez přehodnocení plánu se neprovádějí další optimalizace.
+
+## Druhá iterace: uživatelem autorizované pokračování
+
+Po oznámení první neúspěšné brány uživatel výslovně zadal „Pokračuj“.
+Pokračování zůstává u průběžných indexů; odmítnutá Numba ani číselná
+fasáda se nevracejí.
+
+- Odstraněna regresní `ProcessWordIndex` a produkční `_assess_batch`
+  vrácen na původní vektorový výpočet. Inkrementální příprava vzorku
+  zůstává, včetně původní viditelnosti frekvencí a výběru slov.
+- `LexicalClarity.scores` připravuje metadata kandidátů jednou pro dávku
+  a vybírá dosažené buňky jednou na skupinu. Zachovává všechny cache,
+  masky, duplicity a pořadí; hodnoty zapisuje hromadným indexováním.
+- Sémantická místa používají společný přehled závislostí pro všech sedm
+  rodin. Přepočítávají pouze cíle ovlivněné změněnými dominantními
+  koncepty, vztahy, složeninami a odvozeninami. Konfigurace a záloha
+  přímých mutací se kontrolují jednou na kód a `lexicon_version`, nikoli
+  sedmkrát. `_derivations` zatím stále provádí jeden úplný průchod na
+  `lexicon_version`; není vydáván za inkrementální.
+- Vyrovnání a rozšíření morfologických vzorů sdílejí index jednotek,
+  citačních kořenů a buněk. Změna citačního kořene zasáhne jeho buňky;
+  změna produktivního exponentu nebo dostupnosti koncovky celou příslušnou
+  buňku. Stávající `ExponentIndex` se neduplikuje. Rebracketing zatím
+  zůstává referenčním úplným výpočtem.
+
+Samostatný kontrolní běh po vrácení procesní cache trval 43,9 s pro
+údolí, všechny otisky souhlasily. Není to párové srovnání ani důkaz
+zrychlení či zpomalení této dílčí změny; rozhodující je následné měření
+ustálené kombinace změn proti původní kopii.
+
+### Další dokončené části a odmítnutý pokus
+
+`morphology.assess` nově drží výsledky včetně `None` a ruší pouze závislé
+varianty podle změněné jednotky, citačního kořene, frekvence, počtů
+koncovek a podoby cílového exponentu. Záloha přímých změn dominant se
+provádí jen při `lexicon_version`, nikoli při každé změně tvaru.
+
+`_process_scores` a `_form_scores` sdílejí layout a výsledky assessmentů
+jen po dobu `PressureBatch`. Vestavěné tlaky používají bodovou aritmetiku
+nad poli místo opakovaného skalárního volání NumPy. Zachováno je pořadí
+assessmentů i `None`, NaN, nekonečna a znaménka nul; nulový podíl L2 stále
+ukončí Teachability před assessmenty.
+
+Slabost gramatických buněk (`syntax.weakness`) drží celočíselné počty
+všech a splynulých tvarů. S morfologickými kandidáty sdílí členství a
+vazby citačních kořenů, ale konzumenti mají nezávislé kurzory. Samotná
+slabost nevynucuje výpočet kandidátů ani `class_stats`.
+
+Vyzkoušen byl také deník celočíselných delt podpory zvukových kandidátů.
+Izolované běhy standardní sady otisků:
+
+| Konfigurace stejné průběžné verze | Údolí (s) |
+|---|---:|
+| Se všemi prototypy | 33,3 |
+| S původní podporou kandidátů | 31,9 |
+| S původními sémantickými místy | 36,7 |
+
+Všechny otisky souhlasily. Delta index opory byl **odmítnut a celý vrácen**,
+včetně nových deníků/testů bez dalšího spotřebitele. Opakoval zpracování
+stejných delt pro každou rodinu nadále vedle sestavení celé statistiky;
+zůstává původní efektivní maticový výpočet. Sémantický index naopak
+prokázal přínos a zůstal zachovaný. Tyto izolační běhy jsou jiné měření
+než závěrečný pár níže.
+
+### Závěrečné ověření druhé iterace
+
+Sériový pár proti `3d1016c`, bez souběžných simulací/testů:
+
+| Scénář | Výchozí commit (s) | Druhá iterace (s) |
+|---|---:|---:|
+| phonology | 0,2 | 0,2 |
+| morphology | 0,4 | 0,4 |
+| syntax | 0,6 | 0,5 |
+| grid-5x5 | **3,5** | **2,7** |
+| shift | 1,2 | 1,0 |
+| island-city | 0,9 | 0,7 |
+| valley-50 | **37,6** | **31,0** |
+
+Údolí zrychlilo v tomto páru asi o 18 %, mřížka asi o 23 %.
+**Limit 25 s stále není splněn.** Všech sedm původních otisků přesně
+souhlasí. Rychlá sada: **570 prošlo, 72 vynecháno, 31,49 s**. Celá sada
+včetně bran a checkpointů: **642 prošlo za 241,75 s (4 min 1 s)**. Ruff
+i mypy čisté. Počet testů se změnil; čas celé sady není náhrada měření
+samotné simulace.
+
+Jádro `_innovate` a způsob náhodného losování v této iteraci zůstaly
+beze změny. V pracovním souboru zadání mezitím přibyl dodatek fáze 5,
+který povoluje jednorázovou změnu otisků. Protože předchozí přímá zpráva
+uživatele požadovala bitovou shodu, potvrzení tohoto rozdílu je otevřené;
+nové losování zde není implementováno. Uživatelská úprava zadání zůstává
+mimo commity této iterace.

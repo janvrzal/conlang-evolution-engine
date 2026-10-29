@@ -54,9 +54,11 @@ Pravidla v2, která se snadno poruší:
   zůstává. Aktuální audit a plán jsou v `docs/engine-v2/07-prubezne-indexy.md`.
   Přepočítávej příspěvky změněných slov podle deníků, float agregace dělej
   v původním pořadí. První dva výpočty jsou lexikální jasnost a hodnocení
-  procesů. Brána **valley-50 ≤ 25 s neprošla** (37,3 → 39,0 s).
-  Lexikální jasnost zlevnila, assessment zdražil; další výpočty
-  nepřeváděj bez přehodnocení plánu s uživatelem. Všech sedm
+  procesů. První brána **valley-50 ≤ 25 s neprošla** (37,3 → 39,0 s).
+  Po uživatelově „Pokračuj“ byla regresní procesní cache vrácena a přibyly
+  další indexy a dávkové tlaky: druhá iterace **37,6 → 31,0 s**, stále nad
+  25 s. Jádro losování se nezměnilo; dodatek fáze 5 měnící otisky čeká na
+  vyjasnění vůči předchozímu přímému požadavku bitové shody. Všech sedm
   otisků a checkpointy musí souhlasit. Neprezentuj M6e ani původní cíle
   údolí ≤ 8 s / mřížka ≤ 1 s jako dokončené.
 * **Kalibrační konstanty** mají ve specifikaci zdůvodnění a naměřené

@@ -22,7 +22,7 @@ napojené na CLI, API ani UI; spouští se z testů a skriptů.
 | M6b společnost: migrace, události, vitalita a domény jazyka, diglosie, náboženství, Séguyho zákon | hotovo |
 | M6c linie jazyků a export pro UI | hotovo (výkon plného modelu nad rozpočtem) |
 | M6d odezva: průběžné výsledky, checkpointy, přepočet od změny | hotovo (výpočet sám zůstává pomalý) |
-| M6e průběžné indexy | Numba a nepoužívané sloupce vráceny; první dva inkrementální výpočty zachovávají otisky, brána ≤ 25 s neprošla (37,3 → 39,0 s); další převody zastaveny |
+| M6e průběžné indexy | Numba a regresní procesní cache vráceny; druhá iterace zachovává otisky, údolí 37,6 → 31,0 s a mřížka 3,5 → 2,7 s; limit 25 s stále nesplněn, změna losování fáze 5 čeká na vyjasnění |
 | M7 kalibrace | plán |
 
 Naměřené hodnoty a známé mezery jsou v `docs/engine-v2/05-specifikace.md`.
