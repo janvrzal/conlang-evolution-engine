@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Mapping, Sequence
 
 from cee.v2.language.bank import FormBank
+from cee.v2.language.journal import FrequencyMap
 from cee.v2.language.lexicon import FormStore, Morpheme, PhonologyState, UnitForm
 from cee.v2.language.morphology import FormChange, Paradigm, unit_id
 from cee.v2.language.processes import Process, StressRule
@@ -163,7 +164,7 @@ class World:
     #: Pojem → třída slova (``None`` = neohebné).
     concept_classes: dict[str, str | None] = field(default_factory=dict)
     #: Pojem → jak často se o něm mluví (0 až 1); vlastnost významu, ne slova.
-    concept_frequencies: dict[str, float] = field(default_factory=dict)
+    concept_frequencies: dict[str, float] = field(default_factory=FrequencyMap)
     #: Odvozovací přípona protojazyka (M3b).
     derivational_suffix: tuple[int, ...] = ()
     #: Podíl lidí, kteří se za generaci přestěhují k sousedům (M6b). Nula
@@ -173,6 +174,10 @@ class World:
     bank: FormBank | None = None
     #: Výchozí tvar každého morfému (neměnný), aby se netvořil při každém čtení.
     default_units: dict[str, UnitForm] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.concept_frequencies, FrequencyMap):
+            self.concept_frequencies = FrequencyMap(self.concept_frequencies)
 
     def distribution(self, group_id: str, variable_id: str) -> Distribution | None:
         """Jediné správné čtení stavu: živá proměnná má přednost před repertoárem."""

@@ -170,6 +170,7 @@ def activate(world: World, code: Code, variable_id: str) -> None:
     state.pending[variable_id] = []
     state.queued[variable_id] = set()
     state.order[variable_id] = len(state.order)
+    state.record_lifecycle("process", "activate", variable_id)
     # Celá slovní zásoba se posoudí jedním vyhledáním v tabulce procesu;
     # do fronty jdou jen slova, která změna opravdu mění.
     words = sorted(state.vocabulary)
@@ -185,9 +186,8 @@ def activate(world: World, code: Code, variable_id: str) -> None:
 def enter_vocabulary(world: World, code: Code, morpheme_id: str) -> None:
     """Slovo se stalo dominantním: projdou jím i změny, které právě běží."""
     state = code.phonology
-    if morpheme_id in state.vocabulary:
+    if not state.enter_vocabulary(morpheme_id):
         return
-    state.vocabulary.add(morpheme_id)
     state.version += 1
     state.lexicon_version += 1
     for variable_id in active_processes(state, world):
@@ -195,10 +195,10 @@ def enter_vocabulary(world: World, code: Code, morpheme_id: str) -> None:
 
 
 def leave_vocabulary(code: Code, morpheme_id: str) -> None:
-    if morpheme_id in code.phonology.vocabulary:
-        code.phonology.vocabulary.discard(morpheme_id)
-        code.phonology.version += 1
-        code.phonology.lexicon_version += 1
+    state = code.phonology
+    if state.leave_vocabulary(morpheme_id):
+        state.version += 1
+        state.lexicon_version += 1
 
 
 @dataclass(frozen=True)
@@ -248,6 +248,7 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
             if (tick - since) * dt >= CLOSURE_GENERATIONS * group.generation_years:
                 relics = sorted(morpheme_id for _, morpheme_id in queue)
                 state.closed.add(variable_id)
+                state.record_lifecycle("process", "close", variable_id)
                 del state.pending[variable_id]
                 state.queued.pop(variable_id, None)
                 state.version += 1

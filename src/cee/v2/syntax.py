@@ -241,7 +241,7 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
             or construction.exponent is None or variant in state.grammar_applied
         ):
             continue
-        state.grammar_applied.add(variant)
+        state.mark_grammar_applied(variant)
         _ensure_cell(world, entry)
         paradigm = world.paradigms[entry.word_class]
         donor = catalog()[construction.donor] if construction.donor else None

@@ -143,6 +143,13 @@ class PhonologyState:
     #: nesmí vypadnout, dokud ho užívá aspoň jeden z nich.
     dominant: dict[str, str] = field(default_factory=dict)
     uses: dict[str, int] = field(default_factory=dict)
+    #: Append-only vstupy pro inkrementální konzumenty; obsahují jen stabilní ID.
+    dominant_log: list[tuple[str, str | None, str | None]] = field(default_factory=list)
+    usage_log: list[tuple[str, int, int]] = field(default_factory=list)
+    vocabulary_log: list[tuple[str, str]] = field(default_factory=list)
+    lifecycle_log: list[tuple[str, str, str]] = field(default_factory=list)
+    grammar_log: list[str] = field(default_factory=list)
+    grammar_applied_log: list[str] = field(default_factory=list)
     restructured: dict[str, set[str]] = field(default_factory=dict)
     #: Kdy dosáhl změněný tvar procesu 100 %.
     fixed_since: dict[str, int] = field(default_factory=dict)
@@ -169,6 +176,57 @@ class PhonologyState:
     #: Odvozené údaje (statistiky prostředí, hodnocení procesů) s verzí, ze
     #: které vznikly. Nejsou součástí stavu jazyka.
     cache: dict[object, tuple[int, object]] = field(default_factory=dict)
+
+    def set_dominant(self, concept: str, root: str | None) -> bool:
+        """Změní dominantní kořen a zaznamená i přechodný stav bez kořene."""
+        old = self.dominant.get(concept)
+        if old == root and (root is not None or concept not in self.dominant):
+            return False
+        if root is None:
+            self.dominant.pop(concept, None)
+        else:
+            self.dominant[concept] = root
+        self.dominant_log.append((concept, old, root))
+        return True
+
+    def adjust_uses(self, root: str, delta: int, *, missing: int = 0) -> int:
+        """Upraví počet pojmů kořene a zaznamená změnu pro frekvenční indexy."""
+        old = self.uses.get(root, missing)
+        new = old + delta
+        if new > 0:
+            self.uses[root] = new
+        else:
+            self.uses.pop(root, None)
+        if new != old:
+            self.usage_log.append((root, old, new))
+        return new
+
+    def enter_vocabulary(self, unit: str) -> bool:
+        if unit in self.vocabulary:
+            return False
+        self.vocabulary.add(unit)
+        self.vocabulary_log.append(("enter", unit))
+        return True
+
+    def leave_vocabulary(self, unit: str) -> bool:
+        if unit not in self.vocabulary:
+            return False
+        self.vocabulary.remove(unit)
+        self.vocabulary_log.append(("leave", unit))
+        return True
+
+    def record_lifecycle(self, entity: str, action: str, entity_id: str) -> None:
+        self.lifecycle_log.append((entity, action, entity_id))
+
+    def record_grammar(self, variable_id: str) -> None:
+        self.grammar_log.append(variable_id)
+
+    def mark_grammar_applied(self, variant_id: str) -> bool:
+        if variant_id in self.grammar_applied:
+            return False
+        self.grammar_applied.add(variant_id)
+        self.grammar_applied_log.append(variant_id)
+        return True
 
     def branch(self) -> PhonologyState:
         return copy.deepcopy(self)

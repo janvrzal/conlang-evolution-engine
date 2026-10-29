@@ -175,7 +175,9 @@ def apply_form_change(world: World, code: Code, change: FormChange) -> UnitForm 
 def activate(world: World, code: Code, variable_id: str) -> None:
     state = code.phonology
     if variable_id not in state.morph_closed:
-        state.morph_active.setdefault(variable_id, world.form_changes[variable_id].unit)
+        if variable_id not in state.morph_active:
+            state.morph_active[variable_id] = world.form_changes[variable_id].unit
+            state.record_lifecycle("form", "activate", variable_id)
 
 
 def restructure(world: World, group_id: str, tick: int, history: History, year: float) -> None:
@@ -188,12 +190,14 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
         share = changed_share(world, group_id, variable_id)
         if share <= 0:
             del state.morph_active[variable_id]
+            state.record_lifecycle("form", "remove", variable_id)
             continue
         if share < ANALOGY_THRESHOLD:
             continue
         change = world.form_changes[variable_id]
         del state.morph_active[variable_id]
         state.morph_closed.add(variable_id)
+        state.record_lifecycle("form", "close", variable_id)
         targets = units_of(world, code, unit) if change.lexeme_wide else [unit]
         rewritten = False
         for target in targets:

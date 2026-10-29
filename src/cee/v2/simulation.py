@@ -297,6 +297,17 @@ class Simulation:
             records.extend(self._changes(block, block.freqs, updated))
             if self.config.record_trajectories:
                 self._trace(block, block.freqs, updated)
+            # Konstrukční rozdělení je vstupem syntaxového konzumenta.
+            # Zapisujeme jen proměnné, jejichž řádek se v konkrétní skupině změnil.
+            for row, variable_id in enumerate(block.variable_ids):
+                if self.world.variables[variable_id].kind != "construction":
+                    continue
+                changed_columns = np.flatnonzero(
+                    np.any(block.freqs[row] != updated[row], axis=1)
+                )
+                for column in changed_columns:
+                    group_id = self.world.live.group_ids[int(column)]
+                    self.world.groups[group_id].main_code.phonology.record_grammar(variable_id)
             if self.world.table is not None:
                 self._follow_vocabulary(block, block.freqs, updated)
                 activations.extend(self._activations(block, updated))
@@ -372,9 +383,11 @@ class Simulation:
                 continue
             morpheme = self.world.variants[distribution.dominant()[0]].payload.get("morpheme")
             if isinstance(morpheme, str):
-                code.phonology.dominant[variable.key] = morpheme
-                code.phonology.uses[morpheme] = code.phonology.uses.get(morpheme, 0) + 1
-                code.phonology.vocabulary.update(morphology.units_of(self.world, code, morpheme))
+                state = code.phonology
+                state.set_dominant(variable.key, morpheme)
+                state.adjust_uses(morpheme, 1)
+                for unit in morphology.units_of(self.world, code, morpheme):
+                    state.enter_vocabulary(unit)
                 code.phonology.version += 1
                 code.phonology.lexicon_version += 1
 
@@ -404,15 +417,12 @@ class Simulation:
                 state.lexicon_version += 1
                 if direction == "leave":
                     if state.dominant.get(concept) == morpheme:
-                        del state.dominant[concept]
-                    state.uses[morpheme] = state.uses.get(morpheme, 1) - 1
-                    if state.uses[morpheme] > 0:
+                        state.set_dominant(concept, None)
+                    if state.adjust_uses(morpheme, -1, missing=1) > 0:
                         continue
-                    del state.uses[morpheme]
                 else:
-                    state.dominant[concept] = morpheme
-                    state.uses[morpheme] = state.uses.get(morpheme, 0) + 1
-                    if state.uses[morpheme] > 1:
+                    state.set_dominant(concept, morpheme)
+                    if state.adjust_uses(morpheme, 1) > 1:
                         continue
                     contact.adopt(self.world, group_ids[column], morpheme)
                 for unit in morphology.units_of(self.world, code, morpheme):
