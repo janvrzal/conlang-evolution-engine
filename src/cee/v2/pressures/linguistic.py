@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, cast
 
 import numpy as np
 
@@ -27,7 +27,9 @@ class Appeal(Pressure):
 
 
 def _process_scores(
-    batch: PressureBatch, value: Callable[[Process, ProcessAssessment], float]
+    batch: PressureBatch,
+    value: Callable[[Process, ProcessAssessment], float],
+    values_many: Callable[[Process, list[ProcessAssessment]], np.ndarray] | None = None,
 ) -> FloatArray:
     """Skóre varianty „změna“ každého procesu v každé skupině, která ji slyší.
 
@@ -35,6 +37,23 @@ def _process_scores(
     Skupiny, ke kterým změna vůbec nedolehla, se nehodnotí — nic by to
     nezměnilo a hodnocení není zadarmo.
     """
+    result = np.zeros_like(batch.freqs)
+    for row, process, slot, columns, assessments in _process_score_layout(batch):
+        if not len(columns):
+            continue
+        values: list[float] | np.ndarray
+        if values_many is None:
+            values = [value(process, assessment) for assessment in assessments]
+        else:
+            values = values_many(process, assessments)
+        result[row, columns, slot] = values
+    return result
+
+
+def _process_scores_reference(
+    batch: PressureBatch, value: Callable[[Process, ProcessAssessment], float]
+) -> FloatArray:
+    """Původní skalární cesta, ponechaná pro testy parity."""
     result = np.zeros_like(batch.freqs)
     world = batch.world
     for row, variable_id in enumerate(batch.variable_ids):
@@ -58,13 +77,65 @@ def _process_scores(
     return result
 
 
+_PROCESS_SCORE_LAYOUT_KEY = ("_cee_process_score_layout_v1",)
+
+
+def _process_score_layout(
+    batch: PressureBatch,
+) -> list[tuple[int, Process, int, np.ndarray, list[ProcessAssessment]]]:
+    """Sdílené řádky, změnové sloty a dosažené sloupce pro všechny jazykové tlaky."""
+    cached = batch.memo.get(_PROCESS_SCORE_LAYOUT_KEY)
+    if cached is not None:
+        return cast(list[tuple[int, Process, int, np.ndarray, list[ProcessAssessment]]], cached)
+
+    layout: list[tuple[int, Process, int, np.ndarray, list[ProcessAssessment]]] = []
+    world = batch.world
+    for row, variable_id in enumerate(batch.variable_ids):
+        process = world.processes.get(variable_id)
+        if process is None:
+            continue
+        changed = changed_id(variable_id)
+        if changed not in batch.slots[row]:
+            continue
+        slot = list(batch.slots[row]).index(changed)
+        reached = (batch.freqs[row, :, slot] > 0) | (batch.heard[row, :, slot] > 0)
+        columns = np.flatnonzero(reached)
+        missing = [int(column) for column in columns if (variable_id, int(column)) not in batch.memo]
+        if missing:
+            # Zachovává se pořadí řádků a vzestupné pořadí sloupců původní cesty.
+            fresh = assess_many(
+                world, [batch.group_ids[column] for column in missing], variable_id, batch.tick
+            )
+            for column, assessment in zip(missing, fresh):
+                batch.memo[(variable_id, column)] = assessment
+        assessments = [batch.memo[(variable_id, int(column))] for column in columns]
+        layout.append((row, process, slot, columns, assessments))
+
+    batch.memo[_PROCESS_SCORE_LAYOUT_KEY] = layout
+    return layout
+
+
+def _functional_load_values(
+    _: Process, assessments: list[ProcessAssessment]
+) -> np.ndarray:
+    scaled = FUNCTIONAL_LOAD_SCALE * np.fromiter(
+        (item.merge_mass for item in assessments), dtype=np.float64
+    )
+    # Python min(1.0, NaN) vrací první argument; porovnání zachová totéž.
+    return -np.where(scaled < 1.0, scaled, 1.0)
+
+
 class Articulation(Pressure):
     """Úspora artikulačních gest: oslabení, asimilace, redukce."""
 
     name = "articulation"
 
     def scores(self, batch: PressureBatch) -> FloatArray:
-        return _process_scores(batch, lambda process, _: process.ease)
+        return _process_scores(
+            batch,
+            lambda process, _: process.ease,
+            lambda process, assessments: np.full(len(assessments), process.ease),
+        )
 
 
 class Clarity(Pressure):
@@ -77,6 +148,12 @@ class Clarity(Pressure):
             batch,
             lambda process, assessment: float(
                 np.clip(process.clarity - 1.5 * assessment.short_share, -1.0, 1.0)
+            ),
+            lambda process, assessments: np.clip(
+                process.clarity
+                - 1.5 * np.fromiter((item.short_share for item in assessments), dtype=np.float64),
+                -1.0,
+                1.0,
             ),
         )
 
@@ -94,7 +171,9 @@ class FunctionalLoad(Pressure):
 
     def scores(self, batch: PressureBatch) -> FloatArray:
         return _process_scores(
-            batch, lambda _, assessment: -float(min(1.0, FUNCTIONAL_LOAD_SCALE * assessment.merge_mass))
+            batch,
+            lambda _, assessment: -float(min(1.0, FUNCTIONAL_LOAD_SCALE * assessment.merge_mass)),
+            _functional_load_values,
         )
 
 
@@ -105,7 +184,13 @@ class Dispersion(Pressure):
 
     def scores(self, batch: PressureBatch) -> FloatArray:
         return _process_scores(
-            batch, lambda _, assessment: float(np.clip(4.0 * assessment.dispersion_delta, -1.0, 1.0))
+            batch,
+            lambda _, assessment: float(np.clip(4.0 * assessment.dispersion_delta, -1.0, 1.0)),
+            lambda _, assessments: np.clip(
+                4.0 * np.fromiter((item.dispersion_delta for item in assessments), dtype=np.float64),
+                -1.0,
+                1.0,
+            ),
         )
 
 
@@ -116,5 +201,11 @@ class Phonotactics(Pressure):
 
     def scores(self, batch: PressureBatch) -> FloatArray:
         return _process_scores(
-            batch, lambda _, assessment: -float(np.clip(assessment.markedness_delta, -1.0, 1.0))
+            batch,
+            lambda _, assessment: -float(np.clip(assessment.markedness_delta, -1.0, 1.0)),
+            lambda _, assessments: -np.clip(
+                np.fromiter((item.markedness_delta for item in assessments), dtype=np.float64),
+                -1.0,
+                1.0,
+            ),
         )
