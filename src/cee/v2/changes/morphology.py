@@ -189,10 +189,19 @@ class Rebracketing(AnalogicalChange):
         particle = syntax.particle_form(world, code, negations[0].source)
         if not particle:
             return {}
+        state = code.phonology
+        cached = state.cache.get("dominant-verb-roots")
+        if cached is not None and cached[0] == state.lexicon_version:
+            verb_roots = cast(tuple[str, ...], cached[1])
+        else:
+            verb_roots = tuple(
+                root
+                for root in sorted(set(state.dominant.values()))
+                if world.morphemes[root].word_class == "verb"
+            )
+            state.cache["dominant-verb-roots"] = (state.lexicon_version, verb_roots)
         found = {}
-        for root in sorted(set(code.phonology.dominant.values())):
-            if world.morphemes[root].word_class != "verb":
-                continue
+        for root in verb_roots:
             form = world.form_of(code, root)
             if not form:
                 continue

@@ -34,6 +34,8 @@ class VocabularyIndex(ABC, Generic[Contribution]):
     def __init__(self) -> None:
         self._token: int | None = None
         self._cursor = 0
+        self._vocab_cursor = 0
+        self._lexicon_version = -1
         self._counted: dict[str, Contribution | None] = {}
 
     @abstractmethod
@@ -50,31 +52,59 @@ class VocabularyIndex(ABC, Generic[Contribution]):
 
     def sync(self, world: World, code: Code) -> bool:
         """Dorovná změny; vrací ``True``, když se součet změnil."""
-        vocabulary, forms = code.phonology.vocabulary, code.forms
-        if self._token != forms.token or self._cursor > len(forms.log):
+        state, forms = code.phonology, code.forms
+        vocabulary = state.vocabulary
+        reset = (
+            self._token != forms.token
+            or self._cursor > len(forms.log)
+            or self._vocab_cursor > len(state.vocabulary_log)
+        )
+        if reset:
             self.reset()
             self._counted = {}
             for unit in sorted(vocabulary):
                 self._counted[unit] = value = self.contribution(world, code, unit)
                 self._give(value)
             self._token, self._cursor = forms.token, len(forms.log)
+            self._vocab_cursor = len(state.vocabulary_log)
+            self._lexicon_version = state.lexicon_version
             return True
+
         changed = set(forms.log[self._cursor :])
         self._cursor = len(forms.log)
         counted = self._counted
         touched = False
-        for unit in sorted(counted.keys() - vocabulary):
-            touched |= self._take(counted.pop(unit))
-        for unit in sorted(changed & counted.keys()):
-            new = self.contribution(world, code, unit)
-            if new != counted[unit]:
-                self._take(counted[unit])
-                self._give(new)
-                counted[unit] = new
-                touched = True
-        for unit in sorted(vocabulary - counted.keys()):
-            counted[unit] = value = self.contribution(world, code, unit)
-            touched |= self._give(value)
+
+        vocab_unchanged = (
+            self._vocab_cursor == len(state.vocabulary_log)
+            and self._lexicon_version == state.lexicon_version
+            and len(counted) == len(vocabulary)
+        )
+
+        if vocab_unchanged:
+            for unit in sorted(u for u in changed if u in counted):
+                new = self.contribution(world, code, unit)
+                if new != counted[unit]:
+                    self._take(counted[unit])
+                    self._give(new)
+                    counted[unit] = new
+                    touched = True
+        else:
+            for unit in sorted(counted.keys() - vocabulary):
+                touched |= self._take(counted.pop(unit))
+            for unit in sorted(changed & counted.keys()):
+                new = self.contribution(world, code, unit)
+                if new != counted[unit]:
+                    self._take(counted[unit])
+                    self._give(new)
+                    counted[unit] = new
+                    touched = True
+            for unit in sorted(vocabulary - counted.keys()):
+                counted[unit] = value = self.contribution(world, code, unit)
+                touched |= self._give(value)
+            self._vocab_cursor = len(state.vocabulary_log)
+            self._lexicon_version = state.lexicon_version
+
         return touched
 
     def _give(self, value: Contribution | None) -> bool:
@@ -108,6 +138,14 @@ class ContextIndex(VocabularyIndex[tuple[Context, ...]]):
     def __init__(self) -> None:
         super().__init__()
         self.counts: Counter[Context] = Counter()
+        self.segment_counts: Counter[int] = Counter()
+        self.generation: int = 0
+        self.deltas: list[tuple[Context, int]] = []
+        self._step_delta: Counter[Context] = Counter()
+        self._in_reset: bool = False
+
+    def inventory(self) -> tuple[int, ...]:
+        return tuple(sorted(self.segment_counts))
 
     def contribution(self, world: World, code: Code, unit: str) -> tuple[Context, ...]:
         from cee.v2.changes.sound import form_contexts
@@ -116,14 +154,55 @@ class ContextIndex(VocabularyIndex[tuple[Context, ...]]):
         return form_contexts(world.form_of(code, unit), world.table, code.stress_rule)
 
     def add(self, value: tuple[Context, ...]) -> None:
-        self.counts.update(value)
+        for key in value:
+            old = self.counts[key]
+            self.counts[key] = old + 1
+            if old == 0:
+                self.segment_counts[key[1]] += 1
+            if not self._in_reset:
+                self._step_delta[key] += 1
 
     def remove(self, value: tuple[Context, ...]) -> None:
         for key in value:
-            _decrement(self.counts, key)
+            old = self.counts[key]
+            if old <= 1:
+                if old == 1:
+                    del self.counts[key]
+                    self.segment_counts[key[1]] -= 1
+                    if self.segment_counts[key[1]] <= 0:
+                        del self.segment_counts[key[1]]
+            else:
+                self.counts[key] = old - 1
+            if not self._in_reset:
+                self._step_delta[key] -= 1
 
     def reset(self) -> None:
-        self.counts = Counter()
+        self.counts.clear()
+        self.segment_counts.clear()
+        self.generation += 1
+        self.deltas.clear()
+        self._step_delta.clear()
+
+    def sync(self, world: World, code: Code) -> bool:
+        state, forms = code.phonology, code.forms
+        reset_needed = (
+            self._token != forms.token
+            or self._cursor > len(forms.log)
+            or self._vocab_cursor > len(state.vocabulary_log)
+        )
+        self._step_delta.clear()
+        self._in_reset = reset_needed
+        try:
+            touched = super().sync(world, code)
+        finally:
+            self._in_reset = False
+
+        if not reset_needed and self._step_delta:
+            for ctx, diff in sorted(self._step_delta.items()):
+                if diff != 0:
+                    self.deltas.append((ctx, diff))
+            self._step_delta.clear()
+        return touched
 
 
 Exponent = tuple[str, str, str, tuple[int, ...]]

@@ -248,3 +248,119 @@ Podle předem schváleného rozhodnutí uživatele pokračujeme přímo **krokem
 přírůstkovým indexem opory a měr všech 20 rodin zvukových změn, zrychlením
 synchronizace `VocabularyIndex` pomocí `vocabulary_log` a kešováním dominantních
 slovesných kořenů v `Rebracketing`.
+
+## Krok 3: sdružený přírůstkový index opory zvukových změn
+
+### Návrh
+
+1. **Přeskočení množinových rozdílů ve `VocabularyIndex.sync` a delty v `ContextIndex` (`src/cee/v2/language/index.py`)**:
+   - `VocabularyIndex` sleduje `_vocab_cursor` a `_lexicon_version`. Při přepisu
+     tvarů fonologizací, kdy se `vocabulary_log`, `lexicon_version` ani velikost
+     `vocabulary` nezměnily (~95 % synchronizací), přeskočí oba rozdíly množin
+     `counted.keys() - vocabulary` a `vocabulary - counted.keys()` nad ~364 slovy
+     a dorovná pouze změněná slova z `forms.log` (`O(|changed|)`). Tím zrychlil
+     nejen `ContextIndex`, ale i `ExponentIndex` v přenosu. Při jakékoli změně
+     slovní zásoby či přímé mutaci v testech se provede úplné množinové srovnání.
+   - `ContextIndex` udržuje počty výskytů hlásek `segment_counts` (inventář v
+     `O(|inventář|)` místo procházení ~1 000 čtveřic), generaci a přírůstkový
+     deník celočíselných změn `deltas: list[tuple[Context, int]]`.
+2. **Sdružený `SoundSupportIndex` pro všech 20 rodin (`src/cee/v2/changes/sound.py`)**:
+   - Na rozdíl od dřívějšího neúspěšného prototypu z `07-prubezne-indexy.md`
+     (který zpracovával delty 20× zvlášť a vedle nich dál stavěl celé
+     `ContextStats`) sdružuje `_CombinedSoundCandidates` unikátní kandidáty všech
+     20 rodin `SOUND_CHANGES` (~106 procesů celkem), předřazené vzestupně podle
+     `variable_id`, do jediné matice masek pro dvojici `(id(table), inventory)`.
+   - `SoundSupportIndex` (uložený v `code.phonology.cache["sound-support-index"]`
+     jako čistá data bez odkazů na `World` či `Code`) při nezměněném
+     `state.version` vrací uložený stav v `O(1)` (pokrývá 19 z 20 rodin v kroku
+     se změnou a všech 20 rodin v krocích beze změny).
+   - Při běžném přepisu několika tvarů sečte `contexts.deltas` (~15–30 čtveřic)
+     a jediným celočíselným maticovým součinem `(106, ~20) @ (~20,)` v `int64`
+     aktualizuje opory všech 20 rodin naráz.
+   - Protože vzorec míry závisí jen na efektivní opoře `0` (`< 2`) nebo
+     `min(8, support)`, přepočítají se seřazená místa, pole `rates_array` a
+     jednorázové `float(np.sum(rates_array))` v kanonickém pořadí **výhradně pro
+     rodiny, u nichž se změnila efektivní opora** (typicky 0–3 z 20 rodin).
+   - Pro vlastní podtřídy `SoundChange` mimo standardní `SOUND_CHANGES` nebo při
+     změněném `prior` zůstává v platnosti záložní cesta přes `context_stats`.
+3. **Keš dominantních sloves v `Rebracketing` (`src/cee/v2/changes/morphology.py`)**:
+   - Seřazená n-tice dominantních slovesných kořenů (~25 kořenů z ~155) se kešuje
+     podle `state.lexicon_version` při zachování vnější invalidace kandidátů
+     podle `state.version`.
+4. **Ověření „průběžně = od nuly“**:
+   - V `tests/v2/test_v2_site_rate_index.py` rozšířena kontrola po každém kroku
+     20krokového běhu na všech 31 indexovaných změn (všech 20 `SOUND_CHANGES`,
+     7 sémantických změn, `LexicalCoinage`, `Extension`, `Leveling`,
+     `Rebracketing`) proti čerstvému výpočtu nad **zcela vyprázdněnou**
+     `state.cache`, doplněn test přechodu inventáře a přímé mutace slovníku i
+     kontrola izolace `SoundSupportIndex` a `ContextIndex` v checkpointu.
+
+## Závěrečné sériové srovnání (`825d1c3` vs. krok 3)
+
+Měřeno v jednom souvislém sériovém sledu stejným interpretem bez souběžné zátěže.
+
+### Neinstrumentovaný běh `scripts/v2_digests.py`
+
+| Scénář | Výchozí `3d1016c` (s) | Výchozí fáze 5 `825d1c3` (s) | Po fázi 5 — krok 3 (s) | Otisk (krok 1 = krok 2 = krok 3) |
+|---|---:|---:|---:|---|
+| `phonology` | 0,2 | 0,2 | **0,2** | `91e46de9b912a8847fb7b1595c007c18c5ff0bbf4ca52eb414980df7f2bad4f4` |
+| `morphology` | 0,4 | 0,4 | **0,3** | `7ea78265d605f629dab2edc1f90e7d594d47fde4215d8392e5c3472bb9d5fa87` |
+| `syntax` | 0,6 | 0,5 | **0,3** | `9e1abfe36cce76d10594a7a5087ae61f5f82e0ab6f2b94bae56897e75625dd0c` |
+| `grid-5x5` | 3,5 | 2,7 | **2,2** | `36767c976a7af2c7c989dce2e37b86a582ee97233c2c4cce0e5fc3bde5f2b9bf` |
+| `shift` | 1,2 | 0,9 | **0,7** | `1bfbc2a466d61db09d5762ff2d718069adde6da343eb289bbffee5ce44de36eb` |
+| `island-city` | 0,9 | 0,7 | **0,6** | `3577e966ab9e39320f55688982c42e0d95b9ccfb0b6eb37b6388d937bf20c29e` |
+| `valley-50` | 37,6 | 30,9 | **23,6** | `6246ebdba75988f78e32d386c320bfd6d6842f6dc09d833537b05ef94544a08d` |
+
+Všech sedm otisků kroku 3 je **100 % bitově shodných** s krokem 1 i krokem 2.
+Scénář `valley-50` zrychlil oproti `825d1c3` z **30,9 s na 23,6 s** (−23,6 %),
+oproti původnímu `3d1016c` z **37,6 s na 23,6 s** (−37,2 %), a poprvé splnil i
+původní mez **≤ 25 s**.
+
+### Sériový rozpad času `scripts/v2_timing.py --scenario valley-50`
+
+| Oblast | Výchozí `825d1c3` (s) | Krok 1 (s) | Krok 2 (s) | Krok 3 (s) | Změna `825d1c3` → Krok 3 |
+|---|---:|---:|---:|---:|---|
+| Celý běh `valley-50` | 30,049 | 27,266 | 26,995 | **23,273** | **−6,78 s (−22,6 %), ≤ 30 s SPLNĚNO** |
+| **`phase.innovate`** | **10,771** | **8,626** | **7,826** | **5,091** | **2,12× rychlejší (≥ 2,0× SPLNĚNO)** |
+| — 20 rodin `SoundChange` (`total_rate` + `sites`) | 5,451 | ~5,19 | 5,001 | **2,431** | `voicing` (synchronizace indexu) 2,377 s, zbylých 19 rodin dohromady 0,054 s |
+| — morfologické změny (`leveling`, `extension`, `rebracketing`) | 1,007 | ~0,65 | 0,649 | **0,597** | `leveling` 0,382 s, `rebracketing` 0,210 s, `extension` 0,005 s |
+| — lexikální a sémantické změny (8 rodin) | 0,810 | ~0,67 | 0,675 | **0,672** | `semantic_shift` 0,321 s, ostatních 7 rodin 0,351 s |
+| — syntaktické změny (9 rodin) | 0,527 | ~0,52 | 0,491 | **0,478** | neindexované (0–1 místo) |
+| `phase.transmit` | 16,928 | 16,478 | 16,996 | **15,996** | zrychlení i díky `VocabularyIndex.sync` v `ExponentIndex` |
+| `observe.observe` | 2,347 | 2,160 | 2,171 | **2,184** | beze změny |
+
+Ověření sady testů po kroku 3:
+- Rychlá sada (`pytest -m "not slow" -q`): **585 prošlo, 72 vynecháno**.
+- Celá sada (`pytest -q`, včetně všech milníkových bran a checkpointů): **657 prošlo za 192,79 s (3 min 12 s)**.
+- `ruff check src/cee/v2 tests/v2` i `mypy src/cee/v2` bez nálezů.
+
+## Co zůstalo pomalé a proč
+
+V celkovém čase `valley-50` (~23,3 s) nyní tvoří:
+
+1. **Přenos (`phase.transmit` ≈ 16,0 s, 69 % běhu)**:
+   - Hodnocení zvukových procesů (`_process_scores` 3,79 s, z toho vektorový
+     `_assess_batch` 3,21 s pro 120 nejčastějších slov × dotčené skupiny a
+     hledání homofonních dvojic).
+   - Fonologizace a zápis tvarů (`phonology.restructure` 2,47 s) a morfologické
+     hodnocení (`_form_scores` 2,43 s / `Conservation` 2,05 s).
+   - Lexikální jasnost (`LexicalClarity` 1,72 s — průchod dosažených buněk
+     proměnných × slotů × skupin).
+   - Samotná Wright-Fisherova / logistická selekce a drift nad `LivePools` (~6 s),
+     kde přežívají stovky nízkofrekvenčních variant pod 5 % (přesný Poissonův
+     drift pro malé počty mluvčích by ušetřil další ~24 %, ale mění dynamiku a
+     patří až do kalibrace M7).
+2. **Inovace (`phase.innovate` ≈ 5,1 s, 22 % běhu)**:
+   - Zbývající čas se dělí mezi jednu synchronizaci `ContextIndex` +
+     `SoundSupportIndex` na změněnou vesnici (`voicing` 2,38 s inkluzivně přes
+     `form_contexts` přepsaných slov a agregaci delt), synchronizaci morfologie
+     (`leveling` + `rebracketing` 0,60 s), sémantiky (`0,67 s`), devět levných
+     syntaktických změn (`0,48 s`) a Python smyčku sestavení `expected` matice a
+     skutečných návrhů (`~0,9 s`).
+3. **Pozorování (`observe.observe` ≈ 2,2 s, 9 % běhu)**:
+   - Výpočet párových editačních vzdáleností kognátů mezi 50 vesnicemi každé
+     4 kroky.
+
+Původní orientační rozpočet ze specifikace (`valley-50 ≤ 5 s`, `grid-5x5 ≤ 1 s`)
+zůstává v čistém Pythonu + NumPy po skupinách nedosažitelný bez změny modelu
+(kalibrace driftu v M7) nebo paralelního/architektonického oddělení oblastí.
