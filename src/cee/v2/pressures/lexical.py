@@ -10,6 +10,7 @@ from typing import Callable, Mapping, cast
 
 import numpy as np
 
+from cee.v2.language.lexical_index import LexicalClarityIndex
 from cee.v2.pressures.base import FloatArray, Pressure, PressureBatch
 from cee.v2.pressures.social import Actuation
 
@@ -63,13 +64,28 @@ class LexicalClarity(Pressure):
 
 
 def _clarity_map(batch: PressureBatch, group_id: str) -> Callable[[str, str], float]:
+    """Průběžná mapa jasnosti pro jednu skupinu."""
+    world = batch.world
+    code = world.groups[group_id].main_code
+    state = code.phonology
+    stored = state.cache.get("lexical-clarity-index")
+    if stored is None:
+        index = LexicalClarityIndex()
+        state.cache["lexical-clarity-index"] = (0, index)
+    else:
+        index = cast(LexicalClarityIndex, stored[1])
+    index.sync(world, code)
+    return lambda morpheme, concept: index.score(world, code, morpheme, concept)
+
+
+def _clarity_map_reference(batch: PressureBatch, group_id: str) -> Callable[[str, str], float]:
     """Funkce (morfém, pojem) → skóre jasnosti pro jednu skupinu, s cache."""
     world = batch.world
     code = world.groups[group_id].main_code
     state = code.phonology
     # Mapa homofonů závisí jen na tvarech a slovní zásobě skupiny: drží se
     # napříč dávkami i kroky, dokud se verze kódu nezmění.
-    stored = state.cache.get("lexical-clarity")
+    stored = state.cache.get("lexical-clarity-reference")
     if stored is not None and stored[0] == state.version:
         memo = cast(tuple[dict[tuple[str, str], float], dict[tuple[int, ...], set[tuple[str, str]]]], stored[1])
     else:
@@ -77,7 +93,7 @@ def _clarity_map(batch: PressureBatch, group_id: str) -> Callable[[str, str], fl
         for concept, root in state.dominant.items():
             built.setdefault(world.form_of(code, root), set()).add((root, concept))
         memo = ({}, built)
-        state.cache["lexical-clarity"] = (state.version, memo)
+        state.cache["lexical-clarity-reference"] = (state.version, memo)
     cache: dict[tuple[str, str], float] = memo[0]
     owners: dict[tuple[int, ...], set[tuple[str, str]]] = memo[1]
 
