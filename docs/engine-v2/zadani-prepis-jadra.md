@@ -224,3 +224,134 @@ běhu (souběžné běhy se navzájem brzdí a čísla pak kolísají o ±2 s).
   měření výkonu ho nezapočítávejte, ale zmiňte ho.
 - Při nejistotě, jestli změna drží bitovou shodu, ji nejdřív ověřte na
   `--quick` sadě (`scripts/v2_digests.py --quick`, bez údolí, asi 7 s).
+
+---
+
+## Dodatek (29. 10. 2026): fáze 5, index míst a dávková inovace
+
+Tento dodatek platí po dvou nesplněných branách: Numba (deník
+`06-denik-numba.md`) a průběžné indexy tlaků (deník `07-prubezne-indexy.md`).
+Dosavadní práce se týkala hlavně přenosu. **Inovace** (`Simulation._innovate`)
+přitom zabírá 14 s z asi 37 s údolí a zatím na ni nikdo nesáhl. Tahle fáze míří
+právě na ni.
+
+### Proč inovace stojí tolik
+
+Měřeno na údolí za 1 000 let (40 kroků po 25 letech, 50 vesnic, 40 typů změn):
+
+- `_innovate_with` se volá **80 000×**, ale jen **3 646 volání (4,6 %)**
+  vytvoří aspoň jednu inovaci. V ostatních vyjde z Poissonova losování nula.
+- Každé volání ale nejdřív sestaví úplný seznam míst (`change.sites`) a
+  u nerovnoměrných změn i seznam měr (`change.rates`). Teprve potom losuje.
+  Průměrná velikost seznamu: posun významu 123 míst, ražení 155,
+  rozšíření vzoru 62.
+- Každé volání staví vlastní `rng.generator` (PCG64 + SeedSequence). Za
+  1 000 let to dělá asi 0,8 s, i když se generátor v 95 % volání použije
+  jen na jedno losování nuly.
+- Seznamy míst jsou v cache podle `version` / `lexicon_version`, ale ty se
+  mění skoro každý krok (průměrně 4,8 z 364 slov na vesnici a krok). Cache
+  se tak zahazuje celá a staví znovu.
+
+Samotný počet volání (80 000) nevadí, smyčka v Pythonu je stojí zlomek
+sekundy. Drahé je to, co každé volání udělá, než zjistí, že nic nevznikne.
+
+### Kdy se místa mění
+
+Šíření varianty místa nemění. Místa a jejich míry závisí na stavu kódu
+vesnice: na dominantních kořenech (podíl ≥ 0,5), zapsaných tvarech,
+koncovkách a aktivních procesech. Ten se mění jen ve chvílích, které už
+mají deník (`FormStore.log` a deníky z `07-prubezne-indexy.md`):
+
+- varianta ve vesnici překročí 0,5 (`Simulation._follow_vocabulary`),
+- fonologizace nebo restrukturalizace přepíše tvar,
+- aktivuje se nebo uzavře proces či analogie.
+
+Index míst se proto opravuje jen v těchto chvílích, jen v té vesnici a jen
+pro místa, která na změněném vstupu závisí. Audit závislostí po rodinách už
+je v `07-prubezne-indexy.md`. Rozpracované indexy sémantických a
+morfologických míst z druhé iterace jsou dobrý základ, nestavte je znovu.
+
+### Cílový návrh
+
+1. **Index míst s průběžným součtem.** Pro každou dvojici (kód, typ
+   změny) se drží seřazená místa, jejich míry (pole `float64`) a součet měr.
+   Součet se nepřičítá a neodečítá průběžně, protože zaokrouhlení by
+   záviselo na historii. Index si drží příznak „změněno“ a součet se
+   přepočítá jedním `np.sum` nad polem jen tehdy, když se index od
+   minulého dotazu změnil. Pro `uses_uniform_rate()` stačí počet míst.
+2. **Nejdřív počet, potom místa.** Očekávaný počet inovací
+   (`součet × tempo`, případně `base_rate × tempo × počet × rate_scale`)
+   jde spočítat z indexu bez seznamu míst. Seznam míst, váhy, generátor a
+   `propose` se řeší jen tehdy, když vylosovaný počet není nula.
+3. **Dávka přes vesnice.** Pro jeden typ změny se očekávané počty všech
+   vesnic složí do pole a počty se vylosují najednou hashovaným Poissonem.
+   Každý tah musí záviset jen na `(seed, "innovation", tick, skupina, kód,
+   změna)`, stejně jako dnes `rng.generator`. Pro celou dávku se
+   **nesmí** použít jeden sdílený generátor: tah jedné vesnice by pak
+   závisel na tom, kolik jiných vesnic existuje, a porušila by se izolace
+   oblastí (testy M1/M2). Vhodný vzor je `rng.hash_normal` (splitmix nad
+   stabilními klíči) a inverzní distribuční funkce Poissona pro malé
+   střední hodnoty.
+4. **Pořadí aplikace beze změny.** Výsledné inovace se zapisují do živého
+   skladu a do historie ve stejném pořadí jako dnes, tedy skupiny podle
+   `group_ids()` a v nich změny podle `self.changes`. Vektorově se počítá
+   jen „kolik“, ne „v jakém pořadí“.
+5. **Rodiny bez indexu.** Syntax a změny s nulou či jedním místem (viz
+   tabulka níže) mohou zůstat u dnešního výpočtu míst. Dávka a losování
+   počtu se jich ale týkají taky. Index se zavede jen tam, kde to měření
+   ukáže jako přínos.
+
+Měření jednoho běhu (1 000 let), průměrný počet míst na volání:
+
+| Rodina | Průměr míst | Poznámka |
+|---|---:|---|
+| semantic_shift, lexical_coinage, extension, contamination | 55–155 | hlavní cíl indexu |
+| vowel_shift, derivation, rebracketing, compounding, coda_loss | 13–27 | index, pokud je levný |
+| zvukové změny (většina) | 1–7 | stačí dávka a losování počtu |
+| negation_*, cliticization, affixation, exaptation, taboo_replacement, periphrasis | skoro vždy 0 | levné už dnes |
+
+### Uvolněný invariant: bitová shoda
+
+Tahle fáze mění pořadí a způsob losování, takže **otisky se jednou
+změní**. Uživatel to výslovně schválil. Za bitovou shodu proto nastupují
+tyto podmínky:
+
+- **Model se nemění.** Pro stejný stav musí index dát stejná místa a míry
+  jako dnešní `sites` / `rates`. Ověří se testem „průběžně = od nuly“ po
+  každém kroku delšího běhu a s tolerancí 1e-12 u součtů měr. Mění se jen
+  náhodné tahy.
+- **Brány milníků projdou beze změny prahů** (`tests/v2/*_gate.py`). Jinak
+  je chyba v implementaci, ne v bráně.
+- **Statistická shoda.** Skript porovná na 5 seedech (údolí, 1 000 let)
+  starý a nový engine: počet inovací po typech změn, počet ustálení,
+  počet vymřelých variant a korelaci vzdálenosti (metrika 9). Střední
+  hodnoty se musí lišit méně než o dvě směrodatné odchylky mezi seedy.
+  Výsledek patří do deníku.
+- **Determinismus a izolace oblastí zůstávají**, stejně jako checkpointy:
+  pokračování z checkpointu musí dát stejný otisk jako nepřerušený běh.
+- Nové otisky se zapíší do deníku a do `scripts/v2_digests.py` (komentář)
+  jako nová reference. Od té chvíle zase platí bitová shoda vůči nim.
+
+### Kroky a brána
+
+1. Hashované losování počtu přes vesnice, zatím bez indexu. Místa a míry
+   se dál počítají, protože z nich vychází očekávaný počet. U nulových
+   počtů se ale ušetří stavba generátoru a výběr místa. Změřit a zapsat
+   nové otisky; tento krok ověří losování a statistickou shodu samostatně,
+   dřív než přibude index.
+2. Index míst pro rodiny s průměrem nad 50 míst. Testy „průběžně = od
+   nuly“, změřit.
+3. Podle měření index pro další rodiny.
+
+**Brána po kroku 2:** fáze inovace (`v2_timing.py`) aspoň 2× rychlejší
+proti výchozí kopii v témže sledu a údolí celkem ≤ 30 s. Pokud neprojde,
+Sol zastaví a plán přehodnotí s uživatelem.
+
+### Co do této fáze nepatří
+
+**Přesný drift pro malé počty mluvčích** (Poissonův počet osvojitelů místo
+Gaussova přiblížení v `transmission.transmit`) by zrychlil údolí asi o
+24 % (38,3 → 29,1 s). Ubralo by to „zombie“ varianty, které se staletí drží
+pod 5 %. Mění ale model: v experimentu neprošlo 7 bran a všechny selhaly
+stejným směrem, jazyk se měnil pomaleji. Patří to do kalibrace M7, ne
+sem. Neimplementovat.
