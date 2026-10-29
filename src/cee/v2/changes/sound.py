@@ -21,7 +21,7 @@ import numpy as np
 import numpy.typing as npt
 
 from cee.v2.changes.base import Change, InnovationContext
-from cee.v2.language.processes import Process, stressed_nucleus
+from cee.v2.language.processes import Process, StressRule, stressed_nucleus
 from cee.v2.language.segments import Pattern, SegmentTable
 from cee.v2.phonology import register
 from cee.v2.pressures import (
@@ -80,6 +80,32 @@ class ContextStats:
         return float(self.count[mask].sum())
 
 
+_CONTEXTS: dict[tuple[object, ...], tuple[tuple[int, int, int, bool], ...]] = {}
+_CONTEXTS_LIMIT = 1 << 17
+
+
+def _form_contexts(
+    form: tuple[int, ...], table: SegmentTable, rule: StressRule
+) -> tuple[tuple[int, int, int, bool], ...]:
+    """Prostředí všech hlásek tvaru; čistá funkce tvaru, proto zapamatovaná."""
+    key = (form, rule, id(table))
+    found = _CONTEXTS.get(key)
+    if found is None:
+        if len(_CONTEXTS) >= _CONTEXTS_LIMIT:
+            _CONTEXTS.clear()
+        stress = stressed_nucleus(form, table, rule)
+        found = _CONTEXTS[key] = tuple(
+            (
+                form[index - 1] if index else table.boundary,
+                segment,
+                form[index + 1] if index + 1 < len(form) else table.boundary,
+                index == stress,
+            )
+            for index, segment in enumerate(form)
+        )
+    return found
+
+
 def context_stats(context: InnovationContext) -> ContextStats | None:
     """Statistika prostředí kódu; drží se, dokud se slovní zásoba nezmění."""
     world, code = context.world, context.code
@@ -92,15 +118,7 @@ def context_stats(context: InnovationContext) -> ContextStats | None:
         return cast(ContextStats, cached[1])
     counts: dict[tuple[int, int, int, bool], int] = {}
     for morpheme_id in state.vocabulary:
-        form = world.form_of(code, morpheme_id)
-        stress = stressed_nucleus(form, table, code.stress_rule)
-        for index, segment in enumerate(form):
-            key = (
-                form[index - 1] if index else table.boundary,
-                segment,
-                form[index + 1] if index + 1 < len(form) else table.boundary,
-                index == stress,
-            )
+        for key in _form_contexts(world.form_of(code, morpheme_id), table, code.stress_rule):
             counts[key] = counts.get(key, 0) + 1
     keys = sorted(counts)
     stats = ContextStats(

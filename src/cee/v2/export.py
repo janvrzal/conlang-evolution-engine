@@ -67,6 +67,31 @@ def export(simulation: Simulation, *, events: frozenset[str] | None = TIMELINE) 
     }
 
 
+def frame(simulation: Simulation) -> dict[str, Any]:
+    """Lehký snímek pro průběžné kreslení během běhu (každý krok).
+
+    Jen to, co se mění rychle a co UI kreslí na mapě: rok, populace, podíl
+    L2 mluvčích a poslední pozorované dialekty a jazyky.
+    """
+    world = simulation.world
+    snapshot = simulation.history.snapshots[-1] if simulation.history.snapshots else None
+    observed = _observed_languages(simulation)
+    return {
+        "year": simulation.year,
+        "tick": simulation.tick,
+        "groups": [
+            {"id": group_id, "population": world.groups[group_id].population,
+             "l2_share": world.groups[group_id].main_code.l2_share,
+             "observed_language": observed.get(group_id)}
+            for group_id in world.group_ids()
+        ],
+        "dialects": [] if snapshot is None else [list(cluster) for cluster in snapshot.dialects],
+        "languages": {} if snapshot is None else {
+            lineage: list(groups) for lineage, groups in sorted(snapshot.languages.items())
+        },
+    }
+
+
 def write_json(simulation: Simulation, path: str | Path, **options: Any) -> None:
     Path(path).write_text(
         json.dumps(export(simulation, **options), ensure_ascii=False, sort_keys=True, indent=1),

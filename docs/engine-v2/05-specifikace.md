@@ -373,6 +373,7 @@ Každý milník je svislý řez: musí splnit svou bránu, než začne další.
 | **M6a instituce** | písmo jako zmrazený psaný kód, gramotnost, škola, tisk, tlak `Norma` | S4 |
 | **M6b společnost** | události (migrace, dobytí, válka, epidemie, kolaps, obchod, náboženská změna), podíl L2 z migrace, domény a vitalita jazyka (stabilní dvojjazyčnost, přechod elity a superstrát, Fergusonova diglosie) | metrika 9 (sublineární), stabilní dvojjazyčnost, superstrát, diglosie, liturgické výpůjčky |
 | **M6c linie a export** | vzdálenost i podle tvarů kognátů, emergentní strom jazyků, export pro UI, změření výkonu | stabilní emergentní strom se známou historií |
+| **M6d výkon a odezva** | průběžné výsledky po krocích, checkpointy a přepočet od změněné události, zrychlení bez změny výsledku | pokračování z checkpointu bitově stejné jako běh od začátku |
 | **M7 kalibrace** | hledání vah a konstant proti metrikám | S5, metriky 1, 2, 10 |
 
 ### Stav M1 (2026-10-28)
@@ -881,6 +882,34 @@ Splněno, testy v `tests/v2/test_v2_m6c_gate.py` a `test_v2_observe.py`.
   plochý (miliony drobných operací nad tvary slov); další řádové zrychlení
   potřebuje jiné uložení tvarů nebo paralelní běh nezávislých oblastí.
 
+### Stav M6d (2026-10-28)
+
+Splněno, testy v `tests/v2/test_v2_checkpoints.py`.
+
+- **Průběžné výsledky**: `Simulation.iterate(rok)` vrací běh po každém
+  kroku; `export.frame` dá lehký snímek (rok, populace, podíl L2, dialekty a
+  jazyky) pro kreslení během výpočtu. `run` je jen průchod iterací.
+- **Checkpointy**: `Simulation.checkpoint()` uloží úplný stav (svět,
+  historii, sledování linií; tabulka hlásek a graf pojmů se sdílejí) za asi
+  0,15 s. `Simulation.resume(checkpoint, události)` pokračuje bitově stejně
+  jako běh od začátku (ověřeno otiskem logu i exportem). Se
+  `SimulationConfig(checkpoint_every=…)` se ukládají samy a
+  `Simulation.branch(události)` pokračuje od posledního checkpointu před
+  první změněnou událostí. Příklad: posun druhé hranice ve scénáři
+  `known_tree` z roku 1800 na 2100 se přepočítá od roku 1500 za 4,4 s místo
+  9,1 s.
+- **Zrychlení bez změny výsledku**: zapamatovaná prostředí hlásek pro
+  statistiky zvukových změn (dál navíc ke změnám z M6c). Plný model se
+  syntaxí (údolí, 50 skupin, 2 000 let) zůstává na 66 s.
+- **Proč dál ne**: čas se dělí mezi hodnocení funkční zátěže (asi 19 %),
+  výběr kandidátů zvukových změn (18 %), lexikální tlaky (14 %), místa
+  lexikálních (10 %) a analogických změn (8 %). Všechny se přepočítávají
+  při každé změně tvarů skupiny, a ta při probíhající zvukové změně nastává
+  skoro každý krok. Řádové zrychlení potřebuje sloupcové uložení tvarů
+  všech skupin (pole numpy) a vektorovou aplikaci procesů a statistik přes
+  skupiny naráz; volnější keše (přepočet jednou za několik kroků) by daly
+  odhadem 30–40 %, ale změnily by výsledky.
+
 ## Známé mezery a kam patří
 
 Sepsáno 2026-10-28 při revizi plánu po M3.
@@ -910,7 +939,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | Učené výpůjčky se vracejí jako stará slova s dnešní výslovností; skutečné učené dublety (*fragile* vedle *frêle*) mají tvar psaného kódu | M6c nebo později |
 | Pravopisná výslovnost a revize pravopisu: psané tvary slov se nemění ani s tiskem | později |
 | CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |
-| Výkon plného modelu je 5–13× nad rozpočtem (údolí 67 s místo 5 s, region odhadem 280 s místo 60 s); profil je plochý | samostatný výkonový milník: sloupcové uložení tvarů, paralelní běh propojených komponent, případně Numba |
+| Výkon plného modelu je 5–13× nad rozpočtem (údolí 66 s místo 5 s, region odhadem 280 s místo 60 s). Odezvu pro UI řeší průběžné výsledky a checkpointy (M6d); samotný výpočet potřebuje sloupcové uložení tvarů a vektorové procesy | rozhodnutí: přepis vrstvy tvarů, nebo přijmout a jít na M7 |
 | Sousední vesnice se v plném modelu liší příliš (kontinuum 5×5, 3 000 let: sousedé 0,29, nejvzdálenější 0,38; v nářečních atlasech sousedé asi 0,05–0,15). Prahy dialektu a jazyka proto dávají skoro každou vesnici jako jazyk. Místní mísení je slabé proti tempu změn | M7 (otevřenost, tempo změn, prahy dialektu a jazyka) |
 | Rodokmen slova: export nese původ dnešního slova, ne historii jeho tvarů | později (snímky tvarů v exportu) |
 

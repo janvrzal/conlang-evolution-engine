@@ -21,7 +21,8 @@ napojené na CLI, API ani UI; spouští se z testů a skriptů.
 | M6a instituce: písmo, škola, tisk, diglosie a standardizace | hotovo |
 | M6b společnost: migrace, události, vitalita a domény jazyka, diglosie, náboženství, Séguyho zákon | hotovo |
 | M6c linie jazyků a export pro UI | hotovo (výkon plného modelu nad rozpočtem) |
-| M7 kalibrace, výkon | plán |
+| M6d odezva: průběžné výsledky, checkpointy, přepočet od změny | hotovo (výpočet sám zůstává pomalý) |
+| M7 kalibrace | plán |
 
 Naměřené hodnoty a známé mezery jsou v `docs/engine-v2/05-specifikace.md`.
 

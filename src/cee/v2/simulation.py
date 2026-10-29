@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Iterator, Sequence
 
 import numpy as np
 
@@ -55,6 +56,19 @@ class SimulationConfig:
     dialect_threshold: float = 0.05
     language_threshold: float = 0.25
     record_trajectories: bool = False
+    #: Po kolika letech se automaticky uloží checkpoint (``None`` = nikdy).
+    #: Z checkpointu jde pokračovat se změněnými pozdějšími událostmi
+    #: (:meth:`Simulation.branch`) bez přepočtu starší historie.
+    checkpoint_every: float | None = None
+
+
+@dataclass(frozen=True)
+class Checkpoint:
+    """Úplný stav běhu po kroku ``tick``; pokračování z něj je bitově stejné."""
+
+    tick: int
+    year: float
+    state: tuple[World, History, LineageTracker]
 
 
 class Simulation:
@@ -71,7 +85,21 @@ class Simulation:
         if not world.groups:
             raise ValueError("Svět potřebuje alespoň jednu skupinu mluvčích.")
         self._check_step()
+        self._configure(changes, events)
+        self.history = History()
+        self.tick = 0
+        self.tracker = LineageTracker()
+        world.live.sync_groups(world)
+        world.live.load_differing(world)
+        self._grammar = any(variable.kind == "construction" for variable in world.variables.values())
+        if world.table is not None:
+            for group_id in world.group_ids():
+                self._seed_vocabulary(group_id)
+
+    def _configure(self, changes: Sequence[Change], events: Sequence[WorldEvent]) -> None:
         self.changes = tuple(changes)
+        self.events = tuple(events)
+        self.checkpoints: dict[int, Checkpoint] = {}
         self.pressures = pressures_by_kind(self.changes)
         self.params = TransmissionParams(
             dt=self.config.dt,
@@ -85,15 +113,6 @@ class Simulation:
         )
         # Stabilní řazení: rok, potom pořadí zadání.
         self._pending = sorted(enumerate(events), key=lambda item: (item[1].year, item[0]))
-        self.history = History()
-        self.tick = 0
-        self.tracker = LineageTracker()
-        world.live.sync_groups(world)
-        world.live.load_differing(world)
-        self._grammar = any(variable.kind == "construction" for variable in world.variables.values())
-        if world.table is not None:
-            for group_id in world.group_ids():
-                self._seed_vocabulary(group_id)
 
     @property
     def year(self) -> float:
@@ -104,9 +123,69 @@ class Simulation:
         return self.history.snapshots
 
     def run(self, until_year: float) -> History:
+        for _ in self.iterate(until_year):
+            pass
+        return self.history
+
+    def iterate(self, until_year: float) -> Iterator[Simulation]:
+        """Krok po kroku až do roku ``until_year``; po každém kroku vrátí sebe.
+
+        UI tak může kreslit mapu a časovou osu průběžně, ne až po celém běhu
+        (lehký snímek pro každý krok dává :func:`cee.v2.export.frame`).
+        """
         while self.year + self.config.dt <= until_year + 1e-9:
             self.step()
-        return self.history
+            yield self
+
+    # --- checkpointy -------------------------------------------------------
+
+    def checkpoint(self) -> Checkpoint:
+        """Úplný stav běhu. Neměnná data (tabulka hlásek, graf pojmů) se sdílejí."""
+        return Checkpoint(self.tick, self.year, _copied((self.world, self.history, self.tracker), self.world))
+
+    @classmethod
+    def resume(
+        cls,
+        checkpoint: Checkpoint,
+        events: Sequence[WorldEvent] = (),
+        config: SimulationConfig | None = None,
+        *,
+        changes: Sequence[Change] = DEFAULT_CHANGES,
+    ) -> Simulation:
+        """Pokračování z checkpointu s (případně jinými) událostmi.
+
+        Události do roku checkpointu už se staly a jsou ve stavu; z ``events``
+        se použijí jen pozdější. Výsledek je bitově stejný, jako kdyby běh
+        s ``events`` šel od začátku (pokud se ty starší neliší).
+        """
+        world, history, tracker = _copied(checkpoint.state, checkpoint.state[0])
+        simulation = cls.__new__(cls)
+        simulation.world = world
+        simulation.config = config or SimulationConfig()
+        simulation._configure(changes, events)
+        simulation._pending = [item for item in simulation._pending if item[1].year > checkpoint.year]
+        simulation.history, simulation.tracker, simulation.tick = history, tracker, checkpoint.tick
+        simulation._grammar = any(variable.kind == "construction" for variable in world.variables.values())
+        return simulation
+
+    def branch(self, events: Sequence[WorldEvent]) -> Simulation:
+        """Nový běh s jinými událostmi, od posledního checkpointu před první změnou.
+
+        Když se změní událost v roce 1500, stačí pokračovat z checkpointu před
+        rokem 1500; starší historie se nepočítá znovu. Bez vhodného
+        checkpointu vyhodí ``ValueError`` (pak je třeba běžet od začátku).
+        """
+        old = sorted(self.events, key=lambda event: event.year)
+        new = sorted(events, key=lambda event: event.year)
+        changed = min(
+            [min(first.year, second.year) for first, second in zip(old, new) if first != second]
+            + [event.year for event in (old[len(new):] + new[len(old):])]
+            + [float("inf")]
+        )
+        usable = [tick for tick, point in self.checkpoints.items() if point.year < changed]
+        if not usable:
+            raise ValueError("Žádný checkpoint před první změněnou událostí; spusť běh od začátku.")
+        return Simulation.resume(self.checkpoints[max(usable)], events, self.config, changes=self.changes)
 
     def step(self) -> None:
         self.tick += 1
@@ -118,6 +197,9 @@ class Simulation:
             self.world.live.sync_groups(self.world)
         if self.tick % self.config.observe_every == 0:
             self._observe(year)
+        every = self.config.checkpoint_every
+        if every is not None and (year - self.world.start_year) % every < 1e-9:
+            self.checkpoints[self.tick] = self.checkpoint()
 
     # --- jednotlivé fáze -------------------------------------------------
 
@@ -380,3 +462,12 @@ class Simulation:
                 f"Krok {self.config.dt} let je delší než nejkratší generace "
                 f"({self.world.generation_ceiling()} let)."
             )
+
+
+def _copied(state: Any, world: World) -> Any:
+    """Hluboká kopie stavu; neměnná sdílená data světa se nekopírují."""
+    memo: dict[int, Any] = {}
+    for shared in (world.table, world.semantics):
+        if shared is not None:
+            memo[id(shared)] = shared
+    return copy.deepcopy(state, memo)
