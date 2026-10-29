@@ -1,5 +1,9 @@
 # Deník přepisu datového jádra M6e
 
+**Historický experiment, následně vrácený na žádost uživatele.** Další
+návrh číselné cesty níže uživatel neschválil. Aktuální plán a audit
+závislostí jsou v [`07-prubezne-indexy.md`](07-prubezne-indexy.md).
+
 Výchozí commit: `3d1016c6687d83e165a49601582a86de59cbfbdc`.
 Pracovní větev: `engine-v2-numba`. Koordinátor řídí implementátorky
 Terra 6.1 a Luna 6; měření a simulace se spouštějí postupně.

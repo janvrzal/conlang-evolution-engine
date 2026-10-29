@@ -966,45 +966,34 @@ Celá sada testů 7 min 40 s → 4 min 47 s.
   smyčky běží jako kompilovaná jádra (Numba), nebo průběžně udržované
   součty i pro zbývající statistiky. Obojí je velký zásah do jádra.
 
-### Stav M6e: datově orientované jádro (2026-10-29)
+### Stav M6e: průběžné indexy (2026-10-29)
 
-**Rozpracovaný experiment na větvi `engine-v2-numba`, nikoli splněný
-výkonový milník.** Postup a podrobné výsledky jsou v
-[`06-denik-numba.md`](06-denik-numba.md). Po fázi 2 se postup zastavuje
-před dalšími jádry podle rozhodovací brány v zadání: praktický odhad
-zrychlení horkých cest 10–50× se nepotvrdil.
+**Rozpracováno; výkonová brána nesplněna.** Numba experiment ani další
+navrženou číselnou cestu uživatel nepřijal. Produkční integrace, číselné
+zrcadlo tvarů, nepotřebné registry a závislost Numba byly vráceny;
+zachován je stopkový měřič `scripts/v2_timing.py` včetně `--helpers`.
+Historie pokusu je v [`06-denik-numba.md`](06-denik-numba.md).
 
-- Registry morfémů a koncovek dávají stabilní interní čísla; pořadí
-  výpočtů stále určuje řetězcové ID. `FormStore.bind` udržuje sloupce
-  `form_id`, hranici a číslo koncovky za původním rozhraním. Vlastní
-  přepisy mají číselnou podobu a současně čtecí cache `UnitForm`;
-  slovní zásoba má číselný snímek podle `lexicon_version`.
-- Banka tvarů má rostoucí matici hlásek a délky. Numba s `cache=True`
-  provádí všech šest operací procesů včetně přízvuku, prostředí,
-  minimality slova a hranice kmen | koncovka. Dávka fonologizace zahrnuje
-  jen způsobilý začátek fronty jednoho procesu; zápisy a opětovné
-  zařazování do ostatních front zůstávají sekvenční v původním pořadí.
-- Python reference `Process._apply` a
-  `phonology._restructure_reference` zůstávají pro porovnání v testech.
-  Testy zahrnují náhodné i skutečné tvary, všech šest operací, feeding,
-  bleeding, rovnost prahů, pořadí zápisů, uzavírání a checkpointy.
-  Finální celá sada: 623 testů prošlo za 287,43 s; Ruff a mypy čisté.
-- Všech sedm zadaných otisků historie zůstává přesně shodných. První
-  sériové porovnání s výchozím commitem: údolí 37,7 / 38,9 s, mřížka
-  3,7 / 3,7 s. Údolí je v tomto páru asi o 3 % pomalejší. Cíle
-  **≤ 8 s a ≤ 1 s nejsou splněné**.
-- Mikrobenchmark na skutečných kandidátech a 1 000 tvarech: samotná
-  dávková smyčka asi 5–14× proti Python referenci, kompletní dávka včetně
-  převodů jen asi 1–2,4×; skalární adaptér je místy až 3× pomalejší.
-  První načtení/překlad Numby se vykazuje zvlášť. Samotné časy jádra
-  nejsou důkazem zrychlení simulace.
+Nový plán, úplný audit závislostí a měření jsou v
+[`07-prubezne-indexy.md`](07-prubezne-indexy.md). Doplněny jsou deníky
+změn dominantních konceptů, užití kořenů, členství slov, konceptových
+frekvencí, aktivací/uzavírání a konstrukční gramatiky. Nemění původní
+počty verzí ani okamžiky záměrně zastaralého hodnocení.
 
-Zbývající práce není pouze přeložit další smyčky: horká cesta stále čte
-slovníky a n-tice, připravuje malá pole a převádí výsledek zpět. Registry
-skupin/procesů, číselný stav jako hlavní cesta, číselné fronty i další
-hodnoticí a lexikální jádra dosud nejsou dokončené. Další návrh má nejprve
-ověřit jednu celou číselnou cestu bez těchto konverzí a teprve podle jejího
-měření rozhodnout o širším přepisu.
+První dva inkrementální výpočty jsou mapa lexikální jasnosti a podklady
+hodnocení procesů. Příspěvky slov se dorovnávají podle deníku tvarů;
+float agregace zůstávají v původním pořadí a NumPy redukcích. Testy
+porovnávají průběžný výsledek s referencí, hlídají skutečně nepřepočítaná
+slova, změny frekvencí, syntaktickou kompenzaci i checkpointy.
+
+Sériové měření: **údolí 37,3 → 39,0 s**, mřížka 3,5 → 3,7 s;
+všech sedm otisků přesně souhlasí. **Brána po dvou výpočtech ≤ 25 s
+neprošla, další převody se zastavují k přehodnocení s uživatelem.**
+Rozpad času ukazuje zlepšení lexikální jasnosti (3,154 → 1,761 s), ale
+regresi assessment (4,469 → 6,375 s). Druhý index duplikuje část již
+levných vektorových lookupů banky a stále připravuje celé dávkové matice.
+Tyto dva prototypy nejsou přijatá výkonová etapa a do `engine-v2` se
+neslučují. Původní cíle ≤ 8 s / ≤ 1 s nejsou splněné.
 
 ## Známé mezery a kam patří
 

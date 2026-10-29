@@ -49,16 +49,16 @@ Pravidla v2, která se snadno poruší:
   milníků (`*_gate.py`) jsou `slow` a celá sada trvá asi 5 minut. Optimalizace
   nesmí změnit výsledek: ověř otisk logu (`History.digest`) proti předchozímu
   commitu.
-* **Experiment M6e (Numba)**: `language/kernels.py` překládá aplikaci
-  procesů a dávky tvarů; `Process._apply` a
-  `phonology._restructure_reference` zůstávají referencemi pro testy.
-  Číselné sloupce `FormStore` jsou zatím zrcadlem rychlé fasády `UnitForm`,
-  slovní zásoba má číselný snímek podle `lexicon_version`. Registry se při
-  checkpointu kopírují, banka se dál sdílí. **Výkonnostní brána fáze 2
-  nebyla splněna**: převody dat pohlcují zisk přeložené smyčky. Neprezentuj
-  M6e ani cíle údolí ≤ 8 s / mřížka ≤ 1 s jako dokončené. Pokračování
-  musí nejprve přehodnotit plán podle
-  `docs/engine-v2/06-denik-numba.md`; automaticky nerozjížděj fázi 3.
+* **M6e: průběžné indexy**: neúspěšná Numba integrace a číselné zrcadlo
+  tvarů byly vráceny na žádost uživatele; měřič `scripts/v2_timing.py`
+  zůstává. Aktuální audit a plán jsou v `docs/engine-v2/07-prubezne-indexy.md`.
+  Přepočítávej příspěvky změněných slov podle deníků, float agregace dělej
+  v původním pořadí. První dva výpočty jsou lexikální jasnost a hodnocení
+  procesů. Brána **valley-50 ≤ 25 s neprošla** (37,3 → 39,0 s).
+  Lexikální jasnost zlevnila, assessment zdražil; další výpočty
+  nepřeváděj bez přehodnocení plánu s uživatelem. Všech sedm
+  otisků a checkpointy musí souhlasit. Neprezentuj M6e ani původní cíle
+  údolí ≤ 8 s / mřížka ≤ 1 s jako dokončené.
 * **Kalibrační konstanty** mají ve specifikaci zdůvodnění a naměřené
   hodnoty; při změně je přeměř a aktualizuj oddíl „Stav Mx“.
 
