@@ -22,6 +22,7 @@ napojené na CLI, API ani UI; spouští se z testů a skriptů.
 | M6b společnost: migrace, události, vitalita a domény jazyka, diglosie, náboženství, Séguyho zákon | hotovo |
 | M6c linie jazyků a export pro UI | hotovo (výkon plného modelu nad rozpočtem) |
 | M6d odezva: průběžné výsledky, checkpointy, přepočet od změny | hotovo (výpočet sám zůstává pomalý) |
+| M6e datově orientované jádro s Numbou | experiment na větvi `engine-v2-numba`; fáze 2 zachovává otisky, ale nepotvrdila praktické zrychlení; před fází 3 přehodnotit plán s uživatelem |
 | M7 kalibrace | plán |
 
 Naměřené hodnoty a známé mezery jsou v `docs/engine-v2/05-specifikace.md`.

@@ -46,9 +46,19 @@ Pravidla v2, která se snadno poruší:
   řádky `cee/data/v2_grammar.yaml`; jazyk je má podle profilu protojazyka.
   Do kódu změn a tlaků nepiš jména konkrétních funkcí, čti katalog.
 * **Testy v2**: rychlá sada `pytest -m "not slow"` (asi 17 s); brány
-  milníků (`*_gate.py`) jsou `slow` a celá sada trvá asi 8 minut. Optimalizace
+  milníků (`*_gate.py`) jsou `slow` a celá sada trvá asi 5 minut. Optimalizace
   nesmí změnit výsledek: ověř otisk logu (`History.digest`) proti předchozímu
   commitu.
+* **Experiment M6e (Numba)**: `language/kernels.py` překládá aplikaci
+  procesů a dávky tvarů; `Process._apply` a
+  `phonology._restructure_reference` zůstávají referencemi pro testy.
+  Číselné sloupce `FormStore` jsou zatím zrcadlem rychlé fasády `UnitForm`,
+  slovní zásoba má číselný snímek podle `lexicon_version`. Registry se při
+  checkpointu kopírují, banka se dál sdílí. **Výkonnostní brána fáze 2
+  nebyla splněna**: převody dat pohlcují zisk přeložené smyčky. Neprezentuj
+  M6e ani cíle údolí ≤ 8 s / mřížka ≤ 1 s jako dokončené. Pokračování
+  musí nejprve přehodnotit plán podle
+  `docs/engine-v2/06-denik-numba.md`; automaticky nerozjížděj fázi 3.
 * **Kalibrační konstanty** mají ve specifikaci zdůvodnění a naměřené
   hodnoty; při změně je přeměř a aktualizuj oddíl „Stav Mx“.
 

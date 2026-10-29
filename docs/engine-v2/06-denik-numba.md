@@ -69,3 +69,87 @@ produkční simulace v tomto běhu ještě používala původní aplikátor.
 Výchozí kopie s měřičem: údolí 37,700 s, stejný otisk. Inovace
 14,244 s, přenos 21,102 s (uvnitř artikulace 5,167 s, lexikální jasnost
 3,331 s, fonologizace 2,689 s), pozorování 2,352 s. Údaje jsou inkluzivní.
+
+## Fáze 2: funkčně shodný experiment, výkonnostní brána nesplněna
+
+`Process.apply_tracked` na cache miss volá číselné jádro; původní
+`Process._apply` zůstává čistou Python referencí. Výstupní mapa rysové
+změny se doplňuje jen pro skutečně přítomné cílové hlásky. Banka drží
+rostoucí matici a hromadně vyhodnocuje neznámé tvary ve stejném pořadí
+`np.unique` jako dosud. Fonologizace dávkuje pouze způsobilý začátek fronty
+jednoho procesu. Přepisy, verze, deník a zařazování do ostatních front
+stále provádí postupně Python; referenční smyčka zůstává pro testy.
+
+### Mikrobenchmark
+
+`scripts/v2_kernel_bench.py`: 265 skutečných prototvarů z morfologického
+scénáře, 1 000 řádků na dávku, medián 7 opakování po zahřátí. Kandidáti
+mají skutečné zásahy; každé měření předem ověří shodu s Pythonem.
+
+| Operace | Python (ms) | Skalární produkční adaptér (ms) | Samotné dávkové jádro (ms) | Dávka včetně převodů fasády (ms) |
+|---|---:|---:|---:|---:|
+| change | 1,244 | 3,787 | 0,128 | 0,861 |
+| delete | 1,866 | 1,864 | 0,133 | 0,765 |
+| insert_before | 1,334 | 1,829 | 0,141 | 0,730 |
+| merge_next | 0,663 | 1,762 | 0,133 | 0,693 |
+| replace | 1,860 | 1,922 | 0,136 | 0,864 |
+
+Samotné dávkové jádro přináší asi 5–14×, ale po převodech n-tice → pole →
+n-tice zbývá přibližně 1–2,4× (u merge_next mírné zpomalení). Poslední
+sloupec nezahrnuje internování výsledků zpět do banky ani mutace stavu
+simulace, tedy ani on není příslibem zrychlení `ProcessTable.results`.
+Skalární adaptér má vlastní režii a může být až 3× pomalejší než Python.
+První skalární dispatch v tomto procesu trval 101,935 ms, dávkový
+3,363 ms; jde o první volání s již dostupnou diskovou cache, **nikoli
+měření úplného překladu od nuly**. První volání nejsou v mediánech.
+
+### Plné scénáře a rozhodnutí
+
+První běh po integraci: všech sedm otisků přesně shodných, údolí 39,0 s,
+mřížka 3,7 s. Závěrečné porovnání běželo v jednom sledu se stejným
+interpretem a závislostmi: nejprve výchozí kopie commitu v `/tmp`, poté
+aktuální větev; žádná souběžná simulace ani testy.
+
+| Scénář | Výchozí commit (s) | Fáze 2 (s) | Cíl (s) |
+|---|---:|---:|---:|
+| grid-5x5 | 3,7 | 3,7 | ≤ 1 |
+| valley-50 | 37,7 | 38,9 | ≤ 8 |
+
+Otisky v obou bězích přesně odpovídají tabulce na začátku deníku.
+Údolí je v tomto páru přibližně o 3 % pomalejší. **Výkonnostní cíl nebyl
+splněn a praktický odhad 10–50× se nepotvrdil.** Podle výslovné brány ve
+fázi 2 zadání se práce zastavuje před fází 3 a plán má přehodnotit
+uživatel. Experiment zůstává na pracovní větvi pro kontrolu; do
+`engine-v2` se neslučuje. Izolovaný rozpracovaný kód pro další jádra byl
+odstraněn, aby větev neobsahovala nevyužitý budoucí kód.
+
+Finální celá sada: **623 prošlo za 287,43 s (4 min 47 s)**, včetně
+milníkových bran, checkpointů a všech nových testů. Výchozí sada měla
+587 úspěšných testů a dvě chyby kvůli omezenému oprávnění k socketu;
+finální běh má oprávnění k lokálním portům a žádné selhání. Časy celých
+sad jsou s různým počtem testů, proto samy nedokazují zrychlení enginu.
+Ruff i mypy čisté; `git diff --check` bez chyb. Nezávislá kontrola F1/F2
+neodhalila konkrétní chybu správnosti. Automaticky porovnány čtyři úplné
+sady otisků (fáze 1, fáze 2, závěrečný výchozí a aktuální běh): všechny
+se přesně shodují se sedmi požadovanými hodnotami.
+Finální rychlá sada: **551 prošlo, 72 vynecháno, 19,77 s**.
+
+### Návrh dalšího rozhodnutí
+
+Dosavadní fáze 1 jsou kompatibilní číselné sloupce vedle slovníkové
+čtecí cache, nikoli dokončená hlavní číselná datová cesta. Horká smyčka
+se proto stále vrací k řetězcům, `UnitForm` a n-ticím a připravuje mnoho
+malých dávek. Překlad dalších izolovaných smyček tuto cenu sám neodstraní.
+
+Doporučený další experiment, pokud uživatel schválí upravený plán:
+
+1. Vybrat jednu skutečně dominantní operaci podle stopkového měřiče.
+2. Vést její vstup, výstup i aktualizaci stavu pouze přes číselná pole,
+   s rekonstrukcí fasády až na okraji a s referencí v Pythonu.
+3. Měřit celou cestu včetně internování a aktualizací, ne pouze jádro.
+   Pokračovat až při alespoň 2× zrychlení této celé operace a zlepšení
+   celého údolí nad šum měření, při zachování všech otisků a checkpointů.
+
+Alternativa: vrátit produkční integraci fáze 2 a ponechat ověřený měřič,
+benchmarky a kompatibilní datový základ pro cílenější další práci.
+Ani jedna varianta zatím neslibuje splnění 8 s bez dalšího měření.
