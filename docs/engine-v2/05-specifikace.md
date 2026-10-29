@@ -1017,10 +1017,36 @@ změnou otisků v kroku 1 a následnou bitovou shodou v krocích 2 a 3:
   - `v2_timing.py --scenario valley-50`: celkem **30,049 → 23,273 s**, fáze
     inovace **`phase.innovate` 10,771 → 5,091 s (2,12× rychlejší)** — brána
     fáze 5 (`≥ 2×` rychlejší inovace a `valley-50 ≤ 30 s`) je splněna.
-  - Celá sada testů (`pytest -q`): **657 testů prošlo za 192,79 s (3 min 12 s)**;
-    `ruff` a `mypy` čisté. Nové referenční otisky jsou zapsané v
-    `scripts/v2_digests.py`. Do `engine-v2` se větev sloučí až po schválení
-    uživatelem.
+  - Celá sada testů (`pytest -q`) na konci fáze 5: **657 testů prošlo za 192,79 s
+    (3 min 12 s)**; `ruff` a `mypy` čisté.
+
+Navazující **zpevnění milníkových bran před M7** ([`09-zpevneni-bran.md`](09-zpevneni-bran.md))
+nahradilo účelově zvolený doménový klíč `"innovation-change-34"` neutrální
+konstantou `_INNOVATION_CHANGE_DOMAIN = "innovation-change"` a změřilo přes
+`scripts/v2_gate_rates.py` všech 52 stochastických tvrzení v `tests/v2/*_gate.py`
+na nezávislé řadě seedů `101..120` (u M3 morfologie rozšířeně `101..140`):
+
+- **Nové referenční otisky (`scripts/v2_digests.py`, klíč `"innovation-change"`)**:
+  - `phonology`: `8d7971c1a6afe5f6b8ca9f33919b8b3e2e929d56832ae4e04c738efa18c53840`
+  - `morphology`: `3567be70a272f42662ecd44838079d33abf953d090c59a9a2da4079467933a06`
+  - `syntax`: `eefb5db5be7bfac8284c400b7a0ebc81fe4a65c04325aaafa9b1cdb39d50fc38`
+  - `grid-5x5`: `a6aa9a33f1a416e33144a0235d19194c442bb27ede6f966c5092a7b7342b08c0`
+  - `shift`: `47d69ad8a511366b2dedba0a9c30550c0c1d0045aa24ce3eafbdde03663da71a`
+  - `island-city`: `a082c2463488378f975fc050a9265f62856e716d6b1dd0b4d813f7d5323ab2cf`
+  - `valley-50`: `02ccc3819e155cff096d791466f3dcdab88142a4e31e9b1920f92fc9898b1272`
+- **Stochastické brány (`k` z `N`) a negativní kontroly**: 42 robustních bran a
+  10 deterministických/výkonových testů zůstalo beze změny; 10 křehkých či
+  hraničních bran (včetně Jespersenova cyklu `8/20` převedeného na `N = 19, k = 1`
+  jako ochrany proti regresi a dvou bran existence `m3b::tabu` a `m5::s3_substrat`
+  s `N = 12, k = 1`) používá agregaci `k` z `N` odvozenou z dolní meze Wilsonova
+  95% intervalu (`P(Bin(N, p_dolní) < k) <= 1 %`) na souvislých řadách `1..N`,
+  beze změny vnitřních prahů tvrzení. U všech 10 převedených bran skončila
+  negativní kontrola se vypnutým mechanismem pod prahem `k` (devětkrát `0/N`,
+  jednou `3/10 < 5`). Celá sada testů (`pytest -q`, 665 testů) prochází za
+  428,48 s (7 min 8 s). Otevřené kalibrační otázky (spouštění `NegationReduction`
+  od `0,5`, síla tabu a gradient substrátu v S3) jsou zapsané pro M7 v
+  [`09-zpevneni-bran.md`](09-zpevneni-bran.md). Do `engine-v2` se větev sloučí až
+  po schválení uživatelem.
 
 ## Známé mezery a kam patří
 

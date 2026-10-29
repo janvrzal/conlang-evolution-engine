@@ -45,25 +45,29 @@ Pravidla v2, která se snadno poruší:
 * **Gramatické funkce jsou data.** Minulý čas, člen, pád, zápor apod. jsou
   řádky `cee/data/v2_grammar.yaml`; jazyk je má podle profilu protojazyka.
   Do kódu změn a tlaků nepiš jména konkrétních funkcí, čti katalog.
-* **Testy v2**: rychlá sada `pytest -m "not slow"` (asi 17 s); brány
-  milníků (`*_gate.py`) jsou `slow` a celá sada trvá asi 5 minut. Optimalizace
+* **Testy v2**: rychlá sada `pytest -m "not slow"` (asi 20–30 s); brány
+  milníků (`*_gate.py`) jsou `slow` a celá sada trvá asi 6–7 minut. Optimalizace
   nesmí změnit výsledek: ověř otisk logu (`History.digest`) proti předchozímu
-  commitu.
-* **M6e: průběžné indexy a dávková inovace**: neúspěšná Numba integrace a
-  číselné zrcadlo tvarů byly vráceny (`06-denik-numba.md`); měřič
+  commitu. Když změna proudu náhody shodí stochastickou bránu, nezkoušej jiné
+  seedy ani konstanty. Změř míru průchodu před a po (`scripts/v2_gate_rates.py`)
+  a rozhodni podle ní. Audit a zpevnění bran jsou v `docs/engine-v2/09-zpevneni-bran.md`.
+* **M6e: průběžné indexy, dávková inovace a zpevnění bran**: neúspěšná Numba
+  integrace a číselné zrcadlo tvarů byly vráceny (`06-denik-numba.md`); měřič
   `scripts/v2_timing.py` zůstává. Audit závislostí a výsledky indexů tlaků jsou
   v `docs/engine-v2/07-prubezne-indexy.md`, dávkové losování počtu inovací přes
   `rng.hash_poisson` a indexy míst s mírami (`SemanticSitesIndex`,
   `MorphologyCandidateIndex`, `SoundSupportIndex`, `VocabularyIndex`) v
-  `docs/engine-v2/08-davkova-inovace.md`. Příspěvky slov dorovnávej přírůstkově
-  podle deníků, float agregace (`np.sum`) počítej vždy jednorázově v kanonickém
-  pořadí (nikdy průběžným přičítáním/odečítáním) a v `transmission._normalized`
-  drž sekvenční součet slotů zleva doprava. Ve fázi 5 proběhla schválená
-  jednorázová obměna referenčních otisků v `scripts/v2_digests.py` (ověřeno na
-  5 seedech `< 1,36 SD`); od té chvíle opět platí bitová shoda všech 7 otisků i
-  checkpointů. Scénář `valley-50` běží za ~23,6 s (fáze inovace 2,12× rychlejší)
-  a `grid-5x5` za ~2,2 s; neprezentuj původní orientační cíle údolí ≤ 5–8 s /
-  mřížka ≤ 1 s jako splněné.
+  `docs/engine-v2/08-davkova-inovace.md` a přechod na neutrální doménový klíč
+  `"innovation-change"` se zpevněním stochastických bran (`k` z `N` podle Wilsonovy
+  dolní meze na nezávislých seedech) v `docs/engine-v2/09-zpevneni-bran.md`.
+  Příspěvky slov dorovnávej přírůstkově podle deníků, float agregace (`np.sum`)
+  počítej vždy jednorázově v kanonickém pořadí (nikdy průběžným
+  přičítáním/odečítáním) a v `transmission._normalized` drž sekvenční součet
+  slotů zleva doprava. Od zavedení neutrálního klíče `"innovation-change"` platí
+  bitová shoda všech 7 referenčních otisků v `scripts/v2_digests.py` i
+  checkpointů. Scénář `valley-50` běží za ~23,6–25,4 s (fáze inovace 2,12×
+  rychlejší) a `grid-5x5` za ~2,2–2,5 s; neprezentuj původní orientační cíle
+  údolí ≤ 5–8 s / mřížka ≤ 1 s jako splněné.
 * **Kalibrační konstanty** mají ve specifikaci zdůvodnění a naměřené
   hodnoty; při změně je přeměř a aktualizuj oddíl „Stav Mx“.
 

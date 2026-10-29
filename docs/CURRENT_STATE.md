@@ -22,8 +22,17 @@ napojené na CLI, API ani UI; spouští se z testů a skriptů.
 | M6b společnost: migrace, události, vitalita a domény jazyka, diglosie, náboženství, Séguyho zákon | hotovo |
 | M6c linie jazyků a export pro UI | hotovo (výkon plného modelu nad rozpočtem) |
 | M6d odezva: průběžné výsledky, checkpointy, přepočet od změny | hotovo (výpočet sám zůstává pomalý) |
-| M6e průběžné indexy a dávková inovace | na větvi `engine-v2-numba` hotovo po fázi 5 (`07-prubezne-indexy.md`, `08-davkova-inovace.md`): dávkové `hash_poisson` losování inovací a přírůstkové indexy míst a měr zrychlily `valley-50` na 23,6 s (z 37,6 s; inovace 2,12× rychlejší) a `grid-5x5` na 2,2 s (z 3,5 s); původní orientační rozpočet ≤ 5–8 s zůstává mimo dosah bez změny modelu (M7) či paralelismu |
+| M6e průběžné indexy, dávková inovace a zpevnění bran | na větvi `engine-v2-numba` hotovo po fázi 5 a zpevnění bran (`07-prubezne-indexy.md`, `08-davkova-inovace.md`, `09-zpevneni-bran.md`): dávkové `hash_poisson` losování inovací s neutrálním klíčem `"innovation-change"`, přírůstkové indexy míst a měr (`valley-50` 23,6–25,4 s místo 37,6 s, inovace 2,12× rychlejší; `grid-5x5` 2,2–2,5 s místo 3,5 s) a zpevnění stochastických milníkových bran na `k` z `N` podle auditu `v2_gate_rates.py`; původní orientační rozpočet ≤ 5–8 s zůstává mimo dosah bez změny modelu (M7) či paralelismu |
 | M7 kalibrace | plán |
+
+Platné referenční otisky (`scripts/v2_digests.py`, doménový klíč `"innovation-change"`):
+`phonology` `8d7971c1a6afe5f6b8ca9f33919b8b3e2e929d56832ae4e04c738efa18c53840`,
+`morphology` `3567be70a272f42662ecd44838079d33abf953d090c59a9a2da4079467933a06`,
+`syntax` `eefb5db5be7bfac8284c400b7a0ebc81fe4a65c04325aaafa9b1cdb39d50fc38`,
+`grid-5x5` `a6aa9a33f1a416e33144a0235d19194c442bb27ede6f966c5092a7b7342b08c0`,
+`shift` `47d69ad8a511366b2dedba0a9c30550c0c1d0045aa24ce3eafbdde03663da71a`,
+`island-city` `a082c2463488378f975fc050a9265f62856e716d6b1dd0b4d813f7d5323ab2cf`,
+`valley-50` `02ccc3819e155cff096d791466f3dcdab88142a4e31e9b1920f92fc9898b1272`.
 
 Naměřené hodnoty a známé mezery jsou v `docs/engine-v2/05-specifikace.md`.
 
