@@ -375,6 +375,7 @@ class Simulation:
                 code.phonology.uses[morpheme] = code.phonology.uses.get(morpheme, 0) + 1
                 code.phonology.vocabulary.update(morphology.units_of(self.world, code, morpheme))
                 code.phonology.version += 1
+                code.phonology.lexicon_version += 1
 
     def _follow_vocabulary(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
         """Slovo, které se stane dominantním, vstoupí do fonologie kódu."""
@@ -399,6 +400,7 @@ class Simulation:
                 code = self.world.groups[group_ids[column]].main_code
                 state = code.phonology
                 state.version += 1
+                state.lexicon_version += 1
                 if direction == "leave":
                     if state.dominant.get(concept) == morpheme:
                         del state.dominant[concept]
@@ -467,7 +469,8 @@ class Simulation:
 def _copied(state: Any, world: World) -> Any:
     """Hluboká kopie stavu; neměnná sdílená data světa se nekopírují."""
     memo: dict[int, Any] = {}
-    for shared in (world.table, world.semantics):
+    # Banka tvarů jen přibývá a nemění význam čísel, proto ji kopie sdílejí.
+    for shared in (world.table, world.semantics, world.bank):
         if shared is not None:
             memo[id(shared)] = shared
     return copy.deepcopy(state, memo)

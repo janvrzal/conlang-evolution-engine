@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Literal, Mapping, Sequence
 
+from cee.v2.language.bank import FormBank
 from cee.v2.language.lexicon import FormStore, Morpheme, PhonologyState, UnitForm
 from cee.v2.language.morphology import FormChange, Paradigm, unit_id
 from cee.v2.language.processes import Process, StressRule
@@ -168,6 +169,10 @@ class World:
     #: Podíl lidí, kteří se za generaci přestěhují k sousedům (M6b). Nula
     #: vypne migraci; podíl přistěhovalců pak určuje ``immigration`` skupin.
     migration: float = 0.0
+    #: Banka různých tvarů a tabulky procesů (M6d); vzniká až při potřebě.
+    bank: FormBank | None = None
+    #: Výchozí tvar každého morfému (neměnný), aby se netvořil při každém čtení.
+    default_units: dict[str, UnitForm] = field(default_factory=dict)
 
     def distribution(self, group_id: str, variable_id: str) -> Distribution | None:
         """Jediné správné čtení stavu: živá proměnná má přednost před repertoárem."""
@@ -183,6 +188,12 @@ class World:
             if variable is not None and variable.default is not None:
                 return Distribution.fixed(variable.default)
         return found
+
+    def form_bank(self) -> FormBank:
+        if self.bank is None:
+            assert self.table is not None
+            self.bank = FormBank(self.table)
+        return self.bank
 
     def concept_frequency(self, concept: str) -> float:
         return self.concept_frequencies.get(concept, 0.3)
@@ -209,8 +220,13 @@ class World:
         stored = code.forms.get(morpheme_id)
         if stored is not None:
             return stored
-        morpheme = self.morphemes[morpheme_id]
-        return UnitForm(morpheme.form, morpheme.boundary, morpheme.exponent)
+        default = self.default_units.get(morpheme_id)
+        if default is None:
+            morpheme = self.morphemes[morpheme_id]
+            default = self.default_units[morpheme_id] = UnitForm(
+                morpheme.form, morpheme.boundary, morpheme.exponent
+            )
+        return default
 
     def form_of(self, code: Code, morpheme_id: str) -> tuple[int, ...]:
         """Aktuální podkladový tvar morfému v daném kódu."""
@@ -396,12 +412,12 @@ def _concepts_by_root(code: Code) -> dict[str, list[str]]:
     """Kořen → pojmy, pro které je dominantní (v pořadí slovníku kódu)."""
     state = code.phonology
     cached = state.cache.get("concepts-by-root")
-    if cached is not None and cached[0] == state.version:
+    if cached is not None and cached[0] == state.lexicon_version:
         return cached[1]  # type: ignore[return-value]
     index: dict[str, list[str]] = {}
     for concept, root in state.dominant.items():
         index.setdefault(root, []).append(concept)
-    state.cache["concepts-by-root"] = (state.version, index)
+    state.cache["concepts-by-root"] = (state.lexicon_version, index)
     return index
 
 

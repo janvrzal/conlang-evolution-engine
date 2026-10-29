@@ -6,7 +6,7 @@ Ve světě M1 vracejí nulu a jeho kalibrace zůstává beze změny.
 
 from __future__ import annotations
 
-from typing import Callable, Mapping
+from typing import Callable, Mapping, cast
 
 import numpy as np
 
@@ -42,7 +42,10 @@ class LexicalClarity(Pressure):
         result = np.zeros_like(batch.freqs)
         if world.table is None:
             return result
-        per_group = [_clarity_map(batch, group_id) for group_id in batch.group_ids]
+        per_group: dict[int, Callable[[str, str], float]] = {}
+        # Skupiny, ke kterým varianta nedolehla, se nehodnotí: s nulovým
+        # vstupem ji selekce stejně nevybere.
+        reached = (batch.freqs > 0) | (batch.heard > 0)
         for row, variable_id in enumerate(batch.variable_ids):
             concept = variable_id.split(":", 1)[1]
             for slot, variant in enumerate(batch.slots[row]):
@@ -51,7 +54,11 @@ class LexicalClarity(Pressure):
                 morpheme = world.variants[variant].payload.get("morpheme")
                 if not isinstance(morpheme, str):
                     continue
-                result[row, :, slot] = [scores(morpheme, concept) for scores in per_group]
+                for column in np.flatnonzero(reached[row, :, slot]).tolist():
+                    scores = per_group.get(column)
+                    if scores is None:
+                        scores = per_group[column] = _clarity_map(batch, batch.group_ids[column])
+                    result[row, column, slot] = scores(morpheme, concept)
         return result
 
 
@@ -60,13 +67,17 @@ def _clarity_map(batch: PressureBatch, group_id: str) -> Callable[[str, str], fl
     world = batch.world
     code = world.groups[group_id].main_code
     state = code.phonology
-    key = ("lexical-clarity", state.version)
-    memo = batch.memo.get((key, group_id))
-    if memo is None:
+    # Mapa homofonů závisí jen na tvarech a slovní zásobě skupiny: drží se
+    # napříč dávkami i kroky, dokud se verze kódu nezmění.
+    stored = state.cache.get("lexical-clarity")
+    if stored is not None and stored[0] == state.version:
+        memo = cast(tuple[dict[tuple[str, str], float], dict[tuple[int, ...], set[tuple[str, str]]]], stored[1])
+    else:
         built: dict[tuple[int, ...], set[tuple[str, str]]] = {}
         for concept, root in state.dominant.items():
             built.setdefault(world.form_of(code, root), set()).add((root, concept))
-        memo = batch.memo[(key, group_id)] = ({}, built)
+        memo = ({}, built)
+        state.cache["lexical-clarity"] = (state.version, memo)
     cache: dict[tuple[str, str], float] = memo[0]
     owners: dict[tuple[int, ...], set[tuple[str, str]]] = memo[1]
 

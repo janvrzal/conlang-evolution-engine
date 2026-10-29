@@ -57,6 +57,8 @@ class SegmentTable:
         self._parser = table
         self.boundary = len(self.ipa)
         self._patterns: dict[tuple[tuple[str, str], ...], Pattern] = {}
+        self._enumerated: dict[tuple[int, ...], Pattern] = {}
+        self._parsed: dict[str, Form] = {}
         syllabic = self.vectors[:, self.index["syl"]] == 1
         self.vowel_mask: BoolArray = np.append(syllabic, False)
         count = len(self.ipa)
@@ -74,11 +76,18 @@ class SegmentTable:
     # --- převody --------------------------------------------------------
 
     def parse(self, ipa: str) -> Form:
-        # Běžná záměna: ASCII „g“ místo IPA „ɡ“.
-        segments = self._parser.word_fts(ipa.replace("g", "ɡ"))
-        if not segments:
-            raise ValueError(f"Tvar '{ipa}' neobsahuje žádnou známou hlásku.")
-        return tuple(self._by_vector[tuple(int(v) for v in segment.numeric())] for segment in segments)
+        # Rozbor přes PanPhon je drahý a zápis se opakuje (vzory zvukových
+        # změn se sestavují z týchž hlásek), proto se pamatuje.
+        found = self._parsed.get(ipa)
+        if found is None:
+            # Běžná záměna: ASCII „g“ místo IPA „ɡ“.
+            segments = self._parser.word_fts(ipa.replace("g", "ɡ"))
+            if not segments:
+                raise ValueError(f"Tvar '{ipa}' neobsahuje žádnou známou hlásku.")
+            found = self._parsed[ipa] = tuple(
+                self._by_vector[tuple(int(v) for v in segment.numeric())] for segment in segments
+            )
+        return found
 
     def render(self, form: Iterable[int]) -> str:
         return "".join(self.ipa[segment] for segment in form)
@@ -103,10 +112,13 @@ class SegmentTable:
 
     def segments(self, ipa: Iterable[str]) -> Pattern:
         """Výčtová třída konkrétních hlásek."""
-        ids = sorted(self.id_of(symbol) for symbol in ipa)
-        mask = np.zeros(len(self.vectors) + 1, dtype=bool)
-        mask[ids] = True
-        return Pattern("{" + ",".join(self.ipa[i] for i in ids) + "}", mask)
+        ids = tuple(sorted(self.id_of(symbol) for symbol in ipa))
+        cached = self._enumerated.get(ids)
+        if cached is None:
+            mask = np.zeros(len(self.vectors) + 1, dtype=bool)
+            mask[list(ids)] = True
+            cached = self._enumerated[ids] = Pattern("{" + ",".join(self.ipa[i] for i in ids) + "}", mask)
+        return cached
 
     def is_vowel(self, segment: int) -> bool:
         return bool(self.vowel_mask[segment])

@@ -32,7 +32,9 @@ src/cee/v2/
   language/
     segments.py       tabulka hlásek nad PanPhonem, přirozené třídy
     processes.py      Process: jedna zvuková změna v jednom prostředí
-    lexicon.py        Morpheme, UnitForm, FormStore, PhonologyState
+    lexicon.py        Morpheme, UnitForm, FormStore (s deníkem změn), PhonologyState
+    bank.py           banka různých tvarů a tabulky procesů
+    index.py          průběžné indexy nad slovní zásobou (prostředí hlásek, koncovky)
     morphology.py     Paradigm, FormChange (vyrovnání, rozšíření vzoru)
     protoforms.py     protojazyk a nové kořeny podle fonotaktiky
     constructions.py  Construction, zdroje gramatikalizace
@@ -910,6 +912,39 @@ Splněno, testy v `tests/v2/test_v2_checkpoints.py`.
   skupiny naráz; volnější keše (přepočet jednou za několik kroků) by daly
   odhadem 30–40 %, ale změnily by výsledky.
 
+### Výkon: banka tvarů a průběžné indexy (doplněk M6d, 2026-10-29)
+
+Rozpracováno. Všechny kroky dávají bitově stejnou historii (ověřeno otisky
+logu pro světy M2 až M4b a údolí s 50 vesnicemi). Údolí s 50 vesnicemi
+(syntax, význam) za 1 000 let: 20,4 s → 10,7 s; za 2 000 let: 66 s → 38 s.
+
+- **Banka tvarů** (`language/bank.py`): každý různý tvar má číslo a jeho
+  odvozené vlastnosti (příznakovost) se počítají jednou za běh. **Tabulka
+  procesu** pro každou zvukovou změnu drží „tvar → výsledný tvar“, plněná
+  postupně: proces se na každý různý tvar aplikuje jednou za běh. Používá ji
+  hodnocení funkční zátěže a fronta fonologizace. V údolí jsou různé jen
+  3 % tvarů po 500 letech a 35 % po 2 000 letech.
+- **Průběžné indexy** (`language/index.py`): úložiště tvarů vede deník
+  přepsaných morfémů a index si při dotazu dorovná jen změněná slova a slova,
+  která přibyla do slovní zásoby nebo z ní ubyla. Tak se drží prostředí hlásek
+  (kandidáti zvukových změn) a koncovky tříd slov (analogie, syntax). Index
+  drží jen data, ne odkazy na svět, takže kopie stavu je bezpečná.
+- **Verze slovníku** (`PhonologyState.lexicon_version`) roste jen při změně
+  slovní zásoby, ne při přepisu tvaru. Na ni jsou vázané keše, které na
+  tvarech nezávisí: frekvence užití, výběr vzorku pro hodnocení, kandidáti
+  lexikálních změn, index odvozenin.
+- Drobnosti: kandidáti zvukových změn podle inventáře (vesnice ho sdílejí),
+  rozbor IPA a výčtové vzory hlásek jednou, výchozí tvary slov jednou,
+  fronta fonologizace s množinou čekajících slov místo procházení fronty,
+  lexikální jasnost jen ve skupinách, ke kterým varianta dolehla, a s mapou
+  homofonů napříč dávkami, rozložení vokálů jen u změn, které tvoří vokál,
+  paměť vzdáleností tvarů pro pozorování.
+- **Co zbývá**: v pozdní fázi běhu je největší položkou posuzování nových
+  tvarů všemi živými změnami (každé přepsané slovo je nový tvar a zhruba
+  100 živých změn ho musí posoudit). Zrychlit to jde dávkově: jedna změna na
+  všechny nové tvary naráz nad maticí banky (fáze 4). Dále průběžné indexy
+  pro kandidáty analogie a slabost koncovek v syntaxi.
+
 ## Známé mezery a kam patří
 
 Sepsáno 2026-10-28 při revizi plánu po M3.
@@ -939,7 +974,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | Učené výpůjčky se vracejí jako stará slova s dnešní výslovností; skutečné učené dublety (*fragile* vedle *frêle*) mají tvar psaného kódu | M6c nebo později |
 | Pravopisná výslovnost a revize pravopisu: psané tvary slov se nemění ani s tiskem | později |
 | CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |
-| Výkon plného modelu je 5–13× nad rozpočtem (údolí 66 s místo 5 s, region odhadem 280 s místo 60 s). Odezvu pro UI řeší průběžné výsledky a checkpointy (M6d); samotný výpočet potřebuje sloupcové uložení tvarů a vektorové procesy | rozhodnutí: přepis vrstvy tvarů, nebo přijmout a jít na M7 |
+| Výkon plného modelu je pořád nad rozpočtem (údolí 38 s místo 5 s po bance tvarů a indexech). Zbývá dávková aplikace změn nad maticí banky a indexy analogie a syntaxe | pokračování výkonové práce |
 | Sousední vesnice se v plném modelu liší příliš (kontinuum 5×5, 3 000 let: sousedé 0,29, nejvzdálenější 0,38; v nářečních atlasech sousedé asi 0,05–0,15). Prahy dialektu a jazyka proto dávají skoro každou vesnici jako jazyk. Místní mísení je slabé proti tempu změn | M7 (otevřenost, tempo změn, prahy dialektu a jazyka) |
 | Rodokmen slova: export nese původ dnešního slova, ne historii jeho tvarů | později (snímky tvarů v exportu) |
 

@@ -21,6 +21,7 @@ import numpy as np
 import numpy.typing as npt
 
 from cee.v2.changes.base import Change, InnovationContext
+from cee.v2.language.index import ContextIndex
 from cee.v2.language.processes import Process, StressRule, stressed_nucleus
 from cee.v2.language.segments import Pattern, SegmentTable
 from cee.v2.phonology import register
@@ -84,7 +85,7 @@ _CONTEXTS: dict[tuple[object, ...], tuple[tuple[int, int, int, bool], ...]] = {}
 _CONTEXTS_LIMIT = 1 << 17
 
 
-def _form_contexts(
+def form_contexts(
     form: tuple[int, ...], table: SegmentTable, rule: StressRule
 ) -> tuple[tuple[int, int, int, bool], ...]:
     """Prostředí všech hlásek tvaru; čistá funkce tvaru, proto zapamatovaná."""
@@ -116,10 +117,13 @@ def context_stats(context: InnovationContext) -> ContextStats | None:
     cached = state.cache.get("context-stats")
     if cached is not None and cached[0] == state.version:
         return cast(ContextStats, cached[1])
-    counts: dict[tuple[int, int, int, bool], int] = {}
-    for morpheme_id in state.vocabulary:
-        for key in _form_contexts(world.form_of(code, morpheme_id), table, code.stress_rule):
-            counts[key] = counts.get(key, 0) + 1
+    # Počty prostředí drží průběžný index; dorovná jen změněná slova.
+    index = state.cache.get("context-index")
+    if index is None:
+        index = state.cache["context-index"] = (0, ContextIndex())
+    contexts = cast(ContextIndex, index[1])
+    contexts.sync(world, code)
+    counts = contexts.counts
     keys = sorted(counts)
     stats = ContextStats(
         previous=np.array([key[0] for key in keys], dtype=np.intp),
@@ -131,6 +135,10 @@ def context_stats(context: InnovationContext) -> ContextStats | None:
     )
     state.cache["context-stats"] = (state.version, stats)
     return stats
+
+
+_CANDIDATES: dict[tuple[str, int, tuple[int, ...]], list[Process]] = {}
+_CANDIDATES_LIMIT = 1 << 12
 
 
 class SoundChange(Change):
@@ -158,7 +166,15 @@ class SoundChange(Change):
         table = context.world.table
         found: dict[str, tuple[Process, float]] = {}
         if stats is not None and table is not None:
-            for process in self.candidates(table, stats.inventory):
+            # Kandidáti závisí jen na inventáři, a ten mají vesnice většinou
+            # společný a mění se zřídka: sestaví se jednou pro každý inventář.
+            memo_key = (self.kind, id(table), stats.inventory)
+            candidates = _CANDIDATES.get(memo_key)
+            if candidates is None:
+                if len(_CANDIDATES) >= _CANDIDATES_LIMIT:
+                    _CANDIDATES.clear()
+                candidates = _CANDIDATES[memo_key] = self.candidates(table, stats.inventory)
+            for process in candidates:
                 support = stats.support(process, table)
                 variable_id = Variable("process", process.key).id
                 if support >= MIN_SUPPORT and variable_id not in found:

@@ -68,12 +68,29 @@ def segment_cost(world: World, first: int, second: int) -> float:
     return min(1.0, float((vectors[first] != vectors[second]).sum()) / FEATURE_SCALE)
 
 
+_DISTANCES: dict[tuple[tuple[int, ...], tuple[int, ...], int], float] = {}
+_DISTANCES_LIMIT = 1 << 19
+
+
 def form_distance(world: World, first: tuple[int, ...], second: tuple[int, ...]) -> float:
-    """Normalizovaná editační vzdálenost dvou tvarů (0 shodné, 1 zcela jiné)."""
+    """Normalizovaná editační vzdálenost dvou tvarů (0 shodné, 1 zcela jiné).
+
+    Dvojice tvarů se mezi pozorováními skoro nemění, proto se pamatuje.
+    """
     if first == second:
         return 0.0
     if not first or not second:
         return 1.0
+    key = (first, second, id(world.table))
+    found = _DISTANCES.get(key)
+    if found is None:
+        if len(_DISTANCES) >= _DISTANCES_LIMIT:
+            _DISTANCES.clear()
+        found = _DISTANCES[key] = _edit_distance(world, first, second)
+    return found
+
+
+def _edit_distance(world: World, first: tuple[int, ...], second: tuple[int, ...]) -> float:
     previous = [float(index) for index in range(len(second) + 1)]
     for row, a in enumerate(first, 1):
         current = [float(row)]

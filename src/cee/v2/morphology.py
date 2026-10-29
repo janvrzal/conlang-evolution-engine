@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 from cee.v2.history import History
+from cee.v2.language.index import ExponentIndex
 from cee.v2.language.lexicon import Morpheme, UnitForm
 from cee.v2.language.morphology import FormChange, Paradigm, extend, level, rebracket, unit_id
 from cee.v2.language.segments import Form
@@ -56,17 +57,14 @@ def class_stats(world: World, code: Code) -> ClassStats:
     cached = state.cache.get("class-stats")
     if cached is not None and cached[0] == state.version:
         return cast(ClassStats, cached[1])
-    exponents: dict[tuple[str, str], Counter[str]] = {}
-    shapes: dict[str, Counter[Form]] = {}
-    for morpheme_id in sorted(state.vocabulary):
-        morpheme = world.morphemes[morpheme_id]
-        if morpheme.kind != "word" or morpheme.word_class is None or morpheme.cell is None:
-            continue
-        unit = world.unit_of(code, morpheme_id)
-        if unit.exponent is None:
-            continue
-        exponents.setdefault((morpheme.word_class, morpheme.cell), Counter())[unit.exponent] += 1
-        shapes.setdefault(unit.exponent, Counter())[unit.ending] += 1
+    # Počty koncovek drží průběžný index; dorovná jen změněná slova.
+    held = state.cache.get("exponent-index")
+    if held is None:
+        held = state.cache["exponent-index"] = (0, ExponentIndex())
+    index = cast(ExponentIndex, held[1])
+    index.sync(world, code)
+    exponents = {key: Counter(index.exponents[key]) for key in sorted(index.exponents)}
+    shapes = {key: index.shapes[key] for key in sorted(index.shapes)}
     endings = {
         exponent: max(sorted(counter), key=lambda shape: counter[shape])
         for exponent, counter in shapes.items()

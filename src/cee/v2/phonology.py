@@ -130,20 +130,23 @@ def _needed(world: World, variable_id: str, morpheme_id: str, code: Code | None 
 
 
 def _applies(world: World, code: Code, variable_id: str, morpheme_id: str) -> bool:
-    assert world.table is not None
-    process = world.processes[variable_id]
-    return process.apply(world.form_of(code, morpheme_id), world.table, code.stress_rule) is not None
+    # Tabulka procesu v bance tvarů: každý různý tvar se posoudí jednou za běh.
+    bank = world.form_bank()
+    table = bank.process_table(world.processes[variable_id], code.stress_rule)
+    return table.result(bank.id_of(world.form_of(code, morpheme_id))) >= 0
 
 
 def _queue(world: World, code: Code, variable_id: str, morpheme_id: str) -> None:
     state = code.phonology
     queue = state.pending.setdefault(variable_id, [])
+    waiting = state.queued.setdefault(variable_id, set())
     if morpheme_id in state.restructured.get(variable_id, ()):
         return
-    if any(item[1] == morpheme_id for item in queue):
+    if morpheme_id in waiting:
         return
     if _applies(world, code, variable_id, morpheme_id):
         bisect.insort(queue, (_needed(world, variable_id, morpheme_id, code), morpheme_id))
+        waiting.add(morpheme_id)
 
 
 def requeue(world: World, code: Code, variable_id: str, morpheme_id: str) -> None:
@@ -165,6 +168,7 @@ def activate(world: World, code: Code, variable_id: str) -> None:
     if variable_id in state.pending or variable_id in state.closed:
         return
     state.pending[variable_id] = []
+    state.queued[variable_id] = set()
     state.order[variable_id] = len(state.order)
     for morpheme_id in sorted(state.vocabulary):
         _queue(world, code, variable_id, morpheme_id)
@@ -177,6 +181,7 @@ def enter_vocabulary(world: World, code: Code, morpheme_id: str) -> None:
         return
     state.vocabulary.add(morpheme_id)
     state.version += 1
+    state.lexicon_version += 1
     for variable_id in active_processes(state, world):
         _queue(world, code, variable_id, morpheme_id)
 
@@ -185,6 +190,7 @@ def leave_vocabulary(code: Code, morpheme_id: str) -> None:
     if morpheme_id in code.phonology.vocabulary:
         code.phonology.vocabulary.discard(morpheme_id)
         code.phonology.version += 1
+        code.phonology.lexicon_version += 1
 
 
 @dataclass(frozen=True)
@@ -207,6 +213,7 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
         rewritten: list[str] = []
         while queue and queue[0][0] < level:
             _, morpheme_id = queue.pop(0)
+            state.queued[variable_id].discard(morpheme_id)
             process = world.processes[variable_id]
             unit = world.unit_of(code, morpheme_id)
             new = process.apply_tracked(unit.form, world.table, code.stress_rule, unit.boundary)
@@ -230,6 +237,7 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
                 relics = sorted(morpheme_id for _, morpheme_id in queue)
                 state.closed.add(variable_id)
                 del state.pending[variable_id]
+                state.queued.pop(variable_id, None)
                 state.version += 1
                 history.record(
                     "process_closed", tick, year, group=group_id, variable=variable_id,

@@ -10,6 +10,7 @@ koncovek pak nejsou zvláštní mechanismy, ale rozdíly mezi uloženými tvary.
 from __future__ import annotations
 
 import copy
+import itertools
 from dataclasses import dataclass, field
 from typing import Literal, NamedTuple
 
@@ -74,6 +75,9 @@ class UnitForm(NamedTuple):
         return () if self.boundary is None else self.form[self.boundary :]
 
 
+_TOKENS = itertools.count()
+
+
 class FormStore:
     """Podkladové tvary kódu jako copy-on-write vrstvy nad výchozími tvary.
 
@@ -82,12 +86,16 @@ class FormStore:
     v M5.
     """
 
-    __slots__ = ("_base", "_own", "_frozen")
+    __slots__ = ("_base", "_own", "_frozen", "token", "log")
 
     def __init__(self, base: FormStore | None = None):
         self._base = base
         self._own: dict[str, UnitForm] = {}
         self._frozen = False
+        #: Identita úložiště a deník přepsaných morfémů. Průběžné indexy
+        #: (:mod:`cee.v2.language.index`) podle nich dorovnají jen změny.
+        self.token = next(_TOKENS)
+        self.log: list[str] = []
 
     def get(self, morpheme_id: str) -> UnitForm | None:
         layer: FormStore | None = self
@@ -102,6 +110,7 @@ class FormStore:
         if self._frozen:
             raise RuntimeError("Zmrazené tvary nelze měnit; použij branch().")
         self._own[morpheme_id] = unit
+        self.log.append(morpheme_id)
 
     def freeze(self) -> FormStore:
         self._frozen = True
@@ -140,11 +149,17 @@ class PhonologyState:
     closed: set[str] = field(default_factory=set)
     #: Proces → seřazené (potřebný logit, morfém); viz ``restructure``.
     pending: dict[str, list[tuple[float, str]]] = field(default_factory=dict)
+    #: Morfémy, které ve frontě procesu právě čekají (pro rychlé „už tam je?“).
+    queued: dict[str, set[str]] = field(default_factory=dict)
     #: Pořadí, ve kterém procesy kód zasáhly: chronologie změn tohoto kódu.
     #: Nezávisí na tom, kdy stejnou změnu vymyslel někdo jinde.
     order: dict[str, int] = field(default_factory=dict)
     #: Roste s každou změnou slovní zásoby nebo podkladových tvarů.
     version: int = 0
+    #: Roste jen se změnou slovní zásoby (které slovo je pro který pojem
+    #: dominantní), ne s přepisem tvarů. Keše, které na tvarech nezávisí, se
+    #: tak nepřepočítávají při každé zvukové změně.
+    lexicon_version: int = 0
     #: Živé morfologické změny (proměnná → tvar slova, kterého se týká) a ty,
     #: které už si kód zapsal.
     morph_active: dict[str, str] = field(default_factory=dict)

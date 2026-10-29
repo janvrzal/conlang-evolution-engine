@@ -175,14 +175,15 @@ class SemanticChange(Change):
         state = context.code.phonology
         key = ("lexical-sites", self.kind)
         cached = state.cache.get(key)
-        if cached is not None and cached[0] == state.version:
+        # Možnosti závisí jen na slovní zásobě (dominantní kořeny), ne na tvarech.
+        if cached is not None and cached[0] == state.lexicon_version:
             return cast(dict[str, list[tuple[float, dict[str, object]]]], cached[1])
         found = {}
         for site in context.code.repertoire.variable_ids_of("lexical"):
             options = self.options(context, concept_of(site))
             if options:
                 found[site] = options
-        state.cache[key] = (state.version, found)
+        state.cache[key] = (state.lexicon_version, found)
         return found
 
     def sites(self, context: InnovationContext) -> Sequence[str]:
@@ -411,14 +412,14 @@ def _derivations(context: InnovationContext) -> dict[str, list[tuple[str, str]]]
     """Základní pojem → (pojem, kořen) odvozenin z něj, seřazeno podle pojmu."""
     state = context.code.phonology
     cached = state.cache.get("derivations")
-    if cached is not None and cached[0] == state.version:
+    if cached is not None and cached[0] == state.lexicon_version:
         return cast(dict[str, list[tuple[str, str]]], cached[1])
     index: dict[str, list[tuple[str, str]]] = {}
     for other, root in sorted(state.dominant.items()):
         morpheme = context.world.morphemes[root]
         if morpheme.etymology == "derivation" and len(morpheme.sources) == 1:
             index.setdefault(morpheme.sources[0], []).append((other, root))
-    state.cache["derivations"] = (state.version, index)
+    state.cache["derivations"] = (state.lexicon_version, index)
     return index
 
 

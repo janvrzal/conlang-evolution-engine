@@ -14,6 +14,9 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
+import numpy as np
+import numpy.typing as npt
+
 from cee.v2.language.processes import Process
 from cee.v2.language.segments import Form, SegmentTable
 
@@ -89,6 +92,14 @@ def _nearest(vowel: int, others: set[int], table: SegmentTable) -> float:
     return min(distances, default=0.0)
 
 
+def _shapes_vowels(process: Process, table: SegmentTable) -> bool:
+    """Může změna ovlivnit rozptyl vokálů? Stejné podmínky jako :func:`_dispersion_gain`."""
+    return (
+        process.stress != "unstressed" and process.segment is not None
+        and table.is_vowel(process.segment)
+    )
+
+
 def _dispersion_gain(
     process: Process, before: set[int], after: set[int], table: SegmentTable
 ) -> float:
@@ -99,8 +110,9 @@ def _dispersion_gain(
     funkční zátěž. V nepřízvučné slabice se kontrasty neutralizují samy a
     natlačení vokálů tam nevadí (redukce na ə).
     """
-    if process.stress == "unstressed" or process.segment is None or not table.is_vowel(process.segment):
+    if not _shapes_vowels(process, table):
         return 0.0
+    assert process.segment is not None
     output = process.segment
     if output in before:
         return 0.0
@@ -117,6 +129,8 @@ class _Vocabulary:
     owners: dict[Form, list[str]]
     total: float
     vowels: Counter[int]
+    #: Čísla tvarů v bance, ve stejném pořadí jako ``forms``.
+    ids: npt.NDArray[np.int64]
 
 
 def _vocabulary(world: World, group_id: str) -> _Vocabulary:
@@ -126,9 +140,15 @@ def _vocabulary(world: World, group_id: str) -> _Vocabulary:
     if cached is not None and cached[0] == state.version:
         return cast(_Vocabulary, cached[1])
     assert world.table is not None
-    chosen = sorted(
-        state.vocabulary, key=lambda morpheme: (-world.usage_frequency(code, morpheme), morpheme)
-    )[:SAMPLE_WORDS]
+    # Výběr vzorku závisí jen na slovní zásobě, ne na tvarech.
+    picked = state.cache.get("vocabulary-sample")
+    if picked is not None and picked[0] == state.lexicon_version:
+        chosen = cast(list[str], picked[1])
+    else:
+        chosen = sorted(
+            state.vocabulary, key=lambda morpheme: (-world.usage_frequency(code, morpheme), morpheme)
+        )[:SAMPLE_WORDS]
+        state.cache["vocabulary-sample"] = (state.lexicon_version, chosen)
     forms = {morpheme: world.form_of(code, morpheme) for morpheme in sorted(chosen)}
     owners: dict[Form, list[str]] = {}
     vowels: Counter[int] = Counter()
@@ -136,7 +156,8 @@ def _vocabulary(world: World, group_id: str) -> _Vocabulary:
         owners.setdefault(form, []).append(morpheme)
         vowels.update(segment for segment in form if world.table.is_vowel(segment))
     frequency = {morpheme: max(0.01, world.usage_frequency(code, morpheme)) for morpheme in forms}
-    vocabulary = _Vocabulary(forms, frequency, owners, sum(frequency.values()) or 1.0, vowels)
+    ids = world.form_bank().ids_of(list(forms.values()))
+    vocabulary = _Vocabulary(forms, frequency, owners, sum(frequency.values()) or 1.0, vowels, ids)
     state.cache["vocabulary"] = (state.version, vocabulary)
     return vocabulary
 
@@ -193,11 +214,16 @@ def _assess(world: World, group_id: str, variable_id: str) -> ProcessAssessment:
     vocabulary = _vocabulary(world, group_id)
     if not vocabulary.forms:
         return NEUTRAL
+    # Výsledek procesu pro každý tvar vzorku jedním vyhledáním v tabulce
+    # procesu; proces se na každý různý tvar aplikuje jednou za celý běh.
+    bank = world.form_bank()
+    results = bank.process_table(process, code.stress_rule).results(vocabulary.ids)
     affected: dict[str, Form] = {}
-    for morpheme, form in vocabulary.forms.items():
-        changed = process.apply(form, table, code.stress_rule)
-        if changed is not None:
-            affected[morpheme] = changed
+    affected_ids: dict[str, tuple[int, int]] = {}
+    for (morpheme, old), new in zip(zip(vocabulary.forms, vocabulary.ids.tolist()), results.tolist()):
+        if new >= 0:
+            affected[morpheme] = bank.forms[new]
+            affected_ids[morpheme] = (old, new)
     if not affected:
         return NEUTRAL
     frequency = vocabulary.frequency
@@ -222,16 +248,23 @@ def _assess(world: World, group_id: str, variable_id: str) -> ProcessAssessment:
         frequency[morpheme] for morpheme, form in affected.items()
         if len(form) <= 2 and len(form) < len(vocabulary.forms[morpheme])
     )
+    def marked_of(form_id: int) -> float:
+        return bank.derived("markedness", form_id, lambda form: markedness(form, table))
+
     marked = sum(
-        frequency[morpheme] * (markedness(form, table) - markedness(vocabulary.forms[morpheme], table))
-        for morpheme, form in affected.items()
+        frequency[morpheme] * (marked_of(affected_ids[morpheme][1]) - marked_of(affected_ids[morpheme][0]))
+        for morpheme in affected
     )
-    vowels_after = Counter(vocabulary.vowels)
-    for morpheme, form in affected.items():
-        vowels_after.subtract(segment for segment in vocabulary.forms[morpheme] if table.is_vowel(segment))
-        vowels_after.update(segment for segment in form if table.is_vowel(segment))
     before = {vowel for vowel, count in vocabulary.vowels.items() if count > 0}
-    after = {vowel for vowel, count in vowels_after.items() if count > 0}
+    after = before
+    if _shapes_vowels(process, table):
+        # Rozložení vokálů po změně je potřeba jen pro změny, které tvoří
+        # vokál; u ostatních je zisk rozptylu nulový bez ohledu na něj.
+        vowels_after = Counter(vocabulary.vowels)
+        for morpheme, form in affected.items():
+            vowels_after.subtract(segment for segment in vocabulary.forms[morpheme] if table.is_vowel(segment))
+            vowels_after.update(segment for segment in form if table.is_vowel(segment))
+        after = {vowel for vowel, count in vowels_after.items() if count > 0}
     return ProcessAssessment(
         coverage=affected_mass / vocabulary.total,
         merge_mass=merge / vocabulary.total,
