@@ -24,7 +24,10 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from cee.v2.history import History
+from cee.v2.language import kernels
 from cee.v2.language.lexicon import PhonologyState, UnitForm
 from cee.v2.language.processes import Process
 from cee.v2.language.segments import Form
@@ -208,7 +211,7 @@ class Phonologized:
     words: tuple[str, ...]
 
 
-def restructure(world: World, group_id: str, tick: int, dt: float, history: History, year: float) -> None:
+def _restructure_reference(world: World, group_id: str, tick: int, dt: float, history: History, year: float) -> None:
     """Fonologizace a uzavírání procesů v jedné skupině (krok 6 ticku)."""
     group = world.groups[group_id]
     code = group.main_code
@@ -224,7 +227,7 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
             state.queued[variable_id].discard(morpheme_id)
             process = world.processes[variable_id]
             unit = world.unit_of(code, morpheme_id)
-            new = process.apply_tracked(unit.form, world.table, code.stress_rule, unit.boundary)
+            new = process._apply(unit.form, world.table, code.stress_rule, unit.boundary)
             if new is None:
                 continue  # dřívější přepis jinou změnou mu vzal půdu
             code.forms.set(morpheme_id, UnitForm(new[0], new[1], unit.exponent))
@@ -238,6 +241,80 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
             for other in active_processes(state, world):
                 if other != variable_id and world.processes[other].key in possible:
                     _queue(world, code, other, morpheme_id)
+        if rewritten:
+            history.record(
+                "phonologized", tick, year, group=group_id, variable=variable_id,
+                words=len(rewritten),
+            )
+        if share >= 1.0:
+            since = state.fixed_since.setdefault(variable_id, tick)
+            if (tick - since) * dt >= CLOSURE_GENERATIONS * group.generation_years:
+                relics = sorted(morpheme_id for _, morpheme_id in queue)
+                state.closed.add(variable_id)
+                del state.pending[variable_id]
+                state.queued.pop(variable_id, None)
+                state.version += 1
+                history.record(
+                    "process_closed", tick, year, group=group_id, variable=variable_id,
+                    restructured=len(state.restructured.get(variable_id, ())), relics=len(relics),
+                )
+        else:
+            state.fixed_since.pop(variable_id, None)
+
+
+def restructure(world: World, group_id: str, tick: int, dt: float, history: History, year: float) -> None:
+    """Fonologizace a uzavírání procesů v jedné skupině (krok 6 ticku)."""
+    group = world.groups[group_id]
+    code = group.main_code
+    state = code.phonology
+    assert world.table is not None
+    # Při porušené jedinečnosti by další výskyt četl už změněný tvar.
+    if any(len(queue) != len(state.queued.get(variable_id, ()))
+           for variable_id, queue in state.pending.items()):
+        _restructure_reference(world, group_id, tick, dt, history, year)
+        return
+    for variable_id in active_processes(state, world):
+        share = changed_share(world, group_id, variable_id)
+        queue = state.pending[variable_id]
+        level = _logit(share) if share > 0 else -math.inf
+        rewritten: list[str] = []
+        count = 0
+        while count < len(queue) and queue[count][0] < level:
+            count += 1
+        units = [world.unit_of(code, item) for _, item in queue[:count]]
+        if units:
+            width = max(len(unit.form) for unit in units)
+            forms = np.full((count, width), -1, dtype=np.int64)
+            lengths = np.array([len(unit.form) for unit in units], dtype=np.int64)
+            boundaries = np.array([
+                -1 if unit.boundary is None else unit.boundary for unit in units
+            ], dtype=np.int64)
+            for row, unit in enumerate(units):
+                forms[row, :lengths[row]] = unit.form
+            process = world.processes[variable_id]
+            args = process.kernel_args(world.table, code.stress_rule, forms.ravel())
+            output, output_lengths, output_boundaries, changed = kernels.apply_process_batch(
+                forms, lengths, boundaries, *args
+            )
+            for row, unit in enumerate(units):
+                _, morpheme_id = queue.pop(0)
+                state.queued[variable_id].discard(morpheme_id)
+                if not changed[row]:
+                    continue  # dřívější přepis jinou změnou mu vzal půdu
+                new_form = tuple(output[row, :output_lengths[row]].tolist())
+                new_boundary = int(output_boundaries[row])
+                code.forms.set(morpheme_id, UnitForm(
+                    new_form, None if new_boundary < 0 else new_boundary, unit.exponent
+                ))
+                state.restructured.setdefault(variable_id, set()).add(morpheme_id)
+                state.version += 1
+                rewritten.append(morpheme_id)
+                # Ostatní změny posoudí nový tvar ve stejném pořadí jako dřív.
+                bank = world.form_bank()
+                possible = bank.possible(bank.id_of(new_form), code.stress_rule)
+                for other in active_processes(state, world):
+                    if other != variable_id and world.processes[other].key in possible:
+                        _queue(world, code, other, morpheme_id)
         if rewritten:
             history.record(
                 "phonologized", tick, year, group=group_id, variable=variable_id,

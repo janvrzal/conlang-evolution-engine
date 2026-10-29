@@ -12,7 +12,16 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Literal
 
+import numpy as np
+import numpy.typing as npt
+
+from cee.v2.language import kernels
 from cee.v2.language.segments import Form, Pattern, SegmentTable
+
+KernelArgs = tuple[
+    npt.NDArray[np.bool_], npt.NDArray[np.bool_], npt.NDArray[np.bool_],
+    npt.NDArray[np.bool_], npt.NDArray[np.int64], int, int, int, int, bool
+]
 
 Operation = Literal["change", "replace", "delete", "insert_before", "insert_after", "merge_next"]
 Stress = Literal["stressed", "unstressed"] | None
@@ -38,6 +47,8 @@ _MISSING = object()
 #: Paměť aplikací procesů; při zaplnění se vyprázdní (výsledek se nemění).
 _APPLIED: dict[tuple[object, ...], object] = {}
 _APPLIED_LIMIT = 1 << 18
+# Klíč drží tabulku živou; -2 znamená dosud nevyhodnocenou hlásku.
+_CHANGE_OUTPUTS: dict[tuple[SegmentTable, tuple[tuple[str, str], ...]], npt.NDArray[np.int64]] = {}
 
 
 @dataclass(frozen=True)
@@ -125,8 +136,45 @@ class Process:
         if found is _MISSING:
             if len(_APPLIED) >= _APPLIED_LIMIT:
                 _APPLIED.clear()
-            found = _APPLIED[key] = self._apply(form, table, rule, boundary)
+            found = _APPLIED[key] = self._apply_compiled(form, table, rule, boundary)
         return found  # type: ignore[return-value]
+
+    def kernel_args(
+        self, table: SegmentTable, rule: StressRule, segments: npt.NDArray[np.int64]
+    ) -> KernelArgs:
+        """Masky a mapování pro jádro; změněné hlásky doplňuje podle potřeby."""
+        key = (table, self.changes)
+        mapping = _CHANGE_OUTPUTS.get(key)
+        if mapping is None:
+            mapping = _CHANGE_OUTPUTS[key] = np.full(len(table.vowel_mask), -2, dtype=np.int64)
+        if self.operation == "change":
+            for segment in np.unique(segments).tolist():
+                if segment >= 0 and segment < table.boundary and self.target.mask[segment] and mapping[segment] == -2:
+                    changed = table.changed(segment, self.changes)
+                    mapping[segment] = -1 if changed is None else changed
+        return (
+            self.target.mask,
+            table.ANY.mask if self.left is None else self.left.mask,
+            table.ANY.mask if self.right is None else self.right.mask,
+            table.vowel_mask, mapping,
+            {"change": 0, "replace": 1, "delete": 2, "insert_before": 3,
+             "insert_after": 4, "merge_next": 5}[self.operation],
+            -1 if self.segment is None else self.segment,
+            {None: 0, "stressed": 1, "unstressed": 2}[self.stress],
+            {"initial": 0, "penult": 1, "final": 2}[rule], self.medial,
+        )
+
+    def _apply_compiled(
+        self, form: Form, table: SegmentTable, rule: StressRule, boundary: int | None
+    ) -> tuple[Form, int | None] | None:
+        array = np.asarray(form, dtype=np.int64)
+        args = self.kernel_args(table, rule, array)
+        output, new_boundary, changed = kernels.apply_process(
+            array, *args, -1 if boundary is None else boundary
+        )
+        if not changed:
+            return None
+        return tuple(output.tolist()), None if new_boundary < 0 else int(new_boundary)
 
     def _apply(
         self, form: Form, table: SegmentTable, rule: StressRule, boundary: int | None
