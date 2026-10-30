@@ -193,6 +193,60 @@
         "143A-9": "WALS value does not map unambiguously to engine NEG pre/post/embraced state."
       }
     },
+    "14A": {
+      "categories": {
+        "14A-1": "No fixed stress",
+        "14A-2": "Initial",
+        "14A-3": "Second",
+        "14A-4": "Third",
+        "14A-5": "Antepenultimate",
+        "14A-6": "Penultimate",
+        "14A-7": "Ultimate"
+      },
+      "coverage": {
+        "genera_with_data": 200,
+        "languages_with_data": 502,
+        "mapped_languages": 281,
+        "mapped_weight_share": 0.5537995569684373
+      },
+      "crosswalk": {
+        "14A-1": null,
+        "14A-2": "14A-2",
+        "14A-3": "14A-3",
+        "14A-4": null,
+        "14A-5": "14A-5",
+        "14A-6": "14A-6",
+        "14A-7": "14A-7"
+      },
+      "distribution": {
+        "14A-1": 0.4449504430315628,
+        "14A-2": 0.20100423522292593,
+        "14A-3": 0.02048097880403382,
+        "14A-4": 0.0012499999999999994,
+        "14A-5": 0.02619815668202764,
+        "14A-6": 0.17158685937718185,
+        "14A-7": 0.13452932688226799
+      },
+      "engine_categories": [
+        "14A-2",
+        "14A-3",
+        "14A-5",
+        "14A-6",
+        "14A-7"
+      ],
+      "engine_distribution": {
+        "14A-2": 0.36295485016861756,
+        "14A-3": 0.03698265653397966,
+        "14A-5": 0.04730620736758869,
+        "14A-6": 0.30983567469152223,
+        "14A-7": 0.2429206112382918
+      },
+      "name": "Fixed Stress Locations",
+      "unsupported": {
+        "14A-1": "Weight-sensitive stress without a fixed syllable position (WALS 15A, deferred to D3).",
+        "14A-4": "Third-syllable stress is not representable by the fixed StressRule set."
+      }
+    },
     "1A": {
       "categories": {
         "1A-1": "Small",

@@ -353,7 +353,23 @@ def typology_profile(
                 "81A": "ORDER", "143A": "NEG"}
     order_values = {"SOV": "81A-1", "SVO": "81A-2", "VSO": "81A-3",
                     "VOS": "81A-4", "OVS": "81A-5", "OSV": "81A-6"}
+    stress_values = {
+        "initial": "14A-2",
+        "second": "14A-3",
+        "antepenult": "14A-5",
+        "penult": "14A-6",
+        "final": "14A-7",
+    }
     result: dict[str, str | None] = {}
+    stress_totals: dict[str | None, float] = {}
+    for group in groups:
+        val = stress_values.get(group.main_code.stress_rule)
+        stress_totals[val] = stress_totals.get(val, 0.0) + group.population
+    result["14A"] = (
+        min(stress_totals, key=lambda key: (-stress_totals[key], key is not None, key or ""))
+        if stress_totals
+        else None
+    )
     for feature, function in features.items():
         totals: dict[str | None, float] = {}
         variable = variable_id(function)

@@ -125,17 +125,45 @@ def _functional_load_values(
     return -np.where(scaled < 1.0, scaled, 1.0)
 
 
+#: Násobek úspory artikulace pro redukční procesy v nepřízvučných slabikách
+#: u jazyků se silným přízvukem (stress-timed).
+#:
+#: Literatura podporuje směr (silnější redukce a afixální komprese v nepřízvučné
+#: pozici: Dauer 1983; Bybee, Chakraborti, Jung & Scheibman 1998 „Prosody and
+#: segmental effect: Some paths of evolution for word stress“, Studies in
+#: Language 22; Schiering 2010), hodnota 1,5 je autorský odhad (neladěno na WALS).
+STRESS_STRENGTH_MULTIPLIER: float = 1.5
+
+
 class Articulation(Pressure):
     """Úspora artikulačních gest: oslabení, asimilace, redukce."""
 
     name = "articulation"
 
     def scores(self, batch: PressureBatch) -> FloatArray:
-        return _process_scores(
-            batch,
-            lambda process, _: process.ease,
-            lambda process, assessments: np.full(len(assessments), process.ease),
-        )
+        result = np.zeros_like(batch.freqs)
+        groups = getattr(batch.world, "groups", None)
+        if groups is not None:
+            strong_groups = np.array(
+                [
+                    getattr(groups[gid].main_code, "stress_strength", "weak") == "strong"
+                    for gid in batch.group_ids
+                ],
+                dtype=bool,
+            )
+        else:
+            strong_groups = np.zeros(len(batch.group_ids), dtype=bool)
+
+        for row, process, slot, columns, _ in _process_score_layout(batch):
+            if not len(columns):
+                continue
+            ease = process.ease
+            if getattr(process, "reductive", False) and getattr(process, "stress", None) == "unstressed":
+                multipliers = np.where(strong_groups[columns], STRESS_STRENGTH_MULTIPLIER, 1.0)
+                result[row, columns, slot] = ease * multipliers
+            else:
+                result[row, columns, slot] = ease
+        return result
 
 
 class Clarity(Pressure):

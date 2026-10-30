@@ -56,13 +56,14 @@ class Code:
     #: Podíl mluvčích, kteří se kód naučili až v dospělosti (0 až 1). Řídí
     #: interferenci z ``l1_source`` a tlak `Teachability`.
     l2_share: float = 0.0
+    stress_strength: Literal["weak", "strong"] = "weak"
 
     def branch(self) -> Code:
         """Nezávislá kopie kódu (zjemnění, odštěpení)."""
         return Code(
             self.id, self.repertoire.branch(), self.usage_share, self.acquisition,
             self.l1_source, self.forms.branch(), self.phonology.branch(), self.stress_rule,
-            self.language, self.l2_share,
+            self.language, self.l2_share, self.stress_strength,
         )
 
 

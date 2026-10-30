@@ -16,7 +16,7 @@ import time
 from collections import Counter
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from cee.v2 import metrics
 from cee.v2.language.constructions import Construction
@@ -26,13 +26,28 @@ from cee.v2.scenarios import FULL_GRAMMAR, SYNTAX_GRAMMAR, village_grid
 from cee.v2.simulation import Simulation
 
 YEARS = (0, 1000, 2000, 3000, 5000)
-FEATURES = ("33A", "37A", "66A", "67A", "81A", "143A")
+FEATURES = ("14A", "33A", "37A", "66A", "67A", "81A", "143A")
+GRAMMAR_FEATURES = ("33A", "37A", "66A", "67A", "81A", "143A")
 ORDERS = {f"81A-{index}": value for index, value in
           enumerate(("SOV", "SVO", "VSO", "VOS", "OVS", "OSV"), 1)}
 
 
 def load_reference() -> dict[str, Any]:
     return json.loads(files("cee.data").joinpath("v2_typology.json").read_text(encoding="utf-8"))
+
+
+def sample_stress_rule(seed: int, reference: dict[str, Any]) -> str:
+    distribution = reference["features"]["14A"]["engine_distribution"]
+    values = sorted(distribution)
+    rng = generator(seed, "typology-wals-start", "14A")
+    val = values[int(rng.choice(len(values), p=[distribution[key] for key in values]))]
+    return {
+        "14A-2": "initial",
+        "14A-3": "second",
+        "14A-5": "antepenult",
+        "14A-6": "penult",
+        "14A-7": "final",
+    }.get(val, "penult")
 
 
 def sample_grammar(seed: int, reference: dict[str, Any]) -> dict[str, Construction]:
@@ -45,7 +60,7 @@ def sample_grammar(seed: int, reference: dict[str, Any]) -> dict[str, Constructi
     scenario initialization, not a claim to reconstruct WALS morphology.
     """
     grammar = dict(SYNTAX_GRAMMAR)
-    for feature in FEATURES:
+    for feature in GRAMMAR_FEATURES:
         distribution = reference["features"][feature]["engine_distribution"]
         values = sorted(distribution)
         rng = generator(seed, "typology-wals-start", feature)
@@ -206,18 +221,44 @@ def main() -> None:
                 grammar = dict(FULL_GRAMMAR)
             else:
                 grammar = sample_grammar(seed, reference)
+            stress_rule = sample_stress_rule(seed, reference) if experiment == "wals" else "penult"
             started = time.perf_counter()
-            world = village_grid(args.columns, seed=seed, syntax=True, semantics=True,
-                                 phonology=True, morphology=True, grammar=grammar)
+            world = village_grid(
+                args.columns, seed=seed, syntax=True, semantics=True,
+                phonology=True, morphology=True, grammar=grammar,
+                stress_rule=cast(Any, stress_rule),
+            )
             simulation = Simulation(world)
             frames = [capture(simulation)]
             for year in YEARS[1:]:
                 simulation.run(year)
                 frames.append(capture(simulation))
             elapsed = time.perf_counter() - started
-            run = {"experiment": experiment, "seed": seed, "seconds": elapsed,
-                   "grammar": {name: construction.key for name, construction in grammar.items()},
-                   "frames": frames, "digest": simulation.history.digest()}
+            est_shifts = sum(
+                1 for e in simulation.history.events
+                if e.get("kind") == "established" and e.get("variable") == "prosody:stress_rule"
+            )
+            rule_changes = sum(
+                1 for e in simulation.history.events
+                if e.get("kind") == "stress_rule_changed"
+            )
+            est_strong = sum(
+                1 for e in simulation.history.events
+                if e.get("kind") == "established" and e.get("variant") == "prosody:stress_strength:strong"
+            )
+            weak_to_strong = sum(
+                1 for e in simulation.history.events
+                if e.get("kind") == "stress_strength_changed" and e.get("before") == "weak" and e.get("after") == "strong"
+            )
+            run = {
+                "experiment": experiment, "seed": seed, "seconds": elapsed,
+                "grammar": {name: construction.key for name, construction in grammar.items()},
+                "frames": frames, "digest": simulation.history.digest(),
+                "est_shifts": est_shifts,
+                "rule_changes": rule_changes,
+                "est_strong": est_strong,
+                "weak_to_strong": weak_to_strong,
+            }
             runs.append(run)
             rows = summarize(runs, reference)
             args.output.write_text(json.dumps({"metadata": metadata, "runs": runs, "summary": rows},

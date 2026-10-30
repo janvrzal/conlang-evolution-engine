@@ -78,6 +78,11 @@ class UnitForm(NamedTuple):
 _TOKENS = itertools.count()
 
 
+def next_token() -> int:
+    """Jedinečné ID verze tvarů pro zneplatnění indexů."""
+    return next(_TOKENS)
+
+
 class FormStore:
     """Podkladové tvary kódu jako copy-on-write vrstvy nad výchozími tvary.
 

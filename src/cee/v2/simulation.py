@@ -8,7 +8,7 @@ from typing import Any, Iterator, Sequence
 
 import numpy as np
 
-from cee.v2 import contact, morphology, phonology, syntax
+from cee.v2 import contact, morphology, phonology, prosody, syntax
 from cee.v2.changes import DEFAULT_CHANGES, Change, InnovationContext, pressures_by_kind
 from cee.v2.events import WorldEvent
 from cee.v2.history import History
@@ -415,6 +415,7 @@ class Simulation:
                     morphology.restructure(self.world, group_id, self.tick, self.history, year)
                 if self._grammar:
                     syntax.restructure(self.world, group_id, self.tick, self.history, year)
+                prosody.restructure(self.world, group_id, self.tick, self.history, year)
 
     def _changes(
         self, block: PoolBlock, before: np.ndarray, after: np.ndarray

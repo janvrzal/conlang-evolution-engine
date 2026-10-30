@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 WALS_FEATURE_IDS = (
-    "1A", "2A", "10A", "12A", "33A", "37A", "49A", "66A", "67A",
+    "1A", "2A", "10A", "12A", "14A", "33A", "37A", "49A", "66A", "67A",
     "81A", "112A", "143A",
 )
 
@@ -32,6 +32,13 @@ EXPECTED_SHA256 = {
 # A list of WALS categories can be coarsened to one engine state where the
 # engine cannot represent the distinctions inside that group.
 CROSSWALKS: dict[str, dict[str, str]] = {
+    "14A": {
+        "14A-2": "14A-2",
+        "14A-3": "14A-3",
+        "14A-5": "14A-5",
+        "14A-6": "14A-6",
+        "14A-7": "14A-7",
+    },
     "33A": {
         **{f"33A-{number}": "plural_present" for number in range(1, 9)},
         "33A-9": "plural_absent",
@@ -81,6 +88,10 @@ UNSUPPORTED_REASONS = {
 }
 
 MAPPED_CATEGORY_UNSUPPORTED = {
+    "14A": {
+        "14A-1": "Weight-sensitive stress without a fixed syllable position (WALS 15A, deferred to D3).",
+        "14A-4": "Third-syllable stress is not representable by the fixed StressRule set.",
+    },
     "33A": {},
     "37A": {},
     "66A": {},

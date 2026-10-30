@@ -16,7 +16,7 @@ from cee.v2.language.segments import Form, Pattern, SegmentTable
 
 Operation = Literal["change", "replace", "delete", "insert_before", "insert_after", "merge_next"]
 Stress = Literal["stressed", "unstressed"] | None
-StressRule = Literal["initial", "penult", "final"]
+StressRule = Literal["initial", "second", "antepenult", "penult", "final"]
 
 
 def nuclei(form: Form, table: SegmentTable) -> list[int]:
@@ -29,9 +29,15 @@ def stressed_nucleus(form: Form, table: SegmentTable, rule: StressRule) -> int |
         return None
     if rule == "initial":
         return found[0]
+    if rule == "second":
+        return found[1] if len(found) >= 2 else found[0]
+    if rule == "antepenult":
+        return found[-3] if len(found) >= 3 else found[0]
+    if rule == "penult":
+        return found[-2] if len(found) >= 2 else found[0]
     if rule == "final":
         return found[-1]
-    return found[-2] if len(found) >= 2 else found[0]
+    raise ValueError(f"Neznámé pravidlo přízvuku: {rule}")
 
 
 _MISSING = object()

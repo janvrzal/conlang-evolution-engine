@@ -12,7 +12,7 @@ from typing import Any, Literal, Mapping
 import numpy as np
 import numpy.typing as npt
 
-VariableKind = Literal["process", "lexical", "form", "construction"]
+VariableKind = Literal["process", "lexical", "form", "construction", "prosody"]
 
 FloatArray = npt.NDArray[np.float64]
 

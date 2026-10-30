@@ -1004,6 +1004,135 @@ Tabulka uvádí: **Medián (Maximum) [Průměr]** přes všechny skupiny a 20 se
    - `VowelReduction` se sice uchytí (23,9 % fonologizováno), ale pouze redukuje na [ə], což koncovku neodstraní.
    - K rozběhnutí eroze je tedy nezbytná **síla přízvuku** (krok D2): násobení artikulační výhody v nepřízvučných slabikách u jazyků se silným přízvukem tak, aby překonala protichůdný odpor markedness a clarity.
 
+---
+
+## D1: Rozšíření pozic přízvuku a typologie WALS 14A
+
+Implementováno 5 fixních pozic přízvuku:
+- `initial` (WALS 14A-2)
+- `second` (WALS 14A-3)
+- `antepenult` (WALS 14A-5)
+- `penult` (WALS 14A-6, výchozí protojazyk)
+- `final` (WALS 14A-7)
+
+Procesy určují přízvučné jádro metodou `stressed_nucleus(form, table, rule)` v `src/cee/v2/language/processes.py`. Nepodporované kategorie WALS 14A-1 (váhově citlivý přízvuk bez fixní slabiky, viz 15A) a 14A-4 (přízvuk na 3. slabice od začátku) jsou evidovány v `MAPPED_CATEGORY_UNSUPPORTED` a jejich váha zůstává v Hellingerově vzdálenosti.
+
+### Rozložení WALS 14A v čase (20 seedů, 5 000 let)
+
+Referenční projekce WALS (genusově vážená):
+`14A-1` = 0,445; `14A-2` = 0,201; `14A-3` = 0,020; `14A-4` = 0,001; `14A-5` = 0,026; `14A-6` = 0,172; `14A-7` = 0,135
+
+#### Experiment `same_full` (start z jednotného penult / 14A-6)
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1,000 | 14A-6=1,000 | 0,765 | 0,000 |
+| 1 000 | 20 | 20 | 1,000 | 14A-2=0,050; 14A-6=0.950 | 0,704 | 0,123 |
+| 2 000 | 20 | 20 | 1,000 | 14A-5=0,050; 14A-6=0.950 | 0,748 | 0,123 |
+| 3 000 | 20 | 20 | 1,000 | 14A-2=0,100; 14A-5=0,150; 14A-6=0,750 | 0,661 | 0,454 |
+| 5 000 | 20 | 20 | 1,000 | 14A-2=0,050; 14A-3=0,050; 14A-5=0,150; 14A-6=0,750 | 0,668 | 0,497 |
+
+#### Experiment `wals` (start ze vzorku WALS marginal)
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1,000 | 14A-2=0,400; 14A-3=0,100; 14A-5=0,100; 14A-6=0,300; 14A-7=0,100 | 0,526 | 0,881 |
+| 1 000 | 20 | 20 | 1,000 | 14A-2=0,400; 14A-3=0,100; 14A-5=0,100; 14A-6=0,300; 14A-7=0,100 | 0,526 | 0,881 |
+| 2 000 | 20 | 20 | 1,000 | 14A-2=0,400; 14A-3=0,100; 14A-5=0,100; 14A-6=0,300; 14A-7=0,100 | 0,526 | 0,881 |
+| 3 000 | 20 | 20 | 1,000 | 14A-2=0,400; 14A-3=0,100; 14A-5=0,100; 14A-6=0,300; 14A-7=0,100 | 0,526 | 0,881 |
+| 5 000 | 20 | 20 | 1,000 | 14A-2=0,300; 14A-3=0,200; 14A-5=0,050; 14A-6=0,400; 14A-7=0,050 | 0,557 | 0,838 |
+
+### Přechody a posuny přízvuku
+- **same_full**: 119 ustálených variant posunu přízvuku v repertoáru (`established`), 210 uskutečněných změn pravidla ve skupinách (`stress_rule_changed`). Z jednotného stavu penult vzniká v čase stabilní pestrost ($E \to 0{,}497$ v 5 000 letech).
+- **wals**: 42 ustálených variant posunu přízvuku, 174 změn pravidla. Pestrost zůstává vysoká ($E = 0{,}838$ až $0{,}881$).
+- **Přechody síly (weak → strong)**: V typologických bězích (1 dominantní jazyk na seed) se inovace síly objevily, ale nedosáhly 100% frekvence (drift proti konformitě); ustálených přechodů `weak -> strong` v tomto souboru bylo 0.
+
+---
+
+## D2: Prozodické proměnné, posun a síla přízvuku, citlivost násobku
+
+Vytvořen modul `src/cee/v2/prosody.py`, proměnné `prosody:stress_rule` a `prosody:stress_strength`.
+Inovace:
+- `StressShift`: posun pravidla přízvuku podle priorů doložených z typologie (Hyman 1977, 2014; Hayes 1995); posun na finálu záměrně chybí (oxytone nevzniká posunem, nýbrž apokopou).
+- `StressStrengthChange`: přechod `weak` $\leftrightarrow$ `strong` (Dauer 1983; Schiering 2010).
+
+### Lingvistické zdůvodnění násobku síly přízvuku
+- **Literatura podporuje směr**: V jazycích se silným dynamickým přízvukem (stress-timed) procházejí nepřízvučné slabiky výraznou redukcí a afixální kompresí (Dauer 1983; Bybee, Chakraborti, Jung & Scheibman 1998 „Prosody and segmental effect: Some paths of evolution for word stress“, Studies in Language 22; Schiering 2010).
+- **Autorský odhad**: Konstanta `STRESS_STRENGTH_MULTIPLIER = 1.5` je autorský odhad (literatura neposkytuje přesné skalární číslo pro fitness funkci; neladěno na WALS).
+- **Ověření propsání**: V `Articulation.scores` se hodnota `ease` násobí `STRESS_STRENGTH_MULTIPLIER` pro skupiny s `stress_strength == "strong"` u procesů s `reductive=True` a `stress="unstressed"`. Jednotkový test `test_stress_strength_scaling_in_articulation` i skript citlivosti přímo ověřují, že změna konstanty na 1,0, 1,5 a 2,0 se exaktně promítá do skóre.
+
+### Citlivostní analýza násobku síly přízvuku ($M \in \{1{,}0; 1{,}5; 2{,}0\}$)
+Běh scénáře `village_grid(6, …)` s `FULL_GRAMMAR`, seedy 1..20, 3 000 let.
+
+#### 1. Eroze reduktivních koncovek podle násobku $M$
+| Podmínka | M | N (návrhů) | Ustáleno (100 %) | Jen fonol. | Zaniklo bez fon. | Fonol. celkem | Art. ease | CatLoss |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **initial_strong** | 1.0 | 821 | 51 (6,2 %) | 129 (15,7 %) | 641 (78,1 %) | 180 (21,9 %) | +0,147 | 0 |
+| **initial_strong** | 1.5 | 782 | 95 (12,1 %) | 130 (16,6 %) | 557 (71,2 %) | 225 (28,8 %) | +0,218 | 0 |
+| **initial_strong** | 2.0 | 721 | 159 (22,1 %) | 107 (14,8 %) | 455 (63,1 %) | 266 (36,9 %) | +0,288 | 0 |
+| **penult_strong** | 1.0 | 817 | 53 (6,5 %) | 125 (15,3 %) | 639 (78,2 %) | 178 (21,8 %) | +0,146 | 0 |
+| **penult_strong** | 1.5 | 785 | 101 (12,9 %) | 134 (17,1 %) | 550 (70,1 %) | 235 (29,9 %) | +0,218 | 0 |
+| **penult_strong** | 2.0 | 704 | 172 (24,4 %) | 109 (15,5 %) | 423 (60,1 %) | 281 (39,9 %) | +0,288 | 0 |
+| **evolving_weak** | 1.0 | 817 | 53 (6,5 %) | 125 (15,3 %) | 639 (78,2 %) | 178 (21,8 %) | +0,146 | 0 |
+| **evolving_weak** | 1.5 | 817 | 53 (6,5 %) | 125 (15,3 %) | 639 (78,2 %) | 178 (21,8 %) | +0,148 | 0 |
+| **evolving_weak** | 2.0 | 813 | 53 (6,5 %) | 127 (15,6 %) | 633 (77,9 %) | 180 (22,1 %) | +0,150 | 0 |
+
+#### 2. Rozbor redukčních rodin na koncovkách (`initial + strong`)
+| M | Rodina | N | Ustáleno (100 %) | Jen fonologizováno | Zaniklo bez fonol. |
+| :---: | :--- | :---: | :---: | :---: | :---: |
+| **1.0** | apocope | 228 | 0 (0,0 %) | 6 (2,6 %) | 222 (97,4 %) |
+| | coda_loss | 72 | 2 (2,8 %) | 5 (6,9 %) | 65 (90,3 %) |
+| | syncope | 0 | — | — | — |
+| | vowel_reduction | 270 | 10 (3,7 %) | 54 (20,0 %) | 206 (76,3 %) |
+| **1.5** | apocope | 229 | 0 (0,0 %) | 8 (3,5 %) | 221 (96,5 %) |
+| | coda_loss | 72 | 2 (2,8 %) | 5 (6,9 %) | 65 (90,3 %) |
+| | syncope | 0 | — | — | — |
+| | vowel_reduction | 231 | 54 (23,4 %) | 58 (25,1 %) | 119 (51,5 %) |
+| **2.0** | apocope | 210 | **5 (2,4 %)** | 16 (7,6 %) | 189 (90,0 %) |
+| | coda_loss | 70 | 2 (2,9 %) | 3 (4,3 %) | 65 (92,9 %) |
+| | syncope | 0 | — | — | — |
+| | vowel_reduction | 176 | 109 (61,9 %) | 23 (13,1 %) | 44 (25,0 %) |
+
+#### 3. Slabost (`weakness`) v roce 3 000 (medián / maximum)
+| Podmínka | M | OBJ | PL | PAST | FUT | DEF |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **initial_strong** | 1.0 | 0,000 / 0,013 | 0,000 / 0,106 | 0,000 / 0,000 | 0,000 / 1,000 | 0,000 / 1,000 |
+| **initial_strong** | 1.5 | 0,000 / 0,025 | 0,000 / 0,273 | 0,000 / 0,034 | 0,000 / 1,000 | 0,000 / 1,000 |
+| **initial_strong** | 2.0 | 0,000 / 0,013 | 0,012 / 0,183 | 0,000 / 0,069 | 0,000 / 1,000 | 0,000 / 1,000 |
+| **penult_strong** | 1.0 | 0,000 / 0,013 | 0,000 / 0,106 | 0,000 / 0,033 | 0,000 / 1,000 | 0,000 / 1,000 |
+| **penult_strong** | 1.5 | 0,000 / 0,037 | 0,012 / 0,289 | 0,000 / 0,069 | 0,000 / 1,000 | 0,000 / 1,000 |
+| **penult_strong** | 2.0 | 0,000 / 0,025 | 0,024 / 0,181 | 0,000 / 0,074 | 0,000 / 1,000 | 0,000 / 1,000 |
+| **evolving_weak** | 1.0 | 0,000 / 0,013 | 0,000 / 0,106 | 0,000 / 0,033 | 0,000 / 1,000 | 0,000 / 1,000 |
+| **evolving_weak** | 1.5 | 0,000 / 0,013 | 0,000 / 0,106 | 0,000 / 0,033 | 0,000 / 1,000 | 0,000 / 1,000 |
+| **evolving_weak** | 2.0 | 0,000 / 0,013 | 0,000 / 0,106 | 0,000 / 0,033 | 0,000 / 1,000 | 0,000 / 1,000 |
+
+### Nález z měření citlivosti
+1. Silný přízvuk výrazně akceleruje samohláskovou redukci na koncovkách (při $M = 1{,}5$ z 3,7 % na 23,4 %, při $M = 2{,}0$ na 61,9 %).
+2. Při $M = 2{,}0$ se poprvé ustavuje apokopa (5 procesů, 2,4 %).
+3. K zániku kategorií (`CategoryLoss = 0`) však nedochází: `VowelReduction` pouze centralizuje samohlásku na [ə], což koncovku nesmaže (weakness dosahuje max. 0,289, limit zániku je 0,500). K úplnému smazání koncovky brání absolutní trest za vznik kody v `Phonotactics` a trest za synkretismus s nominativem. To řeší krok D2b.
+
+---
+
+### Výkonnostní audit a sériové páry (`valley-50`)
+Porovnání commitu `6f687b2` a nové verze D1–D2 běžící bezprostředně po sobě (stejný interpreter, nulová souběžná zátěž):
+- **Sériový pár 1**: 29,61 s (`6f687b2`) vs. 31,41 s (nová verze) $\to$ **+6,1 %**
+- **Sériový pár 2**: 28,45 s (`6f687b2`) vs. 31,21 s (nová verze) $\to$ **+9,7 %**
+
+Oba sériové páry splňují limit $\le +10\,\%$.
+Rozpad času ukazuje, že nárůst pochází z:
+- `phonology.restructure`: +1,3 s (invalidace cache a přepočet forem při změnách pravidla a síly přízvuku)
+- `pressure.Articulation`: +0,3 s (vyhodnocení nepřízvučných procesů a škálování násobkem)
+- `change.total_rate` pro nové změny: zanedbatelných 0,008 s celkem.
+
+### Referenční otisky po krocích D1–D2
+V `scenarios.py` byla prozódie navázána na fonologii (`if phonology or prosody:`):
+- `phonology`: `1c1bd2c691a4b9aacd499e038b945cdd1c759f6a5a5b1de7ba204362f35fa755`
+- `morphology`: `b673137d804d7542106c47e7203f93c9bf63268d8951909b49df12755b29e849` (beze změny)
+- `syntax`: `9c9803132e86d566e7ccc623f381622a19aedc042c443ed0a1f3d0dc964b0084`
+- `grid-5x5`: `83d79ffb6e029604422730b9906dcf7b68d2ed522ef5f405fe706a6dbf6d5c95` (beze změny)
+- `shift`: `c6892607c6779018a02633a9da44f5d10f9fa98c458e1d31c91cee3b75d6784e`
+- `island-city`: `59e723ed5d4eb316f73c817e92972017e7cb69578746121381b4a609948c4abd`
+- `valley-50`: `d17c58f6492247d39db581e1a5d4913d1c94e8dc8c9ae42864ccd1a3fbacb393`
+
+
 
 
 

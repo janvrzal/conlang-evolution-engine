@@ -7,6 +7,7 @@ from typing import Sequence
 from cee.v2.changes.base import Change, InnovationContext, RateBasis
 from cee.v2.changes.lexicon import LEXICAL_CHANGES, LexicalCoinage
 from cee.v2.changes.morphology import MORPHOLOGICAL_CHANGES, AnalogicalChange
+from cee.v2.changes.prosody import PROSODY_CHANGES, StressShift, StressStrengthChange
 from cee.v2.changes.sound import SOUND_CHANGES, SoundChange
 from cee.v2.changes.syntax import SYNTACTIC_CHANGES, SyntacticChange
 from cee.v2.pressures.base import Pressure
@@ -15,7 +16,7 @@ from cee.v2.pressures.social import Norm
 #: Pevné pořadí registru je součástí determinismu. Ve světě bez hláskových
 #: tvarů (M1) zvukové změny nenajdou žádné místo a nic nestojí.
 DEFAULT_CHANGES: tuple[Change, ...] = (
-    *LEXICAL_CHANGES, *SOUND_CHANGES, *MORPHOLOGICAL_CHANGES, *SYNTACTIC_CHANGES,
+    *LEXICAL_CHANGES, *SOUND_CHANGES, *MORPHOLOGICAL_CHANGES, *SYNTACTIC_CHANGES, *PROSODY_CHANGES,
 )
 
 
@@ -50,8 +51,11 @@ __all__ = [
     "Change",
     "InnovationContext",
     "LexicalCoinage",
+    "PROSODY_CHANGES",
     "SOUND_CHANGES",
     "SYNTACTIC_CHANGES",
+    "StressShift",
+    "StressStrengthChange",
     "SyntacticChange",
     "SoundChange",
     "RateBasis",

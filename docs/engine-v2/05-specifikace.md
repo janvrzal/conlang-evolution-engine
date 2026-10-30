@@ -1045,6 +1045,15 @@ na nezávislé řadě seedů `101..120` (u M3 morfologie rozšířeně `101..140
   - `shift`: `d1a1e9e5af395b3120426fb3035912720dccdc5727168e62aa6dee1799dd6816`
   - `island-city`: `13717cb46affdc42b9938627d9314ab09c23fec227595ce6f53cfa099a22d4aa`
   - `valley-50`: `0d462e154e885753e74ad645d2ecb9085bd4d1e442cc86f9229d693f366fca00`
+- **Referenční otisky po krocích D1–D2 typologie (prozódie a posun přízvuku)**:
+  - `phonology`: `1c1bd2c691a4b9aacd499e038b945cdd1c759f6a5a5b1de7ba204362f35fa755`
+  - `morphology`: `b673137d804d7542106c47e7203f93c9bf63268d8951909b49df12755b29e849`
+  - `syntax`: `9c9803132e86d566e7ccc623f381622a19aedc042c443ed0a1f3d0dc964b0084`
+  - `grid-5x5`: `83d79ffb6e029604422730b9906dcf7b68d2ed522ef5f405fe706a6dbf6d5c95`
+  - `shift`: `c6892607c6779018a02633a9da44f5d10f9fa98c458e1d31c91cee3b75d6784e`
+  - `island-city`: `59e723ed5d4eb316f73c817e92972017e7cb69578746121381b4a609948c4abd`
+  - `valley-50`: `d17c58f6492247d39db581e1a5d4913d1c94e8dc8c9ae42864ccd1a3fbacb393`
+  - *Důvod změny otisků:* Zavedení prozodických inovací (`StressShift`, `StressStrengthChange`) do výchozích změn enginu a navázání prozódie na fonologii v `scenarios.py` (`if phonology or prosody:`). Ve všech fonologických a syntaktických scénářích se nyní inicializují proměnné `prosody:stress_rule` a `prosody:stress_strength`, probíhají posuny přízvuku a přechody síly, a restrukturalizace zaznamenává události změny. Scénáře `morphology` a `grid-5x5` fonologii nezapínají, proto si zachovávají přesnou bitovou shodu.
 - **Stochastické brány (`k` z `N`) a negativní kontroly**: 42 robustních bran a
   10 deterministických/výkonových testů zůstalo beze změny; 10 křehkých či
   hraničních bran (včetně Jespersenova cyklu `8/20` převedeného na `N = 19, k = 1`

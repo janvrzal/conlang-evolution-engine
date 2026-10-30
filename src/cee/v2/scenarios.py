@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping, Sequence
+from typing import Literal, Mapping, Sequence
 
 from cee.data.core_vocabulary import CORE_EXTENSION, SWADESH_CORE
 from cee.v2.events import (
@@ -19,7 +19,9 @@ from cee.v2.events import (
 )
 from cee.v2.language.constructions import GRAMMATICAL_SOURCES, Construction, catalog
 from cee.v2.language.morphology import Paradigm
+from cee.v2.language.processes import StressRule
 from cee.v2.language.protoforms import DEFAULT_CONSONANTS, DEFAULT_VOWELS, protolanguage
+from cee.v2.prosody import register_stress_rule, register_stress_strength
 from cee.v2.repertoire import Distribution, Origin, Repertoire
 from cee.v2.rng import stable_int
 from cee.v2.semantics import core_graph
@@ -111,6 +113,22 @@ def _seed_constructions(world: World, base: Repertoire, grammar: Mapping[str, Co
     return layer.freeze()
 
 
+def _seed_prosody(
+    world: World,
+    base: Repertoire,
+    rule: StressRule = "penult",
+    strength: Literal["weak", "strong"] = "weak",
+) -> Repertoire:
+    """Prozodické proměnné protojazyka: pravidlo přízvuku a jeho síla."""
+    layer = Repertoire(base)
+    origin = Origin(None, 0, world.start_year, None)
+    rule_var, rule_variant = register_stress_rule(world, rule, origin)
+    layer.set(rule_var, Distribution.fixed(rule_variant.id))
+    strength_var, strength_variant = register_stress_strength(world, strength, origin)
+    layer.set(strength_var, Distribution.fixed(strength_variant.id))
+    return layer.freeze()
+
+
 #: Odvozovací přípona protojazyka (jmenná, typ *-ka*).
 DERIVATIONAL_SUFFIX = "ka"
 
@@ -142,6 +160,9 @@ def village_grid(
     syntax: bool = False,
     grammar: Mapping[str, Construction] | None = None,
     taboo: Sequence[str] = (),
+    prosody: bool = False,
+    stress_rule: StressRule = "penult",
+    stress_strength: Literal["weak", "strong"] = "weak",
 ) -> World:
     """Mřížka stejných vesnic s gravitačními vazbami na nejbližší sousedy.
 
@@ -182,6 +203,8 @@ def village_grid(
         base = world.seed_lexicon(concepts, forms, frequencies, classes, endings)
         if syntax:
             base = _seed_constructions(world, base, grammar)
+        if phonology or prosody:
+            base = _seed_prosody(world, base, rule=stress_rule, strength=stress_strength)
         if semantics and world.table is not None:
             world.derivational_suffix = world.table.parse(DERIVATIONAL_SUFFIX)
     else:
@@ -198,7 +221,11 @@ def village_grid(
                     id=village,
                     territory=village,
                     population=population,
-                    codes=[Code("main", base.branch())],
+                    codes=[Code(
+                        "main", base.branch(),
+                        stress_rule=stress_rule,
+                        stress_strength=stress_strength,
+                    )],
                     generation_years=generation_years,
                     openness=openness,
                     taboo=frozenset(taboo),
@@ -231,6 +258,8 @@ class Language:
     vowels: tuple[str, ...] = DEFAULT_VOWELS
     #: Vazby uvnitř jazyka sahají do této vzdálenosti (km).
     link_reach: float = 25.0
+    stress_rule: StressRule = "penult"
+    stress_strength: Literal["weak", "strong"] = "weak"
 
 
 def contact_world(
@@ -281,6 +310,7 @@ def contact_world(
             language=language.id, cells=cells[language.id],
         )
         base = _seed_constructions(world, base, language.grammar)
+        base = _seed_prosody(world, base, rule=language.stress_rule, strength=language.stress_strength)
         territory = f"area-{language.id}"
         world.add_territory(Territory(territory, "area", parent="world", position=language.places[0].position))
         for place in language.places:
@@ -288,7 +318,11 @@ def contact_world(
             world.add_group(
                 SpeechGroup(
                     id=place.id, territory=place.id, population=place.population,
-                    codes=[Code("main", base.branch(), language=language.id)],
+                    codes=[Code(
+                        "main", base.branch(), language=language.id,
+                        stress_rule=language.stress_rule,
+                        stress_strength=language.stress_strength,
+                    )],
                     generation_years=generation_years, prestige=place.prestige,
                     openness=place.openness, immigration=place.immigration,
                 )

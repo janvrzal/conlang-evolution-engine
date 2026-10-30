@@ -37,7 +37,7 @@ def test_puvodni_start_ma_presny_profil_a_chybejici_funkce():
     world = village_grid(1, seed=1, grammar=dict(SYNTAX_GRAMMAR))
     assert set(SYNTAX_GRAMMAR) == {"PAST", "PL", "OBJ", "NEG", "ORDER"}
     profile = metrics.typology_profile(world, list(world.groups))
-    assert profile == {"33A": "plural_present", "37A": "definite_absent", "66A": "past_present",
+    assert profile == {"14A": "14A-6", "33A": "plural_present", "37A": "definite_absent", "66A": "past_present",
                        "67A": "67A-2", "81A": None, "143A": "143A-1"}
 
 
