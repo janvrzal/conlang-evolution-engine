@@ -89,11 +89,15 @@ a docstringu.
 
 ### C3: zánik kategorie
 
-Nová změna (např. `CategoryLoss`, šablona `inflection`): syntetická
-konstrukce, jejíž koncovka z velké části splynula (`weakness` vysoké)
-a kterou nic neobnovuje, přejde do `zero`. Totéž pro opis u funkce s nízkou
-potřebou nebo kompenzovanou funkcí. Pravděpodobnost úměrná `weakness`
-a nepřímo úměrná potřebě po odečtu kompenzace z C2.
+Nová změna (např. `CategoryLoss`, šablona `inflection`): syntetická nebo opisná
+konstrukce přejde do `zero`. Zánik se nesmí spouštět jen vysokou `weakness`
+(která podle měření C0 v modelu samovolně téměř nenastává), ale primárně
+nízkou potřebou po odečtu kompenzace z C2 (funkce saturovaná kontextem nebo
+náhradní strategií, kde `effective_need` klesne k nule a převáží `Economy`).
+Vysoká `weakness` (pokud koncovky splynou a nic je neobnovuje) zůstává doplňkovým
+spouštěčem. Pravděpodobnost úměrná poklesu efektivní potřeby a slabosti vyjádření.
+Konstanty zdůvodnit v docstringu analogií s ostatními změnami (`base_rate` ~ 0,01–0,03),
+neladit na shodu s WALS.
 
 - Doložené typy zániku uveď v docstringu: ztráta pádů v angličtině
   a románských jazycích (zastoupena slovosledem), ztráta rodu v angličtině,

@@ -329,7 +329,9 @@ def normalized_entropy(distribution: dict[str, float], categories: Sequence[str]
                 for value in distribution.values() if value > 0) / math.log(len(categories))
 
 
-def typology_profile(world: World, language: Sequence[str]) -> dict[str, str | None]:
+def typology_profile(
+    world: World, language: Sequence[str], weakness_threshold: float | None = None
+) -> dict[str, str | None]:
     """Převládající typologické kategorie pozorovaného jazyka.
 
     ``language`` je posloupnost ID skupin z ``Snapshot.languages``, nikoli
@@ -337,8 +339,12 @@ def typology_profile(world: World, language: Sequence[str]) -> dict[str, str | N
     rozdělení variant, nikoli jen lokální vítěz. Nerozlišitelné kategorie
     mají hodnotu None; psané skupiny bez mluvčích se nezapočítají.
     37A a 66A používají hrubší, výslovně odvozené kategorie.
+
+    Pokud je zadán ``weakness_threshold``, syntetická konstrukce se započte jako
+    přítomná pouze tehdy, je-li podíl splynulých tvarů v buňce
+    (``syntax.weakness``) ostře menší než tento práh.
     """
-    from cee.v2.syntax import construction_of, variable_id
+    from cee.v2.syntax import construction_of, variable_id, weakness
 
     groups = [world.groups[group_id] for group_id in sorted(set(language))
               if not world.groups[group_id].written and world.groups[group_id].domain == "home"
@@ -370,7 +376,13 @@ def typology_profile(world: World, language: Sequence[str]) -> dict[str, str | N
                     )
                 elif feature == "67A":
                     if construction.kind == "synthetic":
-                        value = "67A-1"
+                        if (
+                            weakness_threshold is not None
+                            and weakness(world, group.main_code, function) >= weakness_threshold
+                        ):
+                            value = "67A-2"
+                        else:
+                            value = "67A-1"
                     elif construction.kind == "zero" or (
                         construction.kind == "periphrastic" and construction.stage == "free"
                     ):
@@ -379,7 +391,15 @@ def typology_profile(world: World, language: Sequence[str]) -> dict[str, str | N
                     prefix = {"33A": "plural", "37A": "definite", "66A": "past"}[feature]
                     if construction.kind == "zero":
                         value = f"{prefix}_absent"
-                    elif construction.kind in ("synthetic", "periphrastic"):
+                    elif construction.kind == "synthetic":
+                        if (
+                            weakness_threshold is not None
+                            and weakness(world, group.main_code, function) >= weakness_threshold
+                        ):
+                            value = f"{prefix}_absent"
+                        else:
+                            value = f"{prefix}_present"
+                    elif construction.kind == "periphrastic":
                         value = f"{prefix}_present"
                 totals[value] = totals.get(value, 0.0) + group.population * float(frequency)
         # Při shodě má přednost neznámá hodnota; u známých rozhoduje ID.

@@ -593,3 +593,95 @@ pro každou vesnici). Pro tento nárůst udělil uživatel výslovnou výjimku.
 - Výkonnostní brána: výjimka schválena uživatelem (rozšíření modelu o 8 rodin).
 
 Commit části B uložen jako `e7dc08c`.
+Oprava zápisu výkonu a schválené výjimky uložena jako `e4c14cf`.
+
+## Část C: gramatická dynamika
+
+Zadání zkopírováno ze sdíleného checkoutu `docs/engine-v2/zadani-gramaticka-dynamika.md`
+a uloženo v commitu `bd3ce86`.
+
+### C0: měřidlo podle povrchového kontrastu (bez změny modelu)
+
+Do `metrics.typology_profile` bylo doplněno volitelné druhé čtení `weakness_threshold=0.5`.
+Práh `0,5` je odvozen z lingvistického významu metriky `syntax.weakness` (podíl splynulých
+tvarů v gramatické buňce s citačním tvarem): pokud více než 50 % tvarů ztratilo
+rozlišení (`weakness >= 0,5`), synkretismus převažuje nad kontrastem a syntetická
+kategorie přestává být na povrchu spolehlivě rozlišitelná.
+
+Měření proběhlo na stejných 40 bězích z částí A a B (20 běhů `same`, 20 běhů `wals`, seedy 1..20,
+roky 0, 1 000, 2 000, 3 000, 5 000).
+
+#### Výsledek C0
+
+Obraz se prakticky **vůbec nezměnil**:
+- U rysů PL (33A), DEFINITE (37A), PAST (66A), ORDER (81A) a NEG (143A) je povrchové
+  čtení ve všech 5 časových řezech a v obou pokusech **zcela totožné** s formálním čtením
+  konstrukčního profilu.
+- Jediná drobná odchylka nastala u WALS 67A (FUTURE) v roce 3 000: formální čtení vykázalo
+  100 % present (`67A-1`), zatímco povrchové čtení odhalilo 1 jazyk z 20 (5 %) se splynutou
+  koncovkou budoucího času (`weakness >= 0,5`); v roce 5 000 byl budoucí čas opět 100 % rozlišený.
+
+#### Rozložení weakness (medián, 90. percentil, maximum)
+
+| Pokus | Funkce | Rok | Medián | 90. perc. | Maximum |
+|---|---|---:|---:|---:|---:|
+| `same` | PL | 0 | 0,000 | 0,000 | 0,000 |
+| `same` | PL | 1 000 | 0,000 | 0,000 | 0,011 |
+| `same` | PL | 2 000 | 0,000 | 0,000 | 0,012 |
+| `same` | PL | 3 000 | 0,000 | 0,024 | 0,094 |
+| `same` | PL | 5 000 | 0,013 | 0,053 | 0,132 |
+| `same` | PAST | 0 | 0,000 | 0,000 | 0,000 |
+| `same` | PAST | 1 000 | 0,000 | 0,000 | 0,000 |
+| `same` | PAST | 2 000 | 0,000 | 0,000 | 0,000 |
+| `same` | PAST | 3 000 | 0,000 | 0,000 | 0,033 |
+| `same` | PAST | 5 000 | 0,000 | 0,000 | 0,000 |
+| `same` | FUTURE | 0–5 000 | 1,000 | 1,000 | 1,000 |
+| `same` | DEFINITE | 0–5 000 | 1,000 | 1,000 | 1,000 |
+| `same` | OBJ | 0 | 0,000 | 0,000 | 0,000 |
+| `same` | OBJ | 1 000 | 0,000 | 0,000 | 0,022 |
+| `same` | OBJ | 2 000 | 0,000 | 0,000 | 0,024 |
+| `same` | OBJ | 3 000 | 0,000 | 0,000 | 0,013 |
+| `same` | OBJ | 5 000 | 0,000 | 0,000 | 0,013 |
+| `wals` | PL | 0 | 0,000 | 0,100 | 1,000 |
+| `wals` | PL | 1 000 | 0,000 | 0,100 | 1,000 |
+| `wals` | PL | 2 000 | 0,000 | 0,000 | 0,012 |
+| `wals` | PL | 3 000 | 0,000 | 0,024 | 0,094 |
+| `wals` | PL | 5 000 | 0,013 | 0,063 | 0,148 |
+| `wals` | PAST | 0 | 0,000 | 1,000 | 1,000 |
+| `wals` | PAST | 1 000 | 0,000 | 1,000 | 1,000 |
+| `wals` | PAST | 2 000 | 0,000 | 1,000 | 1,000 |
+| `wals` | PAST | 3 000 | 0,000 | 0,000 | 0,038 |
+| `wals` | PAST | 5 000 | 0,000 | 0,000 | 0,038 |
+| `wals` | FUTURE | 0–2 000 | 0,000 | 1,000 | 1,000 |
+| `wals` | FUTURE | 3 000 | 0,000 | 0,000 | 1,000 |
+| `wals` | FUTURE | 5 000 | 0,000 | 0,000 | 0,000 |
+| `wals` | DEFINITE | 0–1 000 | 1,000 | 1,000 | 1,000 |
+| `wals` | DEFINITE | 2 000 | 0,000 | 0,000 | 0,033 |
+| `wals` | DEFINITE | 3 000 | 0,000 | 0,000 | 0,037 |
+| `wals` | DEFINITE | 5 000 | 0,000 | 0,000 | 0,020 |
+| `wals` | OBJ | 0 | 0,000 | 0,000 | 0,000 |
+| `wals` | OBJ | 1 000 | 0,000 | 0,011 | 0,022 |
+| `wals` | OBJ | 2 000 | 0,000 | 0,000 | 0,024 |
+| `wals` | OBJ | 3 000 | 0,000 | 0,000 | 0,024 |
+| `wals` | OBJ | 5 000 | 0,000 | 0,000 | 0,650 |
+
+*Poznámka k tabulce:* Hodnota 1,000 značí funkci v `zero` (žádný tvar v paradigmatu není odlišen od citačního).
+Jakmile je syntetická kategorie etablovaná, `weakness` téměř nikdy nepřesáhne 0,10–0,15 (maximum u PL v 5 000 letech
+je 0,148, u PAST 0,038).
+
+#### Závěr C0 a aktualizace plánu C3
+
+Měření potvrdilo zásadní fakt: **eroze koncovek v modelu samovolně téměř nenastává**.
+Pokud by plánovaný zánik kategorie (`CategoryLoss` v C3) závisel pouze na vysoké slabosti
+(`weakness >= 0,5`), zánik by v modelu nenastal prakticky nikdy.
+
+**Aktualizovaný mechanismus C3:**
+Zánik kategorie se musí spouštět primárně **funkční cestou**:
+1. **Nízká efektivní potřeba**: Pokud po odečtu kompenzace z C2 (náhradní strategie, kontext)
+   klesne efektivní potřeba kategorie (`effective_need = need - compensation`) pod prahovou mez,
+   kategorie ztrácí komunikativní přínos. Tlak `Economy` penalizuje slova navíc a morfémy,
+   a kategorie přechází do `zero` i bez předchozí fonetické eroze koncovky.
+2. **Fonetická eroze**: Vysoká `weakness` zůstává jako doplňkový spouštěč, nikoli jako jediná nutná podmínka.
+3. Míra inovace `CategoryLoss` bude mít řádovou hodnotu `base_rate` ~ 0,01–0,03 (odpovídající
+   stávajícím změnám `order_relaxation`, `negation_reduction`), zdůvodněnou v docstringu,
+   bez ladění konstant na shodu s WALS.

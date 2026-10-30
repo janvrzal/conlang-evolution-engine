@@ -88,9 +88,10 @@ def capture(simulation: Simulation) -> dict[str, Any]:
         snapshot = simulation.snapshots[-1]
         if snapshot.year != simulation.year:
             raise ValueError("A requested measurement must coincide with an observation tick.")
-    profiles, inventories, contrasts = [], [], []
+    profiles, surface_profiles, inventories, contrasts = [], [], [], []
     for _, groups in sorted(snapshot.languages.items()):
         profiles.append(metrics.typology_profile(simulation.world, groups))
+        surface_profiles.append(metrics.typology_profile(simulation.world, groups, weakness_threshold=0.5))
         inventories.append(metrics.underlying_inventory_proxy(simulation.world, groups))
         witnesses = {group: metrics.nasal_contrast_witness(simulation.world, group) for group in sorted(groups)}
         total = sum(simulation.world.groups[group].population for group in groups)
@@ -98,50 +99,62 @@ def capture(simulation: Simulation) -> dict[str, Any]:
         contrasts.append({"witness_population_share": witnessed / total if total else 0.0,
                           "majority_witness": witnessed > total / 2 if total else False,
                           "witnesses": {group: pair for group, pair in witnesses.items() if pair is not None}})
-    return {"year": int(simulation.year), "profiles": profiles, "inventory_proxies": inventories, "nasal_contrast_witnesses": contrasts}
+    return {
+        "year": int(simulation.year),
+        "profiles": profiles,
+        "surface_profiles": surface_profiles,
+        "inventory_proxies": inventories,
+        "nasal_contrast_witnesses": contrasts,
+    }
 
 
 def summarize(runs: list[dict[str, Any]], reference: dict[str, Any]) -> list[dict[str, Any]]:
     rows = []
-    for experiment in ("same", "wals"):
-        selected = [run for run in runs if run["experiment"] == experiment]
-        for year in YEARS:
-            frames = [frame for run in selected for frame in run["frames"] if frame["year"] == year]
-            profiles = [profile for frame in frames for profile in frame["profiles"]]
-            for feature in FEATURES:
-                counts = Counter(profile[feature] for profile in profiles if profile[feature] is not None)
-                known = sum(counts.values())
-                observed = {key: count / known for key, count in sorted(counts.items())} if known else {}
-                expected = projected_reference(reference["features"][feature])
-                rows.append({
-                    "experiment": experiment, "year": year, "feature": feature,
-                    "runs": len(selected), "languages": len(profiles), "known": known,
-                    "coverage": known / len(profiles) if profiles else 0.0,
-                    "counts": dict(sorted(counts.items())), "distribution": observed,
-                    "hellinger": metrics.hellinger(observed, expected) if known else None,
-                    "entropy": metrics.normalized_entropy(observed, tuple(reference["features"][feature]["engine_categories"])) if known else None,
-                })
+    readings = ("construction", "surface_contrast")
+    for reading in readings:
+        profile_key = "profiles" if reading == "construction" else "surface_profiles"
+        for experiment in ("same", "wals"):
+            selected = [run for run in runs if run["experiment"] == experiment]
+            for year in YEARS:
+                frames = [frame for run in selected for frame in run["frames"] if frame["year"] == year]
+                profiles = [profile for frame in frames for profile in frame.get(profile_key, frame["profiles"])]
+                for feature in FEATURES:
+                    counts = Counter(profile[feature] for profile in profiles if profile[feature] is not None)
+                    known = sum(counts.values())
+                    observed = {key: count / known for key, count in sorted(counts.items())} if known else {}
+                    expected = projected_reference(reference["features"][feature])
+                    rows.append({
+                        "reading": reading,
+                        "experiment": experiment, "year": year, "feature": feature,
+                        "runs": len(selected), "languages": len(profiles), "known": known,
+                        "coverage": known / len(profiles) if profiles else 0.0,
+                        "counts": dict(sorted(counts.items())), "distribution": observed,
+                        "hellinger": metrics.hellinger(observed, expected) if known else None,
+                        "entropy": metrics.normalized_entropy(observed, tuple(reference["features"][feature]["engine_categories"])) if known else None,
+                    })
     return rows
 
 
 def markdown_report(rows: list[dict[str, Any]], reference: dict[str, Any]) -> str:
     lines = ["## Naměřená rozložení", "", "H = Hellinger od celé projekce WALS; E = normovaná entropie.",
              "N je počet jazyků, n počet jednoznačně zařazených. Rozložení je podmíněné na n.",
+             "Čtení: formální = přítomnost syntetické/opisné konstrukce; povrchové = syntetická kategorie vyžaduje weakness < 0,5.",
              "Nenamapovaná referenční hmotnost zůstává v H; E je normalizována pevně počtem kategorií, které měřidlo umí rozlišit.", ""]
     for experiment in ("same", "wals"):
         for feature in FEATURES:
             expected = projected_reference(reference["features"][feature])
             lines.extend([f"### {experiment}: {feature}", "",
                           "WALS (genusově vážené): " + "; ".join(f"{key}={value:.3f}" for key, value in expected.items()), "",
-                          "| Rok | N | n | Pokrytí | Rozložení | H | E |",
-                          "|---:|---:|---:|---:|---|---:|---:|"])
-            for row in rows:
-                if row["experiment"] != experiment or row["feature"] != feature:
-                    continue
-                distribution = "; ".join(f"{key}={value:.3f}" for key, value in row["distribution"].items()) or "neznámé"
-                h = "—" if row["hellinger"] is None else f"{row['hellinger']:.3f}"
-                e = "—" if row["entropy"] is None else f"{row['entropy']:.3f}"
-                lines.append(f"| {row['year']} | {row['languages']} | {row['known']} | {row['coverage']:.3f} | {distribution} | {h} | {e} |")
+                          "| Rok | Čtení | N | n | Pokrytí | Rozložení | H | E |",
+                          "|---:|---|---:|---:|---:|---|---:|---:|"])
+            for year in YEARS:
+                matching = [row for row in rows if row["experiment"] == experiment and row["feature"] == feature and row["year"] == year]
+                for row in matching:
+                    r_label = "formální" if row.get("reading") == "construction" else "povrchové"
+                    distribution = "; ".join(f"{key}={value:.3f}" for key, value in row["distribution"].items()) or "neznámé"
+                    h = "—" if row["hellinger"] is None else f"{row['hellinger']:.3f}"
+                    e = "—" if row["entropy"] is None else f"{row['entropy']:.3f}"
+                    lines.append(f"| {row['year']} | {r_label} | {row['languages']} | {row['known']} | {row['coverage']:.3f} | {distribution} | {h} | {e} |")
             lines.append("")
     return "\n".join(lines) + "\n"
 
