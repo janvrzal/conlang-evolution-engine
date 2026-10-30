@@ -15,12 +15,17 @@ Varianty jsou konstrukce, které spolu soutěží:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal, Mapping, cast
 
 import yaml
+
+from cee.v2.parameters import Parameters
+
+if TYPE_CHECKING:
+    from cee.v2.world import World
 
 CATALOG = Path(__file__).resolve().parents[2] / "data" / "v2_grammar.yaml"
 
@@ -65,6 +70,31 @@ def catalog() -> dict[str, GrammaticalFunction]:
         )
         for name, entry in data["functions"].items()
     }
+
+
+@lru_cache(maxsize=None)
+def _with_overrides(grammar: Mapping[str, Mapping[str, float]]) -> dict[str, GrammaticalFunction]:
+    """Katalog s přepsanými poli ``need`` a ``context``; globální katalog se nemění."""
+    base = catalog()
+    unknown = sorted(set(grammar) - set(base))
+    if unknown:
+        raise ValueError(f"Parametry přepisují neznámé gramatické funkce: {unknown}.")
+    return {
+        name: replace(entry, **cast(Any, {key: float(value) for key, value in grammar[name].items()}))
+        if name in grammar else entry
+        for name, entry in base.items()
+    }
+
+
+def catalog_for(world: World | Parameters) -> dict[str, GrammaticalFunction]:
+    """Katalog funkcí s přepisy z ``params.grammar`` světa (nebo z přímo daných parametrů).
+
+    Bez přepisů je to sdílený :func:`catalog`. Výsledek se nesmí měnit; cache
+    je podle hodnoty přepisů, takže světy s týmiž parametry sdílejí katalog
+    a světy s různými parametry se neovlivňují.
+    """
+    grammar = (world if isinstance(world, Parameters) else world.params).grammar
+    return _with_overrides(grammar) if grammar else catalog()
 
 
 def function(name: str) -> GrammaticalFunction:

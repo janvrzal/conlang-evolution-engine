@@ -5,7 +5,7 @@ redukce (V -> ə) -> apokopa (ə -> ∅) -> splynutí tvarů -> CategoryLoss / P
 
 Testuje citlivost:
 1. CLARITY_DELETE_SCHWA v {-0.15, -0.05, -0.02}
-2. CODA_TOLERANCE_SCALE v {0.0, 0.5, 1.0}
+2. coda_tolerance_scale v {0.0, 0.5, 1.0}
 
 Přes 20 seedů, 3 000 let, pro podmínky initial_strong, penult_strong, evolving_weak.
 """
@@ -21,7 +21,7 @@ import numpy as np
 from cee.v2 import syntax
 from cee.v2.changes import sound
 from cee.v2.language.processes import StressRule
-from cee.v2.pressures import linguistic
+from cee.v2.parameters import Parameters
 from cee.v2.scenarios import FULL_GRAMMAR, village_grid
 from cee.v2.simulation import Simulation
 
@@ -43,11 +43,9 @@ def run_chain_experiment(
     # 1. Nastavení a ověření propagace
     sound.CLARITY_DELETE_SCHWA = clarity_schwa
     sound.CLARITY_DELETE_FULL = clarity_full
-    linguistic.CODA_TOLERANCE_SCALE = coda_tol
-    linguistic.STRESS_STRENGTH_MULTIPLIER = stress_mult
+    params = Parameters(coda_tolerance_scale=coda_tol, stress_strength_multiplier=stress_mult)
 
     assert sound.CLARITY_DELETE_SCHWA == clarity_schwa
-    assert linguistic.CODA_TOLERANCE_SCALE == coda_tol
 
     started = time.perf_counter()
     weakness_by_fn: dict[str, list[float]] = {fn: [] for fn in CELLS}
@@ -72,6 +70,7 @@ def run_chain_experiment(
             grammar=dict(FULL_GRAMMAR),
             stress_rule=rule,
             stress_strength=strength,
+            params=params,
         )
         sim = Simulation(world)
 
@@ -197,8 +196,8 @@ def main() -> None:
         print(f"hotovo ({r['seconds']:.1f} s)")
         runs.append(r)
 
-    # 2. Citlivost na CODA_TOLERANCE_SCALE (initial_strong, clarity_schwa=-0.05)
-    print("\n--- 2. Citlivost na CODA_TOLERANCE_SCALE (initial_strong, clarity_schwa=-0.05) ---")
+    # 2. Citlivost na coda_tolerance_scale (initial_strong, clarity_schwa=-0.05)
+    print("\n--- 2. Citlivost na coda_tolerance_scale (initial_strong, clarity_schwa=-0.05) ---")
     for c_tol in [0.0, 1.0]:  # 0.5 už máme z bodu 1
         print(f"Spouštím coda_tol = {c_tol} ... ", end="", flush=True)
         r = run_chain_experiment("initial_strong", "initial", "strong", clarity_schwa=-0.05, coda_tol=c_tol)
@@ -219,8 +218,6 @@ def main() -> None:
     # Obnov výchozí konstanty
     sound.CLARITY_DELETE_SCHWA = -0.05
     sound.CLARITY_DELETE_FULL = -0.15
-    linguistic.CODA_TOLERANCE_SCALE = 0.0
-    linguistic.STRESS_STRENGTH_MULTIPLIER = 1.5
 
     out_file = "/tmp/cee-erosion-chain.json"
     with open(out_file, "w", encoding="utf-8") as f:

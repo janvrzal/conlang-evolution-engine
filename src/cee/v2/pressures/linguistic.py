@@ -119,23 +119,13 @@ def _process_score_layout(
 
 
 def _functional_load_values(
-    _: Process, assessments: list[ProcessAssessment]
+    scale: float, assessments: list[ProcessAssessment]
 ) -> np.ndarray:
-    scaled = FUNCTIONAL_LOAD_SCALE * np.fromiter(
+    scaled = scale * np.fromiter(
         (item.merge_mass for item in assessments), dtype=np.float64
     )
     # Python min(1.0, NaN) vrací první argument; porovnání zachová totéž.
     return -np.where(scaled < 1.0, scaled, 1.0)
-
-
-#: Násobek úspory artikulace pro redukční procesy v nepřízvučných slabikách
-#: u jazyků se silným přízvukem (stress-timed).
-#:
-#: Literatura podporuje směr (silnější redukce a afixální komprese v nepřízvučné
-#: pozici: Dauer 1983; Bybee, Chakraborti, Jung & Scheibman 1998 „Prosody and
-#: segmental effect: Some paths of evolution for word stress“, Studies in
-#: Language 22; Schiering 2010), hodnota 1,5 je autorský odhad (neladěno na WALS).
-STRESS_STRENGTH_MULTIPLIER: float = 1.5
 
 
 class Articulation(Pressure):
@@ -157,12 +147,13 @@ class Articulation(Pressure):
         else:
             strong_groups = np.zeros(len(batch.group_ids), dtype=bool)
 
+        multiplier = batch.world.params.stress_strength_multiplier
         for row, process, slot, columns, _ in _process_score_layout(batch):
             if not len(columns):
                 continue
             ease = process.ease
             if getattr(process, "reductive", False) and getattr(process, "stress", None) == "unstressed":
-                multipliers = np.where(strong_groups[columns], STRESS_STRENGTH_MULTIPLIER, 1.0)
+                multipliers = np.where(strong_groups[columns], multiplier, 1.0)
                 result[row, columns, slot] = ease * multipliers
             else:
                 result[row, columns, slot] = ease
@@ -189,22 +180,17 @@ class Clarity(Pressure):
         )
 
 
-#: Jak silně zvýhodňuje funkční zátěž zachování kontrastu. Je to sklon, ne
-#: zákaz (Wedel a kol. 2013): eroze pádových koncovek se v reálných jazycích
-#: děje i přes splynutí tvarů (latinské koncové -m).
-FUNCTIONAL_LOAD_SCALE = 5.0
-
-
 class FunctionalLoad(Pressure):
     """Splynutí, které vyrobí mnoho častých homofonů, je nevýhodné (Martinet)."""
 
     name = "functional_load"
 
     def scores(self, batch: PressureBatch) -> FloatArray:
+        scale = batch.world.params.functional_load_scale
         return _process_scores(
             batch,
-            lambda _, assessment: -float(min(1.0, FUNCTIONAL_LOAD_SCALE * assessment.merge_mass)),
-            _functional_load_values,
+            lambda _, assessment: -float(min(1.0, scale * assessment.merge_mass)),
+            lambda _, assessments: _functional_load_values(scale, assessments),
         )
 
 
@@ -251,13 +237,6 @@ def coda_share(world: World, group_id: str) -> float:
     return val
 
 
-#: Autorský odhad míry tolerance nové kody podle stávající stavby slabik jazyka
-#: (WALS 12A, Maddieson: jazyky s povolenou kodou netrestají vznik uzavřené slabiky
-#: absolutně jako jazyky s čistě otevřenými slabikami).
-#: 0.0 = výchozí model bez tolerance (kalibrace v M7); 1.0 = plná tolerance kod.
-CODA_TOLERANCE_SCALE: float = 0.0
-
-
 class Phonotactics(Pressure):
     """Slabičná stavba: změna, která přidá shluky či hiát, je nevýhodná."""
 
@@ -266,16 +245,17 @@ class Phonotactics(Pressure):
     def scores(self, batch: PressureBatch) -> FloatArray:
         result = np.zeros_like(batch.freqs)
         world = batch.world
+        tolerance = world.params.coda_tolerance_scale
         for row, process, slot, columns, assessments in _process_score_layout(batch):
             if not len(columns):
                 continue
             deltas = np.fromiter((item.markedness_delta for item in assessments), dtype=np.float64)
-            if getattr(process, "family", "") == "apocope" and CODA_TOLERANCE_SCALE > 0.0:
+            if getattr(process, "family", "") == "apocope" and tolerance > 0.0:
                 coda_shares = np.array([
                     coda_share(world, batch.group_ids[col])
                     for col in columns
                 ], dtype=np.float64)
-                factors = np.clip(1.0 - CODA_TOLERANCE_SCALE * coda_shares, 0.0, 1.0)
+                factors = np.clip(1.0 - tolerance * coda_shares, 0.0, 1.0)
                 deltas = deltas * factors
 
             result[row, columns, slot] = -np.clip(deltas, -1.0, 1.0)

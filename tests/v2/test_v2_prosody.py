@@ -5,6 +5,7 @@ import pytest
 from cee.v2 import metrics
 from cee.v2.language.processes import stressed_nucleus
 from cee.v2.language.segments import SegmentTable
+from cee.v2.parameters import Parameters
 from cee.v2.scenarios import village_grid
 
 
@@ -170,7 +171,7 @@ def test_articulation_stress_strength_multiplier() -> None:
     group_weak = SimpleNamespace(main_code=SimpleNamespace(stress_strength="weak"))
     group_strong = SimpleNamespace(main_code=SimpleNamespace(stress_strength="strong"))
     groups = {"g_weak": group_weak, "g_strong": group_strong}
-    world = SimpleNamespace(processes=processes, groups=groups)
+    world = SimpleNamespace(processes=processes, groups=groups, params=Parameters())
 
     freqs = np.zeros((2, 2, 2))
     freqs[0, :, 1] = 0.5  # variable 0 (reductive) reached by g_weak and g_strong
@@ -194,8 +195,8 @@ def test_articulation_stress_strength_multiplier() -> None:
     )
 
     art = Articulation()
-    # Test with STRESS_STRENGTH_MULTIPLIER = 1.5
-    linguistic.STRESS_STRENGTH_MULTIPLIER = 1.5
+    # Test with stress_strength_multiplier = 1.5
+    world.params = Parameters(stress_strength_multiplier=1.5)
     scores = art.scores(batch)
 
     # Reductive unstressed process:
@@ -208,14 +209,11 @@ def test_articulation_stress_strength_multiplier() -> None:
     assert np.isclose(scores[1, 0, 1], 0.10)
     assert np.isclose(scores[1, 1, 1], 0.10)
 
-    # Test sensitivity propagation: change STRESS_STRENGTH_MULTIPLIER to 2.0
-    linguistic.STRESS_STRENGTH_MULTIPLIER = 2.0
+    # Test sensitivity propagation: change stress_strength_multiplier to 2.0
+    world.params = Parameters(stress_strength_multiplier=2.0)
     batch.memo.pop(linguistic._PROCESS_SCORE_LAYOUT_KEY, None)
     scores2 = art.scores(batch)
     assert np.isclose(scores2[0, 1, 1], 0.30)  # 0.15 * 2.0 = 0.30
-
-    # Restore default
-    linguistic.STRESS_STRENGTH_MULTIPLIER = 1.5
 
 
 def test_clarity_schwa_vs_full_deletion() -> None:
@@ -255,7 +253,6 @@ def test_phonotactics_coda_tolerance() -> None:
     import numpy as np
 
     from cee.v2.phonology import changed_id
-    from cee.v2.pressures import linguistic
     from cee.v2.pressures.base import PressureBatch
     from cee.v2.pressures.linguistic import Phonotactics
 
@@ -280,6 +277,7 @@ def test_phonotactics_coda_tolerance() -> None:
         processes={var_apocope: proc_apocope},
         groups={"g1": mock_group},
         table=None,
+        params=Parameters(),
     )
 
     freqs = np.zeros((1, 1, 2), dtype=np.float64)
@@ -300,20 +298,17 @@ def test_phonotactics_coda_tolerance() -> None:
 
     pt = Phonotactics()
 
-    # 1. CODA_TOLERANCE_SCALE = 0.5: delta = 0.40 * (1 - 0.5 * 0.40) = 0.40 * 0.80 = 0.32 -> score = -0.32
-    linguistic.CODA_TOLERANCE_SCALE = 0.5
+    # 1. coda_tolerance_scale = 0.5: delta = 0.40 * (1 - 0.5 * 0.40) = 0.40 * 0.80 = 0.32 -> score = -0.32
+    world.params = Parameters(coda_tolerance_scale=0.5)
     scores = pt.scores(batch)
     assert np.isclose(scores[0, 0, 1], -0.32)
 
-    # 2. CODA_TOLERANCE_SCALE = 0.0 (starý absolutní model): score = -0.40
-    linguistic.CODA_TOLERANCE_SCALE = 0.0
+    # 2. coda_tolerance_scale = 0.0 (starý absolutní model): score = -0.40
+    world.params = Parameters(coda_tolerance_scale=0.0)
     scores_zero = pt.scores(batch)
     assert np.isclose(scores_zero[0, 0, 1], -0.40)
 
-    # 3. CODA_TOLERANCE_SCALE = 1.0 (plná tolerance): delta = 0.40 * (1 - 1.0 * 0.40) = 0.24 -> score = -0.24
-    linguistic.CODA_TOLERANCE_SCALE = 1.0
+    # 3. coda_tolerance_scale = 1.0 (plná tolerance): delta = 0.40 * (1 - 1.0 * 0.40) = 0.24 -> score = -0.24
+    world.params = Parameters(coda_tolerance_scale=1.0)
     scores_full = pt.scores(batch)
     assert np.isclose(scores_full[0, 0, 1], -0.24)
-
-    # Restore default
-    linguistic.CODA_TOLERANCE_SCALE = 0.0

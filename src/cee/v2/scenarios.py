@@ -17,10 +17,11 @@ from cee.v2.events import (
     Schooling,
     WorldEvent,
 )
-from cee.v2.language.constructions import GRAMMATICAL_SOURCES, Construction, catalog
+from cee.v2.language.constructions import GRAMMATICAL_SOURCES, Construction, catalog, catalog_for
 from cee.v2.language.morphology import Paradigm
 from cee.v2.language.processes import StressRule
 from cee.v2.language.protoforms import DEFAULT_CONSONANTS, DEFAULT_VOWELS, protolanguage
+from cee.v2.parameters import Parameters
 from cee.v2.prosody import register_stress_rule, register_stress_strength
 from cee.v2.repertoire import Distribution, Origin, Repertoire
 from cee.v2.rng import stable_int
@@ -106,7 +107,7 @@ def _seed_constructions(world: World, base: Repertoire, grammar: Mapping[str, Co
     layer = Repertoire(base)
     origin = Origin(None, 0, world.start_year, None)
     for name, construction in grammar.items():
-        if construction.function != name or name not in catalog():
+        if construction.function != name or name not in catalog_for(world):
             raise ValueError(f"Neznámá nebo nesouhlasná funkce profilu: {name}.")
         variable, variant = register_construction(world, construction, origin)
         layer.set(variable, Distribution.fixed(variant.id))
@@ -163,6 +164,7 @@ def village_grid(
     prosody: bool = False,
     stress_rule: StressRule = "penult",
     stress_strength: Literal["weak", "strong"] = "weak",
+    params: Parameters | None = None,
 ) -> World:
     """Mřížka stejných vesnic s gravitačními vazbami na nejbližší sousedy.
 
@@ -176,7 +178,7 @@ def village_grid(
     gramatikalizace (M4). Profil ``grammar`` (funkce → výchozí konstrukce)
     nahradí výchozí gramatiku :data:`SYNTAX_GRAMMAR` a zapne syntax (M4b).
     """
-    world = World(seed=seed)
+    world = World(seed=seed, params=Parameters() if params is None else params)
     world.add_territory(Territory("world", "world"))
     world.add_territory(
         Territory("valley", "area", parent="world",
@@ -269,6 +271,7 @@ def contact_world(
     concepts: Sequence[str] = DEFAULT_CONCEPTS,
     semantics: bool = True,
     generation_years: float = 25.0,
+    params: Parameters | None = None,
 ) -> World:
     """Svět s několika nepříbuznými jazyky (M5).
 
@@ -279,7 +282,7 @@ def contact_world(
     Paradigmata světa jsou sjednocení buněk všech jazyků; každý jazyk
     dostane koncovky jen ve svých buňkách.
     """
-    world = World(seed=seed)
+    world = World(seed=seed, params=Parameters() if params is None else params)
     world.add_territory(Territory("world", "world"))
     concepts = tuple(dict.fromkeys((*concepts, *GRAMMATICAL_SOURCES)))
     cells: dict[str, dict[str, tuple[str, ...]]] = {}
@@ -290,8 +293,9 @@ def contact_world(
         }
         for kind, found in cells[language.id].items():
             union.setdefault(kind, set()).update(found)
-    order = {entry.cell: index for index, entry in enumerate(catalog().values())}
-    weights = {entry.cell: entry.weight for entry in catalog().values()}
+    entries = catalog_for(world)
+    order = {entry.cell: index for index, entry in enumerate(entries.values())}
+    weights = {entry.cell: entry.weight for entry in entries.values()}
     for kind, citation in CITATION_CELLS.items():
         ordered = sorted(union.get(kind, ()), key=lambda cell: order[cell])
         world.paradigms[kind] = Paradigm(

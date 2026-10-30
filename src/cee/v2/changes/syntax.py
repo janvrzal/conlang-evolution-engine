@@ -18,7 +18,7 @@ import numpy as np
 
 from cee.v2 import syntax
 from cee.v2.changes.base import Change, InnovationContext
-from cee.v2.language.constructions import Construction, catalog
+from cee.v2.language.constructions import Construction, catalog_for
 from cee.v2.pressures import Actuation, Conformity, Pressure
 from cee.v2.pressures.syntactic import Ambiguity, Economy, Expressivity, Fusion, Learnability
 from cee.v2.repertoire import Origin, Variant
@@ -75,7 +75,7 @@ class SyntacticChange(Change):
 
 def _sources(context: InnovationContext, function: str) -> list[str]:
     dominant = context.code.phonology.dominant
-    return [concept for concept in catalog()[function].sources if concept in dominant]
+    return [concept for concept in catalog_for(context.world)[function].sources if concept in dominant]
 
 
 def _pick(options: Sequence[str], rng: np.random.Generator) -> str:
@@ -145,7 +145,7 @@ class Exaptation(SyntacticChange):
     kind, template, base_rate = "exaptation", "inflection", 0.02
 
     def _donors(self, context: InnovationContext, function: str) -> list[tuple[str, str]]:
-        functions = catalog()
+        functions = catalog_for(context.world)
         found = []
         for donor in functions[function].donors:
             if functions[donor].word_class != functions[function].word_class:
@@ -213,10 +213,11 @@ class OrderFixation(SyntacticChange):
     kind, template, base_rate = "order_fixation", "order", 0.03
 
     def applies(self, context, current):
-        return current.kind == "free" and bool(catalog()[current.function].orders)
+        return current.kind == "free" and bool(catalog_for(context.world)[current.function].orders)
 
     def next(self, context, current, rng):
-        return Construction(current.function, "fixed", order=_pick(catalog()[current.function].orders, rng))
+        orders = catalog_for(context.world)[current.function].orders
+        return Construction(current.function, "fixed", order=_pick(orders, rng))
 
 
 class OrderRelaxation(SyntacticChange):
@@ -253,8 +254,6 @@ class CategoryLoss(SyntacticChange):
     """
 
     kind, template, base_rate = "category_loss", "inflection", 0.02
-    #: Kolikrát častěji navrhují vypuštění L2 mluvčí; stejně jako u analogie.
-    l2_boost: ClassVar[float] = 4.0
 
     def _pressure(self, context: InnovationContext, current: Construction) -> float:
         """Kolik důvodů k vypuštění výrazu mluvčí mají (násobek ``base_rate``)."""
@@ -265,7 +264,7 @@ class CategoryLoss(SyntacticChange):
         unreliable = 0.0
         if current.kind == "synthetic":
             unreliable = syntax.weakness(context.world, context.code, current.function)
-        return unreliable + self.l2_boost * context.code.l2_share
+        return unreliable + context.world.params.category_loss_l2_boost * context.code.l2_share
 
     def applies(self, context: InnovationContext, current: Construction) -> bool:
         return self._pressure(context, current) > 0.0

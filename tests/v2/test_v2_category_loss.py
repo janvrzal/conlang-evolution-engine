@@ -9,17 +9,17 @@ Ověřuje:
 6. Learnability znevýhodní vázané výrazy úměrně podílu L2 mluvčích.
 """
 
-from dataclasses import replace
 
 import numpy as np
 
 from cee.v2 import morphology, syntax
 from cee.v2.changes.base import InnovationContext
 from cee.v2.changes.syntax import CategoryLoss
-from cee.v2.language.constructions import Construction, catalog
+from cee.v2.language.constructions import Construction
 from cee.v2.language.lexicon import UnitForm
+from cee.v2.parameters import Parameters
 from cee.v2.pressures.base import PressureBatch
-from cee.v2.pressures.syntactic import LEARNABILITY_STRENGTH, Economy, Expressivity, Learnability
+from cee.v2.pressures.syntactic import Economy, Expressivity, Learnability
 from cee.v2.repertoire import Origin
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
@@ -99,81 +99,70 @@ def test_l2_mluvci_navrhuji_vypusteni_vazaneho_vyrazu():
     clitic = Construction("DEFINITE", "periphrastic", "that", "clitic")
     assert cat_loss.applies(context, clitic)
     assert cat_loss.applies(context, Construction("PL", "synthetic"))
-    assert cat_loss.rate(context, "construction:PL") == cat_loss.base_rate * cat_loss.l2_boost * 0.5
+    assert cat_loss.rate(context, "construction:PL") == cat_loss.base_rate * world.params.category_loss_l2_boost * 0.5
 
 
 def test_selekce_rozhoduje_ve_prospech_zero_pri_nizke_potrebe():
     """Při efektivní potřebě <= 0,15 penalizace Economy (-0,15) způsobí, že zero má vyšší fitness."""
     world, group, code = _world()
-    cat = catalog()
-    orig_def = cat["DEFINITE"]
-    try:
-        # Nastavíme context = 0.50 (need 0.25 -> eff_need = 0.125 < 0.15)
-        cat["DEFINITE"] = replace(orig_def, context=0.50)
+    # Nastavíme context = 0.50 (need 0.25 -> eff_need = 0.125 < 0.15)
+    world.params = Parameters(grammar={"DEFINITE": {"context": 0.50}})
+    zero_var = syntax.register(world, Construction("DEFINITE", "zero"), Origin("test", 0, 0, None))[1]
+    free_var = syntax.register(world, Construction("DEFINITE", "periphrastic", "that", "free"), Origin("test", 0, 0, None))[1]
 
-        zero_var = syntax.register(world, Construction("DEFINITE", "zero"), Origin("test", 0, 0, None))[1]
-        free_var = syntax.register(world, Construction("DEFINITE", "periphrastic", "that", "free"), Origin("test", 0, 0, None))[1]
+    batch = PressureBatch(
+        world=world,
+        variable_ids=["construction:DEFINITE"],
+        group_ids=[group.id],
+        freqs=np.array([[[0.5, 0.5]]]),
+        slots=[[zero_var.id, free_var.id]],
+        tick=0,
+        heard=np.array([[[0.5, 0.5]]]),
+    )
 
-        batch = PressureBatch(
-            world=world,
-            variable_ids=["construction:DEFINITE"],
-            group_ids=[group.id],
-            freqs=np.array([[[0.5, 0.5]]]),
-            slots=[[zero_var.id, free_var.id]],
-            tick=0,
-            heard=np.array([[[0.5, 0.5]]]),
-        )
+    exp_scores = Expressivity().scores(batch)[0, 0]
+    eco_scores = Economy().scores(batch)[0, 0]
 
-        exp_scores = Expressivity().scores(batch)[0, 0]
-        eco_scores = Economy().scores(batch)[0, 0]
+    # zero: Expressivity = 0.25 * 0.50 = 0.125, Economy = 0.0 -> celkem 0.125
+    # free: Expressivity = 0.25 * 1.00 = 0.250, Economy = -0.15 -> celkem 0.100
+    total_zero = exp_scores[0] + eco_scores[0]
+    total_free = exp_scores[1] + eco_scores[1]
 
-        # zero: Expressivity = 0.25 * 0.50 = 0.125, Economy = 0.0 -> celkem 0.125
-        # free: Expressivity = 0.25 * 1.00 = 0.250, Economy = -0.15 -> celkem 0.100
-        total_zero = exp_scores[0] + eco_scores[0]
-        total_free = exp_scores[1] + eco_scores[1]
-
-        assert total_zero > total_free, f"Zero ({total_zero}) musí mít vyšší fitness než volný opis ({total_free})"
-    finally:
-        cat["DEFINITE"] = orig_def
+    assert total_zero > total_free, f"Zero ({total_zero}) musí mít vyšší fitness než volný opis ({total_free})"
 
 
 def test_selekce_rozhoduje_ve_prospech_zero_pri_erodovane_synteze():
     """Když slabost koncovky překročí 1 - context, syntéza ztrácí expressivity a zero vítězí."""
     world, group, code = _world()
-    cat = catalog()
-    orig_past = cat["PAST"]
-    try:
-        # PAST má need = 1.0, context = 0.25. Hranice je 1 - 0.25 = 0.75.
-        # Simulujeme extrémní erozi (weakness = 0.90).
-        for unit in sorted(code.phonology.vocabulary):
-            if world.morphemes[unit].cell == "PAST":
-                citation = morphology.citation_form(world, code, unit)
-                code.forms.set(unit, UnitForm(citation, len(citation), world.unit_of(code, unit).exponent))
-        code.phonology.version += 1
+    # PAST má need = 1.0, context = 0.25. Hranice je 1 - 0.25 = 0.75.
+    # Simulujeme extrémní erozi (weakness = 0.90).
+    for unit in sorted(code.phonology.vocabulary):
+        if world.morphemes[unit].cell == "PAST":
+            citation = morphology.citation_form(world, code, unit)
+            code.forms.set(unit, UnitForm(citation, len(citation), world.unit_of(code, unit).exponent))
+    code.phonology.version += 1
 
-        assert syntax.weakness(world, code, "PAST") >= 0.75
+    assert syntax.weakness(world, code, "PAST") >= 0.75
 
-        zero_var = syntax.register(world, Construction("PAST", "zero"), Origin("test", 0, 0, None))[1]
-        syn_var = syntax.register(world, Construction("PAST", "synthetic"), Origin("test", 0, 0, None))[1]
+    zero_var = syntax.register(world, Construction("PAST", "zero"), Origin("test", 0, 0, None))[1]
+    syn_var = syntax.register(world, Construction("PAST", "synthetic"), Origin("test", 0, 0, None))[1]
 
-        batch = PressureBatch(
-            world=world,
-            variable_ids=["construction:PAST"],
-            group_ids=[group.id],
-            freqs=np.array([[[0.5, 0.5]]]),
-            slots=[[zero_var.id, syn_var.id]],
-            tick=0,
-            heard=np.array([[[0.5, 0.5]]]),
-        )
+    batch = PressureBatch(
+        world=world,
+        variable_ids=["construction:PAST"],
+        group_ids=[group.id],
+        freqs=np.array([[[0.5, 0.5]]]),
+        slots=[[zero_var.id, syn_var.id]],
+        tick=0,
+        heard=np.array([[[0.5, 0.5]]]),
+    )
 
-        exp_scores = Expressivity().scores(batch)[0, 0]
+    exp_scores = Expressivity().scores(batch)[0, 0]
 
-        # Obě mají words = 0 -> Economy = 0.
-        # zero: Expressivity = 1.0 * 0.25 = 0.25
-        # syn:  Expressivity = 1.0 * (1 - 1.0) = 0.0
-        assert exp_scores[0] > exp_scores[1], f"Zero ({exp_scores[0]}) musí mít vyšší Expressivity než erodovaná syntéza ({exp_scores[1]})"
-    finally:
-        cat["PAST"] = orig_past
+    # Obě mají words = 0 -> Economy = 0.
+    # zero: Expressivity = 1.0 * 0.25 = 0.25
+    # syn:  Expressivity = 1.0 * (1 - 1.0) = 0.0
+    assert exp_scores[0] > exp_scores[1], f"Zero ({exp_scores[0]}) musí mít vyšší Expressivity než erodovaná syntéza ({exp_scores[1]})"
 
 
 def test_learnability_znevyhodni_vazane_vyrazy_podle_podilu_l2():
@@ -189,7 +178,7 @@ def test_learnability_znevyhodni_vazane_vyrazy_podle_podilu_l2():
 
     code.l2_share = 0.5
     scores = Learnability().scores(batch)[0, 0]
-    assert list(scores) == [0.0, 0.0, -LEARNABILITY_STRENGTH * 0.5]
+    assert list(scores) == [0.0, 0.0, -world.params.learnability_strength * 0.5]
 
 
 def test_pri_plne_l2_skupine_vyhraje_zero_nad_neporusenou_koncovkou():

@@ -8,6 +8,7 @@ import pytest
 
 import cee.v2.pressures.linguistic as linguistic
 from cee.v2.assessment import ProcessAssessment
+from cee.v2.parameters import Parameters
 from cee.v2.phonology import changed_id
 from cee.v2.pressures.base import PressureBatch
 
@@ -41,7 +42,7 @@ def _make_batch() -> PressureBatch:
     freqs[1, 2, 0] = 0.6  # dosažený jiný slot nesmí být hodnocen.
     memo = {(variable0, 0): _assessment(short=float("nan"), merge=float("nan"), marked=-0.0)}
     return PressureBatch(
-        world=SimpleNamespace(processes=processes),  # type: ignore[arg-type]
+        world=SimpleNamespace(processes=processes, params=Parameters()),  # type: ignore[arg-type]
         variable_ids=(variable0, variable1),
         group_ids=("g0", "g1", "g2"),
         freqs=freqs,
@@ -74,7 +75,7 @@ def _scalar_value(pressure: Any, process: Any, assessment: ProcessAssessment) ->
     if isinstance(pressure, linguistic.Clarity):
         return float(np.clip(process.clarity - 1.5 * assessment.short_share, -1.0, 1.0))
     if isinstance(pressure, linguistic.FunctionalLoad):
-        return -float(min(1.0, linguistic.FUNCTIONAL_LOAD_SCALE * assessment.merge_mass))
+        return -float(min(1.0, Parameters().functional_load_scale * assessment.merge_mass))
     if isinstance(pressure, linguistic.Dispersion):
         return float(np.clip(4.0 * assessment.dispersion_delta, -1.0, 1.0))
     assert isinstance(pressure, linguistic.Phonotactics)

@@ -12,6 +12,7 @@ from cee.v2.language.lexicon import FormStore, Morpheme, PhonologyState, UnitFor
 from cee.v2.language.morphology import FormChange, Paradigm, unit_id
 from cee.v2.language.processes import Process, StressRule
 from cee.v2.language.segments import SegmentTable, default_table
+from cee.v2.parameters import Parameters
 from cee.v2.pools import LivePools
 from cee.v2.repertoire import Distribution, Origin, Repertoire, Variable, Variant
 from cee.v2.rng import stable_id, stable_int
@@ -175,6 +176,8 @@ class World:
     bank: FormBank | None = None
     #: Výchozí tvar každého morfému (neměnný), aby se netvořil při každém čtení.
     default_units: dict[str, UnitForm] = field(default_factory=dict)
+    #: Kalibrační konstanty dynamiky tohoto světa (neměnné, sdílí je kopie stavu).
+    params: Parameters = field(default_factory=Parameters)
 
     def __post_init__(self) -> None:
         if not isinstance(self.concept_frequencies, FrequencyMap):

@@ -16,9 +16,9 @@ from typing import Any, cast
 
 import numpy as np
 
-import cee.v2.pressures.linguistic as ling_mod
 from cee.v2.assessment import assess
 from cee.v2.language.processes import StressRule
+from cee.v2.parameters import Parameters
 from cee.v2.rng import hash_normal, stable_int
 from cee.v2.scenarios import FULL_GRAMMAR, village_grid
 from cee.v2.simulation import Simulation
@@ -76,138 +76,135 @@ def run_single(
     columns: int = 6,
     max_year: int = 3000,
 ) -> tuple[list[InnovationRecord], dict[int, dict[str, list[float]]]]:
-    ling_mod.FUNCTIONAL_LOAD_SCALE = fl_scale
-    try:
-        world = village_grid(
-            columns,
-            seed=seed,
-            syntax=True,
-            semantics=True,
-            phonology=True,
-            morphology=True,
-            grammar=dict(FULL_GRAMMAR),
-        )
-        for grp in world.groups.values():
-            grp.main_code.stress_rule = rule
+    world = village_grid(
+        columns,
+        seed=seed,
+        syntax=True,
+        semantics=True,
+        phonology=True,
+        morphology=True,
+        grammar=dict(FULL_GRAMMAR),
+        params=Parameters(functional_load_scale=fl_scale),
+    )
+    for grp in world.groups.values():
+        grp.main_code.stress_rule = rule
 
-        sim = Simulation(world)
-        innovations: list[InnovationRecord] = []
-        weakness_by_year: dict[int, dict[str, list[float]]] = {}
+    sim = Simulation(world)
+    innovations: list[InnovationRecord] = []
+    weakness_by_year: dict[int, dict[str, list[float]]] = {}
 
-        # Year 0 weakness
-        weakness_by_year[0] = {
-            fn: [weakness(world, g.main_code, fn) for g in world.groups.values()]
-            for fn in CELLS
-        }
+    # Year 0 weakness
+    weakness_by_year[0] = {
+        fn: [weakness(world, g.main_code, fn) for g in world.groups.values()]
+        for fn in CELLS
+    }
 
-        last_idx = 0
-        current_year = 0
-        while current_year < max_year:
-            sim.step()
-            current_year = int(round(sim.year))
-            evs = sim.history.events[last_idx:]
-            last_idx = len(sim.history.events)
+    last_idx = 0
+    current_year = 0
+    while current_year < max_year:
+        sim.step()
+        current_year = int(round(sim.year))
+        evs = sim.history.events[last_idx:]
+        last_idx = len(sim.history.events)
 
-            for ev in evs:
-                if ev["kind"] == "innovation" and ev.get("variable") in world.processes:
-                    var_id = ev["variable"]
-                    grp_id = ev["group"]
-                    code = world.groups[grp_id].main_code
-                    proc = world.processes[var_id]
+        for ev in evs:
+            if ev["kind"] == "innovation" and ev.get("variable") in world.processes:
+                var_id = ev["variable"]
+                grp_id = ev["group"]
+                code = world.groups[grp_id].main_code
+                proc = world.processes[var_id]
 
-                    hits_ending = 0
-                    hits_root = 0
-                    ending_cells: set[str] = set()
+                hits_ending = 0
+                hits_root = 0
+                ending_cells: set[str] = set()
 
-                    for u_id in code.phonology.vocabulary:
-                        u = world.unit_of(code, u_id)
-                        m = world.morphemes[u_id]
-                        sites = proc.sites(u.form, world.table, code.stress_rule)
-                        if sites:
-                            if m.cell in CELLS and u.boundary is not None:
-                                for s in sites:
-                                    if s >= u.boundary:
-                                        hits_ending += 1
-                                        ending_cells.add(m.cell)
-                                    else:
-                                        hits_root += 1
-                            else:
-                                hits_root += len(sites)
+                for u_id in code.phonology.vocabulary:
+                    u = world.unit_of(code, u_id)
+                    m = world.morphemes[u_id]
+                    sites = proc.sites(u.form, world.table, code.stress_rule)
+                    if sites:
+                        if m.cell in CELLS and u.boundary is not None:
+                            for s in sites:
+                                if s >= u.boundary:
+                                    hits_ending += 1
+                                    ending_cells.add(m.cell)
+                                else:
+                                    hits_root += 1
+                        else:
+                            hits_root += len(sites)
 
-                    asm = assess(world, grp_id, var_id, sim.tick)
-                    art = proc.ease
-                    cla = 0.6 * float(np.clip(proc.clarity - 1.5 * asm.short_share, -1.0, 1.0))
-                    fl = -float(min(1.0, fl_scale * asm.merge_mass))
-                    dis = 0.5 * float(np.clip(4.0 * asm.dispersion_delta, -1.0, 1.0))
-                    pho = -0.4 * float(np.clip(asm.markedness_delta, -1.0, 1.0))
+                asm = assess(world, grp_id, var_id, sim.tick)
+                art = proc.ease
+                cla = 0.6 * float(np.clip(proc.clarity - 1.5 * asm.short_share, -1.0, 1.0))
+                fl = -float(min(1.0, fl_scale * asm.merge_mass))
+                dis = 0.5 * float(np.clip(4.0 * asm.dispersion_delta, -1.0, 1.0))
+                pho = -0.4 * float(np.clip(asm.markedness_delta, -1.0, 1.0))
 
-                    epoch = sim.tick // 8
-                    gk = np.array([stable_int(seed, "actuation", epoch, grp_id)], dtype=np.uint64)
-                    vk = np.array([stable_int("actuation", ev["variant"])], dtype=np.uint64)
-                    act = float(np.clip(0.25 * hash_normal(gk, vk), -1.0, 1.0)[0, 0])
-                    p0 = 0.02
-                    conf = 0.1 * (2.0 * p0 - 1.0)
-                    soc = act + conf
-                    fit = art + cla + fl + dis + pho + soc
+                epoch = sim.tick // 8
+                gk = np.array([stable_int(seed, "actuation", epoch, grp_id)], dtype=np.uint64)
+                vk = np.array([stable_int("actuation", ev["variant"])], dtype=np.uint64)
+                act = float(np.clip(0.25 * hash_normal(gk, vk), -1.0, 1.0)[0, 0])
+                p0 = 0.02
+                conf = 0.1 * (2.0 * p0 - 1.0)
+                soc = act + conf
+                fit = art + cla + fl + dis + pho + soc
 
-                    rec = InnovationRecord(
-                        seed=seed,
-                        config=config_key,
-                        var_id=var_id,
-                        variant_id=ev["variant"],
-                        group_id=grp_id,
-                        tick=ev["tick"],
-                        year=ev["year"],
-                        family=ev["change"],
-                        hits_ending=hits_ending,
-                        hits_root=hits_root,
-                        ending_cells=sorted(ending_cells),
-                        art=art,
-                        cla=cla,
-                        fl=fl,
-                        pho=pho,
-                        dis=dis,
-                        act=act,
-                        conf=conf,
-                        soc=soc,
-                        fit=fit,
-                        short_share=asm.short_share,
-                        merge_mass=asm.merge_mass,
-                        markedness_delta=asm.markedness_delta,
-                    )
-                    innovations.append(rec)
+                rec = InnovationRecord(
+                    seed=seed,
+                    config=config_key,
+                    var_id=var_id,
+                    variant_id=ev["variant"],
+                    group_id=grp_id,
+                    tick=ev["tick"],
+                    year=ev["year"],
+                    family=ev["change"],
+                    hits_ending=hits_ending,
+                    hits_root=hits_root,
+                    ending_cells=sorted(ending_cells),
+                    art=art,
+                    cla=cla,
+                    fl=fl,
+                    pho=pho,
+                    dis=dis,
+                    act=act,
+                    conf=conf,
+                    soc=soc,
+                    fit=fit,
+                    short_share=asm.short_share,
+                    merge_mass=asm.merge_mass,
+                    markedness_delta=asm.markedness_delta,
+                )
+                innovations.append(rec)
 
-            if current_year in (1000, 2000, 3000):
-                weakness_by_year[current_year] = {
-                    fn: [weakness(world, g.main_code, fn) for g in world.groups.values()]
-                    for fn in CELLS
-                }
+        if current_year in (1000, 2000, 3000):
+            weakness_by_year[current_year] = {
+                fn: [weakness(world, g.main_code, fn) for g in world.groups.values()]
+                for fn in CELLS
+            }
 
-        # Resolve outcomes at year 3000
-        phonologized_vars = {
-            (e["variable"], e["group"])
-            for e in sim.history.events
-            if e["kind"] == "phonologized"
-        }
-        established_variants = {
-            (e["variant"], e["group"])
-            for e in sim.history.events
-            if e["kind"] == "established"
-        }
-        extinct_variants = {
-            e["variant"]
-            for e in sim.history.events
-            if e["kind"] == "extinct"
-        }
+    # Resolve outcomes at year 3000
+    phonologized_vars = {
+        (e["variable"], e["group"])
+        for e in sim.history.events
+        if e["kind"] == "phonologized"
+    }
+    established_variants = {
+        (e["variant"], e["group"])
+        for e in sim.history.events
+        if e["kind"] == "established"
+    }
+    extinct_variants = {
+        e["variant"]
+        for e in sim.history.events
+        if e["kind"] == "extinct"
+    }
 
-        for rec in innovations:
-            rec.is_phonologized = (rec.var_id, rec.group_id) in phonologized_vars
-            rec.is_established = (rec.variant_id, rec.group_id) in established_variants
-            rec.is_extinct = rec.variant_id in extinct_variants
+    for rec in innovations:
+        rec.is_phonologized = (rec.var_id, rec.group_id) in phonologized_vars
+        rec.is_established = (rec.variant_id, rec.group_id) in established_variants
+        rec.is_extinct = rec.variant_id in extinct_variants
 
-        return innovations, weakness_by_year
-    finally:
-        ling_mod.FUNCTIONAL_LOAD_SCALE = 5.0
+    return innovations, weakness_by_year
 
 
 def summarize_target(records: list[InnovationRecord]) -> dict[str, Any]:

@@ -11,7 +11,7 @@ from typing import Callable
 import numpy as np
 
 from cee.v2 import syntax
-from cee.v2.language.constructions import Construction, catalog
+from cee.v2.language.constructions import Construction, catalog_for
 from cee.v2.pressures.base import FloatArray, Pressure, PressureBatch
 
 
@@ -49,7 +49,7 @@ class Expressivity(Pressure):
 
     def scores(self, batch: PressureBatch) -> FloatArray:
         world = batch.world
-        functions = catalog()
+        functions = catalog_for(world)
 
         def value(construction: Construction, current: Construction | None, group_id: str) -> float:
             need = functions[construction.function].need
@@ -68,7 +68,8 @@ class Economy(Pressure):
     name = "economy"
 
     def scores(self, batch: PressureBatch) -> FloatArray:
-        return _scores(batch, lambda construction, _, __: -0.15 * construction.words)
+        cost = batch.world.params.economy_word_cost
+        return _scores(batch, lambda construction, _, __: -cost * construction.words)
 
 
 class Fusion(Pressure):
@@ -81,17 +82,14 @@ class Fusion(Pressure):
     name = "fusion"
 
     def scores(self, batch: PressureBatch) -> FloatArray:
+        bonus = batch.world.params.fusion_bonus
+
         def value(construction: Construction, current: Construction | None, _: str) -> float:
             if current is None or current.rank == 0:
                 return 0.0
-            return 0.25 if construction.rank == current.rank + 1 else 0.0
+            return bonus if construction.rank == current.rank + 1 else 0.0
 
         return _scores(batch, value)
-
-
-#: Autorský odhad: stejná síla jako `Teachability` u tvarů. Literatura
-#: podporuje směr, ne velikost.
-LEARNABILITY_STRENGTH = 1.0
 
 
 class Learnability(Pressure):
@@ -111,7 +109,8 @@ class Learnability(Pressure):
         shares = np.array([world.groups[group_id].main_code.l2_share for group_id in batch.group_ids])
         if not shares.any():
             return np.zeros_like(batch.freqs)
-        bound = _scores(batch, lambda construction, _, __: -LEARNABILITY_STRENGTH * construction.bound)
+        strength = world.params.learnability_strength
+        bound = _scores(batch, lambda construction, _, __: -strength * construction.bound)
         return bound * shares[None, :, None]
 
 
@@ -130,7 +129,8 @@ class Ambiguity(Pressure):
 
     def scores(self, batch: PressureBatch) -> FloatArray:
         world = batch.world
-        functions = catalog()
+        functions = catalog_for(world)
+        rigidity = world.params.order_rigidity
 
         def value(construction: Construction, current: Construction | None, group_id: str) -> float:
             code = world.groups[group_id].main_code
@@ -138,7 +138,7 @@ class Ambiguity(Pressure):
             for compensated in functions[construction.function].compensates:
                 lost = syntax.weakness(world, code, compensated)
                 if construction.carries_order:
-                    score -= 0.05 * (1.0 - lost)
+                    score -= rigidity * (1.0 - lost)
                 else:
                     score -= functions[compensated].need * lost
             return score

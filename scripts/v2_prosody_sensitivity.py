@@ -1,6 +1,6 @@
 """Měření citlivosti síly přízvuku (krok D2).
 
-Testuje násobek STRESS_STRENGTH_MULTIPLIER v {1.0, 1.5, 2.0} napříč 20 seedy (3 000 let)
+Testuje násobek stress_strength_multiplier v {1.0, 1.5, 2.0} napříč 20 seedy (3 000 let)
 pro 3 podmínky:
 1. initial_strong: silný přízvuk na 1. slabice (iniciální)
 2. penult_strong: silný přízvuk na předposlední slabice (penult)
@@ -17,7 +17,7 @@ import numpy as np
 
 from cee.v2 import syntax
 from cee.v2.language.processes import StressRule
-from cee.v2.pressures import linguistic
+from cee.v2.parameters import Parameters
 from cee.v2.scenarios import FULL_GRAMMAR, village_grid
 from cee.v2.simulation import Simulation
 
@@ -35,11 +35,8 @@ def run_condition_m(
     strength: Literal["weak", "strong"],
     seeds: range = SEEDS,
 ) -> dict[str, Any]:
-    # 1. Ověření propagace hodnoty
-    linguistic.STRESS_STRENGTH_MULTIPLIER = multiplier
-    assert (
-        linguistic.STRESS_STRENGTH_MULTIPLIER == multiplier
-    ), f"Hodnota M={multiplier} se nepropsala do linguistic.STRESS_STRENGTH_MULTIPLIER!"
+    # 1. Hodnota se předá světu přes parametry
+    params = Parameters(stress_strength_multiplier=multiplier)
 
     started = time.perf_counter()
     weakness_by_fn: dict[str, list[float]] = {fn: [] for fn in CELLS}
@@ -85,6 +82,7 @@ def run_condition_m(
             grammar=dict(FULL_GRAMMAR),
             stress_rule=rule,
             stress_strength=strength,
+            params=params,
         )
         sim = Simulation(world)
 

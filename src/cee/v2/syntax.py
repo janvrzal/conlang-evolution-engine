@@ -24,7 +24,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, cast
 
 from cee.v2.history import History
-from cee.v2.language.constructions import Construction, GrammaticalFunction, catalog
+from cee.v2.language.constructions import Construction, GrammaticalFunction, catalog, catalog_for
 from cee.v2.language.lexicon import Morpheme, UnitForm
 from cee.v2.language.morphology import unit_id
 from cee.v2.language.segments import Form
@@ -47,7 +47,7 @@ def variable_id(function: str) -> str:
 def functions(world: World, template: str | None = None) -> list[GrammaticalFunction]:
     """Funkce katalogu, které jazykový svět sleduje (mají konstrukční proměnnou)."""
     return [
-        entry for name, entry in sorted(catalog().items())
+        entry for name, entry in sorted(catalog_for(world).items())
         if variable_id(name) in world.variables and (template is None or entry.template == template)
     ]
 
@@ -61,7 +61,11 @@ def _cells() -> dict[tuple[str | None, str], GrammaticalFunction]:
 
 
 def function_of_cell(word_class: str | None, cell: str) -> GrammaticalFunction | None:
-    """Funkce, kterou buňka paradigmatu vyjadřuje (citační buňka žádnou)."""
+    """Funkce, kterou buňka paradigmatu vyjadřuje (citační buňka žádnou).
+
+    Čte se z globálního katalogu, takže hodnoty ``need`` a ``context`` mohou
+    být bez přepisů světa; volající smí použít jen identitu funkce.
+    """
     return _cells().get((word_class, cell))
 
 
@@ -109,7 +113,7 @@ def _weakness_reference(world: World, code: Code, function: str) -> float:
     """
     from cee.v2.morphology import citation_form
 
-    entry = catalog().get(function)
+    entry = catalog_for(world).get(function)
     if entry is None or entry.cell is None:
         return 0.0
     units = cell_units(world, code, entry)
@@ -123,7 +127,7 @@ def weakness(world: World, code: Code, function: str) -> float:
     """Podíl splynulých tvarů v gramatické buňce, průběžně udržovaný."""
     from cee.v2.language.morphology_index import WeaknessIndex
 
-    entry = catalog().get(function)
+    entry = catalog_for(world).get(function)
     if entry is None or entry.cell is None:
         return 0.0
     state = code.phonology
@@ -181,7 +185,7 @@ def strength(
         words = (construction.source, construction.reinforcer)
         return 1.0 if any(not eroded(world, code, word) for word in words if word) else 0.0
     if kind == "zero":
-        entry = catalog().get(construction.function)
+        entry = catalog_for(world).get(construction.function)
         ctx = entry.context if entry is not None else 0.0
         comp = compensation(world, group_id, construction.function) if group_id is not None else 0.0
         return max(ctx, comp)
@@ -195,7 +199,7 @@ def applied(code: Code, world: World, construction: Construction) -> bool:
 
 def compensation(world: World, group_id: str, function: str) -> float:
     """Jakou měrou roli funkce přebírají jiné dominantní konstrukce (0 až 1)."""
-    for entry in catalog().values():
+    for entry in catalog_for(world).values():
         if function in entry.compensates:
             current = dominant(world, group_id, entry.id)
             if current is not None and entry.template == "order" and current.carries_order:
@@ -229,7 +233,7 @@ def new_affix(world: World, code: Code, construction: Construction, group_id: st
     slova zbude jeho začátek, nejvýš souhláska a samohláska.
     """
     assert world.table is not None
-    entry = catalog()[construction.function]
+    entry = catalog_for(world)[construction.function]
     form = particle_form(world, code, construction.source)
     vowels = [index for index, segment in enumerate(form) if world.table.is_vowel(segment)]
     if not vowels or entry.cell is None:
@@ -277,7 +281,7 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
         state.mark_grammar_applied(variant)
         _ensure_cell(world, entry)
         paradigm = world.paradigms[entry.word_class]
-        donor = catalog()[construction.donor] if construction.donor else None
+        donor = catalog_for(world)[construction.donor] if construction.donor else None
         ending = world.morphemes[construction.exponent].form
         rewritten = kept = 0
         roots = sorted({
