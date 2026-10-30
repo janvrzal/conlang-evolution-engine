@@ -89,6 +89,32 @@ class Fusion(Pressure):
         return _scores(batch, value)
 
 
+#: Autorský odhad: stejná síla jako `Teachability` u tvarů. Literatura
+#: podporuje směr, ne velikost.
+LEARNABILITY_STRENGTH = 1.0
+
+
+class Learnability(Pressure):
+    """Dospělí, kteří se jazyk učí jako druhý, vázané výrazy neudrží.
+
+    Koncovka a přiklonka jsou nevýhodné úměrně podílu L2 mluvčích ve
+    skupině; volné slovo ani nevyjádřená funkce nic nestojí. Jazyky s více
+    L2 mluvčími mají méně pádů (Bentz & Winter 2013) a kontaktní variety
+    dávají přednost volným výrazům (Trudgill 2011; McWhorter 2007). Bez L2
+    mluvčích je tlak nulový.
+    """
+
+    name = "learnability"
+
+    def scores(self, batch: PressureBatch) -> FloatArray:
+        world = batch.world
+        shares = np.array([world.groups[group_id].main_code.l2_share for group_id in batch.group_ids])
+        if not shares.any():
+            return np.zeros_like(batch.freqs)
+        bound = _scores(batch, lambda construction, _, __: -LEARNABILITY_STRENGTH * construction.bound)
+        return bound * shares[None, :, None]
+
+
 class Ambiguity(Pressure):
     """Funkce, kterou jazyk přestal vyjadřovat, se musí poznat jinak.
 

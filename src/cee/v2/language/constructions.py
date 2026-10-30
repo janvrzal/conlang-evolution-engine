@@ -123,3 +123,8 @@ class Construction:
     def carries_order(self) -> bool:
         """Nese tato konstrukce role argumentů pořadím slov?"""
         return self.kind == "fixed"
+
+    @property
+    def bound(self) -> bool:
+        """Je výraz vázaný na slovo (koncovka nebo přiklonka)?"""
+        return self.kind == "synthetic" or (self.kind == "periphrastic" and self.stage == "clitic")

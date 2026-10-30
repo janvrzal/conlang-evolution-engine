@@ -1,11 +1,12 @@
-"""Jednotkové testy pro zánik kategorie (CategoryLoss, krok C3).
+"""Jednotkové testy pro zánik kategorie (CategoryLoss, kroky C3 a E).
 
 Ověřuje:
-1. CategoryLoss je s výchozím katalogem neaktivní (efektivní potřeba > 0,15, slabost <= 0,15).
-2. Spuštění větve (a): syntetická konstrukce s vysokou slabostí (weakness >= 0,5).
-3. Spuštění větve (b): volný opis (words = 1) s nízkou efektivní potřebou (<= 0,15).
-4. Selekce rozhoduje ve prospěch zero při nízké efektivní potřebě (Economy -0,15 převáží).
+1. Neporušená koncovka bez L2 mluvčích nemá důvod zaniknout; volný opis ano.
+2. Míra návrhu roste se slabostí koncovky (žádný práh).
+3. L2 mluvčí navrhují vypuštění vázaného výrazu i bez eroze.
+4. Selekce rozhoduje ve prospěch zero při nízké potřebě (Economy -0,15 převáží).
 5. Selekce rozhoduje ve prospěch zero při vysoké erozní slabosti (weakness > 1 - context).
+6. Learnability znevýhodní vázané výrazy úměrně podílu L2 mluvčích.
 """
 
 from dataclasses import replace
@@ -18,7 +19,7 @@ from cee.v2.changes.syntax import CategoryLoss
 from cee.v2.language.constructions import Construction, catalog
 from cee.v2.language.lexicon import UnitForm
 from cee.v2.pressures.base import PressureBatch
-from cee.v2.pressures.syntactic import Economy, Expressivity
+from cee.v2.pressures.syntactic import LEARNABILITY_STRENGTH, Economy, Expressivity, Learnability
 from cee.v2.repertoire import Origin
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
@@ -35,77 +36,70 @@ def _context(world, group):
     return InnovationContext(world, group, group.main_code, 1, 25.0)
 
 
-def test_category_loss_neaktivni_ve_vychozim_stavu():
-    """S dnešním katalogem a neporušenou gramatikou je CategoryLoss zcela neaktivní."""
-    world, group, code = _world()
-    context = _context(world, group)
-    cat_loss = CategoryLoss()
-
-    # 1. Syntetické kategorie (PAST, PL): slabost je <= 0,15 (< 0,5)
-    for func in ("PAST", "PL"):
-        current = Construction(func, "synthetic")
-        assert not cat_loss.applies(context, current)
-
-    # 2. Volné opisy (DEFINITE, FUTURE, PAST, PL): efektivní potřeba je vždy > 0,15
-    # DEF: 0,25 * (1 - 0,22) = 0,195 > 0,15
-    # FUT: 0,40 * (1 - 0,35) = 0,260 > 0,15
-    # PL:  0,60 * (1 - 0,30) = 0,420 > 0,15
-    # PAST: 1,0 * (1 - 0,25) = 0,750 > 0,15
-    for func, src in (("DEFINITE", "that"), ("FUTURE", "go"), ("PAST", "have"), ("PL", "thing")):
-        free = Construction(func, "periphrastic", src, "free")
-        assert not cat_loss.applies(context, free)
-
-    # 3. Přiklonky a nulový tvar: CategoryLoss se na ně nevztahuje
-    clitic = Construction("DEFINITE", "periphrastic", "that", "clitic")
-    assert not cat_loss.applies(context, clitic)
-    zero = Construction("DEFINITE", "zero")
-    assert not cat_loss.applies(context, zero)
-
-    # V žádné skupině nenajde místo
-    assert not cat_loss.sites(context)
-
-
-def test_category_loss_vetev_synteticka_pri_vysoke_slabosti():
-    """Větev (a): syntetická koncovka se slabostí >= 0,5 navrhne zánik do zero."""
-    world, group, code = _world()
-    context = _context(world, group)
-    cat_loss = CategoryLoss()
-    rng = np.random.default_rng(123)
-
-    # Erodujeme koncovky minulého času (nahradíme citačním tvarem)
+def _erode_past(world, code):
     for unit in sorted(code.phonology.vocabulary):
         if world.morphemes[unit].cell == "PAST":
             citation = morphology.citation_form(world, code, unit)
             code.forms.set(unit, UnitForm(citation, len(citation), world.unit_of(code, unit).exponent))
     code.phonology.version += 1
 
-    assert syntax.weakness(world, code, "PAST") >= 0.5
-    current = Construction("PAST", "synthetic")
-    assert cat_loss.applies(context, current)
 
-    proposed = cat_loss.next(context, current, rng)
-    assert proposed == Construction("PAST", "zero")
+def _batch(world, group, function, constructions):
+    variants = [syntax.register(world, item, Origin("test", 0, 0, None))[1] for item in constructions]
+    share = 1.0 / len(variants)
+    return PressureBatch(
+        world=world,
+        variable_ids=[f"construction:{function}"],
+        group_ids=[group.id],
+        freqs=np.full((1, 1, len(variants)), share),
+        slots=[[variant.id for variant in variants]],
+        tick=0,
+        heard=np.full((1, 1, len(variants)), share),
+    )
 
 
-def test_category_loss_vetev_volny_opis_pri_nizke_potrebe():
-    """Větev (b): volný opis s efektivní potřebou <= 0,15 navrhne zánik do zero."""
+def test_neporusena_koncovka_bez_l2_nema_duvod_zaniknout():
+    """Bez eroze a bez L2 mluvčích se vázaný výraz nenavrhuje k vypuštění; volný opis ano."""
     world, group, code = _world()
     context = _context(world, group)
     cat_loss = CategoryLoss()
-    rng = np.random.default_rng(456)
 
-    cat = catalog()
-    orig_def = cat["DEFINITE"]
-    try:
-        # Simulujeme situaci s vysokým kontextem (context = 0.45 -> eff_need = 0.25 * 0.55 = 0.1375 <= 0.15)
-        cat["DEFINITE"] = replace(orig_def, context=0.45)
-        current = Construction("DEFINITE", "periphrastic", "that", "free")
-        assert cat_loss.applies(context, current)
+    for func in ("PAST", "PL"):
+        assert syntax.weakness(world, code, func) == 0.0
+        assert not cat_loss.applies(context, Construction(func, "synthetic"))
+    assert not cat_loss.applies(context, Construction("DEFINITE", "periphrastic", "that", "clitic"))
+    assert not cat_loss.applies(context, Construction("DEFINITE", "zero"))
+    assert cat_loss.applies(context, Construction("DEFINITE", "periphrastic", "that", "free"))
+    # Výchozí gramatika má jen neporušené koncovky: žádné místo.
+    assert not cat_loss.sites(context)
 
-        proposed = cat_loss.next(context, current, rng)
-        assert proposed == Construction("DEFINITE", "zero")
-    finally:
-        cat["DEFINITE"] = orig_def
+
+def test_mira_navrhu_roste_se_slabosti_koncovky():
+    """Míra návrhu je úměrná slabosti koncovky; návrh je zero."""
+    world, group, code = _world()
+    context = _context(world, group)
+    cat_loss = CategoryLoss()
+    _erode_past(world, code)
+
+    weakness = syntax.weakness(world, code, "PAST")
+    assert weakness > 0.0
+    assert cat_loss.sites(context) == ["construction:PAST"]
+    assert cat_loss.rate(context, "construction:PAST") == cat_loss.base_rate * weakness
+    proposed = cat_loss.next(context, Construction("PAST", "synthetic"), np.random.default_rng(123))
+    assert proposed == Construction("PAST", "zero")
+
+
+def test_l2_mluvci_navrhuji_vypusteni_vazaneho_vyrazu():
+    """L2 mluvčí navrhují vypuštění koncovky i přiklonky bez eroze."""
+    world, group, code = _world()
+    context = _context(world, group)
+    cat_loss = CategoryLoss()
+    code.l2_share = 0.5
+
+    clitic = Construction("DEFINITE", "periphrastic", "that", "clitic")
+    assert cat_loss.applies(context, clitic)
+    assert cat_loss.applies(context, Construction("PL", "synthetic"))
+    assert cat_loss.rate(context, "construction:PL") == cat_loss.base_rate * cat_loss.l2_boost * 0.5
 
 
 def test_selekce_rozhoduje_ve_prospech_zero_pri_nizke_potrebe():
@@ -180,3 +174,28 @@ def test_selekce_rozhoduje_ve_prospech_zero_pri_erodovane_synteze():
         assert exp_scores[0] > exp_scores[1], f"Zero ({exp_scores[0]}) musí mít vyšší Expressivity než erodovaná syntéza ({exp_scores[1]})"
     finally:
         cat["PAST"] = orig_past
+
+
+def test_learnability_znevyhodni_vazane_vyrazy_podle_podilu_l2():
+    """Koncovka a přiklonka ztrácejí úměrně podílu L2 mluvčích; volné slovo a zero ne."""
+    world, group, code = _world()
+    constructions = [
+        Construction("DEFINITE", "zero"),
+        Construction("DEFINITE", "periphrastic", "that", "free"),
+        Construction("DEFINITE", "periphrastic", "that", "clitic"),
+    ]
+    batch = _batch(world, group, "DEFINITE", constructions)
+    assert not Learnability().scores(batch).any()
+
+    code.l2_share = 0.5
+    scores = Learnability().scores(batch)[0, 0]
+    assert list(scores) == [0.0, 0.0, -LEARNABILITY_STRENGTH * 0.5]
+
+
+def test_pri_plne_l2_skupine_vyhraje_zero_nad_neporusenou_koncovkou():
+    """Ve skupině samých L2 mluvčích převáží Learnability výhodu koncovky plurálu."""
+    world, group, code = _world()
+    code.l2_share = 1.0
+    batch = _batch(world, group, "PL", [Construction("PL", "zero"), Construction("PL", "synthetic")])
+    total = Expressivity().scores(batch)[0, 0] + Learnability().scores(batch)[0, 0]
+    assert total[0] > total[1]

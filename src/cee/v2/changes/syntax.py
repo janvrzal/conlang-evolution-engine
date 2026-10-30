@@ -20,7 +20,7 @@ from cee.v2 import syntax
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.constructions import Construction, catalog
 from cee.v2.pressures import Actuation, Conformity, Pressure
-from cee.v2.pressures.syntactic import Ambiguity, Economy, Expressivity, Fusion
+from cee.v2.pressures.syntactic import Ambiguity, Economy, Expressivity, Fusion, Learnability
 from cee.v2.repertoire import Origin, Variant
 
 SYNTAX_PRESSURES: Mapping[type[Pressure], float] = {
@@ -28,6 +28,7 @@ SYNTAX_PRESSURES: Mapping[type[Pressure], float] = {
     Economy: 1.0,
     Fusion: 1.0,
     Ambiguity: 1.0,
+    Learnability: 1.0,
     Conformity: 0.1,
     Actuation: 1.0,
 }
@@ -231,32 +232,49 @@ class OrderRelaxation(SyntacticChange):
 
 
 class CategoryLoss(SyntacticChange):
-    """Zánik kategorie: přechod z volného opisu nebo erodované syntézy do zero.
+    """Zánik kategorie: výraz funkce se přestane užívat a funkce je ``zero``.
 
-    Kategorie, která ztratila funkční opodstatnění nebo jejíž exponenty zcela
-    erodovaly, přestane být povinně vyjadřována:
-    a) Erodovaná syntetická koncovka: weakness >= 0.5 (koncovky splynuly
-       s citačním tvarem a synkretismus převládl nad kontrastem).
-    b) Volný opis (words = 1) s nízkou efektivní potřebou:
-       effective_need = need * (1 - max(context, compensation)) <= 0.15.
-       Při této efektivní potřebě cena za slovo (Economy = -0.15) převáží
-       nebo vyrovná přínos vyjádření a opis ztrácí selekční výhodu.
+    Gramatikalizace je jednosměrná pro výraz (slovo → přiklonka → koncovka),
+    kategorie ale cyklí: koncovka nakonec zmizí a místo otevře novému opisu
+    (Hopper & Traugott 2003). Doložené cesty k ``zero``:
+
+    - eroze bez obnovy: koncovka splývá s citačním tvarem (ztráta pádů
+      v angličtině a románských jménech);
+    - převzetí funkce: roli nese pevný slovosled (``compensates``);
+    - kontakt: dospělí L2 mluvčí vázané výrazy vypouštějí (Bentz & Winter
+      2013; afrikánština, kreoly).
+
+    Návrh nepotřebuje žádný práh. Vypuštění koncovky navrhují mluvčí tím
+    častěji, čím je koncovka nespolehlivější (``weakness``) a čím víc je
+    ve skupině L2 mluvčích; o osudu návrhu rozhoduje selekce
+    (`Expressivity` proti `Learnability` a `Economy`). Volný opis lze
+    vypustit vždy se základní mírou: slovo navíc stojí a funkci s nízkou
+    potřebou nebo silným kontextem selekce nedrží.
     """
 
     kind, template, base_rate = "category_loss", "inflection", 0.02
+    #: Kolikrát častěji navrhují vypuštění L2 mluvčí; stejně jako u analogie.
+    l2_boost: ClassVar[float] = 4.0
+
+    def _pressure(self, context: InnovationContext, current: Construction) -> float:
+        """Kolik důvodů k vypuštění výrazu mluvčí mají (násobek ``base_rate``)."""
+        if current.kind == "periphrastic" and current.stage == "free":
+            return 1.0
+        if not current.bound:
+            return 0.0
+        unreliable = 0.0
+        if current.kind == "synthetic":
+            unreliable = syntax.weakness(context.world, context.code, current.function)
+        return unreliable + self.l2_boost * context.code.l2_share
 
     def applies(self, context: InnovationContext, current: Construction) -> bool:
-        if current.kind == "synthetic":
-            return syntax.weakness(context.world, context.code, current.function) >= 0.5
-        if current.kind == "periphrastic" and current.stage == "free":
-            entry = catalog().get(current.function)
-            if entry is None:
-                return False
-            comp = syntax.compensation(context.world, context.group.id, current.function)
-            eff_context = max(entry.context, comp)
-            effective_need = entry.need * (1.0 - eff_context)
-            return effective_need <= 0.15
-        return False
+        return self._pressure(context, current) > 0.0
+
+    def rate(self, context: InnovationContext, site: str) -> float:
+        current = syntax.dominant(context.world, context.group.id, site.split(":", 1)[1])
+        if current is None:
+            return 0.0
+        return self.base_rate * self._pressure(context, current)
 
     def next(
         self, context: InnovationContext, current: Construction, rng: np.random.Generator
