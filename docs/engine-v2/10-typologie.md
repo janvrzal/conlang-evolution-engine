@@ -760,18 +760,27 @@ Implementace v kódu:
 
 #### Citlivostní analýza parametru `context` (DEFINITE a FUTURE v {0,1; 0,2; 0,3; 0,4})
 
-Měření proběhlo sériově na 20 seedech (5 000 let) pro `same_full` a `wals` a na bráně `M4b::clen_vznikne`:
+Měření proběhlo sériově na 20 seedech (5 000 let) pro `same_full` a `wals` a na bráně `M4b::clen_vznikne`.
+Položky v `catalog()` byly mutovány in-place s ověřením, že `syntax.catalog()` vidí přesnou hodnotu:
 
-| `context` | Brána `M4b::clen_vznikne` | `same_full` DEF 2k / 5k | `same_full` FUT 2k / 5k | `wals` DEF 1k / 5k | `wals` FUT 2k / 5k |
+| `context` | Brána `M4b::clen_vznikne` | `same_full` DEF 1k / 2k / 5k | `same_full` FUT 2k / 5k | `wals` DEF 1k / 2k | `wals` FUT 2k / 5k |
 |---:|:---:|---:|---:|---:|---:|
-| 0,1 | 2/3 (prošla) | 45 % / 100 % | 37,5 % / 100 % | 75 % / 100 % | 89,5 % / 100 % |
-| 0,2 | 2/3 (prošla) | 45 % / 100 % | 37,5 % / 100 % | 75 % / 100 % | 89,5 % / 100 % |
-| 0,3 | 2/3 (prošla) | 45 % / 100 % | 37,5 % / 100 % | 75 % / 100 % | 89,5 % / 100 % |
-| 0,4 | 2/3 (prošla) | 45 % / 100 % | 37,5 % / 100 % | 75 % / 100 % | 89,5 % / 100 % |
+| 0,1 | 3/3 (prošla) | 20 % / 70 % / 100 % | 100 % / 100 % | 85 % / 100 % | 100 % / 100 % |
+| 0,2 | 2/3 (prošla) | 15 % / 50 % / 100 % | 100 % / 100 % | 80 % / 95 % | 100 % / 100 % |
+| 0,3 | 1/3 (neprošla) | 5 % / 25 % / 95 % | 71,4 % / 100 % | 70 % / 95 % | 100 % / 100 % |
+| 0,4 | 1/3 (neprošla) | 0 % / 20 % / 85 % | 11,1 % / 100 % | 65 % / 85 % | 85 % / 100 % |
 
-*Poznámka k tabulce:* Výchozí hodnoty modelu (DEFINITE 0,22; FUTURE 0,35) nebyly podle výsledku měněny.
-Rozložení na makroúrovni 20 seedů je v tomto intervalu identické, protože jakmile vznikne přiklonka
-či koncovka (`words = 0`), nepodléhá penalizaci `Economy` a rozdíl Expressivity zůstává kladný.
+*Poznámka k metodice a chování:*
+Výchozí hodnoty modelu (DEFINITE 0,22; FUTURE 0,35) nebyly podle výsledku měněny.
+Výsledky ukazují silný, monotónní vliv parametru `context` na rychlost šíření kategorií:
+- U členu (`need: 0.25`) při `context = 0.4` klesne efektivní potřeba na $0{,}25 \times (1 - 0{,}4) = 0{,}15$,
+  což se přesně rovná ceně slova (`Economy = -0.15`). Vznik volného opisu tak ztrácí selekční výhodu
+  oproti `zero` a v roce 1 000 má přítomnost členu 0 % (v roce 5 000 stále 15 % jazyků bez členu).
+  Brána `M4b::clen_vznikne` vyžadující vznik členu ve 2 ze 3 seedů projde pouze pro `context <= 0.2`.
+- U budoucího času (`need: 0.4`) při `context = 0.4` má v roce 2 000 syntetický budoucí čas jen 11,1 %
+  jazyků (oproti 100 % při `context = 0.1` a `0.2`).
+- *Pravidlo:* Když parametr v testu zdánlivě nemá žádný vliv, je nutné nejprve hledat chybu v měření
+  (v původním skriptu re-import držel starou referenci `catalog`), nikoli konstruovat vysvětlení.
 
 #### Analýza selekce před krokem C3
 
@@ -780,18 +789,19 @@ Rozdíl `Expressivity` mezi syntetickou konstrukcí a stavem `zero` je:
 $$\Delta \text{Expressivity} = \text{need} \times (1 - \text{weakness} - \text{context})$$
 Tento rozdíl zůstává **striktně kladný**, dokud platí:
 $$\text{weakness} < 1 - \text{context}$$
-Pro člen s `context = 0,22` je tato hranice $1 - 0,22 = 0,78$.
-Měření C0 přitom ukázalo, že maximální naměřená slabost syntetických kategorií nepřesahuje 0,15.
-Z toho plyne zásadní teoretický důsledek:
-**Pokud by `CategoryLoss` pouze náhodně navrhoval přechod syntetické konstrukce do `zero`, selekce
+Pro člen s `context = 0,22` je tato hranice $1 - 0,22 = 0,78$, pro minulý čas s `context = 0,25` je $0,75$.
+Měření C0 přitom prokázalo, že maximální naměřená slabost syntetických kategorií v modelu samovolně
+nepřesahuje 0,15.
+Z toho plyne zásadní teoretický fakt:
+**Pokud by `CategoryLoss` navrhoval přechod funkční syntetické konstrukce do `zero`, selekce
 by tuto variantu okamžitě eliminovala (má nižší fitness než stávající syntetický tvar).**
 
 Zánik kategorie proto v C3 musí mít dvě cesty:
 1. **Volný opis (`words = 1`)**: Zde působí penalizace `Economy` ($-0,15$). Pokud je efektivní potřeba
-   kategorie nízká ($\text{need} \times (1 - \text{context}) \le 0,15$), stav `zero` má vyšší fitness
-   než volný opis, a opis zanikne.
-2. **Syntetická konstrukce s vysokou slabostí**: Zánik syntetického afixu může uspět teprve tehdy,
-   když je koncovka skutečně erodovaná ($\text{weakness}$ blízko hranice $1 - \text{context}$).
-   Jelikož fonetická eroze v modelu bez prozódie téměř nenastává, samotná syntetická kategorie
-   bude samovolně mizet jen výjimečně. V dalším zadání to vyřeší prozódie a redukce nepřízvučných slabik.
+   kategorie nízká:
+   $$\text{effective\_need} = \text{need} \times (1 - \max(\text{context}, \text{compensation})) \le 0,15$$
+   stav `zero` má vyšší nebo shodnou fitness než volný opis, a opis zanikne.
+2. **Syntetická konstrukce s vysokou slabostí**: Zánik syntetického afixu se spouští při
+   $\text{weakness} \ge 0,5$, kdy koncovky splynuly s citačním tvarem a synkretismus převládl nad kontrastem.
+
 
