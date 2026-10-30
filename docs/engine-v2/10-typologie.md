@@ -572,15 +572,24 @@ island-city  13717cb46affdc42b9938627d9314ab09c23fec227595ce6f53cfa099a22d4aa
 valley-50    0d462e154e885753e74ad645d2ecb9085bd4d1e442cc86f9229d693f366fca00
 ```
 
-Sériový čas `valley-50` je 28,5 s (proti 26,3 s na základu `68d4e54`, nárůst +8,4 %,
-limit brány +10 % = 28,93 s splněn). Optimalizace agregace kontextových změn
-v `SoundSupportIndex` a cache fonetických vzdáleností segmentů drží engine bezpečně v limitu.
+#### Výkon a měření sériových párů (`valley-50`)
+
+Měření na dvou sériových párech spuštěných hned po sobě bez souběžné zátěže
+(`v2_digests.py`, stejný interpreter `/Users/janvrzal/Documents/CEE/.venv/bin/python`):
+
+- **Pár 1**: `68d4e54` `valley-50` 24,9 s (celkem 30,27 s) vs. nová verze 29,6 s (celkem 35,07 s), nárůst `valley-50` **+18,9 %** (celkem +15,84 %).
+- **Pár 2**: `68d4e54` `valley-50` 24,5 s (celkem 29,97 s) vs. nová verze 28,0 s (celkem 33,43 s), nárůst `valley-50` **+14,3 %** (celkem +11,55 %).
+
+Limit brány výkonu (+10 % ze stejného páru) tedy neprošel. Důvodem je skutečné rozšíření
+modelu o 8 nových rodin zvukových změn (vyhodnocování 28 rodin místo 20 v každé generaci
+pro každou vesnici). Pro tento nárůst udělil uživatel výslovnou výjimku.
 
 #### Brána B
 
 - `ruff check --no-cache`: čisté (0 chyb).
 - `mypy`: čisté (51 zdrojových souborů bez chyb v dotčeném rozsahu).
-- Celá sada testů `pytest -q`: všechny testy prošly.
+- Celá sada testů `pytest -q`: všechny testy prošly (717 testů, 440 s).
 - Všechny milníkové stochastické brány splněny.
+- Výkonnostní brána: výjimka schválena uživatelem (rozšíření modelu o 8 rodin).
 
-Část B je připravena k potvrzení uživatelem. Po potvrzení bude vytvořen commit části B, a následně se přejde k části C.
+Commit části B uložen jako `e7dc08c`.
