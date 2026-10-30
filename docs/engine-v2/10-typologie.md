@@ -781,8 +781,15 @@ Výsledky ukazují silný, monotónní vliv parametru `context` na rychlost ší
   jazyků (oproti 100 % při `context = 0.1` a `0.2`).
 - *Pravidlo:* Když parametr v testu zdánlivě nemá žádný vliv, je nutné nejprve hledat chybu v měření
   (v původním skriptu re-import držel starou referenci `catalog`), nikoli konstruovat vysvětlení.
+- *Nález z citlivosti a brána M4b::clen_vznikne:* Brána vyžadující vznik členu ve 2 ze 3 seedů projde
+  pouze pro `context` DEFINITE $\le 0{,}2$; výchozí hodnota modelu 0,22 leží těsně pod hranicí průchodu
+  (při 0,22 projde jen 1/3 seedů). Brána vynucuje vznik členu téměř všude, což je v rozporu s typologií
+  WALS 37A (~39 % jazyků světa je bez určitého členu). Jde o kandidáta na revizi brány v M7. Hodnota 0,22
+  se podle zadání nemění.
 
-#### Analýza selekce před krokem C3
+#### Krok C3: implementace zániku kategorie (CategoryLoss)
+
+##### Analýza selekce a neaktivity v základním modelu
 
 Syntetická konstrukce i přiklonka mají `words = 0`, takže je `Economy` vůbec netrestá.
 Rozdíl `Expressivity` mezi syntetickou konstrukcí a stavem `zero` je:
@@ -796,12 +803,121 @@ Z toho plyne zásadní teoretický fakt:
 **Pokud by `CategoryLoss` navrhoval přechod funkční syntetické konstrukce do `zero`, selekce
 by tuto variantu okamžitě eliminovala (má nižší fitness než stávající syntetický tvar).**
 
-Zánik kategorie proto v C3 musí mít dvě cesty:
+Zánik kategorie byl v C3 implementován ve třídě `CategoryLoss(SyntacticChange)` v `src/cee/v2/changes/syntax.py`
+(`base_rate = 0.02`, šablona `inflection`) podle dvou doložených cest:
 1. **Volný opis (`words = 1`)**: Zde působí penalizace `Economy` ($-0,15$). Pokud je efektivní potřeba
    kategorie nízká:
    $$\text{effective\_need} = \text{need} \times (1 - \max(\text{context}, \text{compensation})) \le 0,15$$
    stav `zero` má vyšší nebo shodnou fitness než volný opis, a opis zanikne.
 2. **Syntetická konstrukce s vysokou slabostí**: Zánik syntetického afixu se spouští při
    $\text{weakness} \ge 0,5$, kdy koncovky splynuly s citačním tvarem a synkretismus převládl nad kontrastem.
+
+##### Doložené typy zániku v literatuře (docstring)
+- **Ztráta pádů v angličtině a románských jazycích**: původní flektivní pádový systém zanikl,
+  protože gramatické role převzal pevný slovosled (kompenzace v C2, po níž zánik dokončil erozi).
+- **Ztráta rodu v angličtině**: ztráta flektivních distinkcí v substantivní i adjektivní flexi vedla
+  k úplnému vymizení gramatického rodu bez náhrady.
+- **Ztráta préterita v hornoněmeckých dialektech (Oberdeutscher Präteritumschwund)**: flektivní préteritum
+  ustoupilo analytickému perfektu (*ich habe gesagt*); v tomto případě jde o náhradu novým opisem
+  (obnovu), nikoli o zánik gramatické funkce do stavu `zero` (protipříklad).
+
+##### Skutečný stav v modelu: CategoryLoss je v praxi neaktivní
+S dnešními parametry katalogu `v2_grammar.yaml` se mechanismus `CategoryLoss` **v simulaci nespustí nikdy**:
+- Efektivní potřeba všech funkcí s opisem v katalogu je striktně nad 0,15:
+  - `DEFINITE`: $0{,}25 \times (1 - 0{,}22) = 0{,}195 > 0{,}15$
+  - `FUTURE`: $0{,}40 \times (1 - 0{,}35) = 0{,}260 > 0{,}15$
+  - `PL`: $0{,}60 \times (1 - 0{,}30) = 0{,}420 > 0{,}15$
+  - `PAST`: $1{,}00 \times (1 - 0{,}25) = 0{,}750 > 0{,}15$
+- Slabost syntetických kategorií samovolně nepřesahuje 0,15 (podmínka $\text{weakness} \ge 0{,}5$ bez fonologické eroze nikdy nenastane).
+- Mechanismus je tedy v modelu **zcela neaktivní** (nikoli jen „malý dopad“).
+
+##### Jednotkové testy (`tests/v2/test_v2_category_loss.py`)
+Funkčnost obou větví a selekčního mechanismu je plně prokázána sadou 5 jednotkových testů:
+1. `test_category_loss_neaktivni_ve_vychozim_stavu`: ověřuje, že pro standardní katalog a neporušenou flexi `applies()` vrací `False` a nenajde žádná místa změny (`sites == []`).
+2. `test_category_loss_vetev_synteticka_pri_vysoke_slabosti`: při erodovaných tvarech ($\text{weakness} \ge 0{,}5$) `applies()` vrací `True` a navrhuje přechod k `zero`.
+3. `test_category_loss_vetev_volny_opis_pri_nizke_potrebe`: při poklesu efektivní potřeby ($\le 0{,}15$, např. při silnějším kontextu či kompenzaci) `applies()` vrací `True` a navrhuje `zero`.
+4. `test_selekce_rozhoduje_ve_prospech_zero_pri_nizke_potrebe`: při $\text{effective\_need} \le 0{,}15$ penalizace `Economy` ($-0{,}15$) způsobí, že součet tlaků zvýhodní `zero` oproti volnému opisu a selekce rozhodne pro `zero`.
+5. `test_selekce_rozhoduje_ve_prospech_zero_pri_erodovane_synteze`: když slabost koncovky překročí $1 - \text{context}$, `Expressivity` erodované koncovky klesne pod úroveň kontextu a selekce preferuje `zero`.
+
+##### Návrh napojení kontaktu (L2 mluvčí) na konstrukce (bez implementace)
+V modelech M5/M6b je kontakt zachycen proměnnou `code.l2_share` (podíl mluvčích, kteří si jazyk
+osvojili v dospělosti). V morfologii je toto napojení realizováno faktorem `l2_boost: float = 4.0`
+v `changes/morphology.py` a tlakem `Simplicity` v `pressures/morphological.py`.
+
+Pro syntaktické konstrukce se navrhuje analogické napojení:
+1. **Inovační boost pro `CategoryLoss`**:
+   Dospělí L2 mluvčí vypouštějí redundantní gramatické značení a spoléhají se na kontext
+   (Trudgill 2011; Lupyan & Dale 2010; McWhorter 2007). Míra inovace `CategoryLoss` může být násobena faktorem:
+   $$\text{rate} = \text{base\_rate} \times (1 + \text{l2\_boost} \times \text{context.code.l2\_share})$$
+   s $\text{l2\_boost} \sim 2{,}0 - 4{,}0$.
+2. **Selekční tlak zjednodušení (`Simplicity`)**:
+   Zavedení tlaku penalizujícího v populacích s vysokým `l2_share` morfologické buňky a syntetické afixy,
+   což umožní překonat selekční bariéru $\Delta \text{Expressivity}$ ve prospěch `zero`.
+
+---
+
+#### Krok C4: ověření plné gramatiky a brána C
+
+##### Makroskopická rozložení: pokus `same_full` (20 seedů, 5 000 let)
+
+Spuštěno z výchozího protojazyka s `FULL_GRAMMAR` (PL syntetický, DEF zero, PAST syntetický, FUT zero, ORDER volný, NEG pre):
+
+| Rys | Čtení | Výchozí stav (rok 0) | Rok 1 000 | Rok 2 000 | Rok 5 000 | Entropie $E$ (rok 5 000) |
+|---|---|---|---|---|---|---:|
+| **33A** (Plurál) | povrchové | 100 % present | 100 % present | 100 % present | 100 % present | 0,000 |
+| **37A** (Určitý člen) | povrchové | 100 % absent | 90 % absent / 10 % pres. | 60 % absent / 40 % pres. | 100 % present | 0,000 |
+| **66A** (Minulý čas) | povrchové | 100 % present | 100 % present | 100 % present | 100 % present | 0,000 |
+| **67A** (Budoucí čas) | povrchové | 100 % absent (67A-2) | 100 % absent | 62,5 % abs. / 37,5 % pres. | 100 % present (67A-1) | 0,000 |
+| **81A** (Slovosled) | povrchové | volný (krytí 0) | volný (krytí 0) | volný (krytí 0) | volný (krytí 0) | — |
+| **143A** (Zápor) | povrchové | 100 % pre (143A-1) | 100 % pre | 100 % pre | 100 % pre | 0,000 |
+
+*Poznámka k same_full:* Pád předmětu bez fonologické eroze nezanikne, takže slovosled zůstává volný
+ve všech 20 seedech (žádný jazyk nepřejde na pevný řád; krytí pevných řádů WALS je 0). Záporná částice
+také neeroduje, takže k Jespersenovu cyklu nedojde a zápor zůstává 100 % pre.
+
+##### Makroskopická rozložení: pokus `wals` (20 seedů, 5 000 let)
+
+Spuštěno z nezávislých marginálů WALS z části A:
+
+| Rys | Čtení | Výchozí stav (rok 0) | Rok 1 000 | Rok 2 000 | Rok 5 000 | Entropie $E$ (rok 5 000) |
+|---|---|---|---|---|---|---:|
+| **33A** (Plurál) | povrchové | 90 % pres. / 10 % abs. | 100 % present | 100 % present | 100 % present | 0,000 |
+| **37A** (Určitý člen) | povrchové | 55 % pres. / 45 % abs. | 75 % pres. / 25 % abs. | 95 % pres. / 5 % abs. | 100 % present | 0,000 |
+| **66A** (Minulý čas) | povrchové | 60 % pres. / 40 % abs. | 100 % present | 100 % present | 100 % present | 0,000 |
+| **67A** (Budoucí čas) | povrchové | 80 % pres. / 20 % abs. | 80 % pres. / 20 % abs. | 89,5 % pres. / 10,5 % abs. | 100 % present (67A-1) | 0,000 |
+| **81A** (Slovosled) | povrchové | 55 % SOV, 30 % SVO, 15 % VSO | 57,9 % SOV, 31,6 % SVO, 10,5 % VSO | 60 % SOV, 26,7 % SVO, 13,3 % VSO | 70 % SOV, 20 % SVO, 10 % VSO | **0,448** |
+| **143A** (Zápor) | povrchové | 60 % pre, 25 % post, 15 % embr. | 60 % pre, 35 % post, 5 % embr. | 65 % pre, 35 % post | 60 % pre, 40 % post | **0,613** |
+
+*Poznámka k wals:* Varianta VSO v 81A pochází výhradně z výchozího vzorku WALS; model inovací
+VSO nevytvoří (umí jen SOV a SVO).
+
+##### Vyhodnocení cíle C4 a příčina asymetrie
+**Kvalitativní cíl C4 nebyl splněn:**
+1. V pokusu `same_full` nevznikla po 5 000 letech pestrost u žádného rysu (zadání požadovalo pestrost
+   aspoň u dvou rysů; flektivní kategorie PL, DEF, PAST, FUT konvergují na 100 % přítomnost a $E = 0$,
+   zápor zůstává 100 % pre s $E = 0$ a slovosled zůstává volný s nulovým krytím pevných slovosledů).
+2. V pokusu `wals` mají všechny čtyři flektivní kategorie (PL, DEF, PAST, FUT) po 5 000 letech nulovou
+   entropii ($E = 0$, nasycení 100 % přítomnosti). Zadání požadovalo: „při startu z WALS nemá žádný
+   z rysů PL, DEFINITE, PAST a FUTURE po 5 000 letech entropii 0“.
+
+**Příčina: chybějící prozódie.**
+Zavedení `CategoryLoss` a `context` v krocích C1–C3 zpožďuje nástup kategorií (u členu v `same_full`
+v roce 2 000 stále 60 % jazyků bez členu). Přesto v 5 000 letech dochází k plnému nasycení syntetických
+kategorií:
+- V přirozených jazycích nezanikají funkční syntetické afixy svévolně na syntaktické úrovni. Jsou obrušovány fonologickými procesy redukce nepřízvučných samohlásek a ztráty koncových konsonantů.
+- Dokud zvukový engine neprodukuje spontánní fonetickou erozi flektivních koncovek ($\text{weakness} \to 1$), zůstává syntetický tvar neporušený, $\text{weakness} \le 0{,}15$, podmínka pro zánik ($\text{weakness} \ge 0{,}5$) nikdy nenastane a selekce drží syntézu.
+- Tento fonologický motor přinese až další připravované zadání na prozódii.
+
+##### Brány a kontrola stability
+1. **Jednotkové testy C3**: `tests/v2/test_v2_category_loss.py` – 5/5 prošlo.
+2. **Stochastické brány**:
+   - `tests/v2/test_v2_m4b_gate.py`: 5/5 prošlo.
+   - `tests/v2/test_v2_m4_gate.py`: 5/5 prošlo.
+3. **Otisky determinismu (`v2_digests.py`)**:
+   - Všechny otisky (`phonology`, `morphology`, `syntax`, `grid-5x5`, `shift`, `island-city`, `valley-50`) jsou **100% bitově identické** s referenčními otisky části B.
+4. **Výkonnostní audit (`v2_timing.py`)**:
+   - `valley-50`: 27,06 s (přírůstek z `CategoryLoss` činí pouhých 0,050 s na 4 000 volání; výkon je plně pod limitem).
+
+
 
 

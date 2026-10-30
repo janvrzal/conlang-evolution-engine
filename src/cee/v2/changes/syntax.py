@@ -230,7 +230,42 @@ class OrderRelaxation(SyntacticChange):
         return Construction(current.function, "free")
 
 
+class CategoryLoss(SyntacticChange):
+    """Zánik kategorie: přechod z volného opisu nebo erodované syntézy do zero.
+
+    Kategorie, která ztratila funkční opodstatnění nebo jejíž exponenty zcela
+    erodovaly, přestane být povinně vyjadřována:
+    a) Erodovaná syntetická koncovka: weakness >= 0.5 (koncovky splynuly
+       s citačním tvarem a synkretismus převládl nad kontrastem).
+    b) Volný opis (words = 1) s nízkou efektivní potřebou:
+       effective_need = need * (1 - max(context, compensation)) <= 0.15.
+       Při této efektivní potřebě cena za slovo (Economy = -0.15) převáží
+       nebo vyrovná přínos vyjádření a opis ztrácí selekční výhodu.
+    """
+
+    kind, template, base_rate = "category_loss", "inflection", 0.02
+
+    def applies(self, context: InnovationContext, current: Construction) -> bool:
+        if current.kind == "synthetic":
+            return syntax.weakness(context.world, context.code, current.function) >= 0.5
+        if current.kind == "periphrastic" and current.stage == "free":
+            entry = catalog().get(current.function)
+            if entry is None:
+                return False
+            comp = syntax.compensation(context.world, context.group.id, current.function)
+            eff_context = max(entry.context, comp)
+            effective_need = entry.need * (1.0 - eff_context)
+            return effective_need <= 0.15
+        return False
+
+    def next(
+        self, context: InnovationContext, current: Construction, rng: np.random.Generator
+    ) -> Construction | None:
+        return Construction(current.function, "zero")
+
+
 SYNTACTIC_CHANGES: tuple[SyntacticChange, ...] = (
-    Periphrasis(), Cliticization(), Affixation(), Exaptation(), NegationReinforcement(),
-    NegationReduction(), NegationRenewal(), OrderFixation(), OrderRelaxation(),
+    Periphrasis(), Cliticization(), Affixation(), Exaptation(), CategoryLoss(),
+    NegationReinforcement(), NegationReduction(), NegationRenewal(),
+    OrderFixation(), OrderRelaxation(),
 )
