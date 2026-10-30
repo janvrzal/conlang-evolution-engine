@@ -1,0 +1,559 @@
+{
+  "features": {
+    "10A": {
+      "categories": {
+        "10A-1": "Contrast present",
+        "10A-2": "Contrast absent"
+      },
+      "coverage": {
+        "genera_with_data": 204,
+        "languages_with_data": 244,
+        "mapped_languages": 0,
+        "mapped_weight_share": 0.0
+      },
+      "crosswalk": {
+        "10A-1": null,
+        "10A-2": null
+      },
+      "distribution": {
+        "10A-1": 0.259640522875817,
+        "10A-2": 0.7403594771241829
+      },
+      "engine_categories": [],
+      "engine_distribution": {},
+      "name": "Vowel Nasalization",
+      "unsupported": {
+        "10A-1": "Surface nasal vowels do not establish phonemic/contrastive nasalization or its absence.",
+        "10A-2": "Surface nasal vowels do not establish phonemic/contrastive nasalization or its absence."
+      }
+    },
+    "112A": {
+      "categories": {
+        "112A-1": "Negative affix",
+        "112A-2": "Negative particle",
+        "112A-3": "Negative auxiliary verb",
+        "112A-4": "Negative word, unclear if verb or particle",
+        "112A-5": "Variation between negative word and affix",
+        "112A-6": "Double negation"
+      },
+      "coverage": {
+        "genera_with_data": 447,
+        "languages_with_data": 1157,
+        "mapped_languages": 0,
+        "mapped_weight_share": 0.0
+      },
+      "crosswalk": {
+        "112A-1": null,
+        "112A-2": null,
+        "112A-3": null,
+        "112A-4": null,
+        "112A-5": null,
+        "112A-6": null
+      },
+      "distribution": {
+        "112A-1": 0.34274342987388995,
+        "112A-2": 0.43665413437063116,
+        "112A-3": 0.05310508877750404,
+        "112A-4": 0.05447584841051832,
+        "112A-5": 0.019960500232904493,
+        "112A-6": 0.09306099833455199
+      },
+      "engine_categories": [],
+      "engine_distribution": {},
+      "name": "Negative Morphemes",
+      "unsupported": {
+        "112A-1": "The engine NEG stage does not uniquely encode WALS negative-morpheme types (affix, particle, auxiliary, etc.).",
+        "112A-2": "The engine NEG stage does not uniquely encode WALS negative-morpheme types (affix, particle, auxiliary, etc.).",
+        "112A-3": "The engine NEG stage does not uniquely encode WALS negative-morpheme types (affix, particle, auxiliary, etc.).",
+        "112A-4": "The engine NEG stage does not uniquely encode WALS negative-morpheme types (affix, particle, auxiliary, etc.).",
+        "112A-5": "The engine NEG stage does not uniquely encode WALS negative-morpheme types (affix, particle, auxiliary, etc.).",
+        "112A-6": "The engine NEG stage does not uniquely encode WALS negative-morpheme types (affix, particle, auxiliary, etc.)."
+      }
+    },
+    "12A": {
+      "categories": {
+        "12A-1": "Simple",
+        "12A-2": "Moderately complex",
+        "12A-3": "Complex"
+      },
+      "coverage": {
+        "genera_with_data": 316,
+        "languages_with_data": 486,
+        "mapped_languages": 0,
+        "mapped_weight_share": 0.0
+      },
+      "crosswalk": {
+        "12A-1": null,
+        "12A-2": null,
+        "12A-3": null
+      },
+      "distribution": {
+        "12A-1": 0.13304324894514774,
+        "12A-2": 0.5628258740204943,
+        "12A-3": 0.3041308770343581
+      },
+      "engine_categories": [],
+      "engine_distribution": {},
+      "name": "Syllable Structure",
+      "unsupported": {
+        "12A-1": "WALS syllable-structure complexity is not represented by an explicit engine grammar state.",
+        "12A-2": "WALS syllable-structure complexity is not represented by an explicit engine grammar state.",
+        "12A-3": "WALS syllable-structure complexity is not represented by an explicit engine grammar state."
+      }
+    },
+    "143A": {
+      "categories": {
+        "143A-1": "NegV",
+        "143A-10": "Type 2 / Type 4",
+        "143A-11": "Type 3 / Type 4",
+        "143A-12": "Type 3 / Negative Infix",
+        "143A-13": "OptSingleNeg",
+        "143A-14": "ObligDoubleNeg",
+        "143A-15": "OptDoubleNeg",
+        "143A-16": "OptTripleNeg&ObligDoubleNeg",
+        "143A-17": "OptTripleNeg&OptDoubleNeg",
+        "143A-2": "VNeg",
+        "143A-3": "[Neg-V]",
+        "143A-4": "[V-Neg]",
+        "143A-5": "Negative Tone",
+        "143A-6": "Type 1 / Type 2",
+        "143A-7": "Type 1 / Type 3",
+        "143A-8": "Type 1 / Type 4",
+        "143A-9": "Type 2 / Type 3"
+      },
+      "coverage": {
+        "genera_with_data": 485,
+        "languages_with_data": 1325,
+        "mapped_languages": 810,
+        "mapped_weight_share": 0.6008809746954079
+      },
+      "crosswalk": {
+        "143A-1": "143A-1",
+        "143A-10": null,
+        "143A-11": null,
+        "143A-12": null,
+        "143A-13": null,
+        "143A-14": "143A-14",
+        "143A-15": null,
+        "143A-16": null,
+        "143A-17": null,
+        "143A-2": "143A-2",
+        "143A-3": null,
+        "143A-4": null,
+        "143A-5": null,
+        "143A-6": null,
+        "143A-7": null,
+        "143A-8": null,
+        "143A-9": null
+      },
+      "distribution": {
+        "143A-1": 0.40237909284301043,
+        "143A-10": 0.009603248984692279,
+        "143A-11": 0.005171300635218159,
+        "143A-12": 0.00011454753722794954,
+        "143A-13": 0.000515463917525773,
+        "143A-14": 0.07615841775635593,
+        "143A-15": 0.05788942443581615,
+        "143A-16": 0.006208476517754865,
+        "143A-17": 0.001030927835051546,
+        "143A-2": 0.12234346409604152,
+        "143A-3": 0.09161355826304302,
+        "143A-4": 0.19576553457996732,
+        "143A-5": 0.0006872852233676972,
+        "143A-6": 0.012335356510614237,
+        "143A-7": 0.00713058419243986,
+        "143A-8": 0.011007497656982187,
+        "143A-9": 4.581901489117982e-05
+      },
+      "engine_categories": [
+        "143A-1",
+        "143A-14",
+        "143A-2"
+      ],
+      "engine_distribution": {
+        "143A-1": 0.669648582311963,
+        "143A-14": 0.12674459828747503,
+        "143A-2": 0.20360681940056188
+      },
+      "name": "Order of Negative Morpheme and Verb",
+      "unsupported": {
+        "143A-10": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-11": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-12": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-13": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-15": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-16": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-17": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-3": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-4": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-5": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-6": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-7": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-8": "WALS value does not map unambiguously to engine NEG pre/post/embraced state.",
+        "143A-9": "WALS value does not map unambiguously to engine NEG pre/post/embraced state."
+      }
+    },
+    "1A": {
+      "categories": {
+        "1A-1": "Small",
+        "1A-2": "Moderately small",
+        "1A-3": "Average",
+        "1A-4": "Moderately large",
+        "1A-5": "Large"
+      },
+      "coverage": {
+        "genera_with_data": 355,
+        "languages_with_data": 563,
+        "mapped_languages": 0,
+        "mapped_weight_share": 0.0
+      },
+      "crosswalk": {
+        "1A-1": null,
+        "1A-2": null,
+        "1A-3": null,
+        "1A-4": null,
+        "1A-5": null
+      },
+      "distribution": {
+        "1A-1": 0.1687614576346971,
+        "1A-2": 0.23706908115358827,
+        "1A-3": 0.34074782025486244,
+        "1A-4": 0.1531913704448916,
+        "1A-5": 0.10023027051196062
+      },
+      "engine_categories": [],
+      "engine_distribution": {},
+      "name": "Consonant Inventories",
+      "unsupported": {
+        "1A-1": "WALS measures phoneme inventory size; the engine exposes used surface segments, not a contrastive phoneme inventory.",
+        "1A-2": "WALS measures phoneme inventory size; the engine exposes used surface segments, not a contrastive phoneme inventory.",
+        "1A-3": "WALS measures phoneme inventory size; the engine exposes used surface segments, not a contrastive phoneme inventory.",
+        "1A-4": "WALS measures phoneme inventory size; the engine exposes used surface segments, not a contrastive phoneme inventory.",
+        "1A-5": "WALS measures phoneme inventory size; the engine exposes used surface segments, not a contrastive phoneme inventory."
+      }
+    },
+    "2A": {
+      "categories": {
+        "2A-1": "Small (2-4)",
+        "2A-2": "Average (5-6)",
+        "2A-3": "Large (7-14)"
+      },
+      "coverage": {
+        "genera_with_data": 353,
+        "languages_with_data": 564,
+        "mapped_languages": 0,
+        "mapped_weight_share": 0.0
+      },
+      "crosswalk": {
+        "2A-1": null,
+        "2A-2": null,
+        "2A-3": null
+      },
+      "distribution": {
+        "2A-1": 0.17196366743108965,
+        "2A-2": 0.5072923692612076,
+        "2A-3": 0.32074396330770266
+      },
+      "engine_categories": [],
+      "engine_distribution": {},
+      "name": "Vowel Quality Inventories",
+      "unsupported": {
+        "2A-1": "WALS measures phonemic vowel-quality inventory size; the engine does not expose that contrastive inventory as a typological state.",
+        "2A-2": "WALS measures phonemic vowel-quality inventory size; the engine does not expose that contrastive inventory as a typological state.",
+        "2A-3": "WALS measures phonemic vowel-quality inventory size; the engine does not expose that contrastive inventory as a typological state."
+      }
+    },
+    "33A": {
+      "categories": {
+        "33A-1": "Plural prefix",
+        "33A-2": "Plural suffix",
+        "33A-3": "Plural stem change",
+        "33A-4": "Plural tone",
+        "33A-5": "Plural complete reduplication",
+        "33A-6": "Mixed morphological plural",
+        "33A-7": "Plural word",
+        "33A-8": "Plural clitic",
+        "33A-9": "No plural"
+      },
+      "coverage": {
+        "genera_with_data": 413,
+        "languages_with_data": 1066,
+        "mapped_languages": 1066,
+        "mapped_weight_share": 0.9999999999999999
+      },
+      "crosswalk": {
+        "33A-1": "plural_present",
+        "33A-2": "plural_present",
+        "33A-3": "plural_present",
+        "33A-4": "plural_present",
+        "33A-5": "plural_present",
+        "33A-6": "plural_present",
+        "33A-7": "plural_present",
+        "33A-8": "plural_present",
+        "33A-9": "plural_absent"
+      },
+      "distribution": {
+        "33A-1": 0.09624507856953383,
+        "33A-2": 0.5047137319231745,
+        "33A-3": 0.0063492063492063535,
+        "33A-4": 0.0066585956416464935,
+        "33A-5": 0.004766561122493329,
+        "33A-6": 0.05040219734529666,
+        "33A-7": 0.1304786651336289,
+        "33A-8": 0.07880654118547588,
+        "33A-9": 0.12157942272954392
+      },
+      "engine_categories": [
+        "plural_absent",
+        "plural_present"
+      ],
+      "engine_distribution": {
+        "plural_absent": 0.12157942272954393,
+        "plural_present": 0.878420577270456
+      },
+      "name": "Coding of Nominal Plurality",
+      "unsupported": {}
+    },
+    "37A": {
+      "categories": {
+        "37A-1": "Definite word distinct from demonstrative",
+        "37A-2": "Demonstrative word used as definite article",
+        "37A-3": "Definite affix",
+        "37A-4": "No definite, but indefinite article",
+        "37A-5": "No definite or indefinite article"
+      },
+      "coverage": {
+        "genera_with_data": 294,
+        "languages_with_data": 620,
+        "mapped_languages": 620,
+        "mapped_weight_share": 0.9999999999999998
+      },
+      "crosswalk": {
+        "37A-1": "definite_present",
+        "37A-2": "definite_present",
+        "37A-3": "definite_present",
+        "37A-4": "definite_absent",
+        "37A-5": "definite_absent"
+      },
+      "distribution": {
+        "37A-1": 0.3318431239701473,
+        "37A-2": 0.11912027621035358,
+        "37A-3": 0.15682035371514613,
+        "37A-4": 0.07074187638930776,
+        "37A-5": 0.32147436971504517
+      },
+      "engine_categories": [
+        "definite_absent",
+        "definite_present"
+      ],
+      "engine_distribution": {
+        "definite_absent": 0.39221624610435296,
+        "definite_present": 0.6077837538956471
+      },
+      "name": "Definite Articles",
+      "unsupported": {}
+    },
+    "49A": {
+      "categories": {
+        "49A-1": "No morphological case-marking",
+        "49A-2": "2 cases",
+        "49A-3": "3 cases",
+        "49A-4": "4 cases",
+        "49A-5": "5 cases",
+        "49A-6": "6-7 cases",
+        "49A-7": "8-9 cases",
+        "49A-8": "10 or more cases",
+        "49A-9": "Exclusively borderline case-marking"
+      },
+      "coverage": {
+        "genera_with_data": 202,
+        "languages_with_data": 261,
+        "mapped_languages": 0,
+        "mapped_weight_share": 0.0
+      },
+      "crosswalk": {
+        "49A-1": null,
+        "49A-2": null,
+        "49A-3": null,
+        "49A-4": null,
+        "49A-5": null,
+        "49A-6": null,
+        "49A-7": null,
+        "49A-8": null,
+        "49A-9": null
+      },
+      "distribution": {
+        "49A-1": 0.35420792079207924,
+        "49A-2": 0.08078736445073077,
+        "49A-3": 0.03382838283828383,
+        "49A-4": 0.03206034889203206,
+        "49A-5": 0.04225601131541726,
+        "49A-6": 0.14415370108439415,
+        "49A-7": 0.10231023102310231,
+        "49A-8": 0.09653465346534654,
+        "49A-9": 0.11386138613861387
+      },
+      "engine_categories": [],
+      "engine_distribution": {},
+      "name": "Number of Cases",
+      "unsupported": {
+        "49A-1": "OBJ presence/absence does not determine the language's total morphological case inventory or WALS's case-count category.",
+        "49A-2": "OBJ presence/absence does not determine the language's total morphological case inventory or WALS's case-count category.",
+        "49A-3": "OBJ presence/absence does not determine the language's total morphological case inventory or WALS's case-count category.",
+        "49A-4": "OBJ presence/absence does not determine the language's total morphological case inventory or WALS's case-count category.",
+        "49A-5": "OBJ presence/absence does not determine the language's total morphological case inventory or WALS's case-count category.",
+        "49A-6": "OBJ presence/absence does not determine the language's total morphological case inventory or WALS's case-count category.",
+        "49A-7": "OBJ presence/absence does not determine the language's total morphological case inventory or WALS's case-count category.",
+        "49A-8": "OBJ presence/absence does not determine the language's total morphological case inventory or WALS's case-count category.",
+        "49A-9": "OBJ presence/absence does not determine the language's total morphological case inventory or WALS's case-count category."
+      }
+    },
+    "66A": {
+      "categories": {
+        "66A-1": "Present, no remoteness distinctions",
+        "66A-2": "Present, 2-3 remoteness distinctions",
+        "66A-3": "Present, 4 or more remoteness distinctions",
+        "66A-4": "No past tense"
+      },
+      "coverage": {
+        "genera_with_data": 156,
+        "languages_with_data": 222,
+        "mapped_languages": 222,
+        "mapped_weight_share": 1.0
+      },
+      "crosswalk": {
+        "66A-1": "past_present",
+        "66A-2": "past_present",
+        "66A-3": "past_present",
+        "66A-4": "past_absent"
+      },
+      "distribution": {
+        "66A-1": 0.3591131091131093,
+        "66A-2": 0.17857142857142852,
+        "66A-3": 0.012820512820512818,
+        "66A-4": 0.44949494949494945
+      },
+      "engine_categories": [
+        "past_absent",
+        "past_present"
+      ],
+      "engine_distribution": {
+        "past_absent": 0.44949494949494945,
+        "past_present": 0.5505050505050506
+      },
+      "name": "The Past Tense",
+      "unsupported": {}
+    },
+    "67A": {
+      "categories": {
+        "67A-1": "Inflectional future exists",
+        "67A-2": "No inflectional future"
+      },
+      "coverage": {
+        "genera_with_data": 156,
+        "languages_with_data": 222,
+        "mapped_languages": 222,
+        "mapped_weight_share": 1.0
+      },
+      "crosswalk": {
+        "67A-1": "67A-1",
+        "67A-2": "67A-2"
+      },
+      "distribution": {
+        "67A-1": 0.5308788433788434,
+        "67A-2": 0.4691211566211568
+      },
+      "engine_categories": [
+        "67A-1",
+        "67A-2"
+      ],
+      "engine_distribution": {
+        "67A-1": 0.5308788433788434,
+        "67A-2": 0.4691211566211568
+      },
+      "name": "The Future Tense",
+      "unsupported": {}
+    },
+    "81A": {
+      "categories": {
+        "81A-1": "SOV",
+        "81A-2": "SVO",
+        "81A-3": "VSO",
+        "81A-4": "VOS",
+        "81A-5": "OVS",
+        "81A-6": "OSV",
+        "81A-7": "No dominant order"
+      },
+      "coverage": {
+        "genera_with_data": 502,
+        "languages_with_data": 1376,
+        "mapped_languages": 1187,
+        "mapped_weight_share": 0.8460175431784931
+      },
+      "crosswalk": {
+        "81A-1": "81A-1",
+        "81A-2": "81A-2",
+        "81A-3": "81A-3",
+        "81A-4": "81A-4",
+        "81A-5": "81A-5",
+        "81A-6": "81A-6",
+        "81A-7": null
+      },
+      "distribution": {
+        "81A-1": 0.4804593504563228,
+        "81A-2": 0.27497236775727296,
+        "81A-3": 0.058829735474092565,
+        "81A-4": 0.021951108057151156,
+        "81A-5": 0.008499843729020474,
+        "81A-6": 0.0013051377046331795,
+        "81A-7": 0.15398245682150688
+      },
+      "engine_categories": [
+        "81A-1",
+        "81A-2",
+        "81A-3",
+        "81A-4",
+        "81A-5",
+        "81A-6"
+      ],
+      "engine_distribution": {
+        "81A-1": 0.5679070774953839,
+        "81A-2": 0.32501969962017585,
+        "81A-3": 0.06953725244640778,
+        "81A-4": 0.025946398197229704,
+        "81A-5": 0.010046888267927056,
+        "81A-6": 0.0015426839728757507
+      },
+      "name": "Order of Subject, Object and Verb",
+      "unsupported": {
+        "81A-7": "WALS 'no dominant order' is not the same as the engine's free order state."
+      }
+    }
+  },
+  "schema_version": 1,
+  "source": {
+    "citation": "Dryer, Matthew S. & Haspelmath, Martin (eds.) 2013. The World Atlas of Language Structures Online. Leipzig: Max Planck Institute for Evolutionary Anthropology. WALS Online v2020.6 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.23010827",
+    "cldf_metadata_upstream": {
+      "dc:created": "v2020.5",
+      "dc:title": "Repository",
+      "rdf:about": "https://github.com/cldf-datasets/wals",
+      "rdf:type": "prov:Entity"
+    },
+    "dataset": "World Atlas of Language Structures Online (CLDF StructureDataset)",
+    "git_commit": "81298aa26d01fdc11b769bcc7fa87ad9e43d7ccd",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "release": "v2020.6",
+    "release_doi": "https://doi.org/10.5281/zenodo.23010827",
+    "release_url": "https://github.com/cldf-datasets/wals/tree/v2020.6",
+    "repository": "https://github.com/cldf-datasets/wals",
+    "sha256": {
+      "StructureDataset-metadata.json": "96f4881b6c29c3349e22f22e4058b6b5025595c03f8cbfb66fb203ba2a8b4307",
+      "codes.csv": "fbcc50b8ab6a71cb38f64d65fd06f2ee7f1c0fe33fa33c4ae91debbe10980f6d",
+      "languages.csv": "1eaaf032d1d14bcd50c998f5452fde6ba4766043506568dab6e21c31a13d6189",
+      "parameters.csv": "c9bd5960007a0b342bd9cf4206c906f096ff44321a8fa5ba06cc7d57327462b5",
+      "values.csv": "47b85f2f9bc9f26d8c6037886cfa32bd45b7042e5ab8815d5a8bf7d933aaf9f4"
+    }
+  },
+  "weighting": "Within each feature, each WALS genus contributes total weight 1 split evenly among languages with data; languages without genus are singleton units."
+}
