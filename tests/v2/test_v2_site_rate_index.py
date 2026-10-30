@@ -219,7 +219,7 @@ def test_sound_support_index_inventory_transition_and_mutations() -> None:
 
     # 2. Odchod slova ze slovníku
     state = code.phonology
-    sample_root = next(iter(state.vocabulary))
+    sample_root = min(state.vocabulary)
     leave_vocabulary(code, sample_root)
     for change in SOUND_CHANGES:
         assert list(change.sites(context)) == sorted(change._supported_legacy(context))
@@ -229,11 +229,18 @@ def test_sound_support_index_inventory_transition_and_mutations() -> None:
     for change in SOUND_CHANGES:
         assert list(change.sites(context)) == sorted(change._supported_legacy(context))
 
-    # 4. Přímá mutace state.vocabulary.remove bez logu
-    word_to_remove = next(iter(state.vocabulary))
-    state.vocabulary.remove(word_to_remove)
-    for change in SOUND_CHANGES:
-        assert list(change.sites(context)) == sorted(change._supported_legacy(context))
+    # 4. Přímá mutace state.vocabulary.remove bez logu. Index ji pozná podle
+    # počtu slov; referenční výpočet má keš podle ``state.version``, kterou
+    # mutace bez logu nezvýší, proto se jeho keš před srovnáním zahodí.
+    # Slovo se vybírá pevně (dříve podle pořadí množiny, test závisel na
+    # PYTHONHASHSEED); 13 ze 149 slov tohoto světa je jedinou oporou nějakého
+    # místa, takže zastaralá reference by se lišila.
+    for word_to_remove in sorted(state.vocabulary)[:20]:
+        state.vocabulary.remove(word_to_remove)
+        state.cache.pop("context-stats", None)
+        for change in SOUND_CHANGES:
+            state.cache.pop(("sound-sites", change.kind), None)
+            assert list(change.sites(context)) == sorted(change._supported_legacy(context))
 
     # 5. Přechod inventáře: odebrání všech slov obsahujících vybranou hlásku
     ci = cast(ContextIndex, state.cache["context-index"][1])
