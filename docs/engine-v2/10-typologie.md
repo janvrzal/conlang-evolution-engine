@@ -918,6 +918,93 @@ kategorií:
 4. **Výkonnostní audit (`v2_timing.py`)**:
    - `valley-50`: 27,06 s (přírůstek z `CategoryLoss` činí pouhých 0,050 s na 4 000 volání; výkon je plně pod limitem).
 
+---
+
+# Část D: prozódie a eroze koncovek
+
+Datum: 30. 10. 2026. Navazuje na části A–C ve worktree `../CEE-typologie`, větev `engine-v2-typologie`,
+od commitu `6f687b2`.
+
+## D0: diagnóza eroze koncovek (bez změny modelu)
+
+Skript `scripts/v2_ending_erosion.py`. Běh scénáře `village_grid(6, …)` s `FULL_GRAMMAR`,
+seedy 1..20, 3 000 let (celkem 120 simulačních běhů) pro 6 diagnostických variant.
+Surová data uložena do `/tmp/cee-ending-erosion.json`, tabulky v `/tmp/cee-ending-erosion.md`.
+
+### Definice kategorií osudu inovace
+V průběhu simulace proces prochází stavy, které vyjadřujeme disjunktně i celkově:
+- **Ustáleno (100 %)**: varianta dosáhla frekvence 1,0 v dané skupině (předtím byla fonologizována).
+- **Jen fonologizováno**: varianta přepsala $\ge 1$ tvar v lexikonu, ale nedosáhla 100 % (následně zanikla nebo zůstává aktivní).
+- **Zaniklo bez fonologizace**: varianta vymřela, aniž by stihla přepsat jakýkoli tvar v lexikonu.
+- *Disjunktní součet:* `Ustáleno` + `Jen fonologizováno` + `Zaniklo bez fonologizace` = $N$ (všechny navržené inovace daného typu).
+- *Doplňkové součty:* `Fonologizováno celkem` = `Ustáleno` + `Jen fonologizováno`; `Zaniklo celkem` = `Zaniklo bez fonologizace` + zaniklé po fonologizaci.
+
+### 1. Souhrnná tabulka osudu inovací a rozpadu fitness
+
+| Konfigurace | Cíl | N | Ustáleno (100 %) | Jen fonolog. | Zaniklo bez fon. | Fonolog. celkem | Zaniklo celkem | Fitness | Articul. | Clarity | FuncLoad | Phonotact. | Social |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **penult / FL 5.0 (výchozí)** | Ending | 1 189 | 102 (8,6 %) | 167 (14,0 %) | 842 (70,8 %) | 269 (22,6 %) | 984 (82,8 %) | −0,148 | +0,097 | −0,078 | −0,027 | −0,015 | −0,095 |
+| | Root | 3 045 | 516 (16,9 %) | 346 (11,4 %) | 1 898 (62,3 %) | 862 (28,3 %) | 2 264 (74,4 %) | −0,100 | +0,105 | −0,076 | −0,002 | +0,004 | −0,102 |
+| | **Reductive Ending** | 566 | **12 (2,1 %)** | 64 (11,3 %) | 470 (83,0 %) | 76 (13,4 %) | **522 (92,2 %)** | **−0,188** | +0,150 | −0,151 | −0,052 | −0,049 | −0,087 |
+| **initial / FL 5.0** | Ending | 1 191 | 98 (8,2 %) | 171 (14,4 %) | 850 (71,4 %) | 269 (22,6 %) | 994 (83,5 %) | −0,152 | +0,097 | −0,079 | −0,028 | −0,015 | −0,094 |
+| | Root | 3 063 | 507 (16,6 %) | 334 (10,9 %) | 1 927 (62,9 %) | 841 (27,5 %) | 2 284 (74,6 %) | −0,103 | +0,105 | −0,076 | −0,002 | +0,003 | −0,103 |
+| | Reductive Ending | 571 | 12 (2,1 %) | 65 (11,4 %) | 474 (83,0 %) | 77 (13,5 %) | 527 (92,3 %) | −0,191 | +0,150 | −0,152 | −0,054 | −0,051 | −0,085 |
+| **final / FL 5.0** | Ending | 1 016 | 110 (10,8 %) | 139 (13,7 %) | 694 (68,3 %) | 249 (24,5 %) | 805 (79,2 %) | −0,159 | +0,039 | −0,024 | −0,018 | +0,021 | −0,105 |
+| | Root | 2 954 | 482 (16,3 %) | 374 (12,7 %) | 1 803 (61,0 %) | 856 (29,0 %) | 2 211 (74,8 %) | −0,086 | +0,121 | −0,091 | −0,001 | +0,007 | −0,103 |
+| | Reductive Ending | 71 | 2 (2,8 %) | 5 (7,0 %) | 63 (88,7 %) | 7 (9,9 %) | 66 (93,0 %) | −0,295 | +0,150 | −0,319 | −0,199 | +0,158 | −0,085 |
+| **penult / FL 2.5** | Ending | 1 184 | 102 (8,6 %) | 169 (14,3 %) | 836 (70,6 %) | 271 (22,9 %) | 979 (82,7 %) | −0,133 | +0,097 | −0,078 | −0,013 | −0,015 | −0,095 |
+| | Root | 3 051 | 518 (17,0 %) | 345 (11,3 %) | 1 898 (62,2 %) | 863 (28,3 %) | 2 266 (74,3 %) | −0,100 | +0,105 | −0,076 | −0,001 | +0,004 | −0,102 |
+| | Reductive Ending | 564 | 12 (2,1 %) | 67 (11,9 %) | 464 (82,3 %) | 79 (14,0 %) | 519 (92,0 %) | −0,161 | +0,150 | −0,151 | −0,026 | −0,049 | −0,086 |
+| **penult / FL 0.0** | Ending | 1 174 | 104 (8,9 %) | 171 (14,6 %) | 816 (69,5 %) | 275 (23,4 %) | 959 (81,7 %) | −0,122 | +0,096 | −0,078 | +0,000 | −0,015 | −0,096 |
+| | Root | 3 048 | 520 (17,1 %) | 352 (11,5 %) | 1 880 (61,7 %) | 872 (28,6 %) | 2 251 (73,9 %) | −0,097 | +0,105 | −0,076 | +0,000 | +0,004 | −0,102 |
+| | Reductive Ending | 560 | 13 (2,3 %) | 71 (12,7 %) | 449 (80,2 %) | 84 (15,0 %) | 507 (90,5 %) | −0,136 | +0,150 | −0,150 | +0,000 | −0,049 | −0,086 |
+| **initial / FL 2.5** | Ending | 1 190 | 98 (8,2 %) | 174 (14,6 %) | 847 (71,2 %) | 272 (22,9 %) | 990 (83,2 %) | −0,137 | +0,097 | −0,080 | −0,014 | −0,015 | −0,093 |
+| | Root | 3 060 | 507 (16,6 %) | 336 (11,0 %) | 1 928 (63,0 %) | 843 (27,5 %) | 2 281 (74,5 %) | −0,103 | +0,105 | −0,076 | −0,001 | +0,003 | −0,103 |
+| | Reductive Ending | 570 | 12 (2,1 %) | 68 (11,9 %) | 467 (81,9 %) | 80 (14,0 %) | 523 (91,8 %) | −0,164 | +0,150 | −0,152 | −0,026 | −0,051 | −0,084 |
+
+### 2. Rozbor redukčních rodin na koncovkách i kořenech (výchozí: penult / FL 5.0)
+
+| Pozice | Rodina | N | Ustáleno (100 %) | Jen fonolog. | Zaniklo bez fon. | Fonolog. celkem | Zaniklo celkem | Fitness | Articul. | Clarity | FuncLoad | Phonotact. | short_share | merge_mass |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Koncovka (Ending)** | **apocope** | 226 | **0 (0,0 %)** | 5 (2,2 %) | 216 (95,6 %) | 5 (2,2 %) | **221 (97,8 %)** | **−0,302** | +0,150 | −0,133 | −0,057 | **−0,173** | 0,050 | 0,0114 |
+| **Kořen (Root)** | **apocope** | 55 | **0 (0,0 %)** | 0 (0,0 %) | 48 (87,3 %) | 0 (0,0 %) | **48 (87,3 %)** | **−0,245** | +0,150 | −0,145 | −0,004 | **−0,148** | 0,066 | 0,0008 |
+| **Koncovka (Ending)** | **coda_loss** | 72 | **2 (2,8 %)** | 5 (6,9 %) | 65 (90,3 %) | 7 (9,7 %) | **68 (94,4 %)** | **−0,294** | +0,150 | **−0,320** | **−0,200** | +0,158 | 0,160 | 0,0401 |
+| **Kořen (Root)** | **coda_loss** | 117 | 8 (6,8 %) | 3 (2,6 %) | 91 (77,8 %) | 11 (9,4 %) | 92 (78,6 %) | −0,215 | +0,150 | −0,356 | −0,015 | +0,148 | 0,249 | 0,0030 |
+| **Koncovka (Ending)** | **syncope** | 0 | — | — | — | — | — | — | — | — | — | — | — | — |
+| **Kořen (Root)** | **syncope** | 220 | 27 (12,3 %) | 39 (17,7 %) | 110 (50,0 %) | 66 (30,0 %) | 129 (58,6 %) | −0,057 | +0,150 | −0,090 | +0,000 | −0,005 | 0,000 | 0,0000 |
+| **Koncovka (Ending)** | **vowel_reduction** | 268 | **10 (3,7 %)** | 54 (20,1 %) | 189 (70,5 %) | 64 (23,9 %) | **233 (86,9 %)** | **−0,064** | +0,150 | −0,120 | −0,008 | +0,000 | 0,000 | 0,0016 |
+| **Kořen (Root)** | **vowel_reduction** | 65 | 0 (0,0 %) | 14 (21,5 %) | 39 (60,0 %) | 14 (21,5 %) | 49 (75,4 %) | −0,100 | +0,150 | −0,120 | +0,000 | +0,000 | 0,000 | 0,0000 |
+
+### 3. Vývoj slabosti (`weakness`) v čase
+
+Tabulka uvádí: **Medián (Maximum) [Průměr]** přes všechny skupiny a 20 seedů v roce 3 000.
+
+| Konfigurace | PAST | FUTURE | PL | OBJ | DEFINITE |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **penult / FL 5.0 (výchozí)** | 0,000 (0,033) [0,001] | 0,000 (1,000) [0,250] | 0,000 (0,094) [0,008] | 0,000 (0,013) [0,000] | 0,000 (1,000) [0,425] |
+| **initial / FL 5.0** | 0,000 (0,000) [0,000] | 0,000 (1,000) [0,242] | 0,000 (0,106) [0,006] | 0,000 (0,013) [0,000] | 0,000 (1,000) [0,425] |
+| **final / FL 5.0** | 0,000 (0,000) [0,000] | 0,000 (1,000) [0,250] | 0,000 (0,085) [0,005] | 0,000 (0,025) [0,001] | 0,000 (1,000) [0,425] |
+| **penult / FL 2.5** | 0,000 (0,000) [0,000] | 0,000 (1,000) [0,250] | 0,000 (0,179) [0,015] | 0,000 (0,025) [0,001] | 0,000 (1,000) [0,425] |
+| **penult / FL 0.0** | 0,000 (0,033) [0,001] | 0,000 (1,000) [0,250] | 0,000 (0,271) [0,023] | 0,000 (0,070) [0,003] | 0,000 (1,000) [0,425] |
+| **initial / FL 2.5** | 0,000 (0,000) [0,000] | 0,000 (1,000) [0,242] | 0,000 (0,200) [0,013] | 0,000 (0,013) [0,000] | 0,000 (1,000) [0,425] |
+
+*(Pozn.: U `FUTURE` a `DEFINITE` je výchozí stav v `FULL_GRAMMAR` roven `zero`, proto v roce 0 je weakness 1,0; v průběhu času část jazyků gramatikalizuje na `synthetic` s koncovkou, čímž weakness klesá k 0,0).*
+
+### 4. Zhodnocení: Který faktor erozi brzdí nejvíc?
+
+1. **Apokopa se neujímá vůbec (ani na koncovkách, ani na kořenech)**:
+   - Z 226 pokusů na koncovkách a 55 pokusů na kořenech (celkem 281 návrhů) se **neustálila ani jediná apokopa (0/281, 0,0 %)**!
+   - Důvod: `Phonotactics` trestá vznik nové koncové kody absolutně (markedness penalizuje uzavřenou slabiku průměrně −0,173 na koncovkách a −0,148 na kořenech). Spolu s `Clarity` (−0,133 až −0,145) to plně přebíjí artikulační zisk `ease = +0.15`. Celkové fitness apokopy je v hlubokém záporu (−0,302). Zapsáno jako otevřený problém a kandidát na M7.
+2. **`FunctionalLoad` brzdí splynutí, ale není hlavní překážkou**:
+   - U `CodaLoss` na koncovkách (akuzativ `-m`, plurál `-n`) funkční zátěž skutečně tvrdě trestá synkretismus s nominativem (−0,200).
+   - Úplné vypnutí funkční zátěže (`FL = 0.0`) sice zvedlo maximum `weakness` (PL z 0,094 na 0,271 a OBJ z 0,013 na 0,070), ale celkové ustálení reduktivních erozí stouplo pouze z 2,1 % na 2,3 % a medián weakness zůstal 0,000. Wedel, Kaplan & Jackson (2013) měli pravdu: funkční zátěž splynutí brzdí, ale sama o sobě eroze nezastavuje.
+3. **Pravidlo přízvuku (`initial` vs `penult`) nemá vliv bez síly přízvuku**:
+   - Většina slov protojazyka je 2–3 slabičná, takže koncovky leží na nepřízvučných slabikách v obou pravidlech.
+   - `Syncope` na koncovkách vůbec nevzniká (`medial=True`).
+   - `VowelReduction` se sice uchytí (23,9 % fonologizováno), ale pouze redukuje na [ə], což koncovku neodstraní.
+   - K rozběhnutí eroze je tedy nezbytná **síla přízvuku** (krok D2): násobení artikulační výhody v nepřízvučných slabikách u jazyků se silným přízvukem tak, aby překonala protichůdný odpor markedness a clarity.
+
+
 
 
 
