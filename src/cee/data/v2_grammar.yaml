@@ -13,6 +13,11 @@
 #   weight       váha buňky v užívání (frekvence tvaru = lexém × váha)
 #   need         jak moc funkci komunikace potřebuje (0 až 1); řídí tlak
 #                k obnově zeslabeného vyjádření
+#   context      jak dobře funkci nese diskurzní a pragmatický kontext bez
+#                gramatického vyjádření (0 až 1; C2); snižuje efektivní potřebu.
+#                Číselné hodnoty jsou autorský odhad (modelový parametr);
+#                typologická literatura podporuje relativní pořadí funkcí
+#                podle kontextové zastupitelnosti, nikoli konkrétní čísla.
 #   sources      zdroje gramatikalizace: autorský výběr nejčastějších cest
 #                podle Heine & Kuteva 2002 a Hopper & Traugott 2003
 #   compensates  funkce, jejichž roli může tato funkce převzít
@@ -26,6 +31,7 @@ functions:
     cell: PAST
     weight: 0.5
     need: 1.0
+    context: 0.25
     sources: [have, finish, come]
   FUTURE:
     template: inflection
@@ -33,6 +39,7 @@ functions:
     cell: FUT
     weight: 0.3
     need: 0.4
+    context: 0.35
     sources: [go, want]
   PL:
     template: inflection
@@ -40,6 +47,7 @@ functions:
     cell: PL
     weight: 0.4
     need: 0.6
+    context: 0.30
     sources: [many, all]
   OBJ:
     template: inflection
@@ -47,6 +55,7 @@ functions:
     cell: OBJ
     weight: 0.5
     need: 1.0
+    context: 0.10
     sources: []
   DEFINITE:
     template: inflection
@@ -54,16 +63,19 @@ functions:
     cell: DEF
     weight: 0.6
     need: 0.25
+    context: 0.22
     sources: [that, this]
     donors: [OBJ]
   NEG:
     template: negation
     domain: clause
     need: 0.5
+    context: 0.0
     sources: [thing, step, one]
   ORDER:
     template: order
     domain: clause
     need: 0.0
+    context: 0.0
     orders: [SOV, SVO]
     compensates: [OBJ]

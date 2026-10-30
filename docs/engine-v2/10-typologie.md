@@ -665,23 +665,133 @@ Obraz se prakticky **vůbec nezměnil**:
 | `wals` | OBJ | 3 000 | 0,000 | 0,000 | 0,024 |
 | `wals` | OBJ | 5 000 | 0,000 | 0,000 | 0,650 |
 
-*Poznámka k tabulce:* Hodnota 1,000 značí funkci v `zero` (žádný tvar v paradigmatu není odlišen od citačního).
-Jakmile je syntetická kategorie etablovaná, `weakness` téměř nikdy nepřesáhne 0,10–0,15 (maximum u PL v 5 000 letech
-je 0,148, u PAST 0,038).
+### Kroky C1 a C2: Úplná gramatika a náhradní strategie
 
-#### Závěr C0 a aktualizace plánu C3
+#### C1: Úplná gramatika (`FULL_GRAMMAR`)
 
-Měření potvrdilo zásadní fakt: **eroze koncovek v modelu samovolně téměř nenastává**.
-Pokud by plánovaný zánik kategorie (`CategoryLoss` v C3) závisel pouze na vysoké slabosti
-(`weakness >= 0,5`), zánik by v modelu nenastal prakticky nikdy.
+V `src/cee/v2/scenarios.py` byla definována nová gramatika `FULL_GRAMMAR`:
+obsahuje všechny konstrukce z výchozí `SYNTAX_GRAMMAR` plus všechny zbývající funkce katalogu
+(`FUTURE` a `DEFINITE`) s výchozí konstrukcí `zero`.
+Výchozí `SYNTAX_GRAMMAR` zůstala beze změny, aby nedošlo k porušení stávajících scénářů a testů.
+Skript `scripts/v2_typology.py` byl rozšířen o parametr `--experiments` umožňující
+paralelní spuštění pokusů `same` (se `SYNTAX_GRAMMAR`), `same_full` (s `FULL_GRAMMAR`)
+a `wals` (vzorkování marginál ze statistiky WALS).
 
-**Aktualizovaný mechanismus C3:**
-Zánik kategorie se musí spouštět primárně **funkční cestou**:
-1. **Nízká efektivní potřeba**: Pokud po odečtu kompenzace z C2 (náhradní strategie, kontext)
-   klesne efektivní potřeba kategorie (`effective_need = need - compensation`) pod prahovou mez,
-   kategorie ztrácí komunikativní přínos. Tlak `Economy` penalizuje slova navíc a morfémy,
-   a kategorie přechází do `zero` i bez předchozí fonetické eroze koncovky.
-2. **Fonetická eroze**: Vysoká `weakness` zůstává jako doplňkový spouštěč, nikoli jako jediná nutná podmínka.
-3. Míra inovace `CategoryLoss` bude mít řádovou hodnotu `base_rate` ~ 0,01–0,03 (odpovídající
-   stávajícím změnám `order_relaxation`, `negation_reduction`), zdůvodněnou v docstringu,
-   bez ladění konstant na shodu s WALS.
+#### C2: Náhradní strategie přes `compensates` a kontextová síla `zero`
+
+Funkce, kterou jazyk gramaticky nevyjadřuje (`zero`), není v komunikaci nevyjádřená.
+Do katalogu `src/cee/data/v2_grammar.yaml` byl ke každé funkci přidán parametr `context` (0 až 1),
+odrážející míru, do jaké funkci nese pragmatický a diskurzní kontext bez gramatického vyjádření.
+
+> [!NOTE]
+> Číselné hodnoty parametru `context` jsou **autorský odhad** (modelový parametr).
+> Typologická literatura podporuje relativní pořadí funkcí podle míry kontextové
+> zastupitelnosti (určenost a budoucí čas jsou kontextem neseny podstatně lépe než
+> syntaktické role argumentů u volného slovosledu), nikoli konkrétní čísla.
+
+Kvalitativní opora v literatuře:
+- **`DEFINITE` (`need: 0.25`, `context: 0.22`)**: Dryer (2013, WALS 37A: *Definite Articles*)
+  dokládá, že 39 % jazyků světa nemá žádný člen; Lyons (1999, *Definiteness*, Cambridge Univ. Press)
+  ukazuje, že v bezčlenných jazycích je určenost nesena situační význačností a tématem.
+  S `context = 0.22` je efektivní přínos volného opisu `0.25 * (1 - 0.22) = 0.195`, což oproti
+  ekonomické penalizaci volného slova (`Economy = -0.15`) dává mírný přebytek `+0.045`.
+- **`PAST` (`need: 1.0`, `context: 0.25`)**: Dahl (1985, *Tense and Aspect Systems*)
+  a Bybee, Perkins & Pagliuca (1994, *The Evolution of Grammar*) uvádějí, že bezčasové
+  jazyky (~45 % ve WALS 66A) se opírají o chronologické řazení vyprávění a časová příslovce;
+  kontext spolehlivě ukotví čas v části promluv, ale neukotvené klauzule stále tlačí k vyjádření.
+- **`FUTURE` (`need: 0.4`, `context: 0.35`)**: Dahl (1985) a Ultan (1978) ukazují,
+  že budoucí čas je typologicky mnohem méně gramatikalizovaný než minulý; prézens v budoucím kontextu
+  je běžný v mnoha rodinách (germánské, baltofinské, slovanské).
+- **`PL` (`need: 0.6`, `context: 0.30`)**: Corbett (2000, *Number*) a Dryer (2013,
+  WALS 33A) ukazují, že u jazyků se všeobecným číslem (*general number*) kontext a kvantifikátory
+  postačují pro orientaci o počtu.
+- **`OBJ` (`need: 1.0`, `context: 0.10`, kompenzace od `ORDER: fixed` až 0.90)**: Comrie (1989,
+  kap. 9) a Siewierska (1998) dokládají, že samotný kontext bez pádů a bez pevného slovosledu
+  nedokáže spolehlivě rozlišit role argumentů u reverzibilních dějů. Naopak pevný slovosled
+  (`ORDER: fixed`) přebírá roli pádu s vysokou spolehlivostí (~0.90), čímž efektivní potřeba pádu
+  klesá na `1.0 * (1 - 0.90) = 0.10` a nepřevažuje nad ekonomií.
+
+Implementace v kódu:
+1. `src/cee/v2/language/constructions.py`: `GrammaticalFunction.context` načítané z `v2_grammar.yaml`.
+2. `src/cee/v2/syntax.py`:
+   - `compensation(world, group_id, function) -> float`: zjišťuje, zda pevný slovosled
+     (`template: "order"`, `current.carries_order`) přebírá roli pádu (hodnota 0,90).
+     Nepoužívaná větev pro neexistující nekatalogové kompenzace byla odstraněna.
+   - `compensated(world, group_id, function) -> bool`: vrací `compensation > 0.0`.
+   - `strength(world, code, construction, group_id=None)`: pro konstrukci `kind == "zero"` vrací
+     `max(entry.context, compensation(world, group_id, function))`.
+3. `src/cee/v2/pressures/syntactic.py`:
+   - `Expressivity`: předává `group_id` do `syntax.strength`, takže skóre nevyjádřené funkce
+     bere v úvahu kontextové nasycení a kompenzaci. Tlak na inovaci nové konstrukce je úměrný
+     pouze zbývající neuspokojené potřebě.
+
+#### Výsledky ověření C1 a C2
+
+1. **Otisky a determinismus (`scripts/v2_digests.py`)**:
+   Všech 7 scénářů v `v2_digests.py` dává **100% bitovou shodu** s referencí části B:
+   - `phonology`: `cd79626de3a0b02f19fea574cf5637971ad012a1f89aeacb9a59a04e8064dd62`
+   - `morphology`: `b673137d804d7542106c47e7203f93c9bf63268d8951909b49df12755b29e849`
+   - `syntax`: `3dca8fd6c3e511c3ef059d4e0d5550eadd2e3d94024afcc550b7e730fbaefcf0`
+   - `grid-5x5`: `83d79ffb6e029604422730b9906dcf7b68d2ed522ef5f405fe706a6dbf6d5c95`
+   - `shift`: `d1a1e9e5af395b3120426fb3035912720dccdc5727168e62aa6dee1799dd6816`
+   - `island-city`: `13717cb46affdc42b9938627d9314ab09c23fec227595ce6f53cfa099a22d4aa`
+   - `valley-50`: `0d462e154e885753e74ad645d2ecb9085bd4d1e442cc86f9229d693f366fca00` (27,9 s)
+
+2. **Brány a testy**:
+   - `tests/v2/test_v2_m4b_gate.py`: 5 passed
+   - `tests/v2/test_v2_m4_gate.py`: 5 passed
+   - Statické kontroly: `ruff check` a `mypy` čisté bez chyb.
+
+3. **Typologická dynamika (pokusy `same`, `same_full` a `wals` na 20 seedech po 5 000 let)**:
+   - **`same`**: Zůstává přesně identický s výchozím stavem (plná stabilita).
+   - **`same_full` (s `FULL_GRAMMAR`)**:
+     - U `DEFINITE` (37A) je 45 % přítomnosti v roce 2 000 pouhým **průjezdem**, nikoli stabilním
+       stavem: rok 0: 0 % present, rok 1 000: 10 %, rok 2 000: 45 %, rok 3 000: 90 %, rok 5 000: 100 %.
+     - U `FUTURE` (67A): rok 0–1 000: 0 % present, rok 2 000: 37,5 %, rok 3 000: 77,8 % (povrchové),
+       rok 5 000: 100 %.
+     - Závěr: **C2 jednosměrnou rohatku gramatikalizace zpomalila, ale nezastavila**. Bez mechanismu
+       zániku (C3) nakonec všechny inovované kategorie dosáhnou 100 %.
+   - **`wals`**:
+     - Nástup kategorií je díky C2 znatelně plynulejší (u `DEFINITE` v roce 1 000 stále 25 % jazyků bez členu
+       proti původním 10 %; v roce 2 000 stále 5 % bez členu proti původním 0 %).
+     - V 5 000 letech však všechny syntetické kategorie dosáhnou 100 % přítomnosti, protože **chybí mechanismus
+       zániku kategorie (C3)**. Diverzita v 5 000 letech přetrvává pouze u slovosledu 81A ($E = 0,448$)
+       a záporu 143A ($E = 0,613$), kde obousměrná dynamika existuje.
+
+#### Citlivostní analýza parametru `context` (DEFINITE a FUTURE v {0,1; 0,2; 0,3; 0,4})
+
+Měření proběhlo sériově na 20 seedech (5 000 let) pro `same_full` a `wals` a na bráně `M4b::clen_vznikne`:
+
+| `context` | Brána `M4b::clen_vznikne` | `same_full` DEF 2k / 5k | `same_full` FUT 2k / 5k | `wals` DEF 1k / 5k | `wals` FUT 2k / 5k |
+|---:|:---:|---:|---:|---:|---:|
+| 0,1 | 2/3 (prošla) | 45 % / 100 % | 37,5 % / 100 % | 75 % / 100 % | 89,5 % / 100 % |
+| 0,2 | 2/3 (prošla) | 45 % / 100 % | 37,5 % / 100 % | 75 % / 100 % | 89,5 % / 100 % |
+| 0,3 | 2/3 (prošla) | 45 % / 100 % | 37,5 % / 100 % | 75 % / 100 % | 89,5 % / 100 % |
+| 0,4 | 2/3 (prošla) | 45 % / 100 % | 37,5 % / 100 % | 75 % / 100 % | 89,5 % / 100 % |
+
+*Poznámka k tabulce:* Výchozí hodnoty modelu (DEFINITE 0,22; FUTURE 0,35) nebyly podle výsledku měněny.
+Rozložení na makroúrovni 20 seedů je v tomto intervalu identické, protože jakmile vznikne přiklonka
+či koncovka (`words = 0`), nepodléhá penalizaci `Economy` a rozdíl Expressivity zůstává kladný.
+
+#### Analýza selekce před krokem C3
+
+Syntetická konstrukce i přiklonka mají `words = 0`, takže je `Economy` vůbec netrestá.
+Rozdíl `Expressivity` mezi syntetickou konstrukcí a stavem `zero` je:
+$$\Delta \text{Expressivity} = \text{need} \times (1 - \text{weakness} - \text{context})$$
+Tento rozdíl zůstává **striktně kladný**, dokud platí:
+$$\text{weakness} < 1 - \text{context}$$
+Pro člen s `context = 0,22` je tato hranice $1 - 0,22 = 0,78$.
+Měření C0 přitom ukázalo, že maximální naměřená slabost syntetických kategorií nepřesahuje 0,15.
+Z toho plyne zásadní teoretický důsledek:
+**Pokud by `CategoryLoss` pouze náhodně navrhoval přechod syntetické konstrukce do `zero`, selekce
+by tuto variantu okamžitě eliminovala (má nižší fitness než stávající syntetický tvar).**
+
+Zánik kategorie proto v C3 musí mít dvě cesty:
+1. **Volný opis (`words = 1`)**: Zde působí penalizace `Economy` ($-0,15$). Pokud je efektivní potřeba
+   kategorie nízká ($\text{need} \times (1 - \text{context}) \le 0,15$), stav `zero` má vyšší fitness
+   než volný opis, a opis zanikne.
+2. **Syntetická konstrukce s vysokou slabostí**: Zánik syntetického afixu může uspět teprve tehdy,
+   když je koncovka skutečně erodovaná ($\text{weakness}$ blízko hranice $1 - \text{context}$).
+   Jelikož fonetická eroze v modelu bez prozódie téměř nenastává, samotná syntetická kategorie
+   bude samovolně mizet jen výjimečně. V dalším zadání to vyřeší prozódie a redukce nepřízvučných slabik.
+

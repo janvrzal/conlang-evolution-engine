@@ -62,6 +62,13 @@ SYNTAX_GRAMMAR: Mapping[str, Construction] = {
     "NEG": Construction("NEG", "pre", "not"),
     "ORDER": Construction("ORDER", "free"),
 }
+#: Úplná gramatika pro typologické pokusy (C1): SYNTAX_GRAMMAR plus všechny
+#: zbývající funkce katalogu nastavené na ``zero``, aby je jazyk mohl vyvinout.
+FULL_GRAMMAR: Mapping[str, Construction] = {
+    **SYNTAX_GRAMMAR,
+    "FUTURE": Construction("FUTURE", "zero"),
+    "DEFINITE": Construction("DEFINITE", "zero"),
+}
 #: Citační buňka každé třídy slov.
 CITATION_CELLS = {"noun": "SG", "verb": "PRES"}
 #: Koncovky buněk, které protojazyk se syntaxí může mít; předmět typu

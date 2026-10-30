@@ -22,7 +22,7 @@ from cee.v2 import metrics
 from cee.v2.language.constructions import Construction
 from cee.v2.observe import LineageTracker, observe
 from cee.v2.rng import generator
-from cee.v2.scenarios import SYNTAX_GRAMMAR, village_grid
+from cee.v2.scenarios import FULL_GRAMMAR, SYNTAX_GRAMMAR, village_grid
 from cee.v2.simulation import Simulation
 
 YEARS = (0, 1000, 2000, 3000, 5000)
@@ -111,9 +111,13 @@ def capture(simulation: Simulation) -> dict[str, Any]:
 def summarize(runs: list[dict[str, Any]], reference: dict[str, Any]) -> list[dict[str, Any]]:
     rows = []
     readings = ("construction", "surface_contrast")
+    experiments: list[str] = []
+    for run in runs:
+        if run["experiment"] not in experiments:
+            experiments.append(run["experiment"])
     for reading in readings:
         profile_key = "profiles" if reading == "construction" else "surface_profiles"
-        for experiment in ("same", "wals"):
+        for experiment in experiments:
             selected = [run for run in runs if run["experiment"] == experiment]
             for year in YEARS:
                 frames = [frame for run in selected for frame in run["frames"] if frame["year"] == year]
@@ -140,7 +144,11 @@ def markdown_report(rows: list[dict[str, Any]], reference: dict[str, Any]) -> st
              "N je počet jazyků, n počet jednoznačně zařazených. Rozložení je podmíněné na n.",
              "Čtení: formální = přítomnost syntetické/opisné konstrukce; povrchové = syntetická kategorie vyžaduje weakness < 0,5.",
              "Nenamapovaná referenční hmotnost zůstává v H; E je normalizována pevně počtem kategorií, které měřidlo umí rozlišit.", ""]
-    for experiment in ("same", "wals"):
+    experiments: list[str] = []
+    for row in rows:
+        if row["experiment"] not in experiments:
+            experiments.append(row["experiment"])
+    for experiment in experiments:
         for feature in FEATURES:
             expected = projected_reference(reference["features"][feature])
             lines.extend([f"### {experiment}: {feature}", "",
@@ -166,6 +174,13 @@ def main() -> None:
     parser.add_argument("--label", default="working-tree", help="model label stored in the result metadata")
     parser.add_argument("--seeds", type=int, default=20, help="consecutive seeds 1..N; audit requires N>=20")
     parser.add_argument("--columns", type=int, default=6)
+    parser.add_argument(
+        "--experiments",
+        nargs="+",
+        default=["same", "wals"],
+        choices=["same", "same_full", "wals"],
+        help="experiments to run (same, same_full, wals; default: same, wals)",
+    )
     args = parser.parse_args()
     if args.seeds < 1 or args.columns < 1:
         parser.error("seeds and columns must be positive")
@@ -183,9 +198,14 @@ def main() -> None:
                 "reference_sha256": hashlib.sha256(files("cee.data").joinpath("v2_typology.json").read_bytes()).hexdigest(),
                 "protocol": "serial; pooled observed languages each weight 1; grammatical marginal sampling conditional on support"}
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    for experiment in ("same", "wals"):
+    for experiment in args.experiments:
         for seed in metadata["seeds"]:
-            grammar = dict(SYNTAX_GRAMMAR) if experiment == "same" else sample_grammar(seed, reference)
+            if experiment == "same":
+                grammar = dict(SYNTAX_GRAMMAR)
+            elif experiment == "same_full":
+                grammar = dict(FULL_GRAMMAR)
+            else:
+                grammar = sample_grammar(seed, reference)
             started = time.perf_counter()
             world = village_grid(args.columns, seed=seed, syntax=True, semantics=True,
                                  phonology=True, morphology=True, grammar=grammar)

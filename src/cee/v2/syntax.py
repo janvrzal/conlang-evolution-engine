@@ -157,8 +157,14 @@ def eroded(world: World, code: Code, concept: str | None) -> bool:
     return len(world.form_of(code, root)) < len(world.morphemes[root].form)
 
 
-def strength(world: World, code: Code, construction: Construction) -> float:
-    """Jak zřetelně konstrukce svou funkci vyjadřuje (0 až 1)."""
+def strength(
+    world: World, code: Code, construction: Construction, group_id: str | None = None
+) -> float:
+    """Jak zřetelně konstrukce svou funkci vyjadřuje (0 až 1).
+
+    U nevyjádřené funkce (``zero``) odráží síla míru, do jaké funkci
+    zastoupí kontext a kompenzující strategie (C2; Dryer 2013, Dahl 1985).
+    """
     kind = construction.kind
     if kind == "periphrastic":
         return 1.0
@@ -174,7 +180,12 @@ def strength(world: World, code: Code, construction: Construction) -> float:
         # Zápor je tak výrazný, jak silné je jeho nejsilnější slovo.
         words = (construction.source, construction.reinforcer)
         return 1.0 if any(not eroded(world, code, word) for word in words if word) else 0.0
-    return 0.0  # zero, free, fixed
+    if kind == "zero":
+        entry = catalog().get(construction.function)
+        ctx = entry.context if entry is not None else 0.0
+        comp = compensation(world, group_id, construction.function) if group_id is not None else 0.0
+        return max(ctx, comp)
+    return 0.0  # free, fixed
 
 
 def applied(code: Code, world: World, construction: Construction) -> bool:
@@ -182,14 +193,20 @@ def applied(code: Code, world: World, construction: Construction) -> bool:
     return variant in code.phonology.grammar_applied
 
 
-def compensated(world: World, group_id: str, function: str) -> bool:
-    """Převzala roli funkce jiná konstrukce (např. pevný slovosled roli pádu)?"""
+def compensation(world: World, group_id: str, function: str) -> float:
+    """Jakou měrou roli funkce přebírají jiné dominantní konstrukce (0 až 1)."""
     for entry in catalog().values():
         if function in entry.compensates:
             current = dominant(world, group_id, entry.id)
-            if current is not None and current.carries_order:
-                return True
-    return False
+            if current is not None and entry.template == "order" and current.carries_order:
+                # Pevný slovosled spolehlivě nese role argumentů (Siewierska 1998).
+                return 0.9
+    return 0.0
+
+
+def compensated(world: World, group_id: str, function: str) -> bool:
+    """Převzala roli funkce jiná konstrukce (např. pevný slovosled roli pádu)?"""
+    return compensation(world, group_id, function) > 0.0
 
 
 def residual_exponent(world: World, code: Code, donor: GrammaticalFunction) -> str | None:

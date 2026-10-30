@@ -40,7 +40,9 @@ class Expressivity(Pressure):
     zvukovými změnami splynula s citačním tvarem, má opis (*mít* + sloveso)
     výhodu úměrnou tomu, kolik tvarů splynulo. Funkce, kterou jazyk vůbec
     nevyjadřuje (``zero``), tlačí k novému výrazu tím víc, čím víc ji
-    komunikace potřebuje (minulý čas víc než určenost).
+    komunikace potřebuje (minulý čas víc než určenost), ale tato potřeba
+    je tlumena kontextem a náhradními strategiemi (C2; Bybee et al. 1994,
+    Dahl 1985, Dryer 2013).
     """
 
     name = "expressivity"
@@ -53,7 +55,9 @@ class Expressivity(Pressure):
             need = functions[construction.function].need
             if need == 0.0:
                 return 0.0
-            return need * syntax.strength(world, world.groups[group_id].main_code, construction)
+            return need * syntax.strength(
+                world, world.groups[group_id].main_code, construction, group_id=group_id
+            )
 
         return _scores(batch, value)
 

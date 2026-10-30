@@ -33,6 +33,7 @@ class GrammaticalFunction:
     template: Template
     domain: str
     need: float = 0.0
+    context: float = 0.0
     cell: str | None = None
     weight: float = 0.5
     sources: tuple[str, ...] = ()
@@ -54,6 +55,7 @@ def catalog() -> dict[str, GrammaticalFunction]:
             template=entry["template"],
             domain=entry["domain"],
             need=float(entry.get("need", 0.0)),
+            context=float(entry.get("context", 0.0)),
             cell=entry.get("cell"),
             weight=float(entry.get("weight", 0.5)),
             sources=tuple(entry.get("sources", ())),
