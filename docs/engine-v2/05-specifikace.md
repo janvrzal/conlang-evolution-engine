@@ -1054,6 +1054,11 @@ na nezávislé řadě seedů `101..120` (u M3 morfologie rozšířeně `101..140
   - `island-city`: `59e723ed5d4eb316f73c817e92972017e7cb69578746121381b4a609948c4abd`
   - `valley-50`: `9c2e85f1aa5448e50811ffa2db9587bda771ee84564b815243814ddc6ecf2476`
   - *Důvod změny otisků:* Zavedení prozodických inovací (`StressShift`, `StressStrengthChange`) do výchozích změn enginu a navázání prozódie na fonologii v `scenarios.py` (`if phonology or prosody:`). Ve všech fonologických a syntaktických scénářích se nyní inicializují proměnné `prosody:stress_rule` a `prosody:stress_strength`, probíhají posuny přízvuku a přechody síly, a restrukturalizace zaznamenává události změny. Scénáře `morphology` a `grid-5x5` fonologii nezapínají, proto si zachovávají přesnou bitovou shodu. Otisk `valley-50` se dále změnil zavedením `CLARITY_DELETE_SCHWA = -0.05` pro percepčně slabé smazání redukovaného vokálu [ə] v `sound.py`.
+- **Referenční otisky po části E** ([`11-gramaticka-dynamika.md`](11-gramaticka-dynamika.md)):
+  změnily se jen scénáře s L2 mluvčími, `shift`
+  `c934bff8888225fd23621c0ee3288c4c208b4b9ce6f535fd9a34b2adfb67e342` a `island-city`
+  `e3b1ba4d2a3410424595f13c8213f48987455299fd5c83de024d782bb4892b65`; ostatních pět
+  je shodných s částí D. Refaktoring na `Parameters` otisky nezměnil.
 - **Stochastické brány (`k` z `N`) a negativní kontroly**: 42 robustních bran a
   10 deterministických/výkonových testů zůstalo beze změny; 10 křehkých či
   hraničních bran (včetně Jespersenova cyklu `8/20` převedeného na `N = 19, k = 1`
@@ -1067,6 +1072,37 @@ na nezávislé řadě seedů `101..120` (u M3 morfologie rozšířeně `101..140
   od `0,5`, síla tabu a gradient substrátu v S3) jsou zapsané pro M7 v
   [`09-zpevneni-bran.md`](09-zpevneni-bran.md). Do `engine-v2` se větev sloučí až
   po schválení uživatelem.
+
+### Cíle kalibrace M7 (2026-10-30)
+
+Sepsáno po částech A–E ([`10-typologie.md`](10-typologie.md),
+[`11-gramaticka-dynamika.md`](11-gramaticka-dynamika.md)). M7 nesmí ladit jen
+tempo slovní zásoby a zvukových změn: flexivní kategorie by se dál jen
+sčítaly a nikdo by si toho nevšiml. Pořadí:
+
+1. **Test dosažitelnosti** (`scripts/v2_reachability.py`): projít rohy
+   prostoru konstant, které literatura připouští, a zjistit, zda se cyklus
+   kategorií (vznik i zánik) vůbec rozběhne. Pokud ne, chybí mechanismus,
+   ne číslo.
+2. **Kalibrace proti cílům**, každý s daty a mírou shody:
+
+| Cíl | Data | Dnes |
+|---|---|---|
+| Retence základní slovní zásoby za tisíciletí (metrika 1) | glottochronologie, Lexibank (CC BY) | 70–95 %, průměr nekalibrován |
+| Častá slova se nahrazují pomaleji (metrika 2) | Pagel a kol. 2007 (směr) | splněno |
+| Stacionarita typologie: start z WALS se za 5 000 let nemá výrazně vzdálit (Hellinger, entropie) u 14A, 33A, 37A, 66A, 67A, 81A, 143A | WALS (CC BY), měřidlo části A | flexivní rysy kolabují na E = 0 |
+| Zpětný test: latina → románské jazyky (tempo ztráty koncového *-m*, koncových vokálů, pádů; vznik členu a analytického perfekta) | historická gramatika, Lexibank | nezačato |
+| Nářeční kontinuum: vzdálenost sousedních vesnic | nářeční atlasy (0,05–0,15) | 0,29 |
+| Kontakt: více L2 mluvčích → méně pádů | Bentz & Winter 2013 (směr) | mechanismus od části E |
+| Malé izolované komunity drží složitost | Trudgill 2011 (směr) | obráceně |
+| Prestižní asymetrie výpůjček | Thomason & Kaufman 1988 (směr) | slabá |
+
+3. **Revize bran** podle výsledku: `M4b::clen_vznikne` vynucuje vznik členu
+   skoro všude, což je v rozporu s cílem stacionarity (37A: ~39 % jazyků bez
+   členu).
+
+Konstanty se mění jen přes `Parameters` světa, nikdy přepisem globálních
+proměnných.
 
 ## Známé mezery a kam patří
 
@@ -1086,7 +1122,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3; aktualizováno po části D (proz�
 | ~~Exaptace a jazyky bez některých kategorií~~ | vyřešeno v M4b |
 | Další funkce katalogu: vid, shoda, osoba, rod a jmenné třídy; víc dárců exaptace | rozšíření katalogu (data), kdykoli |
 | Člen (a obecně funkce `zero`) v dlouhém horizontu (5 000 let) vznikne ve většině jazyků (C2 zavedlo tlumení kontextem, takže v 1 000 letech je 20–35 % bez členu; zánik C3 je bez fonologické eroze neaktivní). Nález z citlivosti C2: brána `M4b::clen_vznikne` projde jen pro context DEFINITE ≤ 0,2; výchozí 0,22 leží těsně pod hranicí. Brána vynucuje vznik členu skoro všude, což je v rozporu s WALS 37A (~39 % bez členu); kandidát na revizi brány v M7 (hodnota 0,22 neměněna) | kontakt L2 (M5/M6b), revize brány M7 |
-| `CategoryLoss` (zánik kategorie, C3) a velký cyklus jsou v samovolném běhu neaktivní: samovolná eroze v D4 nedosahuje weakness 0,50 (PL max. ~0,29). Erozi stále brzdí: (1) `CodaLoss` clarity −0,32 a martinetovská `FunctionalLoad` proti splynutí pádových koncovek s nominativem, (2) řídké návrhy apokopy ə, (3) `Phonotactics` trestá novou kodu absolutně (výchozí `CODA_TOLERANCE_SCALE = 0.0`). Kalibrace konstant a fonotaktiky patří do M7 proti datům | M7 (kalibrace vah zvukových změn a fonotaktické tolerance kod) |
+| `CategoryLoss` (zánik kategorie, C3) a velký cyklus jsou v samovolném běhu bez kontaktu neaktivní: samovolná eroze v D4 nedosahuje weakness 0,50 (PL max. ~0,29). Od části E nemá zánik práh (míra návrhu úměrná `weakness` a podílu L2 mluvčích, rozhoduje selekce) a kontakt má vlastní cestu (`Learnability`); bez L2 mluvčích selekce koncovku stále drží, dokud `weakness < 1 − context`. Erozi stále brzdí: (1) `CodaLoss` clarity −0,32 a martinetovská `FunctionalLoad` proti splynutí pádových koncovek s nominativem, (2) řídké návrhy apokopy ə, (3) `Phonotactics` trestá novou kodu absolutně (výchozí `CODA_TOLERANCE_SCALE = 0.0`). Kalibrace konstant a fonotaktiky patří do M7 proti datům | M7 (kalibrace vah zvukových změn a fonotaktické tolerance kod) |
 | Přirozená četnost eroze konkrétní koncovky je nízká (zvukové inovace se dělí mezi stovky kandidátů); analytizace je proto doložena kontrolovanými pokusy. Nález z diagnózy D0: apokopa 0/281 celkem ustálena (0/226 na koncovkách, 0/55 na kořenech) – model ji prakticky vylučuje, ač je typologicky jednou z nejčastějších změn. `Phonotactics` trestá novou kódu absolutně (−0,17), nezávisle na stavbě slabiky jazyka | M7 (kalibrace tempa zvukových změn a revize fonotaktického tlaku) |
 | Malé izolované komunity podle Trudgilla hromadí morfofonologickou složitost díky husté síti silných vazeb, která udrží i neobvyklé změny. Model to nereprodukuje: alternace kmene roste s velikostí skupiny, protože velká skupina účinněji přijme přirozené zvukové změny. Nepravidelnost koncovek už velikost sleduje správně. Tlak místní identity (M6b) to nevyřešil | M7 (tempo a váhy zvukových změn), případně výzkum |
 | ~~Stabilní dvojjazyčnost a superstrát~~ | vyřešeno v M6b (domény, demografie ze sítě) |

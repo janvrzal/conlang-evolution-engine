@@ -36,16 +36,17 @@ Platné referenční otisky (`scripts/v2_digests.py`, doménový klíč `"innova
 
 Naměřené hodnoty a známé mezery jsou v `docs/engine-v2/05-specifikace.md`.
 
-Na větvi `engine-v2-typologie` je připravené měřidlo typologické pestrosti
-(část A, bez změny simulačního modelu): `scripts/build_v2_typology.py`
-vytváří ověřený genusově vážený výřez WALS, `scripts/v2_typology.py` měří
-šest konstrukčních rysů a samostatné podkladové inventářové proxy. Dva
-pokusy po 20 seedech do 5 000 let a omezení převodů jsou v
-[`engine-v2/10-typologie.md`](engine-v2/10-typologie.md). Start z WALS
-v tomto scénáři ztrácí pestrost širších kategorií PL, DEFINITE, PAST a
-inflexního FUTURE; konstrukční štítky samy nedokazují zachovaný povrchový
-kontrast. Část B (sekundární artikulace) zatím nezačala a čeká na rozhodnutí
-uživatele. Tyto výsledky nejsou kalibrací M7.
+Na větvi `engine-v2-typologie` jsou hotové části A–D (`engine-v2/10-typologie.md`):
+měřidlo typologické pestrosti proti WALS, sekundární artikulace (palatalizace,
+nosové vokály, labializace), kontext a úplná gramatika pro pokusy, zánik
+kategorie a prozódie (pět poloh přízvuku, posun a síla přízvuku). Na větvi
+`engine-v2-dynamika` navazuje část E (`engine-v2/11-gramaticka-dynamika.md`):
+zánik kategorie bez prahu, kontakt přes L2 mluvčí (`Learnability`),
+kalibrační konstanty dynamiky jako `world.params` (`src/cee/v2/parameters.py`)
+a test dosažitelnosti cyklu kategorií: bez kontaktu flexivní kategorie jen
+přibývají, s kontaktem se cyklus rozběhne. Cíle kalibrace M7 jsou ve
+specifikaci (oddíl „Cíle kalibrace M7“). Nic z toho zatím není v `engine-v2`;
+sloučení čeká na uživatele. Tyto výsledky nejsou kalibrací M7.
 
 
 ## Legacy jádro
