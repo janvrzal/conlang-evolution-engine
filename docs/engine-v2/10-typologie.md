@@ -1,0 +1,417 @@
+# Typologická pestrost: část A
+
+Datum: 30. 10. 2026. Výchozí model: `68d4e54`.
+Práce probíhá ve worktree `/Users/janvrzal/Documents/CEE-typologie`, větev
+`engine-v2-typologie`. Při navázání již worktree existoval, byl čistý a jeho
+jediný commit nad výchozím modelem byl `9582bd3` (pouze zadání). Zadání se
+bajtově shodovalo s necommitnutým originálem ve sdíleném checkoutu.
+Žádný nový commit bez potvrzení uživatele; část B čeká na samostatné potvrzení.
+
+## Předem stanovený protokol
+
+- Dva pokusy: `same` (přesně `SYNTAX_GRAMMAR`) a `wals` (gramatika losovaná
+  z genusově vážených referenčních rozložení v rozsahu vyjádřitelném modelem).
+- V každém pokusu 20 nezávislých protojazyků, souvislé seedy `1..20`;
+  žádný seed se nevybírá ani nevylučuje podle výsledku.
+- `village_grid(6, seed=seed, syntax=True, semantics=True, phonology=True,
+  morphology=True)` s plnou výchozí slovní zásobou a výchozími konstantami.
+  Šest vesnic umožní vznik a rozpad jazyků při menší ceně než velká mřížka;
+  nekrátí se slovník, horizont ani mechanismy. V každém běhu stejných šest
+  výchozích skupin sdílí jeden nezávislý protojazyk.
+- Odečty 0, 1 000, 2 000, 3 000 a 5 000 let; mezi odečty tentýž pokračující
+  běh. Jednotkou agregace je pozorovaný jazyk (`Snapshot.languages`), ne
+  skupina ani genealogický identifikátor kódu. Každý jazyk má váhu 1.
+- Uvnitř jazyka převládající stav přes mluvené domácí skupiny, vážený počtem
+  mluvčích. Nepodporované a nejednoznačné stavy zůstávají explicitně neznámé;
+  report obsahuje pokrytí, aby se jejich vynechání nezaměnilo za shodu.
+- Losování gramatiky používá samostatné stabilní klíče `cee.v2.rng`, nezávislé
+  na proudu simulace. Nevyjádřitelné WALS stavy se nepřevádějí odhadem;
+  jejich hmotnost a podmínění startovního rozložení budou výslovně uvedeny.
+- Hellingerova vzdálenost používá `metrics.hellinger`; normovaná entropie
+  má pevný jmenovatel logaritmu počtu kategorií měřeného rysu, nikoli jen
+  počtu právě pozorovaných kategorií. Neznámý stav není typologická kategorie.
+- Měření a simulace běží sériově, včetně testů a sedmi referenčních otisků.
+  Žádné změny modelu, seedů, konstant ani existujících bran.
+
+## Rozsah a omezení
+
+Výchozí fonologie se v pokusu `wals` nelosuje z WALS: zadání požaduje losovat
+**gramatiku**. Stacionaritu gramatických marginál proto lze zkoumat jen
+v jejich vyjádřitelném rozsahu; výchozí fonologická odchylka sama o sobě
+není důkaz dynamického atraktoru. Losování jednotlivých gramatických rysů
+z marginál navíc neobnovuje skutečnou korelaci rysů WALS.
+
+## A1: zdroj a převodní tabulka
+
+WALS CLDF `v2020.6`, commit `81298aa26d01fdc11b769bcc7fa87ad9e43d7ccd`,
+licence CC BY 4.0. Citace: Dryer, Matthew S. & Haspelmath, Martin (eds.)
+2013. *The World Atlas of Language Structures Online*. Leipzig: Max Planck
+Institute for Evolutionary Anthropology. [Vydání dat na Zenodo](https://doi.org/10.5281/zenodo.23010827),
+[zdrojový checkout](https://github.com/cldf-datasets/wals/tree/v2020.6).
+Vnitřní metadata vydání zmiňují starší upstream `v2020.5`; připnutí se řídí
+skutečným tagem, commitem a pěti kontrolními součty, nikoli tímto historickým údajem.
+
+`build_v2_typology.py` čte čtyři tabulky CLDF a metadata; všech pět vstupů
+musí přesně odpovídat připnutým SHA-256, jinak build skončí chybou. Výřez
+`v2_typology.json` obsahuje citaci, licenci, verzi, SHA-256 vstupů, úplná
+rozložení i výslovné seznamy nepodporovaných kategorií. Pro každý rys zvlášť
+má každý genus s daty celkovou váhu 1, rozdělenou mezi jazyky s údajem o
+**tomto** rysu. Chybějící genus znamená samostatnou jednotku pro daný jazyk.
+
+| Stav enginu | Kategorie / projekce WALS | Co se nepřevádí a proč |
+|---|---|---|
+| `PL`: `synthetic` nebo `periphrastic` / `zero` či funkce mimo profil | [33A](https://wals.info/chapter/33): `plural_present` = 1–8, `plural_absent` = 9 | Jen odvozená přítomnost, ne strategie prefix/sufix/změna kmene/tón/reduplikace/smíšená/slovo/klitika. |
+| `DEFINITE`: `synthetic` nebo `periphrastic` / `zero` či funkce mimo profil | [37A](https://wals.info/chapter/37): `definite_present` = 1–3, `definite_absent` = 4–5 | WALS zahrnuje demonstrativum používané jako člen. Nerozlišujeme jeho původ, člen jako slovo proti afixu ani neurčitý člen. |
+| `PAST`: `synthetic` nebo `periphrastic` / `zero` či funkce mimo profil | [66A](https://wals.info/chapter/66): `past_present` = 1–3, `past_absent` = 4 | Model nemá vzdálenosti minulosti; nesmí se přiřadit konkrétní kategorie 1/2/3. |
+| `FUTURE`: `synthetic` / `zero`, volný opis nebo funkce mimo profil | [67A](https://wals.info/chapter/67): 1 / 2 | Jde o **inflexní** budoucnost. Klitika je neznámá; neprovádí se odhad hranice klitika–afix. |
+| `ORDER=fixed`, pořadí SOV/SVO/VSO/VOS/OVS/OSV | [81A](https://wals.info/chapter/81): 1/2/3/4/5/6 | `free` je neznámé, nikoli 81A-7 „bez dominantního pořadí“. Inovace modelu nabízejí jen SOV/SVO, ostatní pevné řády lze reprezentovat ve startu. |
+| `NEG=pre` / `post` / `embraced` | [143A](https://wals.info/chapter/143): 1 / 2 / 14 | 14 je široká povinná dvojitá negace, reprezentovaná startem pre+post; není to rekonstrukce ostatních pozic/slov/afixů z této kategorie. Hodnoty 3–13 a 15–17 jsou nepodporované. |
+| Počet použitých podkladových souhláskových segmentů | [1A](https://wals.info/chapter/1): nezařazeno | WALS počítá fonémy, ne segmenty zaznamenané během částečné fonologizace. Samostatně reportujeme inventářový proxy. |
+| Počet použitých podkladových vokalických segmentů | [2A](https://wals.info/chapter/2): nezařazeno | Chybí explicitní kontrastivní inventář vokalických kvalit, navíc segmenty mohou rozlišovat více než kvalitu. |
+| Podkladové nosové samohlásky | [10A](https://wals.info/chapter/10): nezařazeno | Přítomnost segmentu nedokazuje fonémový kontrast. Proxy je pomocná diagnostika pro B, nikoli přímé srovnání s 10A. |
+| Stavba slabiky | [12A](https://wals.info/chapter/12): nezařazeno | Model nemá explicitní stav povolené slabičné gramatiky; konečný slovník nedokazuje hranice přípustných struktur. |
+| `OBJ` | [49A](https://wals.info/chapter/49): nezařazeno | Vyjádření předmětu neurčuje počet všech pádů jazyka ani kategorii hraničního pádového značení. |
+| `NEG` | [112A](https://wals.info/chapter/112): nezařazeno samostatně | Pro zadání je použit částečný 143A; 112A by přidával další srovnání téhož procesu s jiným členěním. |
+
+U syntetických konstrukcí jde o **konstrukční stav modelu**: štítek sám
+nedokazuje zachovaný povrchový kontrast po erozi. `syntax.weakness` erozi
+sleduje pro výběr inovací a selekci, ale nemění konstrukci automaticky na
+`zero`. Hodnoty `present` tedy nelze vydávat za nezávislé zjištění, že všechny
+původní koncovky zůstaly rozlišitelné. Měřidlo toto omezení nepřekrývá
+odhadem nového prahu. U širších projekcí je rozlišovací schopnost menší:
+nelze jimi měřit pestrost uvnitř kategorie „přítomné“.
+
+### Inicializace pokusu z WALS
+
+Losování používá pro každý rys samostatně
+`generator(seed, "typology-wals-start", feature)`. Kategorie s explicitním
+nulovým vyjádřením zůstávají **v profilu**, a mohou tedy gramatikalizovat.
+Zástupci jsou: přítomný PL a PAST = původní syntetická konstrukce, přítomný
+člen = volné demonstrativum `this`, inflexní FUTURE = syntetická konstrukce,
+nepřítomnost = `zero`; NEG = `not` před slovesem, samotné `not` po slovesu,
+nebo `not … thing`; ORDER = konkrétní pevné pořadí. OBJ zůstává výchozí.
+To jsou reprezentanti metrických kategorií, nikoli odhady skutečné
+morfologie jednotlivých jazyků WALS.
+
+U 81A má namapovaná část WALS váhu 0,84602; u 143A 0,60088. Start losuje
+**podmíněné** rozložení těchto částí. Hellinger přesto používá celé
+referenční rozložení včetně nepodporovaných hodnot. Počáteční H proto
+nemusí být nulová ani při dokonalém sampleru. U ostatních čtyř projekcí je
+pokrytí referenční hmotnosti 1. Entropie se normalizuje pevně počtem
+rozlišovaných kategorií měřidla (2, 2, 2, 2, 6 a 3); ne podle počtu hodnot
+skutečně přítomných ve vzorku. H i E se počítají z jednoznačně zařazených
+jazyků a vždy mají doprovodný údaj o jejich pokrytí.
+
+## Reprodukce
+
+Z kořene worktree, s Pythonem projektu a `PYTHONPATH=src:.`:
+
+```text
+python scripts/build_v2_typology.py --cldf-dir /tmp/cee-wals-typology/cldf
+python scripts/v2_typology.py --output /tmp/cee-typology-results.json --markdown /tmp/cee-typology-tables.md
+python -m pytest -q
+python scripts/v2_digests.py
+ruff check --no-cache
+mypy --cache-dir /tmp/cee-typology-mypy
+```
+
+Zdrojová data WALS lze získat checkoutem výše uvedeného commitu mimo
+repozitář; cesta `/tmp/cee-wals-typology` je jen lokální příklad. V tomto
+prostředí se používá interpreter `/Users/janvrzal/Documents/CEE/.venv/bin/python`
+a `PYTHONDONTWRITEBYTECODE=1`. Syrová měření v `/tmp` ani zdrojové CSV WALS
+nepatří do commitu; souhrnné tabulky zůstávají zde v deníku.
+
+## A2–A3: výsledky a jejich význam
+
+Všech 40 předem stanovených běhů skončilo bez výběru nebo vyloučení seedů.
+Celkový čas včetně odečtů byl 207,3 s (same 96,4 s; wals 110,9 s). V každém
+běhu pozorovatel v každém odečtu spojil šest skupin do jediného jazyka:
+rozložení proto mají N=20 nezávislých jazyků, po jednom z každého protojazyka.
+Fonologické proxy se v čase mění, takže stálá gramatika pokusu same není
+artefaktem odečítání výchozího světa. Párový test měření ověřuje nezměněný
+otisk historie i distribuce proti běhu bez odečtů.
+
+**Same:** v žádném ze šesti hrubě měřených konstrukčních rysů se mezi
+nezávislými protojazyky neobjevila rozlišitelná pestrost. PL a PAST zůstaly
+present, DEFINITE chybí a FUTURE není inflexní (obě funkce jsou mimo profil),
+NEG zůstal pre a ORDER free. E=0 pro pět klasifikovaných rysů; ORDER nemá
+žádné klasifikované pozorování, proto jeho H ani E nejsou definované.
+Tento výsledek se vztahuje k převažujícím širším konstrukčním kategoriím;
+nevylučuje jiné afixy, menšinové varianty, odlišné tvary ani fonologickou pestrost.
+
+**WALS:** stacionarita těchto marginál v tomto scénáři neplatí. Nejde o
+absolutní shodu startu s WALS (vzorek má jen 20 jazyků a část kategorií je
+nepodporovaná), ale o směr změny vůči skutečně vylosovanému startu.
+
+| Rys | E v roce 0 → 5 000 | H v roce 0 → 5 000 | Interpretace |
+|---|---:|---:|---|
+| PL | 0,469 → 0 | 0,024 → 0,251 | Všechny konstrukční profily present už v roce 1 000. |
+| DEFINITE | 0,993 → 0 | 0,112 → 0,469 | Present 9/20 na startu, 18/20 v roce 1 000, 20/20 od roku 2 000. |
+| PAST | 0,971 → 0 | 0,035 → 0,508 | Present 12/20 na startu, 20/20 od roku 1 000. |
+| FUTURE (inflexní) | 0,722 → 0 | 0,205 → 0,521 | Na startu 16/20; v roce 2 000 je 18 syntetických a 2 neurčitelné klitiky, od roku 3 000 všech 20 syntetických. |
+| ORDER | 0,544 → 0,448 | 0,324 → 0,330 | Pokrytí 20/20 → 10/20, zbývajících 10 je free. Z podmíněné entropie nelze doložit celkový kolaps. |
+| NEG | 0,853 → 0,589 | 0,476 → 0,531 | Povinná dvojitá negace 3/20 → 0/20; na konci 13 pre a 7 post. Cyklus existuje, šíření se v tomto okně liší podle stadia. |
+
+U PL, DEFINITE a PAST chybí inovace do `zero`, zatímco ze `zero` vede
+obnovovací cesta přes opis, klitiku a koncovku. FUTURE má stejnou cestu
+k inflexi; klitiky vysvětlují dočasný pokles pokrytí. NEG má všechny tři
+směry cyklu, takže úbytek stadia embraced není důkaz chybějící zpětné
+cesty. ORDER má návrh fixace i relaxace, ale neznámý `free` omezuje srovnání.
+Konkrétní změny a tlaky jsou rozebrané níže. **Model se v části A neopravuje.**
+
+Výsledek je deskriptivní audit na jednom předem zvoleném malém scénáři,
+ne odhad časové škály pro všechny mapy ani kalibrace vůči skutečným rodinám.
+Výběr 20 nezávislých seedů má přirozený vzorkovací rozptyl (např. FUTURE
+16/20 na startu proti WALS 53,1 %); podle této odchylky se seedy nepřelosovaly.
+
+## Naměřená rozložení
+
+H = Hellinger od celé projekce WALS; E = normovaná entropie.
+N je počet jazyků, n počet jednoznačně zařazených. Rozložení je podmíněné na n.
+Nenamapovaná referenční hmotnost zůstává v H; E je normalizována pevně počtem kategorií, které měřidlo umí rozlišit.
+
+### same: 33A
+
+WALS (genusově vážené): plural_present=0.878; plural_absent=0.122
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1.000 | plural_present=1.000 | 0.251 | 0.000 |
+| 1000 | 20 | 20 | 1.000 | plural_present=1.000 | 0.251 | 0.000 |
+| 2000 | 20 | 20 | 1.000 | plural_present=1.000 | 0.251 | 0.000 |
+| 3000 | 20 | 20 | 1.000 | plural_present=1.000 | 0.251 | 0.000 |
+| 5000 | 20 | 20 | 1.000 | plural_present=1.000 | 0.251 | 0.000 |
+
+### same: 37A
+
+WALS (genusově vážené): definite_present=0.608; definite_absent=0.392
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1.000 | definite_absent=1.000 | 0.611 | 0.000 |
+| 1000 | 20 | 20 | 1.000 | definite_absent=1.000 | 0.611 | 0.000 |
+| 2000 | 20 | 20 | 1.000 | definite_absent=1.000 | 0.611 | 0.000 |
+| 3000 | 20 | 20 | 1.000 | definite_absent=1.000 | 0.611 | 0.000 |
+| 5000 | 20 | 20 | 1.000 | definite_absent=1.000 | 0.611 | 0.000 |
+
+### same: 66A
+
+WALS (genusově vážené): past_present=0.551; past_absent=0.449
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1.000 | past_present=1.000 | 0.508 | 0.000 |
+| 1000 | 20 | 20 | 1.000 | past_present=1.000 | 0.508 | 0.000 |
+| 2000 | 20 | 20 | 1.000 | past_present=1.000 | 0.508 | 0.000 |
+| 3000 | 20 | 20 | 1.000 | past_present=1.000 | 0.508 | 0.000 |
+| 5000 | 20 | 20 | 1.000 | past_present=1.000 | 0.508 | 0.000 |
+
+### same: 67A
+
+WALS (genusově vážené): 67A-1=0.531; 67A-2=0.469
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1.000 | 67A-2=1.000 | 0.561 | 0.000 |
+| 1000 | 20 | 20 | 1.000 | 67A-2=1.000 | 0.561 | 0.000 |
+| 2000 | 20 | 20 | 1.000 | 67A-2=1.000 | 0.561 | 0.000 |
+| 3000 | 20 | 20 | 1.000 | 67A-2=1.000 | 0.561 | 0.000 |
+| 5000 | 20 | 20 | 1.000 | 67A-2=1.000 | 0.561 | 0.000 |
+
+### same: 81A
+
+WALS (genusově vážené): 81A-1=0.480; 81A-2=0.275; 81A-3=0.059; 81A-4=0.022; 81A-5=0.008; 81A-6=0.001; 81A-7=0.154
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 0 | 0.000 | neznámé | — | — |
+| 1000 | 20 | 0 | 0.000 | neznámé | — | — |
+| 2000 | 20 | 0 | 0.000 | neznámé | — | — |
+| 3000 | 20 | 0 | 0.000 | neznámé | — | — |
+| 5000 | 20 | 0 | 0.000 | neznámé | — | — |
+
+### same: 143A
+
+WALS (genusově vážené): 143A-1=0.402; 143A-10=0.010; 143A-11=0.005; 143A-12=0.000; 143A-13=0.001; 143A-14=0.076; 143A-15=0.058; 143A-16=0.006; 143A-17=0.001; 143A-2=0.122; 143A-3=0.092; 143A-4=0.196; 143A-5=0.001; 143A-6=0.012; 143A-7=0.007; 143A-8=0.011; 143A-9=0.000
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1.000 | 143A-1=1.000 | 0.605 | 0.000 |
+| 1000 | 20 | 20 | 1.000 | 143A-1=1.000 | 0.605 | 0.000 |
+| 2000 | 20 | 20 | 1.000 | 143A-1=1.000 | 0.605 | 0.000 |
+| 3000 | 20 | 20 | 1.000 | 143A-1=1.000 | 0.605 | 0.000 |
+| 5000 | 20 | 20 | 1.000 | 143A-1=1.000 | 0.605 | 0.000 |
+
+### wals: 33A
+
+WALS (genusově vážené): plural_present=0.878; plural_absent=0.122
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1.000 | plural_absent=0.100; plural_present=0.900 | 0.024 | 0.469 |
+| 1000 | 20 | 20 | 1.000 | plural_present=1.000 | 0.251 | 0.000 |
+| 2000 | 20 | 20 | 1.000 | plural_present=1.000 | 0.251 | 0.000 |
+| 3000 | 20 | 20 | 1.000 | plural_present=1.000 | 0.251 | 0.000 |
+| 5000 | 20 | 20 | 1.000 | plural_present=1.000 | 0.251 | 0.000 |
+
+### wals: 37A
+
+WALS (genusově vážené): definite_present=0.608; definite_absent=0.392
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1.000 | definite_absent=0.550; definite_present=0.450 | 0.112 | 0.993 |
+| 1000 | 20 | 20 | 1.000 | definite_absent=0.100; definite_present=0.900 | 0.250 | 0.469 |
+| 2000 | 20 | 20 | 1.000 | definite_present=1.000 | 0.469 | 0.000 |
+| 3000 | 20 | 20 | 1.000 | definite_present=1.000 | 0.469 | 0.000 |
+| 5000 | 20 | 20 | 1.000 | definite_present=1.000 | 0.469 | 0.000 |
+
+### wals: 66A
+
+WALS (genusově vážené): past_present=0.551; past_absent=0.449
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1.000 | past_absent=0.400; past_present=0.600 | 0.035 | 0.971 |
+| 1000 | 20 | 20 | 1.000 | past_present=1.000 | 0.508 | 0.000 |
+| 2000 | 20 | 20 | 1.000 | past_present=1.000 | 0.508 | 0.000 |
+| 3000 | 20 | 20 | 1.000 | past_present=1.000 | 0.508 | 0.000 |
+| 5000 | 20 | 20 | 1.000 | past_present=1.000 | 0.508 | 0.000 |
+
+### wals: 67A
+
+WALS (genusově vážené): 67A-1=0.531; 67A-2=0.469
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1.000 | 67A-1=0.800; 67A-2=0.200 | 0.205 | 0.722 |
+| 1000 | 20 | 20 | 1.000 | 67A-1=0.800; 67A-2=0.200 | 0.205 | 0.722 |
+| 2000 | 20 | 18 | 0.900 | 67A-1=1.000 | 0.521 | 0.000 |
+| 3000 | 20 | 20 | 1.000 | 67A-1=1.000 | 0.521 | 0.000 |
+| 5000 | 20 | 20 | 1.000 | 67A-1=1.000 | 0.521 | 0.000 |
+
+### wals: 81A
+
+WALS (genusově vážené): 81A-1=0.480; 81A-2=0.275; 81A-3=0.059; 81A-4=0.022; 81A-5=0.008; 81A-6=0.001; 81A-7=0.154
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1.000 | 81A-1=0.550; 81A-2=0.300; 81A-3=0.150 | 0.324 | 0.544 |
+| 1000 | 20 | 19 | 0.950 | 81A-1=0.579; 81A-2=0.316; 81A-3=0.105 | 0.315 | 0.512 |
+| 2000 | 20 | 15 | 0.750 | 81A-1=0.600; 81A-2=0.267; 81A-3=0.133 | 0.322 | 0.518 |
+| 3000 | 20 | 13 | 0.650 | 81A-1=0.538; 81A-2=0.308; 81A-3=0.154 | 0.325 | 0.549 |
+| 5000 | 20 | 10 | 0.500 | 81A-1=0.700; 81A-2=0.200; 81A-3=0.100 | 0.330 | 0.448 |
+
+### wals: 143A
+
+WALS (genusově vážené): 143A-1=0.402; 143A-10=0.010; 143A-11=0.005; 143A-12=0.000; 143A-13=0.001; 143A-14=0.076; 143A-15=0.058; 143A-16=0.006; 143A-17=0.001; 143A-2=0.122; 143A-3=0.092; 143A-4=0.196; 143A-5=0.001; 143A-6=0.012; 143A-7=0.007; 143A-8=0.011; 143A-9=0.000
+
+| Rok | N | n | Pokrytí | Rozložení | H | E |
+|---:|---:|---:|---:|---|---:|---:|
+| 0 | 20 | 20 | 1.000 | 143A-1=0.600; 143A-14=0.150; 143A-2=0.250 | 0.476 | 0.853 |
+| 1000 | 20 | 20 | 1.000 | 143A-1=0.600; 143A-14=0.050; 143A-2=0.350 | 0.490 | 0.750 |
+| 2000 | 20 | 20 | 1.000 | 143A-1=0.650; 143A-2=0.350 | 0.531 | 0.589 |
+| 3000 | 20 | 20 | 1.000 | 143A-1=0.650; 143A-2=0.350 | 0.531 | 0.589 |
+| 5000 | 20 | 20 | 1.000 | 143A-1=0.650; 143A-2=0.350 | 0.531 | 0.589 |
+
+
+## Pomocný podkladový inventář pro část B
+
+Sjednocení segmentů ve slovnících skupin každého pozorovaného jazyka,
+čtených přes `World.unit_of`, nikoli povrchových segmentů aktivních procesů.
+Nejde o převládající fonémový inventář: přepis tvarů je postupný a chybí
+anotace foném/allofon. Počty proto nevstupují do Hellingerova srovnání
+s WALS 1A/2A/10A. Tabulka uvádí minimum / medián / maximum přes 20 jazyků.
+
+| Pokus | Rok | Souhláskové segmenty | Vokalické segmenty | Jazyky s nosovým vokálem |
+|---|---:|---|---|---:|
+| same | 0 | 14 / 14 / 14 | 5 / 5 / 5 | 0/20 |
+| same | 1000 | 15 / 17 / 21 | 6 / 7 / 8 | 0/20 |
+| same | 2000 | 18 / 21 / 27 | 6 / 8 / 10 | 0/20 |
+| same | 3000 | 21 / 23.5 / 27 | 8 / 9 / 10 | 0/20 |
+| same | 5000 | 22 / 25 / 27 | 8 / 9 / 11 | 0/20 |
+| wals | 0 | 14 / 14 / 14 | 5 / 5 / 5 | 0/20 |
+| wals | 1000 | 15 / 17 / 21 | 6 / 7 / 9 | 0/20 |
+| wals | 2000 | 18 / 21 / 27 | 6 / 8 / 10 | 0/20 |
+| wals | 3000 | 21 / 24 / 27 | 8 / 9 / 10 | 0/20 |
+| wals | 5000 | 21 / 25 / 27 | 8 / 9 / 10 | 0/20 |
+
+V obou pokusech je proxy nosových vokálů v každém čase 0/20. WALS 10A má
+v této genusově vážené referenci 25,964 % jazyků s kontrastem a 74,036 % bez
+kontrastu. To jsou různé měřicí definice: z proxy nelze tvrdit přesný rozdíl
+fonémových podílů. Pozorované nulové nosové segmenty souhlasí s plošným
+filtrem sekundární artikulace v `SegmentTable.changed`; část B tento filtr
+teprve může změnit. Pro přímé kontrastivní srovnání B s 10A bude potřeba
+výslovně stanovit test fonémového kontrastu, nikoli přejmenovat tento proxy.
+Aspirace, ejektivy ani glotalizace se v této části nijak neimplementují.
+
+## Mechanistický rozbor šesti rysů a omezení měřidla
+
+- **33A (PL):** `Periphrasis` navrhuje ze `zero` při dostupném zdroji (`many`, `all`) opis a při oslabení syntetické formy obnovu; `Cliticization` a `Affixation` posouvají opis ke koncovce. `Expressivity` (potřeba PL 0,6) zvýhodňuje výraznou konstrukci, `Economy` trestá další slova a `Fusion` podporuje další krok srůstání. Neexistuje inovace, která by vytvořila `zero` z existujícího výrazu. Důležité omezení: profil čte pouze převažující druh konstrukce; `synthetic` započte jako přítomný i při úplném splynutí tvarů. `syntax.weakness` tuto erozi sleduje pro selekci, ale typologický profil ji neodečítá: stálé `plural_present` proto nedokazuje, že se plurál na povrchu rozlišuje. WALS 1–8 je sloučeno do přítomnosti, 9 do nepřítomnosti.
+- **37A (DEFINITE):** `Periphrasis` umožňuje `zero` → opis ze `this/that`, `Exaptation` také `zero` → syntetický výraz ze zbytkového OBJ, je-li kompenzován; další vývoj `Cliticization` → `Affixation`. `Expressivity` má potřebu 0,25, `Economy` a `Fusion` působí jako výše. Zpětný návrh do `zero` chybí; obnova opisu při erozi může udržet vyjádření. V přesném `SYNTAX_GRAMMAR` funkce úplně chybí: `syntax.functions` ji proto nenabízí jako místo inovace, a její stálá nepřítomnost zde není důkazem dynamické stability stavu explicitní konstrukce `zero`. Hrubý převod sloučí WALS 1–3 proti 4–5 a neověřuje všechny sémantické podmínky článku.
+- **66A (PAST):** `Periphrasis`, `Cliticization` a `Affixation` pracují jako u PL; zdroje `have/finish/come`, `Expressivity` má potřebu 1,0. Zero lze překročit směrem k opisu, zpětný návrh na zero chybí. Měřidlo opět klasifikuje podle druhu konstrukce, i když `syntax.weakness` eviduje splynutí s prézentem: `past_present` tedy není důkaz zachovaného povrchového kontrastu. Rozdíly vzdálenosti minulosti WALS 66A-1/2/3 jsou sloučeny do jedné třídy; model je sám nerozlišuje.
+- **67A (FUTURE):** explicitní `zero` → opis ze `go/want` (`Periphrasis`) → klitika → afix; potřeba `Expressivity` 0,4, `Economy` a `Fusion` zvýhodňují kratší a pokročilejší vyjádření. `67A-1` znamená syntetickou konstrukci, `67A-2` nulovou nebo volný opis; klitika se neklasifikuje, proto průběžně uvádět pokrytí. Stejně jako u minulosti není výsledek kontrolou povrchově zachovaného kontrastu. Pokud funkce chybí z celého profilu, jako ve `SYNTAX_GRAMMAR`, nemá místo pro vznik; nelze to zaměňovat s explicitním `zero`.
+- **81A (ORDER):** `OrderFixation` navrhuje z `free` pevný slovosled z katalogu (`SOV`, `SVO`); `OrderRelaxation` navrhuje návrat `fixed` → `free`. `Ambiguity` penalizuje `free` úměrně slabosti OBJ, kdežto `fixed` penalizuje jen o 0,05 při zachovalém OBJ; neplatí, že `OrderRelaxation.applies` samo vyžaduje silný pád, ten mění selekci. Inovace umí jen SOV/SVO, počáteční sampler umí všechny reprezentovatelné WALS pevné řády. `free` záměrně = neznámé, nikoliv WALS „no dominant order“; H vůči celé referenci zahrnuje nepodporovanou hmotu, entropie a četnosti jsou podmíněny známými hodnotami a je třeba uvádět pokrytí.
+- **143A (NEG):** `NegationReinforcement` navrhuje pre → embraced při dostupném jiném zdroji, `NegationReduction` embraced → post a `NegationRenewal` post → pre; jde tedy o cyklus, nikoli trvalou jednosměrnou cestu. `Expressivity` používá sílu nejsilnějšího slova záporky, `Economy` trestá dvě slova stavu embraced. Známé omezení: `NegationReduction` může vznikat již při dominanci embraced, dříve než se embraced plně ustálí (viz audit bran). 143A-14 slučuje více podob povinné dvojité negace než jen reprezentovaný embraced; nepodporované hodnoty se ponechávají v plné referenci.
+
+Společná omezení: konstrukční inovace se nejprve jen navrhnou, selekce a přenos rozhodují o jejich rozšíření; z existence cesty nelze odvozovat její skutečnou míru. Kategorie se agregují přes mluvené skupiny vážené populací, následné rozložení váží pozorované jazyky stejně. Počty závisí na prahu a shlukování pozorovatele; `Code.language` není jeden pozorovaný jazyk. Výsledky malého propojeného scénáře nelze bez dalšího zobecnit na jiné mapy. Přepisy slov mohou změnit realizaci při zachování stejné značky konstrukce; tento audit tedy měří konstrukční stav, nikoli zcela nezávisle doloženou funkční opozici.
+
+## Brána A: ověření a předání k potvrzení
+
+- **Celá sada:** 694 testů prošlo za 415,09 s; dva testy legacy API
+  (`test_find_free_port_vrati_navazatelny_port`,
+  `test_find_free_port_preskoci_obsazeny`) skončily na `PermissionError`
+  při `socket.bind` na `127.0.0.1` v omezeném prostředí. Oba byly beze změny
+  testu i kódu zopakovány s oprávněním otevřít lokální port a prošly
+  (`2 passed`, 0,34 s). Celkem je tedy ověřeno **696 testů**, nikoli jedna
+  nepřerušená zelená invokace celé sady. Žádná stochastická brána neselhala.
+- **Nové testy:** samostatná sada 32 testů prošla; zahrnuje populační
+  agregaci včetně živého skladu, neznámé stavy, všechna startovní mapování,
+  nulové pokrytí, zachování nepodporované WALS hmoty, normalizaci entropie,
+  genusové vážení, nosový inventářový proxy a neinvazivnost odečtu.
+- **Otisky:** všech sedm scénářů sériově před i po je přesně shodných
+  s referencí `68d4e54` (tabulka níže). Simulační jádro se nezměnilo;
+  v `src/cee/v2/metrics.py` pouze přibyly nové měřicí funkce.
+- **Data:** opakovaný build z připnutého CLDF je bajtově shodný se zabaleným
+  `v2_typology.json`, včetně citace, licence a všech pěti SHA-256 vstupů.
+- **Styl a typy nového rozsahu:** `ruff check --no-cache src/cee/v2`
+  spolu s oběma novými skripty a třemi testovacími soubory prošel.
+  `mypy --follow-imports=silent src/cee/v2 scripts/build_v2_typology.py
+  scripts/v2_typology.py` prošel (50 souborů); importované legacy moduly
+  se v této cílené kontrole nekontrolují samostatně.
+- **Celorepozitářové statické kontroly nejsou čisté:** Ruff hlásí
+  13 nálezů a mypy 48 chyb ve starším kódu. Všech 23 různých souborů, ve
+  kterých jsou tyto nálezy, je bajtově shodných s verzí v `68d4e54`.
+  Nejsou to nové chyby části A a nebyly opravovány mimo zadání. Mypy uváděl
+  48 legacy chyb už oddíl „Známé mezery“ výchozí specifikace. Čistotu
+  celorepozitářových kontrol tedy nelze prohlásit za dosaženou.
+
+| Scénář | Otisk před = po = reference |
+|---|---|
+| phonology | `8d7971c1a6afe5f6b8ca9f33919b8b3e2e929d56832ae4e04c738efa18c53840` |
+| morphology | `3567be70a272f42662ecd44838079d33abf953d090c59a9a2da4079467933a06` |
+| syntax | `eefb5db5be7bfac8284c400b7a0ebc81fe4a65c04325aaafa9b1cdb39d50fc38` |
+| grid-5x5 | `a6aa9a33f1a416e33144a0235d19194c442bb27ede6f966c5092a7b7342b08c0` |
+| shift | `47d69ad8a511366b2dedba0a9c30550c0c1d0045aa24ce3eafbdde03663da71a` |
+| island-city | `a082c2463488378f975fc050a9265f62856e716d6b1dd0b4d813f7d5323ab2cf` |
+| valley-50 | `02ccc3819e155cff096d791466f3dcdab88142a4e31e9b1920f92fc9898b1272` |
+
+SHA-256 zabaleného referenčního výřezu: `0e68aa4551b699dd784f00abd19bc7b88a6f2ca96976420161fb52ebbcc58b63`.
+
+Práci provedli subagenti **Terra 6.1** (metriky, testy, mechanistický rozbor)
+a **Luna 6** (WALS, build, licence, vážení a crosswalk); integraci, všechny
+simulace a běhové kontroly sériově provedl hlavní agent. Sdílený checkout
+nebyl upravován. Nevznikl žádný nový commit, stash, push ani sloučení;
+zůstává pouze dříve existující první commit zadání `9582bd3`.
+
+**Část A je předána k potvrzení. Část B nezačala.** Po potvrzení lze změny
+rozdělit do commitů A1 (reference), A2 (metriky a runner), A3 (výsledky a
+stav); žádný z těchto commitů zatím nebyl vytvořen. O zahájení části B
+rozhodne uživatel samostatně.
+
+## Potvrzení části A a zahájení části B
+
+Uživatel potvrdil výsledky části A a výslovně povolil pokračovat částí B.
+Kroky A1 a A2 byly uloženy jako `6f83049` a `058502b`; tento záznam a
+výsledky tvoří krok A3. Část B se vyvíjí nad tímto beze změny modelu
+ověřeným stavem. Nové commity části B zůstávají podmíněné dalším potvrzením.

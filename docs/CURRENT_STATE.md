@@ -36,6 +36,18 @@ Platné referenční otisky (`scripts/v2_digests.py`, doménový klíč `"innova
 
 Naměřené hodnoty a známé mezery jsou v `docs/engine-v2/05-specifikace.md`.
 
+Na větvi `engine-v2-typologie` je připravené měřidlo typologické pestrosti
+(část A, bez změny simulačního modelu): `scripts/build_v2_typology.py`
+vytváří ověřený genusově vážený výřez WALS, `scripts/v2_typology.py` měří
+šest konstrukčních rysů a samostatné podkladové inventářové proxy. Dva
+pokusy po 20 seedech do 5 000 let a omezení převodů jsou v
+[`engine-v2/10-typologie.md`](engine-v2/10-typologie.md). Start z WALS
+v tomto scénáři ztrácí pestrost širších kategorií PL, DEFINITE, PAST a
+inflexního FUTURE; konstrukční štítky samy nedokazují zachovaný povrchový
+kontrast. Část B (sekundární artikulace) zatím nezačala a čeká na rozhodnutí
+uživatele. Tyto výsledky nejsou kalibrací M7.
+
+
 ## Legacy jádro
 
 ## Funguje dnes
