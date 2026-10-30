@@ -306,3 +306,112 @@ def code_distance(
         variants = sorted(set(a.variants) | set(b.variants))
         totals[variable.kind] += 0.5 * sum(abs(a.frequency(v) - b.frequency(v)) for v in variants)
     return {kind: total / max(1, lexical) for kind, total in totals.items()}
+
+
+def normalized_entropy(distribution: dict[str, float], categories: Sequence[str]) -> float:
+    """Shannonova entropie dělená logaritmem počtu možných kategorií.
+
+    Prázdný vzorek nemá definovanou entropii a vyvolá ValueError. Nulové
+    kategorie se započítávají do normalizace, nikoli do logaritmu podílu.
+    """
+    if len(set(categories)) != len(categories) or not categories:
+        raise ValueError("Kategorie musí být neprázdné a jedinečné.")
+    if any(value < 0 or not math.isfinite(value) for value in distribution.values()):
+        raise ValueError("Četnosti musí být konečné a nezáporné.")
+    if set(distribution) - set(categories):
+        raise ValueError("Rozdělení obsahuje neznámou kategorii.")
+    total = sum(distribution.values())
+    if total <= 0:
+        raise ValueError("Prázdné rozdělení nemá entropii.")
+    if len(categories) == 1:
+        return 0.0
+    return -sum((value / total) * math.log(value / total)
+                for value in distribution.values() if value > 0) / math.log(len(categories))
+
+
+def typology_profile(world: World, language: Sequence[str]) -> dict[str, str | None]:
+    """Převládající typologické kategorie pozorovaného jazyka.
+
+    ``language`` je posloupnost ID skupin z ``Snapshot.languages``, nikoli
+    genealogická linie ``Code.language``. Hlasy skupin váží populace a celé
+    rozdělení variant, nikoli jen lokální vítěz. Nerozlišitelné kategorie
+    mají hodnotu None; psané skupiny bez mluvčích se nezapočítají.
+    37A a 66A používají hrubší, výslovně odvozené kategorie.
+    """
+    from cee.v2.syntax import construction_of, variable_id
+
+    groups = [world.groups[group_id] for group_id in sorted(set(language))
+              if not world.groups[group_id].written and world.groups[group_id].domain == "home"
+              and world.groups[group_id].population > 0]
+    features = {"33A": "PL", "37A": "DEFINITE", "66A": "PAST", "67A": "FUTURE",
+                "81A": "ORDER", "143A": "NEG"}
+    order_values = {"SOV": "81A-1", "SVO": "81A-2", "VSO": "81A-3",
+                    "VOS": "81A-4", "OVS": "81A-5", "OSV": "81A-6"}
+    result: dict[str, str | None] = {}
+    for feature, function in features.items():
+        totals: dict[str | None, float] = {}
+        variable = variable_id(function)
+        for group in groups:
+            distribution = world.distribution(group.id, variable)
+            if distribution is None:
+                # Funkce vynechaná z profilu se nevyjadřuje a nemůže inovovat.
+                absent = {"33A": "plural_absent", "37A": "definite_absent",
+                          "66A": "past_absent", "67A": "67A-2"}.get(feature)
+                totals[absent] = totals.get(absent, 0.0) + group.population
+                continue
+            for variant, frequency in zip(distribution.variants, distribution.freqs):
+                construction = construction_of(world, variant)
+                value: str | None = None
+                if feature == "81A" and construction.kind == "fixed":
+                    value = order_values.get(construction.order or "")
+                elif feature == "143A":
+                    value = {"pre": "143A-1", "post": "143A-2", "embraced": "143A-14"}.get(
+                        construction.kind
+                    )
+                elif feature == "67A":
+                    if construction.kind == "synthetic":
+                        value = "67A-1"
+                    elif construction.kind == "zero" or (
+                        construction.kind == "periphrastic" and construction.stage == "free"
+                    ):
+                        value = "67A-2"
+                elif feature in ("33A", "37A", "66A"):
+                    prefix = {"33A": "plural", "37A": "definite", "66A": "past"}[feature]
+                    if construction.kind == "zero":
+                        value = f"{prefix}_absent"
+                    elif construction.kind in ("synthetic", "periphrastic"):
+                        value = f"{prefix}_present"
+                totals[value] = totals.get(value, 0.0) + group.population * float(frequency)
+        # Při shodě má přednost neznámá hodnota; u známých rozhoduje ID.
+        result[feature] = min(totals, key=lambda key: (-totals[key], key is not None, key or "")) if totals else None
+    return result
+
+
+def underlying_inventory_proxy(world: World, language: Sequence[str]) -> dict[str, int | bool] | None:
+    """Sjednocený inventář podkladových tvarů mluvených skupin (proxy).
+
+    Změna se do tvarů přepisuje už při částečném šíření. Inventář tedy
+    nerozlišuje fonémy a alofony; výskyt nosového vokálu nedokazuje kontrast
+    podle WALS 10A a počty nejsou přímo srovnatelné s WALS 1A/2A.
+    """
+    if world.table is None:
+        return None
+    groups = [world.groups[group_id] for group_id in sorted(set(language))
+              if not world.groups[group_id].written and world.groups[group_id].domain == "home"
+              and world.groups[group_id].population > 0]
+    segments = {
+        segment
+        for group in groups
+        for unit in sorted(group.main_code.phonology.vocabulary)
+        for segment in world.unit_of(group.main_code, unit).form
+    }
+    if not segments:
+        return None
+    vowels = [segment for segment in segments if world.table.is_vowel(segment)]
+    nasal_index = world.table.index["nas"]
+    return {
+        "consonants": len(segments) - len(vowels),
+        "vowels": len(vowels),
+        "nasal_vowel": any(world.table.vectors[segment, nasal_index] == 1 for segment in vowels),
+        "nasal_vowels": sum(int(world.table.vectors[segment, nasal_index] == 1) for segment in vowels),
+    }
