@@ -25,14 +25,14 @@ Reference části B typologie (doplněk M2, sekundární artikulace):
     island-city  13717cb46affdc42b9938627d9314ab09c23fec227595ce6f53cfa099a22d4aa
     valley-50    0d462e154e885753e74ad645d2ecb9085bd4d1e442cc86f9229d693f366fca00
 
-Reference části D typologie (prozódie a posun přízvuku, kroky D1–D2):
+Reference části D typologie (prozódie, posun přízvuku a zakončení části D):
     phonology    1c1bd2c691a4b9aacd499e038b945cdd1c759f6a5a5b1de7ba204362f35fa755
     morphology   b673137d804d7542106c47e7203f93c9bf63268d8951909b49df12755b29e849
     syntax       9c9803132e86d566e7ccc623f381622a19aedc042c443ed0a1f3d0dc964b0084
     grid-5x5     83d79ffb6e029604422730b9906dcf7b68d2ed522ef5f405fe706a6dbf6d5c95
     shift        c6892607c6779018a02633a9da44f5d10f9fa98c458e1d31c91cee3b75d6784e
     island-city  59e723ed5d4eb316f73c817e92972017e7cb69578746121381b4a609948c4abd
-    valley-50    d17c58f6492247d39db581e1a5d4913d1c94e8dc8c9ae42864ccd1a3fbacb393
+    valley-50    9c2e85f1aa5448e50811ffa2db9587bda771ee84564b815243814ddc6ecf2476
 """
 
 from __future__ import annotations

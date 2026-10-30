@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, cast
+from typing import TYPE_CHECKING, Callable, cast
 
 import numpy as np
 
@@ -10,6 +10,9 @@ from cee.v2.assessment import ProcessAssessment, assess_many
 from cee.v2.language.processes import Process
 from cee.v2.phonology import changed_id
 from cee.v2.pressures.base import FloatArray, Pressure, PressureBatch
+
+if TYPE_CHECKING:
+    from cee.v2.world import World
 
 
 class Appeal(Pressure):
@@ -222,18 +225,58 @@ class Dispersion(Pressure):
         )
 
 
+def coda_share(world: World, group_id: str) -> float:
+    """Podíl slov ve slovníku skupiny, která končí na souhlásku (kodu)."""
+    group = world.groups.get(group_id)
+    if group is None:
+        return 0.0
+    code = group.main_code
+    state = code.phonology
+    cached = state.cache.get("coda_share")
+    if cached is not None and cached[0] == state.version:
+        return float(cast(float, cached[1]))
+    table = world.table
+    if table is None or not state.vocabulary:
+        return 0.0
+    codas = 0
+    total = 0
+    for u_id in state.vocabulary:
+        u = world.unit_of(code, u_id)
+        if u.form:
+            total += 1
+            if not table.is_vowel(u.form[-1]):
+                codas += 1
+    val = codas / total if total else 0.0
+    state.cache["coda_share"] = (state.version, val)
+    return val
+
+
+#: Autorský odhad míry tolerance nové kody podle stávající stavby slabik jazyka
+#: (WALS 12A, Maddieson: jazyky s povolenou kodou netrestají vznik uzavřené slabiky
+#: absolutně jako jazyky s čistě otevřenými slabikami).
+#: 0.0 = výchozí model bez tolerance (kalibrace v M7); 1.0 = plná tolerance kod.
+CODA_TOLERANCE_SCALE: float = 0.0
+
+
 class Phonotactics(Pressure):
     """Slabičná stavba: změna, která přidá shluky či hiát, je nevýhodná."""
 
     name = "phonotactics"
 
     def scores(self, batch: PressureBatch) -> FloatArray:
-        return _process_scores(
-            batch,
-            lambda _, assessment: -float(np.clip(assessment.markedness_delta, -1.0, 1.0)),
-            lambda _, assessments: -np.clip(
-                np.fromiter((item.markedness_delta for item in assessments), dtype=np.float64),
-                -1.0,
-                1.0,
-            ),
-        )
+        result = np.zeros_like(batch.freqs)
+        world = batch.world
+        for row, process, slot, columns, assessments in _process_score_layout(batch):
+            if not len(columns):
+                continue
+            deltas = np.fromiter((item.markedness_delta for item in assessments), dtype=np.float64)
+            if getattr(process, "family", "") == "apocope" and CODA_TOLERANCE_SCALE > 0.0:
+                coda_shares = np.array([
+                    coda_share(world, batch.group_ids[col])
+                    for col in columns
+                ], dtype=np.float64)
+                factors = np.clip(1.0 - CODA_TOLERANCE_SCALE * coda_shares, 0.0, 1.0)
+                deltas = deltas * factors
+
+            result[row, columns, slot] = -np.clip(deltas, -1.0, 1.0)
+        return result

@@ -1041,8 +1041,8 @@ Referenční projekce WALS (genusově vážená):
 | 5 000 | 20 | 20 | 1,000 | 14A-2=0,300; 14A-3=0,200; 14A-5=0,050; 14A-6=0,400; 14A-7=0,050 | 0,557 | 0,838 |
 
 ### Přechody a posuny přízvuku
-- **same_full**: 119 ustálených variant posunu přízvuku v repertoáru (`established`), 210 uskutečněných změn pravidla ve skupinách (`stress_rule_changed`). Z jednotného stavu penult vzniká v čase stabilní pestrost ($E \to 0{,}497$ v 5 000 letech).
-- **wals**: 42 ustálených variant posunu přízvuku, 174 změn pravidla. Pestrost zůstává vysoká ($E = 0{,}838$ až $0{,}881$).
+- **same_full**: 119 ustálených variant posunu přízvuku v repertoáru (`established`) celkem přes 20 seedů za 5 000 let (tj. průměrně 5,95 posunu na běh, cca 1 posun za 840 let), 210 uskutečněných změn pravidla ve skupinách (`stress_rule_changed`, průměrně 10,5 na běh). Z jednotného stavu penult vzniká v čase stabilní pestrost ($E \to 0{,}497$ v 5 000 letech).
+- **wals**: 42 ustálených variant posunu přízvuku celkem přes 20 seedů za 5 000 let (průměrně 2,1 na běh), 174 změn pravidla ve skupinách (průměrně 8,7 na běh). Pestrost zůstává vysoká ($E = 0{,}838$ až $0{,}881$). Celkem přes všech 40 běhů proběhlo 161 ustálených posunů (průměrně 4,03 na běh).
 - **Přechody síly (weak → strong)**: V typologických bězích (1 dominantní jazyk na seed) se inovace síly objevily, ale nedosáhly 100% frekvence (drift proti konformitě); ustálených přechodů `weak -> strong` v tomto souboru bylo 0.
 
 ---
@@ -1131,6 +1131,119 @@ V `scenarios.py` byla prozódie navázána na fonologii (`if phonology or prosod
 - `shift`: `c6892607c6779018a02633a9da44f5d10f9fa98c458e1d31c91cee3b75d6784e`
 - `island-city`: `59e723ed5d4eb316f73c817e92972017e7cb69578746121381b4a609948c4abd`
 - `valley-50`: `d17c58f6492247d39db581e1a5d4913d1c94e8dc8c9ae42864ccd1a3fbacb393`
+
+---
+
+## D2b: Percepční výraznost elize a fonotaktická tolerance kod
+
+Krok D2b analyzuje mechanismy brzdící erozi koncových samohlásek zjištěné v D0 a D2:
+
+### 1. Model percepční výraznosti mazané hlásky (`Clarity`)
+- **Lingvistické zdůvodnění**: Ohala (1993); Blevins (2004, kap. 5). Zánik samohlásek v nepřízvučných pozicích probíhá typicky dvoustupňově: plný vokál nejprve redukuje na centrální [ə], a teprve redukovaná hláska eliduje. Redukované [ə] nese minimální percepční a spektrální energii (středoanglické *-e*, francouzské *e muet*, slovanské jery), zatímco plné vokály nesou silnější akustická vodítka.
+- **Implementace**:
+  - `CLARITY_DELETE_FULL: float = -0.15` (původní hodnota zachování plného vokálu, beze změny)
+  - `CLARITY_DELETE_SCHWA: float = -0.05` (mírnější penalizace pro specifické smazání redukovaného vokálu [ə])
+  - **Jeden zdroj pravdy**: hodnoty se nastavují přímo v kandidátech v `src/cee/v2/changes/sound.py` (`Syncope` a `Apocope`), nikoli dynamicky přes `getattr` či inspekci popisků. Třída `Clarity.scores` v `src/cee/v2/pressures/linguistic.py` zůstává v původní čisté vektorové podobě.
+
+### 2. Fonotaktická tolerance kod relativně ke stavbě slabik (`Phonotactics`)
+- **Lingvistické zdůvodnění**: WALS 12A (Maddieson, *Syllable Structure*). V jazycích, které již v kánonu běžně mají uzavřené slabiky / koncové konsonanty (v našem protojazyku ~34 % slov končí na souhlásku: akuzativ *-m*, plurál *-n*, préteritum *-s*), vznik nové kody apokopou ($VCV \to VC$) neporušuje systémový typ slabiky.
+- **Implementace**:
+  - Pomocná kešovaná funkce `coda_share(world: World, group_id: str) -> float` bez `Any` a `getattr`.
+  - V `Phonotactics.scores` se pro apokopu penalizace škáluje faktorem:
+    $$\Delta_{\text{markedness}} \times (1 - \text{CODA\_TOLERANCE\_SCALE} \times \text{coda\_share})$$
+  - **Výchozí hodnota**: `CODA_TOLERANCE_SCALE = 0.0` (ponecháno bez dalších aktivních knoflíků v základu; mechanismus je připraven a otestován, plná kalibrace patří do M7 proti empirickým datům).
+
+---
+
+### Měření řetězce eroze: redukce → apokopa ə → splynutí → CategoryLoss / Periphrasis
+
+Měřeno skriptem `scripts/v2_erosion_chain.py` (20 seedů, 3 000 let, 6 sídel):
+
+| Podmínka | cla_schwa | coda_tol | Redukce vokálů (est / N) | Apokopa ə (est / N) | Apokopa plná (est / N) | CodaLoss (est / N) | PL weakness (med / max) | CatLoss | Perifráze |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **initial_strong** | −0,15 | 0,5 | 54 / 231 (23,4 %) | **0 / 20 (0,0 %)** | 0 / 209 (0,0 %) | 2 / 71 (2,8 %) | 0,000 / 0,229 | 0 | 442 |
+| **initial_strong** | −0,05 | 0,5 | 54 / 232 (23,3 %) | **1 / 19 (5,3 %)** | 0 / 210 (0,0 %) | 2 / 70 (2,9 %) | 0,000 / 0,247 | 0 | 447 |
+| **initial_strong** | −0,02 | 0,5 | 54 / 232 (23,3 %) | **1 / 19 (5,3 %)** | 0 / 210 (0,0 %) | 2 / 70 (2,9 %) | 0,000 / 0,229 | 0 | 452 |
+| **initial_strong** | −0,05 | 0,0 | 54 / 232 (23,3 %) | **0 / 20 (0,0 %)** | 0 / 210 (0,0 %) | 2 / 72 (2,8 %) | 0,000 / 0,282 | 0 | 446 |
+| **initial_strong** | −0,05 | 1,0 | 54 / 232 (23,3 %) | **1 / 19 (5,3 %)** | 0 / 206 (0,0 %) | 2 / 71 (2,8 %) | 0,000 / 0,247 | 0 | 454 |
+| **penult_strong** | −0,05 | 0,5 | 57 / 228 (25,0 %) | **1 / 19 (5,3 %)** | 0 / 211 (0,0 %) | 2 / 70 (2,9 %) | **0,006 / 0,289** | 0 | 466 |
+| **evolving_weak** | −0,05 | 0,5 | 10 / 264 (3,8 %) | 0 / 10 (0,0 %) | 0 / 217 (0,0 %) | 2 / 72 (2,8 %) | 0,000 / 0,106 | 0 | 425 |
+
+### Zhodnocení řetězce
+1. **Redukce samohlásek ($V \to \partial$)**:
+   - V silném přízvuku je masivní a stabilní (23–25 % ustáleno).
+2. **Apokopa plných vokálů ($V \to \emptyset$)**:
+   - Zůstává 0/210 ustáleno (0,0 %) v tomto souboru podmínek.
+3. **Apokopa šva ($\partial \to \emptyset$)**:
+   - Při starých parametrech (`cla_schwa = -0.15` nebo `coda_tol = 0.0`) bylo ustálení 0/20 (0,0 %).
+   - Při zavedení `cla_schwa = -0.05` a `coda_tol >= 0.5` se apokopa redukované samohlásky objevila jako **jedna izolovaná událost (1/19, 5,3 %)**, nikoli jako systémové prolomení bariéry.
+4. **Co erozi v samovolném běhu stále brzdí**:
+   - `CodaLoss` clarity (−0,32) a silný tlak `FunctionalLoad` penalizující pádový synkretismus s nominativem.
+   - Řídké návrhy apokopy ə (samotná inovační frekvence zániku šva je nízká).
+   - V základním nastavení `Phonotactics` trestá novou kodu absolutně (`CODA_TOLERANCE_SCALE = 0.0`).
+   - Weakness pro PL dosahuje v samovolném běhu maximálně 0,289, což je hluboko pod prahem 0,500 pro spuštění `CategoryLoss`.
+
+---
+
+## D4: Celková typologická validace modelu s prozodií
+
+Běhy skriptem `scripts/v2_typology.py` (seedy 1..20, 5 000 let, pokusy `same_full` a `wals`).
+
+### 1. Výsledky pokusu `same_full` (všech 7 rysů)
+
+| Rys | Rok 0 | Rok 1 000 | Rok 2 000 | Rok 3 000 | Rok 5 000 | Stav v roce 5 000 | H (rok 5 000) | E (rok 5 000) |
+|---|---|---|---|---|---|---|---|---|
+| **14A** (přízvuk) | penult 100 % | penult 95 %, init 5 % | penult 95 %, ante 5 % | penult 75 %, ante 15 %, init 10 % | **penult 75 %, ante 15 %, init 5 %, second 5 %** | **dynamická pestrost** | 0,668 | **0,497** |
+| **33A** (plurál) | present 100 % | present 100 % | present 100 % | present 100 % | present 100 % | bez pestrosti | 0,251 | 0,000 |
+| **37A** (určenost) | absent 100 % | absent 100 % | absent 100 % | absent 100 % | absent 100 % | bez pestrosti | 0,611 | 0,000 |
+| **66A** (minulý čas) | present 100 % | present 100 % | present 100 % | present 100 % | present 100 % | bez pestrosti | 0,508 | 0,000 |
+| **67A** (budoucí čas) | absent 100 % | absent 100 % | absent 100 % | absent 100 % | absent 100 % | bez pestrosti | 0,561 | 0,000 |
+| **81A** (slovosled) | neznámé (volný) | neznámé | neznámé | neznámé | neznámé (volný) | bez fixace | — | — |
+| **143A** (zápor) | pre 100 % | pre 100 % | pre 100 % | pre 100 % | pre 100 % | bez pestrosti | 0,605 | 0,000 |
+
+### 2. Výsledky pokusu `wals` (všech 7 rysů)
+
+| Rys | Rok 0 | Rok 1 000 | Rok 2 000 | Rok 3 000 | Rok 5 000 | Stav v roce 5 000 | H (rok 5 000) | E (rok 5 000) |
+|---|---|---|---|---|---|---|---|---|
+| **14A** (přízvuk) | init 40 %, pen 30 %, sec 10 %, ant 10 %, fin 10 % | dtto | dtto | dtto | **pen 40 %, init 30 %, sec 20 %, ant 5 %, fin 5 %** | **udržená pestrost** | 0,557 | **0,838** |
+| **33A** (plurál) | pres 90 %, abs 10 % | pres 100 % | pres 100 % | pres 100 % | pres 100 % | monotyp (rohatka) | 0,251 | 0,000 |
+| **37A** (určenost) | pres 45 %, abs 55 % | pres 75 %, abs 25 % | pres 95 %, abs 5 % | pres 100 % | pres 100 % | monotyp (rohatka) | 0,469 | 0,000 |
+| **66A** (minulý čas) | pres 60 %, abs 40 % | pres 100 % | pres 100 % | pres 100 % | pres 100 % | monotyp (rohatka) | 0,508 | 0,000 |
+| **67A** (budoucí čas) | pres 80 %, abs 20 % | pres 80 %, abs 20 % | pres 90 %, abs 10 % | pres 100 % | pres 100 % | monotyp (rohatka) | 0,521 | 0,000 |
+| **81A** (slovosled) | SOV 55 %, SVO 30 %, VSO 15 % | SOV 58 %, SVO 32 %, VSO 10 % | SOV 60 %, SVO 27 %, VSO 13 % | SOV 54 %, SVO 31 %, VSO 15 % | **SOV 70 %, SVO 20 %, VSO 10 %** | **udržená pestrost** | 0,330 | **0,448** |
+| **143A** (zápor) | pre 60 %, post 25 %, emb 15 % | pre 60 %, post 35 %, emb 5 % | pre 65 %, post 35 % | pre 65 %, post 35 % | **pre 60 %, post 40 %** | **udržená pestrost** | 0,536 | **0,613** |
+
+---
+
+### Kvalitativní vyhodnocení zadání D4
+
+1. **Roste `weakness` koncovek v jazycích s počátečním nebo silným přízvukem víc?**
+   - Ano, silný přízvuk zvyšuje frekvenci i ustálení samohláskové redukce ($V \to \partial$) z 3,8 % na 23–25 %. U plurálu stoupá maximální weakness z 0,106 na 0,289. Přesto zůstává hluboko pod prahem 0,500 potřebným pro zánik kategorie.
+2. **Spustí se `CategoryLoss` a velký cyklus samy bez kontrolovaných pokusů?**
+   - **Nespustí (0 / 40 běhů)**. Důvodem je, že fonologická eroze se v modelu zastavuje: zánik šva je vzácný a zánik kody (`CodaLoss`) je účinně blokován akustickým trestem v `Clarity` (−0,32) i funkční zátěží (`FunctionalLoad`). Dokud weakness nedosáhne 0,50, syntetická kategorie nezmizí.
+3. **Má po 5 000 letech některý z rysů PL, DEFINITE, PAST a FUTURE entropii nad 0?**
+   - **Nemá ($E = 0$ u všech čtyř rysů v obou pokusech)**.
+   - Gramatikalizace v modelu působí jako jednosměrná rohatka: inovace opisů vznikají snadno a sytí potřebu, ale bez fungujícího zániku syntetické báze nemůže dojít k přirozenému cyklickému návratu k nulovému stavu.
+   - Skutečné pestrosti v čase dosahují prozodické posuny přízvuku (**14A**: $E = 0{,}497$ v `same`, $0{,}838$ ve `wals`), slovosled (**81A**: $E = 0{,}448$) a typ záporu (**143A**: $E = 0{,}613$).
+
+---
+
+### Výkonnostní audit a sériové páry (`valley-50` proti commitu `5316ac6`)
+Měřeno sériovými páry bezprostředně po sobě (stejný interpreter, nulová souběžná zátěž):
+- **Sériový pár 1**: 30,60 s (`5316ac6`) vs. 29,87 s (nová verze) $\to$ **−2,4 %**
+- **Sériový pár 2**: 29,92 s (`5316ac6`) vs. 29,85 s (nová verze) $\to$ **−0,2 %**
+
+Oba páry s přehledem splňují limit $\le +10\,\%$. Celá testovací sada `pytest -q` (728 testů včetně `test_v2_process_scores` a milníkových bran) prochází za 437 s.
+
+### Finální referenční otisky po části D
+- `phonology`: `1c1bd2c691a4b9aacd499e038b945cdd1c759f6a5a5b1de7ba204362f35fa755`
+- `morphology`: `b673137d804d7542106c47e7203f93c9bf63268d8951909b49df12755b29e849`
+- `syntax`: `9c9803132e86d566e7ccc623f381622a19aedc042c443ed0a1f3d0dc964b0084`
+- `grid-5x5`: `83d79ffb6e029604422730b9906dcf7b68d2ed522ef5f405fe706a6dbf6d5c95`
+- `shift`: `c6892607c6779018a02633a9da44f5d10f9fa98c458e1d31c91cee3b75d6784e`
+- `island-city`: `59e723ed5d4eb316f73c817e92972017e7cb69578746121381b4a609948c4abd`
+- `valley-50`: `9c2e85f1aa5448e50811ffa2db9587bda771ee84564b815243814ddc6ecf2476`
+
 
 
 

@@ -1052,8 +1052,8 @@ na nezávislé řadě seedů `101..120` (u M3 morfologie rozšířeně `101..140
   - `grid-5x5`: `83d79ffb6e029604422730b9906dcf7b68d2ed522ef5f405fe706a6dbf6d5c95`
   - `shift`: `c6892607c6779018a02633a9da44f5d10f9fa98c458e1d31c91cee3b75d6784e`
   - `island-city`: `59e723ed5d4eb316f73c817e92972017e7cb69578746121381b4a609948c4abd`
-  - `valley-50`: `d17c58f6492247d39db581e1a5d4913d1c94e8dc8c9ae42864ccd1a3fbacb393`
-  - *Důvod změny otisků:* Zavedení prozodických inovací (`StressShift`, `StressStrengthChange`) do výchozích změn enginu a navázání prozódie na fonologii v `scenarios.py` (`if phonology or prosody:`). Ve všech fonologických a syntaktických scénářích se nyní inicializují proměnné `prosody:stress_rule` a `prosody:stress_strength`, probíhají posuny přízvuku a přechody síly, a restrukturalizace zaznamenává události změny. Scénáře `morphology` a `grid-5x5` fonologii nezapínají, proto si zachovávají přesnou bitovou shodu.
+  - `valley-50`: `9c2e85f1aa5448e50811ffa2db9587bda771ee84564b815243814ddc6ecf2476`
+  - *Důvod změny otisků:* Zavedení prozodických inovací (`StressShift`, `StressStrengthChange`) do výchozích změn enginu a navázání prozódie na fonologii v `scenarios.py` (`if phonology or prosody:`). Ve všech fonologických a syntaktických scénářích se nyní inicializují proměnné `prosody:stress_rule` a `prosody:stress_strength`, probíhají posuny přízvuku a přechody síly, a restrukturalizace zaznamenává události změny. Scénáře `morphology` a `grid-5x5` fonologii nezapínají, proto si zachovávají přesnou bitovou shodu. Otisk `valley-50` se dále změnil zavedením `CLARITY_DELETE_SCHWA = -0.05` pro percepčně slabé smazání redukovaného vokálu [ə] v `sound.py`.
 - **Stochastické brány (`k` z `N`) a negativní kontroly**: 42 robustních bran a
   10 deterministických/výkonových testů zůstalo beze změny; 10 křehkých či
   hraničních bran (včetně Jespersenova cyklu `8/20` převedeného na `N = 19, k = 1`
@@ -1062,19 +1062,20 @@ na nezávislé řadě seedů `101..120` (u M3 morfologie rozšířeně `101..140
   95% intervalu (`P(Bin(N, p_dolní) < k) <= 1 %`) na souvislých řadách `1..N`,
   beze změny vnitřních prahů tvrzení. U všech 10 převedených bran skončila
   negativní kontrola se vypnutým mechanismem pod prahem `k` (devětkrát `0/N`,
-  jednou `3/10 < 5`). Celá sada testů (`pytest -q`, 665 testů) prochází za
-  428,48 s (7 min 8 s). Otevřené kalibrační otázky (spouštění `NegationReduction`
+  jednou `3/10 < 5`). Celá sada testů (`pytest -q`, 728 testů) prochází za
+  437 s (7 min 17 s). Otevřené kalibrační otázky (spouštění `NegationReduction`
   od `0,5`, síla tabu a gradient substrátu v S3) jsou zapsané pro M7 v
   [`09-zpevneni-bran.md`](09-zpevneni-bran.md). Do `engine-v2` se větev sloučí až
   po schválení uživatelem.
 
 ## Známé mezery a kam patří
 
-Sepsáno 2026-10-28 při revizi plánu po M3.
+Sepsáno 2026-10-28 při revizi plánu po M3; aktualizováno po části D (prozódie a typologie).
 
 | Mezera | Kam |
 |---|---|
-| Přízvuk jako proměnná (změna pravidla přízvuku), délka a kompenzační prodloužení, tónová perturbace → tonogeneze | doplněk M2 (po M3b) |
+| ~~Přízvuk jako proměnná (změna pravidla přízvuku) a síla přízvuku~~ | vyřešeno v části D (kroky D1–D2) |
+| Délka samohlásek, kompenzační prodloužení (Kavitskaya 2002) a přízvuk podle váhy slabiky (WALS 15A), tónová perturbace → tonogeneze | M7 (kalibrace modelu) |
 | Sporadické změny: metateze, disimilace, nepravidelné zkracování velmi častých slov | doplněk M2 |
 | Nové změny aspirace, ejektivity a glotalizace (sekundární palatalizace, labializace a vokalická nazalizace mají vlastní doplněk v části B typologie) | další doplněk M2, mimo rozsah B |
 | ~~Frekvence užití se nevyvíjí~~ | vyřešeno v M3b |
@@ -1084,8 +1085,8 @@ Sepsáno 2026-10-28 při revizi plánu po M3.
 | ~~Konverze mezi slovními druhy~~ | vyřešeno v M4 |
 | ~~Exaptace a jazyky bez některých kategorií~~ | vyřešeno v M4b |
 | Další funkce katalogu: vid, shoda, osoba, rod a jmenné třídy; víc dárců exaptace | rozšíření katalogu (data), kdykoli |
-| Člen (a obecně funkce `zero`) v dlouhém horizontu (5 000 let) vznikne ve většině jazyků (C2 zavedlo tlumení kontextem, takže v 1 000 letech je 20–35 % bez členu; zánik C3 je bez fonologické eroze neaktivní). Nález z citlivosti C2: brána `M4b::clen_vznikne` projde jen pro context DEFINITE ≤ 0,2; výchozí 0,22 leží těsně pod hranicí. Brána vynucuje vznik členu skoro všude, což je v rozporu s WALS 37A (~39 % bez členu); kandidát na revizi brány v M7 (hodnota 0,22 neměněna) | doplněk M2 (prozódie a redukce nepřízvučných slabik), kontakt L2 (M5/M6b), revize brány M7 |
-| `CategoryLoss` (zánik kategorie, C3) je v modelu neaktivní: efektivní potřeba všech funkcí s opisem převyšuje 0,15 (DEF 0,195, FUT 0,26, PL 0,42, PAST 0,75) a samovolná fonetická eroze koncovek v modelu bez prozódie nepřesahuje weakness 0,15 (spouštěcí práh 0,5 nikdy nenastane) | doplněk M2 (prozodický model přízvuku a redukce nepřízvučných slabik) |
+| Člen (a obecně funkce `zero`) v dlouhém horizontu (5 000 let) vznikne ve většině jazyků (C2 zavedlo tlumení kontextem, takže v 1 000 letech je 20–35 % bez členu; zánik C3 je bez fonologické eroze neaktivní). Nález z citlivosti C2: brána `M4b::clen_vznikne` projde jen pro context DEFINITE ≤ 0,2; výchozí 0,22 leží těsně pod hranicí. Brána vynucuje vznik členu skoro všude, což je v rozporu s WALS 37A (~39 % bez členu); kandidát na revizi brány v M7 (hodnota 0,22 neměněna) | kontakt L2 (M5/M6b), revize brány M7 |
+| `CategoryLoss` (zánik kategorie, C3) a velký cyklus jsou v samovolném běhu neaktivní: samovolná eroze v D4 nedosahuje weakness 0,50 (PL max. ~0,29). Erozi stále brzdí: (1) `CodaLoss` clarity −0,32 a martinetovská `FunctionalLoad` proti splynutí pádových koncovek s nominativem, (2) řídké návrhy apokopy ə, (3) `Phonotactics` trestá novou kodu absolutně (výchozí `CODA_TOLERANCE_SCALE = 0.0`). Kalibrace konstant a fonotaktiky patří do M7 proti datům | M7 (kalibrace vah zvukových změn a fonotaktické tolerance kod) |
 | Přirozená četnost eroze konkrétní koncovky je nízká (zvukové inovace se dělí mezi stovky kandidátů); analytizace je proto doložena kontrolovanými pokusy. Nález z diagnózy D0: apokopa 0/281 celkem ustálena (0/226 na koncovkách, 0/55 na kořenech) – model ji prakticky vylučuje, ač je typologicky jednou z nejčastějších změn. `Phonotactics` trestá novou kódu absolutně (−0,17), nezávisle na stavbě slabiky jazyka | M7 (kalibrace tempa zvukových změn a revize fonotaktického tlaku) |
 | Malé izolované komunity podle Trudgilla hromadí morfofonologickou složitost díky husté síti silných vazeb, která udrží i neobvyklé změny. Model to nereprodukuje: alternace kmene roste s velikostí skupiny, protože velká skupina účinněji přijme přirozené zvukové změny. Nepravidelnost koncovek už velikost sleduje správně. Tlak místní identity (M6b) to nevyřešil | M7 (tempo a váhy zvukových změn), případně výzkum |
 | ~~Stabilní dvojjazyčnost a superstrát~~ | vyřešeno v M6b (domény, demografie ze sítě) |

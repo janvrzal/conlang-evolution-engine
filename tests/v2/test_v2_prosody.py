@@ -216,3 +216,104 @@ def test_articulation_stress_strength_multiplier() -> None:
 
     # Restore default
     linguistic.STRESS_STRENGTH_MULTIPLIER = 1.5
+
+
+def test_clarity_schwa_vs_full_deletion() -> None:
+    from cee.v2.changes import sound
+    from cee.v2.language.segments import default_table
+
+    table = default_table()
+    inventory = tuple(range(len(table.ipa)))
+    schwa = table.id_of("ə")
+
+    apocope = sound.Apocope()
+    cands_apo = apocope.candidates(table, inventory)
+    cands_apo_schwa = [c for c in cands_apo if f"{table.ipa[schwa]} → ∅" in c.label]
+    cands_apo_full = [c for c in cands_apo if "a → ∅" in c.label]
+
+    assert len(cands_apo_schwa) == 1
+    assert len(cands_apo_full) == 1
+    assert cands_apo_schwa[0].clarity == sound.CLARITY_DELETE_SCHWA
+    assert cands_apo_full[0].clarity == sound.CLARITY_DELETE_FULL
+    assert sound.CLARITY_DELETE_SCHWA == -0.05
+    assert sound.CLARITY_DELETE_FULL == -0.15
+
+    syncope = sound.Syncope()
+    cands_syn = syncope.candidates(table, inventory)
+    cands_syn_schwa = [c for c in cands_syn if f"{table.ipa[schwa]} → ∅" in c.label]
+    cands_syn_full = [c for c in cands_syn if "a → ∅" in c.label]
+
+    assert len(cands_syn_schwa) == 1
+    assert len(cands_syn_full) == 1
+    assert cands_syn_schwa[0].clarity == sound.CLARITY_DELETE_SCHWA
+    assert cands_syn_full[0].clarity == sound.CLARITY_DELETE_FULL
+
+
+def test_phonotactics_coda_tolerance() -> None:
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from cee.v2.phonology import changed_id
+    from cee.v2.pressures import linguistic
+    from cee.v2.pressures.base import PressureBatch
+    from cee.v2.pressures.linguistic import Phonotactics
+
+    var_apocope = "process:apocope|{schwa}|delete"
+    proc_apocope = SimpleNamespace(
+        variable_id=var_apocope,
+        family="apocope",
+        operation="delete",
+        label="ə → ∅ /C_# nepřízvučně",
+    )
+
+    # Mock code with 40% codas in vocabulary
+    mock_code = SimpleNamespace(
+        phonology=SimpleNamespace(
+            version=1,
+            cache={"coda_share": (1, 0.40)},
+            vocabulary={"w1", "w2"},
+        )
+    )
+    mock_group = SimpleNamespace(main_code=mock_code)
+    world = SimpleNamespace(
+        processes={var_apocope: proc_apocope},
+        groups={"g1": mock_group},
+        table=None,
+    )
+
+    freqs = np.zeros((1, 1, 2), dtype=np.float64)
+    freqs[0, 0, 1] = 0.5
+
+    batch = PressureBatch(
+        world=world,  # type: ignore[arg-type]
+        variable_ids=(var_apocope,),
+        group_ids=("g1",),
+        freqs=freqs,
+        slots=((None, changed_id(var_apocope)),),
+        tick=1,
+        heard=np.zeros_like(freqs),
+        memo={
+            (var_apocope, 0): SimpleNamespace(markedness_delta=0.40),
+        },
+    )
+
+    pt = Phonotactics()
+
+    # 1. CODA_TOLERANCE_SCALE = 0.5: delta = 0.40 * (1 - 0.5 * 0.40) = 0.40 * 0.80 = 0.32 -> score = -0.32
+    linguistic.CODA_TOLERANCE_SCALE = 0.5
+    scores = pt.scores(batch)
+    assert np.isclose(scores[0, 0, 1], -0.32)
+
+    # 2. CODA_TOLERANCE_SCALE = 0.0 (starý absolutní model): score = -0.40
+    linguistic.CODA_TOLERANCE_SCALE = 0.0
+    scores_zero = pt.scores(batch)
+    assert np.isclose(scores_zero[0, 0, 1], -0.40)
+
+    # 3. CODA_TOLERANCE_SCALE = 1.0 (plná tolerance): delta = 0.40 * (1 - 1.0 * 0.40) = 0.24 -> score = -0.24
+    linguistic.CODA_TOLERANCE_SCALE = 1.0
+    scores_full = pt.scores(batch)
+    assert np.isclose(scores_full[0, 0, 1], -0.24)
+
+    # Restore default
+    linguistic.CODA_TOLERANCE_SCALE = 0.0

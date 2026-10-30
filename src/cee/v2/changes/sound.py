@@ -883,22 +883,34 @@ class VowelReduction(SoundChange):
         return found
 
 
+#: Ztráta akustických vodítek při smazání nepřízvučného plného vokálu.
+CLARITY_DELETE_FULL: float = -0.15
+
+#: Ztráta akustických vodítek při smazání redukovaného vokálu [ə] (šva).
+#: Redukovaný vokál nese minimální percepční kontrast (Ohala 1993; Blevins 2004),
+#: proto je trest za jeho zánik výrazně nižší než u plných samohlásek.
+CLARITY_DELETE_SCHWA: float = -0.05
+
+
 class Syncope(SoundChange):
     """Nepřízvučný vokál mezi souhláskami zmizí."""
 
     kind, prior, domain = "syncope", 0.5, "vowel"
 
     def candidates(self, table, inventory):
+        schwa = table.id_of("ə")
         found = [
             _make(self.kind, f"{table.ipa[v]} → ∅ /C_C nepřízvučně", target=_single(table, v),
                   operation="delete", left=table.CONSONANT, right=table.CONSONANT,
-                  stress="unstressed", medial=True, ease=0.15, clarity=-0.15, reductive=True)
+                  stress="unstressed", medial=True, ease=0.15,
+                  clarity=CLARITY_DELETE_SCHWA if v == schwa else CLARITY_DELETE_FULL,
+                  reductive=True)
             for v in _vowels(table, inventory)
         ]
         found.append(_make(self.kind, "vysoké vokály → ∅ /C_C nepřízvučně",
                            target=table.pattern({"syl": "+", "hi": "+"}), operation="delete",
                            left=table.CONSONANT, right=table.CONSONANT, stress="unstressed",
-                           medial=True, ease=0.15, clarity=-0.15, reductive=True))
+                           medial=True, ease=0.15, clarity=CLARITY_DELETE_FULL, reductive=True))
         return found
 
 
@@ -908,16 +920,19 @@ class Apocope(SoundChange):
     kind, prior, domain = "apocope", 0.5, "vowel"
 
     def candidates(self, table, inventory):
+        schwa = table.id_of("ə")
         found = [
             _make(self.kind, f"{table.ipa[v]} → ∅ /C_# nepřízvučně", target=_single(table, v),
                   operation="delete", left=table.CONSONANT, right=table.BOUNDARY,
-                  stress="unstressed", ease=0.15, clarity=-0.15, reductive=True)
+                  stress="unstressed", ease=0.15,
+                  clarity=CLARITY_DELETE_SCHWA if v == schwa else CLARITY_DELETE_FULL,
+                  reductive=True)
             for v in _vowels(table, inventory)
         ]
         found.append(_make(self.kind, "vokály → ∅ /C_# nepřízvučně",
                            target=table.VOWEL, operation="delete", left=table.CONSONANT,
-                           right=table.BOUNDARY, stress="unstressed", ease=0.15, clarity=-0.15,
-                           reductive=True))
+                           right=table.BOUNDARY, stress="unstressed", ease=0.15,
+                           clarity=CLARITY_DELETE_FULL, reductive=True))
         return found
 
 
