@@ -8,6 +8,7 @@ opakovaná past legacy jádra (AGENT.md 3.1b).
 
 from __future__ import annotations
 
+import unicodedata
 from functools import lru_cache
 from typing import Iterable, Mapping, Sequence
 
@@ -51,9 +52,29 @@ class SegmentTable:
                 shortest[vector] = ipa
         # Řazení podle IPA dává stabilní ID nezávislé na pořadí v PanPhonu.
         ordered = sorted(shortest.items(), key=lambda item: (item[1], item[0]))
-        self.ipa: tuple[str, ...] = tuple(ipa for _, ipa in ordered)
-        self.vectors: IntArray = np.array([vector for vector, _ in ordered], dtype=np.int8)
+        # Append explicit secondary-articulation symbols without renumbering
+        # existing IDs. PanPhon assigns k and kʲ (and ɡ and ɡʲ) the same vector.
+        # Palatalized velars are phonetically advanced velars: setting back=0
+        # (central) distinguishes them from plain velars (back=1) and from palatals
+        # c/ɟ (back=-1) without any vector collisions across the entire inventory.
+        existing = {ipa for _, ipa in ordered}
+        aliases = [base + mark for base in ("p", "t", "k", "b", "d", "ɡ", "s", "m", "n", "l", "r")
+                   for mark in ("ʲ",)]
+        aliases += [base + "ʷ" for base in ("k", "ɡ")]
+        aliases += [base + "\u0303" for base in ("a", "e", "i", "o", "u", "ɛ", "ɔ", "ə")]
+        appended = []
+        back_index = self.index["back"]
+        for ipa in aliases:
+            parsed = table.word_fts(ipa)
+            if len(parsed) == 1 and ipa not in existing:
+                vec = [int(value) for value in parsed[0].numeric()]
+                if ipa in ("kʲ", "ɡʲ"):
+                    vec[back_index] = 0
+                appended.append((tuple(vec), ipa))
+        self.ipa: tuple[str, ...] = tuple(ipa for _, ipa in (*ordered, *appended))
+        self.vectors: IntArray = np.array([vector for vector, _ in (*ordered, *appended)], dtype=np.int8)
         self._by_vector = {vector: position for position, (vector, _) in enumerate(ordered)}
+        self._aliases = {ipa: position for position, ipa in enumerate(self.ipa) if ipa in aliases}
         self._parser = table
         self.boundary = len(self.ipa)
         self._patterns: dict[tuple[tuple[str, str], ...], Pattern] = {}
@@ -72,6 +93,9 @@ class SegmentTable:
         # artikulace (ʰ ʷ ˠ …). Jinak by nejbližší vektor k /o/ se zvýšeným
         # jazykem byl velarizované /oˠ/, ne /u/.
         self.plain: BoolArray = np.array([_is_plain(ipa) for ipa in self.ipa], dtype=bool)
+        self._secondary = tuple(_secondary_marks(ipa) for ipa in self.ipa)
+        self._secondary_tuple = tuple(tuple(sorted(marks)) for marks in self._secondary)
+        self._allowed_masks: dict[tuple[str, ...], BoolArray] = {}
 
     # --- převody --------------------------------------------------------
 
@@ -84,9 +108,13 @@ class SegmentTable:
             segments = self._parser.word_fts(ipa.replace("g", "ɡ"))
             if not segments:
                 raise ValueError(f"Tvar '{ipa}' neobsahuje žádnou známou hlásku.")
+            symbols = self._parser.ipa_segs(ipa.replace("g", "ɡ"))
             found = self._parsed[ipa] = tuple(
-                self._by_vector[tuple(int(v) for v in segment.numeric())] for segment in segments
+                self._aliases.get(symbol, self._by_vector.get(tuple(int(v) for v in segment.numeric()), -1))
+                for symbol, segment in zip(symbols, segments)
             )
+            if -1 in found or len(found) != len(segments):
+                raise ValueError(f"Tvar '{ipa}' obsahuje nepodporovanou hlásku.")
         return found
 
     def render(self, form: Iterable[int]) -> str:
@@ -149,8 +177,18 @@ class SegmentTable:
         rounded = 1.0 if self.feature(segment, "round") == 1 else 0.0
         return height, back, rounded
 
-    def changed(self, segment: int, changes: tuple[tuple[str, str], ...]) -> int | None:
-        return _closest(self, segment, changes)
+    def changed(
+        self, segment: int, changes: tuple[tuple[str, str], ...], allow: tuple[str, ...] = ()
+    ) -> int | None:
+        # Preserve secondary articulation already present on the input. A
+        # feature change must not silently depalatalize or denasalize it;
+        # explicit reverse processes use ``replace`` to remove the mark.
+        if not allow:
+            allow_key = self._secondary_tuple[segment]
+        else:
+            inherited = self._secondary[segment]
+            allow_key = allow if not inherited else tuple(sorted(inherited | set(allow)))
+        return _closest(self, segment, changes, allow_key)
 
     def features_of(self, ipa: str, names: Iterable[str]) -> tuple[tuple[str, str], ...]:
         """Hodnoty vybraných rysů konkrétní hlásky, jako požadavek pro změnu."""
@@ -160,10 +198,21 @@ class SegmentTable:
 
 
 @lru_cache(maxsize=1 << 16)
-def _closest_cached(table_id: int, segment: int, changes: tuple[tuple[str, str], ...]) -> int | None:
+def _closest_cached(
+    table_id: int, segment: int, changes: tuple[tuple[str, str], ...], allow: tuple[str, ...]
+) -> int | None:
     table = _TABLES[table_id]
     vectors = table.vectors
-    candidates = table.plain.copy()
+    if allow:
+        cached = table._allowed_masks.get(allow)
+        if cached is None:
+            cached = table._allowed_masks[allow] = np.array([
+                set(allow).issubset(marks) and _allowed_marks(ipa, allow)
+                for ipa, marks in zip(table.ipa, table._secondary)
+            ], dtype=bool)
+        candidates = cached.copy()
+    else:
+        candidates = table.plain.copy()
     for name, value in changes:
         candidates &= vectors[:, table.index[name]] == _VALUES[value]
     if not candidates.any():
@@ -182,10 +231,12 @@ def _closest_cached(table_id: int, segment: int, changes: tuple[tuple[str, str],
 _TABLES: dict[int, SegmentTable] = {}
 
 
-def _closest(table: SegmentTable, segment: int, changes: tuple[tuple[str, str], ...]) -> int | None:
+def _closest(
+    table: SegmentTable, segment: int, changes: tuple[tuple[str, str], ...], allow: tuple[str, ...]
+) -> int | None:
     """Nejbližší skutečná hláska s požadovanými rysy, nebo ``None``."""
     _TABLES.setdefault(id(table), table)
-    return _closest_cached(id(table), segment, changes)
+    return _closest_cached(id(table), segment, changes, allow)
 
 
 @lru_cache(maxsize=1)
@@ -197,7 +248,25 @@ def default_table() -> SegmentTable:
 _PLAIN_MARKS = {"\u0361", "ː"}
 
 
+def _ipa_normalized(ipa: str) -> str:
+    return unicodedata.normalize("NFD", ipa)
+
+
+def _secondary_marks(ipa: str) -> frozenset[str]:
+    return frozenset(char for char in _ipa_normalized(ipa)
+                     if char in "ʰʷʲˠˤʼ" or (unicodedata.combining(char) and char not in _PLAIN_MARKS))
+
+
+def _allowed_marks(ipa: str, allow: tuple[str, ...]) -> bool:
+    ipa = _ipa_normalized(ipa)
+    return all(char.isalpha() and char not in "ʰʷʲˠˤʼ" or char in _PLAIN_MARKS or char in allow
+               for char in ipa) and all(
+        not unicodedata.combining(char) or char in allow or char in _PLAIN_MARKS for char in ipa
+    )
+
+
 def _is_plain(ipa: str) -> bool:
+    ipa = _ipa_normalized(ipa)
     return all(char.isalpha() or char in _PLAIN_MARKS for char in ipa) and not any(
         char in "ʰʷʲˠˤʼ" for char in ipa
     )

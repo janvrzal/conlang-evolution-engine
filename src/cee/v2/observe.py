@@ -7,11 +7,13 @@ skutečného stavu repertoárů.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Sequence
 
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2.language.segments import SegmentTable
 from cee.v2.rng import stable_id
 from cee.v2.world import World
 
@@ -64,8 +66,14 @@ def segment_cost(world: World, first: int, second: int) -> float:
     if first == second:
         return 0.0
     assert world.table is not None
-    vectors = world.table.vectors
-    return min(1.0, float((vectors[first] != vectors[second]).sum()) / FEATURE_SCALE)
+    return _segment_cost_cached(world.table, first, second, FEATURE_SCALE)
+
+
+@lru_cache(maxsize=65536)
+def _segment_cost_cached(table: SegmentTable, first: int, second: int, scale: float) -> float:
+    # A strong table reference in the key avoids accidental reuse of object IDs.
+    vectors = table.vectors
+    return min(1.0, float((vectors[first] != vectors[second]).sum()) / scale)
 
 
 _DISTANCES: dict[tuple[tuple[int, ...], tuple[int, ...], int], float] = {}

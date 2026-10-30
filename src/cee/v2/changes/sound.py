@@ -68,6 +68,7 @@ class ContextStats:
     segment: npt.NDArray[np.intp]
     following: npt.NDArray[np.intp]
     stressed: npt.NDArray[np.bool_]
+    following2: npt.NDArray[np.intp]
     count: npt.NDArray[np.float64]
     inventory: tuple[int, ...]
 
@@ -77,6 +78,8 @@ class ContextStats:
             mask &= process.left.mask[self.previous]
         if process.right is not None:
             mask &= process.right.mask[self.following]
+        if process.right2 is not None:
+            mask &= process.right2.mask[self.following2]
         if process.stress == "stressed":
             mask &= self.stressed
         elif process.stress == "unstressed":
@@ -84,13 +87,13 @@ class ContextStats:
         return float(self.count[mask].sum())
 
 
-_CONTEXTS: dict[tuple[object, ...], tuple[tuple[int, int, int, bool], ...]] = {}
+_CONTEXTS: dict[tuple[object, ...], tuple[tuple[int, int, int, bool, int], ...]] = {}
 _CONTEXTS_LIMIT = 1 << 17
 
 
 def form_contexts(
     form: tuple[int, ...], table: SegmentTable, rule: StressRule
-) -> tuple[tuple[int, int, int, bool], ...]:
+) -> tuple[tuple[int, int, int, bool, int], ...]:
     """Prostředí všech hlásek tvaru; čistá funkce tvaru, proto zapamatovaná."""
     key = (form, rule, id(table))
     found = _CONTEXTS.get(key)
@@ -104,6 +107,7 @@ def form_contexts(
                 segment,
                 form[index + 1] if index + 1 < len(form) else table.boundary,
                 index == stress,
+                form[index + 2] if index + 2 < len(form) else table.boundary,
             )
             for index, segment in enumerate(form)
         )
@@ -133,6 +137,7 @@ def context_stats(context: InnovationContext) -> ContextStats | None:
         segment=np.array([key[1] for key in keys], dtype=np.intp),
         following=np.array([key[2] for key in keys], dtype=np.intp),
         stressed=np.array([key[3] for key in keys], dtype=bool),
+        following2=np.array([key[4] for key in keys], dtype=np.intp),
         count=np.array([counts[key] for key in keys], dtype=np.float64),
         inventory=tuple(sorted({key[1] for key in keys})),
     )
@@ -154,6 +159,9 @@ class _Candidates:
         self.right = np.array([
             everything if process.right is None else process.right.mask for process in processes
         ]).reshape(-1, size)
+        self.right2_rows = np.array([i for i, process in enumerate(processes) if process.right2 is not None],
+                                    dtype=np.intp)
+        self.right2 = np.array([cast(Pattern, processes[i].right2).mask for i in self.right2_rows], dtype=bool).reshape(-1, size)
         # Identifikátor proměnné a jen první kandidát se stejnou změnou.
         self.variable_ids = [Variable("process", process.key).id for process in processes]
         seen: set[str] = set()
@@ -170,6 +178,8 @@ class _Candidates:
         if not self.processes:
             return np.zeros(0)
         mask = self.target[:, stats.segment] & self.left[:, stats.previous] & self.right[:, stats.following]
+        if len(self.right2_rows):
+            mask[self.right2_rows] &= self.right2[:, stats.following2]
         mask &= np.where(self.stressed[:, None], stats.stressed[None, :], True)
         unstressed = ~stats.stressed & table.vowel_mask[stats.segment]
         mask &= np.where(self.unstressed[:, None], unstressed[None, :], True)
@@ -226,18 +236,22 @@ class _CombinedSoundCandidates:
             self.right = np.array([
                 everything if p.right is None else p.right.mask for p in all_processes
             ], dtype=bool).reshape(-1, size)
-            self.stressed = np.array([p.stress == "stressed" for p in all_processes], dtype=bool)
-            self.unstressed = np.array([p.stress == "unstressed" for p in all_processes], dtype=bool)
-            self.has_stressed = bool(np.any(self.stressed))
-            self.has_unstressed = bool(np.any(self.unstressed))
+            self.right2_rows = np.array([i for i, p in enumerate(all_processes) if p.right2 is not None],
+                                        dtype=np.intp)
+            self.right2 = np.array([cast(Pattern, all_processes[i].right2).mask for i in self.right2_rows],
+                                   dtype=bool).reshape(-1, size)
+            self.stressed_rows = np.array([i for i, p in enumerate(all_processes) if p.stress == "stressed"],
+                                          dtype=np.intp)
+            self.unstressed_rows = np.array([i for i, p in enumerate(all_processes) if p.stress == "unstressed"],
+                                            dtype=np.intp)
         else:
             self.target = np.zeros((0, size), dtype=bool)
             self.left = np.zeros((0, size), dtype=bool)
             self.right = np.zeros((0, size), dtype=bool)
-            self.stressed = np.zeros(0, dtype=bool)
-            self.unstressed = np.zeros(0, dtype=bool)
-            self.has_stressed = False
-            self.has_unstressed = False
+            self.right2_rows = np.zeros(0, dtype=np.intp)
+            self.right2 = np.zeros((0, size), dtype=bool)
+            self.stressed_rows = np.zeros(0, dtype=np.intp)
+            self.unstressed_rows = np.zeros(0, dtype=np.intp)
 
     def eval_supports(
         self,
@@ -245,18 +259,21 @@ class _CombinedSoundCandidates:
         seg: npt.NDArray[np.intp],
         foll: npt.NDArray[np.intp],
         str_arr: npt.NDArray[np.bool_],
+        foll2: npt.NDArray[np.intp],
         counts_int64: npt.NDArray[np.int64],
         table: SegmentTable,
     ) -> npt.NDArray[np.int64]:
         if not self.all_processes or len(counts_int64) == 0:
             return np.zeros(len(self.all_processes), dtype=np.int64)
         mask = self.target[:, seg] & self.left[:, prev] & self.right[:, foll]
-        if self.has_stressed:
-            mask &= np.where(self.stressed[:, None], str_arr[None, :], True)
-        if self.has_unstressed:
+        if len(self.right2_rows):
+            mask[self.right2_rows] &= self.right2[:, foll2]
+        if len(self.stressed_rows):
+            mask[self.stressed_rows] &= str_arr
+        if len(self.unstressed_rows):
             unstressed = ~str_arr & table.vowel_mask[seg]
-            mask &= np.where(self.unstressed[:, None], unstressed[None, :], True)
-        result: npt.NDArray[np.int64] = mask.astype(np.int64) @ counts_int64
+            mask[self.unstressed_rows] &= unstressed
+        result: npt.NDArray[np.int64] = mask @ counts_int64
         return result
 
 
@@ -344,36 +361,47 @@ class SoundSupportIndex:
             if not contexts.counts:
                 self.supports = np.zeros(len(combined.all_processes), dtype=np.int64)
             else:
-                keys = list(contexts.counts.keys())
-                counts_arr = np.array([contexts.counts[k] for k in keys], dtype=np.int64)
+                items = list(contexts.counts.items())
+                keys = [key for key, _ in items]
+                counts_arr = np.array([count for _, count in items], dtype=np.int64)
                 prev = np.array([k[0] for k in keys], dtype=np.intp)
                 seg = np.array([k[1] for k in keys], dtype=np.intp)
                 foll = np.array([k[2] for k in keys], dtype=np.intp)
                 str_arr = np.array([k[3] for k in keys], dtype=bool)
-                self.supports = combined.eval_supports(prev, seg, foll, str_arr, counts_arr, table)
+                foll2 = np.array([k[4] for k in keys], dtype=np.intp)
+                self.supports = combined.eval_supports(prev, seg, foll, str_arr, foll2, counts_arr, table)
             self.table_id = id(table)
             self.inventory = inventory
             self.context_generation = contexts.generation
             self.delta_cursor = len(contexts.deltas)
             self.effective_supports = np.zeros(0, dtype=np.int64)
         else:
-            new_deltas = contexts.deltas[self.delta_cursor :]
+            new_deltas = contexts.deltas[self.delta_cursor:]
             self.delta_cursor = len(contexts.deltas)
-            if new_deltas:
-                agg: dict[tuple[int, int, int, bool], int] = {}
-                for ctx, diff in new_deltas:
-                    agg[ctx] = agg.get(ctx, 0) + diff
-                non_zero = [(ctx, diff) for ctx, diff in agg.items() if diff != 0]
-                if non_zero:
-                    diffs_arr = np.array([diff for _, diff in non_zero], dtype=np.int64)
-                    prev = np.array([k[0] for k, _ in non_zero], dtype=np.intp)
-                    seg = np.array([k[1] for k, _ in non_zero], dtype=np.intp)
-                    foll = np.array([k[2] for k, _ in non_zero], dtype=np.intp)
-                    str_arr = np.array([k[3] for k, _ in non_zero], dtype=bool)
-                    delta_supps = combined.eval_supports(prev, seg, foll, str_arr, diffs_arr, table)
-                    self.supports = self.supports + delta_supps
+            if not new_deltas:
+                self.version = state.version
+                return
+            agg: dict[tuple[int, int, int, bool, int], int] = {}
+            for ctx, diff in new_deltas:
+                agg[ctx] = agg.get(ctx, 0) + diff
+            items = [(ctx, diff) for ctx, diff in agg.items() if diff != 0]
+            if not items:
+                self.version = state.version
+                return
+            keys = [key for key, _ in items]
+            diffs_arr = np.array([count for _, count in items], dtype=np.int64)
+            prev = np.array([k[0] for k in keys], dtype=np.intp)
+            seg = np.array([k[1] for k in keys], dtype=np.intp)
+            foll = np.array([k[2] for k in keys], dtype=np.intp)
+            str_arr = np.array([k[3] for k in keys], dtype=bool)
+            foll2 = np.array([k[4] for k in keys], dtype=np.intp)
+            delta_supps = combined.eval_supports(prev, seg, foll, str_arr, foll2, diffs_arr, table)
+            self.supports = self.supports + delta_supps
 
         new_effective = np.where(self.supports < 2, np.int64(0), np.minimum(np.int64(8), self.supports))
+        if len(self.effective_supports) == len(new_effective) and np.array_equal(new_effective, self.effective_supports):
+            self.version = state.version
+            return
         total_prior = _total_prior()
 
         for ch in SOUND_CHANGES:
@@ -1015,11 +1043,158 @@ class Prothesis(SoundChange):
                       right=table.CONSONANT, ease=-0.05, clarity=0.1)]
 
 
+
+
+def _feature_delta(table: SegmentTable, source: int, target: int) -> tuple[tuple[str, str], ...]:
+    symbols = {1: "+", -1: "-", 0: "0"}
+    return tuple(sorted((name, symbols[table.feature(target, name)]) for name in table.names
+                        if table.feature(source, name) != table.feature(target, name)))
+
+
+class SecondaryPalatalization(SoundChange):
+    """C → Cʲ / _i,j. The numerical prior is an authored heuristic.
+
+    Blevins (2004), *Evolutionary Phonology: The Emergence of Sound Patterns*,
+    Cambridge University Press; Kümmel (2007), *Konsonantenwandel*, Reichert.
+    The original direct Palatalization remains a parallel historical pathway.
+    """
+    kind, prior, domain = "secondary_palatalization", 0.35, "consonant"
+
+    def candidates(self, table, inventory):
+        front = table.segments(("i", "j"))
+        found = []
+        for symbol in ("p", "t", "k", "b", "d", "ɡ", "s", "m", "n", "l", "r"):
+            src, dst = table.id_of(symbol), table.id_of(symbol + "ʲ")
+            if src in inventory and src != dst:
+                found.append(_make(self.kind, f"{symbol} → {symbol}ʲ /_i,j", target=_single(table, src),
+                                   operation="change", changes=_feature_delta(table, src, dst),
+                                   allow=("ʲ",), right=front, ease=0.1))
+        return found
+
+
+class Depalatalization(SoundChange):
+    """Loss of secondary palatalization; numerical prior is an authored heuristic.
+
+    Blevins (2004), *Evolutionary Phonology: The Emergence of Sound Patterns*,
+    Cambridge University Press; Kümmel (2007), *Konsonantenwandel*, Reichert.
+    """
+    kind, prior, domain = "depalatalization", 0.2, "consonant"
+
+    def candidates(self, table, inventory):
+        return [_make(self.kind, f"{symbol}ʲ → {symbol}", target=_single(table, table.id_of(symbol + "ʲ")),
+                      operation="replace", segment=table.id_of(symbol), ease=0.1)
+                for symbol in ("p", "t", "k", "b", "d", "ɡ", "s", "m", "n", "l", "r")
+                if table.id_of(symbol + "ʲ") in inventory]
+
+
+class PalatalAffrication(SoundChange):
+    """Palatalized velars develop affricates; prior is an authored heuristic.
+
+    Blevins (2004), *Evolutionary Phonology: The Emergence of Sound Patterns*,
+    Cambridge University Press; Kümmel (2007), *Konsonantenwandel*, Reichert.
+    """
+    kind, prior, domain = "palatal_affrication", 0.25, "consonant"
+
+    def candidates(self, table, inventory):
+        return [_make(self.kind, f"{src} → {dst}", target=_single(table, table.id_of(src)),
+                      operation="replace", segment=table.id_of(dst), ease=0.05)
+                for src, dst in (("kʲ", "t͡ʃ"), ("ɡʲ", "d͡ʒ")) if table.id_of(src) in inventory]
+
+
+class VowelNasalization(SoundChange):
+    """V → Ṽ / _N(C|#); numerical prior is an authored heuristic.
+
+    Ohala & Ohala (1993), “The phonetics of nasal phonology: theorems and
+    data”, in Huffman & Krakow (eds.), *Nasals, Nasalization, and the Velum*,
+    Academic Press, pp. 225–249; doi:10.1016/B978-0-12-360380-7.50013-2.
+    """
+    kind, prior, domain = "vowel_nasalization", 0.35, "vowel"
+
+    def candidates(self, table, inventory):
+        nasal = table.pattern({"nas": "+", "syl": "-"})
+        c_or_boundary = Pattern("C|#", table.CONSONANT.mask | table.BOUNDARY.mask)
+        found = []
+        for symbol in ("a", "e", "i", "o", "u", "ɛ", "ɔ", "ə"):
+            src, dst = table.id_of(symbol), table.id_of(symbol + "\u0303")
+            if src in inventory and src != dst:
+                found.append(_make(self.kind, f"{symbol} → {symbol}̃ /_N(C|#)", target=_single(table, src),
+                                   operation="change", changes=_feature_delta(table, src, dst),
+                                   allow=("\u0303",), right=nasal, right2=c_or_boundary,
+                                   ease=0.1, reductive=True))
+        return found
+
+
+class VowelDenazalization(SoundChange):
+    """Nasal vowels lose nasality; numerical prior is an authored heuristic.
+
+    Blevins (2004), *Evolutionary Phonology: The Emergence of Sound Patterns*,
+    Cambridge University Press. Ohala & Ohala (1993), “The phonetics of nasal
+    phonology: theorems and data”, in Huffman & Krakow (eds.), *Nasals,
+    Nasalization, and the Velum*, Academic Press, pp. 225–249.
+    """
+    kind, prior, domain = "vowel_denazalization", 0.2, "vowel"
+
+    def candidates(self, table, inventory):
+        return [_make(self.kind, f"{symbol}̃ → {symbol}", target=_single(table, table.id_of(symbol + "\u0303")),
+                      operation="replace", segment=table.id_of(symbol), ease=0.1)
+                for symbol in ("a", "e", "i", "o", "u", "ɛ", "ɔ", "ə")
+                if table.id_of(symbol + "\u0303") in inventory]
+
+
+class Labialization(SoundChange):
+    """Velar → labialized velar / _u,w; prior is an authored heuristic.
+
+    Blevins (2004), *Evolutionary Phonology: The Emergence of Sound Patterns*,
+    Cambridge University Press; Kümmel (2007), *Konsonantenwandel*, Reichert.
+    """
+    kind, prior, domain = "labialization", 0.3, "consonant"
+
+    def candidates(self, table, inventory):
+        found = []
+        for symbol in ("k", "ɡ"):
+            src, dst = table.id_of(symbol), table.id_of(symbol + "ʷ")
+            if src in inventory and src != dst:
+                found.append(_make(self.kind, f"{symbol} → {symbol}ʷ /_u,w", target=_single(table, src),
+                                   operation="change", changes=_feature_delta(table, src, dst),
+                                   allow=("ʷ",), right=table.segments(("u", "w")), ease=0.1))
+        return found
+
+
+class Delabialization(SoundChange):
+    """Loss of secondary labialization; numerical prior is an authored heuristic.
+
+    Blevins (2004), *Evolutionary Phonology: The Emergence of Sound Patterns*,
+    Cambridge University Press; Kümmel (2007), *Konsonantenwandel*, Reichert.
+    """
+    kind, prior, domain = "delabialization", 0.2, "consonant"
+
+    def candidates(self, table, inventory):
+        return [_make(self.kind, f"{symbol}ʷ → {symbol}", target=_single(table, table.id_of(symbol + "ʷ")),
+                      operation="replace", segment=table.id_of(symbol), ease=0.1)
+                for symbol in ("k", "ɡ") if table.id_of(symbol + "ʷ") in inventory]
+
+
+class LabialShift(SoundChange):
+    """Labiovelar → labial stop; numerical prior is an authored heuristic.
+
+    Blevins (2004), *Evolutionary Phonology: The Emergence of Sound Patterns*,
+    Cambridge University Press; Kümmel (2007), *Konsonantenwandel*, Reichert.
+    """
+    kind, prior, domain = "labial_shift", 0.2, "consonant"
+
+    def candidates(self, table, inventory):
+        return [_make(self.kind, f"{src} → {dst}", target=_single(table, table.id_of(src)),
+                      operation="replace", segment=table.id_of(dst), ease=0.05)
+                for src, dst in (("kʷ", "p"), ("ɡʷ", "b")) if table.id_of(src) in inventory]
+
+
 SOUND_CHANGES: tuple[SoundChange, ...] = (
     Voicing(), Spirantization(), Debuccalization(), IntervocalicLoss(), Fortition(),
     Palatalization(), NasalAssimilation(), VoicingAssimilation(), FinalDevoicing(), CodaLoss(),
     ClusterSimplification(), VowelReduction(), Syncope(), Apocope(), VowelShift(),
     Diphthongization(), Monophthongization(), GlideFormation(), Epenthesis(), Prothesis(),
+    SecondaryPalatalization(), Depalatalization(), PalatalAffrication(), VowelNasalization(),
+    VowelDenazalization(), Labialization(), Delabialization(), LabialShift(),
 )
 
 _STANDARD_SOUND_PRIORS: dict[type[SoundChange], float] = {

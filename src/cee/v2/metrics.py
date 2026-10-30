@@ -415,3 +415,58 @@ def underlying_inventory_proxy(world: World, language: Sequence[str]) -> dict[st
         "nasal_vowel": any(world.table.vectors[segment, nasal_index] == 1 for segment in vowels),
         "nasal_vowels": sum(int(world.table.vectors[segment, nasal_index] == 1) for segment in vowels),
     }
+
+
+def nasal_contrast_witness(world: World, group_id: str) -> tuple[str, str] | None:
+    """Dva různé dominantní lexémy lišící se jen oralitou/nazalitou vokálu.
+
+    Nosový člen páru navíc nesmí mít bezprostředně za vokálem nosovou
+    souhlásku: vyloučí se tak dosud podmíněná nazalizace i při lexikální
+    difuzi. Jde o postačující pozitivní svědectví v podkladovém slovníku skupiny,
+    nikoli úplný fonologický rozbor. None znamená nedoložený kontrast;
+    neprokazuje jeho absenci ve skutečném jazyce ani v jiných slovech.
+    Aktivní povrchové procesy se zde neaplikují. Sdílený kořen pro dva
+    koncepty (polysémie) se nesmí zaměnit za dva různé lexémy.
+    """
+    import unicodedata
+
+    table = world.table
+    group = world.groups[group_id]
+    if table is None or group.written or group.domain != "home" or group.population <= 0:
+        return None
+    roots: set[str] = set()
+    for variable_id, variable in sorted(world.variables.items()):
+        if variable.kind != "lexical":
+            continue
+        distribution = world.distribution(group_id, variable_id)
+        if distribution is None:
+            continue
+        root = world.variants[distribution.dominant()[0]].payload.get("morpheme")
+        if isinstance(root, str):
+            roots.add(root)
+    nasal_index = table.index["nas"]
+    signatures: dict[int, tuple[tuple[int, ...], str]] = {}
+    buckets: dict[tuple[object, ...], dict[bool, str]] = {}
+    for root in sorted(roots):
+        form = world.form_of(group.main_code, root)
+        lexeme = world.morphemes[root].lexeme_id
+        for position, segment in enumerate(form):
+            if not table.is_vowel(segment):
+                continue
+            nasal = table.feature(segment, "nas") == 1
+            if nasal and position + 1 < len(form):
+                following = form[position + 1]
+                if not table.is_vowel(following) and table.feature(following, "nas") == 1:
+                    continue
+            if segment not in signatures:
+                vector = tuple(int(value) for index, value in enumerate(table.vectors[segment])
+                               if index != nasal_index)
+                spelling = unicodedata.normalize("NFD", table.ipa[segment]).replace("\u0303", "")
+                signatures[segment] = (vector, spelling)
+            key = (form[:position], form[position + 1:], signatures[segment])
+            observed = buckets.setdefault(key, {})
+            other = observed.get(not nasal)
+            if other is not None and other != lexeme:
+                return (other, lexeme) if other < lexeme else (lexeme, other)
+            observed.setdefault(nasal, lexeme)
+    return None

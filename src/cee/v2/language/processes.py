@@ -63,6 +63,10 @@ class Process:
     reductive: bool = False
     #: Čitelný popis pro audit.
     label: str = field(default="", compare=False)
+    #: Explicitně zamýšlené diakritiky výstupu; jinak zůstává výstup plain.
+    allow: tuple[str, ...] = ()
+    #: Druhá následující pozice (např. /_N(C|#)).
+    right2: Pattern | None = None
 
     @cached_property
     def key(self) -> str:
@@ -76,6 +80,8 @@ class Process:
             self.stress or "",
             "medial" if self.medial else "",
         ]
+        if self.allow or self.right2 is not None:
+            parts.extend((",".join(sorted(set(self.allow))), "" if self.right2 is None else self.right2.key))
         return "|".join(parts)
 
     def sites(self, form: Form, table: SegmentTable, rule: StressRule) -> list[int]:
@@ -91,6 +97,10 @@ class Process:
             if self.left is not None and (form[index - 1] if index > 0 else boundary) not in self.left:
                 continue
             if self.right is not None and (form[index + 1] if index < last else boundary) not in self.right:
+                continue
+            if self.right2 is not None and (
+                form[index + 2] if index + 2 <= last else boundary
+            ) not in self.right2:
                 continue
             if self.stress == "stressed" and index != stressed:
                 continue
@@ -157,7 +167,7 @@ class Process:
                 continue
             operation = self.operation
             if operation == "change":
-                output = table.changed(segment, self.changes)
+                output = table.changed(segment, self.changes, self.allow)
                 result.append(segment if output is None else output)
             elif operation == "replace":
                 assert self.segment is not None

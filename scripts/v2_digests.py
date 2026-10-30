@@ -15,6 +15,15 @@ Reference zpevnění bran (neutrální klíč ``innovation-change``):
     shift        47d69ad8a511366b2dedba0a9c30550c0c1d0045aa24ce3eafbdde03663da71a
     island-city  a082c2463488378f975fc050a9265f62856e716d6b1dd0b4d813f7d5323ab2cf
     valley-50    02ccc3819e155cff096d791466f3dcdab88142a4e31e9b1920f92fc9898b1272
+
+Reference části B typologie (doplněk M2, sekundární artikulace):
+    phonology    cd79626de3a0b02f19fea574cf5637971ad012a1f89aeacb9a59a04e8064dd62
+    morphology   b673137d804d7542106c47e7203f93c9bf63268d8951909b49df12755b29e849
+    syntax       3dca8fd6c3e511c3ef059d4e0d5550eadd2e3d94024afcc550b7e730fbaefcf0
+    grid-5x5     83d79ffb6e029604422730b9906dcf7b68d2ed522ef5f405fe706a6dbf6d5c95
+    shift        d1a1e9e5af395b3120426fb3035912720dccdc5727168e62aa6dee1799dd6816
+    island-city  13717cb46affdc42b9938627d9314ab09c23fec227595ce6f53cfa099a22d4aa
+    valley-50    0d462e154e885753e74ad645d2ecb9085bd4d1e442cc86f9229d693f366fca00
 """
 
 from __future__ import annotations

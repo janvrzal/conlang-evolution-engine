@@ -88,11 +88,17 @@ def capture(simulation: Simulation) -> dict[str, Any]:
         snapshot = simulation.snapshots[-1]
         if snapshot.year != simulation.year:
             raise ValueError("A requested measurement must coincide with an observation tick.")
-    profiles, inventories = [], []
+    profiles, inventories, contrasts = [], [], []
     for _, groups in sorted(snapshot.languages.items()):
         profiles.append(metrics.typology_profile(simulation.world, groups))
         inventories.append(metrics.underlying_inventory_proxy(simulation.world, groups))
-    return {"year": int(simulation.year), "profiles": profiles, "inventory_proxies": inventories}
+        witnesses = {group: metrics.nasal_contrast_witness(simulation.world, group) for group in sorted(groups)}
+        total = sum(simulation.world.groups[group].population for group in groups)
+        witnessed = sum(simulation.world.groups[group].population for group, pair in witnesses.items() if pair is not None)
+        contrasts.append({"witness_population_share": witnessed / total if total else 0.0,
+                          "majority_witness": witnessed > total / 2 if total else False,
+                          "witnesses": {group: pair for group, pair in witnesses.items() if pair is not None}})
+    return {"year": int(simulation.year), "profiles": profiles, "inventory_proxies": inventories, "nasal_contrast_witnesses": contrasts}
 
 
 def summarize(runs: list[dict[str, Any]], reference: dict[str, Any]) -> list[dict[str, Any]]:
@@ -144,6 +150,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--markdown", type=Path)
+    parser.add_argument("--label", default="working-tree", help="model label stored in the result metadata")
     parser.add_argument("--seeds", type=int, default=20, help="consecutive seeds 1..N; audit requires N>=20")
     parser.add_argument("--columns", type=int, default=6)
     args = parser.parse_args()
@@ -151,7 +158,14 @@ def main() -> None:
         parser.error("seeds and columns must be positive")
     reference = load_reference()
     runs: list[dict[str, Any]] = []
-    metadata = {"model_base": "68d4e54", "seeds": list(range(1, args.seeds + 1)),
+    source_root = Path(__file__).resolve().parents[1] / "src" / "cee" / "v2"
+    source_digest = hashlib.sha256()
+    for source_file in sorted(source_root.rglob("*.py")):
+        source_digest.update(str(source_file.relative_to(source_root)).encode("utf-8"))
+        source_digest.update(b"\0")
+        source_digest.update(source_file.read_bytes())
+    metadata = {"model_base": "68d4e54", "model_label": args.label,
+                "engine_source_sha256": source_digest.hexdigest(), "seeds": list(range(1, args.seeds + 1)),
                 "columns": args.columns, "years": list(YEARS),
                 "reference_sha256": hashlib.sha256(files("cee.data").joinpath("v2_typology.json").read_bytes()).hexdigest(),
                 "protocol": "serial; pooled observed languages each weight 1; grammatical marginal sampling conditional on support"}

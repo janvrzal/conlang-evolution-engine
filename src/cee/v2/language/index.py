@@ -129,11 +129,11 @@ def _decrement(counter: Counter[Key], key: Key) -> None:
         del counter[key]
 
 
-Context = tuple[int, int, int, bool]
+Context = tuple[int, int, int, bool, int]
 
 
 class ContextIndex(VocabularyIndex[tuple[Context, ...]]):
-    """Kolikrát se ve slovní zásobě vyskytuje (předchozí, hláska, následující, přízvuk)."""
+    """Kolikrát se ve slovní zásobě vyskytuje (předchozí, hláska, následující, přízvuk, za-následující)."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -202,6 +202,7 @@ class ContextIndex(VocabularyIndex[tuple[Context, ...]]):
                 if diff != 0:
                     self.deltas.append((ctx, diff))
             self._step_delta.clear()
+        return touched
         return touched
 
 

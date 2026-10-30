@@ -35,7 +35,10 @@ Pravidla v2, která se snadno poruší:
   posledním bitu.
 * **Tvary slov** jsou `UnitForm` (tvar, hranice kmen | koncovka, koncovka)
   ve `FormStore` kódu; zvukové procesy se aplikují dvoufázově a výstup je
-  vždy skutečná „obyčejná“ hláska (`SegmentTable.changed`).
+  vždy skutečná hláska (`SegmentTable.changed`). Sekundární artikulaci smí
+  změna přidat pouze výslovným záměrem (`Process.allow`); jiné značky nesmí
+  vzniknout vedlejším produktem nejbližšího vektoru. Již přítomné značky
+  se zachovávají, dokud je výslovná změna neodstraní.
 * **Kód je uzel sítě.** Vícejazyčná komunita jsou skupiny se společným
   `community`, jedna na kód; kontakt mezi liniemi jazyků (`Code.language`)
   prochází filtry v `contact.py`. Nový morfém nese `language` kódu, ve

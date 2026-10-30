@@ -415,3 +415,172 @@ Uživatel potvrdil výsledky části A a výslovně povolil pokračovat částí
 Kroky A1 a A2 byly uloženy jako `6f83049` a `058502b`; tento záznam a
 výsledky tvoří krok A3. Část B se vyvíjí nad tímto beze změny modelu
 ověřeným stavem. Nové commity části B zůstávají podmíněné dalším potvrzením.
+
+## Část B: předem stanovený protokol
+
+Část A byla potvrzena a uložena v `6f83049`, `058502b` a `a82f21c`.
+Část B zůstává do dalšího potvrzení necommitnutá. Původní simulační model
+pro srovnání je archiv `a82f21c` v `/tmp/cee-typology-before-b`, v jádře
+shodný s `68d4e54`. Do archivu se přenášejí pouze nové měřicí funkce a runner,
+aby před i po měřil **tentýž přístroj**. Otisky jeho 40 běhů se porovnají
+s výsledky A, což kontroluje, že rozšířené odečty nezměnily vývoj modelu.
+
+- Oba pokusy a všechny seedy `1..20`, šest vesnic, slovník, časy i gramatické
+  reprezentanty z A zůstávají stejné. Žádné přelosování či kalibrace na WALS.
+- Vedle původního inventářového proxy přibývá konzervativní svědectví
+  nosového kontrastu: dva různé dominantní lexémy v téže skupině, jejichž
+  podkladové tvary se liší pouze oralitou/nazalitou jednoho vokálu; u nosového
+  členu páru již nesmí stát hned za vokálem nosová souhláska. Tím se vyloučí
+  dosud podmíněná nazalizace i při neúplné lexikální difuzi. Páry napříč
+  skupinami se nezaměňují za kontrast uvnitř jedné skupiny. Jazyku se vykáže
+  populační podíl skupin s doloženým párem a zvlášť přítomnost svědectví ve
+  většině mluvčích (> 1/2). Nedoložený pár **není** důkaz absence kontrastu;
+  jeho podíl je dolní mez pozitivních dokladů, ne odhad celé WALS populace.
+- Srovnání pestrosti uvádí všechny roky a všechny rysy, změnu entropie,
+  Hellingerovy vzdálenosti a pokrytí. Jakýkoli pokles entropie oproti předchozímu
+  modelu se výslovně uvede; nevyrovnává se účelovou změnou seedu či konstant.
+- Výkon: sériový pár `v2_digests.py`, stejný interpreter a prostředí,
+  rozhodující scénář `valley-50` (50 skupin, 2 000 let). Mez B je +10 % vůči
+  modelu `68d4e54`. Případné další optimalizace musí zachovat již naměřené
+  otisky nového modelu, aby se nezaměnila rychlost se změnou chování.
+- Milníkové brány nemění prahy. Při selhání stochastické brány se změří
+  průchod před a po na nezávislé souvislé řadě `101..120` pomocí
+  `v2_gate_rates.py`; změny seedů či konstant pro získání zelené brány jsou
+  zakázány. Výsledek auditu je podklad k rozhodnutí, nikoli důvod bránu přepsat.
+
+Uživatel zároveň zadal navazující část C ze sdíleného necommitnutého
+`docs/engine-v2/zadani-gramaticka-dynamika.md`. **C začne až po dokončení a
+výslovném potvrzení B.** Teprve pak se zadání zkopíruje do stejného worktree
+jako první commit C. Po C0 se před změnami C1 a dalšími znovu vyčká na
+potvrzení. V této chvíli se zadání C nekopíruje ani necommituje.
+
+
+### B1–B2: reprezentace a změny
+
+`SegmentTable` zachovává všechna původní ID hlásek a potřebné zápisy přidává
+na konec. Matice vznikají parserem PanPhonu se skládáním diakritik; žádný
+ručně vymyšlený rysový vektor se nepřidává. V původním PanPhonu mají `k` a `kʲ` (i `ɡ` a `ɡʲ`) totožný rysový vektor, protože
+veláry mají již ve výchozím stavu `hi=+1`. Aby se zabránilo kolizi rysových vektorů
+při zachování 24 standardních rysů PanPhonu, mají pokročilé veláry `kʲ` a `ɡʲ`
+v `SegmentTable` explicitně nastaveno `back=0` (středová/pokročilá artikulace).
+Tím vzniká přirozené fonetické kontinuum (`k` back=+1 → `kʲ` back=0 → `c` back=−1),
+žádné dvě hlásky v celé tabulce (3 012 hlásek) nemají stejný vektor a rysová
+vzdálenost i změny spolehlivě rozliší `k` od `kʲ` i `kʲ` od `c`. Unikátnost vektorů
+všech hlásek tabulky je chráněna testem.
+*Poznámka k sémantice rysů:* Hodnota `back=0` představuje v PanPhonu „neurčeno“
+(nepříznakovou/středovou artikulaci); `kʲ` a `ɡʲ` proto nespadají do přirozených
+tříd a vzorů s `back=+` (např. asimilace `n → ŋ` před `kʲ` nenastane, pokud vzor
+vyžaduje striktní veláru s `back=+`).
+
+`allow` je součástí kanonického klíče procesu i klíče hledání kandidáta.
+Požadované značky a zděděné značky výchozí hlásky jsou povinné; ostatní se
+odfiltrují. Unicode NFC/NFD se rozpoznává stejně. Předpočítané značky a
+masky zamezují opakované práci ve změnách. Zpětné změny odstraňují značky
+výslovnou náhradou. Kontrola 3 010 původních IPA záznamů doložila stejnou
+množinu plain kandidátů jako dříve; žádný nový alias není plain. Regrese
+/o/ se zvýšeným jazykem nadále vrací /u/, nikoli velarizaci.
+
+`right2` rozšiřuje kontext o druhého pravého souseda pro `_N(C|#)` a je
+součástí identity procesu. Opory inovací, průběžné indexy a samotný aplikátor
+kontrolují totožné prostředí. Banka tvarů může mít konzervativní předfiltr:
+smí pustit navíc kandidáta k přesné kontrole, nesmí vyloučit skutečnou shodu.
+
+| Nová rodina | Prior | Cesta |
+|---|---:|---|
+| SecondaryPalatalization | 0,35 | C → Cʲ před i/j |
+| Depalatalization | 0,20 | Cʲ → C |
+| PalatalAffrication | 0,25 | kʲ/ɡʲ → t͡ʃ/d͡ʒ |
+| VowelNasalization | 0,35 | V → Ṽ před N následovaným souhláskou nebo hranicí |
+| VowelDenazalization | 0,20 | Ṽ → V |
+| Labialization | 0,30 | k/ɡ → kʷ/ɡʷ před u/w |
+| Delabialization | 0,20 | kʷ/ɡʷ → k/ɡ |
+| LabialShift | 0,20 | kʷ/ɡʷ → p/b |
+
+Váhy jsou **autorské heuristické relativní priory**, nikoli naměřené
+historické četnosti z literatury. Byly stanoveny před vyhodnocením B;
+koartikulace dostala mírně vyšší váhu než ztráta sekundární artikulace,
+přechody mezistupňů jsou méně častou doplňkovou cestou. Jde o hypotézu
+výchozího modelu, nikoli výsledek kalibrace. Přidání rodin mění normalizaci
+celkového zvukového prioru, takže i frekvence starších rodin může klesnout.
+Původní přímá palatalizace k → t͡ʃ zůstává jako paralelní historická cesta;
+nová dvojice kroků ji v tomto doplňku nenahrazuje.
+
+Nevzniká žádná zvláštní operace „vytvoř kontrast“. Integrační test nejdřív
+použije existující fonologizaci nazalizace a poté existující `CodaLoss`.
+Až po zániku N se v uložených tvarech doloží minimální pár pã/pa.
+Aspirace, ejektivy a glotalizace nejsou nové rodiny tohoto doplňku a jsou
+výslovně zapsané ve Známých mezerách.
+
+### B3: ověření, výsledky a otisky
+
+Audit části B proběhl na stejném protokolu a sériovém měřidle (40 běhů:
+20 same, 20 wals, seedy 1..20, 6 vesnic, 5 000 let).
+
+#### Nosové samohlásky (proxy, kontrastní svědectví a WALS 10A)
+
+Před částí B byl podíl jazyků s nosovými samohláskami nulový (0/20 ve všech
+letech), protože `_is_plain` veškeré diakritiky plošně zakazoval. Po zavedení
+záměrných diakritik a rodin `VowelNasalization` / `VowelDenazalization`:
+
+| Experiment | Rok 0 | Rok 1 000 | Rok 2 000 | Rok 3 000 | Rok 5 000 | WALS 10A (ref.) |
+|---|---:|---:|---:|---:|---:|---:|
+| `same` (proxy) | 0/20 (0 %) | 9/20 (45 %) | 16/20 (80 %) | 19/20 (95 %) | 19/20 (95 %) | 22,4 % |
+| `wals` (proxy) | 0/20 (0 %) | 9/20 (45 %) | 16/20 (80 %) | 19/20 (95 %) | 19/20 (95 %) | 22,4 % |
+| `same` (kontrast) | 0/20 (0 %) | 0/20 (0 %) | 0/20 (0 %) | 0/20 (0 %) | 0/20 (0 %) | 22,4 % |
+| `wals` (kontrast) | 0/20 (0 %) | 0/20 (0 %) | 0/20 (0 %) | 0/20 (0 %) | 0/20 (0 %) | 22,4 % |
+
+Hodnota 95 % v roce 5 000 je hrubé povrchové proxy inventáře, které zahrnuje i
+podmíněnou (alofonickou) nazalizaci před dosud nezmizelou nosovou souhláskou.
+Naproti tomu konzervativní svědectví kontrastu (minimální pár dvou různých dominantních
+lexémů v téže skupině lišících se pouze oralitou/nazalitou vokálu, kde po nosovém vokálu
+již nenásleduje nosovka) dává 0/20, protože vyžaduje následný zánik kody (`CodaLoss`),
+který v tomto malém scénáři nestihl proběhnout.
+
+**Ani jedno z těchto dvou čísel není přímo srovnatelné s WALS 10A (22,4 %):**
+- Proxy 95 % je horní mez zahrnující alofony a podmíněný kontext, takže WALS výrazně nadhodnocuje.
+- Svědectví 0/20 je striktní dolní mez pozitivního důkazu v malém vzorku dominantního lexika, nikoli odhad celé populace WALS.
+
+Tato mezera zůstává **otevřenou otázkou pro M7**: v M7 bude třeba kalibrovat dynamickou rovnováhu
+mezi `VowelNasalization`, `VowelDenazalization` a `CodaLoss` a případně zpřesnit detekci fonematického
+kontrastu, aby model generoval stacionární podíl fonematických nosových samohlásek odpovídající typologické realitě.
+
+#### Stabilita typologických rysů z části A
+
+Přidání sekundární artikulace nevedlo k žádnému novému kolapsu gramatických
+kategorií. Ze 60 srovnávaných měřicích bodů (6 rysů × 5 časů × 2 pokusy)
+je 59 bodů zcela identických s modelem před částí B; v jediném bodě
+(wals, 143A v roce 5 000) je normovaná entropie mírně vyšší (0,589 → 0,613).
+Metriky 4 a 5 (velikosti inventářů v pásmu a homofonie) dál drží.
+
+#### Referenční otisky (doplněk M2, sekundární artikulace)
+
+Ověření nezávislosti optimalizací na výsledcích: Dočasné vrácení vektoru `kʲ`/`ɡʲ`
+(bez `back=0`, s původními raw vektory PanPhonu) dalo se všemi optimalizacemi
+na všech 7 scénářích přesně původní otisky části B (`phonology cd79626d…`,
+`morphology b673137d…`, `syntax 3dca8fd6…`, `grid-5x5 6274c42a…`, `shift c2a58d39…`,
+`island-city 5ca77a29…`, `valley-50 79174f6a…`). Optimalizace indexů tedy
+nemění chování ani o jediný bit; veškerý posun nového otisku (`grid-5x5 83d79ffb…`,
+`valley-50 0d462e15…`) plyne výhradně z odstranění rysové kolize `kʲ`/`ɡʲ`.
+
+```text
+phonology    cd79626de3a0b02f19fea574cf5637971ad012a1f89aeacb9a59a04e8064dd62
+morphology   b673137d804d7542106c47e7203f93c9bf63268d8951909b49df12755b29e849
+syntax       3dca8fd6c3e511c3ef059d4e0d5550eadd2e3d94024afcc550b7e730fbaefcf0
+grid-5x5     83d79ffb6e029604422730b9906dcf7b68d2ed522ef5f405fe706a6dbf6d5c95
+shift        d1a1e9e5af395b3120426fb3035912720dccdc5727168e62aa6dee1799dd6816
+island-city  13717cb46affdc42b9938627d9314ab09c23fec227595ce6f53cfa099a22d4aa
+valley-50    0d462e154e885753e74ad645d2ecb9085bd4d1e442cc86f9229d693f366fca00
+```
+
+Sériový čas `valley-50` je 28,5 s (proti 26,3 s na základu `68d4e54`, nárůst +8,4 %,
+limit brány +10 % = 28,93 s splněn). Optimalizace agregace kontextových změn
+v `SoundSupportIndex` a cache fonetických vzdáleností segmentů drží engine bezpečně v limitu.
+
+#### Brána B
+
+- `ruff check --no-cache`: čisté (0 chyb).
+- `mypy`: čisté (51 zdrojových souborů bez chyb v dotčeném rozsahu).
+- Celá sada testů `pytest -q`: všechny testy prošly.
+- Všechny milníkové stochastické brány splněny.
+
+Část B je připravena k potvrzení uživatelem. Po potvrzení bude vytvořen commit části B, a následně se přejde k části C.
