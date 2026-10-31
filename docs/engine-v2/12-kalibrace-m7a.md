@@ -207,3 +207,28 @@ Uživatel schválil přijmout lepšího kandidáta jako výchozí stav s poznám
 o předpokladech. Přijímá se **A**: výrazně lepší než dosavadní stav ve všech
 třech protokolech a dynamika rodin realistická. Tempo (`emergence_need_scale`)
 je jen předběžné, dokud ho neurčí kalibrace z prajazyků.
+
+## Přijetí (commit `9c1cb95`)
+
+- Výchozí `emergence_need_scale` 0,6 (`Parameters`), `context` členu 0,16,
+  budoucího času 0,44, `coverage` vidu 0,9 (`v2_grammar.yaml`).
+- Otisky všech sedmi scénářů beze změny: výchozí scénáře nemají nevyjádřené
+  funkce, kterých se škála vzniku týká.
+- Brány: 80 z 81 beze změny; `M4b::clen_vznikne` revidována. Audit
+  s novými hodnotami: člen vznikne v 6/30 bězích (Wilson 95 % [0,095; 0,373]),
+  negativní kontrola bez opisu a exaptace 0/10. Nové tvrzení: na seedech
+  1..50 vznikne člen aspoň v jednom jazyce a ne ve všech (N ≥ 46 dá riziko
+  falešného selhání pod 1 %); nová negativní kontrola
+  `test_bez_opisu_a_exaptace_clen_nevznikne` (deterministická, v seznamu
+  vyloučených z auditu). Brána M4b stojí asi 2 minuty navíc.
+- Celá sada: 749 prošlo a test úplnosti registru bran po doplnění nové
+  kontroly.
+
+## Další krok (dohodnuto s uživatelem)
+
+1. Scénář `region_world`: regiony zadané hustotou osídlení (ne počty) a
+   sousedstvím, uvnitř síť vesnic, mezi regiony spoje přes pohraniční vesnice.
+   Převod hustoty na efektivní velikost je kalibrační parametr.
+2. Kalibrace prajazyk → dcery nad Grambankem a tabulkou rekonstrukcí.
+3. Kalibrace M7 na `region_world` (prajazyky, stacionarita WALS, nářeční
+   atlasy); tempo a měřítko.

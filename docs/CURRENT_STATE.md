@@ -44,8 +44,11 @@ kategorie a prozódie (pět poloh přízvuku, posun a síla přízvuku). Na vět
 zánik kategorie bez prahu, kontakt přes L2 mluvčí (`Learnability`),
 kalibrační konstanty dynamiky jako `world.params` (`src/cee/v2/parameters.py`)
 a test dosažitelnosti cyklu kategorií: bez kontaktu flexivní kategorie jen
-přibývají, s kontaktem se cyklus rozběhne. Cíle kalibrace M7 jsou ve
-specifikaci (oddíl „Cíle kalibrace M7“). Nic z toho zatím není v `engine-v2`;
+přibývají, s kontaktem se cyklus rozběhne. První kalibrace M7a (`engine-v2/12-kalibrace-m7a.md`)
+oddělila vznik kategorie od obnovy, přidala vid jako náhradu minulého času
+a nastavila výchozí hodnoty podle stacionarity WALS; minulý čas a člen se
+teď v rodinách liší jako ve skutečnosti, tempo je předběžné. Cíle kalibrace
+M7 jsou ve specifikaci (oddíl „Cíle kalibrace M7“). Nic z toho zatím není v `engine-v2`;
 sloučení čeká na uživatele. Tyto výsledky nejsou kalibrací M7.
 
 
