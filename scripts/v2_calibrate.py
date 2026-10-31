@@ -9,18 +9,25 @@ nastavení je proto spravedlivé):
   stacionarita: rozložení rysů 33A, 37A, 66A a 67A po 2 000 a 5 000 letech má
   zůstat blízko WALS (průměrná Hellingerova vzdálenost).
 - ``family``: všechny seedy začínají stejnou úplnou gramatikou
-  (``FULL_GRAMMAR``: člen a budoucí čas chybí). Cíl je obrat uvnitř rodiny:
-  po 5 000 letech se mají jazyky lišit aspoň u členu a budoucího času
-  (normovaná entropie ≥ 0,5; v indoevropské rodině má člen zhruba polovina
-  větví). Model, který se nemění vůbec, by byl stacionární triviálně; tento
-  člen to trestá.
+  (``FULL_GRAMMAR``: člen, budoucí čas a vid chybí). Cíl je obrat uvnitř
+  rodiny. Režim ``wals`` (výchozí): normovaná entropie rysů uvnitř modelové
+  rodiny v roce 2 000 a 5 000 se srovná s průměrnou entropií skutečných
+  mladých (asi 1 300–2 600 let: románské, slovanské, germánské, turkické)
+  a starých rodin (asi 4 000–8 500 let) z WALS (``families`` ve
+  ``v2_typology.json``; jen jednotky s aspoň 5 jazyky). Modelová rodina je
+  hvězda nezávislých seedů, skutečná rodina strom; ta je proto spíš méně
+  pestrá. Režim ``author`` (první dvě kola): entropie členu a budoucího času
+  po 5 000 letech aspoň 0,5. Model, který se nemění vůbec, by byl stacionární
+  triviálně; tento člen to trestá.
 
 Kontakt: každý seed dostane stálý podíl L2 mluvčích podle ``CONTACT``
 (většina jazyků má málo kontaktu, část hodně). Je to předpoklad o prostředí,
 ne kalibrovaný parametr; jeho vliv je v deníku.
 
 Ztráta = průměr H (wals; roky 2 000 a 5 000; čtyři rysy)
-       + ``TURNOVER_WEIGHT`` × průměr max(0; 0,5 − E) (family; 37A a 67A).
+       + ``TURNOVER_WEIGHT`` × průměr |E_model − E_rodiny| (režim ``wals``;
+         čtyři rysy, mladé rodiny v roce 2 000, staré v roce 5 000),
+         nebo × průměr max(0; 0,5 − E) (režim ``author``; 37A a 67A).
 
 Hledání: výchozí bod + latinská hyperkrychle (pevný seed) + místní zjemnění
 kolem nejlepších; nejlepší kandidáti se ověří na odložených seedech.
@@ -55,6 +62,9 @@ FEATURES = ("33A", "37A", "66A", "67A")
 TURNOVER_FEATURES = ("37A", "67A")
 TURNOVER_TARGET = 0.5
 TURNOVER_WEIGHT = 0.5
+#: Rok modelu, se kterým se srovnává třída skutečných rodin.
+FAMILY_YEARS = {"young": 2000, "old": 5000}
+FAMILY_MIN_LANGUAGES = 5
 #: Stálý podíl L2 mluvčích podle ``seed % 3``.
 CONTACT = (0.0, 0.1, 0.3)
 
@@ -64,13 +74,12 @@ SPACE: tuple[tuple[str, float, float], ...] = (
     ("emergence_need_scale", 0.0, 1.0),
     ("context.DEFINITE", 0.10, 0.50),
     ("context.FUTURE", 0.20, 0.60),
-    ("context.PL", 0.10, 0.50),
-    ("context.PAST", 0.10, 0.50),
-    ("coverage.ASPECT", 0.40, 0.90),
+    ("coverage.ASPECT", 0.40, 0.95),
 )
-#: Síla kontaktu a tempo opisu první kolo neurčilo; drží se na výchozích hodnotách.
+#: Síla kontaktu a tempo opisu první kolo neurčilo, kontext plurálu a minulého
+#: času druhé kolo; drží se na výchozích hodnotách.
 DEFAULT = {"emergence_need_scale": 1.0, "context.DEFINITE": 0.22, "context.FUTURE": 0.35,
-           "context.PL": 0.30, "context.PAST": 0.25, "coverage.ASPECT": 0.7}
+           "coverage.ASPECT": 0.7}
 
 
 def to_parameters(point: dict[str, float]) -> Parameters:
@@ -129,7 +138,22 @@ def _distribution(runs: list[dict[str, Any]], year: int, feature: str) -> dict[s
     return {key: count / total for key, count in sorted(counts.items())} if total else {}
 
 
-def score(runs: list[dict[str, Any]], reference: dict[str, Any]) -> dict[str, Any]:
+def family_targets(reference: dict[str, Any]) -> dict[str, dict[str, float]]:
+    """Průměrná normovaná entropie rysů uvnitř skutečných rodin podle třídy stáří."""
+    found: dict[str, dict[str, list[float]]] = {}
+    for unit in reference["families"].values():
+        for feature in FEATURES:
+            data = unit["features"][feature]
+            if data["languages"] < FAMILY_MIN_LANGUAGES:
+                continue
+            categories = tuple(reference["features"][feature]["engine_categories"])
+            value = metrics.normalized_entropy(data["engine_distribution"], categories)
+            found.setdefault(unit["class"], {}).setdefault(feature, []).append(abs(value))
+    return {age: {feature: float(np.mean(values)) for feature, values in sorted(by_feature.items())}
+            for age, by_feature in sorted(found.items())}
+
+
+def score(runs: list[dict[str, Any]], reference: dict[str, Any], mode: str = "wals") -> dict[str, Any]:
     wals = [run for run in runs if run["experiment"] == "wals"]
     family = [run for run in runs if run["experiment"] == "family"]
     hellinger: dict[str, dict[int, float]] = {}
@@ -137,14 +161,25 @@ def score(runs: list[dict[str, Any]], reference: dict[str, Any]) -> dict[str, An
         expected = projected_reference(reference["features"][feature])
         hellinger[feature] = {year: metrics.hellinger(_distribution(wals, year, feature), expected)
                               for year in YEARS}
-    entropy = {}
+    entropy: dict[str, float] = {}
+    by_year: dict[int, dict[str, float]] = {}
+    for year in YEARS[1:]:
+        for feature in FEATURES:
+            categories = tuple(reference["features"][feature]["engine_categories"])
+            value = abs(metrics.normalized_entropy(_distribution(family, year, feature), categories))
+            by_year.setdefault(year, {})[feature] = value
     for feature in TURNOVER_FEATURES:
-        categories = tuple(reference["features"][feature]["engine_categories"])
-        entropy[feature] = metrics.normalized_entropy(_distribution(family, YEARS[-1], feature), categories)
+        entropy[feature] = by_year[YEARS[-1]][feature]
     stationarity = float(np.mean([hellinger[f][year] for f in FEATURES for year in YEARS[1:]]))
-    turnover = float(np.mean([max(0.0, TURNOVER_TARGET - entropy[f]) for f in TURNOVER_FEATURES]))
+    if mode == "author":
+        turnover = float(np.mean([max(0.0, TURNOVER_TARGET - entropy[f]) for f in TURNOVER_FEATURES]))
+    else:
+        targets = family_targets(reference)
+        turnover = float(np.mean([abs(by_year[FAMILY_YEARS[age]][feature] - target)
+                                  for age, by_feature in targets.items() for feature, target in by_feature.items()]))
     return {"loss": stationarity + TURNOVER_WEIGHT * turnover, "stationarity": stationarity,
             "turnover_penalty": turnover, "hellinger": hellinger, "family_entropy": entropy,
+            "family_entropy_by_year": by_year,
             "wals_present": {f: {year: _distribution(wals, year, f) for year in YEARS} for f in FEATURES},
             "family_final": {f: _distribution(family, YEARS[-1], f) for f in FEATURES}}
 
@@ -172,14 +207,14 @@ def neighbours(point: dict[str, float], count: int, seed: int, scale: float = 0.
 
 
 def evaluate(pool: Any, points: list[dict[str, float]], seeds: list[int],
-             reference: dict[str, Any]) -> list[dict[str, Any]]:
+             reference: dict[str, Any], mode: str = "wals") -> list[dict[str, Any]]:
     tasks = [(point, experiment, seed) for point in points for experiment in ("wals", "family") for seed in seeds]
     outputs = pool.map(run_task, tasks, chunksize=1)
     per_point = len(seeds) * 2
     results = []
     for index, point in enumerate(points):
         runs = outputs[index * per_point:(index + 1) * per_point]
-        results.append({"point": point, "seeds": seeds, **score(runs, reference)})
+        results.append({"point": point, "seeds": seeds, **score(runs, reference, mode)})
     return results
 
 
@@ -193,11 +228,14 @@ def main() -> None:
     parser.add_argument("--refine-top", type=int, default=4)
     parser.add_argument("--refine-each", type=int, default=6)
     parser.add_argument("--validate-top", type=int, default=3)
+    parser.add_argument("--family-target", choices=("wals", "author"), default="wals",
+                        help="obrat uvnitř rodiny: skutečné rodiny z WALS, nebo autorský cíl prvních kol")
     args = parser.parse_args()
     reference = load_reference()
     search_seeds = list(range(1, args.search_seeds + 1))
     holdout_seeds = list(range(101, 101 + args.holdout_seeds))
     record: dict[str, Any] = {"space": SPACE, "default": DEFAULT, "contact": CONTACT,
+                              "family_target": args.family_target, "family_targets": family_targets(reference),
                               "search_seeds": search_seeds, "holdout_seeds": holdout_seeds}
 
     def save() -> None:
@@ -207,19 +245,19 @@ def main() -> None:
     with context.Pool(args.workers) as pool:
         started = time.perf_counter()
         stage1 = [DEFAULT, *latin_hypercube(args.lhs, seed=2026)]
-        record["stage1"] = evaluate(pool, stage1, search_seeds, reference)
+        record["stage1"] = evaluate(pool, stage1, search_seeds, reference, args.family_target)
         save()
         print(f"stage1 {len(stage1)} points {time.perf_counter() - started:.0f}s", flush=True)
 
         best = sorted(record["stage1"], key=lambda r: r["loss"])[:args.refine_top]
         stage2 = [p for i, r in enumerate(best) for p in neighbours(r["point"], args.refine_each, seed=3000 + i)]
-        record["stage2"] = evaluate(pool, stage2, search_seeds, reference)
+        record["stage2"] = evaluate(pool, stage2, search_seeds, reference, args.family_target)
         save()
         print(f"stage2 {len(stage2)} points {time.perf_counter() - started:.0f}s", flush=True)
 
         ranked = sorted(record["stage1"] + record["stage2"], key=lambda r: r["loss"])
         candidates = [DEFAULT] + [r["point"] for r in ranked if r["point"] != DEFAULT][:args.validate_top]
-        record["holdout"] = evaluate(pool, candidates, holdout_seeds, reference)
+        record["holdout"] = evaluate(pool, candidates, holdout_seeds, reference, args.family_target)
         save()
         print(f"holdout {len(candidates)} points {time.perf_counter() - started:.0f}s", flush=True)
 

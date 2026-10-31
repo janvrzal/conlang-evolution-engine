@@ -119,6 +119,36 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+#: Rodiny a podrodiny se známým přibližným stářím prajazyka pro kalibraci obratu
+#: uvnitř rodiny (M7a). Stáří je sporné; uvádí se rozpětí z literatury
+#: a třída ``young`` (srovnání s modelem v roce 2 000) nebo ``old`` (5 000).
+FAMILY_UNITS: tuple[dict[str, Any], ...] = (
+    {"name": "Romance", "level": "Genus", "age_years": [1500, 2000], "class": "young",
+     "source": "rozpad latiny (historicky doloženo)"},
+    {"name": "Slavic", "level": "Genus", "age_years": [1300, 1700], "class": "young",
+     "source": "rozpad praslovanštiny (Kapović 2017)"},
+    {"name": "Germanic", "level": "Genus", "age_years": [2000, 2500], "class": "young",
+     "source": "Ringe 2006"},
+    {"name": "Turkic", "level": "Genus", "age_years": [2000, 2600], "class": "young",
+     "source": "Savelyev & Robbeets 2020"},
+    {"name": "Indo-European", "level": "Family", "age_years": [6000, 8500], "class": "old",
+     "source": "Anthony 2007; Bouckaert a kol. 2012; Chang a kol. 2015"},
+    {"name": "Austronesian", "level": "Family", "age_years": [5000, 5500], "class": "old",
+     "source": "Gray, Drummond & Greenhill 2009"},
+    {"name": "Uralic", "level": "Family", "age_years": [4500, 6500], "class": "old",
+     "source": "Honkola a kol. 2013"},
+    {"name": "Sino-Tibetan", "level": "Family", "age_years": [5500, 7500], "class": "old",
+     "source": "Zhang a kol. 2019; Sagart a kol. 2019"},
+    {"name": "Dravidian", "level": "Family", "age_years": [4000, 5000], "class": "old",
+     "source": "Kolipakam a kol. 2018"},
+    {"name": "Semitic", "level": "Genus", "age_years": [5000, 6500], "class": "old",
+     "source": "Kitchen a kol. 2009"},
+    {"name": "Bantu", "level": "Genus", "age_years": [4000, 5000], "class": "old",
+     "source": "Grollemund a kol. 2015"},
+)
+FAMILY_FEATURE_IDS = ("33A", "37A", "66A", "67A")
+
+
 def genus_key(language: dict[str, str]) -> str:
     genus = language.get("Genus", "").strip()
     if genus:
@@ -222,6 +252,22 @@ def build_reference(root: Path) -> dict[str, Any]:
             },
         }
 
+    families: dict[str, Any] = {}
+    for unit in FAMILY_UNITS:
+        members = {language_id for language_id, row in languages.items() if row[unit["level"]] == unit["name"]}
+        unit_features: dict[str, Any] = {}
+        for feature_id in FAMILY_FEATURE_IDS:
+            crosswalk = CROSSWALKS[feature_id]
+            rows = [(language_id, category_id) for language_id, category_id in observations[feature_id]
+                    if language_id in members and crosswalk.get(category_id) is not None]
+            mapped = [(language_id, crosswalk[category_id]) for language_id, category_id in rows]
+            engine_categories = {category: category for category in sorted(set(crosswalk.values()))}
+            distribution, genus_sizes = weighted_distribution(mapped, languages, engine_categories)
+            unit_features[feature_id] = {"engine_distribution": distribution, "languages": len(mapped),
+                                         "genera": len(genus_sizes)}
+        families[unit["name"]] = {key: unit[key] for key in ("level", "age_years", "class", "source")}
+        families[unit["name"]]["features"] = unit_features
+
     input_hashes = {name: sha256(root / name) for name in EXPECTED_SHA256}
     source_ref = metadata.get("prov:wasDerivedFrom", [{}])[0]
     return {
@@ -241,6 +287,8 @@ def build_reference(root: Path) -> dict[str, Any]:
             "sha256": input_hashes,
         },
         "features": features,
+        "families_weighting": "Within each family or genus unit, each WALS genus contributes total weight 1 (a genus-level unit weights its languages equally).",
+        "families": families,
     }
 
 

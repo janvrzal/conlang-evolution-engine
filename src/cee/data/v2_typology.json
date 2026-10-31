@@ -1,4 +1,480 @@
 {
+  "families": {
+    "Austronesian": {
+      "age_years": [
+        5000,
+        5500
+      ],
+      "class": "old",
+      "features": {
+        "33A": {
+          "engine_distribution": {
+            "plural_absent": 0.12539682539682545,
+            "plural_present": 0.8746031746031746
+          },
+          "genera": 18,
+          "languages": 115
+        },
+        "37A": {
+          "engine_distribution": {
+            "definite_absent": 0.23727969348658978,
+            "definite_present": 0.7627203065134103
+          },
+          "genera": 15,
+          "languages": 88
+        },
+        "66A": {
+          "engine_distribution": {
+            "past_absent": 0.859504132231405,
+            "past_present": 0.14049586776859507
+          },
+          "genera": 11,
+          "languages": 23
+        },
+        "67A": {
+          "engine_distribution": {
+            "67A-1": 0.41735537190082644,
+            "67A-2": 0.5826446280991735
+          },
+          "genera": 11,
+          "languages": 23
+        }
+      },
+      "level": "Family",
+      "source": "Gray, Drummond & Greenhill 2009"
+    },
+    "Bantu": {
+      "age_years": [
+        4000,
+        5000
+      ],
+      "class": "old",
+      "features": {
+        "33A": {
+          "engine_distribution": {
+            "plural_absent": 0.0,
+            "plural_present": 1.0
+          },
+          "genera": 1,
+          "languages": 55
+        },
+        "37A": {
+          "engine_distribution": {
+            "definite_absent": 0.39999999999999997,
+            "definite_present": 0.6
+          },
+          "genera": 1,
+          "languages": 20
+        },
+        "66A": {
+          "engine_distribution": {
+            "past_absent": 0.0,
+            "past_present": 1.0
+          },
+          "genera": 1,
+          "languages": 7
+        },
+        "67A": {
+          "engine_distribution": {
+            "67A-1": 0.7142857142857143,
+            "67A-2": 0.28571428571428575
+          },
+          "genera": 1,
+          "languages": 7
+        }
+      },
+      "level": "Genus",
+      "source": "Grollemund a kol. 2015"
+    },
+    "Dravidian": {
+      "age_years": [
+        4000,
+        5000
+      ],
+      "class": "old",
+      "features": {
+        "33A": {
+          "engine_distribution": {
+            "plural_absent": 0.0,
+            "plural_present": 1.0
+          },
+          "genera": 1,
+          "languages": 10
+        },
+        "37A": {
+          "engine_distribution": {
+            "definite_absent": 1.0,
+            "definite_present": 0.0
+          },
+          "genera": 1,
+          "languages": 2
+        },
+        "66A": {
+          "engine_distribution": {
+            "past_absent": 0.0,
+            "past_present": 1.0
+          },
+          "genera": 1,
+          "languages": 4
+        },
+        "67A": {
+          "engine_distribution": {
+            "67A-1": 0.75,
+            "67A-2": 0.25
+          },
+          "genera": 1,
+          "languages": 4
+        }
+      },
+      "level": "Family",
+      "source": "Kolipakam a kol. 2018"
+    },
+    "Germanic": {
+      "age_years": [
+        2000,
+        2500
+      ],
+      "class": "young",
+      "features": {
+        "33A": {
+          "engine_distribution": {
+            "plural_absent": 0.0,
+            "plural_present": 1.0
+          },
+          "genera": 1,
+          "languages": 7
+        },
+        "37A": {
+          "engine_distribution": {
+            "definite_absent": 0.0,
+            "definite_present": 1.0
+          },
+          "genera": 1,
+          "languages": 8
+        },
+        "66A": {
+          "engine_distribution": {
+            "past_absent": 0.0,
+            "past_present": 1.0
+          },
+          "genera": 1,
+          "languages": 5
+        },
+        "67A": {
+          "engine_distribution": {
+            "67A-1": 0.0,
+            "67A-2": 1.0
+          },
+          "genera": 1,
+          "languages": 5
+        }
+      },
+      "level": "Genus",
+      "source": "Ringe 2006"
+    },
+    "Indo-European": {
+      "age_years": [
+        6000,
+        8500
+      ],
+      "class": "old",
+      "features": {
+        "33A": {
+          "engine_distribution": {
+            "plural_absent": 0.0,
+            "plural_present": 1.0
+          },
+          "genera": 10,
+          "languages": 56
+        },
+        "37A": {
+          "engine_distribution": {
+            "definite_absent": 0.32142857142857134,
+            "definite_present": 0.6785714285714287
+          },
+          "genera": 11,
+          "languages": 47
+        },
+        "66A": {
+          "engine_distribution": {
+            "past_absent": 0.0,
+            "past_present": 1.0
+          },
+          "genera": 8,
+          "languages": 21
+        },
+        "67A": {
+          "engine_distribution": {
+            "67A-1": 0.3958333333333333,
+            "67A-2": 0.6041666666666667
+          },
+          "genera": 8,
+          "languages": 21
+        }
+      },
+      "level": "Family",
+      "source": "Anthony 2007; Bouckaert a kol. 2012; Chang a kol. 2015"
+    },
+    "Romance": {
+      "age_years": [
+        1500,
+        2000
+      ],
+      "class": "young",
+      "features": {
+        "33A": {
+          "engine_distribution": {
+            "plural_absent": 0.0,
+            "plural_present": 1.0
+          },
+          "genera": 1,
+          "languages": 6
+        },
+        "37A": {
+          "engine_distribution": {
+            "definite_absent": 0.0,
+            "definite_present": 1.0
+          },
+          "genera": 1,
+          "languages": 5
+        },
+        "66A": {
+          "engine_distribution": {
+            "past_absent": 0.0,
+            "past_present": 1.0
+          },
+          "genera": 1,
+          "languages": 4
+        },
+        "67A": {
+          "engine_distribution": {
+            "67A-1": 0.5,
+            "67A-2": 0.5
+          },
+          "genera": 1,
+          "languages": 4
+        }
+      },
+      "level": "Genus",
+      "source": "rozpad latiny (historicky doloženo)"
+    },
+    "Semitic": {
+      "age_years": [
+        5000,
+        6500
+      ],
+      "class": "old",
+      "features": {
+        "33A": {
+          "engine_distribution": {
+            "plural_absent": 0.07142857142857145,
+            "plural_present": 0.9285714285714286
+          },
+          "genera": 1,
+          "languages": 14
+        },
+        "37A": {
+          "engine_distribution": {
+            "definite_absent": 0.0,
+            "definite_present": 1.0
+          },
+          "genera": 1,
+          "languages": 13
+        },
+        "66A": {
+          "engine_distribution": {
+            "past_absent": 0.0,
+            "past_present": 1.0
+          },
+          "genera": 1,
+          "languages": 7
+        },
+        "67A": {
+          "engine_distribution": {
+            "67A-1": 0.42857142857142855,
+            "67A-2": 0.5714285714285714
+          },
+          "genera": 1,
+          "languages": 7
+        }
+      },
+      "level": "Genus",
+      "source": "Kitchen a kol. 2009"
+    },
+    "Sino-Tibetan": {
+      "age_years": [
+        5500,
+        7500
+      ],
+      "class": "old",
+      "features": {
+        "33A": {
+          "engine_distribution": {
+            "plural_absent": 0.14254385964912283,
+            "plural_present": 0.8574561403508772
+          },
+          "genera": 19,
+          "languages": 81
+        },
+        "37A": {
+          "engine_distribution": {
+            "definite_absent": 0.513095238095238,
+            "definite_present": 0.4869047619047619
+          },
+          "genera": 14,
+          "languages": 36
+        },
+        "66A": {
+          "engine_distribution": {
+            "past_absent": 0.8333333333333334,
+            "past_present": 0.16666666666666666
+          },
+          "genera": 6,
+          "languages": 8
+        },
+        "67A": {
+          "engine_distribution": {
+            "67A-1": 0.16666666666666666,
+            "67A-2": 0.8333333333333334
+          },
+          "genera": 6,
+          "languages": 8
+        }
+      },
+      "level": "Family",
+      "source": "Zhang a kol. 2019; Sagart a kol. 2019"
+    },
+    "Slavic": {
+      "age_years": [
+        1300,
+        1700
+      ],
+      "class": "young",
+      "features": {
+        "33A": {
+          "engine_distribution": {
+            "plural_absent": 0.0,
+            "plural_present": 1.0
+          },
+          "genera": 1,
+          "languages": 7
+        },
+        "37A": {
+          "engine_distribution": {
+            "definite_absent": 0.7142857142857143,
+            "definite_present": 0.28571428571428575
+          },
+          "genera": 1,
+          "languages": 7
+        },
+        "66A": {
+          "engine_distribution": {
+            "past_absent": 0.0,
+            "past_present": 1.0
+          },
+          "genera": 1,
+          "languages": 2
+        },
+        "67A": {
+          "engine_distribution": {
+            "67A-1": 0.0,
+            "67A-2": 1.0
+          },
+          "genera": 1,
+          "languages": 2
+        }
+      },
+      "level": "Genus",
+      "source": "rozpad praslovanštiny (Kapović 2017)"
+    },
+    "Turkic": {
+      "age_years": [
+        2000,
+        2600
+      ],
+      "class": "young",
+      "features": {
+        "33A": {
+          "engine_distribution": {
+            "plural_absent": 0.0,
+            "plural_present": 1.0
+          },
+          "genera": 1,
+          "languages": 15
+        },
+        "37A": {
+          "engine_distribution": {
+            "definite_absent": 1.0,
+            "definite_present": 0.0
+          },
+          "genera": 1,
+          "languages": 8
+        },
+        "66A": {
+          "engine_distribution": {
+            "past_absent": 0.0,
+            "past_present": 1.0
+          },
+          "genera": 1,
+          "languages": 3
+        },
+        "67A": {
+          "engine_distribution": {
+            "67A-1": 0.6666666666666666,
+            "67A-2": 0.3333333333333333
+          },
+          "genera": 1,
+          "languages": 3
+        }
+      },
+      "level": "Genus",
+      "source": "Savelyev & Robbeets 2020"
+    },
+    "Uralic": {
+      "age_years": [
+        4500,
+        6500
+      ],
+      "class": "old",
+      "features": {
+        "33A": {
+          "engine_distribution": {
+            "plural_absent": 0.0,
+            "plural_present": 1.0
+          },
+          "genera": 7,
+          "languages": 14
+        },
+        "37A": {
+          "engine_distribution": {
+            "definite_absent": 0.4166666666666667,
+            "definite_present": 0.5833333333333334
+          },
+          "genera": 6,
+          "languages": 8
+        },
+        "66A": {
+          "engine_distribution": {
+            "past_absent": 0.0,
+            "past_present": 1.0
+          },
+          "genera": 4,
+          "languages": 4
+        },
+        "67A": {
+          "engine_distribution": {
+            "67A-1": 0.5,
+            "67A-2": 0.5
+          },
+          "genera": 4,
+          "languages": 4
+        }
+      },
+      "level": "Family",
+      "source": "Honkola a kol. 2013"
+    }
+  },
+  "families_weighting": "Within each family or genus unit, each WALS genus contributes total weight 1 (a genus-level unit weights its languages equally).",
   "features": {
     "10A": {
       "categories": {
