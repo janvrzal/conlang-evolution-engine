@@ -198,6 +198,13 @@ class Parameters:
     lingua_franca_link: float = 0.3
     #: Tlak lingua franca domů, když ji autor nechá zdomácnět (``nativize``).
     lingua_franca_pull: float = 0.1
+    #: Obrození (``polity.Revival``): ``pace`` = tempo návratu rodin k jazyku
+    #: (obousměrný přechod), ``seed`` = podíl lidí, kteří se vymřelý nebo v obci
+    #: ztracený jazyk znovu naučí (noví mluvčí, hebrejština, kornština).
+    revival_levels: Mapping[str, Mapping[str, float]] = field(default_factory=lambda: FrozenMapping({
+        "movement": {"pace": 0.3, "seed": 0.02},
+        "national": {"pace": 1.0, "seed": 0.05},
+    }))
     #: Propustnost hranice státu (``State(border=...)``): násobek vazeb mezi
     #: regiony různých států. Hranice vznikne sama tam, kde sousedí regiony
     #: různých států, a působí hned; rozcházení podél ní dělají odlišná centra
@@ -259,7 +266,7 @@ class Parameters:
 #: Tabulky slovních úrovní (``Parameters``), které autor světa zadává jménem.
 LEVEL_TABLES = (
     "centralization_levels", "policy_levels", "lingua_franca_levels", "terrain_access", "identity_loyalty",
-    "literacy_levels", "schooling_levels", "border_levels",
+    "literacy_levels", "schooling_levels", "border_levels", "revival_levels",
 )
 
 

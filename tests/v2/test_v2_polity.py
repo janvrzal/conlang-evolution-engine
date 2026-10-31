@@ -10,6 +10,7 @@ from cee.v2.polity import (
     LanguagePolicy,
     LinguaFranca,
     Preserve,
+    Revival,
     Schools,
     Secession,
     Standard,
@@ -337,3 +338,50 @@ def test_region_muze_byt_zakonzervovany_od_zacatku():
     world = region_world(regions, seed=1, languages=LANGUAGES)
     Simulation(world, events=[State(0.0, "k", ("capital", "x"), "capital", policy="enforced")]).run(300.0)
     assert home_share(world, "x", "b") == 1.0
+
+
+def enforced(*extra, identity="distinct"):
+    world = pair(identity=identity)
+    simulation = Simulation(world, events=[State(0.0, "k", ("capital", "x"), "capital", policy="enforced"), *extra])
+    return world, simulation
+
+
+def test_hnuti_s_normou_a_skolou_obrati_prechod():
+    plain, base = enforced()
+    revived, simulation = enforced(Revival(50.0, ("x",), strength="national"), Standard(50.0, "x"), Schools(50.0, "x"))
+    base.run(300.0)
+    simulation.run(50.0)
+    start = home_share(revived, "x", "b")
+    simulation.run(300.0)
+    assert home_share(plain, "x", "b") == 0.0
+    assert home_share(revived, "x", "b") > 0.5 and start > 0.5
+
+
+def test_odtrzeni_s_obrozenim_vrati_jazyk():
+    world, simulation = enforced(Secession(50.0, "nezavisly", ("x",), "x"), Revival(50.0, ("x",), strength="national"))
+    simulation.run(50.0)
+    start = home_share(world, "x", "b")
+    simulation.run(400.0)
+    assert home_share(world, "x", "b") > start
+    assert simulation.history.of_kind("revival")
+
+
+def test_vymrely_jazyk_lze_obrodit_jen_z_pisma():
+    later = (Secession(300.0, "nezavisly", ("x",), "x"), Revival(300.0, ("x",), strength="national"))
+    written, simulation = enforced(Standard(0.0, "x"), *later)
+    silent, quiet = enforced(*later)
+    for world, run in ((written, simulation), (silent, quiet)):
+        run.run(275.0)
+        assert home_share(world, "x", "b") == 0.0
+        run.run(300.0)
+    assert not [g for g in silent.group_ids() if g.endswith(":revived")]
+    created = [g for g in written.group_ids() if g.endswith(":revived")]
+    assert created and all(written.groups[g].main_code.language == "b" for g in created)
+    simulation.run(500.0)
+    assert home_share(written, "x", "b") > 0.0
+
+
+def test_obrozeni_odmitne_neznamou_silu():
+    world = pair()
+    with pytest.raises(ValueError, match="síla obrození"):
+        Revival(0.0, ("x",), strength="bouřlivé").apply(world, Simulation(world).history, 0)

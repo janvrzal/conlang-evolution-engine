@@ -38,6 +38,8 @@ class Territory:
     refined_from_year: float | None = None
     #: Terén (klíč ``Parameters.terrain_access``): hory a ostrovy izolují.
     terrain: str = "plain"
+    #: Původní jazyk území (linie), pokud ho scénář zná; obrození ho použije.
+    native_language: str | None = None
 
 
 @dataclass(slots=True)
@@ -124,6 +126,9 @@ class SpeechGroup:
     #: Autor jazyk skupiny zakonzervoval: nikdo z ní nepřejde na jiný jazyk
     #: (``polity.Preserve``). Jazyk se dál vyvíjí, jen nevymře.
     preserved: bool = False
+    #: Síla obrozeneckého hnutí (0 až 1, ``polity.Revival``): tempo, kterým se
+    #: rodiny, jež přešly na jiný jazyk, vracejí k jazyku této skupiny.
+    revival: float = 0.0
 
     def __post_init__(self) -> None:
         if self.population <= 0:

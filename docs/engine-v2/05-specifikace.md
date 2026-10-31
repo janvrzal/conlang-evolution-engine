@@ -1077,7 +1077,7 @@ na nezávislé řadě seedů `101..120` (u M3 morfologie rozšířeně `101..140
 
 Podrobně v [`15-staty-lingua-franca.md`](15-staty-lingua-franca.md). Modul
 `cee.v2.polity`: události `State`, `LanguagePolicy`, `Annexation`,
-`LinguaFranca`, `Secession`, `Collapse`, `BorderPolicy`, konzervace `Preserve`, spisovný jazyk `Standard` a `Schools` (po státech a regionech; škola ve vlastním jazyce brání přechodu) a sčítání `language_census`. Autor zadává regiony a slovní
+`LinguaFranca`, `Secession`, `Collapse`, `BorderPolicy`, konzervace `Preserve`, obrození `Revival` (obousměrný přechod, oživení z písma), spisovný jazyk `Standard` a `Schools` (po státech a regionech; škola ve vlastním jazyce brání přechodu) a sčítání `language_census`. Autor zadává regiony a slovní
 úrovně, čísla jsou v `Parameters`. Regiony `region_world` mohou mít vlastní
 protojazyk (`Region.language`, `ProtoLanguage`), terén a identitu. Stát
 působí jen prestiží sídla, vazbami k sídlu a veřejnou doménou. Nový
@@ -1085,7 +1085,7 @@ mechanismus pronikání veřejného kódu domů (`contact._nativize`,
 `SpeechGroup.home_pull`) rozhoduje, zda region přejde. Odlehlé a odlišné
 regiony jazyk drží. Výchozí `home_pull` = 0, takže dosavadní scénáře mají
 bitově stejné otisky (ověřeno `v2_digests.py --quick` i otiskem
-`region_world`). Hranice jsou implicitní (regiony různých států, `border_levels`) a prestiž se počítá ze stavu světa (`polity.refresh`). Testy `tests/v2/test_v2_polity.py` (24). Úrovně jsou
+`region_world`). Hranice jsou implicitní (regiony různých států, `border_levels`) a prestiž se počítá ze stavu světa (`polity.refresh`). Testy `tests/v2/test_v2_polity.py` (28). Úrovně jsou
 autorské odhady, kalibrace čeká na M7.
 
 ### Cíle kalibrace M7 (2026-10-30)
@@ -1148,7 +1148,6 @@ Sepsáno 2026-10-28 při revizi plánu po M3; aktualizováno po části D (proz�
 | Příbuzné jazyky se po rozpadu mísí bez filtru, protože mají stejnou linii; filtr by měl záviset na pozorované vzdálenosti | M6 (linie jazyků) |
 | Konstanty kontaktu (filtry, váha interference, rychlost přechodu) jsou odhad | M7 |
 | Úrovně státu a jazykové politiky (`capital_prestige`, `policy_levels`, `terrain_access`, `identity_loyalty`…) jsou autorské odhady; přechod začne až od jednoho mluvčího za generaci (práh, ne rozložení) | M7 (tempo přechodu, francouzština 1794–1950, přežití v Baskicku a Walesu) |
-| Obrození jazyka (návrat k menšinovému jazyku) chybí: přechod jde jen k vyššímu statusu | podle potřeby (obousměrný tok, událost obnovy prestiže) |
 | Lingua franca se zadává, nevzniká sama z obchodní sítě | další krok M6f |
 | Města nerostou (urbanizace jako motor přechodu chybí); přechod mezi dialekty téže linie (spisovný jazyk jako „střecha“) chybí; pidžiny a kreoly nevznikají | další kroky M6f |
 | ~~Stabilní diglosie (Ferguson 1959)~~ | vyřešeno v M6b (`Schooling(diglossic=True)`) |

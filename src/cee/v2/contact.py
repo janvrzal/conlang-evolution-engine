@@ -290,33 +290,61 @@ def _shift(
     Abrams & Strogatz (2003): za generaci přejde podíl ``status ×
     podíl^1,31``, kde status plyne z prestiže a podíl je demografie
     (:func:`demographic_share`). Loajalita komunity přechod zpomalí.
+
+    Přechod, který začal tlakem státu nebo obrozením (``home_pull`` > 0), je
+    obousměrný jako u Abramse a Strogatze: rodiny se vracejí ke starému
+    jazyku podle jeho statusu a demografie, tempem obrozeneckého hnutí
+    (``revival``) a školy ve vlastním jazyce. Jazyk s takovou oporou si děti
+    předávají dál i pod prahem užívání.
     """
     params = world.params
     source, target = world.groups[source_id], world.groups[target_id]
-    if source.preserved:
-        return False
     total = source.population + target.population
     status = target.prestige / (target.prestige + source.prestige)
-    share = demographic_share(world, source_id, target_id)
-    # Přechod, který začal tlakem státu (``_nativize``), jde tempem politiky:
-    # uvolnění politiky ho zpomalí.
-    # Škola ve vlastním jazyce ho brání: děti se ho učí i psaný.
-    pace = target.home_pull * (1.0 - own_schooling(world, source_id)) if target.home_pull > 0 else 1.0
-    moving = (
-        source.population * renewal * params.shift_rate * pace * (1.0 - source.loyalty) * status
-        * share**params.shift_exponent
-    )
-    births = 0.0
-    if source.population / total < params.child_threshold:
-        # Děti se starý kód už neučí: rodí se do nového.
-        if source.transmitted:
-            source.transmitted = False
-            history.record("transmission_stopped", tick, year, group=source_id, language=source.main_code.language)
-        births = source.population * renewal
-    moving = min(moving, source.population - births)
+    driven = target.home_pull > 0
+    resist = min(1.0, source.revival + own_schooling(world, source_id)) if driven else 0.0
+    moving = births = back = 0.0
+    if not source.preserved:
+        share = demographic_share(world, source_id, target_id)
+        # Přechod, který začal tlakem státu (``_nativize``) nebo obrozením, jde
+        # tempem politiky či hnutí: jejich uvolnění ho zpomalí. Škola ve vlastním
+        # jazyce ho brzdí, škola v cílovém jazyce urychlí.
+        pace = (target.home_pull * (1.0 - own_schooling(world, source_id))
+                * (1.0 + own_schooling(world, target_id))) if driven else 1.0
+        # Loajalita brzdí odchod od jazyka, ne návrat k němu (obrozený kód).
+        brake = 1.0 - source.loyalty if target.revival == 0.0 else 1.0
+        moving = (
+            source.population * renewal * params.shift_rate * pace * brake * status
+            * share**params.shift_exponent
+        )
+        if source.population / total < params.child_threshold and resist == 0.0:
+            # Děti se starý kód už neučí: rodí se do nového.
+            if source.transmitted:
+                source.transmitted = False
+                history.record("transmission_stopped", tick, year, group=source_id,
+                               language=source.main_code.language)
+            births = source.population * renewal
+        moving = min(moving, source.population - births)
+    if resist > 0.0:
+        if not source.transmitted:
+            source.transmitted = True
+            history.record("transmission_resumed", tick, year, group=source_id, language=source.main_code.language)
+        back = (
+            target.population * renewal * params.shift_rate * resist * (1.0 - status)
+            * demographic_share(world, target_id, source_id)**params.shift_exponent
+        )
+        back = min(back, target.population + moving + births)
     learners = target.main_code.l2_share * target.population * (1.0 - renewal) + moving
-    remaining = source.population - moving - births
-    target_population = target.population + moving + births
+    remaining = source.population - moving - births + back
+    target_population = target.population + moving + births - back
+    if target_population < LAST_SPEAKERS:
+        # Všichni se vrátili ke starému jazyku.
+        source.population = max(1, round(remaining + target_population))
+        world.materialize(target_id)
+        world.remove_group(target_id)
+        history.record("revival", tick, year, group=source_id, left=target_id,
+                       language=source.main_code.language, from_language=target.main_code.language)
+        return True
     target.main_code.l2_share = min(1.0, learners / target_population)
     target.population = max(1, round(target_population))
     if remaining < LAST_SPEAKERS:

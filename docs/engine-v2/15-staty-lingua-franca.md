@@ -177,12 +177,14 @@ původního jazyka doma):
 | spisovný jazyk státu | rovina | 0,87 | 0,62 | 0,53 | 0,36 | 0,00 |
 | spisovný jazyk státu | jih | 0,94 | 0,82 | 0,78 | 0,70 | 0,42 |
 | + vlastní norma jihu | jih | 0,94 | 0,85 | 0,81 | 0,74 | 0,52 |
-| od 600 vynucování a masová škola | rovina | 0,87 | 0,39 | 0,00 | 0,00 | 0,00 |
-| od 600 vynucování a masová škola | jih | 0,94 | 0,69 | 0,13 | 0,00 | 0,00 |
-| + vlastní norma a škola jihu | jih | 0,94 | 0,83 | 0,73 | 0,51 | 0,00 |
+| od 600 vynucování a masová škola | rovina | 0,87 | 0,30 | 0,00 | 0,00 | 0,00 |
+| od 600 vynucování a masová škola | jih | 0,94 | 0,64 | 0,00 | 0,00 | 0,00 |
+| + vlastní norma a škola jihu | jih | 0,94 | 0,84 | 0,80 | 0,74 | 0,63 |
 
-Vlastní škola drží jih po 300 letech vynucování na polovině. Bez ní by
-jazyk zmizel za 100–200 let. Proti 900 letům vynucování ale neobstojí.
+Čísla jsou po zavedení obrození, kdy škola působí na obě strany (viz
+Obrození). Škola ve státním jazyce asimilaci urychlí: jih bez vlastní školy
+ztratí jazyk do 100 let. Vlastní škola ho drží i po 900 letech vynucování
+na 0,63, protože část rodin se k jazyku vrací.
 
 ## Hranice, prestiž a konzervace jazyka
 
@@ -252,16 +254,74 @@ Ze zakonzervované skupiny nikdo nepřejde na jiný jazyk (`SpeechGroup.preserve
 Jazyk se dál vyvíjí, přejímá slova a mluvčí ho mohou užívat mimo domov,
 jen nevymře.
 
+## Obrození
+
+Přechod, který rozběhl stát nebo obrození (`home_pull` > 0), je nově
+**obousměrný**, jako v původním modelu Abramse a Strogatze. Rodiny se
+vracejí ke starému jazyku podílem
+
+`tempo hnutí × (1 − status cílového jazyka) × podíl mluvčích starého jazyka^1,31`.
+
+Tempo hnutí je součet `SpeechGroup.revival` a školy ve vlastním jazyce.
+Jazyk s takovou oporou si děti předávají dál i pod prahem užívání
+(`transmission_resumed`). Když se vrátí všichni, skupina, která na jiný
+jazyk přešla, zanikne (`revival`).
+
+Přechody, které nerozběhl stát ani obrození (dosavadní scénáře), zůstávají
+jednosměrné. Otisky se nemění.
+
+Škola nově působí na obě strany. Škola ve vlastním jazyce přechod brzdí,
+škola v cílovém jazyce ho urychlí. Proto se po této změně zrychlily
+varianty království s masovou školou: jih bez vlastní školy ztratí jazyk
+do roku 700 místo 900. Jih s vlastní školou drží v roce 1 500 podíl 0,63
+místo 0.
+
+```python
+Revival(1850, ("jih",), strength="movement")   # movement | national
+```
+
+- Mluvčím jazyka v regionu dá tempo hnutí: `movement` 0,3, `national` 1,0
+  (`Parameters.revival_levels`).
+- Obce, kde jazyk už nikdo nemluví, ho dostanou zpět jako **noví mluvčí**
+  (2 % nebo 5 % obyvatel): od sousedů, kteří ho ještě mluví, jinak z písma.
+  Učí se ho jako druhý jazyk, s interferencí z dosavadního jazyka. Bez
+  mluvčích i bez písma jazyk oživit nejde.
+- Loajalita brzdí odchod od jazyka, ne návrat k němu.
+- Původní jazyk regionu si pamatuje území (`Territory.native_language`),
+  takže stačí zadat region.
+
+Jestli se obrození ujme, rozhoduje dál status a demografie.
+`scripts/v2_revival.py`: hlavní město jazyka `a` a region `x` jazyka `b`
+s vlastní identitou, od roku 0 vynucování. Čísla jsou podíl obyvatel
+regionu, kteří doma mluví jazykem `b`:
+
+| varianta | 75 | 150 | 300 | 400 | 500 | 700 | 1 000 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| bez obrození | 0,65 | 0,23 | 0,00 | 0,00 | 0,00 | 0,00 | 0,00 |
+| hnutí od 75, stát trvá | 0,66 | 0,26 | 0,02 | 0,00 | 0,00 | 0,00 | 0,00 |
+| národní hnutí, norma a škola od 75 | 0,81 | 0,84 | 0,87 | 0,88 | 0,89 | 0,89 | 0,89 |
+| odtržení a národní obrození od 75 | 0,85 | 0,95 | 1,00 | 1,00 | 1,00 | 1,00 | 1,00 |
+| vymřelý jazyk z písma: odtržení a obrození od 400 | 0,70 | 0,32 | 0,00 | 0,06 | 0,17 | 1,00 | 1,00 |
+| totéž se školou v obrozeném jazyce | 0,70 | 0,32 | 0,00 | 0,07 | 0,48 | 1,00 | 1,00 |
+
+Samotné hnutí proti vynucujícímu státu nestačí (typ Bretaň). S vlastní
+normou a školou jazyk vydrží (typ Wales a Katalánsko). Vlastní stát
+přechod obrátí. Vymřelý jazyk s písmem oživí vlastní stát za 200–300 let
+(typ hebrejština).
+
+Úspěch je až příliš spolehlivý. Irsko mělo vlastní stát i školu, a přesto
+obrození selhalo, protože angličtina měla celosvětovou prestiž, kterou
+model nezná. Autor může sílu obrození zvolit slabší.
+
 ## Omezení
 
 - **Práh prvního mluvčího.** Přechod začne, až když by za generaci přešel
   aspoň jeden člověk. Slabý tlak v odlehlém nebo velmi loajálním regionu
   proto nezačne nikdy. Hory se silnou identitou tak drží jazyk i při
   vynucování, což u Baskicka sedí, ale je to práh, ne rozložení.
-- **Jen jeden směr.** Návrat k jazyku (velština, katalánština, hebrejština)
-  není: přechod jde jen k jazyku s vyšším statusem. Prestiž se už mění
-  s mocí (rozpad, odtržení), ale ztracené mluvčí jazyk zpátky nezíská.
-  Obrození chce obousměrný Abramsův–Strogatzův tok.
+- **Obousměrný je jen přechod rozběhnutý státem nebo obrozením.**
+  Přechody z dosavadních scénářů (dobytí, trh) zůstávají jednosměrné.
+  Prestiž mimo svět (světový jazyk) model nezná.
 - **Demografie je deterministická.** Podíly nezávisí na seedu, náhoda
   působí jen na jazyk samotný.
 - **Mezi dialekty téže linie přechod nefunguje.** Přechod funguje jen mezi

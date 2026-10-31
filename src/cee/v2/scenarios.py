@@ -378,10 +378,10 @@ def region_world(
         )}
     villages_of: dict[str, list[str]] = {}
     for region in regions:
-        world.add_territory(Territory(region.id, "region", parent="world", position=region.position,
-                                      terrain=region.terrain))
-        population = max(1, round(region.density * world.params.population_per_density))
         lineage = lineages.get(region.language or languages[0].id) if languages else None
+        world.add_territory(Territory(region.id, "region", parent="world", position=region.position,
+                                      terrain=region.terrain, native_language=lineage.id if lineage else "proto"))
+        population = max(1, round(region.density * world.params.population_per_density))
         base = bases[lineage.id if lineage else "proto"]
         rule = lineage.stress_rule if lineage else stress_rule
         strength = lineage.stress_strength if lineage else stress_strength

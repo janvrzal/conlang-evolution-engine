@@ -44,7 +44,7 @@ from typing import Any
 from cee.v2.events import Codification, LanguageShift, Printing, Schooling, WorldEvent
 from cee.v2.history import History
 from cee.v2.parameters import level
-from cee.v2.world import Link, World
+from cee.v2.world import Link, SpeechGroup, World
 
 
 @dataclass(slots=True)
@@ -460,6 +460,106 @@ class Preserve(WorldEvent):
                     groups.append(group_id)
         history.record("preserve", tick, self.year, regions=sorted(self.regions), language=self.language,
                        preserved=self.preserved, groups=groups)
+
+
+@dataclass(frozen=True)
+class Revival(WorldEvent):
+    """Obrozenecké hnutí: regiony ``regions`` se vracejí k jazyku ``language``.
+
+    ``language`` je linie; ``None`` = původní jazyk regionu. ``strength``
+    (``movement``, ``national``) určí tempo, kterým se rodiny, jež přešly
+    na jiný jazyk, k němu vracejí (obousměrný přechod v
+    :func:`cee.v2.contact._shift`); mluvčí si jazyk předávají i pod prahem
+    užívání. Obce, kde jazyk už nikdo nemluví, ho dostanou zpět jako noví
+    mluvčí (podíl ``seed``): od sousedů, kteří ho ještě mluví, nebo z písma
+    (hebrejština, kornština). Bez mluvčích i bez písma jazyk oživit nejde.
+    Jestli se obrození ujme, rozhoduje dál status a demografie: pomůže
+    vlastní stát (``Secession``), norma a škola.
+    """
+
+    year: float
+    regions: tuple[str, ...]
+    language: str | None = None
+    strength: str = "movement"
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        _check_regions(world, self.regions)
+        table = level(world.params.revival_levels, self.strength, "síla obrození")
+        pace, seed = float(table["pace"]), float(table["seed"])
+        speakers, revived = [], []
+        for region in self.regions:
+            language = self.language or world.territories[region].native_language
+            if language is None:
+                raise ValueError(f"Region '{region}' nezná svůj původní jazyk; zadej language.")
+            home = groups_in(world, [region])
+            for group_id in home:
+                if world.groups[group_id].main_code.language == language:
+                    world.groups[group_id].revival = max(world.groups[group_id].revival, pace)
+                    speakers.append(group_id)
+            for group_id in home:
+                group = world.groups[group_id]
+                community = group.community or group_id
+                if group.main_code.language == language or any(
+                    (world.groups[other].community or other) == community
+                    and world.groups[other].domain == "home"
+                    and world.groups[other].main_code.language == language
+                    for other in world.group_ids()
+                ):
+                    continue
+                created = _revive(world, group_id, language, region, pace, seed)
+                if created is not None:
+                    revived.append(created)
+        refresh(world)
+        history.record("revival_movement", tick, self.year, regions=sorted(self.regions),
+                       language=self.language, strength=self.strength, speakers=speakers, revived=revived)
+
+
+def _donor(world: World, group_id: str, language: str, region: str) -> str | None:
+    """Odkud se ztracený jazyk naučit: soused, který ho mluví, jinak jeho písmo."""
+    for link in sorted(world.neighbors(group_id), key=lambda found: (-found.strength, found.target)):
+        peer = world.groups[link.target]
+        if not peer.written and peer.domain == "home" and peer.main_code.language == language:
+            return link.target
+    written = world.standards.get(region)
+    if written is not None and written in world.groups and _language_of(world, written) == language:
+        return written
+    for candidate in world.group_ids():
+        if world.groups[candidate].written and world.groups[candidate].main_code.language == language:
+            return candidate
+    return None
+
+
+def _revive(world: World, group_id: str, language: str, region: str, pace: float, seed: float) -> str | None:
+    donor = _donor(world, group_id, language, region)
+    group = world.groups[group_id]
+    new_id = f"{group_id}>{language}:revived"
+    if donor is None or new_id in world.groups:
+        return None
+    world.materialize(donor)
+    code = world.groups[donor].main_code.branch()
+    code.acquisition, code.l1_source, code.l2_share = "L2", group_id, 1.0
+    community = group.community or group_id
+    group.community = community
+    written = donor if world.groups[donor].written else world.groups[donor].standard
+    created = world.add_group(SpeechGroup(
+        id=new_id, territory=group.territory, population=max(1, round(group.population * seed)),
+        codes=[code], generation_years=group.generation_years,
+        prestige=world.base_prestige.get(group_id, group.prestige), openness=group.openness,
+        community=community, home_pull=pace, loyalty=group.loyalty, revival=pace,
+        standard=written, literacy=max(group.literacy, 0.5 if written else 0.0),
+    ))
+    world.base_prestige[new_id] = created.prestige
+    world.connect(new_id, group_id, 0.8, "strong")
+    for link in world.neighbors(group_id):
+        neighbour = world.groups[link.target]
+        neighbourhood = neighbour.community or link.target
+        for other in world.group_ids():
+            peer = world.groups[other]
+            if other == new_id or peer.written or peer.main_code.language != language:
+                continue
+            if other == link.target or (peer.community or other) == neighbourhood:
+                world.connect(new_id, other, link.strength, link.kind)
+    return new_id
 
 
 def refresh(world: World) -> None:
