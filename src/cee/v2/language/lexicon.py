@@ -267,15 +267,14 @@ class PhonologyState:
     def branch(self) -> PhonologyState:
         """Nezávislá kopie stavu pro nový kód (odštěpení, přechod, zjemnění).
 
-        Hodnocení zvukových procesů (``("assessment", proces)`` v keši) se
-        nedědí: smějí zastarat o několik kroků, a jejich obsah tak závisí na
-        tom, kdy je kód předlohy naposledy spočítal. Nový kód si je spočítá
-        sám, takže jeho historie nezávisí na tom, kdo předlohu hodnotil
-        (paralelní běh, :mod:`cee.v2.parallel`).
+        Keš (odvozené údaje) se nedědí, nový kód si ji postaví sám. Většina
+        keší je čistou funkcí stavu, takže na výsledku to nic nemění (otisky
+        stejné); hodnocení zvukových procesů ale smí zastarat o několik kroků,
+        a s děděnou keší by historie nového kódu závisela na tom, kdy předlohu
+        kdo hodnotil (paralelní běh, :mod:`cee.v2.parallel`). Kopie je i levnější.
         """
         cache = self.cache
-        self.cache = {key: value for key, value in cache.items()
-                      if not (isinstance(key, tuple) and key and key[0] == "assessment")}
+        self.cache = {}
         try:
             return copy.deepcopy(self)
         finally:

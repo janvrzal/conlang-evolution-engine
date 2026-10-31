@@ -77,6 +77,10 @@ class Simulation:
     #: inovací) počítá každý proces jen pro své skupiny a výsledky si procesy
     #: vymění. ``None`` = vše v tomto procesu (i po ``resume``).
     shards: Any = None
+    #: Jen pro testy nezávislosti na pořadí skupin: kroky po skupinách se
+    #: projdou pozpátku. Výsledný stav se nesmí změnit (podmínka paralelního
+    #: běhu, kde skupiny zpracovávají různé procesy).
+    reverse_groups: bool = False
 
     def __init__(
         self,
@@ -296,7 +300,8 @@ class Simulation:
             for part in self.shards.gather("sites", sites):
                 sites.update(part)
 
-        for group_idx, (context, _, share, _) in enumerate(entries):
+        order = list(enumerate(entries))
+        for group_idx, (context, _, share, _) in (reversed(order) if self.reverse_groups else order):
             for change_idx, change in enumerate(self.changes):
                 count = int(counts[group_idx, change_idx])
                 if count <= 0:
@@ -436,7 +441,7 @@ class Simulation:
                 if distribution is not None:
                     self.world.groups[group_id].main_code.repertoire.set(variable_id, distribution)
         if self.world.table is not None:
-            for group_id in live.group_ids:
+            for group_id in (list(reversed(live.group_ids)) if self.reverse_groups else live.group_ids):
                 if self.world.groups[group_id].written:
                     continue
                 state = self.world.groups[group_id].main_code.phonology
@@ -513,7 +518,9 @@ class Simulation:
             ("leave", (before >= 0.5) & (after < 0.5) & lexical),
             ("enter", (before < 0.5) & (after >= 0.5) & lexical),
         ):
-            for row, column, slot in zip(*np.nonzero(mask)):
+            cells = list(zip(*np.nonzero(mask)))
+            for row, column, slot in (sorted(cells, key=lambda cell: (-cell[1], cell[0], cell[2]))
+                                      if self.reverse_groups else cells):
                 variant = block.slots[row][slot]
                 morpheme = variants[variant].payload.get("morpheme") if variant else None
                 if not isinstance(morpheme, str):

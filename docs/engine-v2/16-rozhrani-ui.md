@@ -217,6 +217,43 @@ přidává čekání na nejpomalejší proces a start procesů.
   jádra.
 - **Menší konstanta na buňku**: tlaky jako hromadné operace v numpy.
 
+### Vlastnický režim (rozpracováno, odloženo)
+
+Navazující pokus: kroky, které mění stav skupiny (uplatnění inovací,
+slovník, aktivace a přestavba), dělá jen vlastník skupiny. Ostatním
+procesům posílá jen to, co potřebují:
+- nové položky registrů světa;
+- operace nad skladem (vrácené a přehrané ve stejném pořadí skupin, aby
+  bloky a sloty byly všude stejné);
+- slovník skupiny (tvary, dominantní kořeny, slovní zásoba, přízvuk).
+
+Před událostmi a při vzniku skupiny z cizího kódu si procesy vyžádají
+úplné kódy od vlastníků.
+
+Zjištění:
+
+- **Engine nezávisí na pořadí skupin v kroku** (`tests/v2/test_v2_order.py`,
+  `Simulation.reverse_groups`): stav i záznamy historie jsou stejné,
+  i když se skupiny projdou pozpátku. To je podmínka každého paralelního
+  běhu.
+- **Keše jsou při větvení kódu čistou funkcí stavu**: kód bez keší i bez
+  deníků dává bitově stejné otisky. Nový kód proto keš nedědí
+  (`PhonologyState.branch`).
+- Na malém světě byl vlastnický režim bitově shodný s jedním procesem.
+  Na světě 12 regionů × 4 vesnice se rozešel v roce 400, kdy nastoupí
+  spisovný jazyk a školy: u dvojjazyčné skupiny dal tlak `Uniformity`
+  jiný součet (4,4534 proti 4,3756). Ostatní tlaky a vstupy (slyšené
+  rozdělení, podíl L2, docházka) byly stejné. Příčina zatím nalezena není.
+- Zrychlení se zatím neprokázalo (1,0× se dvěma procesy). Režii tvořily
+  výměny přes koordinátora, přenos celých kódů (zmenšený vynecháním keší
+  a deníků) a kopie skladu v každém kroku.
+
+**Rozhodnutí uživatele: odloženo, nejdřív model.** Konstanta na buňku
+(~30 µs) je cena Pythonu. Přeložené jádro (Rust pod Pythonem, PyO3) by ji
+srazilo zhruba 30–100× a paralelismus by šel ve vláknech bez kopií světa.
+Model se ale ještě mění (kalibrace M7), takže přepis má smysl, až se ustálí.
+Rozpracovaný vlastnický režim je na větvi `engine-v2-parallel-owner`.
+
 ## Co zbývá pro UI
 
 1. **Převod projektu na `WorldSpec`.** Projekt (`project_schema.py`, V3)
