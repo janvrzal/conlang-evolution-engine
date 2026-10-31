@@ -139,6 +139,51 @@ Centralizace v jednojazyčném světě (čtverec čtyř regionů, otevřenost 0,
 (`moderate`) a 0,074 (`strong`). Nářečí se k centru srovnávají, kontinuum
 uvnitř regionu zůstává.
 
+## Spisovný jazyk
+
+Vrstvy písma, tisku a školy z M6a (`Codification`, `Printing`,
+`Schooling`) se dají zadat i po regionech:
+
+```python
+Standard(1400, "kralovstvi", literacy="elite")   # elite | towns | mass
+Standard(1850, "jih")                            # vlastní norma menšinového jazyka
+Schools(1880, "kralovstvi", coverage="mass", printing=True, diglossic=False)  # towns | mass
+Schools(1880, "jih")
+```
+
+- `of` je ID státu (řeč jeho sídla, úřední jazyk) nebo regionu (řeč jeho
+  největší rodilé vesnice).
+- Gramotnost a škola se násobí dosahem centra; u regionu jen terénem.
+- Skupina čte normu svého jazyka. Normu cizího jazyka čte jen tehdy, když
+  vlastní nemá, a pak z ní přejímá učená slova.
+- **Školou prochází jen řeč jazyka normy.** U něj nastává standardizace
+  a nářečí ustupují. Regiony jiného jazyka spisovný jazyk státu jen čtou;
+  ve škole se ho učí jejich mluvčí mimo domov (veřejná doména) a ti, kdo
+  na něj přešli. Školy kanály institucí nefiltrují podle linie, takže
+  škola v cizím jazyce nesmí vlévat jeho konstrukce do mateřštiny. Asimilaci
+  školou proto zadává `LanguagePolicy("enforced")`.
+- Mluvčí kodifikovaného jazyka dostanou `standard_prestige`× (1,5×)
+  vyšší prestiž. Spisovný jazyk státu tak přechod mírně urychlí a vlastní
+  norma regionu jeho status vyrovná.
+- **Škola ve vlastním jazyce chrání.** Tlak úředního jazyka domů
+  i tempo přechodu se násobí `1 − docházka do školy ve vlastním jazyce`
+  (`contact.own_schooling`), jako u češtiny, finštiny nebo katalánštiny.
+
+Stejné království jako výše, spisovný jazyk státu od roku 300 (podíl
+původního jazyka doma):
+
+| varianta | region | 300 | 600 | 700 | 900 | 1 500 |
+|---|---|---:|---:|---:|---:|---:|
+| spisovný jazyk státu | rovina | 0,87 | 0,62 | 0,53 | 0,36 | 0,00 |
+| spisovný jazyk státu | jih | 0,94 | 0,82 | 0,78 | 0,70 | 0,42 |
+| + vlastní norma jihu | jih | 0,94 | 0,85 | 0,81 | 0,74 | 0,52 |
+| od 600 vynucování a masová škola | rovina | 0,87 | 0,39 | 0,00 | 0,00 | 0,00 |
+| od 600 vynucování a masová škola | jih | 0,94 | 0,69 | 0,13 | 0,00 | 0,00 |
+| + vlastní norma a škola jihu | jih | 0,94 | 0,83 | 0,73 | 0,51 | 0,00 |
+
+Vlastní škola drží jih po 300 letech vynucování na polovině. Bez ní by
+jazyk zmizel za 100–200 let. Proti 900 letům vynucování ale neobstojí.
+
 ## Omezení
 
 - **Práh prvního mluvčího.** Přechod začne, až když by za generaci přešel
@@ -154,9 +199,8 @@ uvnitř regionu zůstává.
   liniemi (`Code.language`). Regiony společného protojazyka, které se
   rozešly v různé pozorované jazyky, se jen srovnávají sítí, k přechodu
   mezi nimi nedojde.
-- **Jazyková politika a lingua franca nemají vlastní normu ani školu.**
-  Spisovný jazyk státu se dál zadává `Codification` a `Schooling` po
-  skupinách. Uživatelsky přívětivá varianta po regionech by patřila sem.
+- **Norma se nezmění.** Spisovný jazyk se zapíše jednou. Revize normy
+  podle jiného nářečí a jiné písmo přirozeně nejsou.
 - Lingua franca se zadává, sama nevzniká (výběr podle dosahu obchodní
   sítě je další krok).
 - Všechny úrovně jsou autorské odhady. Kalibraci zbývá udělat proti tempu

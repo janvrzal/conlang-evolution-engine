@@ -208,6 +208,15 @@ def demographic_share(world: World, source_id: str, target_id: str) -> float:
     return speakers / total if total else 0.0
 
 
+def own_schooling(world: World, group_id: str) -> float:
+    """Školní docházka skupiny v jejím vlastním jazyce (0, když škola učí cizí normu)."""
+    group = world.groups[group_id]
+    standard = world.groups.get(group.standard) if group.standard is not None else None
+    if standard is None or standard.main_code.language != group.main_code.language:
+        return 0.0
+    return group.schooling
+
+
 def _nativize(
     world: World, public_id: str, home_id: str, renewal: float, tick: int, year: float, history: History
 ) -> bool:
@@ -215,7 +224,7 @@ def _nativize(
 
     Za generaci přejde podíl ``home_pull × status × dvojjazyčnost^1,31``
     domácnosti (jako u přechodu, Abrams & Strogatz 2003), zpomalený loajalitou
-    komunity. Přešlé rodiny tvoří domácí skupinu cílového jazyka, kterou pak
+    komunity a školou ve vlastním jazyce. Přešlé rodiny tvoří domácí skupinu cílového jazyka, kterou pak
     dál vede :func:`_shift`: jestli starý jazyk vymře, rozhodne místní
     demografie a loajalita, ne politika sama. Přiblížení, ne model rodin.
     """
@@ -225,7 +234,7 @@ def _nativize(
     bilingual = min(1.0, public.population / home.population)
     moving = (
         home.population * renewal * params.shift_rate * public.home_pull * (1.0 - home.loyalty) * status
-        * bilingual**params.shift_exponent
+        * bilingual**params.shift_exponent * (1.0 - own_schooling(world, home_id))
     )
     moving = min(moving, home.population - 1.0)
     language = public.main_code.language
@@ -251,6 +260,7 @@ def _nativize(
         id=f"{home_id}>{language}:home", territory=home.territory, population=max(1, round(moving)),
         codes=[code], generation_years=home.generation_years, prestige=public.prestige,
         openness=public.openness, community=community, loyalty=home.loyalty, home_pull=public.home_pull,
+        standard=public.standard, literacy=public.literacy, schooling=public.schooling,
     ))
     home.population = max(1, round(home.population - moving))
     for link in world.neighbors(public_id):
@@ -279,7 +289,8 @@ def _shift(
     share = demographic_share(world, source_id, target_id)
     # Přechod, který začal tlakem státu (``_nativize``), jde tempem politiky:
     # uvolnění politiky ho zpomalí.
-    pace = target.home_pull if target.home_pull > 0 else 1.0
+    # Škola ve vlastním jazyce ho brání: děti se ho učí i psaný.
+    pace = target.home_pull * (1.0 - own_schooling(world, source_id)) if target.home_pull > 0 else 1.0
     moving = (
         source.population * renewal * params.shift_rate * pace * (1.0 - source.loyalty) * status
         * share**params.shift_exponent

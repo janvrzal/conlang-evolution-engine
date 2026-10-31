@@ -725,7 +725,7 @@ def known_tree(seed: int = 1, *, first: float = 300.0, second: float = 1800.0) -
 
 def kingdom(
     seed: int = 1, *, founded: float = 100.0, policy: str = "promoted", modern: float | None = None,
-    lingua_franca: bool = False,
+    lingua_franca: bool = False, standard: float | None = None, own_standard: tuple[str, ...] = (),
 ) -> tuple[World, list[WorldEvent]]:
     """Ukázkový stát čtyř jazyků (M6f): které regiony přejdou a které ne.
 
@@ -734,9 +734,11 @@ def kingdom(
     identitou (``c``). V roce ``founded`` vznikne stát s politikou ``policy``;
     s ``modern`` od toho roku vynucuje úřední jazyk (povinná škola). S
     ``lingua_franca`` se regiony od začátku domlouvají jazykem hlavního
-    města i bez státu (obchod).
+    města i bez státu (obchod). Se ``standard`` vznikne v tom roce spisovný
+    jazyk státu (elitní gramotnost) a regiony ``own_standard`` dostanou
+    vlastní normu; s ``modern`` k tomu přijde i masová škola a tisk.
     """
-    from cee.v2.polity import LanguagePolicy, LinguaFranca, State
+    from cee.v2.polity import LanguagePolicy, LinguaFranca, Schools, Standard, State
 
     regions = (
         Region("capital", (0.0, 0.0), density=2.0, neighbours=("plain", "mountains", "south"), language="a"),
@@ -757,6 +759,12 @@ def kingdom(
     if lingua_franca:
         events.append(LinguaFranca(0.0, "capital", ids[1:]))
     events.append(State(founded, "kingdom", ids, "capital", policy=policy))
+    if standard is not None:
+        events.append(Standard(standard, "kingdom"))
+        events += [Standard(standard, region) for region in own_standard]
     if modern is not None:
         events.append(LanguagePolicy(modern, "kingdom", "enforced"))
+        if standard is not None:
+            events.append(Schools(modern, "kingdom"))
+            events += [Schools(modern, region) for region in own_standard]
     return world, events

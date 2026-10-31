@@ -187,6 +187,8 @@ class World:
     params: Parameters = field(default_factory=Parameters)
     #: Státy světa (``cee.v2.polity``) podle ID; vznikají událostí ``State``.
     states: dict[str, Any] = field(default_factory=dict)
+    #: Spisovné jazyky států a regionů: ID státu či regionu → ID psaného kódu.
+    standards: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not isinstance(self.concept_frequencies, FrequencyMap):

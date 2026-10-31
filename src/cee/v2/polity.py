@@ -11,6 +11,11 @@ mechanismy, které engine už má:
   (veřejná doména) a politika určuje, jak silně se tlačí i domů
   (:func:`cee.v2.contact._nativize`).
 
+**Spisovný jazyk** (``Standard``, ``Schools``) zapíše řeč sídla státu
+nebo regionu a rozšíří gramotnost a školu po regionech; vrstvy písma,
+tisku a školy (M6a) jsou tytéž, jen zadané po regionech. Vlastní norma
+zvedne prestiž svého jazyka, a tak brzdí přechod na jiný.
+
 Jestli jazyk regionu přežije, rozhoduje jeho demografie, terén (dosah
 státu) a loajalita (odlišnost regionu), ne autor. **Lingua franca** je
 týž mechanismus bez státu: komunity různých jazyků se jedním kódem
@@ -28,7 +33,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-from cee.v2.events import LanguageShift, WorldEvent
+from cee.v2.events import Codification, LanguageShift, Printing, Schooling, WorldEvent
 from cee.v2.history import History
 from cee.v2.parameters import level
 from cee.v2.world import World
@@ -70,11 +75,16 @@ def groups_in(world: World, regions: tuple[str, ...] | list[str]) -> list[str]:
 
 
 def seat_of(world: World, region: str) -> str:
-    """Největší vesnice regionu (při shodě první podle ID)."""
+    """Největší vesnice regionu (při shodě první podle ID).
+
+    Přednost mají rodilé skupiny před těmi, které na jazyk teprve přešly.
+    """
     found = groups_in(world, [region])
     if not found:
         raise ValueError(f"Region '{region}' nemá žádnou vesnici.")
-    return min(found, key=lambda group_id: (-world.groups[group_id].population, group_id))
+    return min(found, key=lambda group_id: (
+        world.groups[group_id].main_code.l1_source is not None, -world.groups[group_id].population, group_id,
+    ))
 
 
 def reach(world: World, group_id: str, seat: str, *, distance: bool = True) -> float:
@@ -132,6 +142,10 @@ def public_bilingualism(
         LanguageShift(year, group_id, source_id, initial_share=share, domain="public").apply(world, history, tick)
         existing = world.groups[public_id]
         existing.home_pull = pull
+        # Úřední jazyk se mimo domov užívá i psaný: veřejná skupina čte normu zdroje.
+        if source.standard is not None:
+            existing.standard = source.standard
+            existing.literacy = max(group.literacy, source.literacy)
     if link > 0:
         current = world.links.get((public_id, source_id))
         if current is None or current.strength < link:
@@ -291,6 +305,118 @@ class LinguaFranca(WorldEvent):
         history.record("lingua_franca", tick, self.year, source=source, language=language,
                        regions=sorted(self.regions), spread=self.spread, nativize=self.nativize,
                        bilingual=bilingual)
+
+
+def _language_of(world: World, group_id: str) -> str:
+    return world.groups[group_id].main_code.language
+
+
+def _scope(world: World, of: str) -> tuple[tuple[str, ...], str, bool]:
+    """Regiony, sídlo a zda jde o stát pro ``of`` (ID státu, nebo regionu)."""
+    if of in world.states:
+        polity = world.states[of]
+        return polity.regions, polity.seat, True
+    _check_regions(world, (of,))
+    return (of,), seat_of(world, of), False
+
+
+def _readers(world: World, regions: tuple[str, ...]) -> list[str]:
+    """Mluvené skupiny regionů včetně veřejné domény (čtou a chodí do školy)."""
+    wanted = set(regions)
+    return [
+        group_id for group_id in world.group_ids()
+        if not world.groups[group_id].written and region_of(world, group_id) in wanted
+    ]
+
+
+@dataclass(frozen=True)
+class Standard(WorldEvent):
+    """Spisovný jazyk státu nebo regionu ``of``: zapíše se řeč jeho sídla.
+
+    Pro stát je to řeč sídla státu (úřední jazyk), pro region řeč jeho
+    největší vesnice (vlastní norma menšinového jazyka). Gramotnost
+    ``literacy`` (``elite``, ``towns``, ``mass``) se násobí dosahem centra.
+    Skupina čte normu svého jazyka; cizí normu jen tehdy, když vlastní nemá
+    (učené výpůjčky). Mluvčí kodifikovaného jazyka dostanou
+    ``Parameters.standard_prestige``× vyšší prestiž.
+    """
+
+    year: float
+    of: str
+    literacy: str = "elite"
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        regions, seat, is_state = _scope(world, self.of)
+        share = float(level(world.params.literacy_levels, self.literacy, "úroveň gramotnosti"))
+        if self.of in world.standards or f"written:{seat}" in world.groups:
+            raise ValueError(f"'{self.of}' už spisovný jazyk má; školu přidá událost Schools.")
+        Codification(self.year, seat, (), 0.0).apply(world, history, tick)
+        written = f"written:{seat}"
+        world.standards[self.of] = written
+        language = _language_of(world, written)
+        readers = []
+        for group_id in _readers(world, regions):
+            group = world.groups[group_id]
+            own = group.main_code.language == language
+            current = group.standard if group.standard in world.groups else None
+            if current is not None and (not own or _language_of(world, current) == group.main_code.language):
+                continue
+            group.standard = written
+            group.literacy = max(group.literacy, share * reach(world, group_id, seat, distance=is_state))
+            if own:
+                group.prestige *= world.params.standard_prestige
+            readers.append(group_id)
+        history.record("standard", tick, self.year, of=self.of, written=written, language=language,
+                       literacy=self.literacy, readers=readers)
+
+
+@dataclass(frozen=True)
+class Schools(WorldEvent):
+    """Školy ve státě nebo regionu ``of``: děti se učí spisovný jazyk.
+
+    ``coverage`` (``towns``, ``mass``) je podíl dětí ve škole, násobený
+    dosahem centra. Školou prochází jen řeč jazyka normy (standardizace,
+    nářečí ustupují); regiony jiného jazyka spisovný jazyk státu čtou a
+    jeho mluvčí mimo domov se ho učí ve škole. Asimilaci školou zadává
+    ``LanguagePolicy("enforced")``. S ``printing`` norma sleduje řeč sídla
+    (moderní spisovné jazyky), s ``diglossic`` se učí jako samostatná vysoká
+    varieta a stojí (Ferguson 1959). Vyžaduje dřívější ``Standard``.
+    """
+
+    year: float
+    of: str
+    coverage: str = "mass"
+    printing: bool = True
+    diglossic: bool = False
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        regions, seat, is_state = _scope(world, self.of)
+        written = world.standards.get(self.of)
+        if written is None:
+            raise ValueError(f"'{self.of}' nemá spisovný jazyk; nejdřív událost Standard.")
+        source = written.removeprefix("written:")
+        seat = source if source in world.groups else seat  # dosah se měří od sídla normy
+        share = float(level(world.params.schooling_levels, self.coverage, "úroveň školství"))
+        language = _language_of(world, written)
+        pupils = []
+        for group_id in _readers(world, regions):
+            group = world.groups[group_id]
+            if group.standard != written and group.standard in world.groups:
+                continue  # chodí do školy vlastní normy
+            group.standard = written
+            value = share * reach(world, group_id, seat, distance=is_state)
+            group.literacy = max(group.literacy, value)
+            if group.main_code.language != language:
+                continue
+            if self.diglossic and group.domain == "home":
+                Schooling(self.year, (group_id,), value, value, diglossic=True).apply(world, history, tick)
+            else:
+                group.schooling = max(group.schooling, value)
+            pupils.append(group_id)
+        if self.printing and not self.diglossic:
+            Printing(self.year, written).apply(world, history, tick)
+        history.record("schools", tick, self.year, of=self.of, coverage=self.coverage,
+                       printing=self.printing, diglossic=self.diglossic, pupils=pupils)
 
 
 def _polity(world: World, state: str) -> Polity:

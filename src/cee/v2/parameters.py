@@ -198,6 +198,18 @@ class Parameters:
     lingua_franca_link: float = 0.3
     #: Tlak lingua franca domů, když ji autor nechá zdomácnět (``nativize``).
     lingua_franca_pull: float = 0.1
+    #: Spisovný jazyk (``polity.Standard``, ``polity.Schools``): podíl gramotných
+    #: při kodifikaci a podíl dětí ve škole podle úrovně; násobí se dosahem centra.
+    literacy_levels: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
+        "elite": 0.05, "towns": 0.2, "mass": 0.8,
+    }))
+    schooling_levels: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
+        "towns": 0.3, "mass": 0.8,
+    }))
+    #: Kolikrát vyšší prestiž dostanou mluvčí jazyka, který má vlastní spisovnou
+    #: normu (literatura, úřady, škola): vlastní norma brzdí přechod na jiný
+    #: jazyk (čeština, finština, katalánština). Autorský odhad.
+    standard_prestige: float = 1.5
     #: Dostupnost regionu podle terénu: násobí vazby přes hranici regionu, vazbu
     #: k sídlu státu i dosah jazykové politiky. Hory a ostrovy izolují.
     terrain_access: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
@@ -240,6 +252,7 @@ class Parameters:
 #: Tabulky slovních úrovní (``Parameters``), které autor světa zadává jménem.
 LEVEL_TABLES = (
     "centralization_levels", "policy_levels", "lingua_franca_levels", "terrain_access", "identity_loyalty",
+    "literacy_levels", "schooling_levels",
 )
 
 

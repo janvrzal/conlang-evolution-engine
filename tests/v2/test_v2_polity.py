@@ -7,6 +7,8 @@ from cee.v2.polity import (
     Annexation,
     LanguagePolicy,
     LinguaFranca,
+    Schools,
+    Standard,
     State,
     groups_in,
     language_census,
@@ -168,3 +170,58 @@ def test_kralovstvi_je_deterministicke():
         simulation.run(300.0)
         digests.append(simulation.history.digest())
     assert digests[0] == digests[1]
+
+
+def test_spisovny_jazyk_statu_ctou_vsichni_a_zvedne_prestiz_jeho_jazyka():
+    world = pair()
+    history = Simulation(world).history
+    State(0.0, "k", ("capital", "x"), "capital").apply(world, history, 0)
+    before = {g: world.groups[g].prestige for g in world.group_ids()}
+    Standard(0.0, "k", literacy="towns").apply(world, history, 0)
+    written = world.standards["k"]
+    assert world.groups[written].written
+    for group_id in groups_in(world, ["capital", "x"]):
+        group = world.groups[group_id]
+        assert group.standard == written and group.literacy > 0.0
+        own = group.main_code.language == "a"
+        expected = before[group_id] * (world.params.standard_prestige if own else 1.0)
+        assert group.prestige == pytest.approx(expected)
+    with pytest.raises(ValueError, match="už spisovný jazyk má"):
+        Standard(0.0, "k").apply(world, history, 0)
+
+
+def test_skola_uci_jen_jazyk_normy_a_vlastni_norma_zustane():
+    world = pair()
+    history = Simulation(world).history
+    with pytest.raises(ValueError, match="nemá spisovný jazyk"):
+        Schools(0.0, "x").apply(world, history, 0)
+    State(0.0, "k", ("capital", "x"), "capital", policy="tolerant").apply(world, history, 0)
+    Standard(0.0, "x").apply(world, history, 0)
+    Standard(0.0, "k").apply(world, history, 0)
+    Schools(0.0, "k").apply(world, history, 0)
+    assert world.groups[world.standards["k"]].openness > 0.0  # tisk: norma sleduje řeč sídla
+    for group_id in groups_in(world, ["x"]):
+        assert world.groups[group_id].standard == world.standards["x"]
+        assert world.groups[group_id].schooling == 0.0
+    for group_id in groups_in(world, ["capital"]):
+        assert world.groups[group_id].schooling > 0.0
+    public = [g for g in world.group_ids() if world.groups[g].domain == "public"]
+    assert public and all(world.groups[g].schooling > 0.0 for g in public)
+
+
+def test_skola_ve_vlastnim_jazyce_prechod_brzdi():
+    plain, protected = pair(identity="distinct"), pair(identity="distinct")
+    state = State(0.0, "k", ("capital", "x"), "capital", policy="enforced")
+    Simulation(plain, events=[state]).run(100.0)
+    Simulation(protected, events=[state, Standard(0.0, "x"), Schools(0.0, "x")]).run(100.0)
+    assert home_share(plain, "x", "b") < home_share(protected, "x", "b")
+
+
+def test_diglosni_skola_vytvori_vysokou_varietu():
+    world = pair()
+    history = Simulation(world).history
+    State(0.0, "k", ("capital", "x"), "capital", policy="tolerant").apply(world, history, 0)
+    Standard(0.0, "k").apply(world, history, 0)
+    Schools(0.0, "k", diglossic=True).apply(world, history, 0)
+    assert any(g.endswith(">H") for g in world.group_ids())
+    assert world.groups[world.standards["k"]].openness == 0.0

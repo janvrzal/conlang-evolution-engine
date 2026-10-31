@@ -1077,7 +1077,7 @@ na nezávislé řadě seedů `101..120` (u M3 morfologie rozšířeně `101..140
 
 Podrobně v [`15-staty-lingua-franca.md`](15-staty-lingua-franca.md). Modul
 `cee.v2.polity`: události `State`, `LanguagePolicy`, `Annexation`,
-`LinguaFranca` a sčítání `language_census`. Autor zadává regiony a slovní
+`LinguaFranca`, spisovný jazyk `Standard` a `Schools` (po státech a regionech; škola ve vlastním jazyce brání přechodu) a sčítání `language_census`. Autor zadává regiony a slovní
 úrovně, čísla jsou v `Parameters`. Regiony `region_world` mohou mít vlastní
 protojazyk (`Region.language`, `ProtoLanguage`), terén a identitu. Stát
 působí jen prestiží sídla, vazbami k sídlu a veřejnou doménou. Nový
@@ -1085,7 +1085,7 @@ mechanismus pronikání veřejného kódu domů (`contact._nativize`,
 `SpeechGroup.home_pull`) rozhoduje, zda region přejde. Odlehlé a odlišné
 regiony jazyk drží. Výchozí `home_pull` = 0, takže dosavadní scénáře mají
 bitově stejné otisky (ověřeno `v2_digests.py --quick` i otiskem
-`region_world`). Testy `tests/v2/test_v2_polity.py` (13). Úrovně jsou
+`region_world`). Testy `tests/v2/test_v2_polity.py` (17). Úrovně jsou
 autorské odhady, kalibrace čeká na M7.
 
 ### Cíle kalibrace M7 (2026-10-30)
@@ -1149,7 +1149,8 @@ Sepsáno 2026-10-28 při revizi plánu po M3; aktualizováno po části D (proz�
 | Konstanty kontaktu (filtry, váha interference, rychlost přechodu) jsou odhad | M7 |
 | Úrovně státu a jazykové politiky (`capital_prestige`, `policy_levels`, `terrain_access`, `identity_loyalty`…) jsou autorské odhady; přechod začne až od jednoho mluvčího za generaci (práh, ne rozložení) | M7 (tempo přechodu, francouzština 1794–1950, přežití v Baskicku a Walesu) |
 | Obrození jazyka (návrat k menšinovému jazyku) chybí: přechod jde jen k vyššímu statusu | podle potřeby (obousměrný tok, událost obnovy prestiže) |
-| Lingua franca se zadává, nevzniká sama z obchodní sítě; spisovný jazyk státu se zadává po skupinách (`Codification`, `Schooling`), ne po regionech | další krok M6f |
+| Lingua franca se zadává, nevzniká sama z obchodní sítě | další krok M6f |
+| Státy samy neoslabují vazby přes svou hranici; města nerostou (urbanizace jako motor přechodu chybí); prestiž se po vzniku státu nemění (rozpad státu ani ztráta moci ji nesníží); přechod mezi dialekty téže linie (spisovný jazyk jako „střecha“) chybí; pidžiny a kreoly nevznikají | další kroky M6f |
 | ~~Stabilní diglosie (Ferguson 1959)~~ | vyřešeno v M6b (`Schooling(diglossic=True)`) |
 | Učené výpůjčky se vracejí jako stará slova s dnešní výslovností; skutečné učené dublety (*fragile* vedle *frêle*) mají tvar psaného kódu | M6c nebo později |
 | Pravopisná výslovnost a revize pravopisu: psané tvary slov se nemění ani s tiskem | později |

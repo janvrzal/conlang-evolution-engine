@@ -23,6 +23,11 @@ VARIANTS: dict[str, dict[str, Any]] = {
     "podporovaný jazyk": {"policy": "promoted"},
     "podporovaný, od 600 vynucovaný": {"policy": "promoted", "modern": 600.0},
     "lingua franca, tolerantní stát": {"policy": "tolerant", "lingua_franca": True},
+    "spisovný jazyk státu od 300": {"policy": "promoted", "standard": 300.0},
+    "+ vlastní norma jihu": {"policy": "promoted", "standard": 300.0, "own_standard": ("south",)},
+    "spisovný, od 600 vynucovaný se školou": {"policy": "promoted", "standard": 300.0, "modern": 600.0},
+    "+ vlastní norma a škola jihu": {"policy": "promoted", "standard": 300.0, "modern": 600.0,
+                                     "own_standard": ("south",)},
 }
 
 
