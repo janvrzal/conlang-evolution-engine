@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Literal, Mapping, Sequence
 
@@ -145,6 +146,50 @@ def synthetic_concepts(count: int) -> tuple[str, ...]:
     return tuple(f"concept-{index:04d}" for index in range(count))
 
 
+def _seed_language(
+    world: World,
+    *,
+    seed: int,
+    concepts: Sequence[str],
+    phonology: bool,
+    morphology: bool,
+    semantics: bool,
+    syntax: bool,
+    grammar: Mapping[str, Construction] | None,
+    prosody: bool,
+    stress_rule: StressRule,
+    stress_strength: Literal["weak", "strong"],
+) -> Repertoire:
+    """Protojazyk světa (slovník, tvary, gramatika, přízvuk) jako výchozí repertoár."""
+    if grammar is not None:
+        syntax = True
+    grammar = SYNTAX_GRAMMAR if grammar is None else grammar
+    if syntax:
+        morphology = phonology = True
+        concepts = tuple(dict.fromkeys((*concepts, *GRAMMATICAL_SOURCES)))
+        world.paradigms.update(grammar_paradigms(grammar))
+    elif morphology:
+        world.paradigms.update(PROTO_PARADIGMS)
+    if semantics:
+        world.semantics = core_graph()
+    if not (phonology or morphology or semantics):
+        return world.seed_lexicon(concepts)
+    forms, frequencies = protolanguage(concepts, seed=seed)
+    classes = (
+        {concept: found for concept in concepts if (found := word_class(concept)) is not None}
+        if morphology else None
+    )
+    endings = {**PROTO_ENDINGS, **SYNTAX_ENDINGS} if syntax else PROTO_ENDINGS if morphology else None
+    base = world.seed_lexicon(concepts, forms, frequencies, classes, endings)
+    if syntax:
+        base = _seed_constructions(world, base, grammar)
+    if phonology or prosody:
+        base = _seed_prosody(world, base, rule=stress_rule, strength=stress_strength)
+    if semantics and world.table is not None:
+        world.derivational_suffix = world.table.parse(DERIVATIONAL_SUFFIX)
+    return base
+
+
 def village_grid(
     columns: int,
     rows: int = 1,
@@ -185,33 +230,11 @@ def village_grid(
         Territory("valley", "area", parent="world",
                   position=((columns - 1) * spacing / 2, (rows - 1) * spacing / 2))
     )
-    if grammar is not None:
-        syntax = True
-    grammar = SYNTAX_GRAMMAR if grammar is None else grammar
-    if syntax:
-        morphology = phonology = True
-        concepts = tuple(dict.fromkeys((*concepts, *GRAMMATICAL_SOURCES)))
-        world.paradigms.update(grammar_paradigms(grammar))
-    elif morphology:
-        world.paradigms.update(PROTO_PARADIGMS)
-    if semantics:
-        world.semantics = core_graph()
-    if phonology or morphology or semantics:
-        forms, frequencies = protolanguage(concepts, seed=seed)
-        classes = (
-            {concept: found for concept in concepts if (found := word_class(concept)) is not None}
-            if morphology else None
-        )
-        endings = {**PROTO_ENDINGS, **SYNTAX_ENDINGS} if syntax else PROTO_ENDINGS if morphology else None
-        base = world.seed_lexicon(concepts, forms, frequencies, classes, endings)
-        if syntax:
-            base = _seed_constructions(world, base, grammar)
-        if phonology or prosody:
-            base = _seed_prosody(world, base, rule=stress_rule, strength=stress_strength)
-        if semantics and world.table is not None:
-            world.derivational_suffix = world.table.parse(DERIVATIONAL_SUFFIX)
-    else:
-        base = world.seed_lexicon(concepts)
+    base = _seed_language(
+        world, seed=seed, concepts=concepts, phonology=phonology, morphology=morphology,
+        semantics=semantics, syntax=syntax, grammar=grammar, prosody=prosody,
+        stress_rule=stress_rule, stress_strength=stress_strength,
+    )
     for row in range(rows):
         for column in range(columns):
             village = f"v{row:02d}-{column:02d}"
@@ -235,6 +258,113 @@ def village_grid(
                 )
             )
     gravity_links(world, max_distance=spacing * link_reach)
+    return world
+
+
+@dataclass(frozen=True)
+class Region:
+    """Region pro :func:`region_world`: poloha těžiště, relativní hustota a sousedé.
+
+    Hustota je relativní (1,0 = běžná krajina): autor ví, že pobřeží je hustě
+    osídlené a hory řídce, ne kolik tam žilo lidí.
+    """
+
+    id: str
+    position: tuple[float, float]
+    density: float = 1.0
+    neighbours: tuple[str, ...] = ()
+    villages: int = 4
+    prestige: float = 0.5
+    openness: float = 0.1
+    immigration: float = 0.0
+
+
+def region_world(
+    regions: Sequence[Region],
+    *,
+    seed: int = 1,
+    concepts: Sequence[str] = DEFAULT_CONCEPTS,
+    village_spacing: float = 10.0,
+    generation_years: float = 25.0,
+    link_reach: float = 2.0,
+    phonology: bool = False,
+    morphology: bool = False,
+    semantics: bool = False,
+    syntax: bool = False,
+    grammar: Mapping[str, Construction] | None = None,
+    prosody: bool = False,
+    stress_rule: StressRule = "penult",
+    stress_strength: Literal["weak", "strong"] = "weak",
+    params: Parameters | None = None,
+) -> World:
+    """Regiony jako sítě vesnic; sousední regiony spojují jen pohraniční vesnice.
+
+    Každý region má vesnici v těžišti a zbytek na prstenci o poloměru
+    ``village_spacing``. Uvnitř regionu se vesnice spojí gravitačními vazbami
+    (husté nářeční kontinuum), mezi sousedními regiony vede jediná vazba mezi
+    jejich nejbližší dvojicí vesnic. Hranice regionu je tak místem, kde se
+    šíření zpomalí a izoglosy hromadí. Populace vesnice je hustota regionu ×
+    ``Parameters.population_per_density``. Jazyk protojazyka a jeho přepínače
+    jsou stejné jako u :func:`village_grid`.
+    """
+    world = World(seed=seed, params=Parameters() if params is None else params)
+    ids = [region.id for region in regions]
+    if len(set(ids)) != len(ids):
+        raise ValueError("Regiony musí mít jedinečná ID.")
+    known = set(ids)
+    for region in regions:
+        unknown = set(region.neighbours) - known
+        if unknown:
+            raise ValueError(f"Region '{region.id}' sousedí s neznámými regiony: {sorted(unknown)}.")
+        if region.villages < 1:
+            raise ValueError(f"Region '{region.id}' musí mít aspoň jednu vesnici.")
+        if region.density <= 0:
+            raise ValueError(f"Region '{region.id}' musí mít kladnou hustotu.")
+    world.add_territory(Territory("world", "world"))
+    base = _seed_language(
+        world, seed=seed, concepts=concepts, phonology=phonology, morphology=morphology,
+        semantics=semantics, syntax=syntax, grammar=grammar, prosody=prosody,
+        stress_rule=stress_rule, stress_strength=stress_strength,
+    )
+    villages_of: dict[str, list[str]] = {}
+    for region in regions:
+        world.add_territory(Territory(region.id, "region", parent="world", position=region.position))
+        population = max(1, round(region.density * world.params.population_per_density))
+        villages_of[region.id] = []
+        for index in range(region.villages):
+            if index == 0:
+                position = region.position
+            else:
+                angle = 2 * math.pi * (index - 1) / (region.villages - 1)
+                position = (region.position[0] + village_spacing * math.cos(angle),
+                            region.position[1] + village_spacing * math.sin(angle))
+            village = f"{region.id}-v{index}"
+            world.add_territory(Territory(village, "settlement", parent=region.id, position=position))
+            world.add_group(
+                SpeechGroup(
+                    id=village,
+                    territory=village,
+                    population=population,
+                    codes=[Code("main", base.branch(), stress_rule=stress_rule, stress_strength=stress_strength,
+                                l2_share=region.immigration)],
+                    generation_years=generation_years,
+                    openness=region.openness,
+                    prestige=region.prestige,
+                    immigration=region.immigration,
+                )
+            )
+            villages_of[region.id].append(village)
+        gravity_links(world, max_distance=village_spacing * link_reach, groups=villages_of[region.id])
+    for region in regions:
+        for neighbour in sorted(region.neighbours):
+            if neighbour < region.id and region.id in next(r for r in regions if r.id == neighbour).neighbours:
+                continue  # dvojici už spojil soused
+            pairs = [
+                (math.dist(world.position_of(a) or (0.0, 0.0), world.position_of(b) or (0.0, 0.0)), a, b)
+                for a in villages_of[region.id] for b in villages_of[neighbour]
+            ]
+            _, first, second = min(pairs)
+            gravity_links(world, groups=[first, second])
     return world
 
 

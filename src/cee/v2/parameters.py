@@ -94,6 +94,11 @@ class Parameters:
     #: docs/engine-v2/12-kalibrace-m7a.md); tempo je předběžné, dokud ho neurčí
     #: kalibrace z prajazyků.
     emergence_need_scale: float = 0.6
+    #: Populace jedné vesnice regionu při relativní hustotě osídlení 1,0
+    #: (scénář `region_world`). Autor světa zadává hustotu, ne počty; převod na
+    #: velikost populace, která řídí drift, je kalibrační parametr. Výchozí
+    #: hodnota odpovídá vesnicím dosavadních scénářů (500).
+    population_per_density: float = 500.0
     #: Kolikrát častěji navrhují vypuštění výrazu L2 mluvčí; stejně jako
     #: u analogie (změna `CategoryLoss`).
     category_loss_l2_boost: float = 4.0
