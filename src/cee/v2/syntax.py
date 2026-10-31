@@ -84,10 +84,10 @@ def construction_of(world: World, variant_id: str) -> Construction:
 def dominant(world: World, group_id: str, function: str) -> Construction | None:
     if variable_id(function) not in world.variables:
         return None
-    distribution = world.distribution(group_id, variable_id(function))
-    if distribution is None:
+    found = world.dominant(group_id, variable_id(function))
+    if found is None:
         return None
-    return construction_of(world, distribution.dominant()[0])
+    return construction_of(world, found[0])
 
 
 def cell_units(world: World, code: Code, entry: GrammaticalFunction) -> list[str]:

@@ -68,7 +68,10 @@ def register(world: World, process: Process, origin: Origin) -> tuple[str, Varia
 
 
 def changed_share(world: World, group_id: str, variable_id: str) -> float:
-    distribution: Distribution | None = world.distribution(group_id, variable_id)
+    if variable_id in world.live and group_id in world.live.group_index:
+        found = world.live.frequency(group_id, variable_id, changed_id(variable_id))
+        return 0.0 if found is None else found
+    distribution: Distribution | None = world.stored(group_id, variable_id)
     return 0.0 if distribution is None else distribution.frequency(changed_id(variable_id))
 
 

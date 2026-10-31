@@ -100,6 +100,8 @@ stát s politikou `promoted`, od poloviny norma a škola; běh přes `runner`):
 | 12 regionů × 2 vesnice | 2 000 | 16 s | 31 | 0,9 MB |
 | 24 regionů × 3 vesnice | 3 000 | 153 s | 109 | 3,1 MB |
 
+Tabulka je před zrychlením popsaným níže.
+
 Čas roste rychleji než počet vesnic (skupin přibývá i s dvojjazyčností).
 Pro UI to znamená:
 
@@ -108,8 +110,51 @@ Pro UI to znamená:
   dává podobné výsledky, ukáže kontrola měřítka (otevřená).
 - **Průběžné kreslení.** Snímek každých 100 let, takže uživatel vidí
   mapu po vteřinách, ne po minutě.
-- **Zrychlení** (paralelismus po komponentách sítě, levnější pozorování)
-  bude potřeba pro světy nad zhruba 50 vesnic.
+- **Zrychlení** bude potřeba pro světy nad zhruba 50 vesnic (viz níže).
+
+### Zrychlení bez změny výsledku
+
+Profil světa se státem je plochý: žádná funkce nebere víc než pár procent.
+Za nadlineárním růstem stojí dvojjazyčné skupiny. Stejný svět
+(12 regionů × 4 vesnice, 800 let) běží bez státu 4,3 s a se státem 11,5 s,
+při 48 a 85 skupinách. Veřejné skupiny mají slovník, který se mění skoro
+každý krok, protože přejímají slova z místního jazyka. Každá změna dřív
+spustila přepočet. Navíc každá skupina vymýšlí zvukové změny, které se
+pak hodnotí ve všech skupinách, kam dorazí (zhruba skupiny × procesy).
+
+Opravy (všechny bitově stejné: otisky `v2_digests.py` včetně `valley-50`
+a otisky světů se státem ze `spec` se nezměnily):
+
+| oprava | kde |
+|---|---|
+| úložiště tvarů se při mnoha větveních sloučí do jedné vrstvy (sídlo státu větvené pro každou veřejnou skupinu mělo desítky vrstev a každé čtení tvaru je procházelo) | `FormStore.branch` |
+| inventář hlásek pro adaptaci výpůjček se čte z průběžného indexu prostředí místo přepočtu celé slovní zásoby při každé výpůjčce | `contact.inventory`, `adapt` |
+| frekvence užití tvarů se pamatuje po kořenech a zneplatní ji jen deník dominantních kořenů | `World.usage_frequency` |
+| vzorek slov pro hodnocení zvukových změn se po změně slovníku staví znovu jen tehdy, když se změní výběr | `AssessmentVocabularyIndex.sync` |
+| dominantní varianta a podíl varianty se čtou ze skladu bez stavby celého rozdělení | `World.dominant`, `LivePools.frequency` |
+| pronikání domů hledá domácí skupinu podle ID, ne průchodem všech skupin | `contact._nativize` |
+
+Výsledek: procesorový čas, nejlepší ze tří běhů pro 12 regionů a z jednoho
+běhu pro 24 regionů:
+
+| svět | let | před | po |
+|---|---:|---:|---:|
+| 12 regionů × 4 vesnice | 800 | 13,1 s | 10,9 s (−17 %) |
+| 24 regionů × 3 vesnice | 1 500 | 51,6 s | 45,2 s (−12 %) |
+| údolí 50 vesnic bez státu (`valley-50`) | — | 30,4 s | 29,2 s |
+
+Víc už bez změny modelu nejde. Další možnosti:
+
+- **Hrubý náhled** (dvě vesnice na region): asi 3× rychlejší, model
+  stejný. Chybí ověření, že dává podobné výsledky (kontrola měřítka).
+- **Lehčí veřejné skupiny**: dvojjazyčná varieta úředního jazyka by
+  nevymýšlela vlastní zvukové změny, jen by přejímala od zdroje
+  a z interference. Pokus dal −15 % ve světě se státem. Mění to model
+  a otisky světů se státem, proto čeká na rozhodnutí.
+- **Paralelní běh**: bloky proměnných jsou v kroku nezávislé, ale sdílejí
+  odvozené keše se zastaráváním po krocích (`STALE_TICKS`). Paralelní
+  výpočet by je musel vracet, aby výsledek zůstal stejný. Je to větší
+  přestavba. Přeložený kód (Numba) uživatel dřív odmítl.
 
 ## Co zbývá pro UI
 

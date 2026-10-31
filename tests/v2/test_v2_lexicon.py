@@ -123,8 +123,9 @@ def test_slovo_ziska_frekvenci_kdyz_ziska_vyznam():
     code = group.main_code
     tongue = next(m for m in world.morphemes.values() if m.meaning == "tongue")
     before = world.usage_frequency(code, tongue.id)
-    code.phonology.dominant["language"] = tongue.id
-    # Změna slovní zásoby zvyšuje obecnou verzi i verzi slovníku.
+    # Dominantní kořen se mění přes deník (``set_dominant``), na který spoléhají
+    # průběžné indexy; změna slovní zásoby zvyšuje obecnou verzi i verzi slovníku.
+    code.phonology.set_dominant("language", tongue.id)
     code.phonology.version += 1
     code.phonology.lexicon_version += 1
     assert world.usage_frequency(code, tongue.id) == pytest.approx(before + 0.3)

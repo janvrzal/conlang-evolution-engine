@@ -157,6 +157,42 @@ class LivePools:
         block = self.blocks[self._block_of[variable_id]]
         return bool(block.present[block.row_of(variable_id), self.group_index[group_id]])
 
+    def frequency(self, group_id: str, variable_id: str, variant_id: str) -> float | None:
+        """Podíl varianty, jako ``get(...).frequency(variant_id)``; ``None`` = skupina proměnnou nemá."""
+        block = self.blocks[self._block_of[variable_id]]
+        row = block.row_of(variable_id)
+        column = self.group_index[group_id]
+        if not block.present[row, column]:
+            return None
+        slots = block.slots[row]
+        if variant_id not in slots:
+            return 0.0
+        freq = float(block.freqs[row, column, slots.index(variant_id)])
+        return freq if freq > 0 else 0.0
+
+    def dominant(self, group_id: str, variable_id: str) -> tuple[str, float] | None:
+        """Nejčastější varianta a její podíl, jako ``get(...).dominant()``.
+
+        Shodu rozhodne menší ID varianty (``get`` řadí varianty podle ID a
+        ``argmax`` vrátí první maximum); nestaví ``Distribution``.
+        """
+        block = self.blocks[self._block_of[variable_id]]
+        row = block.row_of(variable_id)
+        column = self.group_index[group_id]
+        if not block.present[row, column]:
+            return None
+        freqs = block.freqs[row, column]
+        best: tuple[str, float] | None = None
+        for slot, variant in enumerate(block.slots[row]):
+            if variant is None:
+                continue
+            freq = float(freqs[slot])
+            if freq <= 0:
+                continue
+            if best is None or freq > best[1] or (freq == best[1] and variant < best[0]):
+                best = (variant, freq)
+        return best
+
     def get(self, group_id: str, variable_id: str) -> Distribution | None:
         block = self.blocks[self._block_of[variable_id]]
         row = block.row_of(variable_id)

@@ -60,14 +60,25 @@ def language_of(world: World, group_id: str) -> str:
 
 
 def inventory(world: World, code: Code) -> tuple[int, ...]:
-    """Hlásky, které kód ve slovní zásobě užívá (seřazené)."""
+    """Hlásky, které kód ve slovní zásobě užívá (seřazené).
+
+    Čte je z průběžného indexu prostředí hlásek (``ContextIndex``), který
+    dorovná jen změněná slova; dřív se inventář stavěl z celé slovní zásoby
+    po každé změně slova, tedy při každé výpůjčce.
+    """
+    from typing import cast
+
+    from cee.v2.language.index import ContextIndex
+
     state = code.phonology
-    cached = state.cache.get("inventory")
-    if cached is not None and cached[0] == state.version:
-        return tuple(cached[1])  # type: ignore[arg-type]
-    found = sorted({segment for unit in state.vocabulary for segment in world.form_of(code, unit)})
-    state.cache["inventory"] = (state.version, found)
-    return tuple(found)
+    if world.table is None:
+        return tuple(sorted({segment for unit in state.vocabulary for segment in world.form_of(code, unit)}))
+    holder = state.cache.get("context-index")
+    if holder is None:
+        holder = state.cache["context-index"] = (0, ContextIndex())
+    contexts = cast(ContextIndex, holder[1])
+    contexts.sync(world, code)
+    return contexts.inventory()
 
 
 def adapt(world: World, code: Code, form: Form) -> Form:
@@ -76,16 +87,21 @@ def adapt(world: World, code: Code, form: Form) -> Form:
     native = inventory(world, code)
     if not native:
         return form
-    vectors = world.table.vectors
+    if all(segment in native for segment in form):
+        return form
+    table = world.table
+    vectors = table.vectors
     pool = np.array(native)
+    pool_vowels = np.array([table.is_vowel(int(other)) for other in pool])
+    known = set(native)
     result = []
     for segment in form:
-        if segment in native:
+        if segment in known:
             result.append(segment)
             continue
         distance = (vectors[pool] != vectors[segment]).sum(axis=1)
         # Samohláska zůstane samohláskou, souhláska souhláskou.
-        same = np.array([world.table.is_vowel(int(other)) == world.table.is_vowel(segment) for other in pool])
+        same = pool_vowels == table.is_vowel(segment)
         distance = np.where(same, distance, distance + 1000)
         result.append(int(pool[int(np.argmin(distance))]))
     return tuple(result)
@@ -241,9 +257,12 @@ def _nativize(
     moving = min(moving, home.population - 1.0)
     language = public.main_code.language
     community = home.community or home.id
+    # Domácí skupina cílového jazyka v komunitě vzniká jen jako přechod
+    # (``LanguageShift``, ID ``home>jazyk``) nebo pronikáním domů (``:home``).
     existing = [
-        other for other in world.group_ids()
-        if world.groups[other].community == community and world.groups[other].domain == "home"
+        other for other in (f"{home_id}>{language}", f"{home_id}>{language}:home")
+        if other in world.groups
+        and world.groups[other].community == community and world.groups[other].domain == "home"
         and world.groups[other].main_code.language == language and world.groups[other].main_code.l1_source == home_id
     ]
     if existing:

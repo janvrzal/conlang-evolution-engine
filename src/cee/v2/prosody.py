@@ -64,18 +64,18 @@ def register_stress_strength(
 
 
 def dominant_rule(world: World, group_id: str) -> StressRule:
-    dist = world.distribution(group_id, stress_rule_variable_id())
-    if dist is None:
+    found = world.dominant(group_id, stress_rule_variable_id())
+    if found is None:
         return cast(StressRule, world.groups[group_id].main_code.stress_rule)
-    dominant_id, _ = dist.dominant()
+    dominant_id, _ = found
     return cast(StressRule, world.variants[dominant_id].payload["rule"])
 
 
 def dominant_strength(world: World, group_id: str) -> Literal["weak", "strong"]:
-    dist = world.distribution(group_id, stress_strength_variable_id())
-    if dist is None:
+    found = world.dominant(group_id, stress_strength_variable_id())
+    if found is None:
         return cast(Literal["weak", "strong"], getattr(world.groups[group_id].main_code, "stress_strength", "weak"))
-    dominant_id, _ = dist.dominant()
+    dominant_id, _ = found
     return cast(Literal["weak", "strong"], world.variants[dominant_id].payload["strength"])
 
 
@@ -83,9 +83,9 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
     code = world.groups[group_id].main_code
     rule_var = stress_rule_variable_id()
     if rule_var in world.variables:
-        rule_dist = world.distribution(group_id, rule_var)
-        if rule_dist is not None:
-            var_id, share = rule_dist.dominant()
+        rule_found = world.dominant(group_id, rule_var)
+        if rule_found is not None:
+            var_id, share = rule_found
             if share >= 0.5:
                 new_rule = cast(StressRule, world.variants[var_id].payload["rule"])
                 if new_rule != code.stress_rule:
@@ -101,9 +101,9 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
 
     strength_var = stress_strength_variable_id()
     if strength_var in world.variables:
-        strength_dist = world.distribution(group_id, strength_var)
-        if strength_dist is not None:
-            var_id, share = strength_dist.dominant()
+        strength_found = world.dominant(group_id, strength_var)
+        if strength_found is not None:
+            var_id, share = strength_found
             if share >= 0.5:
                 new_strength = cast(Literal["weak", "strong"], world.variants[var_id].payload["strength"])
                 if new_strength != code.stress_strength:

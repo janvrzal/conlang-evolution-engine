@@ -42,8 +42,10 @@ class AssessmentVocabularyIndex:
         state, store = code.phonology, code.forms
         frequency_key = self.frequency_key(world)
         reset = (self.vocabulary is None or self.token != store.token or self.cursor > len(store.log)
-                 or self.lexicon_version != state.lexicon_version or self.sample_size != SAMPLE_WORDS)
-        if reset:
+                 or self.sample_size != SAMPLE_WORDS)
+        lexical = self.lexicon_version != state.lexicon_version
+        selected: list[str] | None = None
+        if lexical:
             picked = state.cache.get("vocabulary-sample")
             if picked is not None and picked[0] == state.lexicon_version:
                 selected = cast(list[str], picked[1])
@@ -52,6 +54,20 @@ class AssessmentVocabularyIndex:
                     state.vocabulary, key=lambda unit: (-world.usage_frequency(code, unit), unit)
                 )[:SAMPLE_WORDS]
                 state.cache["vocabulary-sample"] = (state.lexicon_version, selected)
+            # Změna slovníku, která nezmění vybraný vzorek (výpůjčka okrajového
+            # slova), stačí dorovnat tvary a frekvence; stavět vzorek znovu ne.
+            if not reset and self.vocabulary is not None and sorted(selected) != self.vocabulary.morphemes:
+                reset = True
+        if reset:
+            if selected is None:
+                picked = state.cache.get("vocabulary-sample")
+                if picked is not None and picked[0] == state.lexicon_version:
+                    selected = cast(list[str], picked[1])
+                else:
+                    selected = sorted(
+                        state.vocabulary, key=lambda unit: (-world.usage_frequency(code, unit), unit)
+                    )[:SAMPLE_WORDS]
+                    state.cache["vocabulary-sample"] = (state.lexicon_version, selected)
             chosen = sorted(selected)
             forms = {unit: world.form_of(code, unit) for unit in chosen}
             frequency = {unit: max(0.01, world.usage_frequency(code, unit)) for unit in chosen}
@@ -87,8 +103,8 @@ class AssessmentVocabularyIndex:
                 position = self.positions[unit]
                 vocabulary.ids[position] = world.form_bank().id_of(new)
                 self.changes.append(position)
-            if frequency_key != self.frequency_token:
-                # Výběr se nemění: původní kód ho obnovuje jen s lexicon_version.
+            if frequency_key != self.frequency_token or lexical:
+                # Výběr se nemění (frekvence pojmů, nebo změna slovníku mimo vzorek).
                 frequency = {unit: max(0.01, world.usage_frequency(code, unit))
                              for unit in vocabulary.morphemes}
                 vocabulary.frequency.clear()

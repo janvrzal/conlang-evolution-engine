@@ -83,6 +83,10 @@ def next_token() -> int:
     return next(_TOKENS)
 
 
+#: Od kolika vrstev pod sebou se úložiště tvarů při větvení sloučí.
+MAX_LAYERS = 4
+
+
 class FormStore:
     """Podkladové tvary kódu jako copy-on-write vrstvy nad výchozími tvary.
 
@@ -121,12 +125,39 @@ class FormStore:
         self._frozen = True
         return self
 
+    def _depth(self) -> int:
+        depth, layer = 0, self._base
+        while layer is not None:
+            depth, layer = depth + 1, layer._base
+        return depth
+
+    def _flattened(self) -> FormStore:
+        """Zmrazená jediná vrstva se stejným obsahem jako celý řetěz pod ní."""
+        chain = []
+        layer: FormStore | None = self
+        while layer is not None:
+            chain.append(layer._own)
+            layer = layer._base
+        merged: dict[str, UnitForm] = {}
+        for own in reversed(chain):
+            merged.update(own)
+        flat = FormStore()
+        flat._own = merged
+        flat._frozen = True
+        return flat
+
     def branch(self) -> FormStore:
+        # Každé větvení přidá vrstvu; kód větvený mnohokrát (sídlo státu, ze
+        # kterého vzniká veřejná skupina v každé vesnici) by jinak při každém
+        # čtení tvaru procházel desítky vrstev. Zmrazené vrstvy se nemění,
+        # takže sloučení dá při čtení stejný výsledek.
         if self._frozen:
-            return FormStore(self)
+            return FormStore(self._flattened() if self._depth() >= MAX_LAYERS else self)
         snapshot = FormStore(self._base)
         snapshot._own = self._own
         snapshot._frozen = True
+        if snapshot._depth() >= MAX_LAYERS:
+            snapshot = snapshot._flattened()
         self._base = snapshot
         self._own = {}
         return FormStore(snapshot)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Literal, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence, cast
 
 from cee.v2.language.bank import FormBank
 from cee.v2.language.journal import FrequencyMap
@@ -216,6 +216,13 @@ class World:
             return self.live.get(group_id, variable_id)
         return self.stored(group_id, variable_id)
 
+    def dominant(self, group_id: str, variable_id: str) -> tuple[str, float] | None:
+        """Nejčastější varianta a její podíl (``distribution(...).dominant()``), bez kopie rozdělení."""
+        if variable_id in self.live and group_id in self.live.group_index:
+            return self.live.dominant(group_id, variable_id)
+        found = self.stored(group_id, variable_id)
+        return None if found is None else found.dominant()
+
     def stored(self, group_id: str, variable_id: str) -> Distribution | None:
         """Stav z repertoáru (bez živého skladu), včetně výchozí varianty."""
         found = self.groups[group_id].main_code.repertoire.get(variable_id)
@@ -242,13 +249,36 @@ class World:
         paradigmatu má navíc váhu své buňky. Bez dominantních pojmů (svět M1,
         výchozí stav) platí statická frekvence morfému.
         """
+        # Výsledek závisí jen na pojmech, pro které je kořen dominantní, a na
+        # frekvencích pojmů světa. Pamatuje se po kořenech; deník dominantních
+        # kořenů (``dominant_log``) zneplatní jen kořeny, kterých se změna týká.
+        state = code.phonology
         morpheme = self.morphemes[morpheme_id]
+        held = state.cache.get("usage-frequency")
+        memo = cast(_UsageMemo, held[1]) if held is not None else None
+        frequencies = self.concept_frequencies
+        key = (id(frequencies), getattr(frequencies, "version", None))
+        log = state.dominant_log
+        if memo is None or memo.key != key or memo.cursor > len(log) or key[1] is None:
+            memo = _UsageMemo(key, len(log))
+            state.cache["usage-frequency"] = (0, memo)
+        elif memo.cursor < len(log):
+            for _, old_root, new_root in log[memo.cursor:]:
+                memo.by_root.pop(old_root, None)
+                memo.by_root.pop(new_root, None)
+            memo.cursor = len(log)
+        values = memo.by_root.setdefault(morpheme.lexeme_id, {})
+        found = values.get(morpheme_id)
+        if found is not None:
+            return found
         concepts = _concepts_by_root(code).get(morpheme.lexeme_id)
         if not concepts:
-            return morpheme.frequency
-        total = min(1.0, sum(self.concept_frequency(concept) for concept in concepts))
-        if morpheme.kind == "word" and morpheme.word_class in self.paradigms and morpheme.cell:
-            total *= self.paradigms[morpheme.word_class].weight(morpheme.cell)
+            total = morpheme.frequency
+        else:
+            total = min(1.0, sum(self.concept_frequency(concept) for concept in concepts))
+            if morpheme.kind == "word" and morpheme.word_class in self.paradigms and morpheme.cell:
+                total *= self.paradigms[morpheme.word_class].weight(morpheme.cell)
+        values[morpheme_id] = total
         return total
 
     def unit_of(self, code: Code, morpheme_id: str) -> UnitForm:
@@ -442,6 +472,17 @@ class World:
             self.variants[variant.id] = variant
             repertoire.set(variable.id, Distribution.fixed(variant.id))
         return repertoire.freeze()
+
+
+class _UsageMemo:
+    """Frekvence užití tvarů kódu po kořenech (viz ``World.usage_frequency``)."""
+
+    __slots__ = ("key", "cursor", "by_root")
+
+    def __init__(self, key: tuple[int, int | None], cursor: int) -> None:
+        self.key = key
+        self.cursor = cursor
+        self.by_root: dict[str | None, dict[str, float]] = {}
 
 
 def _concepts_by_root(code: Code) -> dict[str, list[str]]:
