@@ -102,9 +102,11 @@ class Parameters:
     #: Otevřenost vesnice regionu (`region_world`): podíl vstupu, který děti
     #: dostávají od sousedních vesnic. Síly vazeb se v mixing matrix normalizují,
     #: takže kolik se skupina od sousedů učí, určuje jen otevřenost. Region ji
-    #: může přepsat. Výchozí 0,1 jako ostatní scénáře; kalibruje se na nářeční
-    #: kontinuum.
-    village_openness: float = 0.1
+    #: může přepsat. 0,5 z kalibrace nářečního kontinua (pásmo atlasů, jeden
+    #: jazyk na 80 km, pořadí vzdáleností; docs/engine-v2/14-kalibrace-kontinua.md);
+    #: od 0,35 výš zůstane jeden jazyk, při 0,1 se 80 km rozpadne na čtyři jazyky.
+    #: Ostatní scénáře (`village_grid`) mají dál vlastní 0,1.
+    village_openness: float = 0.5
     #: Násobek síly vazby mezi pohraničními vesnicemi sousedních regionů proti
     #: gravitační síle (`region_world`). Určuje, jakou část vstupu pohraniční
     #: vesnice dostává přes hranici, tedy propustnost hranice.

@@ -1092,7 +1092,7 @@ sčítaly a nikdo by si toho nevšiml. Pořadí:
 | Častá slova se nahrazují pomaleji (metrika 2) | Pagel a kol. 2007 (směr) | splněno |
 | Stacionarita typologie: start z WALS se za 5 000 let nemá výrazně vzdálit (Hellinger, entropie) u 14A, 33A, 37A, 66A, 67A, 81A, 143A | WALS (CC BY), měřidlo části A | flexivní rysy kolabují na E = 0 |
 | Zpětný test: latina → románské jazyky (tempo ztráty koncového *-m*, koncových vokálů, pádů; vznik členu a analytického perfekta) | historická gramatika, Lexibank | nezačato |
-| Nářeční kontinuum: vzdálenost sousedních vesnic | nářeční atlasy (0,05–0,15) | 0,29 |
+| Nářeční kontinuum: vzdálenost sousedních vesnic | nářeční atlasy (0,05–0,15) | `region_world` 0,061 (kalibrováno), `village_grid` 0,29 |
 | Kontakt: více L2 mluvčích → méně pádů | Bentz & Winter 2013 (směr) | mechanismus od části E |
 | Malé izolované komunity drží složitost | Trudgill 2011 (směr) | obráceně |
 | Prestižní asymetrie výpůjček | Thomason & Kaufman 1988 (směr) | slabá |
@@ -1137,7 +1137,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3; aktualizováno po části D (proz�
 | Pravopisná výslovnost a revize pravopisu: psané tvary slov se nemění ani s tiskem | později |
 | CI je červené kvůli 48 chybám mypy v legacy kódu | samostatná úklidová práce |
 | Výkon plného modelu je nad původním rozpočtem UI (`valley-50` 23,6 s místo 5 s, `grid-5x5` 2,2 s; z toho přenos ~16 s). Další výrazné zrychlení vyžaduje buď přesnější drift pro malé skupiny v M7, nebo paralelní běh oblastí | M7 (kalibrace driftu) / architektura |
-| Sousední vesnice se v plném modelu liší příliš (kontinuum 5×5, 3 000 let: sousedé 0,29, nejvzdálenější 0,38; v nářečních atlasech sousedé asi 0,05–0,15). Prahy dialektu a jazyka proto dávají skoro každou vesnici jako jazyk. Místní mísení je slabé proti tempu změn | M7 (otevřenost, tempo změn, prahy dialektu a jazyka) |
+| Sousední vesnice se v `village_grid` (otevřenost 0,1) liší příliš (kontinuum 5×5, 3 000 let: sousedé 0,29). V `region_world` je otevřenost kalibrovaná na 0,5 (`14-kalibrace-kontinua.md`): sousedé v regionu 0,061 po 3 000 letech, 80 km zůstane jedním jazykem, hranice regionů brzdí šíření. Rovnováha nenastává: vzdálenost dál pomalu roste (0,090 po 6 000 letech). Gramatiku M7a je třeba překalibrovat na `region_world` | M7 (kalibrace na `region_world`) |
 | Rodokmen slova: export nese původ dnešního slova, ne historii jeho tvarů | později (snímky tvarů v exportu) |
 
 ## Co převzít z legacy
