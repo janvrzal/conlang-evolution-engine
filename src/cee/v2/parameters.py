@@ -143,6 +143,10 @@ class Parameters:
     #: platí pro všechny typy proměnných, kde tlak působí. Prázdné = tabulky
     #: jednotlivých změn beze změny. Neznámý tlak odmítne ``pressures_by_kind``.
     pressure_weights: Mapping[str, float] = field(default_factory=FrozenMapping)
+    #: Násobky tempa inovací podle ``kind`` změny (např. ``{"periphrasis": 0.5}``);
+    #: násobí očekávaný počet inovací. Prázdné = tempa změn beze změny. Neznámou
+    #: změnu odmítne simulace.
+    change_rates: Mapping[str, float] = field(default_factory=FrozenMapping)
     #: Přepisy polí ``need`` a ``context`` katalogu gramatických funkcí podle
     #: funkce, např. ``{"DEFINITE": {"context": 0.4}}``. Prázdné = katalog
     #: ``v2_grammar.yaml`` beze změny.
@@ -159,3 +163,4 @@ class Parameters:
                 )
         object.__setattr__(self, "grammar", grammar)
         object.__setattr__(self, "pressure_weights", FrozenMapping(self.pressure_weights))
+        object.__setattr__(self, "change_rates", FrozenMapping(self.change_rates))

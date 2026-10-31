@@ -258,3 +258,21 @@ def test_pressure_weights_prepisuji_vahy_tlaku_jen_ve_svem_svete():
         }
     with pytest.raises(ValueError, match="Neznámé tlaky"):
         pressures_by_kind(DEFAULT_CHANGES, Parameters(pressure_weights={"neexistuje": 1.0}))
+
+
+def test_change_rates_meni_tempo_jen_vybrane_zmeny():
+    """Násobek tempa 0 vypne inovace jedné změny, ostatní zůstanou; neznámá změna se odmítne."""
+
+    def innovations(params):
+        simulation = Simulation(village_grid(3, seed=4, phonology=True, params=params))
+        simulation.run(500)
+        return [event["change"] for event in simulation.history.of_kind("innovation")]
+
+    default = innovations(Parameters())
+    assert "voicing" in default
+    silenced = innovations(Parameters(change_rates={"voicing": 0.0}))
+    assert "voicing" not in silenced
+    assert set(silenced) - {"voicing"}
+    assert Parameters().change_rates == {}
+    with pytest.raises(ValueError, match="neznámých změn"):
+        Simulation(village_grid(2, seed=4, phonology=True, params=Parameters(change_rates={"neexistuje": 2.0})))

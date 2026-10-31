@@ -102,6 +102,11 @@ class Simulation:
         self._change_keys = np.array(
             [stable_int(_INNOVATION_CHANGE_DOMAIN, change.kind) for change in self.changes], dtype=np.uint64
         )
+        rates = self.world.params.change_rates
+        unknown = set(rates) - {change.kind for change in self.changes}
+        if unknown:
+            raise ValueError(f"Parametry mění tempo neznámých změn: {sorted(unknown)}.")
+        self._rate_scales = {change.kind: float(rates[change.kind]) for change in self.changes if change.kind in rates}
         self.events = tuple(events)
         self.checkpoints: dict[int, Checkpoint] = {}
         self.pressures = pressures_by_kind(self.changes, self.world.params)
@@ -259,6 +264,8 @@ class Simulation:
                 rate_sum = change.total_rate(ctx)
                 if rate_sum > 0.0:
                     expected[group_idx, change_idx] = float(rate_sum) * float(tempos[group_idx])
+            if change.kind in self._rate_scales:
+                expected[:, change_idx] *= self._rate_scales[change.kind]
 
         if not np.any(expected > 0.0):
             return
@@ -334,7 +341,7 @@ class Simulation:
             return
         share, frequency = self.innovation_scale(context.group.id)
         tempo = (renewal if change.rate_basis == "generation" else self.config.dt) * frequency
-        expected = float(rate_sum * tempo)
+        expected = float(rate_sum * tempo) * self._rate_scales.get(change.kind, 1.0)
         group_key = np.uint64(
             stable_int(
                 self.world.seed,
