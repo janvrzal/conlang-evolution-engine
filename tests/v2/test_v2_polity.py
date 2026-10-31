@@ -1,0 +1,170 @@
+"""Státy, jazyková politika a lingua franca (M6f, ``cee.v2.polity``)."""
+
+import pytest
+
+from cee.v2.parameters import Parameters
+from cee.v2.polity import (
+    Annexation,
+    LanguagePolicy,
+    LinguaFranca,
+    State,
+    groups_in,
+    language_census,
+    seat_of,
+)
+from cee.v2.scenarios import ProtoLanguage, Region, kingdom, region_world
+from cee.v2.simulation import Simulation
+
+LANGUAGES = (ProtoLanguage("a"), ProtoLanguage("b"))
+
+
+def pair(terrain="plain", identity="shared", distance=60.0, villages=3):
+    regions = (
+        Region("capital", (0.0, 0.0), density=2.0, neighbours=("x",), language="a", villages=villages),
+        Region("x", (distance, 0.0), neighbours=("capital",), language="b", villages=villages,
+               terrain=terrain, identity=identity),
+    )
+    return region_world(regions, seed=1, languages=LANGUAGES)
+
+
+def home_share(world, region, language):
+    return language_census(world)[region]["home"].get(language, 0.0)
+
+
+def test_stat_zvedne_prestiz_hlavniho_mesta_a_spoji_vesnice_se_sidlem():
+    world = pair()
+    before = {group_id: world.groups[group_id].prestige for group_id in world.group_ids()}
+    simulation = Simulation(world, events=[State(0.0, "k", ("capital", "x"), "capital", centralization="strong")])
+    simulation.run(25.0)
+    seat = seat_of(world, "capital")
+    assert world.states["k"].seat == seat and world.states["k"].language == "a"
+    for group_id in groups_in(world, ["capital"]):
+        assert world.groups[group_id].prestige == pytest.approx(before[group_id] * world.params.capital_prestige)
+    for group_id in groups_in(world, ["x"]):
+        assert (group_id, seat) in world.links
+    assert simulation.history.of_kind("state")
+
+
+def test_neplatne_zadani_statu_odmitne_srozumitelne():
+    world = pair()
+    with pytest.raises(ValueError, match="možnosti"):
+        State(0.0, "k", ("capital", "x"), "capital", policy="brutal").apply(world, Simulation(world).history, 0)
+    with pytest.raises(ValueError, match="Hlavní město"):
+        State(0.0, "k", ("x",), "capital").apply(world, Simulation(world).history, 0)
+    with pytest.raises(ValueError, match="není region"):
+        State(0.0, "k", ("capital", "nikde"), "capital").apply(world, Simulation(world).history, 0)
+    with pytest.raises(ValueError, match="neexistuje"):
+        LanguagePolicy(0.0, "nikdo", "enforced").apply(world, Simulation(world).history, 0)
+
+
+def test_region_odmitne_neznamy_teren_a_jazyk():
+    with pytest.raises(ValueError, match="terénu"):
+        region_world((Region("r", (0.0, 0.0), terrain="bažina"),))
+    with pytest.raises(ValueError, match="protojazyk"):
+        region_world((Region("r", (0.0, 0.0), language="z"),), languages=LANGUAGES)
+    with pytest.raises(ValueError, match="languages"):
+        region_world((Region("r", (0.0, 0.0), language="a"),))
+
+
+def border(world):
+    return max(
+        link.strength for (first, second), link in world.links.items()
+        if first.startswith("capital") and second.startswith("x")
+    )
+
+
+def test_teren_oslabi_vazbu_pres_hranici_a_identita_nastavi_loajalitu():
+    plain, mountains = pair(), pair(terrain="mountains", identity="strong")
+    assert border(mountains) == pytest.approx(border(plain) * Parameters().terrain_access["mountains"])
+    strong = Parameters().identity_loyalty["strong"]
+    assert all(mountains.groups[g].loyalty == strong for g in groups_in(mountains, ["x"]))
+
+
+def test_tolerantni_stat_necha_stabilni_dvojjazycnost():
+    world = pair()
+    simulation = Simulation(world, events=[State(0.0, "k", ("capital", "x"), "capital", policy="tolerant")])
+    simulation.run(400.0)
+    census = language_census(world)["x"]
+    assert census["home"] == {"b": 1.0}
+    assert census["public"]["a"] > 0.0
+
+
+def test_vynucovani_prosadi_jazyk_statu_na_blizke_rovine():
+    world = pair()
+    simulation = Simulation(world, events=[State(0.0, "k", ("capital", "x"), "capital", policy="enforced")])
+    simulation.run(300.0)
+    assert home_share(world, "x", "b") == 0.0
+    assert language_census(world)["x"]["public"] == {}
+    kinds = {event["kind"] for event in simulation.history.events}
+    assert {"nativization", "language_shift"} <= kinds
+
+
+def test_hory_se_silnou_identitou_si_jazyk_udrzi():
+    world = pair(terrain="mountains", identity="strong")
+    Simulation(world, events=[State(0.0, "k", ("capital", "x"), "capital", policy="promoted")]).run(500.0)
+    assert home_share(world, "x", "b") == 1.0
+
+
+def test_odlisna_identita_prechod_zpomali():
+    shared, distinct = pair(), pair(identity="distinct")
+    for world in (shared, distinct):
+        Simulation(world, events=[State(0.0, "k", ("capital", "x"), "capital", policy="promoted")]).run(500.0)
+    assert home_share(shared, "x", "b") < home_share(distinct, "x", "b") < 1.0
+
+
+def test_uvolneni_politiky_prechod_zastavi():
+    world = pair(identity="distinct")
+    simulation = Simulation(world, events=[
+        State(0.0, "k", ("capital", "x"), "capital", policy="enforced"),
+        LanguagePolicy(50.0, "k", "tolerant"),
+    ])
+    simulation.run(75.0)
+    paused = home_share(world, "x", "b")
+    simulation.run(400.0)
+    assert 0.0 < paused < 1.0
+    assert home_share(world, "x", "b") == pytest.approx(paused, abs=0.02)
+
+
+def test_pripojeni_regionu_rozsiri_stat():
+    regions = (
+        Region("capital", (0.0, 0.0), density=2.0, neighbours=("x",), language="a", villages=3),
+        Region("x", (60.0, 0.0), neighbours=("capital", "y"), language="b", villages=3),
+        Region("y", (120.0, 0.0), neighbours=("x",), language="b", villages=3),
+    )
+    world = region_world(regions, seed=1, languages=LANGUAGES)
+    simulation = Simulation(world, events=[
+        State(0.0, "k", ("capital", "x"), "capital"), Annexation(50.0, "k", ("y",)),
+    ])
+    simulation.run(75.0)
+    assert world.states["k"].regions == ("capital", "x", "y")
+    assert language_census(world)["y"]["state"] == "k"
+    assert language_census(world)["y"]["public"]["a"] > 0.0
+
+
+def test_lingua_franca_zustane_mimo_domov_nebo_zdomacni():
+    stable, native = pair(), pair()
+    Simulation(stable, events=[LinguaFranca(0.0, "capital", ("x",), spread="common")]).run(400.0)
+    Simulation(native, events=[LinguaFranca(0.0, "capital", ("x",), spread="common", nativize=True)]).run(400.0)
+    census = language_census(stable)["x"]
+    assert census["home"] == {"b": 1.0}
+    assert census["public"]["a"] == pytest.approx(Parameters().lingua_franca_levels["common"], abs=0.02)
+    assert home_share(native, "x", "b") < 1.0
+    public = [g for g in stable.group_ids() if stable.groups[g].domain == "public"]
+    assert public and all(stable.groups[g].main_code.l2_share == 1.0 for g in public)
+
+
+def test_hory_snizi_rozsireni_lingua_franca():
+    plain, mountains = pair(), pair(terrain="mountains")
+    for world in (plain, mountains):
+        Simulation(world, events=[LinguaFranca(0.0, "capital", ("x",), spread="universal")]).run(25.0)
+    assert language_census(mountains)["x"]["public"]["a"] < language_census(plain)["x"]["public"]["a"]
+
+
+def test_kralovstvi_je_deterministicke():
+    digests = []
+    for _ in range(2):
+        world, events = kingdom(1, modern=200.0)
+        simulation = Simulation(world, events=events)
+        simulation.run(300.0)
+        digests.append(simulation.history.digest())
+    assert digests[0] == digests[1]

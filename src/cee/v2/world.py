@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Literal, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 from cee.v2.language.bank import FormBank
 from cee.v2.language.journal import FrequencyMap
@@ -36,6 +36,8 @@ class Territory:
     position: tuple[float, float] | None = None
     #: ``None`` = rozepsáno od začátku běhu, jinak rok zjemnění.
     refined_from_year: float | None = None
+    #: Terén (klíč ``Parameters.terrain_access``): hory a ostrovy izolují.
+    terrain: str = "plain"
 
 
 @dataclass(slots=True)
@@ -114,6 +116,11 @@ class SpeechGroup:
     #: jazyk) nebo ``public`` (trh, úřad, církev; stabilní dvojjazyčnost,
     #: děti se doma učí dál svůj jazyk).
     domain: Literal["home", "public"] = "home"
+    #: Jak silně se veřejný kód (``domain="public"``) tlačí domů: škola
+    #: v úředním jazyce, úřady, smíšená manželství (``cee.v2.polity``). Nula =
+    #: stabilní dvojjazyčnost, děti se doma učí dál svůj jazyk. U domácí skupiny,
+    #: která vznikla pronikáním veřejného kódu domů, je to tempo přechodu.
+    home_pull: float = 0.0
 
     def __post_init__(self) -> None:
         if self.population <= 0:
@@ -178,6 +185,8 @@ class World:
     default_units: dict[str, UnitForm] = field(default_factory=dict)
     #: Kalibrační konstanty dynamiky tohoto světa (neměnné, sdílí je kopie stavu).
     params: Parameters = field(default_factory=Parameters)
+    #: Státy světa (``cee.v2.polity``) podle ID; vznikají událostí ``State``.
+    states: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not isinstance(self.concept_frequencies, FrequencyMap):

@@ -126,7 +126,7 @@ def adopt(world: World, group_id: str, morpheme_id: str) -> None:
 
 
 def community_step(world: World, dt: float, tick: int, year: float, history: History) -> bool:
-    """Jeden krok demografie kódů; vrací ``True``, když nějaká skupina zanikla."""
+    """Jeden krok demografie kódů; vrací ``True``, když nějaká skupina zanikla nebo vznikla."""
     if world.migration > 0:
         _migrate(world, dt)
     removed = False
@@ -142,6 +142,8 @@ def community_step(world: World, dt: float, tick: int, year: float, history: His
         if group.domain == "public":
             # Veřejný kód se každá generace učí znovu v dospělosti.
             code.l2_share = 1.0
+            if group.home_pull > 0 and source is not None:
+                removed |= _nativize(world, group_id, source, renewal, tick, year, history)
             continue
         if source is None:
             # Stárnoucí L2 mluvčí nahradí děti, které se kód učí od narození;
@@ -206,6 +208,61 @@ def demographic_share(world: World, source_id: str, target_id: str) -> float:
     return speakers / total if total else 0.0
 
 
+def _nativize(
+    world: World, public_id: str, home_id: str, renewal: float, tick: int, year: float, history: History
+) -> bool:
+    """Veřejný kód proniká domů: dvojjazyčné rodiny s ním vychovávají děti.
+
+    Za generaci přejde podíl ``home_pull × status × dvojjazyčnost^1,31``
+    domácnosti (jako u přechodu, Abrams & Strogatz 2003), zpomalený loajalitou
+    komunity. Přešlé rodiny tvoří domácí skupinu cílového jazyka, kterou pak
+    dál vede :func:`_shift`: jestli starý jazyk vymře, rozhodne místní
+    demografie a loajalita, ne politika sama. Přiblížení, ne model rodin.
+    """
+    params = world.params
+    public, home = world.groups[public_id], world.groups[home_id]
+    status = public.prestige / (public.prestige + home.prestige)
+    bilingual = min(1.0, public.population / home.population)
+    moving = (
+        home.population * renewal * params.shift_rate * public.home_pull * (1.0 - home.loyalty) * status
+        * bilingual**params.shift_exponent
+    )
+    moving = min(moving, home.population - 1.0)
+    language = public.main_code.language
+    community = home.community or home.id
+    existing = [
+        other for other in world.group_ids()
+        if world.groups[other].community == community and world.groups[other].domain == "home"
+        and world.groups[other].main_code.language == language and world.groups[other].main_code.l1_source == home_id
+    ]
+    if existing:
+        target = world.groups[existing[0]]
+        target.population = max(1, round(target.population + moving))
+        home.population = max(1, round(home.population - moving))
+        return False
+    if moving < LAST_SPEAKERS:
+        return False
+    world.materialize(public_id)
+    code = public.main_code.branch()
+    code.acquisition, code.l1_source, code.l2_share = "L2", home_id, 1.0
+    from cee.v2.world import SpeechGroup
+
+    created = world.add_group(SpeechGroup(
+        id=f"{home_id}>{language}:home", territory=home.territory, population=max(1, round(moving)),
+        codes=[code], generation_years=home.generation_years, prestige=public.prestige,
+        openness=public.openness, community=community, loyalty=home.loyalty, home_pull=public.home_pull,
+    ))
+    home.population = max(1, round(home.population - moving))
+    for link in world.neighbors(public_id):
+        if link.target != home_id:
+            world.connect(created.id, link.target, link.strength, link.kind)
+    world.connect(created.id, public_id, 0.8, "strong")
+    world.connect(created.id, home_id, 0.8, "strong")
+    history.record("nativization", tick, year, group=home_id, into=created.id, language=language,
+                   population=created.population)
+    return True
+
+
 def _shift(
     world: World, target_id: str, source_id: str, renewal: float, tick: int, year: float, history: History
 ) -> bool:
@@ -220,8 +277,11 @@ def _shift(
     total = source.population + target.population
     status = target.prestige / (target.prestige + source.prestige)
     share = demographic_share(world, source_id, target_id)
+    # Přechod, který začal tlakem státu (``_nativize``), jde tempem politiky:
+    # uvolnění politiky ho zpomalí.
+    pace = target.home_pull if target.home_pull > 0 else 1.0
     moving = (
-        source.population * renewal * params.shift_rate * (1.0 - source.loyalty) * status
+        source.population * renewal * params.shift_rate * pace * (1.0 - source.loyalty) * status
         * share**params.shift_exponent
     )
     births = 0.0
@@ -240,6 +300,12 @@ def _shift(
     if remaining < LAST_SPEAKERS:
         world.materialize(source_id)
         world.remove_group(source_id)
+        # Veřejná dvojjazyčnost zaniká se starým jazykem: jeho mluvčí už
+        # cílový kód mají doma.
+        for other in world.group_ids():
+            peer = world.groups[other]
+            if peer.domain == "public" and peer.main_code.l1_source == source_id and peer.home_pull > 0:
+                world.remove_group(other)
         target.main_code.l1_source = None
         # Komunita už mluví novým kódem od dětství: je to zase obyčejná
         # skupina se svou dřívější otevřeností.

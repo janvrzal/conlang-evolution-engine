@@ -22,7 +22,7 @@ from cee.v2.language.constructions import GRAMMATICAL_SOURCES, Construction, cat
 from cee.v2.language.morphology import Paradigm
 from cee.v2.language.processes import StressRule
 from cee.v2.language.protoforms import DEFAULT_CONSONANTS, DEFAULT_VOWELS, protolanguage
-from cee.v2.parameters import Parameters
+from cee.v2.parameters import Parameters, level
 from cee.v2.prosody import register_stress_rule, register_stress_strength
 from cee.v2.repertoire import Distribution, Origin, Repertoire
 from cee.v2.rng import stable_int
@@ -278,6 +278,28 @@ class Region:
     #: ``None`` = ``Parameters.village_openness``.
     openness: float | None = None
     immigration: float = 0.0
+    #: Protojazyk regionu (ID z ``languages`` funkce :func:`region_world`);
+    #: ``None`` = první z nich, nebo společný protojazyk světa bez ``languages``.
+    language: str | None = None
+    #: Terén (``Parameters.terrain_access``): ``plain``, ``hills``, ``mountains``,
+    #: ``island``. Hory a ostrovy oslabí vazby přes hranici i dosah státu.
+    terrain: str = "plain"
+    #: Odlišnost regionu (``Parameters.identity_loyalty``): ``shared``, ``distinct``
+    #: (vlastní etnikum či náboženství), ``strong`` (silná identita). Určuje
+    #: loajalitu k jazyku, tedy jak snadno region přejde na jazyk státu.
+    identity: str = "shared"
+
+
+@dataclass(frozen=True)
+class ProtoLanguage:
+    """Protojazyk vlastní linie pro regiony :func:`region_world` (jako u :class:`Language`)."""
+
+    id: str
+    grammar: Mapping[str, Construction] = field(default_factory=lambda: dict(SYNTAX_GRAMMAR))
+    consonants: tuple[str, ...] = DEFAULT_CONSONANTS
+    vowels: tuple[str, ...] = DEFAULT_VOWELS
+    stress_rule: StressRule = "penult"
+    stress_strength: Literal["weak", "strong"] = "weak"
 
 
 def region_world(
@@ -297,6 +319,7 @@ def region_world(
     stress_rule: StressRule = "penult",
     stress_strength: Literal["weak", "strong"] = "weak",
     params: Parameters | None = None,
+    languages: Sequence[ProtoLanguage] = (),
 ) -> World:
     """Regiony jako sítě vesnic; sousední regiony spojují jen pohraniční vesnice.
 
@@ -309,6 +332,12 @@ def region_world(
     ``Parameters.population_per_density``, otevřenost vesnic
     ``Parameters.village_openness``, pokud ji region nepřepíše. Jazyk protojazyka a jeho přepínače
     jsou stejné jako u :func:`village_grid`.
+
+    S ``languages`` mají regiony protojazyky různých linií (``Region.language``),
+    jako v :func:`contact_world`; přepínače modelu pak platí plné (fonologie,
+    morfologie, syntax). Terén regionu oslabí jeho vazby přes hranici
+    (``Parameters.terrain_access``, součin obou stran) a odlišnost regionu
+    nastaví loajalitu jeho vesnic (``Parameters.identity_loyalty``).
     """
     world = World(seed=seed, params=Parameters() if params is None else params)
     ids = [region.id for region in regions]
@@ -323,16 +352,37 @@ def region_world(
             raise ValueError(f"Region '{region.id}' musí mít aspoň jednu vesnici.")
         if region.density <= 0:
             raise ValueError(f"Region '{region.id}' musí mít kladnou hustotu.")
+        level(world.params.terrain_access, region.terrain, "úroveň terénu")
+        level(world.params.identity_loyalty, region.identity, "úroveň identity")
     world.add_territory(Territory("world", "world"))
-    base = _seed_language(
-        world, seed=seed, concepts=concepts, phonology=phonology, morphology=morphology,
-        semantics=semantics, syntax=syntax, grammar=grammar, prosody=prosody,
-        stress_rule=stress_rule, stress_strength=stress_strength,
-    )
+    lineages = {language.id: language for language in languages}
+    if languages:
+        if len(lineages) != len(languages):
+            raise ValueError("Protojazyky musí mít jedinečná ID.")
+        for region in regions:
+            if region.language is not None and region.language not in lineages:
+                raise ValueError(f"Region '{region.id}' má neznámý protojazyk '{region.language}'.")
+        bases = _seed_lineages(world, languages, seed=seed, concepts=concepts, semantics=semantics)
+        if semantics and world.table is not None:
+            world.derivational_suffix = world.table.parse(DERIVATIONAL_SUFFIX)
+    else:
+        named = [region.id for region in regions if region.language is not None]
+        if named:
+            raise ValueError(f"Regiony {named} mají protojazyk, ale ``languages`` je prázdné.")
+        bases = {"proto": _seed_language(
+            world, seed=seed, concepts=concepts, phonology=phonology, morphology=morphology,
+            semantics=semantics, syntax=syntax, grammar=grammar, prosody=prosody,
+            stress_rule=stress_rule, stress_strength=stress_strength,
+        )}
     villages_of: dict[str, list[str]] = {}
     for region in regions:
-        world.add_territory(Territory(region.id, "region", parent="world", position=region.position))
+        world.add_territory(Territory(region.id, "region", parent="world", position=region.position,
+                                      terrain=region.terrain))
         population = max(1, round(region.density * world.params.population_per_density))
+        lineage = lineages.get(region.language or languages[0].id) if languages else None
+        base = bases[lineage.id if lineage else "proto"]
+        rule = lineage.stress_rule if lineage else stress_rule
+        strength = lineage.stress_strength if lineage else stress_strength
         villages_of[region.id] = []
         for index in range(region.villages):
             if index == 0:
@@ -348,12 +398,13 @@ def region_world(
                     id=village,
                     territory=village,
                     population=population,
-                    codes=[Code("main", base.branch(), stress_rule=stress_rule, stress_strength=stress_strength,
-                                l2_share=region.immigration)],
+                    codes=[Code("main", base.branch(), stress_rule=rule, stress_strength=strength,
+                                l2_share=region.immigration, language=lineage.id if lineage else "proto")],
                     generation_years=generation_years,
                     openness=world.params.village_openness if region.openness is None else region.openness,
                     prestige=region.prestige,
                     immigration=region.immigration,
+                    loyalty=world.params.identity_loyalty[region.identity],
                 )
             )
             villages_of[region.id].append(village)
@@ -369,7 +420,9 @@ def region_world(
             _, first, second = min(pairs)
             gravity_links(world, groups=[first, second])
             border = world.links[(first, second)]
-            world.connect(first, second, border.strength * world.params.border_link_scale)
+            terrain = (world.params.terrain_access[region.terrain]
+                       * world.params.terrain_access[world.territories[neighbour].terrain])
+            world.connect(first, second, border.strength * world.params.border_link_scale * terrain)
     return world
 
 
@@ -420,37 +473,9 @@ def contact_world(
     """
     world = World(seed=seed, params=Parameters() if params is None else params)
     world.add_territory(Territory("world", "world"))
-    concepts = tuple(dict.fromkeys((*concepts, *GRAMMATICAL_SOURCES)))
-    cells: dict[str, dict[str, tuple[str, ...]]] = {}
-    union: dict[str, set[str]] = {}
+    bases = _seed_lineages(world, languages, seed=seed, concepts=concepts, semantics=semantics)
     for language in languages:
-        cells[language.id] = {
-            kind: paradigm.cells[1:] for kind, paradigm in grammar_paradigms(language.grammar).items()
-        }
-        for kind, found in cells[language.id].items():
-            union.setdefault(kind, set()).update(found)
-    entries = catalog_for(world)
-    order = {entry.cell: index for index, entry in enumerate(entries.values())}
-    weights = {entry.cell: entry.weight for entry in entries.values()}
-    for kind, citation in CITATION_CELLS.items():
-        ordered = sorted(union.get(kind, ()), key=lambda cell: order[cell])
-        world.paradigms[kind] = Paradigm(
-            kind, (citation, *ordered), (1.0, *(weights[cell] for cell in ordered))
-        )
-    if semantics:
-        world.semantics = core_graph()
-    classes = {concept: cls for concept in concepts if (cls := word_class(concept)) is not None}
-    for language in languages:
-        forms, frequencies = protolanguage(
-            concepts, seed=stable_int(seed, "language", language.id) % (1 << 31),
-            consonants=language.consonants, vowels=language.vowels,
-        )
-        base = world.seed_lexicon(
-            concepts, forms, frequencies, classes, {**PROTO_ENDINGS, **SYNTAX_ENDINGS},
-            language=language.id, cells=cells[language.id],
-        )
-        base = _seed_constructions(world, base, language.grammar)
-        base = _seed_prosody(world, base, rule=language.stress_rule, strength=language.stress_strength)
+        base = bases[language.id]
         territory = f"area-{language.id}"
         world.add_territory(Territory(territory, "area", parent="world", position=language.places[0].position))
         for place in language.places:
@@ -472,6 +497,52 @@ def contact_world(
     if semantics and world.table is not None:
         world.derivational_suffix = world.table.parse(DERIVATIONAL_SUFFIX)
     return world
+
+
+def _seed_lineages(
+    world: World, languages: Sequence[Language | ProtoLanguage], *, seed: int, concepts: Sequence[str],
+    semantics: bool,
+) -> dict[str, Repertoire]:
+    """Protojazyky několika nepříbuzných linií (každý vlastní tvary a gramatiku).
+
+    Paradigmata světa jsou sjednocení buněk všech jazyků; každý jazyk
+    dostane koncovky jen ve svých buňkách.
+    """
+    concepts = tuple(dict.fromkeys((*concepts, *GRAMMATICAL_SOURCES)))
+    cells: dict[str, dict[str, tuple[str, ...]]] = {}
+    union: dict[str, set[str]] = {}
+    for language in languages:
+        cells[language.id] = {
+            kind: paradigm.cells[1:] for kind, paradigm in grammar_paradigms(language.grammar).items()
+        }
+        for kind, found in cells[language.id].items():
+            union.setdefault(kind, set()).update(found)
+    entries = catalog_for(world)
+    order = {entry.cell: index for index, entry in enumerate(entries.values())}
+    weights = {entry.cell: entry.weight for entry in entries.values()}
+    for kind, citation in CITATION_CELLS.items():
+        ordered = sorted(union.get(kind, ()), key=lambda cell: order[cell])
+        world.paradigms[kind] = Paradigm(
+            kind, (citation, *ordered), (1.0, *(weights[cell] for cell in ordered))
+        )
+    if semantics:
+        world.semantics = core_graph()
+    classes = {concept: cls for concept in concepts if (cls := word_class(concept)) is not None}
+    bases = {}
+    for language in languages:
+        forms, frequencies = protolanguage(
+            concepts, seed=stable_int(seed, "language", language.id) % (1 << 31),
+            consonants=language.consonants, vowels=language.vowels,
+        )
+        base = world.seed_lexicon(
+            concepts, forms, frequencies, classes, {**PROTO_ENDINGS, **SYNTAX_ENDINGS},
+            language=language.id, cells=cells[language.id],
+        )
+        base = _seed_constructions(world, base, language.grammar)
+        bases[language.id] = _seed_prosody(
+            world, base, rule=language.stress_rule, strength=language.stress_strength
+        )
+    return bases
 
 
 def island_and_city(seed: int = 1, *, immigration: float = 0.3) -> World:
@@ -649,4 +720,43 @@ def known_tree(seed: int = 1, *, first: float = 300.0, second: float = 1800.0) -
         Border(first, side["a"] + side["b"], side["c"], factor=0.0),
         Border(second, side["a"], side["b"], factor=0.0),
     ]
+    return world, events
+
+
+def kingdom(
+    seed: int = 1, *, founded: float = 100.0, policy: str = "promoted", modern: float | None = None,
+    lingua_franca: bool = False,
+) -> tuple[World, list[WorldEvent]]:
+    """Ukázkový stát čtyř jazyků (M6f): které regiony přejdou a které ne.
+
+    Hlavní město (jazyk ``a``, hustá rovina) a tři regiony jiných jazyků:
+    blízká rovina (``b``), jih s vlastní identitou (``d``) a hory se silnou
+    identitou (``c``). V roce ``founded`` vznikne stát s politikou ``policy``;
+    s ``modern`` od toho roku vynucuje úřední jazyk (povinná škola). S
+    ``lingua_franca`` se regiony od začátku domlouvají jazykem hlavního
+    města i bez státu (obchod).
+    """
+    from cee.v2.polity import LanguagePolicy, LinguaFranca, State
+
+    regions = (
+        Region("capital", (0.0, 0.0), density=2.0, neighbours=("plain", "mountains", "south"), language="a"),
+        Region("plain", (60.0, 0.0), neighbours=("capital",), language="b"),
+        Region("mountains", (0.0, 60.0), density=0.5, neighbours=("capital",), language="c",
+               terrain="mountains", identity="strong"),
+        Region("south", (0.0, -60.0), neighbours=("capital",), language="d", identity="distinct"),
+    )
+    languages = (
+        ProtoLanguage("a"),
+        ProtoLanguage("b", consonants=("t", "k", "q", "s", "n", "m", "l", "ʃ", "x", "r", "j")),
+        ProtoLanguage("c", grammar=SUBSTRATE_GRAMMAR, consonants=("p", "t", "k", "s", "n", "m", "l", "f", "v", "r", "j")),
+        ProtoLanguage("d", consonants=("b", "d", "g", "s", "n", "m", "l", "r", "w")),
+    )
+    world = region_world(regions, seed=seed, languages=languages)
+    ids = tuple(region.id for region in regions)
+    events: list[WorldEvent] = []
+    if lingua_franca:
+        events.append(LinguaFranca(0.0, "capital", ids[1:]))
+    events.append(State(founded, "kingdom", ids, "capital", policy=policy))
+    if modern is not None:
+        events.append(LanguagePolicy(modern, "kingdom", "enforced"))
     return world, events

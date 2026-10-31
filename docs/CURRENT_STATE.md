@@ -51,6 +51,13 @@ teď v rodinách liší jako ve skutečnosti, tempo je předběžné. Cíle kali
 M7 jsou ve specifikaci (oddíl „Cíle kalibrace M7“). Nic z toho zatím není v `engine-v2`;
 sloučení čeká na uživatele. Tyto výsledky nejsou kalibrací M7.
 
+Dále `region_world` (regiony zadané hustotou jako sítě vesnic,
+`engine-v2/13-region-world.md`), kalibrace nářečního kontinua (otevřenost
+vesnic 0,5, `engine-v2/14-kalibrace-kontinua.md`) a státy, jazyková politika
+a lingua franca (`cee.v2.polity`, `engine-v2/15-staty-lingua-franca.md`):
+regiony mohou mít vlastní jazyk, terén a identitu a o tom, zda region přejde
+na jazyk státu, rozhoduje dosah centra, demografie a loajalita.
+
 
 ## Legacy jádro
 

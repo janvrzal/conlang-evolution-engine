@@ -165,6 +165,49 @@ class Parameters:
     #: jiná konstrukce (pád vedle pevného slovosledu): funkce je nadbytečná a její
     #: ztráta skoro nic nestojí.
     redundant_merge_weight: float = 0.3
+    #: --- státy, jazyková politika a lingua franca (``cee.v2.polity``) ---
+    #: Autor zadává slovní úrovně (``"strong"``, ``"enforced"``…); tyto tabulky je
+    #: převádějí na čísla. Všechny hodnoty jsou autorské odhady, které se kalibrují
+    #: (tempo přechodu asi tři generace, Fishman 1991; přežití jazyků v odlehlých
+    #: a odlišných regionech), viz docs/engine-v2/15-staty-lingua-franca.md.
+    #:
+    #: Kolikrát vyšší prestiž mají vesnice hlavního města. Prestiž řídí, od koho
+    #: se děti učí (``mixing_matrix``), i status jazyka při přechodu.
+    capital_prestige: float = 2.0
+    #: Síla vazby vesnice k sídlu státu při centralizaci ``"moderate"`` a nulové
+    #: vzdálenosti (úřady, trh, vojsko, cesty). Klesá s ``exp(-d / capital_reach)``.
+    capital_link_strength: float = 0.3
+    capital_reach: float = 150.0
+    centralization_levels: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
+        "none": 0.0, "weak": 0.5, "moderate": 1.0, "strong": 2.0,
+    }))
+    #: Jazyková politika vůči regionům jiného jazyka: ``share`` = podíl dospělých,
+    #: kteří úřední jazyk užívají mimo domov (veřejná doména), ``pull`` = jak silně
+    #: ho tlačí i domů (škola v úředním jazyce, úřady, smíšená manželství).
+    #: ``tolerant`` nechá stabilní dvojjazyčnost (diglosie, Fishman 1967).
+    policy_levels: Mapping[str, Mapping[str, float]] = field(default_factory=lambda: FrozenMapping({
+        "tolerant": {"share": 0.1, "pull": 0.0},
+        "promoted": {"share": 0.3, "pull": 0.1},
+        "enforced": {"share": 0.6, "pull": 1.0},
+    }))
+    #: Podíl dospělých, kteří se lingua francou domluví mimo domov.
+    lingua_franca_levels: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
+        "rare": 0.1, "common": 0.3, "universal": 0.6,
+    }))
+    #: Síla vazby mluvčích lingua franca k jejímu zdroji (obchodní město).
+    lingua_franca_link: float = 0.3
+    #: Tlak lingua franca domů, když ji autor nechá zdomácnět (``nativize``).
+    lingua_franca_pull: float = 0.1
+    #: Dostupnost regionu podle terénu: násobí vazby přes hranici regionu, vazbu
+    #: k sídlu státu i dosah jazykové politiky. Hory a ostrovy izolují.
+    terrain_access: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
+        "plain": 1.0, "hills": 0.6, "mountains": 0.3, "island": 0.2,
+    }))
+    #: Loajalita k jazyku podle odlišnosti regionu (etnikum, náboženství, vlastní
+    #: historie): zpomalí přechod na jiný jazyk i jeho pronikání domů.
+    identity_loyalty: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
+        "shared": 0.0, "distinct": 0.5, "strong": 0.8,
+    }))
     #: Přepisy vah tlaků podle jejich ``name`` (např. ``{"clarity": 2.0}``);
     #: platí pro všechny typy proměnných, kde tlak působí. Prázdné = tabulky
     #: jednotlivých změn beze změny. Neznámý tlak odmítne ``pressures_by_kind``.
@@ -190,3 +233,18 @@ class Parameters:
         object.__setattr__(self, "grammar", grammar)
         object.__setattr__(self, "pressure_weights", FrozenMapping(self.pressure_weights))
         object.__setattr__(self, "change_rates", FrozenMapping(self.change_rates))
+        for name in LEVEL_TABLES:
+            object.__setattr__(self, name, FrozenMapping(getattr(self, name)))
+
+
+#: Tabulky slovních úrovní (``Parameters``), které autor světa zadává jménem.
+LEVEL_TABLES = (
+    "centralization_levels", "policy_levels", "lingua_franca_levels", "terrain_access", "identity_loyalty",
+)
+
+
+def level(table: Mapping[str, Any], name: str, what: str) -> Any:
+    """Hodnota slovní úrovně ``name``; neznámou odmítne s výčtem možností."""
+    if name not in table:
+        raise ValueError(f"Neznámá {what} '{name}'; možnosti: {', '.join(sorted(table))}.")
+    return table[name]
