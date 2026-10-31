@@ -43,6 +43,9 @@ class GrammaticalFunction:
     weight: float = 0.5
     sources: tuple[str, ...] = ()
     compensates: tuple[str, ...] = ()
+    #: Jakou část role zastoupených funkcí (``compensates``) nese, když ji jazyk
+    #: vyjadřuje (0 až 1).
+    coverage: float = 0.0
     orders: tuple[str, ...] = field(default=())
     donors: tuple[str, ...] = ()
 
@@ -65,6 +68,7 @@ def catalog() -> dict[str, GrammaticalFunction]:
             weight=float(entry.get("weight", 0.5)),
             sources=tuple(entry.get("sources", ())),
             compensates=tuple(entry.get("compensates", ())),
+            coverage=float(entry.get("coverage", 0.0)),
             orders=tuple(entry.get("orders", ())),
             donors=tuple(entry.get("donors", ())),
         )

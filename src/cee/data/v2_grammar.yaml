@@ -21,6 +21,8 @@
 #   sources      zdroje gramatikalizace: autorský výběr nejčastějších cest
 #                podle Heine & Kuteva 2002 a Hopper & Traugott 2003
 #   compensates  funkce, jejichž roli může tato funkce převzít
+#   coverage     jakou část jejich role nese, když se vyjadřuje (0 až 1;
+#                pevný slovosled 0,9 podle Siewierska 1998, ostatní odhad)
 #   donors       funkce téže třídy slov, jejichž zbytkovou koncovku si tato
 #                funkce může vzít (exaptace, Lass 1990)
 #   orders       možné pevné slovosledy (šablona order)
@@ -66,6 +68,20 @@ functions:
     context: 0.22
     sources: [that, this]
     donors: [OBJ]
+  ASPECT:
+    # Vid (dokonavost): ukončený děj ze slovesa „dokončit“ (completive →
+    # perfective; Bybee, Perkins & Pagliuca 1994, kap. 3). Jazyky bez
+    # minulého času nesou časové zařazení videm a příslovci (Dahl 1985), proto
+    # vid zastupuje PAST. need, context a coverage jsou autorský odhad.
+    template: inflection
+    domain: verb
+    cell: PFV
+    weight: 0.4
+    need: 0.5
+    context: 0.3
+    sources: [finish]
+    compensates: [PAST]
+    coverage: 0.7
   NEG:
     template: negation
     domain: clause
@@ -79,3 +95,4 @@ functions:
     context: 0.0
     orders: [SOV, SVO]
     compensates: [OBJ]
+    coverage: 0.9

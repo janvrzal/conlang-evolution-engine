@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterator, Mapping
 
 #: Pole katalogu gramatických funkcí, která lze přepsat v ``Parameters.grammar``.
-GRAMMAR_FIELDS = frozenset({"need", "context"})
+GRAMMAR_FIELDS = frozenset({"need", "context", "coverage"})
 
 
 class FrozenMapping(Mapping[str, Any]):
@@ -85,6 +85,13 @@ class Parameters:
     fusion_bonus: float = 0.25
     #: Nepatrná cena pevného slovosledu, dokud pád drží roli (tlak `Ambiguity`).
     order_rigidity: float = 0.05
+    #: Jakou část potřeby funkce (``need``) uplatní `Expressivity`, když jazyk
+    #: funkci nevyjadřuje (``zero``). Tlak podle potřeby je doložený pro obnovu
+    #: zeslabeného výrazu (Hopper & Traugott 2003); nová kategorie vzniká hlavně
+    #: z častého užívání a expresivních inovací mluvčích (Bybee 2003;
+    #: Haspelmath 1999), ne z potřeby. 1,0 = dosavadní model (potřeba táhne
+    #: i vznik); kalibruje se v M7.
+    emergence_need_scale: float = 1.0
     #: Kolikrát častěji navrhují vypuštění výrazu L2 mluvčí; stejně jako
     #: u analogie (změna `CategoryLoss`).
     category_loss_l2_boost: float = 4.0

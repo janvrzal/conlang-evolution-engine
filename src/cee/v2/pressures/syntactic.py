@@ -38,11 +38,12 @@ class Expressivity(Pressure):
 
     Skóre je potřeba funkce × síla vyjádření. Když koncovka minulého času
     zvukovými změnami splynula s citačním tvarem, má opis (*mít* + sloveso)
-    výhodu úměrnou tomu, kolik tvarů splynulo. Funkce, kterou jazyk vůbec
-    nevyjadřuje (``zero``), tlačí k novému výrazu tím víc, čím víc ji
-    komunikace potřebuje (minulý čas víc než určenost), ale tato potřeba
-    je tlumena kontextem a náhradními strategiemi (C2; Bybee et al. 1994,
-    Dahl 1985, Dryer 2013).
+    výhodu úměrnou tomu, kolik tvarů splynulo (obnova; Hopper & Traugott
+    2003). Funkce, kterou jazyk vůbec nevyjadřuje (``zero``), tlačí k novému
+    výrazu jen částí potřeby (``emergence_need_scale``): nová kategorie vzniká
+    hlavně z častého užívání a expresivních inovací (Bybee 2003; Haspelmath
+    1999), ne z potřeby. Potřebu dál tlumí kontext a náhradní strategie
+    (C2; Bybee et al. 1994, Dahl 1985, Dryer 2013).
     """
 
     name = "expressivity"
@@ -51,10 +52,14 @@ class Expressivity(Pressure):
         world = batch.world
         functions = catalog_for(world)
 
+        emergence = world.params.emergence_need_scale
+
         def value(construction: Construction, current: Construction | None, group_id: str) -> float:
             need = functions[construction.function].need
             if need == 0.0:
                 return 0.0
+            if current is None or current.kind == "zero":
+                need *= emergence
             return need * syntax.strength(
                 world, world.groups[group_id].main_code, construction, group_id=group_id
             )
@@ -122,7 +127,9 @@ class Ambiguity(Pressure):
     tomu, kolik tvarů splynulo, a pevný slovosled nese role místo pádu
     (analytizace). Dokud pád drží, je pevný slovosled jen nepatrnou
     zbytečnou rigiditou. Které funkce lze takto nahradit, říká katalog
-    (``compensates``).
+    (``compensates``); stejně působí vid vůči minulému času. Zástupce roli
+    nese podle `syntax.carries_role` (slovosled jen pevný, jiné funkce, když
+    se vyjadřují).
     """
 
     name = "ambiguity"
@@ -137,7 +144,7 @@ class Ambiguity(Pressure):
             score = 0.0
             for compensated in functions[construction.function].compensates:
                 lost = syntax.weakness(world, code, compensated)
-                if construction.carries_order:
+                if syntax.carries_role(world, construction):
                     score -= rigidity * (1.0 - lost)
                 else:
                     score -= functions[compensated].need * lost

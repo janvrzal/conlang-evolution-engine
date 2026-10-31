@@ -192,15 +192,30 @@ def applied(code: Code, world: World, construction: Construction) -> bool:
     return variant in code.phonology.grammar_applied
 
 
+def carries_role(world: World, construction: Construction) -> bool:
+    """Nese konstrukce roli funkcí, které její funkce zastupuje (``compensates``)?
+
+    Slovosled ji nese jen pevný; ostatní funkce, když se vůbec vyjadřují.
+    """
+    entry = catalog_for(world).get(construction.function)
+    if entry is not None and entry.template == "order":
+        return construction.carries_order
+    return construction.kind != "zero"
+
+
 def compensation(world: World, group_id: str, function: str) -> float:
-    """Jakou měrou roli funkce přebírají jiné dominantní konstrukce (0 až 1)."""
+    """Jakou měrou roli funkce přebírají jiné dominantní konstrukce (0 až 1).
+
+    Zástupce nese ``coverage`` z katalogu (pevný slovosled pád 0,9, vid minulý
+    čas), když ve skupině převažuje konstrukce, která roli nese.
+    """
+    found = 0.0
     for entry in catalog_for(world).values():
         if function in entry.compensates:
             current = dominant(world, group_id, entry.id)
-            if current is not None and entry.template == "order" and current.carries_order:
-                # Pevný slovosled spolehlivě nese role argumentů (Siewierska 1998).
-                return 0.9
-    return 0.0
+            if current is not None and carries_role(world, current):
+                found = max(found, entry.coverage)
+    return found
 
 
 def compensated(world: World, group_id: str, function: str) -> bool:

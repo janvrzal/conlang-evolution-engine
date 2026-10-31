@@ -71,6 +71,7 @@ FULL_GRAMMAR: Mapping[str, Construction] = {
     **SYNTAX_GRAMMAR,
     "FUTURE": Construction("FUTURE", "zero"),
     "DEFINITE": Construction("DEFINITE", "zero"),
+    "ASPECT": Construction("ASPECT", "zero"),
 }
 #: Citační buňka každé třídy slov.
 CITATION_CELLS = {"noun": "SG", "verb": "PRES"}
