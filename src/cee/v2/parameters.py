@@ -99,6 +99,16 @@ class Parameters:
     #: velikost populace, která řídí drift, je kalibrační parametr. Výchozí
     #: hodnota odpovídá vesnicím dosavadních scénářů (500).
     population_per_density: float = 500.0
+    #: Otevřenost vesnice regionu (`region_world`): podíl vstupu, který děti
+    #: dostávají od sousedních vesnic. Síly vazeb se v mixing matrix normalizují,
+    #: takže kolik se skupina od sousedů učí, určuje jen otevřenost. Region ji
+    #: může přepsat. Výchozí 0,1 jako ostatní scénáře; kalibruje se na nářeční
+    #: kontinuum.
+    village_openness: float = 0.1
+    #: Násobek síly vazby mezi pohraničními vesnicemi sousedních regionů proti
+    #: gravitační síle (`region_world`). Určuje, jakou část vstupu pohraniční
+    #: vesnice dostává přes hranici, tedy propustnost hranice.
+    border_link_scale: float = 1.0
     #: Kolikrát častěji navrhují vypuštění výrazu L2 mluvčí; stejně jako
     #: u analogie (změna `CategoryLoss`).
     category_loss_l2_boost: float = 4.0

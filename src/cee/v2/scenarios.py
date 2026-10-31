@@ -275,7 +275,8 @@ class Region:
     neighbours: tuple[str, ...] = ()
     villages: int = 4
     prestige: float = 0.5
-    openness: float = 0.1
+    #: ``None`` = ``Parameters.village_openness``.
+    openness: float | None = None
     immigration: float = 0.0
 
 
@@ -303,8 +304,10 @@ def region_world(
     ``village_spacing``. Uvnitř regionu se vesnice spojí gravitačními vazbami
     (husté nářeční kontinuum), mezi sousedními regiony vede jediná vazba mezi
     jejich nejbližší dvojicí vesnic. Hranice regionu je tak místem, kde se
-    šíření zpomalí a izoglosy hromadí. Populace vesnice je hustota regionu ×
-    ``Parameters.population_per_density``. Jazyk protojazyka a jeho přepínače
+    šíření zpomalí a izoglosy hromadí; její sílu násobí
+    ``Parameters.border_link_scale``. Populace vesnice je hustota regionu ×
+    ``Parameters.population_per_density``, otevřenost vesnic
+    ``Parameters.village_openness``, pokud ji region nepřepíše. Jazyk protojazyka a jeho přepínače
     jsou stejné jako u :func:`village_grid`.
     """
     world = World(seed=seed, params=Parameters() if params is None else params)
@@ -348,7 +351,7 @@ def region_world(
                     codes=[Code("main", base.branch(), stress_rule=stress_rule, stress_strength=stress_strength,
                                 l2_share=region.immigration)],
                     generation_years=generation_years,
-                    openness=region.openness,
+                    openness=world.params.village_openness if region.openness is None else region.openness,
                     prestige=region.prestige,
                     immigration=region.immigration,
                 )
@@ -365,6 +368,8 @@ def region_world(
             ]
             _, first, second = min(pairs)
             gravity_links(world, groups=[first, second])
+            border = world.links[(first, second)]
+            world.connect(first, second, border.strength * world.params.border_link_scale)
     return world
 
 
