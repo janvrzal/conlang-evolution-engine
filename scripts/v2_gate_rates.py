@@ -250,6 +250,9 @@ EXCLUDED_DETERMINISTIC_TESTS: set[str] = {
     "test_v2_m3b_gate.py::test_determinismus_s_vyznamem",
     "test_v2_m4_gate.py::test_determinismus_se_syntaxi",
     "test_v2_m4b_gate.py::test_determinismus_s_profilem",
+    # Negativní kontrola M7a: s nulovým tempem opisu a exaptace nemá člen jak
+    # vzniknout, výsledek nezávisí na seedu.
+    "test_v2_m4b_gate.py::test_bez_opisu_a_exaptace_clen_nevznikne",
     "test_v2_m6a_gate.py::test_determinismus_s_pismem",
 }
 

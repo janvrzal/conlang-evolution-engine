@@ -32,7 +32,7 @@ def _scores(world, group, function, constructions):
 def test_vznik_kategorie_tlaci_jen_casti_potreby():
     """Nevyjádřená funkce: výhoda opisu proti zero se škáluje ``emergence_need_scale``."""
     pair = [Construction("DEFINITE", "zero"), Construction("DEFINITE", "periphrastic", "this", "free")]
-    full_world, full_group = _world()
+    full_world, full_group = _world(params=Parameters(emergence_need_scale=1.0))
     weak_world, weak_group = _world(params=Parameters(emergence_need_scale=0.2))
     assert syntax.dominant(full_world, full_group.id, "DEFINITE").kind == "zero"
     full = _scores(full_world, full_group, "DEFINITE", pair)
@@ -51,16 +51,16 @@ def test_obnova_zeslabeneho_vyrazu_ma_plnou_potrebu():
 
 
 def test_vid_zastoupi_minuly_cas_a_slovosled_pad():
-    """Kompenzace podle ``coverage``: vid nese 0,7 role minulého času, pevný slovosled 0,9 pádu."""
+    """Kompenzace podle ``coverage``: vid nese 0,9 role minulého času (M7a), pevný slovosled 0,9 pádu."""
     world, group = _world()
     assert syntax.compensation(world, group.id, "PAST") == 0.0
     with_aspect = {**FULL_GRAMMAR, "ASPECT": Construction("ASPECT", "periphrastic", "finish", "free"),
                    "ORDER": Construction("ORDER", "fixed", order="SVO")}
     world, group = _world(with_aspect)
-    assert syntax.compensation(world, group.id, "PAST") == pytest.approx(0.7)
+    assert syntax.compensation(world, group.id, "PAST") == pytest.approx(0.9)
     assert syntax.compensation(world, group.id, "OBJ") == pytest.approx(0.9)
     zero_past = syntax.strength(world, group.main_code, Construction("PAST", "zero"), group_id=group.id)
-    assert zero_past == pytest.approx(0.7)
+    assert zero_past == pytest.approx(0.9)
     assert syntax.carries_role(world, Construction("ORDER", "free")) is False
     assert syntax.carries_role(world, Construction("ASPECT", "zero")) is False
 

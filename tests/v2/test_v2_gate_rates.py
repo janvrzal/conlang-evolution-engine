@@ -182,7 +182,7 @@ def test_gate_registry_completeness():
     # Ověříme přesný počet bran
     assert len(GATE_REGISTRY) == 52, f"Registr musí mít přesně 52 bran, má: {len(GATE_REGISTRY)}"
     assert len(registered_tests) == 52, "Každá brána v registru musí ukazovat na unikátní testovací funkci"
-    assert len(EXCLUDED_DETERMINISTIC_TESTS) == 10, "Deterministických testů musí být přesně 10"
+    assert len(EXCLUDED_DETERMINISTIC_TESTS) == 11, "Deterministických testů musí být přesně 11"
 
     # Množiny musí být disjunktní
     overlap = registered_tests & EXCLUDED_DETERMINISTIC_TESTS
@@ -194,7 +194,7 @@ def test_gate_registry_completeness():
     extra = expected_all - all_test_functions
     assert not missing, f"V souborech bran jsou testy, které chybí v registru i vyloučených: {missing}"
     assert not extra, f"V registru nebo vyloučených jsou neexistující testy: {extra}"
-    assert len(all_test_functions) == 62
+    assert len(all_test_functions) == 63
 
 
 def test_parse_seeds():

@@ -147,9 +147,9 @@ def test_tlaky_ctou_parametry_sveho_sveta():
     assert economy["first"][1] == pytest.approx(-0.15)
     assert economy["second"][1] == pytest.approx(-0.3)
 
-    # Expressivity zero = need × context funkce.
+    # Expressivity zero = need × škála vzniku × context funkce (funkci jazyk nevyjadřuje).
     expressivity = {key: Expressivity().scores(batch)[0, 0] for key, batch in batches.items()}
-    need = catalog()["DEFINITE"].need
+    need = catalog()["DEFINITE"].need * Parameters().emergence_need_scale
     assert expressivity["first"][0] == pytest.approx(need * catalog()["DEFINITE"].context)
     assert expressivity["second"][0] == pytest.approx(need * 0.4)
 

@@ -89,9 +89,11 @@ class Parameters:
     #: funkci nevyjadřuje (``zero``). Tlak podle potřeby je doložený pro obnovu
     #: zeslabeného výrazu (Hopper & Traugott 2003); nová kategorie vzniká hlavně
     #: z častého užívání a expresivních inovací mluvčích (Bybee 2003;
-    #: Haspelmath 1999), ne z potřeby. 1,0 = dosavadní model (potřeba táhne
-    #: i vznik); kalibruje se v M7.
-    emergence_need_scale: float = 1.0
+    #: Haspelmath 1999), ne z potřeby. 1,0 = model před M7a (potřeba táhne
+    #: i vznik). 0,6 z kalibrace M7a (stacionarita WALS a obrat uvnitř rodiny,
+    #: docs/engine-v2/12-kalibrace-m7a.md); tempo je předběžné, dokud ho neurčí
+    #: kalibrace z prajazyků.
+    emergence_need_scale: float = 0.6
     #: Kolikrát častěji navrhují vypuštění výrazu L2 mluvčí; stejně jako
     #: u analogie (změna `CategoryLoss`).
     category_loss_l2_boost: float = 4.0

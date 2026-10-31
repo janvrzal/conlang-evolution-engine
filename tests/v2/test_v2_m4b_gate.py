@@ -12,6 +12,7 @@ import pytest
 
 from cee.v2 import syntax
 from cee.v2.language.constructions import Construction, catalog
+from cee.v2.parameters import Parameters
 from cee.v2.scenarios import SYNTAX_GRAMMAR, village_grid
 from cee.v2.simulation import Simulation
 from tests.v2.gate_checks import evaluate_seeds
@@ -21,7 +22,12 @@ NO_CASE = {
     **{name: construction for name, construction in SYNTAX_GRAMMAR.items() if name != "OBJ"},
     "DEFINITE": Construction("DEFINITE", "zero"),
 }
-ARTICLE_SEEDS = (1, 2, 3)
+#: Člen vzniká jen v části jazyků (M7a, docs/engine-v2/12-kalibrace-m7a.md):
+#: audit 6/30 na seedech 101..130, Wilson 95 % [0,095; 0,373]. Pro „aspoň
+#: jednou“ s rizikem falešného selhání pod 1 % je třeba N ≥ 46 (0,905^46 < 0,01).
+ARTICLE_SEEDS = tuple(range(1, 51))
+#: Slovosled bez pádu se ověřuje na původních seedech (robustní, 30/30).
+ORDER_SEEDS = 3
 EXAPTATION_SEEDS = tuple(range(1, 11))
 
 
@@ -29,8 +35,8 @@ def _kinds(world, function):
     return Counter(syntax.dominant(world, group, function).kind for group in world.group_ids())
 
 
-def run_no_case(seed: int):
-    world = village_grid(6, seed=seed, grammar=NO_CASE, semantics=True)
+def run_no_case(seed: int, params: Parameters | None = None):
+    world = village_grid(6, seed=seed, grammar=NO_CASE, semantics=True, params=params)
     simulation = Simulation(world)
     simulation.run(3000)
     return world, simulation.history
@@ -118,12 +124,19 @@ def no_case():
 
 def test_clen_vznikne_z_ukazovaciho_zajmena(no_case):
     with_article = sum(check_clen_invariants(world, history) for world, history in no_case)
-    # Člen není univerzála: vznikne ve většině jazyků, ne nutně ve všech.
-    assert with_article >= 2
+    # Člen není univerzála (WALS 37A: asi 39 % jazyků bez určitého členu):
+    # za 3 000 let bez kontaktu vznikne v některých jazycích, ne ve všech.
+    assert 1 <= with_article < len(no_case), f"člen ve {with_article} z {len(no_case)} jazyků"
+
+
+def test_bez_opisu_a_exaptace_clen_nevznikne():
+    """Negativní kontrola: bez mechanismů vzniku (opis, exaptace) člen nevznikne."""
+    off = Parameters(change_rates={"periphrasis": 0.0, "exaptation": 0.0})
+    assert not any(check_clen_invariants(*run_no_case(seed, off)) for seed in range(1, 6))
 
 
 def test_bez_padu_se_slovosled_ustali(no_case):
-    for world, _ in no_case:
+    for world, _ in no_case[:ORDER_SEEDS]:
         check_bez_padu(world)
 
 
