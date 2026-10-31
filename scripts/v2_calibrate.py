@@ -61,16 +61,16 @@ CONTACT = (0.0, 0.1, 0.3)
 #: Prohledávaný prostor: název, dolní a horní mez. Výchozí hodnoty modelu
 #: leží uvnitř.
 SPACE: tuple[tuple[str, float, float], ...] = (
+    ("emergence_need_scale", 0.0, 1.0),
     ("context.DEFINITE", 0.10, 0.50),
     ("context.FUTURE", 0.20, 0.60),
     ("context.PL", 0.10, 0.50),
     ("context.PAST", 0.10, 0.50),
-    ("learnability_strength", 0.25, 1.50),
-    ("category_loss_l2_boost", 1.0, 8.0),
-    ("rate.periphrasis", 0.25, 2.0),
+    ("coverage.ASPECT", 0.40, 0.90),
 )
-DEFAULT = {"context.DEFINITE": 0.22, "context.FUTURE": 0.35, "context.PL": 0.30, "context.PAST": 0.25,
-           "learnability_strength": 1.0, "category_loss_l2_boost": 4.0, "rate.periphrasis": 1.0}
+#: Síla kontaktu a tempo opisu první kolo neurčilo; drží se na výchozích hodnotách.
+DEFAULT = {"emergence_need_scale": 1.0, "context.DEFINITE": 0.22, "context.FUTURE": 0.35,
+           "context.PL": 0.30, "context.PAST": 0.25, "coverage.ASPECT": 0.7}
 
 
 def to_parameters(point: dict[str, float]) -> Parameters:
@@ -78,8 +78,9 @@ def to_parameters(point: dict[str, float]) -> Parameters:
     rates: dict[str, float] = {}
     scalars: dict[str, float] = {}
     for name, value in point.items():
-        if name.startswith("context."):
-            grammar.setdefault(name.split(".", 1)[1], {})["context"] = value
+        if name.startswith(("context.", "coverage.")):
+            field, function = name.split(".", 1)
+            grammar.setdefault(function, {})[field] = value
         elif name.startswith("rate."):
             rates[name.split(".", 1)[1]] = value
         else:
@@ -102,7 +103,8 @@ def run_task(task: tuple[dict[str, float], str, int]) -> dict[str, Any]:
     point, experiment, seed = task
     reference = load_reference()
     if experiment == "wals":
-        grammar = sample_grammar(seed, reference)
+        # Vid WALS neměří (65A není ve výřezu): začíná nevyjádřený jako v rodině.
+        grammar = {"ASPECT": FULL_GRAMMAR["ASPECT"], **sample_grammar(seed, reference)}
         rule: Any = sample_stress_rule(seed, reference)
     else:
         grammar, rule = dict(FULL_GRAMMAR), "penult"
