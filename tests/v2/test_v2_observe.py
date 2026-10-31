@@ -7,10 +7,10 @@ import numpy as np
 from cee.v2.events import Contact
 from cee.v2.export import FORMAT, TIMELINE, export, lineages
 from cee.v2.observe import (
-    LineageTracker,
-    _with_hysteresis,
+    _features,
     code_distances,
     cognate_matrix,
+    constrained_average_linkage,
     distance_matrix,
     form_distance,
 )
@@ -47,13 +47,65 @@ def test_svet_bez_tvaru_ma_vzdalenost_jen_ze_slov():
     assert np.array_equal(code_distances(world), distance_matrix(world))
 
 
+def _pairwise(features, first, second):
+    """Vzdálenost dvou skupin z vložení (jako ve shlukování), počítaná přímo."""
+    shares = features.shares
+    categorical = 0.5 * float(((shares[first] - shares[second]) ** 2).sum())
+    forms = sum(weight * features.forms[second].get(column, 0.0) for column, weight in features.spread[first].items())
+    return (categorical + forms) / features.lexical
+
+
+def _diverged(columns=4, years=1500):
+    world = village_grid(columns, 2, seed=1, syntax=True, semantics=True)
+    Simulation(world).run(years)
+    return world
+
+
+def test_vlozeni_dava_temer_stejnou_vzdalenost_jako_vsechny_dvojice():
+    world = _diverged()
+    ids = list(world.live.group_ids)
+    exact = code_distances(world)
+    features = _features(world, ids)
+    upper = np.triu_indices(len(ids), 1)
+    approx = np.array([[_pairwise(features, a, b) for b in range(len(ids))] for a in range(len(ids))])
+    assert np.corrcoef(exact[upper], approx[upper])[0, 1] > 0.99
+    assert 0.85 < approx[upper].mean() / exact[upper].mean() <= 1.0
+
+
+def test_vazba_shluku_ze_souctu_je_prumer_vsech_dvojic():
+    world = _diverged()
+    ids = list(world.live.group_ids)
+    features = _features(world, ids)
+    first, second = list(range(0, len(ids), 2)), list(range(1, len(ids), 2))
+    brute = np.mean([_pairwise(features, a, b) for a in first for b in second])
+    shares, squares = features.shares, features.squares
+    na, nb = len(first), len(second)
+    total = (0.5 * (squares[first].sum() / na + squares[second].sum() / nb)
+             - float(shares[first].sum(axis=0) @ shares[second].sum(axis=0)) / (na * nb))
+    spread = {}
+    for a in first:
+        for column, weight in features.spread[a].items():
+            spread[column] = spread.get(column, 0.0) + weight
+    forms = {}
+    for b in second:
+        for column, weight in features.forms[b].items():
+            forms[column] = forms.get(column, 0.0) + weight
+    total += sum(weight * forms.get(column, 0.0) for column, weight in spread.items()) / (na * nb)
+    assert abs(total / features.lexical - brute) < 1e-6  # vložení je ve float32
+    assert constrained_average_linkage(world, ids, 0.0, features=features) == [[index] for index in range(len(ids))]
+    assert constrained_average_linkage(world, ids, 10.0, features=features) == [list(range(len(ids)))]
+
+
 def test_hystereze_drzi_spojene_a_oddelene_skupiny():
-    tracker = LineageTracker()
-    tracker.update([["a", "b"], ["c"]], 0)
-    distances = np.full((3, 3), 0.3)
-    np.fill_diagonal(distances, 0.0)
-    adjusted = _with_hysteresis(distances, ["a", "b", "c"], tracker, 0.05)
-    assert adjusted[0, 1] == 0.25 and adjusted[0, 2] == 0.35 and adjusted[0, 0] == 0.0
+    world = _diverged(columns=2, years=1000)
+    ids = list(world.live.group_ids)
+    features = _features(world, ids)
+    distance = _pairwise(features, 0, 1)
+    together = constrained_average_linkage(world, ids[:2], distance - 0.01, features=_features(world, ids[:2]),
+                                           labels=["x", "x"], margin=0.02)
+    apart = constrained_average_linkage(world, ids[:2], distance + 0.01, features=_features(world, ids[:2]),
+                                        labels=["x", "y"], margin=0.02)
+    assert together == [[0, 1]] and apart == [[0], [1]]
 
 
 def test_export_je_json_se_slovnikem_puvodem_a_stromem():

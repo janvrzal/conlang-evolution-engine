@@ -56,6 +56,9 @@ class SimulationConfig:
     #: Výchozí prahy průměrné variační vzdálenosti; nekalibrované.
     dialect_threshold: float = 0.05
     language_threshold: float = 0.25
+    #: Ukládat do snímků celou matici vzdáleností (čtvercová v počtu skupin);
+    #: jen pro metriky a testy kontinua.
+    keep_distances: bool = False
     record_trajectories: bool = False
     #: Po kolika letech se automaticky uloží checkpoint (``None`` = nikdy).
     #: Z checkpointu jde pokračovat se změněnými pozdějšími událostmi
@@ -577,6 +580,7 @@ class Simulation:
             self.world, self.tick, year, self.tracker,
             dialect_threshold=self.config.dialect_threshold,
             language_threshold=self.config.language_threshold,
+            keep_distances=self.config.keep_distances,
         )
         self.history.snapshots.append(snapshot)
         for event in events:

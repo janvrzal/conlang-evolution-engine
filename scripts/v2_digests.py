@@ -43,6 +43,17 @@ scénáře s L2 mluvčími; parametry jako data otisky nezměnily):
     shift        c934bff8888225fd23621c0ee3288c4c208b4b9ce6f535fd9a34b2adfb67e342
     island-city  e3b1ba4d2a3410424595f13c8213f48987455299fd5c83de024d782bb4892b65
     valley-50    9c2e85f1aa5448e50811ffa2db9587bda771ee84564b815243814ddc6ecf2476
+
+Reference lineárního pozorování (průměrná vazba mezi sousedícími shluky ze
+součtů, ``observe.constrained_average_linkage``; simulace se nemění, liší se
+jen záznamy o jazycích tam, kde je pozorovatel rozpozná jinak):
+    phonology    1c1bd2c691a4b9aacd499e038b945cdd1c759f6a5a5b1de7ba204362f35fa755
+    morphology   b673137d804d7542106c47e7203f93c9bf63268d8951909b49df12755b29e849
+    syntax       9c9803132e86d566e7ccc623f381622a19aedc042c443ed0a1f3d0dc964b0084
+    grid-5x5     83d79ffb6e029604422730b9906dcf7b68d2ed522ef5f405fe706a6dbf6d5c95
+    shift        c934bff8888225fd23621c0ee3288c4c208b4b9ce6f535fd9a34b2adfb67e342
+    island-city  e3b1ba4d2a3410424595f13c8213f48987455299fd5c83de024d782bb4892b65
+    valley-50    c745056a17646c83224a5aa599997050602f81a288bb1b9e276c7241e37b234b
 """
 
 from __future__ import annotations

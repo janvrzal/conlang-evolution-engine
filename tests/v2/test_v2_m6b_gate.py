@@ -28,7 +28,7 @@ from cee.v2.scenarios import (
     migration_region,
     village_grid,
 )
-from cee.v2.simulation import Simulation
+from cee.v2.simulation import Simulation, SimulationConfig
 from tests.v2.gate_checks import evaluate_seeds
 
 SEEDS = (1, 2)
@@ -48,7 +48,7 @@ def _loans(world, group, language):
 def run_metrika_9(seed: int):
     """Séguyho zákon: na mapě (2D) roste vzdálenost nářečí jako logaritmus."""
     world = village_grid(5, 5, seed=seed, morphology=True, semantics=True)
-    simulation = Simulation(world)
+    simulation = Simulation(world, SimulationConfig(keep_distances=True))
     simulation.run(2500)
     return world, simulation.history
 

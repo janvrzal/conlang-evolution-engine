@@ -22,7 +22,7 @@ from cee.v2.world import Code, SpeechGroup, Territory, World
 def run_continuum(seed: int = 2):
     """S1: řada 20 vesnic, 3 000 let, s trajektoriemi pro metriku 7."""
     world = village_grid(20, seed=seed)
-    simulation = Simulation(world, SimulationConfig(record_trajectories=True))
+    simulation = Simulation(world, SimulationConfig(record_trajectories=True, keep_distances=True))
     simulation.run(3000)
     return world, simulation.history
 
@@ -31,7 +31,8 @@ def run_bordered(seed: int = 2):
     """S1 s hranicí státu mezi 10. a 11. vesnicí od roku 1000."""
     world = village_grid(20, seed=seed)
     ids = world.group_ids()
-    simulation = Simulation(world, events=[Border(1000, tuple(ids[:10]), tuple(ids[10:]), 0.05)])
+    simulation = Simulation(world, SimulationConfig(keep_distances=True),
+                            events=[Border(1000, tuple(ids[:10]), tuple(ids[10:]), 0.05)])
     simulation.run(3000)
     return simulation.history
 

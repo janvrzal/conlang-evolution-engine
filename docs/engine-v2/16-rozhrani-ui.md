@@ -170,8 +170,9 @@ Měření růstu s počtem skupin (procesorový čas, 400 let, mřížka region�
 
 Engine roste **lineárně** s počtem skupin. Za 1 500 let roste mírně
 nadlineárně (24 → 96 skupin: 9,3 → 44,4 s), protože přibývá živých
-proměnných (250 → 450). Čtvercově roste jen pozorování dialektů, které
-porovnává všechny dvojice skupin; dnes je to 1–3 % času. Drahá je konstanta
+proměnných (250 → 450). Čtvercově rostlo jen pozorování dialektů, které
+porovnávalo všechny dvojice skupin (1–3 % času); od té doby je lineární,
+viz níže. Drahá je konstanta
 na buňku skupina × živá proměnná, asi 30 µs Pythonu. Buněk, kde se
 nic neděje (jedna varianta na 100 % i u sousedů), je jen 15–24 %, takže
 jejich přeskakování by dalo nejvýš kolem 20 %.
@@ -216,6 +217,58 @@ přidává čekání na nejpomalejší proces a start procesů.
   (víc seedů, náhled a plná síť souběžně), je triviální a využije všechna
   jádra.
 - **Menší konstanta na buňku**: tlaky jako hromadné operace v numpy.
+
+### Lineární pozorování dialektů a jazyků
+
+Dřívější pozorovatel spočítal matici vzdáleností všech dvojic skupin
+(čtvercová) a shlukoval ji naivní průměrnou vazbou, která při každém
+sloučení hledala minimum v celé matici (kubická). Teď
+(`observe.constrained_average_linkage`):
+
+- **Stejná vzdálenost dvou skupin**: rozdíl rozdělení variant plus rozdíl
+  tvarů příbuzných slov. Rozdíl rozdělení ½ Σ |p − q| se ale počítá jako
+  ½‖φ(p) − φ(q)‖² ve vložení podílů do prahových intervalů (`EDGES`,
+  jemných u 0 a 1). Vychází v průměru o 5–10 % nižší, s korelací 0,999.
+- **Průměrná vazba mezi shluky ze součtů**: díky vložení je průměr přes
+  všechny dvojice členů přesně dán součty za shluk (počet, součet vložení,
+  součet čtverců, četnosti tvarů a hystereze linií). Dvojice členů se
+  neprocházejí. Dlouhé kontinuum se proto rozpadá podle nahromaděného
+  rozdílu jako dřív, ne jen podle rozdílu na hranici.
+- **Slučují se jen sousedící shluky**: sousedí spolu skupiny spojené
+  vazbou nebo jedna ze čtyř zeměpisně nejbližších (mřížka, bez dvojic).
+  Ostrov tak pořád může patřit k jazyku pevniny.
+- **Paměť**: nejvýš 2 000 proměnlivých sloupců (proměnná × slot); víc se
+  odhadne výběrem proměnných podle stabilního hashe a přeškáluje. To dává
+  asi 100 kB na skupinu.
+- Celá matice vzdáleností se do snímku ukládá jen na požádání
+  (`SimulationConfig.keep_distances`). Potřebují ji brány kontinua (M1,
+  metrika 9) a `scripts/v2_innovation_stats.py`. Funkce `code_distances`
+  zůstala pro metriky a skripty.
+
+Shoda se starým pozorovatelem (stejné běhy, každý snímek):
+
+| scénář | stejný počet jazyků | stejný počet dialektů | Randův index dialektů |
+|---|---:|---:|---:|
+| mřížka 5 × 5 vesnic, 2 000 let | 100 % | 80 % | 0,975 |
+| čtverec regionů, otevřenost 0,1 | 100 % | 83 % | 0,983 |
+| čtverec regionů, otevřenost 0,5 | 100 % | 47 % (8,2 → 3,1) | 0,904 |
+| království (stát, vynucování) | 100 % | 40 % (9,2 → 7,6) | 0,982 |
+| ostrov a město, přechod jazyka, známý strom | 100 % | 55–80 % | 0,95–0,99 |
+
+Jazyky vycházejí stejně. Dialektů je o něco méně tam, kde se sousedé liší
+těsně kolem hranice dialektu (0,05), protože nižší vzdálenost je pod hranici
+posune. Na přesném počtu dialektů žádná brána nestojí.
+
+Čas jednoho pozorování (mřížka regionů po čtyřech vesnicích, 300 let):
+
+| skupin | dřív | teď |
+|---:|---:|---:|
+| 100 | 0,05 s | 0,03 s |
+| 400 | 1,3 s | 0,17 s |
+| 784 | 9,6 s | 0,40 s |
+| 1 600 | 102 s | 1,0 s |
+
+Růst je teď zhruba lineární, mírně rychlejší kvůli hranici rostoucích shluků.
 
 ### Vlastnický režim (rozpracováno, odloženo)
 

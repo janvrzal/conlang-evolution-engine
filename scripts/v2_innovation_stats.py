@@ -32,12 +32,12 @@ def collect_metrics(seeds: list[int], years: float) -> dict[str, dict[str, float
     from cee.v2.changes import DEFAULT_CHANGES
     from cee.v2.metrics import isolation_by_distance
     from cee.v2.scenarios import village_grid
-    from cee.v2.simulation import Simulation
+    from cee.v2.simulation import Simulation, SimulationConfig
 
     results: dict[str, dict[str, float]] = {}
     for seed in seeds:
         world = village_grid(10, 5, seed=seed, syntax=True, semantics=True)
-        simulation = Simulation(world)
+        simulation = Simulation(world, SimulationConfig(keep_distances=True))
         simulation.run(years)
 
         history = simulation.history
