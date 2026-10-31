@@ -10,6 +10,7 @@ from cee.v2.changes.morphology import MORPHOLOGICAL_CHANGES, AnalogicalChange
 from cee.v2.changes.prosody import PROSODY_CHANGES, StressShift, StressStrengthChange
 from cee.v2.changes.sound import SOUND_CHANGES, SoundChange
 from cee.v2.changes.syntax import SYNTACTIC_CHANGES, SyntacticChange
+from cee.v2.parameters import Parameters
 from cee.v2.pressures.base import Pressure
 from cee.v2.pressures.social import Norm
 
@@ -20,14 +21,22 @@ DEFAULT_CHANGES: tuple[Change, ...] = (
 )
 
 
-def pressures_by_kind(changes: Sequence[Change]) -> dict[str, tuple[tuple[Pressure, float], ...]]:
+def pressures_by_kind(
+    changes: Sequence[Change], params: Parameters | None = None
+) -> dict[str, tuple[tuple[Pressure, float], ...]]:
     """Tlaky pro každý typ proměnné.
 
     Všechny varianty jedné proměnné se musí hodnotit stejnými tlaky, i když
     je vyrobily různé změny. Tlaky se proto sdružují podle cílového typu;
     deklaruje-li tentýž tlak víc změn, platí nejvyšší váha. `Norm` (škola)
-    působí na každý typ proměnné.
+    působí na každý typ proměnné. ``params.pressure_weights`` přepíše výslednou
+    váhu tlaku podle jeho jména (u všech typů, kde působí).
     """
+    overrides = (params or Parameters()).pressure_weights
+    known = {pressure.name for change in changes for pressure in change.pressures} | {Norm.name}
+    unknown = sorted(set(overrides) - known)
+    if unknown:
+        raise ValueError(f"Neznámé tlaky v pressure_weights: {unknown}; známé jsou {sorted(known)}.")
     weights: dict[str, dict[type[Pressure], float]] = {}
     for change in changes:
         target = weights.setdefault(change.target, {})
@@ -36,7 +45,7 @@ def pressures_by_kind(changes: Sequence[Change]) -> dict[str, tuple[tuple[Pressu
             target[pressure] = max(weight, target.get(pressure, weight))
     return {
         kind: tuple(
-            (pressure(), weight)
+            (pressure(), float(overrides.get(pressure.name, weight)))
             for pressure, weight in sorted(items.items(), key=lambda item: item[0].name)
         )
         for kind, items in weights.items()

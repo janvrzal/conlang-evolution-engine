@@ -8,9 +8,12 @@ from dataclasses import FrozenInstanceError
 import numpy as np
 import pytest
 
-from cee.v2 import syntax
+from cee.v2 import contact, syntax
+from cee.v2.changes import DEFAULT_CHANGES, pressures_by_kind
 from cee.v2.changes.base import InnovationContext
+from cee.v2.changes.morphology import Leveling, Rebracketing
 from cee.v2.changes.syntax import CategoryLoss
+from cee.v2.history import History
 from cee.v2.language.constructions import Construction, catalog, catalog_for
 from cee.v2.parameters import Parameters
 from cee.v2.pressures.base import PressureBatch
@@ -52,6 +55,18 @@ def test_vychozi_hodnoty_jsou_dosavadni_konstanty():
     assert params.order_rigidity == 0.05
     assert params.category_loss_l2_boost == 4.0
     assert len(params.grammar) == 0
+    assert len(params.pressure_weights) == 0
+    defaults = {
+        "analogy_l2_boost": 4.0, "clarity_short_factor": 1.5, "dispersion_factor": 4.0,
+        "interference_weight": 0.5, "school_correction": 0.8, "shift_rate": 1.0,
+        "shift_exponent": 1.31, "child_threshold": 0.2, "reading_weight": 0.1,
+        "school_weight": 0.3, "liturgy_weight": 0.1, "grammar_threshold": 0.85,
+        "conserved_frequency": 0.7, "analogy_threshold": 0.85, "restructure_threshold": 0.85,
+        "word_bias_sd": 1.5, "frequency_lead": 1.0, "closure_generations": 2.0,
+        "activation_share": 0.05, "paradigm_merge_weight": 1.0, "redundant_merge_weight": 0.3,
+    }
+    for name, value in defaults.items():
+        assert getattr(params, name) == value, name
     world, _, _ = _world()
     assert world.params == Parameters()
 
@@ -188,3 +203,58 @@ def test_contact_world_nese_parametry():
     world = contact_world([Language("proto", (Place("a", (0.0, 0.0)),))], seed=1, params=params)
     assert world.params is params
     assert contact_world([Language("proto", (Place("a", (0.0, 0.0)),))], seed=1).params == Parameters()
+
+
+def test_prechod_cte_parametry_sveho_sveta():
+    def moved(params: Parameters) -> tuple[int, bool]:
+        place = (Place("a", (0.0, 0.0), population=500, prestige=1.0),
+                 Place("b", (10.0, 0.0), population=500, prestige=0.3))
+        world = contact_world([Language("proto", place)], seed=1, params=params)
+        contact._shift(world, "a", "b", 0.04, 1, 25.0, History())
+        return world.groups["a"].population, world.groups["b"].transmitted
+
+    fast = Parameters(shift_rate=3.0, child_threshold=0.9)
+    first, second, third = moved(Parameters()), moved(fast), moved(Parameters())
+    assert first == third and first != second
+    # Práh předávání dětem platí jen ve světě, který ho změnil.
+    assert first[1] is True and second[1] is False
+
+
+def test_prah_zapisu_a_vahy_vstupu_jsou_na_svete():
+    first, _, _ = _world()
+    second, _, _ = _world(Parameters(grammar_threshold=0.5, word_bias_sd=0.1, interference_weight=0.9))
+    assert first.params.grammar_threshold == 0.85 and second.params.grammar_threshold == 0.5
+    assert first.params.interference_weight == 0.5 and second.params.interference_weight == 0.9
+
+
+def test_analogie_cte_l2_boost_sveta():
+    first, first_group, first_code = _world()
+    second, second_group, second_code = _world(Parameters(analogy_l2_boost=10.0))
+    first_code.l2_share = second_code.l2_share = 0.5
+    change = Leveling()
+    scales = [
+        change.rate_scale(InnovationContext(world, group, group.main_code, 1, 25.0))
+        for world, group in ((first, first_group), (second, second_group))
+    ]
+    assert scales == [pytest.approx(1.0 + 4.0 * 0.5), pytest.approx(1.0 + 10.0 * 0.5)]
+    context = InnovationContext(second, second_group, second_group.main_code, 1, 25.0)
+    assert Rebracketing().rate_scale(context) == 1.0
+
+
+def test_pressure_weights_prepisuji_vahy_tlaku_jen_ve_svem_svete():
+    def weights(table):
+        return {kind: {p.name: w for p, w in items} for kind, items in table.items()}
+
+    before = weights(pressures_by_kind(DEFAULT_CHANGES, Parameters()))
+    assert before == weights(pressures_by_kind(DEFAULT_CHANGES))
+    after = weights(pressures_by_kind(DEFAULT_CHANGES, Parameters(pressure_weights={"clarity": 0.25, "norm": 2.0})))
+    assert after != before
+    for kind, items in after.items():
+        assert items["norm"] == 2.0
+        if "clarity" in items:
+            assert items["clarity"] == 0.25
+        assert {name: w for name, w in items.items() if name not in ("clarity", "norm")} == {
+            name: w for name, w in before[kind].items() if name not in ("clarity", "norm")
+        }
+    with pytest.raises(ValueError, match="Neznámé tlaky"):
+        pressures_by_kind(DEFAULT_CHANGES, Parameters(pressure_weights={"neexistuje": 1.0}))

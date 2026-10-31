@@ -166,14 +166,15 @@ class Clarity(Pressure):
     name = "clarity"
 
     def scores(self, batch: PressureBatch) -> FloatArray:
+        factor = batch.world.params.clarity_short_factor
         return _process_scores(
             batch,
             lambda process, assessment: float(
-                np.clip(process.clarity - 1.5 * assessment.short_share, -1.0, 1.0)
+                np.clip(process.clarity - factor * assessment.short_share, -1.0, 1.0)
             ),
             lambda process, assessments: np.clip(
                 process.clarity
-                - 1.5 * np.fromiter((item.short_share for item in assessments), dtype=np.float64),
+                - factor * np.fromiter((item.short_share for item in assessments), dtype=np.float64),
                 -1.0,
                 1.0,
             ),
@@ -200,11 +201,12 @@ class Dispersion(Pressure):
     name = "dispersion"
 
     def scores(self, batch: PressureBatch) -> FloatArray:
+        factor = batch.world.params.dispersion_factor
         return _process_scores(
             batch,
-            lambda _, assessment: float(np.clip(4.0 * assessment.dispersion_delta, -1.0, 1.0)),
+            lambda _, assessment: float(np.clip(factor * assessment.dispersion_delta, -1.0, 1.0)),
             lambda _, assessments: np.clip(
-                4.0 * np.fromiter((item.dispersion_delta for item in assessments), dtype=np.float64),
+                factor * np.fromiter((item.dispersion_delta for item in assessments), dtype=np.float64),
                 -1.0,
                 1.0,
             ),

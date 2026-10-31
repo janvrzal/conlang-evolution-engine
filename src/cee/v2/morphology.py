@@ -26,9 +26,6 @@ from cee.v2.repertoire import Origin, Variable, Variant
 if TYPE_CHECKING:
     from cee.v2.world import Code, World
 
-#: Nad tímto podílem si nová generace analogický tvar zapíše.
-ANALOGY_THRESHOLD = 0.85
-
 
 @dataclass(frozen=True)
 class ClassStats:
@@ -192,7 +189,7 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
             del state.morph_active[variable_id]
             state.record_lifecycle("form", "remove", variable_id)
             continue
-        if share < ANALOGY_THRESHOLD:
+        if share < world.params.analogy_threshold:
             continue
         change = world.form_changes[variable_id]
         del state.morph_active[variable_id]

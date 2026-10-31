@@ -104,7 +104,7 @@ class Simulation:
         )
         self.events = tuple(events)
         self.checkpoints: dict[int, Checkpoint] = {}
-        self.pressures = pressures_by_kind(self.changes)
+        self.pressures = pressures_by_kind(self.changes, self.world.params)
         self.params = TransmissionParams(
             dt=self.config.dt,
             alpha=self.config.alpha,
@@ -517,7 +517,7 @@ class Simulation:
             if changed not in block.slots[row]:
                 continue
             slot = block.slots[row].index(changed)
-            for column in np.flatnonzero(after[row, :, slot] >= phonology.ACTIVATION_SHARE):
+            for column in np.flatnonzero(after[row, :, slot] >= self.world.params.activation_share):
                 found.append((group_ids[column], variable_id))
         return found
 

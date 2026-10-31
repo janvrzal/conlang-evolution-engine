@@ -34,11 +34,6 @@ from cee.v2.rng import stable_id
 if TYPE_CHECKING:
     from cee.v2.world import Code, World
 
-#: Nad tímto podílem se nová koncovka zapíše do tvarů slov.
-GRAMMAR_THRESHOLD = 0.85
-#: Lexémy aspoň tak časté si při nástupu nové koncovky drží starý tvar.
-CONSERVED_FREQUENCY = 0.7
-
 
 def variable_id(function: str) -> str:
     return Variable("construction", function).id
@@ -274,7 +269,7 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
         variant, share = distribution.dominant()
         construction = construction_of(world, variant)
         if (
-            share < GRAMMAR_THRESHOLD or construction.kind != "synthetic"
+            share < world.params.grammar_threshold or construction.kind != "synthetic"
             or construction.exponent is None or variant in state.grammar_applied
         ):
             continue
@@ -300,7 +295,7 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
                 new = world.unit_of(code, donor_unit)
                 if new.exponent != construction.exponent:
                     continue
-            elif exists and world.usage_frequency(code, root) >= CONSERVED_FREQUENCY:
+            elif exists and world.usage_frequency(code, root) >= world.params.conserved_frequency:
                 # Velmi častá slova si starý tvar ponechají (silná slovesa vedle
                 # nové pravidelné koncovky, angl. *sang* vedle *walked*).
                 kept += 1

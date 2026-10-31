@@ -836,7 +836,7 @@ Naměřeno (seedy 1 a 2, není-li uvedeno jinak):
   (vysoká varieta, ~ škola × populace lidí), s interferencí z lidové řeči.
   Lidová řeč školou neprochází, jen čtením přejímá učená slova. Vysoké
   variety sousedních vesnic spolu mluví. Školní výuka tlumí interferenci o
-  80 % (`SCHOOL_CORRECTION`): bez toho se vysoká varieta během pár století
+  80 % (`Parameters.school_correction`): bez toho se vysoká varieta během pár století
   přiblížila lidové řeči víc než psanému kódu. Naměřeno (S4 s diglosní
   školou v roce 1500, seedy 1 a 2): vysoká varieta je od psaného kódu
   0,02–0,06 a vzdaluje se jen pomalu, lidová řeč 0,13–0,18 a dál se

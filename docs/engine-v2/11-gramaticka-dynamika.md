@@ -69,13 +69,14 @@ analýza C2.
 
 Otisky všech sedmi scénářů beze změny, `valley-50` bez zpomalení.
 
-Zbývají modulové konstanty mimo rozsah tohoto kroku: priory zvukových změn
-a `CLARITY_DELETE_*` (`changes/sound.py`), konstanty kontaktu
-(`contact.py`, `institutions.py`), prahy (`GRAMMAR_THRESHOLD`,
-`ANALOGY_THRESHOLD`, `RESTRUCTURE_THRESHOLD`), `l2_boost` analogie, tabulky
-vah tlaků (`SOUND_PRESSURES`, `SYNTAX_PRESSURES`, …), literály v `Clarity`
-(1,5) a `Dispersion` (4,0), konstanty pozorovatele. Převést je před
-kalibrací těchto oblastí.
+Druhý průchod přesunul do `Parameters` konstanty kontaktu a institucí, prahy
+(`grammar_threshold`, `analogy_threshold`, `restructure_threshold`, …),
+`analogy_l2_boost`, rozptyl a předstih frekvence fonologie, váhy splynutí
+v `assessment.py`, faktory `Clarity` a `Dispersion` a přepis vah tlaků
+(`pressure_weights`). Zbývají priory zvukových změn a `CLARITY_DELETE_*`
+(`changes/sound.py`; cache kandidátů je klíčovaná tabulkou a inventářem, ne
+světem) a konstanty pozorovatele (`observe.py`). Převést je před kalibrací
+těchto oblastí.
 
 ## Oprava nestabilního testu
 

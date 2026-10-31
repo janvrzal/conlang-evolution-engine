@@ -34,19 +34,9 @@ from cee.v2.rng import generator, stable_id
 if TYPE_CHECKING:
     from cee.v2.world import Code, World
 
-#: Nad tímto p_slovo si nová generace slovo přepíše.
-RESTRUCTURE_THRESHOLD = 0.85
-#: Rozptyl sklonu jednotlivých slov; určuje podíl reliktních výjimek.
-WORD_BIAS_SD = 1.5
-#: Jak silně frekvence předbíhá u redukčních změn (Bybee).
-FREQUENCY_LEAD = 1.0
-#: Po kolika generacích na 100 % proces přestane být živý.
-CLOSURE_GENERATIONS = 2.0
-#: Od jakého podílu ve skupině začne proces působit na slova. Většina
-#: inovací zanikne dřív, a nemusí se proto ani zařazovat do front.
-ACTIVATION_SHARE = 0.05
-
-_LOGIT_THRESHOLD = math.log(RESTRUCTURE_THRESHOLD / (1 - RESTRUCTURE_THRESHOLD))
+# Prahy a rozptyl přepisu slov jsou data světa (``world.params``:
+# ``restructure_threshold``, ``word_bias_sd``, ``frequency_lead``,
+# ``closure_generations``, ``activation_share``).
 
 
 def none_id(variable_id: str) -> str:
@@ -87,7 +77,8 @@ def _logit(p: float) -> float:
     return math.log(p / (1 - p))
 
 
-_BIASES: dict[tuple[int, str, str], float] = {}
+#: Klíč nese i rozptyl, aby světy s různým ``word_bias_sd`` sdílely proces, ne sklony.
+_BIASES: dict[tuple[int, float, str, str], float] = {}
 
 
 def word_bias(world: World, variable_id: str, morpheme_id: str) -> float:
@@ -97,11 +88,12 @@ def word_bias(world: World, variable_id: str, morpheme_id: str) -> float:
     přijmou (nebo odmítnou) společně a výjimka nevyrobí falešnou alternaci.
     """
     morpheme_id = world.morphemes[morpheme_id].lexeme_id
-    key = (world.seed, variable_id, morpheme_id)
+    sd = world.params.word_bias_sd
+    key = (world.seed, sd, variable_id, morpheme_id)
     bias = _BIASES.get(key)
     if bias is None:
         bias = _BIASES[key] = float(
-            generator(world.seed, "word-bias", variable_id, morpheme_id).normal(0.0, WORD_BIAS_SD)
+            generator(world.seed, "word-bias", variable_id, morpheme_id).normal(0.0, sd)
         )
     return bias
 
@@ -109,7 +101,7 @@ def word_bias(world: World, variable_id: str, morpheme_id: str) -> float:
 def _lead(world: World, process: Process, morpheme_id: str, code: Code | None = None) -> float:
     lexeme = world.morphemes[morpheme_id].lexeme_id
     frequency = world.usage_frequency(code, lexeme) if code is not None else world.morphemes[lexeme].frequency
-    return FREQUENCY_LEAD * (2.0 * frequency - 1.0) if process.reductive else 0.0
+    return world.params.frequency_lead * (2.0 * frequency - 1.0) if process.reductive else 0.0
 
 
 def word_probability(
@@ -123,8 +115,9 @@ def word_probability(
 def _needed(world: World, variable_id: str, morpheme_id: str, code: Code | None = None) -> float:
     """Logit sdíleného podílu, při kterém si slovo změnu zapíše."""
     process = world.processes[variable_id]
+    threshold = world.params.restructure_threshold
     return (
-        _LOGIT_THRESHOLD - _lead(world, process, morpheme_id, code)
+        math.log(threshold / (1 - threshold)) - _lead(world, process, morpheme_id, code)
         - word_bias(world, variable_id, morpheme_id)
     )
 
@@ -245,7 +238,7 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
             )
         if share >= 1.0:
             since = state.fixed_since.setdefault(variable_id, tick)
-            if (tick - since) * dt >= CLOSURE_GENERATIONS * group.generation_years:
+            if (tick - since) * dt >= world.params.closure_generations * group.generation_years:
                 relics = sorted(morpheme_id for _, morpheme_id in queue)
                 state.closed.add(variable_id)
                 state.record_lifecycle("process", "close", variable_id)

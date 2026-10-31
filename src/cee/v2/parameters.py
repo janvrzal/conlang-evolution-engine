@@ -88,6 +88,61 @@ class Parameters:
     #: Kolikrát častěji navrhují vypuštění výrazu L2 mluvčí; stejně jako
     #: u analogie (změna `CategoryLoss`).
     category_loss_l2_boost: float = 4.0
+    #: Kolikrát častěji navrhují regularizaci (analogii) L2 mluvčí: přehnané
+    #: zobecnění. Autorský odhad.
+    analogy_l2_boost: float = 4.0
+    #: Váha trestu `Clarity` za podíl slov zkrácených pod mez.
+    clarity_short_factor: float = 1.5
+    #: Váha odměny `Dispersion` za zaplnění mezery v soustavě vokálů.
+    dispersion_factor: float = 4.0
+    #: Jak velkou část vstupu L2 kódu tvoří první jazyk jeho mluvčích, když se
+    #: ho učí všichni až v dospělosti (``l2_share`` = 1).
+    interference_weight: float = 0.5
+    #: O kolik školní výuka (opravování podle normy) interferenci tlumí: kdo se
+    #: kód učí ve škole, nese do něj svůj první jazyk méně než kdo na ulici.
+    school_correction: float = 0.8
+    #: Abrams & Strogatz (2003): rychlost přechodu je úměrná statusu cílového
+    #: jazyka a podílu jeho mluvčích na ``shift_exponent``.
+    shift_rate: float = 1.0
+    shift_exponent: float = 1.31
+    #: Pod tímto podílem užívání v komunitě se kód nepředává dětem (iterace 4).
+    child_threshold: float = 0.2
+    #: Jak velkou část vstupu gramotného mluvčího tvoří psaný kód (jen slova).
+    reading_weight: float = 0.1
+    #: Jak velkou část vstupu dětí při plné školní docházce tvoří psaný kód.
+    #: Škola učí slova, tvary a konstrukce; výslovnost si děti nesou z domova a
+    #: podle písma se mění jen výjimečně (výslovnost podle pravopisu).
+    school_weight: float = 0.3
+    #: Jak velkou část vstupu věřícího tvoří liturgický kód (jen slova).
+    liturgy_weight: float = 0.1
+    #: Nad tímto podílem se nová koncovka zapíše do tvarů slov.
+    grammar_threshold: float = 0.85
+    #: Lexémy aspoň tak časté si při nástupu nové koncovky drží starý tvar.
+    conserved_frequency: float = 0.7
+    #: Nad tímto podílem si nová generace analogický tvar zapíše.
+    analogy_threshold: float = 0.85
+    #: Nad tímto p_slovo si nová generace slovo přepíše.
+    restructure_threshold: float = 0.85
+    #: Rozptyl sklonu jednotlivých slov; určuje podíl reliktních výjimek.
+    word_bias_sd: float = 1.5
+    #: Jak silně frekvence předbíhá u redukčních změn (Bybee).
+    frequency_lead: float = 1.0
+    #: Po kolika generacích na 100 % proces přestane být živý.
+    closure_generations: float = 2.0
+    #: Od jakého podílu ve skupině začne proces působit na slova. Většina
+    #: inovací zanikne dřív, a nemusí se proto ani zařazovat do front.
+    activation_share: float = 0.05
+    #: Splynutí dvou buněk téhož paradigmatu (synkretismus) stojí stejně jako
+    #: náhodný homofon; tvary téhož slova od sebe často odliší kontext.
+    paradigm_merge_weight: float = 1.0
+    #: Splynutí buňky s jiným tvarem téhož slova, když roli její funkce už nese
+    #: jiná konstrukce (pád vedle pevného slovosledu): funkce je nadbytečná a její
+    #: ztráta skoro nic nestojí.
+    redundant_merge_weight: float = 0.3
+    #: Přepisy vah tlaků podle jejich ``name`` (např. ``{"clarity": 2.0}``);
+    #: platí pro všechny typy proměnných, kde tlak působí. Prázdné = tabulky
+    #: jednotlivých změn beze změny. Neznámý tlak odmítne ``pressures_by_kind``.
+    pressure_weights: Mapping[str, float] = field(default_factory=FrozenMapping)
     #: Přepisy polí ``need`` a ``context`` katalogu gramatických funkcí podle
     #: funkce, např. ``{"DEFINITE": {"context": 0.4}}``. Prázdné = katalog
     #: ``v2_grammar.yaml`` beze změny.
@@ -103,3 +158,4 @@ class Parameters:
                     f"ne {sorted(unknown)}."
                 )
         object.__setattr__(self, "grammar", grammar)
+        object.__setattr__(self, "pressure_weights", FrozenMapping(self.pressure_weights))

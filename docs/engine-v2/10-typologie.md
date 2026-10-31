@@ -841,7 +841,7 @@ Funkčnost obou větví a selekčního mechanismu je plně prokázána sadou 5 j
 
 ##### Návrh napojení kontaktu (L2 mluvčí) na konstrukce (bez implementace)
 V modelech M5/M6b je kontakt zachycen proměnnou `code.l2_share` (podíl mluvčích, kteří si jazyk
-osvojili v dospělosti). V morfologii je toto napojení realizováno faktorem `l2_boost: float = 4.0`
+osvojili v dospělosti). V morfologii je toto napojení realizováno faktorem `Parameters.analogy_l2_boost` (4,0)
 v `changes/morphology.py` a tlakem `Simplicity` v `pressures/morphological.py`.
 
 Pro syntaktické konstrukce se navrhuje analogické napojení:

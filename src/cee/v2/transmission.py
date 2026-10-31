@@ -182,21 +182,21 @@ def prepare(world: World, group_ids: Sequence[str], params: TransmissionParams, 
     index = {group_id: position for position, group_id in enumerate(group_ids)}
     learners = [
         (index[group.id], index[group.main_code.l1_source],
-         contact.INTERFERENCE_WEIGHT * group.main_code.l2_share
-         * (1.0 - contact.SCHOOL_CORRECTION * group.schooling))
+         world.params.interference_weight * group.main_code.l2_share
+         * (1.0 - world.params.school_correction * group.schooling))
         for group in groups
         if group.main_code.l1_source in index and group.main_code.l2_share > 0
     ]
     readers = [
-        (index[group.id], index[group.standard], institutions.READING_WEIGHT * group.literacy)
+        (index[group.id], index[group.standard], world.params.reading_weight * group.literacy)
         for group in groups if group.standard in index and group.literacy > 0
     ]
     pupils = [
-        (index[group.id], index[group.standard], institutions.SCHOOL_WEIGHT * group.schooling)
+        (index[group.id], index[group.standard], world.params.school_weight * group.schooling)
         for group in groups if group.standard in index and group.schooling > 0
     ]
     worshippers = [
-        (index[group.id], index[group.liturgy], institutions.LITURGY_WEIGHT * group.devotion)
+        (index[group.id], index[group.liturgy], world.params.liturgy_weight * group.devotion)
         for group in groups if group.liturgy in index and group.devotion > 0
     ]
     channels = [

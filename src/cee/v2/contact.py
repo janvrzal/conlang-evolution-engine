@@ -33,19 +33,9 @@ if TYPE_CHECKING:
 BORROWING = {"lexical": 0.5, "process": 0.1, "construction": 0.1, "form": 0.0}
 #: Filtr interference při osvojování druhého jazyka.
 INTERFERENCE = {"lexical": 0.05, "process": 1.0, "construction": 1.0, "form": 0.0}
-#: Jak velkou část vstupu L2 kódu tvoří první jazyk jeho mluvčích, když se
-#: ho učí všichni až v dospělosti (``l2_share`` = 1).
-INTERFERENCE_WEIGHT = 0.5
-#: O kolik školní výuka (opravování podle normy) interferenci tlumí: kdo se
-#: kód učí ve škole, nese do něj svůj první jazyk méně než kdo na ulici.
-SCHOOL_CORRECTION = 0.8
-
-#: Abrams & Strogatz (2003): rychlost přechodu je úměrná statusu cílového
-#: jazyka a podílu jeho mluvčích na ``SHIFT_EXPONENT``.
-SHIFT_RATE = 1.0
-SHIFT_EXPONENT = 1.31
-#: Pod tímto podílem užívání v komunitě se kód nepředává dětem (iterace 4).
-CHILD_THRESHOLD = 0.2
+# Váhy interference, rychlost přechodu a práh předávání dětem jsou data světa
+# (``world.params``: ``interference_weight``, ``school_correction``,
+# ``shift_rate``, ``shift_exponent``, ``child_threshold``).
 #: Skupina s menší populací zaniká (poslední mluvčí).
 LAST_SPEAKERS = 1.0
 
@@ -225,15 +215,17 @@ def _shift(
     podíl^1,31``, kde status plyne z prestiže a podíl je demografie
     (:func:`demographic_share`). Loajalita komunity přechod zpomalí.
     """
+    params = world.params
     source, target = world.groups[source_id], world.groups[target_id]
     total = source.population + target.population
     status = target.prestige / (target.prestige + source.prestige)
     share = demographic_share(world, source_id, target_id)
     moving = (
-        source.population * renewal * SHIFT_RATE * (1.0 - source.loyalty) * status * share**SHIFT_EXPONENT
+        source.population * renewal * params.shift_rate * (1.0 - source.loyalty) * status
+        * share**params.shift_exponent
     )
     births = 0.0
-    if source.population / total < CHILD_THRESHOLD:
+    if source.population / total < params.child_threshold:
         # Děti se starý kód už neučí: rodí se do nového.
         if source.transmitted:
             source.transmitted = False

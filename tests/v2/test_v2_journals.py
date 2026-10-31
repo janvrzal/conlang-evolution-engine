@@ -194,7 +194,7 @@ def test_syntax_restructure_journals_the_applied_construction_variant() -> None:
             continue
         dominant_variant, share = distribution.dominant()
         construction = syntax.construction_of(world, dominant_variant)
-        if (share >= syntax.GRAMMAR_THRESHOLD and construction.kind == "synthetic"
+        if (share >= world.params.grammar_threshold and construction.kind == "synthetic"
                 and construction.exponent is not None):
             expected.add(dominant_variant)
     assert state.grammar_applied_log

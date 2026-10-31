@@ -399,22 +399,17 @@ def _assess_batch(world: World, group_ids: list[str], variable_id: str) -> list[
             )
     return results
 
-#: Splynutí dvou buněk téhož paradigmatu (synkretismus) stojí stejně jako
-#: náhodný homofon; tvary téhož slova od sebe často odliší kontext.
-PARADIGM_MERGE_WEIGHT = 1.0
-#: Splynutí buňky s jiným tvarem téhož slova, když roli její funkce už nese
-#: jiná konstrukce (pád vedle pevného slovosledu): funkce je nadbytečná a její
-#: ztráta skoro nic nestojí.
-REDUNDANT_MERGE_WEIGHT = 0.3
+# Váhy splynutí buněk paradigmatu jsou data světa (``world.params``:
+# ``paradigm_merge_weight``, ``redundant_merge_weight``).
 
 
 def _pair(world: World, frequency: dict[str, float], first: str, second: str, group_id: str) -> float:
     mass = math.sqrt(frequency[first] * frequency[second])
     a, b = world.morphemes[first], world.morphemes[second]
     if a.lexeme_id == b.lexeme_id:
-        mass *= PARADIGM_MERGE_WEIGHT
+        mass *= world.params.paradigm_merge_weight
         if _redundant_cell(world, group_id, a) or _redundant_cell(world, group_id, b):
-            mass *= REDUNDANT_MERGE_WEIGHT
+            mass *= world.params.redundant_merge_weight
     return mass
 
 

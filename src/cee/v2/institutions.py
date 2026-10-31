@@ -24,18 +24,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from cee.v2.world import World
 
-#: Jak velkou část vstupu gramotného mluvčího tvoří psaný kód (jen slova).
-READING_WEIGHT = 0.1
+# Váhy vstupu psaného a liturgického kódu jsou data světa (``world.params``:
+# ``reading_weight``, ``school_weight``, ``liturgy_weight``).
 READING = {"lexical": 1.0}
-#: Jak velkou část vstupu dětí při plné školní docházce tvoří psaný kód.
-#: Škola učí slova, tvary a konstrukce; výslovnost si děti nesou z domova a
-#: podle písma se mění jen výjimečně (výslovnost podle pravopisu).
-SCHOOL_WEIGHT = 0.3
 SCHOOL = {"lexical": 1.0, "process": 0.1, "construction": 1.0, "form": 1.0}
-
-
-#: Jak velkou část vstupu věřícího tvoří liturgický kód (jen slova).
-LITURGY_WEIGHT = 0.1
 
 
 def liturgy_factor(world: World, variable_id: str) -> float:

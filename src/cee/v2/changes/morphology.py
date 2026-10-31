@@ -30,14 +30,17 @@ class AnalogicalChange(Change):
     rate_basis = "generation"
     pressures = MORPH_PRESSURES
 
-    #: Kolikrát častěji navrhují regularizaci L2 mluvčí (přehnané zobecnění).
-    l2_boost: ClassVar[float] = 4.0
+    #: Zda změna je regularizace: násobí se jí ``params.analogy_l2_boost``
+    #: (reanalýza hranice ji vypíná, není to přehnané zobecnění).
+    regularizing: ClassVar[bool] = True
 
     def candidates(self, context: InnovationContext) -> dict[str, FormChange]:
         raise NotImplementedError
 
     def rate_scale(self, context: InnovationContext) -> float:
-        return 1.0 + self.l2_boost * context.code.l2_share
+        if not self.regularizing:
+            return 1.0
+        return 1.0 + context.world.params.analogy_l2_boost * context.code.l2_share
 
     def _sites(self, context: InnovationContext) -> dict[str, FormChange]:
         state = context.code.phonology
@@ -170,7 +173,7 @@ class Rebracketing(AnalogicalChange):
     kind = "rebracketing"
     # Sporadický jev: jednotky případů na jazyk za tisíciletí.
     base_rate = 0.0002
-    l2_boost = 0.0  # reanalýza hranice není regularizace
+    regularizing = False  # reanalýza hranice není regularizace
 
     def candidates(self, context: InnovationContext) -> dict[str, FormChange]:
         from cee.v2 import syntax

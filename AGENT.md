@@ -58,7 +58,8 @@ Pravidla v2, která se snadno poruší:
   nepřidávej nové modulové konstanty dynamiky a nikdy je neměň přepisem globálních
   proměnných nebo sdíleného `catalog()`. Pro pokusy předej `Parameters` scénáři
   (`village_grid(..., params=...)`); přepisy katalogu jdou přes `grammar`
-  a `catalog_for(world)`.
+  a `catalog_for(world)`, váhy tlaků přes `pressure_weights`. Výjimka: priory zvukových
+  změn a `CLARITY_DELETE_*` (`changes/sound.py`) a konstanty pozorovatele zůstávají modulové.
 * **M6e: průběžné indexy, dávková inovace a zpevnění bran**: neúspěšná Numba
   integrace a číselné zrcadlo tvarů byly vráceny (`06-denik-numba.md`); měřič
   `scripts/v2_timing.py` zůstává. Audit závislostí a výsledky indexů tlaků jsou
