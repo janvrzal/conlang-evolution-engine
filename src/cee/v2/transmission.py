@@ -235,12 +235,54 @@ def prepare(world: World, group_ids: Sequence[str], params: TransmissionParams, 
     )
 
 
+def fitness_of(
+    world: World,
+    block: PoolBlock,
+    inputs: StepInputs,
+    pressures: Mapping[str, Sequence[tuple[Pressure, float]]],
+    heard: FloatArray,
+    columns: Sequence[int] | None = None,
+) -> FloatArray:
+    """Součet vážených tlaků pro každou buňku bloku (proměnná, skupina, slot).
+
+    S ``columns`` jen pro tyto sloupce (skupiny); tvar je pak (proměnné,
+    ``len(columns)``, sloty). Tlak hodnotí každou skupinu zvlášť, takže výřez
+    dá pro své sloupce stejná čísla jako celý blok (na tom stojí paralelní běh,
+    :mod:`cee.v2.parallel`).
+    """
+    current = block.freqs
+    group_ids: Sequence[str] = inputs.group_ids
+    if columns is not None:
+        picked = np.asarray(columns, dtype=np.intp)
+        current, heard = current[:, picked], heard[:, picked]
+        group_ids = [inputs.group_ids[column] for column in picked]
+    fitness = np.zeros_like(current)
+    kinds = np.array([world.variables[variable_id].kind for variable_id in block.variable_ids])
+    for kind, weighted in pressures.items():
+        rows = np.flatnonzero(kinds == kind)
+        if not len(rows):
+            continue
+        batch = PressureBatch(
+            world=world,
+            variable_ids=[block.variable_ids[row] for row in rows],
+            group_ids=group_ids,
+            freqs=current[rows],
+            slots=[block.slots[row] for row in rows],
+            tick=inputs.tick,
+            heard=heard[rows],
+        )
+        for pressure, strength in weighted:
+            fitness[rows] += strength * pressure.scores(batch)
+    return fitness
+
+
 def transmit(
     world: World,
     block: PoolBlock,
     inputs: StepInputs,
     pressures: Mapping[str, Sequence[tuple[Pressure, float]]],
     params: TransmissionParams,
+    fitness_hook: Callable[..., FloatArray] | None = None,
 ) -> tuple[FloatArray, FloatArray]:
     """Nové frekvence a trendová základna jednoho bloku živých proměnných.
 
@@ -268,23 +310,8 @@ def transmit(
             (1.0 - share) * heard[:, channel.learners] + share * current[:, channel.sources]
         )
 
-    fitness = np.zeros_like(current)
-    kinds = np.array([world.variables[variable_id].kind for variable_id in block.variable_ids])
-    for kind, weighted in pressures.items():
-        rows = np.flatnonzero(kinds == kind)
-        if not len(rows):
-            continue
-        batch = PressureBatch(
-            world=world,
-            variable_ids=[block.variable_ids[row] for row in rows],
-            group_ids=inputs.group_ids,
-            freqs=current[rows],
-            slots=[block.slots[row] for row in rows],
-            tick=inputs.tick,
-            heard=heard[rows],
-        )
-        for pressure, strength in weighted:
-            fitness[rows] += strength * pressure.scores(batch)
+    fitness = (fitness_of(world, block, inputs, pressures, heard) if fitness_hook is None
+               else fitness_hook(world, block, inputs, pressures, heard))
 
     selected = _normalized(heard * np.exp(params.selection * fitness), heard)
     trend = params.kappa * (current - previous)

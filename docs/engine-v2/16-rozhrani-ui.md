@@ -156,6 +156,67 @@ Víc už bez změny modelu nejde. Další možnosti:
   výpočet by je musel vracet, aby výsledek zůstal stejný. Je to větší
   přestavba. Přeložený kód (Numba) uživatel dřív odmítl.
 
+### Složitost a paralelní běh (pokus)
+
+Měření růstu s počtem skupin (procesorový čas, 400 let, mřížka regionů po
+čtyřech vesnicích):
+
+| skupin | bez státu | se státem (víc skupin díky dvojjazyčnosti) |
+|---:|---:|---:|
+| 12 / 25 | 0,9 s | 3,5 s |
+| 24 / 49 | 1,7 s | 7,1 s |
+| 48 / 85 | 3,1 s | 12,4 s |
+| 96 / 180 | 6,3 s | 30,6 s |
+
+Engine roste **lineárně** s počtem skupin. Za 1 500 let roste mírně
+nadlineárně (24 → 96 skupin: 9,3 → 44,4 s), protože přibývá živých
+proměnných (250 → 450). Čtvercově roste jen pozorování dialektů, které
+porovnává všechny dvojice skupin; dnes je to 1–3 % času. Drahá je konstanta
+na buňku skupina × živá proměnná, asi 30 µs Pythonu. Buněk, kde se
+nic neděje (jedna varianta na 100 % i u sousedů), je jen 15–24 %, takže
+jejich přeskakování by dalo nejvýš kolem 20 %.
+
+**Pokus s paralelním během** (`cee.v2.parallel`):
+- Každý proces drží celý svět a dělá celý krok sám.
+- Čisté dotazy na stav na začátku kroku počítá jen pro své skupiny a
+  výsledky si procesy vymění: tlaky (`transmission.fitness_of`), tempo
+  inovací (`total_rate`) a místa inovací (`weighted_sites`).
+- Skupinu vlastní vždy týž proces (stabilní hash ID).
+
+Výsledek je bitově stejný jako v jednom procesu (`tests/v2/test_v2_parallel.py`).
+Jedinou překážkou bylo dědění zastaralých hodnocení zvukových procesů při
+větvení kódu; nový kód je už nedědí (`PhonologyState.branch`). Klasické
+otisky se nezměnily. Otisky světů se státem ano, protože v nich skupiny
+vznikají větvením během běhu. Tabulky v `15-staty-lingua-franca.md` se
+nezměnily.
+
+**Zrychlení nepřineslo:**
+
+| svět | 1 proces | 2 procesy | 4 procesy |
+|---|---:|---:|---:|
+| 12 regionů × 4 vesnice, 1 600 let | 29,6 s | 29,9 s | 36,9 s |
+| 24 regionů × 3 vesnice, 1 500 let | 55,8 s | 56,1 s | 55,1 s |
+
+Rozdělené dotazy jsou jen asi třetina až polovina času. Zbytek musí každý
+proces dělat celý, aby stav kopií zůstal stejný: uplatnění inovací, vstup
+slov do slovníku, aktivace a fonologizace, míšení, demografie a pozorování.
+Navíc se v kopiích přesouvá práce, kterou dřív levně udělaly tlaky:
+indexy cizích skupin se synchronizují až v těchto krocích. K tomu se
+přidává čekání na nejpomalejší proces a start procesů.
+
+**Co by zrychlilo:**
+
+- **Dělení po vlastnících i pro kroky, které mění stav.** Vlastník by
+  sám uplatňoval inovace své skupiny, slovník a fonologizaci. Ostatní by
+  dostávali jen změny skladu proměnných (nové varianty a podíly) a
+  záznamy historie. Tvary a slovník cizí skupiny by se posílaly jen
+  tehdy, když je potřebuje větvení kódu (události), pozorování nebo export.
+  Je to velká přestavba: každý krok se musí projít, co čte z cizích skupin.
+- **Paralelismus na úrovni běhů**, jaký už používají kalibrační skripty
+  (víc seedů, náhled a plná síť souběžně), je triviální a využije všechna
+  jádra.
+- **Menší konstanta na buňku**: tlaky jako hromadné operace v numpy.
+
 ## Co zbývá pro UI
 
 1. **Převod projektu na `WorldSpec`.** Projekt (`project_schema.py`, V3)

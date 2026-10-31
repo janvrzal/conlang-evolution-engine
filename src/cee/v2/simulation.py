@@ -73,6 +73,11 @@ class Checkpoint:
 
 
 class Simulation:
+    #: Paralelní běh (:mod:`cee.v2.parallel`): drahé dotazy (tlaky, tempo
+    #: inovací) počítá každý proces jen pro své skupiny a výsledky si procesy
+    #: vymění. ``None`` = vše v tomto procesu (i po ``resume``).
+    shards: Any = None
+
     def __init__(
         self,
         world: World,
@@ -257,27 +262,46 @@ class Simulation:
         renewals = np.array([renewal for _, renewal, _, _ in entries], dtype=np.float64)
         frequencies = np.array([frequency for _, _, _, frequency in entries], dtype=np.float64)
 
+        # Tempo se počítá ze stavu na začátku kroku pro všechny skupiny, než
+        # se uplatní první inovace; v paralelním běhu jen pro vlastní skupiny.
+        owned = [index for index, (ctx, _, _, _) in enumerate(entries)
+                 if self.shards is None or self.shards.owns(ctx.group.id)]
         expected = np.zeros((len(entries), len(self.changes)), dtype=np.float64)
         for change_idx, change in enumerate(self.changes):
             tempos = (renewals if change.rate_basis == "generation" else self.config.dt) * frequencies
-            for group_idx, (ctx, _, _, _) in enumerate(entries):
-                rate_sum = change.total_rate(ctx)
+            for group_idx in owned:
+                rate_sum = change.total_rate(entries[group_idx][0])
                 if rate_sum > 0.0:
                     expected[group_idx, change_idx] = float(rate_sum) * float(tempos[group_idx])
             if change.kind in self._rate_scales:
                 expected[:, change_idx] *= self._rate_scales[change.kind]
+        if self.shards is not None:
+            for rows, values in self.shards.gather("expected", (owned, expected[owned])):
+                expected[rows] = values
 
         if not np.any(expected > 0.0):
             return
 
         counts = hash_poisson(group_keys, self._change_keys, expected)
+        # Místa inovací (a jejich váhy) závisí jen na stavu na začátku kroku;
+        # spočítají se předem, v paralelním běhu každý proces pro své skupiny.
+        sites: dict[tuple[int, int], tuple[Sequence[str], np.ndarray | None]] = {}
+        for group_idx, (context, _, _, _) in enumerate(entries):
+            if self.shards is not None and not self.shards.owns(context.group.id):
+                continue
+            for change_idx, change in enumerate(self.changes):
+                if int(counts[group_idx, change_idx]) > 0:
+                    sites[(group_idx, change_idx)] = change.weighted_sites(context)
+        if self.shards is not None:
+            for part in self.shards.gather("sites", sites):
+                sites.update(part)
 
         for group_idx, (context, _, share, _) in enumerate(entries):
             for change_idx, change in enumerate(self.changes):
                 count = int(counts[group_idx, change_idx])
                 if count <= 0:
                     continue
-                self._apply_innovations(change, context, share, count)
+                self._apply_innovations(change, context, share, count, sites[(group_idx, change_idx)])
 
     def innovation_scale(self, group_id: str) -> tuple[float, float]:
         """Počáteční podíl inovace a násobek četnosti inovací ve skupině.
@@ -294,9 +318,10 @@ class Simulation:
         return share, config.p0 / share
 
     def _apply_innovations(
-        self, change: Change, context: InnovationContext, share: float, count: int
+        self, change: Change, context: InnovationContext, share: float, count: int,
+        weighted: tuple[Sequence[str], np.ndarray | None] | None = None,
     ) -> None:
-        sites, weights = change.weighted_sites(context)
+        sites, weights = change.weighted_sites(context) if weighted is None else weighted
         if not sites:
             return
         rng = generator(
@@ -368,8 +393,9 @@ class Simulation:
         if len(live) == 0:
             return
         inputs = prepare(self.world, live.group_ids, self.params, self.tick)
+        hooks = {} if self.shards is None else {"fitness_hook": self.shards.fitness}
         results = [
-            (block, *transmit(self.world, block, inputs, self.pressures, self.params))
+            (block, *transmit(self.world, block, inputs, self.pressures, self.params, **hooks))
             for block in live.iter_blocks()
         ]
         records: list[tuple[Any, ...]] = []

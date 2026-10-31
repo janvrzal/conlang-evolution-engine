@@ -265,4 +265,18 @@ class PhonologyState:
         return True
 
     def branch(self) -> PhonologyState:
-        return copy.deepcopy(self)
+        """Nezávislá kopie stavu pro nový kód (odštěpení, přechod, zjemnění).
+
+        Hodnocení zvukových procesů (``("assessment", proces)`` v keši) se
+        nedědí: smějí zastarat o několik kroků, a jejich obsah tak závisí na
+        tom, kdy je kód předlohy naposledy spočítal. Nový kód si je spočítá
+        sám, takže jeho historie nezávisí na tom, kdo předlohu hodnotil
+        (paralelní běh, :mod:`cee.v2.parallel`).
+        """
+        cache = self.cache
+        self.cache = {key: value for key, value in cache.items()
+                      if not (isinstance(key, tuple) and key and key[0] == "assessment")}
+        try:
+            return copy.deepcopy(self)
+        finally:
+            self.cache = cache
