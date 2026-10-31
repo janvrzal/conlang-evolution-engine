@@ -198,6 +198,13 @@ class Parameters:
     lingua_franca_link: float = 0.3
     #: Tlak lingua franca domů, když ji autor nechá zdomácnět (``nativize``).
     lingua_franca_pull: float = 0.1
+    #: Propustnost hranice státu (``State(border=...)``): násobek vazeb mezi
+    #: regiony různých států. Hranice vznikne sama tam, kde sousedí regiony
+    #: různých států, a působí hned; rozcházení podél ní dělají odlišná centra
+    #: a normy. Přes hranici dvou států platí méně propustná z obou.
+    border_levels: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
+        "open": 1.0, "normal": 0.5, "closed": 0.1,
+    }))
     #: Spisovný jazyk (``polity.Standard``, ``polity.Schools``): podíl gramotných
     #: při kodifikaci a podíl dětí ve škole podle úrovně; násobí se dosahem centra.
     literacy_levels: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
@@ -252,7 +259,7 @@ class Parameters:
 #: Tabulky slovních úrovní (``Parameters``), které autor světa zadává jménem.
 LEVEL_TABLES = (
     "centralization_levels", "policy_levels", "lingua_franca_levels", "terrain_access", "identity_loyalty",
-    "literacy_levels", "schooling_levels",
+    "literacy_levels", "schooling_levels", "border_levels",
 )
 
 

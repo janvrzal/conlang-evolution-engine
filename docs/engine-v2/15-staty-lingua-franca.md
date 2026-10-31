@@ -184,6 +184,74 @@ původního jazyka doma):
 Vlastní škola drží jih po 300 letech vynucování na polovině. Bez ní by
 jazyk zmizel za 100–200 let. Proti 900 letům vynucování ale neobstojí.
 
+## Hranice, prestiž a konzervace jazyka
+
+Rozhodnutí uživatele: hranice jsou **implicitní**, tedy tam, kam stát
+sahá, a působí **hned v plné síle**. Autor smí jazyk výslovně
+zakonzervovat.
+
+**Hranice.** Engine je odvodí z `world.states` po každé události státu
+(`polity.refresh`). Vazba mezi regiony různých států, nebo státu a regionu
+mimo státy, má sílu základ × propustnost. Platí méně propustná hranice
+z obou stran (`Parameters.border_levels`: `open` 1,0, `normal` 0,5,
+`closed` 0,1). Základ si vazba pamatuje (`world.border_factors`), takže
+připojení regionu nebo rozpad státu hranici zase zruší. Hranice jen
+oslabí kontakt. Rozcházení podél ní dělá to, že každá strana tíhne
+k jinému sídlu a k jiné normě.
+
+`scripts/v2_state_border.py`: jednojazyčný čtverec, sever a jih jako dva
+státy, 2 000 let, průměr seedů 1 a 2 (vzdálenost kódů spojených vesnic
+z různých regionů):
+
+| hranice | uvnitř státu | přes hranici států |
+|---|---:|---:|
+| bez států | 0,124 | 0,111 |
+| `open` | 0,053 | 0,115 |
+| `normal` | 0,053 | 0,133 |
+| `closed` | 0,054 | 0,168 |
+
+Stát sjednotí své regiony (vazby k sídlu) a sousední státy se rozejdou
+i při otevřené hranici. Zavřená hranice rozdíl zhruba zdvojnásobí. Engine
+tak dává typ nizozemština a němčina nebo čeština a slovenština, aniž by
+někdo zadal, kde mají být.
+
+**Prestiž** se počítá ze stavu světa, nenásobí se jednou. Prestiž domácí
+skupiny je:
+- základ regionu;
+- × `capital_prestige`, je-li skupina v hlavním městě existujícího státu;
+- × `standard_prestige`, čte-li normu svého jazyka.
+
+Mluvčí úředního jazyka mimo domov a rodiny, které na něj přešly, přebírají
+**aktuální** prestiž jeho sídla (`world.prestige_mirror`).
+
+**Události moci:**
+
+```python
+Secession(1500, "nezavisly", regions=("jih",), capital="jih", policy="promoted")
+Collapse(1700, "kralovstvi")
+BorderPolicy(1950, "kralovstvi", "closed")
+Annexation(1300, "kralovstvi", ("sever",))   # kdo přijde o hlavní město, zanikne
+```
+
+- **Rozpad státu:** hlavní město ztratí status, hranice zmizí, zmizí
+  i vazby vesnic k sídlu a tlak domů. Spisovná norma zůstane (jako latina
+  po Římu) a lidé úřední jazyk umějí dál; rozběhnutý přechod se zastaví.
+- **Odtržení:** regiony odejdou ze starého státu a jeho politika tam
+  skončí. Jazyk nového hlavního města dostane status úředního jazyka.
+  Hlavní město odtrhnout nejde (to je `Collapse`).
+
+**Konzervace jazyka:** autor vypne vymírání tam, kde ho nechce.
+
+```python
+Region("ostrov", ..., preserve=True)                  # od začátku
+Preserve(1200, ("hory",))                             # od roku 1200 (původní jazyk regionu)
+Preserve(1800, ("hory",), preserved=False)            # zrušení
+```
+
+Ze zakonzervované skupiny nikdo nepřejde na jiný jazyk (`SpeechGroup.preserved`).
+Jazyk se dál vyvíjí, přejímá slova a mluvčí ho mohou užívat mimo domov,
+jen nevymře.
+
 ## Omezení
 
 - **Práh prvního mluvčího.** Přechod začne, až když by za generaci přešel
@@ -191,8 +259,9 @@ jazyk zmizel za 100–200 let. Proti 900 letům vynucování ale neobstojí.
   proto nezačne nikdy. Hory se silnou identitou tak drží jazyk i při
   vynucování, což u Baskicka sedí, ale je to práh, ne rozložení.
 - **Jen jeden směr.** Návrat k jazyku (velština, katalánština, hebrejština)
-  není: přechod jde jen k jazyku s vyšším statusem. Obrození by chtělo
-  obousměrný Abramsův–Strogatzův tok nebo událost obnovy prestiže.
+  není: přechod jde jen k jazyku s vyšším statusem. Prestiž se už mění
+  s mocí (rozpad, odtržení), ale ztracené mluvčí jazyk zpátky nezíská.
+  Obrození chce obousměrný Abramsův–Strogatzův tok.
 - **Demografie je deterministická.** Podíly nezávisí na seedu, náhoda
   působí jen na jazyk samotný.
 - **Mezi dialekty téže linie přechod nefunguje.** Přechod funguje jen mezi

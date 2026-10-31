@@ -121,6 +121,9 @@ class SpeechGroup:
     #: stabilní dvojjazyčnost, děti se doma učí dál svůj jazyk. U domácí skupiny,
     #: která vznikla pronikáním veřejného kódu domů, je to tempo přechodu.
     home_pull: float = 0.0
+    #: Autor jazyk skupiny zakonzervoval: nikdo z ní nepřejde na jiný jazyk
+    #: (``polity.Preserve``). Jazyk se dál vyvíjí, jen nevymře.
+    preserved: bool = False
 
     def __post_init__(self) -> None:
         if self.population <= 0:
@@ -189,6 +192,14 @@ class World:
     states: dict[str, Any] = field(default_factory=dict)
     #: Spisovné jazyky států a regionů: ID státu či regionu → ID psaného kódu.
     standards: dict[str, str] = field(default_factory=dict)
+    #: Vazby oslabené hranicí států: (zdroj, cíl) → použitý násobek. Základní
+    #: síla vazby je síla / násobek (``polity.refresh``).
+    border_factors: dict[tuple[str, str], float] = field(default_factory=dict)
+    #: Základní prestiž skupin před vlivem států a spisovných jazyků.
+    base_prestige: dict[str, float] = field(default_factory=dict)
+    #: Skupina → skupina, jejíž prestiž přebírá (veřejná doména úředního jazyka
+    #: a rodiny, které na něj přešly, mají status jeho sídla).
+    prestige_mirror: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not isinstance(self.concept_frequencies, FrequencyMap):

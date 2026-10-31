@@ -17,7 +17,15 @@ tisku a školy (M6a) jsou tytéž, jen zadané po regionech. Vlastní norma
 zvedne prestiž svého jazyka, a tak brzdí přechod na jiný.
 
 Jestli jazyk regionu přežije, rozhoduje jeho demografie, terén (dosah
-státu) a loajalita (odlišnost regionu), ne autor. **Lingua franca** je
+státu) a loajalita (odlišnost regionu); autor může jazyk výslovně
+zakonzervovat (``Preserve``).
+
+**Hranice** se nezadávají: vzniknou tam, kde sousedí regiony různých
+států, a oslabí vazby přes sebe (``border``). **Prestiž** se po každé
+události státu spočítá znovu ze stavu světa (:func:`refresh`): základ
+regionu × hlavní město existujícího státu × vlastní spisovná norma. Rozpad
+státu (``Collapse``) nebo odtržení (``Secession``) proto status jazyků
+změní. **Lingua franca** je
 týž mechanismus bez státu: komunity různých jazyků se jedním kódem
 domlouvají mimo domov; učí se ho dospělí, takže se zjednodušuje (L2 tlaky)
 a nese stopy jejich jazyků.
@@ -30,13 +38,13 @@ hospodářství ani armádu, jen tyto tři páky.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from cee.v2.events import Codification, LanguageShift, Printing, Schooling, WorldEvent
 from cee.v2.history import History
 from cee.v2.parameters import level
-from cee.v2.world import World
+from cee.v2.world import Link, World
 
 
 @dataclass(slots=True)
@@ -51,6 +59,9 @@ class Polity:
     language: str
     centralization: str
     policy: str
+    border: str = "normal"
+    #: Vazby vesnic k sídlu, které stát vytvořil (centralizace): skupina → síla.
+    links: dict[str, float] = field(default_factory=dict)
 
 
 def region_of(world: World, group_id: str) -> str | None:
@@ -150,6 +161,10 @@ def public_bilingualism(
         current = world.links.get((public_id, source_id))
         if current is None or current.strength < link:
             world.connect(public_id, source_id, link, "weak")
+    world.prestige_mirror[public_id] = source_id
+    nativized = f"{group_id}>{source.main_code.language}:home"
+    if nativized in world.groups:
+        world.prestige_mirror[nativized] = source_id
     return public_id
 
 
@@ -184,15 +199,39 @@ def _centralize(world: World, polity: Polity, regions: tuple[str, ...]) -> int:
         current = world.links.get((group_id, polity.seat))
         if current is None or current.strength < value:
             world.connect(group_id, polity.seat, value, "weak")
+            polity.links[group_id] = value
             linked += 1
     return linked
+
+
+def _release(world: World, polity: Polity, regions: tuple[str, ...]) -> None:
+    """Stát opustí regiony: zmizí jeho vazby k sídlu a jeho politika tam."""
+    wanted = set(regions)
+    for group_id in sorted(polity.links):
+        if group_id in world.groups and region_of(world, group_id) in wanted:
+            for key in ((group_id, polity.seat), (polity.seat, group_id)):
+                world.links.pop(key, None)
+                world.border_factors.pop(key, None)
+            del polity.links[group_id]
+    for group_id, mirrored in sorted(world.prestige_mirror.items()):
+        group = world.groups.get(group_id)
+        if group is None or mirrored != polity.seat or region_of(world, group_id) not in wanted:
+            continue
+        # Lidé jazyk umějí dál, ale stát už ho domů netlačí.
+        if group.domain == "public":
+            group.home_pull = 0.0
+        elif group.home_pull > 0:
+            group.home_pull = 1e-6
 
 
 @dataclass(frozen=True)
 class State(WorldEvent):
     """Vznik státu z regionů ``regions`` s hlavním městem v regionu ``capital``.
 
-    - vesnice hlavního města dostanou ``Parameters.capital_prestige``× prestiž;
+    - vesnice hlavního města mají ``Parameters.capital_prestige``× prestiž, dokud
+      stát trvá (:func:`refresh`);
+    - hranice s regiony jiných států a mimo státy oslabí vazby přes sebe
+      (``border``: ``open``, ``normal``, ``closed``);
     - ``centralization`` (``none``, ``weak``, ``moderate``, ``strong``) spojí
       vesnice státu se sídlem, slaběji s rostoucí vzdáleností a v horách;
     - ``policy`` (``tolerant``, ``promoted``, ``enforced``) určí, kolik lidí
@@ -206,6 +245,8 @@ class State(WorldEvent):
     capital: str
     centralization: str = "moderate"
     policy: str = "tolerant"
+    #: Propustnost hranice státu: ``open``, ``normal``, ``closed``.
+    border: str = "normal"
 
     def apply(self, world: World, history: History, tick: int) -> None:
         if self.id in world.states:
@@ -213,19 +254,23 @@ class State(WorldEvent):
         _check_regions(world, self.regions)
         if self.capital not in self.regions:
             raise ValueError(f"Hlavní město '{self.capital}' musí ležet ve státě '{self.id}'.")
+        owned = sorted(r for polity in world.states.values() for r in polity.regions if r in self.regions)
+        if owned:
+            raise ValueError(f"Regiony {owned} už patří jinému státu; použij Annexation nebo Secession.")
         level(world.params.centralization_levels, self.centralization, "úroveň centralizace")
         level(world.params.policy_levels, self.policy, "jazyková politika")
+        level(world.params.border_levels, self.border, "propustnost hranice")
         seat = seat_of(world, self.capital)
-        for group_id in groups_in(world, [self.capital]):
-            world.groups[group_id].prestige *= world.params.capital_prestige
         polity = Polity(self.id, tuple(self.regions), self.capital, seat,
-                        world.groups[seat].main_code.language, self.centralization, self.policy)
+                        world.groups[seat].main_code.language, self.centralization, self.policy, self.border)
         world.states[self.id] = polity
+        refresh(world)
         linked = _centralize(world, polity, polity.regions)
         bilingual = _policy(world, history, tick, self.year, polity)
+        refresh(world)
         history.record("state", tick, self.year, state=self.id, regions=sorted(self.regions),
                        capital=self.capital, seat=seat, language=polity.language,
-                       centralization=self.centralization, policy=self.policy,
+                       centralization=self.centralization, policy=self.policy, border=self.border,
                        linked=linked, bilingual=bilingual)
 
 
@@ -248,7 +293,10 @@ class LanguagePolicy(WorldEvent):
 
 @dataclass(frozen=True)
 class Annexation(WorldEvent):
-    """Stát ``state`` připojí regiony ``regions`` (dobytí, sňatek, unie)."""
+    """Stát ``state`` připojí regiony ``regions`` (dobytí, sňatek, unie).
+
+    Stát, který tím přijde o hlavní město, zanikne (jako ``Collapse``).
+    """
 
     year: float
     state: str
@@ -257,15 +305,15 @@ class Annexation(WorldEvent):
     def apply(self, world: World, history: History, tick: int) -> None:
         polity = _polity(world, self.state)
         _check_regions(world, self.regions)
-        for other in sorted(world.states.values(), key=lambda found: found.id):
-            if other.id != polity.id:
-                other.regions = tuple(region for region in other.regions if region not in self.regions)
+        fallen = _take(world, self.regions, keep=polity.id)
         added = tuple(region for region in self.regions if region not in polity.regions)
         polity.regions = (*polity.regions, *added)
+        refresh(world)
         linked = _centralize(world, polity, added)
         bilingual = _policy(world, history, tick, self.year, polity)
+        refresh(world)
         history.record("annexation", tick, self.year, state=self.state, regions=sorted(added),
-                       linked=linked, bilingual=bilingual)
+                       linked=linked, bilingual=bilingual, fallen=fallen)
 
 
 @dataclass(frozen=True)
@@ -307,6 +355,168 @@ class LinguaFranca(WorldEvent):
                        bilingual=bilingual)
 
 
+def _take(world: World, regions: tuple[str, ...], *, keep: str | None = None) -> list[str]:
+    """Regiony odejdou ze všech států kromě ``keep``; vrací zaniklé státy.
+
+    Při odtržení (``keep is None``) hlavní město odejít nesmí. Při připojení
+    (``keep`` = dobyvatel) stát, který přijde o hlavní město, zanikne.
+    """
+    fallen = []
+    for other in sorted(world.states.values(), key=lambda found: found.id):
+        if other.id == keep:
+            continue
+        leaving = tuple(region for region in other.regions if region in regions)
+        if not leaving:
+            continue
+        if other.capital in leaving:
+            if keep is None:
+                raise ValueError(f"Hlavní město státu '{other.id}' se nemůže odtrhnout; použij Collapse.")
+            _release(world, other, other.regions)
+            del world.states[other.id]
+            fallen.append(other.id)
+            continue
+        _release(world, other, leaving)
+        other.regions = tuple(region for region in other.regions if region not in regions)
+    return fallen
+
+
+@dataclass(frozen=True)
+class Secession(WorldEvent):
+    """Regiony ``regions`` se odtrhnou a vytvoří nový stát ``id`` (jako ``State``)."""
+
+    year: float
+    id: str
+    regions: tuple[str, ...]
+    capital: str
+    centralization: str = "moderate"
+    policy: str = "tolerant"
+    border: str = "normal"
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        _check_regions(world, self.regions)
+        _take(world, self.regions)
+        history.record("secession", tick, self.year, state=self.id, regions=sorted(self.regions))
+        State(self.year, self.id, self.regions, self.capital, self.centralization, self.policy,
+              self.border).apply(world, history, tick)
+
+
+@dataclass(frozen=True)
+class Collapse(WorldEvent):
+    """Stát ``state`` zanikne: hlavní město ztratí status, hranice a politika zmizí.
+
+    Spisovná norma zůstane (jako latina po Římu) a lidé úřední jazyk umějí
+    dál, jen ho už nikdo netlačí domů.
+    """
+
+    year: float
+    state: str
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        polity = _polity(world, self.state)
+        _release(world, polity, polity.regions)
+        del world.states[self.state]
+        refresh(world)
+        history.record("collapse", tick, self.year, state=self.state, regions=sorted(polity.regions))
+
+
+@dataclass(frozen=True)
+class BorderPolicy(WorldEvent):
+    """Stát ``state`` změní propustnost hranice (``open``, ``normal``, ``closed``)."""
+
+    year: float
+    state: str
+    border: str
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        polity = _polity(world, self.state)
+        level(world.params.border_levels, self.border, "propustnost hranice")
+        polity.border = self.border
+        refresh(world)
+        history.record("border_policy", tick, self.year, state=self.state, border=self.border)
+
+
+@dataclass(frozen=True)
+class Preserve(WorldEvent):
+    """Autor zakonzervuje jazyk regionů ``regions``: nikdo z něj nepřejde jinam.
+
+    ``language`` je linie jazyka; ``None`` = původní jazyk každého regionu
+    (jazyk jeho největší rodilé vesnice). Jazyk se dál mění, jen nevymře
+    a neztrácí mluvčí. ``preserved=False`` konzervaci zruší.
+    """
+
+    year: float
+    regions: tuple[str, ...]
+    language: str | None = None
+    preserved: bool = True
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        _check_regions(world, self.regions)
+        groups = []
+        for region in self.regions:
+            language = self.language or _language_of(world, seat_of(world, region))
+            for group_id in groups_in(world, [region]):
+                if world.groups[group_id].main_code.language == language:
+                    world.groups[group_id].preserved = self.preserved
+                    groups.append(group_id)
+        history.record("preserve", tick, self.year, regions=sorted(self.regions), language=self.language,
+                       preserved=self.preserved, groups=groups)
+
+
+def refresh(world: World) -> None:
+    """Hranice a prestiž ze stavu světa (po každé události státu).
+
+    Vazba mezi regiony různých států (nebo státu a regionu mimo státy) má
+    sílu základ × propustnost méně propustné hranice; základ si vazba drží
+    v ``world.border_factors``, takže připojení hranici zase zruší. Prestiž
+    domácí skupiny je základ × ``capital_prestige`` (hlavní město
+    existujícího státu) × ``standard_prestige`` (čte normu svého jazyka);
+    skupiny v ``world.prestige_mirror`` přebírají prestiž své předlohy.
+    """
+    params = world.params
+    owner = {region: polity.id for polity in sorted(world.states.values(), key=lambda p: p.id)
+             for region in polity.regions}
+    openness = {polity.id: float(params.border_levels[polity.border]) for polity in world.states.values()}
+    regions = {group_id: region_of(world, group_id) for group_id in world.group_ids()}
+    for key in sorted(world.links):
+        first, second = key
+        if world.groups[first].written or world.groups[second].written:
+            continue
+        here, there = regions[first], regions[second]
+        factor = 1.0
+        if here is not None and there is not None and owner.get(here) != owner.get(there):
+            factor = min(openness.get(owner.get(here), 1.0), openness.get(owner.get(there), 1.0))
+        old = world.border_factors.get(key, 1.0)
+        if factor == old:
+            continue
+        link = world.links[key]
+        world.links[key] = Link(first, second, min(1.0, link.strength / old) * factor, link.kind)
+        if factor == 1.0:
+            del world.border_factors[key]
+        else:
+            world.border_factors[key] = factor
+    for key in [key for key in world.border_factors if key not in world.links]:
+        del world.border_factors[key]
+
+    capitals = {polity.capital for polity in world.states.values()}
+    for group_id in world.group_ids():
+        group = world.groups[group_id]
+        if group.written or group.domain != "home" or group_id in world.prestige_mirror:
+            continue
+        base = world.base_prestige.setdefault(group_id, group.prestige)
+        factor = params.capital_prestige if regions[group_id] in capitals else 1.0
+        standard = world.groups.get(group.standard) if group.standard is not None else None
+        if standard is not None and standard.main_code.language == group.main_code.language:
+            factor *= params.standard_prestige
+        group.prestige = base * factor
+    for group_id, model in sorted(world.prestige_mirror.items()):
+        if group_id in world.groups and model in world.groups:
+            world.groups[group_id].prestige = world.groups[model].prestige
+    for stale in [group_id for group_id in world.base_prestige if group_id not in world.groups]:
+        del world.base_prestige[stale]
+    for stale in [group_id for group_id in world.prestige_mirror if group_id not in world.groups]:
+        del world.prestige_mirror[stale]
+
+
 def _language_of(world: World, group_id: str) -> str:
     return world.groups[group_id].main_code.language
 
@@ -337,8 +547,8 @@ class Standard(WorldEvent):
     největší vesnice (vlastní norma menšinového jazyka). Gramotnost
     ``literacy`` (``elite``, ``towns``, ``mass``) se násobí dosahem centra.
     Skupina čte normu svého jazyka; cizí normu jen tehdy, když vlastní nemá
-    (učené výpůjčky). Mluvčí kodifikovaného jazyka dostanou
-    ``Parameters.standard_prestige``× vyšší prestiž.
+    (učené výpůjčky). Mluvčí, kteří čtou normu svého jazyka, mají
+    ``Parameters.standard_prestige``× vyšší prestiž (:func:`refresh`).
     """
 
     year: float
@@ -363,9 +573,8 @@ class Standard(WorldEvent):
                 continue
             group.standard = written
             group.literacy = max(group.literacy, share * reach(world, group_id, seat, distance=is_state))
-            if own:
-                group.prestige *= world.params.standard_prestige
             readers.append(group_id)
+        refresh(world)
         history.record("standard", tick, self.year, of=self.of, written=written, language=language,
                        literacy=self.literacy, readers=readers)
 

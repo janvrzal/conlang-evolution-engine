@@ -5,9 +5,13 @@ import pytest
 from cee.v2.parameters import Parameters
 from cee.v2.polity import (
     Annexation,
+    BorderPolicy,
+    Collapse,
     LanguagePolicy,
     LinguaFranca,
+    Preserve,
     Schools,
+    Secession,
     Standard,
     State,
     groups_in,
@@ -225,3 +229,111 @@ def test_diglosni_skola_vytvori_vysokou_varietu():
     Schools(0.0, "k", diglossic=True).apply(world, history, 0)
     assert any(g.endswith(">H") for g in world.group_ids())
     assert world.groups[world.standards["k"]].openness == 0.0
+
+
+def chain():
+    regions = (
+        Region("w", (0.0, 0.0), neighbours=("m",), language="a", villages=3),
+        Region("m", (40.0, 0.0), neighbours=("w", "e"), language="a", villages=3),
+        Region("e", (80.0, 0.0), neighbours=("m",), language="a", villages=3),
+    )
+    return region_world(regions, seed=1, languages=(ProtoLanguage("a"),))
+
+
+def crossing(world, here, there):
+    return [link for (first, second), link in sorted(world.links.items())
+            if first.startswith(here + "-") and second.startswith(there + "-")]
+
+
+def test_hranice_vznikne_mezi_staty_a_pripojeni_ji_zrusi():
+    world = chain()
+    base = {key: link.strength for key, link in world.links.items()}
+    history = Simulation(world).history
+    State(0.0, "west", ("w",), "w", centralization="none").apply(world, history, 0)
+    State(0.0, "east", ("m", "e"), "e", centralization="none", border="closed").apply(world, history, 0)
+    levels = world.params.border_levels
+    for link in crossing(world, "w", "m"):
+        assert link.strength == pytest.approx(base[(link.source, link.target)] * min(levels["normal"], levels["closed"]))
+    for link in crossing(world, "m", "e"):
+        assert link.strength == pytest.approx(base[(link.source, link.target)])
+    BorderPolicy(0.0, "east", "open").apply(world, history, 0)
+    for link in crossing(world, "w", "m"):
+        assert link.strength == pytest.approx(base[(link.source, link.target)] * levels["normal"])
+    Annexation(0.0, "west", ("m", "e")).apply(world, history, 0)
+    assert "east" not in world.states  # přišel o hlavní město
+    for link in crossing(world, "w", "m"):
+        assert link.strength == pytest.approx(base[(link.source, link.target)])
+
+
+def test_region_mimo_staty_ma_hranici_se_statem():
+    world = chain()
+    base = {key: link.strength for key, link in world.links.items()}
+    State(0.0, "west", ("w",), "w").apply(world, Simulation(world).history, 0)
+    for link in crossing(world, "w", "m"):
+        assert link.strength == pytest.approx(base[(link.source, link.target)] * world.params.border_levels["normal"])
+
+
+def test_stat_odmitne_cizi_region_a_odtrzeni_hlavniho_mesta():
+    world = chain()
+    history = Simulation(world).history
+    State(0.0, "k", ("w", "m"), "w").apply(world, history, 0)
+    with pytest.raises(ValueError, match="už patří"):
+        State(0.0, "j", ("m", "e"), "e").apply(world, history, 0)
+    with pytest.raises(ValueError, match="nemůže odtrhnout"):
+        Secession(0.0, "j", ("w",), "w").apply(world, history, 0)
+
+
+def test_rozpad_statu_vrati_prestiz_a_zastavi_prechod():
+    kept, collapsed = pair(), pair()
+    capital = groups_in(kept, ["capital"])
+    base = {g: kept.groups[g].prestige for g in capital}
+    state = State(0.0, "k", ("capital", "x"), "capital", policy="promoted")
+    Simulation(kept, events=[state]).run(600.0)
+    simulation = Simulation(collapsed, events=[state, Collapse(300.0, "k")])
+    simulation.run(325.0)
+    for group_id in capital:
+        assert collapsed.groups[group_id].prestige == pytest.approx(base[group_id])
+    seat = seat_of(collapsed, "capital")
+    native = [g for g in groups_in(collapsed, ["x"]) if collapsed.groups[g].main_code.language == "b"]
+    assert native and not any((g, seat) in collapsed.links for g in native)
+    after = home_share(collapsed, "x", "b")
+    simulation.run(600.0)
+    assert home_share(collapsed, "x", "b") == pytest.approx(after, abs=0.02)
+    assert home_share(kept, "x", "b") < after
+
+
+def test_odtrzeni_vytvori_novy_stat_a_jeho_jazyk_ziska_prestiz():
+    world = pair()
+    simulation = Simulation(world, events=[
+        State(0.0, "k", ("capital", "x"), "capital", policy="promoted"),
+        Secession(100.0, "nezavisly", ("x",), "x"),
+    ])
+    simulation.run(125.0)
+    assert world.states["k"].regions == ("capital",)
+    assert world.states["nezavisly"].language == "b"
+    native = [g for g in groups_in(world, ["x"]) if world.groups[g].main_code.language == "b"]
+    assert all(world.groups[g].prestige == pytest.approx(0.5 * world.params.capital_prestige) for g in native)
+    assert simulation.history.of_kind("secession")
+
+
+def test_autor_muze_jazyk_zakonzervovat_a_konzervaci_zrusit():
+    world = pair()
+    simulation = Simulation(world, events=[
+        State(0.0, "k", ("capital", "x"), "capital", policy="enforced"),
+        Preserve(0.0, ("x",)),
+        Preserve(300.0, ("x",), preserved=False),
+    ])
+    simulation.run(275.0)
+    assert home_share(world, "x", "b") == 1.0
+    simulation.run(600.0)
+    assert home_share(world, "x", "b") < 1.0
+
+
+def test_region_muze_byt_zakonzervovany_od_zacatku():
+    regions = (
+        Region("capital", (0.0, 0.0), density=2.0, neighbours=("x",), language="a", villages=3),
+        Region("x", (60.0, 0.0), neighbours=("capital",), language="b", villages=3, preserve=True),
+    )
+    world = region_world(regions, seed=1, languages=LANGUAGES)
+    Simulation(world, events=[State(0.0, "k", ("capital", "x"), "capital", policy="enforced")]).run(300.0)
+    assert home_share(world, "x", "b") == 1.0

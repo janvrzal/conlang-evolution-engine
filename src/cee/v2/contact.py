@@ -230,6 +230,8 @@ def _nativize(
     """
     params = world.params
     public, home = world.groups[public_id], world.groups[home_id]
+    if home.preserved:
+        return False
     status = public.prestige / (public.prestige + home.prestige)
     bilingual = min(1.0, public.population / home.population)
     moving = (
@@ -266,6 +268,13 @@ def _nativize(
     for link in world.neighbors(public_id):
         if link.target != home_id:
             world.connect(created.id, link.target, link.strength, link.kind)
+            # Vazba převzala sílu oslabenou hranicí; zapamatuje si i násobek.
+            factor = world.border_factors.get((public_id, link.target))
+            if factor is not None:
+                world.border_factors[(created.id, link.target)] = factor
+                world.border_factors[(link.target, created.id)] = factor
+    if public_id in world.prestige_mirror:
+        world.prestige_mirror[created.id] = world.prestige_mirror[public_id]
     world.connect(created.id, public_id, 0.8, "strong")
     world.connect(created.id, home_id, 0.8, "strong")
     history.record("nativization", tick, year, group=home_id, into=created.id, language=language,
@@ -284,6 +293,8 @@ def _shift(
     """
     params = world.params
     source, target = world.groups[source_id], world.groups[target_id]
+    if source.preserved:
+        return False
     total = source.population + target.population
     status = target.prestige / (target.prestige + source.prestige)
     share = demographic_share(world, source_id, target_id)

@@ -288,6 +288,8 @@ class Region:
     #: (vlastní etnikum či náboženství), ``strong`` (silná identita). Určuje
     #: loajalitu k jazyku, tedy jak snadno region přejde na jazyk státu.
     identity: str = "shared"
+    #: Autor jazyk regionu zakonzervoval: nevymře (``polity.Preserve`` od začátku).
+    preserve: bool = False
 
 
 @dataclass(frozen=True)
@@ -405,6 +407,7 @@ def region_world(
                     prestige=region.prestige,
                     immigration=region.immigration,
                     loyalty=world.params.identity_loyalty[region.identity],
+                    preserved=region.preserve,
                 )
             )
             villages_of[region.id].append(village)
