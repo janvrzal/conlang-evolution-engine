@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from cee.v2 import polity
+
 if TYPE_CHECKING:
     from cee.v2.simulation import Simulation
     from cee.v2.world import World
@@ -27,6 +29,9 @@ TIMELINE = frozenset({
     "religious_change", "codification", "printing", "schooling", "bilingualism",
     "transmission_stopped", "language_shift", "language_emerged", "language_split",
     "language_ended", "grammaticalized", "exapted", "refinement",
+    # státy, jazyková politika a obrození (M6f)
+    "state", "language_policy", "annexation", "secession", "collapse", "border_policy", "lingua_franca",
+    "standard", "schools", "nativization", "revival_movement", "revival", "transmission_resumed", "preserve",
 })
 
 
@@ -46,7 +51,8 @@ def export(simulation: Simulation, *, events: frozenset[str] | None = TIMELINE) 
         "tick": simulation.tick,
         "territories": [
             {"id": territory.id, "level": territory.level, "parent": territory.parent,
-             "position": territory.position}
+             "position": territory.position, "terrain": territory.terrain,
+             "native_language": territory.native_language}
             for _, territory in sorted(world.territories.items())
         ],
         "groups": [_group(world, group_id, observed.get(group_id)) for group_id in world.group_ids()],
@@ -63,6 +69,10 @@ def export(simulation: Simulation, *, events: frozenset[str] | None = TIMELINE) 
         "lineages": lineages(simulation),
         "lexicon": {group_id: lexicon(world, group_id) for group_id in world.group_ids()},
         "grammar": {group_id: grammar(world, group_id) for group_id in world.group_ids()},
+        "states": polity.states(world),
+        "borders": polity.borders(world),
+        "standards": dict(sorted(world.standards.items())),
+        "census": polity.language_census(world),
         "events": [event for event in history.events if events is None or event["kind"] in events],
     }
 
@@ -71,7 +81,8 @@ def frame(simulation: Simulation) -> dict[str, Any]:
     """Lehký snímek pro průběžné kreslení během běhu (každý krok).
 
     Jen to, co se mění rychle a co UI kreslí na mapě: rok, populace, podíl
-    L2 mluvčích a poslední pozorované dialekty a jazyky.
+    L2 mluvčích, poslední pozorované dialekty a jazyky, jazyky regionů doma
+    a mimo domov a území států.
     """
     world = simulation.world
     snapshot = simulation.history.snapshots[-1] if simulation.history.snapshots else None
@@ -89,6 +100,8 @@ def frame(simulation: Simulation) -> dict[str, Any]:
         "languages": {} if snapshot is None else {
             lineage: list(groups) for lineage, groups in sorted(snapshot.languages.items())
         },
+        "census": polity.language_census(world),
+        "states": [{"id": item["id"], "regions": item["regions"]} for item in polity.states(world)],
     }
 
 
@@ -117,6 +130,8 @@ def _group(world: World, group_id: str, lineage: str | None) -> dict[str, Any]:
         "code_language": code.language, "observed_language": lineage,
         "l2_share": code.l2_share, "literacy": group.literacy, "schooling": group.schooling,
         "standard": group.standard, "liturgy": group.liturgy,
+        "loyalty": group.loyalty, "home_pull": group.home_pull, "preserved": group.preserved,
+        "revival": group.revival,
     }
 
 

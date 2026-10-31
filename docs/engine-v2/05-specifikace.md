@@ -1131,7 +1131,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3; aktualizováno po části D (proz�
 | Nové změny aspirace, ejektivity a glotalizace (sekundární palatalizace, labializace a vokalická nazalizace mají vlastní doplněk v části B typologie) | další doplněk M2, mimo rozsah B |
 | ~~Frekvence užití se nevyvíjí~~ | vyřešeno v M3b |
 | ~~Rodokmen slova (původ)~~ | původ slova je v exportu (M6c); historie tvarů viz níže |
-| Spuštění enginu mimo testy: CLI, API, převod projektu z UI na svět v2 (export do JSON už je) | před napojením UI |
+| ~~Spuštění enginu mimo testy~~: popis světa `cee.v2.spec`, běh s průběhem `cee.v2.runner` a `/api/v2` hotové (`16-rozhrani-ui.md`); zbývá převod projektu UI na `WorldSpec`, ukládání běhů a zrychlení pro světy nad ~50 vesnic | UI |
 | ~~`AGENT.md` a `CURRENT_STATE.md` engine v2 nezmiňují~~ | vyřešeno po M3b |
 | ~~Konverze mezi slovními druhy~~ | vyřešeno v M4 |
 | ~~Exaptace a jazyky bez některých kategorií~~ | vyřešeno v M4b |

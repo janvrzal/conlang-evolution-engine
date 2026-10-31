@@ -57,6 +57,10 @@ vesnic 0,5, `engine-v2/14-kalibrace-kontinua.md`) a státy, jazyková politika
 a lingua franca (`cee.v2.polity`, `engine-v2/15-staty-lingua-franca.md`):
 regiony mohou mít vlastní jazyk, terén a identitu a o tom, zda region přejde
 na jazyk státu, rozhoduje dosah centra, demografie a loajalita.
+Pro UI je hotový popis světa jako JSON (`cee.v2.spec`, příklad
+`src/cee/data/v2_example_world.json`), běh s průběhem a export přes
+`/api/v2` (`engine-v2/16-rozhrani-ui.md`, revize API 8). Převod projektu
+z UI na popis světa zatím chybí.
 
 
 ## Legacy jádro

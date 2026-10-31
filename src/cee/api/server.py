@@ -18,11 +18,18 @@ from pydantic import BaseModel
 from cee import __version__, projects
 from cee.api.ports import API_REVISION, DEFAULT_PORT, ENGINE_SIGNATURE
 from cee.api.runs import router as run_router
+from cee.api.v2 import router as v2_router
 from cee.engine.empirical import phoible_status, update_phoible_cache
 from cee.engine.parser import YamlParser
-from cee.engine.topology import ContactEdge, EvolutionGraph, HistoricalEventSpec, Polity, TradeRoute, VerticalEdge
+from cee.engine.topology import (
+    ContactEdge,
+    EvolutionGraph,
+    HistoricalEventSpec,
+    Polity,
+    TradeRoute,
+    VerticalEdge,
+)
 from cee.metrics.schema_profiles import available_schema_profiles
-from cee.project_schema import validate_simulation_topology
 from cee.pipeline import (
     DEFAULT_SEED,
     SimulationConfig,
@@ -32,12 +39,14 @@ from cee.pipeline import (
     run_multiroot_simulation,
     run_simulation,
 )
+from cee.project_schema import validate_simulation_topology
 from cee.semantics.graph import SemanticGraph
 from cee.storage.genealogy import get_genealogy_store
 from cee.storage.legacy_neo4j import import_legacy_graph
 
 app = FastAPI(title="CEE Engine API")
 app.include_router(run_router)
+app.include_router(v2_router)
 
 # Vite dev server si při obsazeném 5173 vezme 5174, 5175, ... — proto povolujeme
 # jakýkoli lokální origin, ne pevný seznam. Server je určený jen pro localhost.

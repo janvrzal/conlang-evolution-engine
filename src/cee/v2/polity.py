@@ -617,6 +617,38 @@ def refresh(world: World) -> None:
         del world.prestige_mirror[stale]
 
 
+def borders(world: World) -> list[dict[str, Any]]:
+    """Hranice států pro mapu: dvojice sousedních regionů různých států.
+
+    Sousedé jsou regiony, mezi jejichž vesnicemi vede vazba. ``factor`` je
+    propustnost hranice (násobek vazeb přes ni).
+    """
+    owner = {region: polity.id for polity in sorted(world.states.values(), key=lambda p: p.id)
+             for region in polity.regions}
+    regions = {group_id: region_of(world, group_id) for group_id in world.group_ids()}
+    found: dict[tuple[str, str], float] = {}
+    for (first, second), _ in sorted(world.links.items()):
+        here, there = regions.get(first), regions.get(second)
+        if here is None or there is None or here >= there or owner.get(here) == owner.get(there):
+            continue
+        factor = world.border_factors.get((first, second), 1.0)
+        found[(here, there)] = min(found.get((here, there), factor), factor)
+    return [
+        {"regions": [here, there], "states": [owner.get(here), owner.get(there)], "factor": factor}
+        for (here, there), factor in sorted(found.items())
+    ]
+
+
+def states(world: World) -> list[dict[str, Any]]:
+    """Státy pro export: území, sídlo, úřední jazyk, úrovně a spisovná norma."""
+    return [
+        {"id": polity.id, "regions": list(polity.regions), "capital": polity.capital, "seat": polity.seat,
+         "language": polity.language, "centralization": polity.centralization, "policy": polity.policy,
+         "border": polity.border, "standard": world.standards.get(polity.id)}
+        for polity in sorted(world.states.values(), key=lambda found: found.id)
+    ]
+
+
 def _language_of(world: World, group_id: str) -> str:
     return world.groups[group_id].main_code.language
 
@@ -626,7 +658,9 @@ def _scope(world: World, of: str) -> tuple[tuple[str, ...], str, bool]:
     if of in world.states:
         polity = world.states[of]
         return polity.regions, polity.seat, True
-    _check_regions(world, (of,))
+    territory = world.territories.get(of)
+    if territory is None or territory.level != "region":
+        raise ValueError(f"'{of}' není stát ani region světa.")
     return (of,), seat_of(world, of), False
 
 

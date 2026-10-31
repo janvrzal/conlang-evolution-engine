@@ -1,0 +1,33 @@
+{
+  "format": "cee-v2-world/1",
+  "name": "Království čtyř jazyků",
+  "seed": 1,
+  "start_year": 0,
+  "end_year": 1500,
+  "languages": [
+    {"id": "a", "name": "jazyk hlavního města"},
+    {"id": "b", "consonants": ["t", "k", "q", "s", "n", "m", "l", "ʃ", "x", "r", "j"]},
+    {"id": "c", "grammar": "substrate", "consonants": ["p", "t", "k", "s", "n", "m", "l", "f", "v", "r", "j"]},
+    {"id": "d", "consonants": ["b", "d", "g", "s", "n", "m", "l", "r", "w"]}
+  ],
+  "regions": [
+    {"id": "capital", "name": "Hlavní město", "position": [0, 0], "density": 2.0,
+     "neighbours": ["plain", "mountains", "south"], "language": "a"},
+    {"id": "plain", "name": "Rovina", "position": [60, 0], "neighbours": ["capital"], "language": "b"},
+    {"id": "mountains", "name": "Hory", "position": [0, 60], "density": 0.5, "neighbours": ["capital"],
+     "language": "c", "terrain": "mountains", "identity": "strong"},
+    {"id": "south", "name": "Jih", "position": [0, -60], "neighbours": ["capital"], "language": "d",
+     "identity": "distinct"}
+  ],
+  "events": [
+    {"kind": "state", "year": 100, "id": "kingdom", "regions": ["capital", "plain", "mountains", "south"],
+     "capital": "capital", "policy": "promoted"},
+    {"kind": "standard", "year": 300, "of": "kingdom"},
+    {"kind": "standard", "year": 300, "of": "south"},
+    {"kind": "language_policy", "year": 600, "state": "kingdom", "policy": "enforced"},
+    {"kind": "schools", "year": 600, "of": "kingdom"},
+    {"kind": "schools", "year": 600, "of": "south"},
+    {"kind": "secession", "year": 900, "id": "south-state", "regions": ["south"], "capital": "south"},
+    {"kind": "revival", "year": 900, "regions": ["south"], "strength": "national"}
+  ]
+}
