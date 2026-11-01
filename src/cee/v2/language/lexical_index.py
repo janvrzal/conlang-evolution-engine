@@ -157,5 +157,17 @@ class LexicalClarityIndex:
     def scores_many(
         self, world: World, code: Code, pairs: list[Pair]
     ) -> list[float]:
-        """Načte skóre více dvojic ve stejném pořadí, včetně duplicit."""
-        return [self.score(world, code, morpheme, concept) for morpheme, concept in pairs]
+        """Načte skóre více dvojic ve stejném pořadí, včetně duplicit.
+
+        Už spočítané dvojice se čtou přímo z paměti; metoda :meth:`score` se
+        volá jen pro nové.
+        """
+        known = self.scores.get
+        values: list[float] = []
+        append = values.append
+        for pair in pairs:
+            value = known(pair)
+            if value is None:
+                value = self.score(world, code, pair[0], pair[1])
+            append(value)
+        return values

@@ -107,6 +107,16 @@ def _lead(world: World, process: Process, morpheme_id: str, code: Code | None = 
     return world.params.frequency_lead * (2.0 * frequency - 1.0) if process.reductive else 0.0
 
 
+def _leads(world: World, process: Process, morpheme_ids: list[str], code: Code) -> list[float]:
+    """:func:`_lead` pro víc morfémů najednou (stejné hodnoty, jedno ověření paměti frekvencí)."""
+    if not process.reductive:
+        return [0.0] * len(morpheme_ids)
+    morphemes = world.morphemes
+    lexemes = [morphemes[morpheme_id].lexeme_id for morpheme_id in morpheme_ids]
+    lead = world.params.frequency_lead
+    return [lead * (2.0 * frequency - 1.0) for frequency in world.usage_frequencies(code, lexemes)]
+
+
 def word_probability(
     world: World, variable_id: str, morpheme_id: str, share: float, code: Code | None = None
 ) -> float:
@@ -174,9 +184,23 @@ def activate(world: World, code: Code, variable_id: str) -> None:
     results = bank.process_table(world.processes[variable_id], code.stress_rule).results(
         bank.ids_of([world.form_of(code, morpheme_id) for morpheme_id in words])
     )
-    for morpheme_id, result in zip(words, results.tolist()):
-        if result >= 0:
-            _queue(world, code, variable_id, morpheme_id)
+    # Fronta vznikne naráz: tabulka už řekla, kterých slov se změna týká
+    # (to, co by ``_queue`` ověřil znovu), a čekající jsou seřazena podle
+    # dvojice (potřebný logit, morfém), tedy úplně, stejně jako po vkládání.
+    restructured = state.restructured.get(variable_id, ())
+    hits = [
+        morpheme_id for morpheme_id, result in zip(words, results.tolist())
+        if result >= 0 and morpheme_id not in restructured
+    ]
+    process = world.processes[variable_id]
+    threshold = world.params.restructure_threshold
+    base = math.log(threshold / (1 - threshold))
+    leads = _leads(world, process, hits, code)
+    state.pending[variable_id] = sorted(
+        (base - lead - word_bias(world, variable_id, morpheme_id), morpheme_id)
+        for morpheme_id, lead in zip(hits, leads)
+    )
+    state.queued[variable_id] = set(hits)
 
 
 def enter_vocabulary(world: World, code: Code, morpheme_id: str) -> None:
@@ -230,9 +254,9 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
             # Nový tvar posoudí jen změny, které v něm podle předfiltru banky
             # mohou mít místo; u ostatních by fronta nic neudělala.
             bank = world.form_bank()
-            possible = bank.possible(bank.id_of(new[0]), code.stress_rule)
+            rewritten_id, rule = bank.id_of(new[0]), code.stress_rule
             for other in active_processes(state, world):
-                if other != variable_id and world.processes[other].key in possible:
+                if other != variable_id and bank.may_apply(rewritten_id, rule, world.processes[other].key):
                     _queue(world, code, other, morpheme_id)
         if rewritten:
             history.record(

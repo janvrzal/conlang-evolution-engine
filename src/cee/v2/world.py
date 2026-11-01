@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Literal, Mapping, Sequence, cast
+from typing import Any, Iterable, Literal, Mapping, Sequence, cast
 
 from cee.v2.language.bank import FormBank
 from cee.v2.language.journal import FrequencyMap
@@ -254,11 +254,42 @@ class World:
         paradigmatu má navíc váhu své buňky. Bez dominantních pojmů (svět M1,
         výchozí stav) platí statická frekvence morfému.
         """
+        memo = self._usage_memo(code)
+        morpheme = self.morphemes[morpheme_id]
+        values = memo.by_root.get(morpheme.lexeme or morpheme.id)
+        if values is not None:
+            found = values.get(morpheme_id)
+            if found is not None:
+                return found
+        return self._usage_compute(code, morpheme, memo)
+
+    def usage_frequencies(self, code: Code, morpheme_ids: Iterable[str]) -> list[float]:
+        """Totéž co :meth:`usage_frequency` pro víc tvarů, s jedním ověřením paměti.
+
+        Hodnoty a jejich pořadí jsou stejné jako při volání po jednom; hromadné
+        volání jen ušetří režii (ověření verze a hledání paměti pro každý tvar).
+        """
+        memo = self._usage_memo(code)
+        by_root = memo.by_root
+        morphemes = self.morphemes
+        result: list[float] = []
+        append = result.append
+        for morpheme_id in morpheme_ids:
+            morpheme = morphemes[morpheme_id]
+            values = by_root.get(morpheme.lexeme or morpheme.id)
+            if values is not None:
+                found = values.get(morpheme_id)
+                if found is not None:
+                    append(found)
+                    continue
+            append(self._usage_compute(code, morpheme, memo))
+        return result
+
+    def _usage_memo(self, code: Code) -> _UsageMemo:
         # Výsledek závisí jen na pojmech, pro které je kořen dominantní, a na
         # frekvencích pojmů světa. Pamatuje se po kořenech; deník dominantních
         # kořenů (``dominant_log``) zneplatní jen kořeny, kterých se změna týká.
         state = code.phonology
-        morpheme = self.morphemes[morpheme_id]
         held = state.cache.get("usage-frequency")
         memo = cast(_UsageMemo, held[1]) if held is not None else None
         frequencies = self.concept_frequencies
@@ -272,10 +303,10 @@ class World:
                 memo.by_root.pop(old_root, None)
                 memo.by_root.pop(new_root, None)
             memo.cursor = len(log)
+        return memo
+
+    def _usage_compute(self, code: Code, morpheme: Morpheme, memo: _UsageMemo) -> float:
         values = memo.by_root.setdefault(morpheme.lexeme_id, {})
-        found = values.get(morpheme_id)
-        if found is not None:
-            return found
         concepts = _concepts_by_root(code).get(morpheme.lexeme_id)
         if not concepts:
             total = morpheme.frequency
@@ -283,14 +314,18 @@ class World:
             total = min(1.0, sum(self.concept_frequency(concept) for concept in concepts))
             if morpheme.kind == "word" and morpheme.word_class in self.paradigms and morpheme.cell:
                 total *= self.paradigms[morpheme.word_class].weight(morpheme.cell)
-        values[morpheme_id] = total
+        values[morpheme.id] = total
         return total
 
     def unit_of(self, code: Code, morpheme_id: str) -> UnitForm:
         """Aktuální stav tvaru slova (tvar, hranice koncovky, koncovka) v kódu."""
-        stored = code.forms.get(morpheme_id)
-        if stored is not None:
-            return stored
+        # Průchod vrstvami úložiště tvarů (``FormStore.get``) bez dalšího volání.
+        layer: FormStore | None = code.forms
+        while layer is not None:
+            stored = layer._own.get(morpheme_id)
+            if stored is not None:
+                return stored
+            layer = layer._base
         default = self.default_units.get(morpheme_id)
         if default is None:
             morpheme = self.morphemes[morpheme_id]
