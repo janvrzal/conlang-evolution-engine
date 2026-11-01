@@ -145,23 +145,56 @@ def context_stats(context: InnovationContext) -> ContextStats | None:
     return stats
 
 
+class _Columns:
+    """Masky kandidátů jen ve sloupcích hlásek inventáře (a hranice slova).
+
+    Tabulka hlásek má desítky tisíc řádků (celé IPA, tóny), inventář jazyka
+    desítky hlásek; matice přes celou tabulku by v paměti kandidátů zabraly
+    gigabajty. Hláska mimo inventář (prostředí slova, které už zmizelo) se
+    dopočítá z úplných masek procesů, takže výsledek je stejný.
+    """
+
+    def __init__(self, processes: list[Process], table: SegmentTable, inventory: Sequence[int]):
+        self.processes = processes
+        self.cols = np.array(sorted({*inventory, table.boundary}), dtype=np.intp)
+        cols = self.cols
+        width = len(cols)
+
+        def stack(rows: list[npt.NDArray[np.bool_]]) -> npt.NDArray[np.bool_]:
+            return np.array(rows, dtype=bool).reshape(len(rows), width)
+
+        everything = np.ones(width, dtype=bool)
+        self.target = stack([p.target.mask[cols] for p in processes])
+        self.left = stack([everything if p.left is None else p.left.mask[cols] for p in processes])
+        self.right = stack([everything if p.right is None else p.right.mask[cols] for p in processes])
+        self.right2_rows = np.array([i for i, p in enumerate(processes) if p.right2 is not None], dtype=np.intp)
+        self.right2 = stack([cast(Pattern, processes[i].right2).mask[cols] for i in self.right2_rows])
+
+    def gather(self, name: str, ids: npt.NDArray[np.intp]) -> npt.NDArray[np.bool_]:
+        """Sloupce masky ``name`` pro hlásky ``ids`` (řádky procesů)."""
+        matrix = getattr(self, name)
+        cols = self.cols
+        position = np.minimum(np.searchsorted(cols, ids), len(cols) - 1)
+        out = matrix[:, position]
+        missing = np.nonzero(cols[position] != ids)[0]
+        if len(missing):
+            processes = self.processes if name != "right2" else [self.processes[i] for i in self.right2_rows]
+            for column in missing:
+                segment = int(ids[column])
+                for row, process in enumerate(processes):
+                    pattern = getattr(process, name)
+                    out[row, column] = True if pattern is None else bool(pattern.mask[segment])
+        return out
+
+
 class _Candidates:
     """Kandidáti rodiny pro jeden inventář a jejich masky složené do matic."""
 
-    def __init__(self, processes: list[Process], table: SegmentTable):
+    def __init__(self, processes: list[Process], table: SegmentTable, inventory: Sequence[int] = ()):
+        # Bez inventáře se sloupce dopočítají z úplných masek (pomalejší, stejný výsledek).
         self.processes = processes
-        size = len(table.vowel_mask)
-        everything = np.ones(size, dtype=bool)
-        self.target = np.array([process.target.mask for process in processes]).reshape(-1, size)
-        self.left = np.array([
-            everything if process.left is None else process.left.mask for process in processes
-        ]).reshape(-1, size)
-        self.right = np.array([
-            everything if process.right is None else process.right.mask for process in processes
-        ]).reshape(-1, size)
-        self.right2_rows = np.array([i for i, process in enumerate(processes) if process.right2 is not None],
-                                    dtype=np.intp)
-        self.right2 = np.array([cast(Pattern, processes[i].right2).mask for i in self.right2_rows], dtype=bool).reshape(-1, size)
+        self.masks = _Columns(processes, table, inventory)
+        self.right2_rows = self.masks.right2_rows
         # Identifikátor proměnné a jen první kandidát se stejnou změnou.
         self.variable_ids = [Variable("process", process.key).id for process in processes]
         seen: set[str] = set()
@@ -177,9 +210,11 @@ class _Candidates:
         """Totéž co :meth:`ContextStats.support` pro všechny kandidáty naráz."""
         if not self.processes:
             return np.zeros(0)
-        mask = self.target[:, stats.segment] & self.left[:, stats.previous] & self.right[:, stats.following]
+        masks = self.masks
+        mask = masks.gather("target", stats.segment) & masks.gather("left", stats.previous) \
+            & masks.gather("right", stats.following)
         if len(self.right2_rows):
-            mask[self.right2_rows] &= self.right2[:, stats.following2]
+            mask[self.right2_rows] &= masks.gather("right2", stats.following2)
         mask &= np.where(self.stressed[:, None], stats.stressed[None, :], True)
         unstressed = ~stats.stressed & table.vowel_mask[stats.segment]
         mask &= np.where(self.unstressed[:, None], unstressed[None, :], True)
@@ -226,32 +261,12 @@ class _CombinedSoundCandidates:
             self.family_candidates[change.kind] = uniq
 
         self.all_processes = all_processes
-        size = len(table.vowel_mask)
-        everything = np.ones(size, dtype=bool)
-        if all_processes:
-            self.target = np.array([p.target.mask for p in all_processes], dtype=bool).reshape(-1, size)
-            self.left = np.array([
-                everything if p.left is None else p.left.mask for p in all_processes
-            ], dtype=bool).reshape(-1, size)
-            self.right = np.array([
-                everything if p.right is None else p.right.mask for p in all_processes
-            ], dtype=bool).reshape(-1, size)
-            self.right2_rows = np.array([i for i, p in enumerate(all_processes) if p.right2 is not None],
+        self.masks = _Columns(all_processes, table, inventory)
+        self.right2_rows = self.masks.right2_rows
+        self.stressed_rows = np.array([i for i, p in enumerate(all_processes) if p.stress == "stressed"],
+                                      dtype=np.intp)
+        self.unstressed_rows = np.array([i for i, p in enumerate(all_processes) if p.stress == "unstressed"],
                                         dtype=np.intp)
-            self.right2 = np.array([cast(Pattern, all_processes[i].right2).mask for i in self.right2_rows],
-                                   dtype=bool).reshape(-1, size)
-            self.stressed_rows = np.array([i for i, p in enumerate(all_processes) if p.stress == "stressed"],
-                                          dtype=np.intp)
-            self.unstressed_rows = np.array([i for i, p in enumerate(all_processes) if p.stress == "unstressed"],
-                                            dtype=np.intp)
-        else:
-            self.target = np.zeros((0, size), dtype=bool)
-            self.left = np.zeros((0, size), dtype=bool)
-            self.right = np.zeros((0, size), dtype=bool)
-            self.right2_rows = np.zeros(0, dtype=np.intp)
-            self.right2 = np.zeros((0, size), dtype=bool)
-            self.stressed_rows = np.zeros(0, dtype=np.intp)
-            self.unstressed_rows = np.zeros(0, dtype=np.intp)
 
     def eval_supports(
         self,
@@ -265,9 +280,10 @@ class _CombinedSoundCandidates:
     ) -> npt.NDArray[np.int64]:
         if not self.all_processes or len(counts_int64) == 0:
             return np.zeros(len(self.all_processes), dtype=np.int64)
-        mask = self.target[:, seg] & self.left[:, prev] & self.right[:, foll]
+        masks = self.masks
+        mask = masks.gather("target", seg) & masks.gather("left", prev) & masks.gather("right", foll)
         if len(self.right2_rows):
-            mask[self.right2_rows] &= self.right2[:, foll2]
+            mask[self.right2_rows] &= masks.gather("right2", foll2)
         if len(self.stressed_rows):
             mask[self.stressed_rows] &= str_arr
         if len(self.unstressed_rows):
@@ -591,7 +607,8 @@ class SoundChange(Change):
             if prepared is None:
                 if len(_CANDIDATES) >= _CANDIDATES_LIMIT:
                     _CANDIDATES.clear()
-                prepared = _CANDIDATES[memo_key] = _Candidates(self.candidates(table, stats.inventory), table)
+                prepared = _CANDIDATES[memo_key] = _Candidates(self.candidates(table, stats.inventory), table,
+                                                               stats.inventory)
             # Opory všech kandidátů jedním maticovým násobením nad počty
             # prostředí (počty jsou celá čísla, součet je přesný).
             supports = prepared.supports(stats, table)
