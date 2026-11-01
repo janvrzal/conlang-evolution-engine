@@ -99,3 +99,43 @@ def test_zruseny_beh_skonci():
     run.cancel()
     run.execute(simulation)
     assert run.status == "cancelled" and run.result is None
+
+
+def test_autor_muze_zadat_vlastni_slova_protojazyka():
+    from cee.v2 import export
+    from cee.v2.language.protoforms import protolanguage
+    from cee.v2.scenarios import DEFAULT_CONCEPTS
+    from cee.v2.simulation import Simulation
+
+    plain, _ = protolanguage(DEFAULT_CONCEPTS, seed=7)
+    fixed, _ = protolanguage(DEFAULT_CONCEPTS, seed=7, fixed={"hand": "ruka"})
+    assert fixed["hand"] == "ruka"
+    assert {c: f for c, f in fixed.items() if c != "hand" and f != "ruka"} == {
+        c: f for c, f in plain.items() if c != "hand" and f != "ruka"}
+    data = small(languages=[{"id": "a", "words": {"hand": "ruka", "water": "voda"}}, {"id": "b"}])
+    world, events, _ = build(data)
+    simulation = Simulation(world, events=events)
+    simulation.run(25.0)
+    lexicon = export.lexicon(simulation.world, "c-v0")
+    assert (lexicon["hand"]["form"], lexicon["water"]["form"]) == ("ruka", "voda")
+
+
+def test_vlastni_slova_se_overi():
+    data = small(languages=[{"id": "a", "words": {"xyz": "ka", "fire": "q͡ǂ", "hand": " "}}, {"id": "b"}])
+    issues = {issue.path: issue.message for issue in check(data)}
+    assert "neznámý pojem" in issues["languages.0.words.xyz"]
+    assert "hlásku" in issues["languages.0.words.fire"]
+    assert "prázdné" in issues["languages.0.words.hand"]
+
+
+def test_identita_prichod_cizincu_a_jmena_statu_v_popisu():
+    data = small(events=[
+        {"kind": "state", "year": 0, "id": "k", "name": "Království", "regions": ["c", "x"], "capital": "c"},
+        {"kind": "identity", "year": 50, "regions": ["x"], "identity": "strong"},
+        {"kind": "immigration", "year": 60, "regions": ["c"], "immigration": 0.2},
+    ])
+    assert check(data) == []
+    world, events, _ = build(data)
+    assert [type(e).__name__ for e in events] == ["State", "Identity", "Immigration"]
+    bad = small(events=[{"kind": "immigration", "year": 0, "regions": ["c"], "immigration": 2}])
+    assert any(issue.path.startswith("events.0") for issue in check(bad))

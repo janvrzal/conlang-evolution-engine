@@ -22,7 +22,7 @@ ENGINE_SIGNATURE = "Conlang Evolution Engine"
 # 5: genealogie v2 (události, prozodie a morfologická metadata)
 # 6: profily schémat, PHOIBLE cache a artefakty/métriky běhu v UI
 # 8: + /api/v2 (engine v2: schéma světa, ověření, běhy s průběhem a export)
-API_REVISION = 8
+API_REVISION = 9
 
 
 def is_port_free(port: int, host: str = "127.0.0.1") -> bool:

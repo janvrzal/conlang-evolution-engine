@@ -74,10 +74,10 @@ jméno („řeč lidí“) s českou podobou na -ština, stát podle hlavního m
 
 ## Co návrh odhalil v enginu
 
-- Chybí události změny svébytnosti (`identity`) a příchodu cizinců v čase
-  (`immigration`); Editor světa je už generuje.
-- Engine neukládá jména států.
-- Autor nemůže zadat vlastní slova protojazyka.
+Doplněno v revizi API 9: události `identity` a `immigration` (vlastnosti
+kraje „odtud potud“), jméno státu `name` u `state` a `secession` a vlastní
+slova protojazyka `languages[].words`. Zbývá:
+
 - Jména dceřiných jazyků a nářečí potřebují systém (zatím přívlastek podle
   kraje vzniku, např. „suská tedština“).
 - Během přechodu k jinému jazyku pozorovatel hlásí krátké jazyky o jedné až

@@ -29,6 +29,8 @@ from cee.v2.polity import (
     Annexation,
     BorderPolicy,
     Collapse,
+    Identity,
+    Immigration,
     LanguagePolicy,
     LinguaFranca,
     Preserve,
@@ -71,6 +73,8 @@ class LanguageSpec(_Model):
     grammar: Literal["default", "substrate", "full"] = "default"
     stress: Literal["initial", "second", "antepenult", "penult", "final"] = "penult"
     stress_strength: Literal["weak", "strong"] = "weak"
+    #: Slova, která zadal autor: pojem → tvar v IPA. Ostatní složí generátor.
+    words: dict[str, str] = Field(default_factory=dict)
 
 
 class RegionSpec(_Model):
@@ -101,6 +105,8 @@ class _Event(_Model):
 class StateSpec(_Event):
     kind: Literal["state"]
     id: str = Field(min_length=1)
+    #: Jméno státu (jen popis; engine ho nese do exportu).
+    name: str | None = None
     regions: list[str] = Field(min_length=1)
     capital: str
     centralization: str = "moderate"
@@ -109,7 +115,7 @@ class StateSpec(_Event):
 
     def event(self) -> WorldEvent:
         return State(self.year, self.id, tuple(self.regions), self.capital, self.centralization, self.policy,
-                     self.border)
+                     self.border, self.name)
 
 
 class LanguagePolicySpec(_Event):
@@ -133,6 +139,7 @@ class AnnexationSpec(_Event):
 class SecessionSpec(_Event):
     kind: Literal["secession"]
     id: str = Field(min_length=1)
+    name: str | None = None
     regions: list[str] = Field(min_length=1)
     capital: str
     centralization: str = "moderate"
@@ -141,7 +148,7 @@ class SecessionSpec(_Event):
 
     def event(self) -> WorldEvent:
         return Secession(self.year, self.id, tuple(self.regions), self.capital, self.centralization,
-                         self.policy, self.border)
+                         self.policy, self.border, self.name)
 
 
 class CollapseSpec(_Event):
@@ -214,16 +221,36 @@ class PreserveSpec(_Event):
         return Preserve(self.year, tuple(self.regions), self.language, self.preserved)
 
 
+class IdentitySpec(_Event):
+    kind: Literal["identity"]
+    regions: list[str] = Field(min_length=1)
+    #: ``shared``, ``distinct``, ``strong`` (``Parameters.identity_loyalty``).
+    identity: str
+
+    def event(self) -> WorldEvent:
+        return Identity(self.year, tuple(self.regions), self.identity)
+
+
+class ImmigrationSpec(_Event):
+    kind: Literal["immigration"]
+    regions: list[str] = Field(min_length=1)
+    #: Podíl přistěhovalců za generaci; 0 příchod zastaví.
+    immigration: float = Field(ge=0.0, le=1.0)
+
+    def event(self) -> WorldEvent:
+        return Immigration(self.year, tuple(self.regions), self.immigration)
+
+
 EventSpec = Annotated[
     Union[
         StateSpec, LanguagePolicySpec, AnnexationSpec, SecessionSpec, CollapseSpec, BorderPolicySpec,
-        LinguaFrancaSpec, StandardSpec, SchoolsSpec, RevivalSpec, PreserveSpec,
+        LinguaFrancaSpec, StandardSpec, SchoolsSpec, RevivalSpec, PreserveSpec, IdentitySpec, ImmigrationSpec,
     ],
     Field(discriminator="kind"),
 ]
 EVENT_KINDS = (
     "state", "language_policy", "annexation", "secession", "collapse", "border_policy",
-    "lingua_franca", "standard", "schools", "revival", "preserve",
+    "lingua_franca", "standard", "schools", "revival", "preserve", "identity", "immigration",
 )
 
 
@@ -336,7 +363,7 @@ def _world(spec: WorldSpec, params: Parameters) -> World:
             language.id, grammar=dict(GRAMMARS[language.grammar]),
             **({"consonants": tuple(language.consonants)} if language.consonants else {}),
             **({"vowels": tuple(language.vowels)} if language.vowels else {}),
-            stress_rule=language.stress, stress_strength=language.stress_strength,
+            stress_rule=language.stress, stress_strength=language.stress_strength, words=dict(language.words),
         )
         for language in spec.languages
     )
@@ -368,6 +395,9 @@ def check(data: dict[str, Any] | WorldSpec) -> list[Issue]:
     params, issues = _parameters(spec)
     if params is None:
         return issues
+    issues = _words(spec)
+    if issues:
+        return issues
     try:
         world = _world(spec, params)
     except ValueError as error:
@@ -385,6 +415,30 @@ def check(data: dict[str, Any] | WorldSpec) -> list[Issue]:
             issues.append(Issue(f"events.{index}", f"neznámé ID {error.args[0]!r}"))
         except ValueError as error:
             issues.append(Issue(f"events.{index}", str(error)))
+    return issues
+
+
+def _words(spec: WorldSpec) -> list[Issue]:
+    """Slova zadaná autorem: známý pojem a hlásky, které engine umí."""
+    from cee.v2.language.constructions import GRAMMATICAL_SOURCES
+    from cee.v2.language.segments import default_table
+    from cee.v2.scenarios import DEFAULT_CONCEPTS
+
+    known, table, issues = {*DEFAULT_CONCEPTS, *GRAMMATICAL_SOURCES}, default_table(), []
+    for index, language in enumerate(spec.languages):
+        for concept, form in sorted(language.words.items()):
+            path = f"languages.{index}.words.{concept}"
+            if concept not in known:
+                issues.append(Issue(path, f"neznámý pojem '{concept}'"))
+            elif not form.strip():
+                issues.append(Issue(path, "slovo nesmí být prázdné"))
+            else:
+                try:
+                    parsed = table.parse(form)
+                except (KeyError, ValueError):
+                    parsed = None
+                if parsed is None or table.render(parsed) != form:
+                    issues.append(Issue(path, f"engine nezná některou hlásku ve slově '{form}'"))
     return issues
 
 

@@ -32,6 +32,7 @@ TIMELINE = frozenset({
     # státy, jazyková politika a obrození (M6f)
     "state", "language_policy", "annexation", "secession", "collapse", "border_policy", "lingua_franca",
     "standard", "schools", "nativization", "revival_movement", "revival", "transmission_resumed", "preserve",
+    "identity", "immigration",
 })
 
 
@@ -101,7 +102,7 @@ def frame(simulation: Simulation) -> dict[str, Any]:
             lineage: list(groups) for lineage, groups in sorted(snapshot.languages.items())
         },
         "census": polity.language_census(world),
-        "states": [{"id": item["id"], "regions": item["regions"]} for item in polity.states(world)],
+        "states": [{"id": item["id"], "name": item["name"], "regions": item["regions"]} for item in polity.states(world)],
     }
 
 

@@ -254,6 +254,26 @@ Ze zakonzervované skupiny nikdo nepřejde na jiný jazyk (`SpeechGroup.preserve
 Jazyk se dál vyvíjí, přejímá slova a mluvčí ho mohou užívat mimo domov,
 jen nevymře.
 
+**Vlastnosti regionu v čase** (doplněno podle návrhu UI, `docs/ui-navrh`).
+Identita a přistěhovalectví regionu se dají měnit i během dějin, editor
+světa je zadává jako úseky „odtud potud“:
+
+```python
+Identity(900, ("teth",), "distinct")      # odlišnost regionu od roku 900
+Immigration(1100, ("vardun",), 0.1)       # obchodní město: přicházejí cizinci
+Immigration(1500, ("vardun",), 0.0)       # příchod skončí
+```
+
+`Identity` nastaví loajalitu domácích skupin regionu stejně jako
+`Region.identity` na začátku (`Parameters.identity_loyalty`). Skupiny, které
+vzniknou později přechodem nebo obrozením, ji zdědí. `Immigration` nastaví
+podíl přistěhovalců za generaci jako `Region.immigration`; přistěhovalci se
+místní řeč učí v dospělosti, takže drží podíl L2 mluvčích. Při zapnuté
+gravitační migraci (`world.migration`) podíl každý krok přepíše migrace.
+
+**Jména států:** `State` a `Secession` mají nepovinné `name`. Na dynamiku
+nemá vliv; engine ho nese do historie a do exportu států.
+
 ## Obrození
 
 Přechod, který rozběhl stát nebo obrození (`home_pull` > 0), je nově

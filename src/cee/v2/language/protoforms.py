@@ -26,6 +26,7 @@ def protolanguage(
     vowels: Sequence[str] = DEFAULT_VOWELS,
     syllables: tuple[int, int] = (1, 3),
     coda_share: float = 0.25,
+    fixed: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, str], dict[str, float]]:
     """Tvary a frekvence pojmů; stejný seed dá stejný protojazyk.
 
@@ -33,12 +34,17 @@ def protolanguage(
     jako v reálných inventářích. Homofony se v protojazyce nepřipouštějí.
     Frekvence pojmů je log-rovnoměrná; prvních 20 pojmů (zájmena a základní
     slova Swadeshova seznamu) má frekvenci vysokou.
+
+    ``fixed`` jsou slova, která zadal autor (pojem → IPA). Generátor pro ně
+    náhodu spotřebuje stejně, takže ostatní slova zůstanou, jak by byla; liší
+    se jen tehdy, když by se s autorovým slovem shodovala (homofon).
     """
+    fixed = dict(fixed or {})
     rng = generator(seed, "protolanguage")
     consonant_weights = _zipf(len(consonants))
     vowel_weights = _zipf(len(vowels))
     forms: dict[str, str] = {}
-    used: set[str] = set()
+    used: set[str] = set(fixed.values())
     for concept in dict.fromkeys(concepts):
         for _ in range(100):
             count = int(rng.integers(syllables[0], syllables[1] + 1))
@@ -53,6 +59,7 @@ def protolanguage(
                 word += consonants[int(rng.choice(len(consonants), p=consonant_weights))]
             if len(word) >= 2 and word not in used:
                 break
+        word = fixed.get(concept, word)
         used.add(word)
         forms[concept] = word
     frequencies = {

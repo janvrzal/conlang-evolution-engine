@@ -32,7 +32,11 @@ v `src/cee/data/v2_example_world.json`.
   - inventář souhlásek a samohlásek;
   - profil gramatiky: `default`, `substrate` nebo `full`;
   - přízvuk: `initial`, `second`, `antepenult`, `penult`, `final` a jeho
-    síla.
+    síla;
+  - `words`: slova, která zadal autor (pojem → tvar v IPA). Ostatní složí
+    generátor; náhodu pro zadaný pojem spotřebuje stejně, takže zbytek
+    slovníku zůstane, jak by byl (liší se jen při shodě s autorovým slovem).
+    Ověření hlásí neznámý pojem a hlásky, které engine nezná.
 - **Regiony:**
   - poloha v km, relativní hustota, sousedé, počet vesnic (1–12) a
     prestiž;
@@ -40,7 +44,8 @@ v `src/cee/data/v2_example_world.json`.
   - konzervace jazyka a přistěhovalectví.
 - **Události** (pole `kind`): `state`, `language_policy`, `annexation`,
   `secession`, `collapse`, `border_policy`, `lingua_franca`, `standard`,
-  `schools`, `revival`, `preserve`. Význam polí je
+  `schools`, `revival`, `preserve`, `identity`, `immigration`. `state`
+  a `secession` mají nepovinné jméno státu `name`. Význam polí je
   v [`15-staty-lingua-franca.md`](15-staty-lingua-franca.md).
 - **Svět:** `seed`, `semantics` (posun významu; vypnutí běh zrychlí asi
   o třetinu), rozestup vesnic, délka generace a `parameters`.
@@ -310,9 +315,10 @@ Rozpracovaný vlastnický režim je na větvi `engine-v2-parallel-owner`.
 ## Co zbývá pro UI
 
 1. **Převod projektu na `WorldSpec`.** Projekt (`project_schema.py`, V3)
-   popisuje legacy model: jazykové uzly, hrany, polygony států. Pro v2
-   bude potřeba editor regionů (body, sousedé, hustota, terén, identita,
-   jazyk) a časové osy událostí. Je to návrh UI, ne enginu.
+   popisuje legacy model: jazykové uzly, hrany, polygony států. Návrh
+   nového UI je v [`docs/ui-navrh`](../ui-navrh/README.md) (desktop na
+   Tauri, prototypy všech pěti kroků); revize API 9 přidala, co z návrhu
+   vyplynulo: `identity`, `immigration`, jména států a vlastní slova.
 2. Stránky UI nad endpointy `/api/v2`: editor světa s ověřením, běh
    s průběhem a mapa ze snímků (regiony obarvené jazykem doma, hranice
    států), časová osa a detail regionu (sčítání, slovník, gramatika).

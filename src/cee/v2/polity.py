@@ -62,6 +62,8 @@ class Polity:
     border: str = "normal"
     #: Vazby vesnic k sídlu, které stát vytvořil (centralizace): skupina → síla.
     links: dict[str, float] = field(default_factory=dict)
+    #: Jméno státu pro autora a export; na dynamiku nemá vliv.
+    name: str | None = None
 
 
 def region_of(world: World, group_id: str) -> str | None:
@@ -247,6 +249,8 @@ class State(WorldEvent):
     policy: str = "tolerant"
     #: Propustnost hranice státu: ``open``, ``normal``, ``closed``.
     border: str = "normal"
+    #: Jméno státu (jen popis; ``None`` = bez jména).
+    name: str | None = None
 
     def apply(self, world: World, history: History, tick: int) -> None:
         if self.id in world.states:
@@ -262,13 +266,14 @@ class State(WorldEvent):
         level(world.params.border_levels, self.border, "propustnost hranice")
         seat = seat_of(world, self.capital)
         polity = Polity(self.id, tuple(self.regions), self.capital, seat,
-                        world.groups[seat].main_code.language, self.centralization, self.policy, self.border)
+                        world.groups[seat].main_code.language, self.centralization, self.policy, self.border,
+                        name=self.name)
         world.states[self.id] = polity
         refresh(world)
         linked = _centralize(world, polity, polity.regions)
         bilingual = _policy(world, history, tick, self.year, polity)
         refresh(world)
-        history.record("state", tick, self.year, state=self.id, regions=sorted(self.regions),
+        history.record("state", tick, self.year, state=self.id, name=self.name, regions=sorted(self.regions),
                        capital=self.capital, seat=seat, language=polity.language,
                        centralization=self.centralization, policy=self.policy, border=self.border,
                        linked=linked, bilingual=bilingual)
@@ -391,13 +396,14 @@ class Secession(WorldEvent):
     centralization: str = "moderate"
     policy: str = "tolerant"
     border: str = "normal"
+    name: str | None = None
 
     def apply(self, world: World, history: History, tick: int) -> None:
         _check_regions(world, self.regions)
         _take(world, self.regions)
         history.record("secession", tick, self.year, state=self.id, regions=sorted(self.regions))
         State(self.year, self.id, self.regions, self.capital, self.centralization, self.policy,
-              self.border).apply(world, history, tick)
+              self.border, self.name).apply(world, history, tick)
 
 
 @dataclass(frozen=True)
@@ -460,6 +466,54 @@ class Preserve(WorldEvent):
                     groups.append(group_id)
         history.record("preserve", tick, self.year, regions=sorted(self.regions), language=self.language,
                        preserved=self.preserved, groups=groups)
+
+
+@dataclass(frozen=True)
+class Identity(WorldEvent):
+    """Regiony ``regions`` změní, jak moc se cítí svébytné: ``shared``, ``distinct``, ``strong``.
+
+    Nastaví loajalitu domácích skupin regionů (``Parameters.identity_loyalty``),
+    stejně jako ``Region.identity`` na začátku. Loajalita brzdí přechod k jinému
+    jazyku; skupiny, které vzniknou později (přechod, obrození), ji zdědí.
+    """
+
+    year: float
+    regions: tuple[str, ...]
+    identity: str
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        _check_regions(world, self.regions)
+        loyalty = level(world.params.identity_loyalty, self.identity, "úroveň identity")
+        groups = groups_in(world, self.regions)
+        for group_id in groups:
+            world.groups[group_id].loyalty = loyalty
+        history.record("identity", tick, self.year, regions=sorted(self.regions), identity=self.identity,
+                       groups=groups)
+
+
+@dataclass(frozen=True)
+class Immigration(WorldEvent):
+    """Do regionů ``regions`` začnou přicházet cizinci (obchodní město, přístav).
+
+    ``immigration`` je podíl přistěhovalců za generaci, jako ``Region.immigration``
+    na začátku; 0 příchod zastaví. Přistěhovalci se místní řeč učí v dospělosti,
+    takže drží podíl L2 mluvčích a s ním tlaky na zjednodušení. Když běží
+    gravitační migrace (``world.migration``), podíl každý krok přepíše ona.
+    """
+
+    year: float
+    regions: tuple[str, ...]
+    immigration: float
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        _check_regions(world, self.regions)
+        if not 0.0 <= self.immigration <= 1.0:
+            raise ValueError(f"Podíl přistěhovalců musí být mezi 0 a 1, ne {self.immigration}.")
+        groups = groups_in(world, self.regions)
+        for group_id in groups:
+            world.groups[group_id].immigration = self.immigration
+        history.record("immigration", tick, self.year, regions=sorted(self.regions),
+                       immigration=self.immigration, groups=groups)
 
 
 @dataclass(frozen=True)
@@ -642,7 +696,7 @@ def borders(world: World) -> list[dict[str, Any]]:
 def states(world: World) -> list[dict[str, Any]]:
     """Státy pro export: území, sídlo, úřední jazyk, úrovně a spisovná norma."""
     return [
-        {"id": polity.id, "regions": list(polity.regions), "capital": polity.capital, "seat": polity.seat,
+        {"id": polity.id, "name": polity.name, "regions": list(polity.regions), "capital": polity.capital, "seat": polity.seat,
          "language": polity.language, "centralization": polity.centralization, "policy": polity.policy,
          "border": polity.border, "standard": world.standards.get(polity.id)}
         for polity in sorted(world.states.values(), key=lambda found: found.id)

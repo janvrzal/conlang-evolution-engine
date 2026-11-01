@@ -302,6 +302,8 @@ class ProtoLanguage:
     vowels: tuple[str, ...] = DEFAULT_VOWELS
     stress_rule: StressRule = "penult"
     stress_strength: Literal["weak", "strong"] = "weak"
+    #: Slova zadaná autorem (pojem → IPA); ostatní vygeneruje :func:`protolanguage`.
+    words: Mapping[str, str] = field(default_factory=dict)
 
 
 def region_world(
@@ -535,7 +537,7 @@ def _seed_lineages(
     for language in languages:
         forms, frequencies = protolanguage(
             concepts, seed=stable_int(seed, "language", language.id) % (1 << 31),
-            consonants=language.consonants, vowels=language.vowels,
+            consonants=language.consonants, vowels=language.vowels, fixed=getattr(language, "words", None),
         )
         base = world.seed_lexicon(
             concepts, forms, frequencies, classes, {**PROTO_ENDINGS, **SYNTAX_ENDINGS},

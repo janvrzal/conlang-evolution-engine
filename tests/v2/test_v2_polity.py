@@ -7,6 +7,8 @@ from cee.v2.polity import (
     Annexation,
     BorderPolicy,
     Collapse,
+    Identity,
+    Immigration,
     LanguagePolicy,
     LinguaFranca,
     Preserve,
@@ -18,6 +20,7 @@ from cee.v2.polity import (
     groups_in,
     language_census,
     seat_of,
+    states,
 )
 from cee.v2.scenarios import ProtoLanguage, Region, kingdom, region_world
 from cee.v2.simulation import Simulation
@@ -385,3 +388,49 @@ def test_obrozeni_odmitne_neznamou_silu():
     world = pair()
     with pytest.raises(ValueError, match="síla obrození"):
         Revival(0.0, ("x",), strength="bouřlivé").apply(world, Simulation(world).history, 0)
+
+
+def test_identita_jde_zmenit_v_case():
+    shifted = []
+    for events in ([], [Identity(0.0, ("x",), "distinct")]):
+        world = pair()
+        Simulation(world, events=[State(0.0, "k", ("capital", "x"), "capital", policy="promoted"), *events]).run(500.0)
+        shifted.append(home_share(world, "x", "b"))
+    reference = pair(identity="distinct")
+    Simulation(reference, events=[State(0.0, "k", ("capital", "x"), "capital", policy="promoted")]).run(500.0)
+    assert shifted[0] < shifted[1] == pytest.approx(home_share(reference, "x", "b"))
+
+
+def test_identita_pozdeji_prechod_zbrzdi():
+    plain, later = pair(), pair()
+    Simulation(plain, events=[State(0.0, "k", ("capital", "x"), "capital", policy="promoted")]).run(600.0)
+    Simulation(later, events=[State(0.0, "k", ("capital", "x"), "capital", policy="promoted"),
+                              Identity(200.0, ("x",), "strong")]).run(600.0)
+    loyalty = Parameters().identity_loyalty["strong"]
+    assert all(later.groups[g].loyalty == loyalty for g in groups_in(later, ["x"]))
+    assert home_share(plain, "x", "b") < home_share(later, "x", "b")
+
+
+def test_prichod_cizincu_drzi_podil_druheho_jazyka_a_jde_zastavit():
+    world = pair()
+    simulation = Simulation(world, events=[Immigration(0.0, ("x",), 0.3), Immigration(300.0, ("x",), 0.0)])
+    simulation.run(275.0)
+    arrived = [world.groups[g].main_code.l2_share for g in groups_in(world, ["x"])]
+    simulation.run(600.0)
+    settled = [world.groups[g].main_code.l2_share for g in groups_in(world, ["x"])]
+    assert min(arrived) > 0.2
+    assert max(settled) < 0.05
+
+
+def test_identita_a_prichod_cizincu_odmitnou_neplatne_zadani():
+    with pytest.raises(ValueError, match="identity"):
+        Identity(0.0, ("x",), "huge").apply(pair(), Simulation(pair()).history, 0)
+    with pytest.raises(ValueError, match="mezi 0 a 1"):
+        Immigration(0.0, ("x",), 1.5).apply(pair(), Simulation(pair()).history, 0)
+
+
+def test_stat_nese_jmeno_do_exportu():
+    world = pair()
+    Simulation(world, events=[State(0.0, "k", ("capital", "x"), "capital", name="Velká říše"),
+                              Secession(100.0, "s", ("x",), "x", name="Knížectví")]).run(125.0)
+    assert {item["id"]: item["name"] for item in states(world)} == {"k": "Velká říše", "s": "Knížectví"}
