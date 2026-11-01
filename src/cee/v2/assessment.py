@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2.language.assessment_index import clipped_frequencies, top_words
 from cee.v2.language.processes import Process, StressRule
 from cee.v2.language.segments import Form, SegmentTable
 
@@ -147,9 +148,7 @@ def _vocabulary_reference(world: World, group_id: str) -> _Vocabulary:
     if picked is not None and picked[0] == state.lexicon_version:
         chosen = cast(list[str], picked[1])
     else:
-        chosen = sorted(
-            state.vocabulary, key=lambda morpheme: (-world.usage_frequency(code, morpheme), morpheme)
-        )[:SAMPLE_WORDS]
+        chosen = top_words(world, code, SAMPLE_WORDS)
         state.cache["vocabulary-sample"] = (state.lexicon_version, chosen)
     forms = {morpheme: world.form_of(code, morpheme) for morpheme in sorted(chosen)}
     owners: dict[Form, list[str]] = {}
@@ -157,7 +156,7 @@ def _vocabulary_reference(world: World, group_id: str) -> _Vocabulary:
     for morpheme, form in forms.items():
         owners.setdefault(form, []).append(morpheme)
         vowels.update(segment for segment in form if world.table.is_vowel(segment))
-    frequency = {morpheme: max(0.01, world.usage_frequency(code, morpheme)) for morpheme in forms}
+    frequency = clipped_frequencies(world, code, forms)
     ids = world.form_bank().ids_of(list(forms.values()))
     morphemes = list(forms)
     weights = np.array([frequency[morpheme] for morpheme in morphemes], dtype=np.float64)

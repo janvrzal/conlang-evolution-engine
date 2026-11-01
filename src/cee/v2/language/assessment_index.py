@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Iterable, cast
 
 import numpy as np
 
@@ -12,6 +12,23 @@ from cee.v2.language.journal import FrequencyMap
 if TYPE_CHECKING:
     from cee.v2.assessment import _Vocabulary
     from cee.v2.world import Code, World
+
+
+def top_words(world: World, code: Code, count: int) -> list[str]:
+    """``count`` nejčastějších tvarů slovní zásoby; shodní se řadí podle ID.
+
+    Řazení je podle dvojice (−frekvence, ID), tedy úplné: pořadí, ve kterém
+    množina slovní zásoby vydává tvary, na výsledku nic nemění.
+    """
+    units = list(code.phonology.vocabulary)
+    keyed = sorted(zip([-value for value in world.usage_frequencies(code, units)], units))
+    return [unit for _, unit in keyed[:count]]
+
+
+def clipped_frequencies(world: World, code: Code, units: Iterable[str]) -> dict[str, float]:
+    """Tvar → frekvence užití, nejméně 0,01 (ve stejném pořadí jako ``units``)."""
+    units = list(units)
+    return {unit: max(0.01, value) for unit, value in zip(units, world.usage_frequencies(code, units))}
 
 
 class AssessmentVocabularyIndex:
@@ -50,9 +67,7 @@ class AssessmentVocabularyIndex:
             if picked is not None and picked[0] == state.lexicon_version:
                 selected = cast(list[str], picked[1])
             else:
-                selected = sorted(
-                    state.vocabulary, key=lambda unit: (-world.usage_frequency(code, unit), unit)
-                )[:SAMPLE_WORDS]
+                selected = top_words(world, code, SAMPLE_WORDS)
                 state.cache["vocabulary-sample"] = (state.lexicon_version, selected)
             # Změna slovníku, která nezmění vybraný vzorek (výpůjčka okrajového
             # slova), stačí dorovnat tvary a frekvence; stavět vzorek znovu ne.
@@ -64,13 +79,11 @@ class AssessmentVocabularyIndex:
                 if picked is not None and picked[0] == state.lexicon_version:
                     selected = cast(list[str], picked[1])
                 else:
-                    selected = sorted(
-                        state.vocabulary, key=lambda unit: (-world.usage_frequency(code, unit), unit)
-                    )[:SAMPLE_WORDS]
+                    selected = top_words(world, code, SAMPLE_WORDS)
                     state.cache["vocabulary-sample"] = (state.lexicon_version, selected)
             chosen = sorted(selected)
             forms = {unit: world.form_of(code, unit) for unit in chosen}
-            frequency = {unit: max(0.01, world.usage_frequency(code, unit)) for unit in chosen}
+            frequency = clipped_frequencies(world, code, chosen)
             owners: dict[tuple[int, ...], list[str]] = {}
             vowels: Counter[int] = Counter()
             for unit, form in forms.items():
@@ -105,8 +118,7 @@ class AssessmentVocabularyIndex:
                 self.changes.append(position)
             if frequency_key != self.frequency_token or lexical:
                 # Výběr se nemění (frekvence pojmů, nebo změna slovníku mimo vzorek).
-                frequency = {unit: max(0.01, world.usage_frequency(code, unit))
-                             for unit in vocabulary.morphemes}
+                frequency = clipped_frequencies(world, code, vocabulary.morphemes)
                 vocabulary.frequency.clear()
                 vocabulary.frequency.update(frequency)
                 vocabulary.weights[:] = [frequency[unit] for unit in vocabulary.morphemes]
