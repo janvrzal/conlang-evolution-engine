@@ -121,6 +121,13 @@ class Parameters:
     clarity_short_factor: float = 1.5
     #: Váha odměny `Dispersion` za zaplnění mezery v soustavě vokálů.
     dispersion_factor: float = 4.0
+    #: Výhoda zažitého slova (``pressures.lexical.Entrenchment``): převládající
+    #: varianta pojmu dostane tuto sílu × frekvenci pojmu (Pagel a kol. 2007).
+    #: Izolovaný jazyk s 0,3 má asi 90 % základní slovní zásoby za tisíciletí,
+    #: pod cílem 95–97 % (islandština; Bergsland & Vogt 1962). Silnější
+    #: zažitost cíl splní (0,9: 96 %), ale potlačí i učené výpůjčky a
+    #: nářeční rozrůznění (brány M6b), viz ``docs/engine-v2/17-pozadi-dejin.md``.
+    entrenchment_strength: float = 0.3
     #: Souběžná variabilita slovní zásoby protojazyka (``cee.v2.variation``):
     #: násobek naměřené hustoty menšinových variant (0 = protojazyk bez
     #: variability) a nejvyšší součet jejich podílů u pojmu ve vesnici, aby

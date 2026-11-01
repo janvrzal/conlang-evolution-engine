@@ -152,12 +152,12 @@ class Entrenchment(Pressure):
     """Zažité slovo pro častý pojem se nahrazuje pomalu (Pagel a kol. 2007).
 
     Dominantní varianta dostane výhodu úměrnou tomu, jak často se o pojmu
-    mluví. Čím častější pojem, tím víc výskytů staré slovo každou generaci
-    upevní a tím těžší je ho vytlačit.
+    mluví (``Parameters.entrenchment_strength`` × frekvence pojmu). Čím
+    častější pojem, tím víc výskytů staré slovo každou generaci upevní a tím
+    těžší je ho vytlačit.
     """
 
     name = "entrenchment"
-    strength = 0.3
 
     def scores(self, batch: PressureBatch) -> FloatArray:
         world = batch.world
@@ -167,7 +167,8 @@ class Entrenchment(Pressure):
             [world.concept_frequency(variable_id.split(":", 1)[1]) for variable_id in batch.variable_ids]
         )
         dominant = (batch.freqs >= 0.5).astype(np.float64)
-        result: FloatArray = self.strength * frequency[:, None, None] * dominant * _has_morpheme(batch)
+        strength = world.params.entrenchment_strength
+        result: FloatArray = strength * frequency[:, None, None] * dominant * _has_morpheme(batch)
         return result
 
 

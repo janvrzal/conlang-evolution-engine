@@ -198,3 +198,47 @@ Kulturní slova se v modelu půjčují jen o málo víc než základní (0,306
 proti 0,253 při `normal`). Ve WOLD je rozdíl mnohem větší (Haspelmath
 & Tadmor 2009); rozšíření slovníku v kalibraci ale není opravdová
 kulturní slovní zásoba, takže srovnání je jen orientační.
+
+### Izolovaný jazyk: co pohání výměnu slov
+
+Vypínání tlaků (izolovaný svět, 4 seedy, populace 500, jádro za první
+tisíciletí; výchozí 0,906):
+
+| zásah | 1 000 let |
+|---|---|
+| bez výhody průhlednosti (`motivation` 0) | 0,994 |
+| bez sociálního ocenění (`lexical_actuation` 0) | 0,989 |
+| poloviční ocenění | 0,970 |
+| zažitost ×2 | 0,936 |
+| konformita ×3 | 1,000 |
+| vesnice 2 000 místo 500 | 0,933 |
+
+Výměnu pohání hlavně stálá výhoda průhledných slov (odvozenina +0,15,
+posun významu +0,05 proti zděděnému kořeni) spolu se sociálním oceněním.
+Obojí jsou odhady bez dat. Zažitost má oporu (Pagel a kol. 2007), proto je
+síla od 2026-11-01 v `Parameters.entrenchment_strength` (výchozí dál 0,3).
+
+| `entrenchment_strength` | izolovaný (8 seedů, 1. / 2. / 3. tisíciletí) | brána M3b (seedy 1, 2) |
+|---|---|---|
+| 0,3 | 0,900 / 0,918 / 0,949 | 0,888 / 0,912 |
+| 0,6 | 0,937 / 0,939 / 0,949 | 0,925 / 0,945 |
+| 0,9 | 0,962 / 0,961 / 0,965 | 0,941 / 0,962 |
+
+Síla 0,9 splní cíl 95–97 %, ale nezavedena, protože:
+
+- chrání převládající slovo i před výpůjčkami, takže rozdíl kontaktu
+  zmizí. Kontakt pak potřebuje silnější elitu (s 0,9 a vazbou elity 0,5:
+  4 seedy 0,863, ale 8 seedů 0,913);
+- výsledek kontaktu stojí na tom, zda vůbec přišla cizí elita (asi 1,2 za
+  tisíciletí ve světě). Seedy 1–4 mají za první tisíciletí 0,84–0,88,
+  seedy 6–8 0,97–0,98;
+- se silou 0,9 padají dvě brány M6b: izolace vzdáleností (seed 3,
+  korelace 0,64 < 0,7) a učená slova z liturgického jazyka (seed 1, jedna
+  převedená vesnice bez učeného slova). S 0,6 padá jen ta druhá;
+- brána M3b má horní mez 0,95 (Lees), izolovaný jazyk má ale asi 0,97
+  (Bergsland & Vogt); zvýšení meze má smysl jen spolu s kalibrací.
+
+Plošná zažitost je tedy hrubý nástroj. Další krok je oddělit, co má
+chránit základní slovo před domácí obměnou, od toho, co brání výpůjčkám
+(učená slova, elity), a zpřesnit elitu z pozadí, aby kontakt nestál na
+jediné vzácné události.
