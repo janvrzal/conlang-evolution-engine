@@ -306,6 +306,8 @@ class ProtoLanguage:
     words: Mapping[str, str] = field(default_factory=dict)
     #: Pojmy vlastního jména jazyka (``cee.v2.naming``); prázdné = ``("language",)``.
     endonym: tuple[str, ...] = ()
+    #: Tóny tónového jazyka (tónové značky); prázdné = jazyk bez tónů.
+    tones: tuple[str, ...] = ()
 
 
 def region_world(
@@ -542,6 +544,7 @@ def _seed_lineages(
         forms, frequencies = protolanguage(
             concepts, seed=stable_int(seed, "language", language.id) % (1 << 31),
             consonants=language.consonants, vowels=language.vowels, fixed=getattr(language, "words", None),
+            tones=tuple(getattr(language, "tones", ())),
         )
         base = world.seed_lexicon(
             concepts, forms, frequencies, classes, {**PROTO_ENDINGS, **SYNTAX_ENDINGS},

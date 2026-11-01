@@ -26,7 +26,7 @@ import numpy.typing as npt
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.index import ContextIndex
 from cee.v2.language.processes import Process, StressRule, stressed_nucleus
-from cee.v2.language.segments import Pattern, SegmentTable
+from cee.v2.language.segments import TONE_CODES, TONES, Pattern, SegmentTable
 from cee.v2.phonology import register
 from cee.v2.pressures import (
     Actuation,
@@ -489,6 +489,9 @@ class SoundChange(Change):
 
     prior: ClassVar[float]
     domain: ClassVar[Domain]
+    #: Tónové rodiny mají vlastní rozpočet inovací: do ``_TOTAL_PRIOR`` se
+    #: nepočítají, takže tempo ostatních rodin nezmění.
+    tonal: ClassVar[bool] = False
 
     @abstractmethod
     def candidates(self, table: SegmentTable, inventory: Sequence[int]) -> list[Process]:
@@ -1203,6 +1206,120 @@ class LabialShift(SoundChange):
                 for src, dst in (("kʷ", "p"), ("ɡʷ", "b")) if table.id_of(src) in inventory]
 
 
+# --- tóny ---------------------------------------------------------------------
+#
+# Tón je rys samohlásky (``x_tone``). Vzniká fonologizací výšky hlasu, kterou
+# sousední souhláska samohlásce vtiskne (Haudricourt 1954; Matisoff 1973;
+# Hombert, Ohala & Ewan 1979): po neznělé souhlásce je samohláska výš, po
+# znělé níž, před rázem stoupá, před /h/ (a /s/) klesá. Když pak rozdíl
+# souhlásek zmizí (ztráta znělosti, ztráta kody), zůstane tón jediným
+# rozlišením. Tóny pak splývají, mizí a v sousedství stejného tónu se
+# rozrůzňují (sandhi; Yip 2002, *Tone*). Priory jsou autorský odhad.
+
+
+def _pitch(code: int) -> tuple[int, int]:
+    """Začátek a konec tónu na škále 1 (˩) až 5 (˥)."""
+    letters = TONES[code - 1]
+    return _LEVEL_PITCH[letters[0]], _LEVEL_PITCH[letters[-1]]
+
+
+_LEVEL_PITCH = {"˩": 1, "˨": 2, "˧": 3, "˦": 4, "˥": 5}
+
+
+def _tone_distance(first: int, second: int) -> int:
+    a, b = _pitch(first), _pitch(second)
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def _tones_present(table: SegmentTable, inventory: Sequence[int]) -> list[int]:
+    return sorted({table.tone_of(segment) for segment in inventory if table.is_vowel(segment)} - {0})
+
+
+def _toneless(table: SegmentTable) -> Pattern:
+    return table.pattern({"syl": "+", "x_tone": "0"})
+
+
+def _with_tone(table: SegmentTable, code: int) -> Pattern:
+    return table.pattern({"syl": "+", "x_tone": str(code)})
+
+
+class ToneFromOnset(SoundChange):
+    """Tonogeneze z počáteční souhlásky: V → V˦ /T_, V → V˨ /D_."""
+
+    kind, prior, domain, tonal = "tonogenesis_onset", 0.12, "vowel", True
+
+    def candidates(self, table, inventory):
+        if not _present(table, inventory, _toneless(table)):
+            return []
+        found = []
+        for voice, tone, name in (("-", "˦", "T"), ("+", "˨", "D")):
+            onset = table.pattern({"syl": "-", "son": "-", "voi": voice})
+            if _present(table, inventory, onset):
+                found.append(_make(self.kind, f"V → V{tone} /{name}_", target=_toneless(table), operation="tone",
+                                   tone=TONE_CODES[tone], left=onset, ease=0.0, clarity=0.1))
+        return found
+
+
+class ToneFromCoda(SoundChange):
+    """Tonogeneze ze zakončení: V → V˧˥ /_ʔ#, V → V˥˩ /_h#, _s#."""
+
+    kind, prior, domain, tonal = "tonogenesis_coda", 0.08, "vowel", True
+
+    def candidates(self, table, inventory):
+        if not _present(table, inventory, _toneless(table)):
+            return []
+        found = []
+        for coda, tone in (("ʔ", "˧˥"), ("h", "˥˩"), ("s", "˥˩")):
+            segment = table.id_of(coda)
+            if segment in inventory:
+                found.append(_make(self.kind, f"V → V{tone} /_{coda}#", target=_toneless(table), operation="tone",
+                                   tone=TONE_CODES[tone], right=_single(table, segment), right2=table.BOUNDARY,
+                                   ease=0.0, clarity=0.1))
+        return found
+
+
+class ToneMerger(SoundChange):
+    """Splynutí dvou blízkých tónů (˦ → ˥, ˧˥ → ˨˥…)."""
+
+    kind, prior, domain, tonal = "tone_merger", 0.08, "vowel", True
+
+    def candidates(self, table, inventory):
+        present = _tones_present(table, inventory)
+        return [_make(self.kind, f"{TONES[a - 1]} → {TONES[b - 1]}", target=_with_tone(table, a), operation="tone",
+                      tone=b, ease=0.1, clarity=-0.15)
+                for a in present for b in present if a != b and _tone_distance(a, b) <= 2]
+
+
+class ToneLoss(SoundChange):
+    """Ztráta tónu: V˦ → V (detonalizace, typicky v kontaktu)."""
+
+    kind, prior, domain, tonal = "tone_loss", 0.04, "vowel", True
+
+    def candidates(self, table, inventory):
+        return [_make(self.kind, f"{TONES[a - 1]} → ∅", target=_with_tone(table, a), operation="tone", tone=0,
+                      ease=0.1, clarity=-0.2)
+                for a in _tones_present(table, inventory)]
+
+
+class ToneDissimilation(SoundChange):
+    """Sandhi: ze dvou stejných tónů za sebou se první změní (˨˩˦ ˨˩˦ → ˧˥ ˨˩˦)."""
+
+    kind, prior, domain, tonal = "tone_dissimilation", 0.04, "vowel", True
+
+    def candidates(self, table, inventory):
+        present = _tones_present(table, inventory)
+        found = []
+        for tone in present:
+            others = [other for other in present if other != tone]
+            if not others:
+                continue
+            nearest = min(others, key=lambda other: (_tone_distance(tone, other), other))
+            found.append(_make(self.kind, f"{TONES[tone - 1]} → {TONES[nearest - 1]} /_C{TONES[tone - 1]}",
+                               target=_with_tone(table, tone), operation="tone", tone=nearest,
+                               right=table.CONSONANT, right2=_with_tone(table, tone), ease=0.05, clarity=0.05))
+        return found
+
+
 SOUND_CHANGES: tuple[SoundChange, ...] = (
     Voicing(), Spirantization(), Debuccalization(), IntervocalicLoss(), Fortition(),
     Palatalization(), NasalAssimilation(), VoicingAssimilation(), FinalDevoicing(), CodaLoss(),
@@ -1210,12 +1327,13 @@ SOUND_CHANGES: tuple[SoundChange, ...] = (
     Diphthongization(), Monophthongization(), GlideFormation(), Epenthesis(), Prothesis(),
     SecondaryPalatalization(), Depalatalization(), PalatalAffrication(), VowelNasalization(),
     VowelDenazalization(), Labialization(), Delabialization(), LabialShift(),
+    ToneFromOnset(), ToneFromCoda(), ToneMerger(), ToneLoss(), ToneDissimilation(),
 )
 
 _STANDARD_SOUND_PRIORS: dict[type[SoundChange], float] = {
     type(change): change.prior for change in SOUND_CHANGES
 }
-_TOTAL_PRIOR: float = sum(change.prior for change in SOUND_CHANGES)
+_TOTAL_PRIOR: float = sum(change.prior for change in SOUND_CHANGES if not change.tonal)
 
 
 def _total_prior() -> float:

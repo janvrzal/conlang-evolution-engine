@@ -89,6 +89,8 @@ class LexiconProfile:
     vowels: int
     #: Podíl pojmů, jejichž dominantní slovo zní stejně jako slovo jiného pojmu.
     homophony: float
+    #: Počet tónů (0 = jazyk bez tónů).
+    tones: int = 0
 
 
 def lexicon_roots(world: World, group_id: str) -> dict[str, tuple[str, tuple[int, ...]]]:
@@ -129,7 +131,10 @@ def lexicon_profile(world: World, group_id: str) -> LexiconProfile:
     assert table is not None
     forms = list(lexicon(world, group_id).values())
     inventory = {segment for form in forms for segment in form}
-    vowels = sum(1 for segment in inventory if table.is_vowel(segment))
+    # Samohlásky se počítají podle kvality bez tónu (jako WALS 2A); tóny zvlášť.
+    vowels = len({table.with_tone(segment, 0) for segment in inventory if table.is_vowel(segment)})
+    consonants = sum(1 for segment in inventory if not table.is_vowel(segment))
+    tones = len({table.tone_of(segment) for segment in inventory if table.is_vowel(segment)} - {0})
     # Homofonie = stejný tvar *různých* kořenů; posun významu (jeden kořen
     # pro dva pojmy) je polysémie, ne homofonie.
     owners: dict[tuple[int, ...], set[str]] = {}
@@ -141,8 +146,9 @@ def lexicon_profile(world: World, group_id: str) -> LexiconProfile:
     shared = sum(count for form, count in by_form.items() if len(owners.get(form, ())) > 1)
     return LexiconProfile(
         mean_length=float(np.mean([len(form) for form in forms])) if forms else 0.0,
-        consonants=len(inventory) - vowels,
+        consonants=consonants,
         vowels=vowels,
+        tones=tones,
         homophony=shared / len(forms) if forms else 0.0,
     )
 

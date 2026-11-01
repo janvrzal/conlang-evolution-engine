@@ -37,6 +37,9 @@ v `src/cee/data/v2_example_world.json`.
     generátor; náhodu pro zadaný pojem spotřebuje stejně, takže zbytek
     slovníku zůstane, jak by byl (liší se jen při shodě s autorovým slovem).
     Ověření hlásí neznámý pojem a hlásky, které engine nezná;
+  - `tones`: tóny tónového jazyka jako tónové značky (`["˥", "˧", "˩"]`);
+    každá samohláska protojazyka dostane jeden, první v seznamu nejčastěji.
+    Prázdné = jazyk bez tónů (tóny pak mohou vzniknout samy);
   - `endonym`: pojmy, ze kterých se skládá vlastní jméno jazyka
     (např. `["person", "language"]`, „řeč lidí“); prázdné = `["language"]`.
 - **Regiony:**

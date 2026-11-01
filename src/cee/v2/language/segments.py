@@ -33,13 +33,30 @@ BoolArray = npt.NDArray[np.bool_]
 
 _VALUES = {"+": 1, "-": -1, "0": 0}
 
+
+def _value(value: str) -> int:
+    """Hodnota rysu: ``+ - 0`` u rysů PanPhonu, číslo u vlastních rysů (kód tónu)."""
+    found = _VALUES.get(value)
+    return int(value) if found is None else found
+
 #: Vlastní rozlišovací rysy nad PanPhonem (0 = jako hláska bez značky).
 #: ``x_variant`` odliší zápisy, které by jinak měly stejné rysy (PanPhon *qʷ* a *kʷ*).
 DETAIL_NAMES: tuple[str, ...] = (
     "x_height", "x_place", "x_round", "x_root", "x_tip", "x_phonation", "x_release",
     "x_length", "x_manner", "x_secondary", "x_rhotic", "x_epiglottal",
-    "x_labial", "x_palatal", "x_aspirated", "x_ejective", "x_nasal", "x_long", "x_variant",
+    "x_labial", "x_palatal", "x_aspirated", "x_ejective", "x_nasal", "x_long", "x_variant", "x_tone",
 )
+
+#: Tóny jako rys samohlásky (``x_tone``): 0 bez tónu, pak úrovně a průběhy
+#: zapsané tónovými značkami (˩ nejnižší, ˥ nejvyšší).
+_LEVELS = "˩˨˧˦˥"
+TONES: tuple[str, ...] = (
+    *_LEVELS,
+    *(a + b for a in _LEVELS for b in _LEVELS if a != b),
+    "˨˩˦", "˧˦˧", "˧˨˧", "˨˦˨", "˦˨˦", "˩˥˩", "˥˩˥",
+)
+#: Tónové značky → kód tónu (1 = ˩ … 5 = ˥, průběhy dál).
+TONE_CODES: dict[str, int] = {tone: code for code, tone in enumerate(TONES, start=1)}
 
 #: Značka IPA → (vlastní rys, hodnota). Rys se nastaví jen tam, kde by se
 #: značka ve vektoru PanPhonu ztratila (u /n̥/ ji PanPhon vyjádří, u /d̥/ ne;
@@ -83,7 +100,7 @@ _TONE_LETTERS = "˥˦˧˨˩"
 #: Značky, které visí na předchozí hlásce (kromě kombinačních znaků).
 _MODIFIERS = "ʰʱʷʲˠˤʼˀːˑⁿˡ˞ᶿˣᵊ"
 #: Značky nových řádků, které se při změně rysů dědí jako sekundární artikulace.
-_NEW_SECONDARY = "ʰʱʷʲˠˤʼˀⁿˡˑ˞"
+_NEW_SECONDARY = "ʰʱʷʲˠˤʼˀⁿˡˑ˞˥˦˧˨˩"
 
 
 class Pattern:
@@ -215,12 +232,17 @@ class SegmentTable:
                 # Kombinační značka patří hned za písmeno, před ː ʰ ʷ ʲ (ɛ̞ː, ne ɛː̞).
                 add(base[0] + mark + base[1:] if unicodedata.combining(mark) else base + mark)
         ordered = sorted(rows.items(), key=lambda item: (len(item[1]), item[1]))
+        toned = self._toned_rows(by_symbol)
+        ordered += [(key, ipa) for key, ipa, _ in toned]
         width = len(DETAIL_NAMES)
         padded = np.hstack([self.vectors, np.zeros((old, width), dtype=np.int8)])
         extra = np.array([[*vector, *detail] for (vector, detail), _ in ordered], dtype=np.int8)
         self.vectors = np.vstack([padded, extra.reshape(-1, len(self.names) + width)])
         self.ipa = (*self.ipa, *(unicodedata.normalize("NFC", cluster) for _, cluster in ordered))
         self._by_detail = {key: old + offset for offset, (key, _) in enumerate(ordered)}
+        self._toned: dict[tuple[int, int], int] = {}
+        self._tone_base: dict[int, tuple[int, int]] = {}
+        first_toned = old + len(ordered) - len(toned)
         self._by_symbol = {signature: self._by_detail[key] for signature, key in by_symbol.items()}
         count = len(self.ipa)
         syllabic = self.vectors[:, self.index["syl"]] == 1
@@ -236,6 +258,48 @@ class SegmentTable:
         secondary = [_secondary_marks(ipa) | frozenset(c for c in ipa if c in _NEW_SECONDARY) for ipa in new_ipa]
         self._secondary = (*self._secondary, *secondary)
         self._secondary_tuple = tuple(tuple(sorted(marks)) for marks in self._secondary)
+        tone = DETAIL_NAMES.index("x_tone")
+        for offset, ((_, detail), _, base_ipa) in enumerate(toned):
+            (base,) = self.parse(base_ipa)
+            self._toned[(base, detail[tone])] = first_toned + offset
+            self._tone_base[first_toned + offset] = (base, detail[tone])
+
+    def _toned_rows(self, by_symbol) -> list[tuple[tuple[tuple[int, ...], tuple[int, ...]], str, str]]:
+        """Řádky samohlásek s tónem: běžné samohlásky (i dlouhé, nosové, dyšné,
+        skřípavé a nové ɐ ɜ ɚ ɝ) × všechny tóny ``TONES``; (klíč, zápis, základ)."""
+        tone = DETAIL_NAMES.index("x_tone")
+        width = len(DETAIL_NAMES)
+        out = []
+        seen: set[str] = set()
+        for symbol in "iyɨʉɯuɪʏʊeøɘɵɤoəɛœɜɞʌɔæɐaɶɑɒɚɝ":
+            for variant in ("", "ː", "\u0303", "\u0324", "\u0330", "\u0303ː"):
+                ipa = unicodedata.normalize("NFC", symbol + variant)
+                if ipa in seen:
+                    continue
+                seen.add(ipa)
+                old = self._faithful_plain(_normalized(ipa))
+                if old is not None:
+                    vector, detail = tuple(int(v) for v in self.vectors[old]), (0,) * width
+                elif _signature(ipa) in by_symbol:
+                    vector, detail = by_symbol[_signature(ipa)]
+                else:
+                    continue
+                for letters, code in TONE_CODES.items():
+                    toned = list(detail)
+                    toned[tone] = code
+                    out.append(((vector, tuple(toned)), ipa + letters, ipa))
+        return out
+
+    def tone_of(self, segment: int) -> int:
+        """Kód tónu samohlásky (0 = bez tónu)."""
+        return self._tone_base.get(segment, (segment, 0))[1]
+
+    def with_tone(self, segment: int, code: int) -> int | None:
+        """Táž samohláska s tónem ``code`` (0 = bez tónu); None, když ji tabulka nemá."""
+        base = self._tone_base.get(segment, (segment, 0))[0]
+        if code == 0:
+            return base
+        return self._toned.get((base, code))
 
     def _vector(self, cluster: str) -> tuple[int, ...]:
         segments = self._parser.word_fts(cluster)
@@ -325,12 +389,23 @@ class SegmentTable:
         for cluster, tones in _clusters(_normalized(ipa)):
             if cluster:
                 if cluster[0] in _TONE_LETTERS:
-                    out.extend(self._parse_plain(cluster))
+                    self._attach_tone(out, cluster)
                 else:
                     out.append(self._segment(ipa, cluster))
             if tones:
-                out.extend(self._parse_plain(tones))
+                self._attach_tone(out, tones)
         return tuple(out)
+
+    def _attach_tone(self, out: list[int], letters: str) -> None:
+        """Tón patří předchozí samohlásce; kde tabulka takovou samohlásku nemá,
+        zůstane tónová značka samostatnou hláskou (jako dřív)."""
+        code = TONE_CODES.get(letters)
+        if out and code is not None and self.is_vowel(out[-1]) and self.tone_of(out[-1]) == 0:
+            toned = self.with_tone(out[-1], code)
+            if toned is not None:
+                out[-1] = toned
+                return
+        out.extend(self._parse_plain(letters))
 
     def _segment(self, ipa: str, cluster: str) -> int:
         plain = self._faithful_plain(cluster)
@@ -370,7 +445,7 @@ class SegmentTable:
         if cached is None:
             mask = np.ones(len(self.vectors), dtype=bool)
             for name, value in items:
-                mask &= self.vectors[:, self.index[name]] == _VALUES[value]
+                mask &= self.vectors[:, self.index[name]] == _value(value)
             key = ",".join(f"{value}{name}" for name, value in items) or "*"
             cached = self._patterns[items] = Pattern(key, np.append(mask, False))
         return cached
@@ -451,7 +526,7 @@ def _closest_cached(
     else:
         candidates = table.plain.copy()
     for name, value in changes:
-        candidates &= vectors[:, table.index[name]] == _VALUES[value]
+        candidates &= vectors[:, table.index[name]] == _value(value)
     if not candidates.any():
         return None
     source = vectors[segment]
@@ -459,7 +534,7 @@ def _closest_cached(
     distance[~candidates] = 1 << 20
     best = int(np.argmin(distance))
     # Víc než dva další změněné rysy už není „tatáž hláska s jiným rysem“.
-    required = sum(int(source[table.index[name]] != _VALUES[value]) for name, value in changes)
+    required = sum(int(source[table.index[name]] != _value(value)) for name, value in changes)
     if best == segment or distance[best] > required + 2:
         return None
     return best
@@ -523,8 +598,8 @@ def _signature(ipa: str) -> str:
 def _needs_detail(ipa: str) -> bool:
     """Obsahuje zápis značky, písmena nebo tóny, které PanPhon sám nerozliší?"""
     text = _normalized(ipa)
-    return any(c in DETAIL_LETTERS or c in TONE_MARKS or (c in DETAIL_MARKS and c not in "ʷʲʰʼːˀ\u0303")
-               for c in text)
+    return any(c in DETAIL_LETTERS or c in TONE_MARKS or c in _TONE_LETTERS
+               or (c in DETAIL_MARKS and c not in "ʷʲʰʼːˀ\u0303") for c in text)
 
 
 def _clusters(text: str) -> list[tuple[str, str]]:

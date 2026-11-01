@@ -27,6 +27,7 @@ def protolanguage(
     syllables: tuple[int, int] = (1, 3),
     coda_share: float = 0.25,
     fixed: Mapping[str, str] | None = None,
+    tones: Sequence[str] = (),
 ) -> tuple[dict[str, str], dict[str, float]]:
     """Tvary a frekvence pojmů; stejný seed dá stejný protojazyk.
 
@@ -40,9 +41,12 @@ def protolanguage(
     se jen tehdy, když by se s autorovým slovem shodovala (homofon).
     """
     fixed = dict(fixed or {})
+    # ``tones``: tóny tónového jazyka (tónové značky); každá samohláska dostane
+    # jeden, první v seznamu nejčastěji. Bez tónů se náhoda na tóny nespotřebuje.
     rng = generator(seed, "protolanguage")
     consonant_weights = _zipf(len(consonants))
     vowel_weights = _zipf(len(vowels))
+    tone_weights = _zipf(len(tones)) if tones else None
     forms: dict[str, str] = {}
     used: set[str] = set(fixed.values())
     for concept in dict.fromkeys(concepts):
@@ -55,6 +59,8 @@ def protolanguage(
                 else:
                     word += consonants[int(rng.choice(len(consonants), p=consonant_weights))]
                 word += vowels[int(rng.choice(len(vowels), p=vowel_weights))]
+                if tones:
+                    word += tones[int(rng.choice(len(tones), p=tone_weights))]
             if rng.random() < coda_share:
                 word += consonants[int(rng.choice(len(consonants), p=consonant_weights))]
             if len(word) >= 2 and word not in used:

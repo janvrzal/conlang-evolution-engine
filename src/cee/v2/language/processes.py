@@ -14,7 +14,7 @@ from typing import Literal
 
 from cee.v2.language.segments import Form, Pattern, SegmentTable
 
-Operation = Literal["change", "replace", "delete", "insert_before", "insert_after", "merge_next"]
+Operation = Literal["change", "replace", "delete", "insert_before", "insert_after", "merge_next", "tone"]
 Stress = Literal["stressed", "unstressed"] | None
 StressRule = Literal["initial", "second", "antepenult", "penult", "final"]
 
@@ -73,6 +73,8 @@ class Process:
     allow: tuple[str, ...] = ()
     #: Druhá následující pozice (např. /_N(C|#)).
     right2: Pattern | None = None
+    #: Kód tónu u operace ``tone`` (0 = tón zmizí); samohláska zůstane, mění se jen tón.
+    tone: int | None = None
 
     @cached_property
     def key(self) -> str:
@@ -88,6 +90,8 @@ class Process:
         ]
         if self.allow or self.right2 is not None:
             parts.extend((",".join(sorted(set(self.allow))), "" if self.right2 is None else self.right2.key))
+        if self.tone is not None:
+            parts.append(f"tone{self.tone}")
         return "|".join(parts)
 
     def sites(self, form: Form, table: SegmentTable, rule: StressRule) -> list[int]:
@@ -180,6 +184,10 @@ class Process:
                 result.append(self.segment)
             elif operation == "delete":
                 continue
+            elif operation == "tone":
+                assert self.tone is not None
+                toned = table.with_tone(segment, self.tone)
+                result.append(segment if toned is None else toned)
             elif operation == "insert_before":
                 assert self.segment is not None
                 result.extend((self.segment, segment))

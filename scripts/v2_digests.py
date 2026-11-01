@@ -54,6 +54,16 @@ jen záznamy o jazycích tam, kde je pozorovatel rozpozná jinak):
     shift        c934bff8888225fd23621c0ee3288c4c208b4b9ce6f535fd9a34b2adfb67e342
     island-city  e3b1ba4d2a3410424595f13c8213f48987455299fd5c83de024d782bb4892b65
     valley-50    c745056a17646c83224a5aa599997050602f81a288bb1b9e276c7241e37b234b
+Reference tónů (2026-11-01; tón jako rys samohlásky a pět tónových rodin
+zvukových změn s vlastním rozpočtem inovací, ``changes.sound.ToneFromOnset`` ad.;
+celé IPA v tabulce hlásek otisky nezměnilo):
+    phonology    8c5c7a9213138b3eebef7b843fe335138dc254bbfea4345f0462af4e81a7258e
+    morphology   4513fcc9c32e4e23c025804f6e3edac03f5cb5f6bca79afd4608a3ed01fd1a4e
+    syntax       360182dca78fade984da6794b855bf35e76210bd56e4d56c46c6bcb4bcbe025d
+    grid-5x5     e1cd39209596a00f1b423802e53e4681081d0de1a5ce623a6dc0fa223e68a0fa
+    shift        5462ab0d60b7091fe6afc589f11722a29ab0450310bfbaafe6d273cab9a37d2e
+    island-city  2467a8174cef5f6431a37686106d7e9d5a3d6b2c7a63142eeaea36c49596994e
+    valley-50    011ca86444d970a59367396e7b99739907ef765e0edacab462c51a34f77a56db
 """
 
 from __future__ import annotations

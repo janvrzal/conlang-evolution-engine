@@ -77,6 +77,8 @@ class LanguageSpec(_Model):
     words: dict[str, str] = Field(default_factory=dict)
     #: Pojmy, ze kterých se skládá vlastní jméno jazyka (např. ``["person", "language"]``).
     endonym: list[str] = Field(default_factory=list)
+    #: Tóny tónového jazyka jako tónové značky (``["˥", "˧", "˩"]``); prázdné = bez tónů.
+    tones: list[str] = Field(default_factory=list)
 
 
 class RegionSpec(_Model):
@@ -366,7 +368,7 @@ def _world(spec: WorldSpec, params: Parameters) -> World:
             **({"consonants": tuple(language.consonants)} if language.consonants else {}),
             **({"vowels": tuple(language.vowels)} if language.vowels else {}),
             stress_rule=language.stress, stress_strength=language.stress_strength, words=dict(language.words),
-            endonym=tuple(language.endonym),
+            endonym=tuple(language.endonym), tones=tuple(language.tones),
         )
         for language in spec.languages
     )
@@ -424,11 +426,17 @@ def check(data: dict[str, Any] | WorldSpec) -> list[Issue]:
 def _words(spec: WorldSpec) -> list[Issue]:
     """Slova zadaná autorem: známý pojem a hlásky, které engine umí."""
     from cee.v2.language.constructions import GRAMMATICAL_SOURCES
-    from cee.v2.language.segments import default_table
+    from cee.v2.language.segments import TONE_CODES, default_table
     from cee.v2.scenarios import DEFAULT_CONCEPTS
 
     known, table, issues = {*DEFAULT_CONCEPTS, *GRAMMATICAL_SOURCES}, default_table(), []
     for index, language in enumerate(spec.languages):
+        for position, tone in enumerate(language.tones):
+            if tone not in TONE_CODES:
+                issues.append(Issue(f"languages.{index}.tones.{position}",
+                                    f"neznámý tón '{tone}'; tón se píše tónovými značkami ˥ ˦ ˧ ˨ ˩ (např. ˥, ˧˥)"))
+        if len(set(language.tones)) != len(language.tones):
+            issues.append(Issue(f"languages.{index}.tones", "tóny se opakují"))
         for position, concept in enumerate(language.endonym):
             if concept not in known:
                 issues.append(Issue(f"languages.{index}.endonym.{position}", f"neznámý pojem '{concept}'"))
