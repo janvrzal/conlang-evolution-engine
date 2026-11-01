@@ -52,7 +52,7 @@ class FormBank:
         #: Pro kolik tabulek (od začátku ``_order``) už byl tvar předfiltrován
         #: a které z nich v něm mohou mít místo.
         self._screened: list[int] = []
-        self._rows: dict[int, list[int]] = {}
+        self._rows: dict[int, set[int]] = {}
         self._possible: dict[tuple[int, StressRule], tuple[int, set[str]]] = {}
 
     def __len__(self) -> int:
@@ -104,7 +104,7 @@ class FormBank:
         key = (process.key, rule)
         table = self._tables.get(key)
         if table is None:
-            table = self._tables[key] = ProcessTable(self, process, rule)
+            table = self._tables[key] = ProcessTable(self, process, rule, len(self._order))
             self._order.append(table)
             self._masks = None
         return table
@@ -128,8 +128,10 @@ class FormBank:
         Změna může tvar zasáhnout jen tam, kde je její cílová hláska se
         správným levým a pravým sousedem. Pro všechny tabulky najednou se to
         ověří jednou operací nad maticemi masek (tabulky × hlásky tvaru);
-        změnám bez místa se rovnou zapíše „nemění“. Podmínky přízvuku a pozice
-        místa jen dál zužují, takže předfiltr nic neodmítne neprávem.
+        změnám bez místa se nezapisuje nic: tabulka procesu si při dotazu na
+        tvar ověří, zda její řádek mezi možnými je (``ProcessTable.result``).
+        Podmínky přízvuku a pozice místa jen dál zužují, takže předfiltr nic
+        neodmítne neprávem.
         """
         if len(self._screened) <= form_id:
             self._screened.extend([0] * (form_id + 1 - len(self._screened)))
@@ -152,19 +154,19 @@ class FormBank:
         previous = np.concatenate([boundary, form[:-1]])
         following = np.concatenate([form[1:], boundary])
         possible = (target[:, form] & left[:, previous] & right[:, following]).any(axis=1)
-        for offset in np.flatnonzero(~possible).tolist():
-            self._order[start + offset].mark_unchanged(form_id)
-        self._rows.setdefault(form_id, []).extend((start + np.flatnonzero(possible)).tolist())
+        self._rows.setdefault(form_id, set()).update((start + np.flatnonzero(possible)).tolist())
         self._screened[form_id] = len(self._order)
 
 
 class ProcessTable:
     """Výsledek jednoho procesu pro každý tvar banky, plněný postupně."""
 
-    def __init__(self, bank: FormBank, process: Process, rule: StressRule):
+    def __init__(self, bank: FormBank, process: Process, rule: StressRule, index: int = -1):
         self.bank = bank
         self.process = process
         self.rule = rule
+        #: Řádek tabulky v pořadí vzniku banky (viz ``FormBank.screen``).
+        self.index = index
         self._results = np.full(max(64, len(bank)), UNKNOWN, dtype=np.int64)
 
     def _grow(self, top: int) -> None:
@@ -173,22 +175,15 @@ class ProcessTable:
             grown[: len(self._results)] = self._results
             self._results = grown
 
-    def known_unchanged(self, form_id: int) -> bool:
-        return form_id < len(self._results) and self._results[form_id] == UNCHANGED
-
-    def mark_unchanged(self, form_id: int) -> None:
-        self._grow(form_id)
-        if self._results[form_id] == UNKNOWN:
-            self._results[form_id] = UNCHANGED
-
     def result(self, form_id: int) -> int:
         """Totéž co :meth:`results` pro jeden tvar (bez režie polí)."""
         self._grow(form_id)
         found = int(self._results[form_id])
         if found == UNKNOWN:
             self.bank.screen(form_id)
-            found = int(self._results[form_id])
-        if found == UNKNOWN:
+            if self.index not in self.bank._rows.get(form_id, ()):
+                self._results[form_id] = UNCHANGED
+                return UNCHANGED
             changed = self.process.apply(self.bank.forms[form_id], self.bank.table, self.rule)
             found = UNCHANGED if changed is None else self.bank.id_of(changed)
             self._results[form_id] = found
