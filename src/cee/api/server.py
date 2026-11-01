@@ -7,6 +7,8 @@ HTTP požadavky na volání služby a zpátky na JSON.
 
 import os
 import subprocess
+import threading
+import time
 import uuid
 from dataclasses import asdict
 from typing import Literal, Optional
@@ -46,6 +48,30 @@ from cee.storage.legacy_neo4j import import_legacy_graph
 
 app = FastAPI(title="CEE Engine API")
 app.include_router(run_router)
+
+
+def _exit_with_parent(pid: int, interval: float = 2.0) -> None:
+    """Ukončí server, když skončí proces ``pid`` (desktopová aplikace).
+
+    Aplikace engine spouští jako pomocný proces a při běžném zavření ho sama
+    ukončí. Když ale spadne nebo ji systém zabije, engine by zůstal běžet;
+    proto ho hlídá i z této strany.
+    """
+    def watch() -> None:
+        while True:
+            time.sleep(interval)
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                os._exit(0)
+            except PermissionError:
+                pass
+
+    threading.Thread(target=watch, name="cee-parent-watch", daemon=True).start()
+
+
+if os.environ.get("CEE_PARENT_PID", "").isdigit():
+    _exit_with_parent(int(os.environ["CEE_PARENT_PID"]))
 app.include_router(v2_router)
 
 # Vite dev server si při obsazeném 5173 vezme 5174, 5175, ... — proto povolujeme

@@ -1,12 +1,27 @@
 /* Vizuální jazyk CEE (docs/ui-navrh): papír „Břidlice“, inkoust, červený inkoust
    jen pro změnu a ruku autora. Barvy jazyků jsou ověřené na barvoslepost a kontrast. */
 
-/* Úplné Charis 7 pro IPA (kombinační diakritika); soubor dodá `npm run fonts`.
-   Bez něj se použije Charis z Fontsource, kterému některá znaménka chybí. */
+/* IPA: Charis 7 (SIL, OFL 1.1) v úplné, neupravené podobě, aby fungovala veškerá
+   kombinační diakritika a skládání znamének (t͡ʃ, n̪, ŋ̊). Fontsource ji ořezává.
+   Písmo se nesmí podmnožinovat pod jménem Charis (vyhrazené jméno v OFL). */
 @font-face {
 	font-family: 'Charis CEE';
 	src: url('/fonts/Charis-Regular.woff2') format('woff2');
 	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Charis CEE';
+	src: url('/fonts/Charis-Italic.woff2') format('woff2');
+	font-weight: 400;
+	font-style: italic;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Charis CEE';
+	src: url('/fonts/Charis-Bold.woff2') format('woff2');
+	font-weight: 700;
 	font-style: normal;
 	font-display: swap;
 }
@@ -31,7 +46,7 @@
 	--l4: #8a9a12;
 	--l5: #c4508a;
 	--f-ui: 'Piazzolla', Georgia, serif;
-	--f-ipa: 'Charis CEE', 'Charis SIL', 'Gentium Plus', serif;
+	--f-ipa: 'Charis CEE', 'Charis SIL', 'Gentium Book Plus', 'Noto Serif', serif;
 	color-scheme: light;
 }
 

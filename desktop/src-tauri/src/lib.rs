@@ -45,6 +45,8 @@ fn spawn_engine(port: u16) -> Option<Child> {
     if let Ok(src) = std::env::var("CEE_ENGINE_SRC") {
         command.env("PYTHONPATH", src);
     }
+    // Engine skončí sám, když aplikace spadne nebo ji systém zabije.
+    command.env("CEE_PARENT_PID", std::process::id().to_string());
     match command.spawn() {
         Ok(child) => Some(child),
         Err(error) => {

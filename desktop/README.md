@@ -46,7 +46,10 @@ v Rustu přijde místo pomocného procesu.
 
 ## Písmo
 
-UI používá Piazzolla a pro IPA Charis (Fontsource). Fontsource z Charis
-vynechává část kombinační diakritiky, proto `npm run fonts` zkopíruje úplné
-Charis 7 do `static/fonts` (mimo git) z balíku, na jehož složku `web` ukazuje
-`CEE_CHARIS`.
+UI je v Piazzolle (Fontsource), IPA v Charis 7 (SIL, OFL 1.1) přibaleném
+v `static/fonts` v úplné, neupravené podobě s licencí `Charis-OFL.txt`.
+Pokrývá všech 138 znaků, které engine umí zapsat, včetně kombinační
+diakritiky a skládání znamének. Porovnání s Gentium Book Plus, Doulos SIL,
+Andika, Noto Serif a Libertinus Serif (tomu chybí tónové značky) je
+v historii projektu (1. 11. 2026). Charis se nesmí podmnožinovat pod svým
+jménem (vyhrazené jméno v OFL), proto se přibaluje celé.

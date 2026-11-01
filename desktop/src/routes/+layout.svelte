@@ -3,7 +3,6 @@
 	import '@fontsource/piazzolla/400-italic.css';
 	import '@fontsource/piazzolla/500.css';
 	import '@fontsource/piazzolla/700.css';
-	import '@fontsource/charis-sil/400.css';
 	import '$lib/tokens.css';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';

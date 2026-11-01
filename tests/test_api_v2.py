@@ -70,3 +70,16 @@ def test_nedokonceny_beh_nema_vysledek_a_jde_zrusit():
     assert early.value.status_code == 409
     v2.cancel_run(run_id)
     assert wait(run_id)["status"] == "cancelled"
+
+
+def test_engine_skonci_s_aplikaci():
+    import subprocess
+    import sys
+
+    parent = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.5)"])
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; from cee.api.server import _exit_with_parent; "
+         f"_exit_with_parent({parent.pid}, interval=0.1); time.sleep(10)"],
+    )
+    parent.wait()
+    assert child.wait(timeout=8) == 0
