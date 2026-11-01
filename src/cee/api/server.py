@@ -52,7 +52,9 @@ app.include_router(v2_router)
 # jakýkoli lokální origin, ne pevný seznam. Server je určený jen pro localhost.
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+    # Vývojový server UI na localhostu a okno desktopové aplikace (Tauri:
+    # tauri://localhost na macOS a Linuxu, http(s)://tauri.localhost na Windows).
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+|tauri://localhost|https?://tauri\.localhost",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -13,6 +13,8 @@ než o kus vedle*. Proto na mapách stojí slova, ne barevné plochy.
 
 ## Platforma
 
+Kostra aplikace je v [`desktop/`](../../desktop/README.md).
+
 Desktopová aplikace na Tauri 2. UI ve Svelte ve webview, engine zatím jako
 pomocný proces s `/api/v2`, po přepisu do Rustu volaný přímo. Webové UI
 zůstává kvůli sazbě IPA (kombinační diakritika) a typografii; únikovou cestou

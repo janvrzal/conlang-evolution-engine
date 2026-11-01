@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Hlavní okno CEE",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

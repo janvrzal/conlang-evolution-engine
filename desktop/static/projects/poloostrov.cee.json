@@ -1,0 +1,574 @@
+{
+ "name": "Poloostrov",
+ "seed": 4417,
+ "end_year": 2000,
+ "languages": [
+  {
+   "id": "pra",
+   "name": "Libodi",
+   "consonants": [
+    "p",
+    "t",
+    "k",
+    "kʷ",
+    "b",
+    "d",
+    "ɡ",
+    "s",
+    "h",
+    "m",
+    "n",
+    "r",
+    "l",
+    "w",
+    "j"
+   ],
+   "vowels": [
+    "a",
+    "e",
+    "i",
+    "o",
+    "u"
+   ],
+   "stress": "initial",
+   "endonym": [
+    "person",
+    "language"
+   ]
+  },
+  {
+   "id": "vych",
+   "consonants": [
+    "t",
+    "k",
+    "n",
+    "s",
+    "m",
+    "l",
+    "r",
+    "ʃ",
+    "x",
+    "d",
+    "ɡ",
+    "j",
+    "θ",
+    "z"
+   ],
+   "vowels": [
+    "a",
+    "i",
+    "u",
+    "ə",
+    "o"
+   ],
+   "stress": "final",
+   "grammar": "substrate",
+   "name": "Teda",
+   "endonym": [
+    "person"
+   ]
+  }
+ ],
+ "regions": [
+  {
+   "id": "vardun",
+   "name": "Jokwekwo",
+   "position": [
+    40,
+    120
+   ],
+   "neighbours": [
+    "bal",
+    "orra",
+    "selm"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 2,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "selm",
+   "name": "Ekwekwo",
+   "position": [
+    85,
+    95
+   ],
+   "neighbours": [
+    "kestrin",
+    "orra",
+    "vardun"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "orra",
+   "name": "Kwulat",
+   "position": [
+    70,
+    150
+   ],
+   "neighbours": [
+    "bal",
+    "kestrin",
+    "selm",
+    "tumar",
+    "vardun"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "kestrin",
+   "name": "Jowe",
+   "position": [
+    120,
+    130
+   ],
+   "neighbours": [
+    "hesk",
+    "ivel",
+    "orra",
+    "selm",
+    "tumar"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "bal",
+   "name": "Kate",
+   "position": [
+    30,
+    175
+   ],
+   "neighbours": [
+    "nask",
+    "orra",
+    "vardun"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "tumar",
+   "name": "Jowohe",
+   "position": [
+    110,
+    180
+   ],
+   "neighbours": [
+    "ivel",
+    "kestrin",
+    "orra"
+   ],
+   "villages": 4,
+   "terrain": "hills",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "hesk",
+   "name": "Jato",
+   "position": [
+    150,
+    90
+   ],
+   "neighbours": [
+    "dorn",
+    "kestrin"
+   ],
+   "villages": 4,
+   "terrain": "hills",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "ivel",
+   "name": "Mopepaj",
+   "position": [
+    160,
+    160
+   ],
+   "neighbours": [
+    "dorn",
+    "kaar",
+    "kestrin",
+    "tumar"
+   ],
+   "villages": 4,
+   "terrain": "mountains",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "dorn",
+   "name": "Rokwa",
+   "position": [
+    185,
+    115
+   ],
+   "neighbours": [
+    "hesk",
+    "ivel",
+    "mirost",
+    "pelna"
+   ],
+   "villages": 4,
+   "terrain": "mountains",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "kaar",
+   "name": "Rowohe",
+   "position": [
+    175,
+    210
+   ],
+   "neighbours": [
+    "corrin",
+    "ebb",
+    "ivel"
+   ],
+   "villages": 4,
+   "terrain": "hills",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "mirost",
+   "name": "Totsu",
+   "position": [
+    225,
+    145
+   ],
+   "neighbours": [
+    "dorn",
+    "pelna",
+    "sorrow",
+    "ulm"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "vych",
+   "identity": "shared"
+  },
+  {
+   "id": "pelna",
+   "name": "Misu",
+   "position": [
+    235,
+    95
+   ],
+   "neighbours": [
+    "dorn",
+    "mirost",
+    "sorrow"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "vych",
+   "identity": "shared"
+  },
+  {
+   "id": "sorrow",
+   "name": "Ichu",
+   "position": [
+    270,
+    125
+   ],
+   "neighbours": [
+    "mirost",
+    "pelna",
+    "teth",
+    "ulm",
+    "varra"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "vych",
+   "identity": "shared"
+  },
+  {
+   "id": "ulm",
+   "name": "Jane",
+   "position": [
+    255,
+    185
+   ],
+   "neighbours": [
+    "mirost",
+    "sorrow",
+    "teth"
+   ],
+   "villages": 4,
+   "terrain": "hills",
+   "density": 1,
+   "language": "vych",
+   "identity": "shared"
+  },
+  {
+   "id": "teth",
+   "name": "Su",
+   "position": [
+    300,
+    165
+   ],
+   "neighbours": [
+    "sorrow",
+    "ulm"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "vych",
+   "identity": "distinct"
+  },
+  {
+   "id": "varra",
+   "name": "Saichu",
+   "position": [
+    310,
+    100
+   ],
+   "neighbours": [
+    "sorrow"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "vych",
+   "identity": "distinct"
+  },
+  {
+   "id": "nask",
+   "name": "Mega",
+   "position": [
+    60,
+    225
+   ],
+   "neighbours": [
+    "bal",
+    "lisk"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "ebb",
+   "name": "Kitu",
+   "position": [
+    140,
+    240
+   ],
+   "neighbours": [
+    "kaar",
+    "lisk"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  },
+  {
+   "id": "lisk",
+   "name": "Kwita",
+   "position": [
+    105,
+    300
+   ],
+   "neighbours": [
+    "ebb",
+    "nask"
+   ],
+   "villages": 4,
+   "terrain": "island",
+   "density": 1,
+   "language": "pra",
+   "identity": "distinct"
+  },
+  {
+   "id": "corrin",
+   "name": "Sawe",
+   "position": [
+    210,
+    240
+   ],
+   "neighbours": [
+    "kaar"
+   ],
+   "villages": 4,
+   "terrain": "plain",
+   "density": 1,
+   "language": "pra",
+   "identity": "shared"
+  }
+ ],
+ "events": [
+  {
+   "kind": "state",
+   "year": 700,
+   "id": "zapad",
+   "regions": [
+    "vardun",
+    "selm",
+    "orra",
+    "kestrin",
+    "bal",
+    "tumar",
+    "hesk",
+    "ivel",
+    "nask",
+    "ebb"
+   ],
+   "capital": "vardun",
+   "centralization": "moderate",
+   "policy": "promoted",
+   "border": "closed",
+   "name": "Západní království"
+  },
+  {
+   "kind": "identity",
+   "year": 900,
+   "regions": [
+    "teth"
+   ],
+   "identity": "strong"
+  },
+  {
+   "kind": "state",
+   "year": 950,
+   "id": "vychod",
+   "regions": [
+    "pelna",
+    "sorrow",
+    "mirost",
+    "varra",
+    "teth",
+    "ulm"
+   ],
+   "capital": "pelna",
+   "centralization": "weak",
+   "policy": "tolerant",
+   "border": "normal",
+   "name": "Východní království"
+  },
+  {
+   "kind": "standard",
+   "year": 1100,
+   "of": "zapad",
+   "literacy": "elite"
+  },
+  {
+   "kind": "immigration",
+   "year": 1100,
+   "regions": [
+    "vardun"
+   ],
+   "immigration": 0.1
+  },
+  {
+   "kind": "lingua_franca",
+   "year": 1200,
+   "source": "vardun",
+   "regions": [
+    "pelna",
+    "sorrow",
+    "mirost",
+    "ulm",
+    "kaar",
+    "corrin"
+   ],
+   "spread": "common",
+   "nativize": false
+  },
+  {
+   "kind": "annexation",
+   "year": 1300,
+   "state": "zapad",
+   "regions": [
+    "kaar",
+    "corrin",
+    "dorn"
+   ]
+  },
+  {
+   "kind": "secession",
+   "year": 1450,
+   "id": "teth",
+   "regions": [
+    "teth",
+    "varra"
+   ],
+   "capital": "teth",
+   "centralization": "moderate",
+   "policy": "tolerant",
+   "border": "normal",
+   "name": "Odtržené knížectví"
+  },
+  {
+   "kind": "schools",
+   "year": 1600,
+   "of": "zapad",
+   "coverage": "mass",
+   "printing": true,
+   "diglossic": false
+  },
+  {
+   "kind": "preserve",
+   "year": 1600,
+   "regions": [
+    "lisk"
+   ],
+   "preserved": true
+  },
+  {
+   "kind": "language_policy",
+   "year": 1650,
+   "state": "zapad",
+   "policy": "enforced"
+  },
+  {
+   "kind": "revival",
+   "year": 1800,
+   "regions": [
+    "teth",
+    "varra"
+   ],
+   "strength": "national"
+  },
+  {
+   "kind": "collapse",
+   "year": 1850,
+   "state": "vychod"
+  }
+ ],
+ "format": "cee-v2-world/1"
+}
