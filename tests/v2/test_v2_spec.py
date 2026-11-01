@@ -121,11 +121,16 @@ def test_autor_muze_zadat_vlastni_slova_protojazyka():
 
 
 def test_vlastni_slova_se_overi():
-    data = small(languages=[{"id": "a", "words": {"xyz": "ka", "fire": "q͡ǂ", "hand": " "}}, {"id": "b"}])
+    data = small(languages=[{"id": "a", "words": {"xyz": "ka", "fire": "ʬ", "water": "q͡ǂa", "nose": "ʬa", "hand": " ",
+                                                   "eye": "kʷá", "ear": "ɐɾʡ"}}, {"id": "b"}])
     issues = {issue.path: issue.message for issue in check(data)}
     assert "neznámý pojem" in issues["languages.0.words.xyz"]
     assert "hlásku" in issues["languages.0.words.fire"]
+    assert "zapsalo jako" in issues["languages.0.words.water"]
+    assert "zapsalo jako 'a'" in issues["languages.0.words.nose"]  # neznámý znak by se ztratil
     assert "prázdné" in issues["languages.0.words.hand"]
+    # tón diakritikou a hlásky, které PanPhon slévá, projdou
+    assert "languages.0.words.eye" not in issues and "languages.0.words.ear" not in issues
 
 
 def test_identita_prichod_cizincu_a_jmena_statu_v_popisu():

@@ -30,7 +30,7 @@ src/cee/v2/
   repertoire.py       Variable, Variant, Distribution, Repertoire
   pools.py            živé proměnné po sloupcích (LivePools)
   language/
-    segments.py       tabulka hlásek nad PanPhonem, přirozené třídy
+    segments.py       tabulka hlásek nad PanPhonem a vlastními rysy (celé IPA), přirozené třídy
     processes.py      Process: jedna zvuková změna v jednom prostředí
     lexicon.py        Morpheme, UnitForm, FormStore (s deníkem změn), PhonologyState
     bank.py           banka různých tvarů a tabulky procesů
@@ -1126,6 +1126,9 @@ Sepsáno 2026-10-28 při revizi plánu po M3; aktualizováno po části D (proz�
 | Mezera | Kam |
 |---|---|
 | ~~Přízvuk jako proměnná (změna pravidla přízvuku) a síla přízvuku~~ | vyřešeno v části D (kroky D1–D2) |
+| ~~Tabulka hlásek slévala části IPA (ɐ a e, ɾ a r, tˠ a tʲ, qʷ a kʷ, jemná diakritika) a neznala ⱱ ʜ ʢ ʡ~~: od 2026-11-01 má za 24 rysy PanPhonu 19 vlastních rozlišovacích rysů (`segments.DETAIL_NAMES`) a 17 656 hlásek; každá hláska tabulky IPA i s diakritikou se zapíše zpět beze ztráty (`tests/v2/test_v2_ipa.py`). Původní hlásky mají vlastní rysy nulové a stejná ID, otisky se nezměnily | vyřešeno |
+| Tón se zapíše (diakritika *á* → tónová značka *a˦*), ale model ho nevyvíjí: tónové značky jsou v tabulce samostatné „hlásky“ a patří do třídy souhlásek, takže zvukové změny by s nimi zacházely jako s ní. Tonogeneze, tónový sandhi a tón jako rys slabiky chybí | prozódie (doplněk části D) / M7 |
+| Vlastní rysy nových hlásek dynamika zatím jen nese: změny rysů je zachovají jako sekundární artikulaci, ale žádná zvuková změna je nevytváří (např. *r → ɾ* mezi samohláskami) | doplněk M2 (katalog změn) |
 | Délka samohlásek, kompenzační prodloužení (Kavitskaya 2002) a přízvuk podle váhy slabiky (WALS 15A), tónová perturbace → tonogeneze | M7 (kalibrace modelu) |
 | Sporadické změny: metateze, disimilace, nepravidelné zkracování velmi častých slov | doplněk M2 |
 | Nové změny aspirace, ejektivity a glotalizace (sekundární palatalizace, labializace a vokalická nazalizace mají vlastní doplněk v části B typologie) | další doplněk M2, mimo rozsah B |

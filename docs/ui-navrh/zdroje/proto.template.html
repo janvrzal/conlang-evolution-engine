@@ -78,7 +78,7 @@ section h2 { margin: 0 0 4px; font-size: 20px; font-weight: 700; display: flex; 
 section h2 small { font-size: 13px; font-weight: 400; color: var(--ink-2); font-style: italic; }
 .phon { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 28px; align-items: start; margin-top: 18px; }
 .chart-wrap { overflow-x: auto; }
-table.chart { border-collapse: collapse; width: 100%; min-width: 620px; }
+table.chart { border-collapse: collapse; width: 100%; min-width: 760px; }
 .chart th { font-size: 10.5px; font-weight: 500; color: var(--ink-2); text-align: left; padding: 2px 4px; vertical-align: bottom; line-height: 1.15; }
 .chart thead th { writing-mode: horizontal-tb; text-align: center; }
 .chart td { border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); padding: 0; height: 34px; text-align: center; white-space: nowrap; }
@@ -270,17 +270,23 @@ table.chart { border-collapse: collapse; width: 100%; min-width: 620px; }
   const CONCEPTS = __CONCEPTS__;
   const GEO = __GEO__;
 
-  // Tabulka souhlásek: řádky způsob, sloupce místo; v buňce neznělá, znělá. Jen hlásky, které engine zná.
-  const PLACES = ['bilabiální', 'labio&shy;dentální', 'zubní', 'dásňové', 'za&shy;dásňové', 'tvrdo&shy;patrové', 'měkko&shy;patrové', 'čípkové', 'hrtanové'];
+  // Tabulka souhlásek IPA: řádky způsob, sloupce místo; v buňce neznělá, znělá. Engine zapíše všechny beze ztráty.
+  const PLACES = ['bilabiální', 'labio&shy;dentální', 'zubní', 'dásňové', 'za&shy;dásňové', 'retro&shy;flexní', 'tvrdo&shy;patrové',
+    'měkko&shy;patrové', 'čípkové', 'hltanové', 'hrtanové'];
   const ROWS = [
-    ['ražené', [['p', 'b'], [], ['', ''], ['t', 'd'], [], ['c', 'ɟ'], ['k', 'ɡ'], ['q', 'ɢ'], ['ʔ']]],
-    ['ražené se zaokrouhlením', [[], [], [], [], [], [], ['kʷ', 'ɡʷ'], [], []]],
-    ['nosové', [['m'], ['ɱ'], [], ['n'], [], ['ɲ'], ['ŋ'], ['ɴ'], null]],
-    ['kmitavé', [[], [], [], ['r'], [], [], null, ['ʀ'], null]],
-    ['třené', [['ɸ', 'β'], ['f', 'v'], ['θ', 'ð'], ['s', 'z'], ['ʃ', 'ʒ'], ['', 'ʝ'], ['x', 'ɣ'], ['χ', 'ʁ'], ['h', 'ɦ']]],
-    ['polotřené', [[], [], [], ['t͡s', 'd͡z'], ['t͡ʃ', 'd͡ʒ'], ['t͡ɕ', 'd͡ʑ'], [], [], null]],
-    ['boční', [[], [], [], ['l', 'ɬ'], [], ['ʎ'], ['ʟ'], [], null]],
-    ['aproximanty', [['w'], ['ʋ'], [], ['ɹ'], [], ['j'], ['ɰ'], [], null]],
+    ['ražené', [['p', 'b'], [], [], ['t', 'd'], [], ['ʈ', 'ɖ'], ['c', 'ɟ'], ['k', 'ɡ'], ['q', 'ɢ'], ['ʡ'], ['ʔ']]],
+    ['ražené se zaokrouhlením', [[], [], [], [], [], [], [], ['kʷ', 'ɡʷ'], ['qʷ', 'ɢʷ'], [], null]],
+    ['nosové', [['m'], ['ɱ'], [], ['n'], [], ['ɳ'], ['ɲ'], ['ŋ'], ['ɴ'], null, null]],
+    ['kmitavé', [['ʙ'], [], [], ['r'], [], [], [], null, ['ʀ'], [], null]],
+    ['švihové', [[], ['ⱱ'], [], ['ɾ'], [], ['ɽ'], [], null, [], [], null]],
+    ['třené', [['ɸ', 'β'], ['f', 'v'], ['θ', 'ð'], ['s', 'z'], ['ʃ', 'ʒ'], ['ʂ', 'ʐ'], ['ç', 'ʝ'], ['x', 'ɣ'], ['χ', 'ʁ'], ['ħ', 'ʕ', 'ʜ', 'ʢ'], ['h', 'ɦ']]],
+    ['boční třené', [[], [], [], ['ɬ', 'ɮ'], [], [], [], [], [], null, null]],
+    ['polotřené', [[], [], [], ['t͡s', 'd͡z'], ['t͡ʃ', 'd͡ʒ'], ['ʈ͡ʂ', 'ɖ͡ʐ'], ['t͡ɕ', 'd͡ʑ'], [], [], [], null]],
+    ['aproximanty', [['w'], ['ʋ'], [], ['ɹ'], [], ['ɻ'], ['j', 'ɥ'], ['ɰ'], [], [], null]],
+    ['boční aproximanty', [[], [], [], ['l'], [], ['ɭ'], ['ʎ'], ['ʟ'], [], null, null]],
+    ['mlaskavé', [['ʘ'], [], ['ǀ'], ['ǃ', 'ǁ'], ['ǂ'], [], [], [], [], null, null]],
+    ['implozivní', [['ɓ'], [], [], ['ɗ'], [], [], ['ʄ'], ['ɠ'], ['ʛ'], null, null]],
+    ['ejektivní', [['pʼ'], [], [], ['tʼ', 'sʼ'], ['t͡ʃʼ'], [], [], ['kʼ'], ['qʼ'], null, null]],
   ];
   // Samohlásky: [ipa, přednost 0 přední … 1 zadní, výška 0 zavřená … 1 otevřená].
   const VOWELS = [
@@ -288,8 +294,8 @@ table.chart { border-collapse: collapse; width: 100%; min-width: 620px; }
     ['ɪ', 0.16, 0.15], ['ʏ', 0.27, 0.15], ['ʊ', 0.84, 0.15],
     ['e', -0.04, 0.33], ['ø', 0.07, 0.33], ['ɘ', 0.45, 0.33], ['ɵ', 0.56, 0.33], ['ɤ', 0.92, 0.33], ['o', 1.03, 0.33],
     ['ə', 0.5, 0.5],
-    ['ɛ', -0.04, 0.66], ['œ', 0.08, 0.66], ['ɞ', 0.56, 0.66], ['ʌ', 0.92, 0.66], ['ɔ', 1.03, 0.66],
-    ['æ', 0.04, 0.83],
+    ['ɛ', -0.04, 0.66], ['œ', 0.08, 0.66], ['ɜ', 0.45, 0.66], ['ɞ', 0.56, 0.66], ['ʌ', 0.92, 0.66], ['ɔ', 1.03, 0.66],
+    ['æ', 0.04, 0.83], ['ɐ', 0.5, 0.83],
     ['a', -0.04, 1], ['ɶ', 0.08, 1], ['ɑ', 0.92, 1], ['ɒ', 1.03, 1],
   ];
   const VOWEL_SET = new Set(VOWELS.map(v => v[0]));
@@ -376,7 +382,7 @@ table.chart { border-collapse: collapse; width: 100%; min-width: 620px; }
   }
 
   // Pořadí hlásek = jak běžné jsou v jazycích světa (zhruba podle PHOIBLE); engine z pořadí odvodí četnost ve slovech.
-  const COMMON = ['m', 'k', 'j', 'p', 'w', 'n', 't', 's', 'ŋ', 'b', 'ɡ', 'd', 'h', 'l', 'ɲ', 'ʔ', 'f', 'r', 't͡ʃ', 'ʃ', 'z', 'v', 'd͡ʒ', 't͡s', 'x', 'c', 'ɟ', 'kʷ', 'ɡʷ',
+  const COMMON = ['m', 'k', 'j', 'p', 'w', 'n', 't', 's', 'ŋ', 'b', 'ɡ', 'd', 'h', 'l', 'ɲ', 'ʔ', 'f', 'r', 't͡ʃ', 'ʃ', 'z', 'v', 'd͡ʒ', 't͡s', 'x', 'ɾ', 'c', 'ɟ', 'kʷ', 'ɡʷ', 'ʈ', 'ɖ', 'ɳ', 'ɓ', 'ɗ', 'kʼ', 'tʼ', 'pʼ', 'ç', 'ɻ', 'ɭ', 'ʂ', 'ʐ', 'ɥ',
     'β', 'ɣ', 'ɸ', 'ʒ', 'ʋ', 'ɹ', 'q', 'χ', 'θ', 'ð', 'ʎ', 'ɬ', 'ɦ', 'd͡z', 't͡ɕ', 'd͡ʑ', 'ʁ', 'ɢ', 'ʝ', 'ɰ', 'ʀ', 'ɴ', 'ɱ', 'ʟ',
     'i', 'a', 'u', 'e', 'o', 'ɛ', 'ɔ', 'ə', 'ɪ', 'ʊ', 'ɨ', 'æ', 'y', 'ɑ', 'ø', 'ɯ', 'ʌ', 'œ', 'ɤ', 'ɒ', 'ʉ', 'ʏ', 'ɘ', 'ɵ', 'ɞ', 'ɶ'];
   const commonness = ipa => { const i = COMMON.indexOf(ipa); return i < 0 ? 999 : i; };
@@ -563,7 +569,7 @@ table.chart { border-collapse: collapse; width: 100%; min-width: 620px; }
     document.querySelector('.phon').parentElement.classList.toggle('freq', chartMode === 'freq');
     $('chart-mode').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === chartMode)));
     $('chart-help').textContent = chartMode === 'pick'
-      ? 'Klikni na hlásku v tabulce nebo v lichoběžníku a zařadíš ji do jazyka. Šrafovaná pole jsou artikulačně nemožná.'
+      ? 'Klikni na hlásku v tabulce nebo v lichoběžníku a zařadíš ji do jazyka. Šrafovaná pole jsou artikulačně nemožná. Engine zapíše celé IPA, včetně diakritiky ve vlastních slovech.'
       : 'Klikáním přepínáš, jak často se hláska ve slovech objeví: velká a tři tečky je častá, malá a jedna tečka vzácná. Účinek uvidíš hned ve slovech.';
     const by = lv => [...L.consonants, ...L.vowels].filter(x => levelOf(x) === lv);
     $('freq-summary').innerHTML = LEVELS.map(lv => `<b>${LEVEL_CZ[lv]}</b> <span class="ipa">${by(lv).join(' ') || '–'}</span>`).join(' · ');

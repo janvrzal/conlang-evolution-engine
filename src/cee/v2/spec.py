@@ -442,9 +442,10 @@ def _words(spec: WorldSpec) -> list[Issue]:
                 try:
                     parsed = table.parse(form)
                 except (KeyError, ValueError):
-                    parsed = None
-                if parsed is None or table.render(parsed) != form:
                     issues.append(Issue(path, f"engine nezná některou hlásku ve slově '{form}'"))
+                    continue
+                if not table.lossless(form):
+                    issues.append(Issue(path, f"slovo '{form}' by se zapsalo jako '{table.render(parsed)}'"))
     return issues
 
 
