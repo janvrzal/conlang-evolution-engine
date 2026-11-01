@@ -277,8 +277,9 @@ class ProcessTable:
 
     def result(self, form_id: int) -> int:
         """Totéž co :meth:`results` pro jeden tvar (bez režie polí)."""
-        self._grow(form_id)
-        found = int(self._results[form_id])
+        if form_id >= len(self._results):
+            self._grow(form_id)
+        found: int = self._results.item(form_id)
         if found == UNKNOWN:
             self.bank.screen(form_id)
             if not (self.bank._rows.get(form_id, 0) >> self.index) & 1:
@@ -299,7 +300,8 @@ class ProcessTable:
             grown[: len(self._results)] = self._results
             self._results = grown
         found = self._results[form_ids]
-        missing = np.unique(form_ids[found == UNKNOWN])
+        unknown = form_ids[found == UNKNOWN]
+        missing = np.unique(unknown) if len(unknown) else unknown
         missing_before = missing
         if len(missing):
             # Tvary bez místa pro změnu se hromadně označí, aplikuje se jen na zbytek.

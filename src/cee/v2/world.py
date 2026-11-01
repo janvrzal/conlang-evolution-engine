@@ -319,9 +319,13 @@ class World:
 
     def unit_of(self, code: Code, morpheme_id: str) -> UnitForm:
         """Aktuální stav tvaru slova (tvar, hranice koncovky, koncovka) v kódu."""
-        stored = code.forms.get(morpheme_id)
-        if stored is not None:
-            return stored
+        # Průchod vrstvami úložiště tvarů (``FormStore.get``) bez dalšího volání.
+        layer: FormStore | None = code.forms
+        while layer is not None:
+            stored = layer._own.get(morpheme_id)
+            if stored is not None:
+                return stored
+            layer = layer._base
         default = self.default_units.get(morpheme_id)
         if default is None:
             morpheme = self.morphemes[morpheme_id]
