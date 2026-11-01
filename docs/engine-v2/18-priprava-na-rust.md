@@ -22,7 +22,7 @@ Každý krok je malý commit, po každém `scripts/v2_digests.py` beze změny
 
 | Krok | Obsah | Stav |
 |---|---|---|
-| A1 | horké cesty: četnost užití, tvary slov, lexikální jasnost hromadně, levnější synchronizace indexů | běží (větev `engine-v2-datamodel`, `zadani-datovy-model.md`) |
+| A1 | horké cesty: hromadné četnosti užití, ploché pole hlásek a bitové předfiltry v bance tvarů, hromadná lexikální jasnost, fronta fonologizace naráz (`zadani-datovy-model.md`, test shody `test_v2_datamodel.py`) | hotovo 2026-11-01: otisky beze změny, valley-50 42,7 s → 34 s (−19 %), grid-5x5 v šumu; profil je teď plochý (podpora zvukových změn ~17 %, artikulace ~14 %, fronta fonologizace ~12 %, lexikální jasnost ~8 %) |
 | A2 | registry číselných ID pro morfémy, varianty, proměnné, skupiny, procesy, pojmy. Pořadí zpracování se nemění: kde dnes kód řadí podle řetězců, registr drží pořadí řetězců (pořadové číslo = pozice v seřazení) | |
 | A3 | stav kódu v polích: tvary (`FormStore` → čísla tvarů do `FormBank`), slovní zásoba a převládající kořeny (`PhonologyState`), fronty fonologizace | |
 | A4 | tabulky světa jako sloupce: morfémy (tvar, frekvence, druh, jazyk, třída slova), varianty (proměnná, payload podle typu), proměnné, vazby (matice/CSR místo slovníku dvojic) | |
