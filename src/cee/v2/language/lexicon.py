@@ -11,10 +11,16 @@ from __future__ import annotations
 
 import copy
 import itertools
+from array import array
 from dataclasses import dataclass, field
-from typing import Literal, NamedTuple
+from typing import Literal, NamedTuple, Protocol
 
+import numpy as np
+import numpy.typing as npt
+
+from cee.v2.language.bank import FormBank
 from cee.v2.language.segments import Form
+from cee.v2.registry import Registry
 
 MorphemeKind = Literal["root", "affix", "word"]
 
@@ -83,84 +89,176 @@ def next_token() -> int:
     return next(_TOKENS)
 
 
-#: Od kolika vrstev pod sebou se úložiště tvarů při větvení sloučí.
-MAX_LAYERS = 4
+class _FormContext(Protocol):
+    """Co úložiště tvarů potřebuje od světa: číslování morfémů a banku tvarů."""
+
+    registry: Registry
+
+    def form_bank(self) -> FormBank: ...
+
+
+class _PrivateContext:
+    """Registr a banka úložiště, které (zatím) nepatří žádnému světu (testy, nový kód)."""
+
+    def __init__(self) -> None:
+        self.registry = Registry()
+        self.bank: FormBank | None = None
+
+    def form_bank(self) -> FormBank:
+        if self.bank is None:
+            from cee.v2.language.segments import default_table
+
+            self.bank = FormBank(default_table())
+        return self.bank
+
+
+#: V polích úložiště tvarů: morfém nemá vlastní tvar (platí výchozí z registru světa).
+UNSET = -1
 
 
 class FormStore:
-    """Podkladové tvary kódu jako copy-on-write vrstvy nad výchozími tvary.
+    """Podkladové tvary kódu v polích podle čísla morfému (krok A3).
 
-    Neznámý morfém (třeba slovo převzaté od sousedů) má výchozí tvar z
-    registru světa; přesnější převzetí podle tvaru u zdroje přinese kontakt
-    v M5.
+    Pro každý morfém, jehož tvar se od výchozího liší, drží tři pole
+    indexovaná číslem morfému z registru světa (:mod:`cee.v2.registry`):
+
+    - ``form``: číslo tvaru v bance tvarů světa (:class:`FormBank`), −1 = výchozí;
+    - ``boundary``: kde začíná koncovka, −1 = bez koncovky;
+    - ``exponent``: číslo morfému koncovky, −1 = žádná.
+
+    Metody ``get``/``set``/``branch`` a deník (``token``, ``log``) zůstávají
+    jako dřív, jen s textovými ID na povrchu. Neznámý morfém (třeba slovo
+    převzaté od sousedů) má výchozí tvar z registru světa; přesnější převzetí
+    podle tvaru u zdroje přinese kontakt v M5.
+
+    Úložiště je přibližně tak velké jako počet morfémů, které kód přepsal;
+    ``branch`` kopíruje pole, takže potomek nesdílí se zdrojem nic měnitelného
+    (banka tvarů jen přibývá a sdílet se smí).
     """
 
-    __slots__ = ("_base", "_own", "_frozen", "token", "log")
+    __slots__ = (
+        "_ctx", "_morphemes", "_bank", "_form", "_boundary", "_exponent", "_frozen", "token", "log",
+    )
 
-    def __init__(self, base: FormStore | None = None):
-        self._base = base
-        self._own: dict[str, UnitForm] = {}
+    def __init__(self, context: _FormContext | None = None):
+        self._ctx: _FormContext = _PrivateContext() if context is None else context
+        self._morphemes = self._ctx.registry.morphemes
+        self._bank: FormBank | None = None
+        self._form = array("i")
+        self._boundary = array("i")
+        self._exponent = array("i")
         self._frozen = False
         #: Identita úložiště a deník přepsaných morfémů. Průběžné indexy
         #: (:mod:`cee.v2.language.index`) podle nich dorovnají jen změny.
         self.token = next(_TOKENS)
         self.log: list[str] = []
 
+    # --- napojení na svět ------------------------------------------------------
+
+    @property
+    def context(self) -> _FormContext:
+        return self._ctx
+
+    def bind(self, context: _FormContext) -> None:
+        """Přepne číslování a banku na ty, které patří světu; obsah se přenese.
+
+        Nový kód vzniká s vlastním (prázdným) číslováním a přidáním do světa
+        se napojí na jeho registr. Má-li už nějaké tvary, zapíšou se znovu
+        podle jmen morfémů.
+        """
+        if context is self._ctx:
+            return
+        names = self._morphemes.names
+        old_bank = self.bank()
+        kept = [
+            (names[number], old_bank.forms[form], self._boundary[number],
+             None if self._exponent[number] == UNSET else names[self._exponent[number]])
+            for number, form in enumerate(self._form) if form != UNSET
+        ]
+        self._ctx, self._bank = context, None
+        self._morphemes = context.registry.morphemes
+        self._form, self._boundary, self._exponent = array("i"), array("i"), array("i")
+        for name, form, boundary, exponent in kept:
+            self._store(name, UnitForm(form, None if boundary == UNSET else boundary, exponent))
+
+    def bank(self) -> FormBank:
+        bank = self._bank
+        if bank is None:
+            bank = self._bank = self._ctx.form_bank()
+        return bank
+
+    # --- čtení a zápis -----------------------------------------------------------
+
     def get(self, morpheme_id: str) -> UnitForm | None:
-        layer: FormStore | None = self
-        while layer is not None:
-            unit = layer._own.get(morpheme_id)
-            if unit is not None:
-                return unit
-            layer = layer._base
-        return None
+        number = self._morphemes.numbers.get(morpheme_id)
+        if number is None or number >= len(self._form):
+            return None
+        form = self._form[number]
+        if form == UNSET:
+            return None
+        boundary, exponent = self._boundary[number], self._exponent[number]
+        bank = self._bank
+        return UnitForm(
+            (self.bank() if bank is None else bank).forms[form], None if boundary == UNSET else boundary,
+            None if exponent == UNSET else self._morphemes.names[exponent],
+        )
+
+    def form(self, morpheme_id: str) -> Form | None:
+        """Jen tvar morfému (bez hranice a koncovky), nebo ``None`` při výchozím tvaru."""
+        number = self._morphemes.numbers.get(morpheme_id)
+        if number is None or number >= len(self._form):
+            return None
+        form = self._form[number]
+        if form == UNSET:
+            return None
+        bank = self._bank
+        return (self.bank() if bank is None else bank).forms[form]
+
+    def form_id(self, morpheme_id: str) -> int:
+        """Číslo tvaru v bance, nebo −1 (výchozí tvar); bez sestavení :class:`UnitForm`."""
+        number = self._morphemes.numbers.get(morpheme_id)
+        if number is None or number >= len(self._form):
+            return UNSET
+        return self._form[number]  # type: ignore[no-any-return]
 
     def set(self, morpheme_id: str, unit: UnitForm) -> None:
         if self._frozen:
             raise RuntimeError("Zmrazené tvary nelze měnit; použij branch().")
-        self._own[morpheme_id] = unit
+        self._store(morpheme_id, unit)
         self.log.append(morpheme_id)
+
+    def _store(self, morpheme_id: str, unit: UnitForm) -> None:
+        morphemes = self._morphemes
+        number = morphemes.intern(morpheme_id)
+        exponent = UNSET if unit.exponent is None else morphemes.intern(unit.exponent)
+        missing = number + 1 - len(self._form)
+        if missing > 0:
+            filler = array("i", [UNSET]) * missing
+            self._form.extend(filler)
+            self._boundary.extend(filler)
+            self._exponent.extend(filler)
+        self._form[number] = self.bank().id_of(unit.form)
+        self._boundary[number] = UNSET if unit.boundary is None else unit.boundary
+        self._exponent[number] = exponent
 
     def freeze(self) -> FormStore:
         self._frozen = True
         return self
 
-    def _depth(self) -> int:
-        depth, layer = 0, self._base
-        while layer is not None:
-            depth, layer = depth + 1, layer._base
-        return depth
-
-    def _flattened(self) -> FormStore:
-        """Zmrazená jediná vrstva se stejným obsahem jako celý řetěz pod ní."""
-        chain = []
-        layer: FormStore | None = self
-        while layer is not None:
-            chain.append(layer._own)
-            layer = layer._base
-        merged: dict[str, UnitForm] = {}
-        for own in reversed(chain):
-            merged.update(own)
-        flat = FormStore()
-        flat._own = merged
-        flat._frozen = True
-        return flat
+    def arrays(self) -> tuple[npt.NDArray[np.int32], npt.NDArray[np.int32], npt.NDArray[np.int32]]:
+        """Kopie polí (tvar, hranice koncovky, koncovka) podle čísla morfému; −1 = nenastaveno."""
+        return tuple(  # type: ignore[return-value]
+            np.array(field, dtype=np.int32) for field in (self._form, self._boundary, self._exponent)
+        )
 
     def branch(self) -> FormStore:
-        # Každé větvení přidá vrstvu; kód větvený mnohokrát (sídlo státu, ze
-        # kterého vzniká veřejná skupina v každé vesnici) by jinak při každém
-        # čtení tvaru procházel desítky vrstev. Zmrazené vrstvy se nemění,
-        # takže sloučení dá při čtení stejný výsledek.
-        if self._frozen:
-            return FormStore(self._flattened() if self._depth() >= MAX_LAYERS else self)
-        snapshot = FormStore(self._base)
-        snapshot._own = self._own
-        snapshot._frozen = True
-        if snapshot._depth() >= MAX_LAYERS:
-            snapshot = snapshot._flattened()
-        self._base = snapshot
-        self._own = {}
-        return FormStore(snapshot)
+        """Nezávislé úložiště se stejným obsahem; zdroj i potomek pak žijí zvlášť."""
+        child = FormStore(self._ctx)
+        child._bank = self._bank
+        child._form = array("i", self._form)
+        child._boundary = array("i", self._boundary)
+        child._exponent = array("i", self._exponent)
+        return child
 
 
 @dataclass

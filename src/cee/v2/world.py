@@ -329,13 +329,9 @@ class World:
 
     def unit_of(self, code: Code, morpheme_id: str) -> UnitForm:
         """Aktuální stav tvaru slova (tvar, hranice koncovky, koncovka) v kódu."""
-        # Průchod vrstvami úložiště tvarů (``FormStore.get``) bez dalšího volání.
-        layer: FormStore | None = code.forms
-        while layer is not None:
-            stored = layer._own.get(morpheme_id)
-            if stored is not None:
-                return stored
-            layer = layer._base
+        stored = code.forms.get(morpheme_id)
+        if stored is not None:
+            return stored
         default = self.default_units.get(morpheme_id)
         if default is None:
             morpheme = self.morphemes[morpheme_id]
@@ -346,7 +342,8 @@ class World:
 
     def form_of(self, code: Code, morpheme_id: str) -> tuple[int, ...]:
         """Aktuální podkladový tvar morfému v daném kódu."""
-        return self.unit_of(code, morpheme_id).form
+        form = code.forms.form(morpheme_id)
+        return self.unit_of(code, morpheme_id).form if form is None else form
 
     def materialize(self, group_id: str) -> None:
         """Zapíše živé proměnné skupiny do jejího repertoáru (před odebráním či kopií)."""
@@ -378,6 +375,9 @@ class World:
             raise ValueError(f"Skupina '{group.id}' už existuje.")
         if group.territory not in self.territories:
             raise ValueError(f"Území '{group.territory}' skupiny '{group.id}' neexistuje.")
+        # Nový kód se napojí na číslování a banku tvarů světa.
+        for code in group.codes:
+            code.forms.bind(self)
         self.groups[group.id] = group
         return group
 
