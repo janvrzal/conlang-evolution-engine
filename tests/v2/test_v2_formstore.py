@@ -7,6 +7,7 @@ import pytest
 from cee.v2.language.lexicon import FormStore, UnitForm
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
+from cee.v2.world import Code
 
 
 class LayeredReference:
@@ -104,3 +105,22 @@ def test_kod_ve_svete_pouziva_registr_a_banku_sveta():
         number = world.registry.morphemes.number(name)
         form_id = code.forms.arrays()[0][number]
         assert world.bank.forms[form_id] == world.form_of(code, name) == code.forms.get(name).form
+
+
+def test_cislo_tvaru_ze_sveta_sedi_s_hasovanim_tvaru_v_bance():
+    world = village_grid(4, seed=2, morphology=True, semantics=True)
+    Simulation(world).run(1000)
+    bank = world.form_bank()
+    checked = 0
+    for group in world.groups.values():
+        code = group.main_code
+        for morpheme_id in list(code.phonology.vocabulary) + list(dict.fromkeys(code.forms.log)):
+            assert world.form_id_of(code, morpheme_id) == bank.id_of(world.form_of(code, morpheme_id))
+            checked += 1
+    assert checked > 100
+    # Kód, který nepatří do světa (vlastní číslování a banka), se přepočte přes banku světa.
+    loose = Code("loose", world.groups[world.group_ids()[0]].main_code.repertoire)
+    morpheme_ids = list(world.morphemes)[:2]
+    loose.forms.set(morpheme_ids[0], UnitForm((1, 2, 3), None, None))
+    assert world.form_id_of(loose, morpheme_ids[0]) == bank.id_of((1, 2, 3))
+    assert world.form_id_of(loose, morpheme_ids[1]) == bank.id_of(world.morphemes[morpheme_ids[1]].form)
