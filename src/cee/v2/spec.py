@@ -276,6 +276,9 @@ class WorldSpec(_Model):
     generation_years: float = Field(default=25.0, ge=25.0, le=1000.0)
     #: Přepisy polí ``Parameters`` (kalibrační konstanty, tabulky úrovní).
     parameters: dict[str, Any] = Field(default_factory=dict)
+    #: Míra pozadí dějin (``Parameters.background_levels``): drobné události,
+    #: které svět generuje sám (mor, přesídlení, obchod, prestiž, cizí elita).
+    background: str = "none"
 
     @model_validator(mode="after")
     def _ordered_years(self) -> WorldSpec:
@@ -407,6 +410,9 @@ def check(data: dict[str, Any] | WorldSpec) -> list[Issue]:
         world = _world(spec, params)
     except ValueError as error:
         return [Issue("regions", str(error))]
+    if spec.background not in params.background_levels:
+        issues.append(Issue("background", f"neznámá míra pozadí dějin '{spec.background}'; možnosti: "
+                            + ", ".join(sorted(params.background_levels))))
     for index, item in enumerate(spec.events):
         if not spec.start_year <= item.year <= spec.end_year:
             issues.append(Issue(f"events.{index}.year", "událost leží mimo start_year až end_year"))
@@ -466,4 +472,21 @@ def build(data: dict[str, Any] | WorldSpec) -> tuple[World, list[WorldEvent], Wo
     assert spec is not None
     params, _ = _parameters(spec)
     assert params is not None
-    return _world(spec, params), [item.event() for _, item in _ordered(spec)], spec
+    events = [item.event() for _, item in _ordered(spec)]
+    return _world(spec, params), events + background_events(spec, params), spec
+
+
+def background_events(spec: WorldSpec, params: Parameters) -> list[WorldEvent]:
+    """Události pozadí dějin pro popis světa (po událostech autora ve stejném roce)."""
+    from cee.v2.background import generate
+
+    first = spec.languages[0].id
+    near: dict[str, set[str]] = {region.id: set() for region in spec.regions}
+    for region in spec.regions:
+        for other in region.neighbours:
+            if other in near and other != region.id:
+                near[region.id].add(other)
+                near[other].add(region.id)
+    regions = [(region.id, sorted(near[region.id]), region.language or first) for region in spec.regions]
+    return generate(regions, start=spec.start_year, end=spec.end_year, level_name=spec.background,
+                    seed=spec.seed, params=params)

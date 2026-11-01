@@ -212,6 +212,18 @@ class Parameters:
     border_levels: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
         "open": 1.0, "normal": 0.5, "closed": 0.1,
     }))
+    #: Pozadí dějin (``cee.v2.background``): míra drobných událostí, které svět
+    #: generuje sám vedle událostí autora. Násobí ``background_rates``.
+    background_levels: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
+        "none": 0.0, "calm": 0.3, "normal": 1.0, "turbulent": 2.5,
+    }))
+    #: Kolikrát za století v jednom kraji nastane událost pozadí při míře
+    #: ``normal``: mor, přesídlení části lidí k sousedům, vzestup obchodní cesty
+    #: k sousednímu kraji, změna prestiže kraje, cizí elita od souseda jiného
+    #: jazyka. Autorský odhad, kalibruje se v M7 (retence slovní zásoby).
+    background_rates: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
+        "plague": 0.08, "resettlement": 0.12, "trade": 0.12, "prestige": 0.08, "foreign_elite": 0.02,
+    }))
     #: Spisovný jazyk (``polity.Standard``, ``polity.Schools``): podíl gramotných
     #: při kodifikaci a podíl dětí ve škole podle úrovně; násobí se dosahem centra.
     literacy_levels: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
@@ -259,6 +271,7 @@ class Parameters:
         object.__setattr__(self, "grammar", grammar)
         object.__setattr__(self, "pressure_weights", FrozenMapping(self.pressure_weights))
         object.__setattr__(self, "change_rates", FrozenMapping(self.change_rates))
+        object.__setattr__(self, "background_rates", FrozenMapping(self.background_rates))
         for name in LEVEL_TABLES:
             object.__setattr__(self, name, FrozenMapping(getattr(self, name)))
 
@@ -266,7 +279,7 @@ class Parameters:
 #: Tabulky slovních úrovní (``Parameters``), které autor světa zadává jménem.
 LEVEL_TABLES = (
     "centralization_levels", "policy_levels", "lingua_franca_levels", "terrain_access", "identity_loyalty",
-    "literacy_levels", "schooling_levels", "border_levels", "revival_levels",
+    "literacy_levels", "schooling_levels", "border_levels", "revival_levels", "background_levels",
 )
 
 
