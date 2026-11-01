@@ -38,13 +38,15 @@ class MorphemeSet(MutableSet):  # type: ignore[type-arg]
     změna množiny za chodu nevadí.
     """
 
-    __slots__ = ("_numbering", "flags", "_count")
+    __slots__ = ("_numbering", "flags", "_count", "_listing")
 
     def __init__(self, numbering: Numbering, items: Iterable[str] = ()) -> None:
         self._numbering = numbering
         #: 1 = morfém č. N v množině; pole je tak dlouhé, jak daleko sahá nejvyšší číslo.
         self.flags = bytearray()
         self._count = 0
+        #: Jména v pořadí čísel, dokud se množina nezměnila (odvozeno, jen pro iteraci).
+        self._listing: list[str] | None = None
         for item in items:
             self.add(item)
 
@@ -66,8 +68,13 @@ class MorphemeSet(MutableSet):  # type: ignore[type-arg]
         return self._count > 0
 
     def __iter__(self) -> Iterator[str]:
-        names = self._numbering.names
-        return iter([names[number] for number in itertools.compress(range(len(self.flags)), self.flags)])
+        listing = self._listing
+        if listing is None:
+            names = self._numbering.names
+            listing = self._listing = [
+                names[number] for number in itertools.compress(range(len(self.flags)), self.flags)
+            ]
+        return iter(listing)
 
     def numbers(self) -> list[int]:
         """Čísla morfémů v množině vzestupně."""
@@ -83,6 +90,7 @@ class MorphemeSet(MutableSet):  # type: ignore[type-arg]
         if not self.flags[number]:
             self.flags[number] = 1
             self._count += 1
+            self._listing = None
 
     def discard(self, name: str) -> None:
         number = self._numbering.numbers.get(name)
@@ -93,10 +101,12 @@ class MorphemeSet(MutableSet):  # type: ignore[type-arg]
         if number < len(self.flags) and self.flags[number]:
             self.flags[number] = 0
             self._count -= 1
+            self._listing = None
 
     def clear(self) -> None:
         self.flags = bytearray()
         self._count = 0
+        self._listing = None
 
     def update(self, items: Iterable[str]) -> None:
         for item in items:
@@ -194,17 +204,24 @@ class DominantMap(MutableMapping):  # type: ignore[type-arg]
         return number
 
     def __getitem__(self, concept: str) -> str:
-        number = self._number(concept)
-        if number < 0:
-            raise KeyError(concept)
-        return self._morphemes.names[self.roots[number]]
+        number = self._concepts.numbers.get(concept)
+        if number is not None and number < len(self.roots):
+            root = self.roots[number]
+            if root >= 0:
+                return self._morphemes.names[root]
+        raise KeyError(concept)
 
     def get(self, concept: str, default: Any = None) -> Any:
-        number = self._number(concept)
-        return default if number < 0 else self._morphemes.names[self.roots[number]]
+        number = self._concepts.numbers.get(concept)
+        if number is not None and number < len(self.roots):
+            root = self.roots[number]
+            if root >= 0:
+                return self._morphemes.names[root]
+        return default
 
     def __contains__(self, concept: object) -> bool:
-        return self._number(concept) >= 0
+        number = self._concepts.numbers.get(concept)  # type: ignore[arg-type]
+        return number is not None and number < len(self.roots) and self.roots[number] >= 0
 
     def __setitem__(self, concept: str, root: str) -> None:
         number = self._concepts.intern(concept)

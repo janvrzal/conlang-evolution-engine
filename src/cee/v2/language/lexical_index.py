@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cee.v2.language.segments import Form
-
 if TYPE_CHECKING:
     from cee.v2.world import Code, World
 
@@ -16,6 +14,8 @@ class LexicalClarityIndex:
     """Příspěvky dominantních kořenů a memo dotázaných kandidátů.
 
     Neuchovává odkazy na svět; změna identity deníku vyvolá úplnou obnovu.
+    Tvary jsou v indexu čísla z banky tvarů světa (stejné číslo = stejný tvar),
+    ne n-tice hlásek.
     """
 
     def __init__(self) -> None:
@@ -26,11 +26,11 @@ class LexicalClarityIndex:
         self.lexicon_version = -1
         self.dominant: dict[str, str] = {}
         self.root_concepts: dict[str, set[str]] = {}
-        self.root_forms: dict[str, Form] = {}
-        self.owners: dict[Form, set[Pair]] = {}
+        self.root_forms: dict[str, int] = {}
+        self.owners: dict[int, set[Pair]] = {}
         self.scores: dict[Pair, float] = {}
-        self.score_forms: dict[Pair, Form] = {}
-        self.by_form: dict[Form, set[Pair]] = {}
+        self.score_forms: dict[Pair, int] = {}
+        self.by_form: dict[int, set[Pair]] = {}
         self.by_root: dict[str, set[Pair]] = {}
         self.graph_signature: object = None
 
@@ -50,13 +50,13 @@ class LexicalClarityIndex:
         self.by_form.clear()
         self.by_root.clear()
 
-    def _add(self, concept: str, root: str, form: Form) -> None:
+    def _add(self, concept: str, root: str, form: int) -> None:
         self.dominant[concept] = root
         self.root_concepts.setdefault(root, set()).add(concept)
         self.root_forms[root] = form
         self.owners.setdefault(form, set()).add((root, concept))
 
-    def _remove(self, concept: str) -> Form:
+    def _remove(self, concept: str) -> int:
         root = self.dominant.pop(concept)
         form = self.root_forms[root]
         self.owners[form].remove((root, concept))
@@ -88,12 +88,12 @@ class LexicalClarityIndex:
             self.owners.clear()
             self._clear_scores()
             for concept, root in state.dominant.items():
-                self._add(concept, root, world.form_of(code, root))
+                self._add(concept, root, world.form_id_of(code, root))
         else:
             if self.graph_signature != signature:
                 self._clear_scores()
             changed = set(forms.log[self.cursor:])
-            dirty_forms: set[Form] = set()
+            dirty_forms: set[int] = set()
             # Běžné přepisy tvarů nemění dominantní kořeny. Kontrola celé
             # mapy je záloha při změně slovní zásoby či neznámém zásahu.
             modified = {concept for concept, _, _ in journal[self.dominant_cursor:]}
@@ -108,7 +108,7 @@ class LexicalClarityIndex:
                     dirty_forms.add(self._remove(concept))
             for root in changed & self.root_concepts.keys():
                 old = self.root_forms[root]
-                new = world.form_of(code, root)
+                new = world.form_id_of(code, root)
                 if old != new:
                     concepts = self.root_concepts[root].copy()
                     for concept in concepts:
@@ -119,7 +119,7 @@ class LexicalClarityIndex:
             for concept in modified:
                 new_root = state.dominant.get(concept)
                 if new_root is not None:
-                    form = world.form_of(code, new_root)
+                    form = world.form_id_of(code, new_root)
                     self._add(concept, new_root, form)
                     dirty_forms.add(form)
             dirty: set[Pair] = set()
@@ -139,8 +139,9 @@ class LexicalClarityIndex:
         found = self.scores.get(key)
         if found is not None:
             return found
-        form = world.form_of(code, morpheme)
-        eroded = len(form) <= 2 and len(form) < len(world.morphemes[morpheme].form)
+        form = world.form_id_of(code, morpheme)
+        length = len(world.form_bank().forms[form])
+        eroded = length <= 2 and length < len(world.morphemes[morpheme].form)
         value = -0.5 if eroded else 0.0
         for root, other in self.owners.get(form, ()):
             if root != morpheme and other != concept and not (

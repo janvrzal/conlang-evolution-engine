@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from array import array
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Literal, Mapping, Sequence, cast
 
@@ -195,6 +196,11 @@ class World:
     bank: FormBank | None = None
     #: Výchozí tvar každého morfému (neměnný), aby se netvořil při každém čtení.
     default_units: dict[str, UnitForm] = field(default_factory=dict)
+    #: Číslo výchozího tvaru morfému v bance tvarů (odvozeno z ``default_units``).
+    default_form_ids: dict[str, int] = field(default_factory=dict)
+    #: Seedované sklony slov ke změně (``phonology.word_bias``): číslo procesu
+    #: → pole podle čísla lexému, NaN = ještě neurčeno. Odvozená keš.
+    word_biases: dict[int, array] = field(default_factory=dict)  # type: ignore[type-arg]
     #: Kalibrační konstanty dynamiky tohoto světa (neměnné, sdílí je kopie stavu).
     params: Parameters = field(default_factory=Parameters)
     #: Státy světa (``cee.v2.polity``) podle ID; vznikají událostí ``State``.
@@ -330,8 +336,9 @@ class World:
     def unit_of(self, code: Code, morpheme_id: str) -> UnitForm:
         """Aktuální stav tvaru slova (tvar, hranice koncovky, koncovka) v kódu."""
         stored = code.forms.get(morpheme_id)
-        if stored is not None:
-            return stored
+        return self._default_unit(morpheme_id) if stored is None else stored
+
+    def _default_unit(self, morpheme_id: str) -> UnitForm:
         default = self.default_units.get(morpheme_id)
         if default is None:
             morpheme = self.morphemes[morpheme_id]
@@ -343,7 +350,26 @@ class World:
     def form_of(self, code: Code, morpheme_id: str) -> tuple[int, ...]:
         """Aktuální podkladový tvar morfému v daném kódu."""
         form = code.forms.form(morpheme_id)
-        return self.unit_of(code, morpheme_id).form if form is None else form
+        return self._default_unit(morpheme_id).form if form is None else form
+
+    def form_id_of(self, code: Code, morpheme_id: str) -> int:
+        """Číslo podkladového tvaru morfému v bance tvarů světa.
+
+        Totéž co ``form_bank().id_of(form_of(code, morpheme_id))`` bez hašování
+        n-tice hlásek: úložiště tvarů kódu drží číslo tvaru přímo.
+        """
+        store = code.forms
+        if store.context is not self:
+            return self.form_bank().id_of(self.form_of(code, morpheme_id))
+        form_id = store.form_id(morpheme_id)
+        if form_id >= 0:
+            return form_id
+        found = self.default_form_ids.get(morpheme_id)
+        if found is None:
+            found = self.default_form_ids[morpheme_id] = self.form_bank().id_of(
+                self._default_unit(morpheme_id).form
+            )
+        return found
 
     def materialize(self, group_id: str) -> None:
         """Zapíše živé proměnné skupiny do jejího repertoáru (před odebráním či kopií)."""

@@ -20,8 +20,11 @@ znovu zařadí do front ostatních živých procesů.
 from __future__ import annotations
 
 import math
+from array import array
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+import numpy as np
 
 from cee.v2.history import History
 from cee.v2.language.columns import ProcessQueue
@@ -80,25 +83,33 @@ def _logit(p: float) -> float:
     return math.log(p / (1 - p))
 
 
-#: Klíč nese i rozptyl, aby světy s různým ``word_bias_sd`` sdílely proces, ne sklony.
-_BIASES: dict[tuple[int, float, str, str], float] = {}
-
-
 def word_bias(world: World, variable_id: str, morpheme_id: str) -> float:
     """Seedovaný sklon slova vůči změně; stejný ve všech skupinách.
 
     Patří lexému, ne jednotlivému tvaru: všechny buňky paradigmatu tak změnu
     přijmou (nebo odmítnou) společně a výjimka nevyrobí falešnou alternaci.
+    Hodnota je čistá funkce (seed, proces, lexém, ``word_bias_sd``); svět si ji
+    pamatuje v poli podle čísla lexému (jedno pole na proces).
     """
-    morpheme_id = world.morphemes[morpheme_id].lexeme_id
-    sd = world.params.word_bias_sd
-    key = (world.seed, sd, variable_id, morpheme_id)
-    bias = _BIASES.get(key)
-    if bias is None:
-        bias = _BIASES[key] = float(
-            generator(world.seed, "word-bias", variable_id, morpheme_id).normal(0.0, sd)
-        )
-    return bias
+    lexeme = world.morphemes[morpheme_id].lexeme_id
+    registry = world.registry
+    process = registry.processes.numbers.get(variable_id)
+    if process is None:
+        return _draw_bias(world, variable_id, lexeme)
+    number = registry.morphemes.numbers[lexeme]
+    column = world.word_biases.get(process)
+    if column is None:
+        column = world.word_biases[process] = array("d")
+    if number >= len(column):
+        column.extend(array("d", [math.nan]) * (len(registry.morphemes) - len(column)))
+    bias = column[number]
+    if bias != bias:
+        bias = column[number] = _draw_bias(world, variable_id, lexeme)
+    return bias  # type: ignore[no-any-return]
+
+
+def _draw_bias(world: World, variable_id: str, lexeme: str) -> float:
+    return float(generator(world.seed, "word-bias", variable_id, lexeme).normal(0.0, world.params.word_bias_sd))
 
 
 def _lead(world: World, process: Process, morpheme_id: str, code: Code | None = None) -> float:
@@ -137,9 +148,8 @@ def _needed(world: World, variable_id: str, morpheme_id: str, code: Code | None 
 
 def _applies(world: World, code: Code, variable_id: str, morpheme_id: str) -> bool:
     # Tabulka procesu v bance tvarů: každý různý tvar se posoudí jednou za běh.
-    bank = world.form_bank()
-    table = bank.process_table(world.processes[variable_id], code.stress_rule)
-    return table.result(bank.id_of(world.form_of(code, morpheme_id))) >= 0
+    table = world.form_bank().process_table(world.processes[variable_id], code.stress_rule)
+    return table.result(world.form_id_of(code, morpheme_id)) >= 0
 
 
 def _queue(world: World, code: Code, variable_id: str, morpheme_id: str) -> None:
@@ -184,7 +194,7 @@ def activate(world: World, code: Code, variable_id: str) -> None:
     words = sorted(state.vocabulary)
     bank = world.form_bank()
     results = bank.process_table(world.processes[variable_id], code.stress_rule).results(
-        bank.ids_of([world.form_of(code, morpheme_id) for morpheme_id in words])
+        np.fromiter((world.form_id_of(code, morpheme_id) for morpheme_id in words), np.int64, len(words))
     )
     # Fronta vznikne naráz: tabulka už řekla, kterých slov se změna týká
     # (to, co by ``_queue`` ověřil znovu), a čekající jsou seřazena podle
@@ -258,7 +268,7 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
             # Nový tvar posoudí jen změny, které v něm podle předfiltru banky
             # mohou mít místo; u ostatních by fronta nic neudělala.
             bank = world.form_bank()
-            rewritten_id, rule = bank.id_of(new[0]), code.stress_rule
+            rewritten_id, rule = world.form_id_of(code, morpheme_id), code.stress_rule
             for other in active_processes(state, world):
                 if other != variable_id and bank.may_apply(rewritten_id, rule, world.processes[other].key):
                     _queue(world, code, other, morpheme_id)
