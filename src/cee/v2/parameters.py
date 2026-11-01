@@ -121,6 +121,12 @@ class Parameters:
     clarity_short_factor: float = 1.5
     #: Váha odměny `Dispersion` za zaplnění mezery v soustavě vokálů.
     dispersion_factor: float = 4.0
+    #: Souběžná variabilita slovní zásoby protojazyka (``cee.v2.variation``):
+    #: násobek naměřené hustoty menšinových variant (0 = protojazyk bez
+    #: variability) a nejvyšší součet jejich podílů u pojmu ve vesnici, aby
+    #: slovo autora zůstalo převládající.
+    standing_variation: float = 1.0
+    variation_cap: float = 0.4
     #: Jak velkou část vstupu L2 kódu tvoří první jazyk jeho mluvčích, když se
     #: ho učí všichni až v dospělosti (``l2_share`` = 1).
     interference_weight: float = 0.5

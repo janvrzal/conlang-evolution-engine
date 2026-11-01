@@ -8,7 +8,7 @@ from typing import Any, Iterator, Sequence
 
 import numpy as np
 
-from cee.v2 import contact, morphology, phonology, prosody, syntax
+from cee.v2 import contact, morphology, phonology, prosody, syntax, variation
 from cee.v2.changes import DEFAULT_CHANGES, Change, InnovationContext, pressures_by_kind
 from cee.v2.events import WorldEvent
 from cee.v2.history import History
@@ -103,11 +103,16 @@ class Simulation:
         self.tick = 0
         self.tracker = LineageTracker()
         world.live.sync_groups(world)
-        world.live.load_differing(world)
         self._grammar = any(variable.kind == "construction" for variable in world.variables.values())
         if world.table is not None:
             for group_id in world.group_ids():
                 self._seed_vocabulary(group_id)
+        if not world.varied:
+            # Až po slovníku (posun významu a odvozování hledají slova kódu)
+            # a před načtením živých proměnných, které variabilitu převezmou.
+            world.varied = True
+            variation.seed(world)
+        world.live.load_differing(world)
 
     def _configure(self, changes: Sequence[Change], events: Sequence[WorldEvent]) -> None:
         self.changes = tuple(changes)

@@ -88,9 +88,48 @@ Průměr 93,4 % kazí první tisíciletí, které je téměř bez změn, a hned 
 něm druhé, které je rychlé, protože se nahromaděné varianty právě
 prosazují. Zažitost (`entrenchment`) a konformita tempo brzdí, ale tvar
 křivky zůstává i bez nich. Jasnost slova (`lexical_clarity`) na retenci
-skoro nepůsobí. Náprava (počáteční variabilita protojazyka, nebo jeho
-zahřátí před začátkem) je změna modelu, která pohne všemi otisky; zatím
-nezavedena.
+skoro nepůsobí.
+
+### Souběžná variabilita protojazyka (`cee.v2.variation`)
+
+Náprava zpoždění. Předběh (síť vesnic žije před začátkem 2 000 let jen
+s lexikálními změnami) zpoždění odstranil, ale stál víc než celý běh
+(`valley-50` 38 s → 143 s) a pokaždé dal statisticky totéž. Engine proto
+používá jen jeho statistiku: `scripts/v2_measure_variation.py` ji jednou
+změří (sítě 3 × 2 a 4 × 3 kraje po třech vesnicích, seedy 1–8, 13 s) do
+`cee/data/v2_standing_variation.json` a `variation.seed` ji rozdá při
+startu simulace bez simulování (0,1 s):
+
+- pro každý pojem, vesnici a druh změny, který u pojmu jde v protojazyce
+  navrhnout, Poissonův počet variant podle naměřené hustoty přeživších
+  variant toho druhu (koše podle frekvence pojmu; varianty vzniklé až
+  řetězením se připočtou k pojmům, kde druh jde);
+- skutečná změna navrhne skutečné slovo (posun významu, odvozenina,
+  složenina…);
+- vrcholový podíl z naměřených kvantilů, o 1, 2, 3 vazby dál naměřený
+  násobek (asi 0,3; 0,1; 0,08), jen ve vesnicích stejného jazyka;
+- slovo autora zůstane převládající: součet menšin u pojmu je nanejvýš
+  `Parameters.variation_cap` (0,4). Varianta, která slovo autora v předběhu
+  vytlačila, se do statistiky nepočítá (jinak by ho hned zase vytlačila).
+
+Hustotu násobí `Parameters.standing_variation` (výchozí 1, 0 vypne).
+Naměřené hodnoty: odvozenina 0,32–0,62 varianty na vesnici a pojem,
+složenina 0,22–0,31, převod mezi slovními druhy 0,13–0,18, posun významu
+0,10–0,12, nové kořeny a kontaminace 0,01–0,02; medián vrcholu 2,8 %
+u vzácných pojmů a 1,2 % u nejčastějších.
+
+Izolovaný svět (8 seedů, jádro): bez variability 0,982, 0,892, 0,930 po
+tisíciletích; s ní 0,900, 0,918, 0,949. Zpoždění zmizelo. Zbývá mírný
+pokles tempa v čase, protože pojmy se mění různě rychle (slabá slova
+padnou první, nová jsou pak dlouho stabilní; Pagel a kol. 2007). Tempo
+lexikálních změn retenci skoro nemění (poloviční tempo: 0,904 za první
+tisíciletí): o ní rozhoduje výběr a drift, ne přísun inovací.
+
+Svět dvou jazyků (8 seedů, jádro / výpůjčky v jádru): bez pozadí 0,915,
+0,834, 0,775 / 0,022, 0,057, 0,090; s pozadím `normal` 0,779, 0,654,
+0,550 / 0,139, 0,203, 0,263. Cíl kontaktu 85–88 % za tisíciletí pozadí
+`normal` přestřelí: výpůjčky přináší hlavně cizí elita, jejíž síla
+(`events.Conquest`: prestiž 2, vazba 0,5 ke všem poddaným) je odhad.
 
 ### Výpůjčky
 

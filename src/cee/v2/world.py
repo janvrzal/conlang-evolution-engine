@@ -208,6 +208,8 @@ class World:
     #: Skupina → skupina, jejíž prestiž přebírá (veřejná doména úředního jazyka
     #: a rodiny, které na něj přešly, mají status jeho sídla).
     prestige_mirror: dict[str, str] = field(default_factory=dict)
+    #: Protojazyky už dostaly souběžnou variabilitu (``cee.v2.variation``).
+    varied: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.concept_frequencies, FrequencyMap):

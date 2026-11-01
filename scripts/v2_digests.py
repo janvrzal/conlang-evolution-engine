@@ -75,6 +75,17 @@ dějin s výchozí mírou ``none`` otisky nezměnilo):
     shift        629d8d5a56b6d6bf2f687e5f21954196027ba8d86002f63e3933cb068cc30460
     island-city  2467a8174cef5f6431a37686106d7e9d5a3d6b2c7a63142eeaea36c49596994e
     valley-50    011ca86444d970a59367396e7b99739907ef765e0edacab462c51a34f77a56db
+
+Reference souběžné variability protojazyka (2026-11-01; ``cee.v2.variation``
+rozdá variabilitu slovní zásoby podle ``cee/data/v2_standing_variation.json``,
+jen světy se sémantikou; svět bez ní je beze změny):
+    phonology    8c5c7a9213138b3eebef7b843fe335138dc254bbfea4345f0462af4e81a7258e
+    morphology   2d2fb0297b2e87508def9f1f64f128a2a54f08edebbffbb2f0a47f7f579ed3f4
+    syntax       d1f4c81011ef7826ff4eac45281cd8e9bdb0180077f15ddc49186b5e0fc8da02
+    grid-5x5     a275faf2a41bcbdded1cf2979bedb062eb8a1156bd1213e97be1d4236bee6eb1
+    shift        b1b7266fd342099cf16515d3a652f16e5bc51e035a9aa164fbd3b1954c72103e
+    island-city  4c1c53554286862612aa9377fdc26831c88cd1c28da557d5218156262564cd2b
+    valley-50    13556259eaec43e0ae265487f8c645e48a91b2fd0b867e2ba9faba77f7c4ca22
 """
 
 from __future__ import annotations
