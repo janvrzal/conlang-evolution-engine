@@ -14,6 +14,7 @@ from cee.v2.language.processes import Process, StressRule
 from cee.v2.language.segments import SegmentTable, default_table
 from cee.v2.parameters import Parameters
 from cee.v2.pools import LivePools
+from cee.v2.registry import RegisteredDict, Registry
 from cee.v2.repertoire import Distribution, Origin, Repertoire, Variable, Variant
 from cee.v2.rng import stable_id, stable_int
 from cee.v2.semantics import ConceptGraph
@@ -161,6 +162,9 @@ class Link:
 class World:
     seed: int
     start_year: float = 0.0
+    #: Číselné registry entit (morfémy, varianty, proměnné, pojmy, skupiny,
+    #: procesy). Patří světu a kopíruje se s ním; viz :mod:`cee.v2.registry`.
+    registry: Registry = field(default_factory=Registry)
     territories: dict[str, Territory] = field(default_factory=dict)
     groups: dict[str, SpeechGroup] = field(default_factory=dict)
     links: dict[tuple[str, str], Link] = field(default_factory=dict)
@@ -212,6 +216,12 @@ class World:
     varied: bool = False
 
     def __post_init__(self) -> None:
+        # Slovníky entit zapisují nové klíče do registru (číslo = pořadí vzniku).
+        self.groups = RegisteredDict(self.registry, "group", self.groups)
+        self.variables = RegisteredDict(self.registry, "variable", self.variables)
+        self.variants = RegisteredDict(self.registry, "variant", self.variants)
+        self.morphemes = RegisteredDict(self.registry, "morpheme", self.morphemes)
+        self.processes = RegisteredDict(self.registry, "process", self.processes)
         if not isinstance(self.concept_frequencies, FrequencyMap):
             self.concept_frequencies = FrequencyMap(self.concept_frequencies)
 
