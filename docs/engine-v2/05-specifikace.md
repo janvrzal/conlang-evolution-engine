@@ -1151,6 +1151,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3; aktualizováno po části D (proz�
 | Migrace nemění velikost sídel (populace jsou stacionární) | podle potřeby UI |
 | Svět bez událostí mezi zásahy autora: od 2026-11-01 je pozadí dějin (`cee.v2.background`, `WorldSpec.background`: mor a obnova, přesídlení, obchod, prestiž kraje, cizí elita; `17-pozadi-dejin.md`). Výchozí míra `none`, četnosti jsou odhad | M7 (kalibrace četností) |
 | ~~Retence slovní zásoby má zahřívání~~: od 2026-11-01 dostane protojazyk souběžnou variabilitu podle naměřené statistiky (`cee.v2.variation`, `17-pozadi-dejin.md`); izolovaný svět 0,900 / 0,918 / 0,949 po tisíciletích, pod cílem 95–97 %. Tempo lexikálních změn retenci skoro nemění; tempo výpůjček (`LexicalBorrowing`, 1e-3) je nekalibrované | M7 (kalibrace retence: výběr a drift, ne tempo inovací) |
+| Kalibrace kontaktu: síla cizí elity z pozadí 0,1 (dva jazyky, pozadí `normal`: 88 % za tisíciletí, výpůjčky v jádru 13 % za 3 000 let). Kulturní slova se půjčují méně než základní a tempo `LexicalBorrowing` nemá vliv: výpůjčka nemá výhodu, kterou má odvozenina (`17-pozadi-dejin.md`) | M7 (přenositelnost výpůjček podle pojmu, výhoda výpůjčky z potřeby) |
 | Výpůjčka nového pojmu nebo kategorie (změna `Výpůjčka`): všechny jazyky mají stejnou sadu pojmů | až budou pojmy přibývat (M6, události) |
 | Příbuzné jazyky se po rozpadu mísí bez filtru, protože mají stejnou linii; filtr by měl záviset na pozorované vzdálenosti | M6 (linie jazyků) |
 | Konstanty kontaktu (filtry, váha interference, rychlost přechodu) jsou odhad | M7 |

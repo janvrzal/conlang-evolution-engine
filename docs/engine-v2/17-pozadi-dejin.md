@@ -24,7 +24,8 @@ k jinému jazyku nebo po migraci. Do historie se zapisují s
 | `Resettlement(year, source, target, share)` | 5–15 % lidí kraje se přestěhuje do sídla sousedního kraje a učí se tam jeho řeč (`events.Migration`) | `resettlement` |
 | `TradeShift(year, (a, b), factor)` | vazby mezi vesnicemi dvou sousedních krajů zesílí ×1,5–3; po 100–300 letech zase upadnou | `trade` |
 | `PrestigeShift(year, region, factor)` | základní prestiž skupin kraje ×0,7–1,4, pak `polity.refresh` | `prestige` |
-| `ForeignElite(year, conqueror, region)` | soused jiného jazyka dosadí v sídle kraje elitu (`events.Conquest`); jen jednou na dvojici | `foreign_elite` |
+| `ForeignElite(year, conqueror, region)` | soused jiného jazyka dosadí v sídle kraje elitu (`events.Conquest`, síla vazby a prestiž z `Parameters.background_elite_*`); jen jednou na dvojici | `foreign_elite` |
+| `EliteAssimilation(year, conqueror, region)` | o 100–300 let později elita splyne s místními a zanikne; výpůjčky zůstanou | `elite_assimilation` |
 
 ## Generátor
 
@@ -40,6 +41,8 @@ první (`Simulation` řadí podle roku a pořadí).
 |---|---|
 | `background_levels` | `none` 0, `calm` 0,3, `normal` 1, `turbulent` 2,5 |
 | `background_rates` (na kraj a století) | mor 0,08, přesídlení 0,12, obchod 0,12, prestiž 0,08, cizí elita 0,02 |
+| `background_spans` (rovnoměrně mezi `low` a `high`) | úmrtnost moru 0,15–0,4, obnova 2–4 kroky, přesídlení 0,05–0,15, obchod ×1,5–3 na 4–12 kroků, prestiž ×0,7–1,4, splynutí elity za 4–12 kroků |
+| `background_elite_prestige`, `_link`, `_share` | 2, **0,1** (kalibrováno níže), 0,1 obyvatel sídla |
 
 Při `normal` vychází asi 4 události na kraj za tisíciletí (plus obnovy a
 úpadky obchodu). Výchozí míra popisu světa je `none`, takže stávající světy
@@ -130,6 +133,46 @@ Svět dvou jazyků (8 seedů, jádro / výpůjčky v jádru): bez pozadí 0,915,
 0,550 / 0,139, 0,203, 0,263. Cíl kontaktu 85–88 % za tisíciletí pozadí
 `normal` přestřelí: výpůjčky přináší hlavně cizí elita, jejíž síla
 (`events.Conquest`: prestiž 2, vazba 0,5 ke všem poddaným) je odhad.
+
+### Kalibrace cizí elity
+
+Pracovní cíl (odhad, ne naměřená data): výpůjčky v základním slovníku
+nanejvýš asi 10 % za 3 000 let středně silného kontaktu a kulturní slova
+víc než základní. WOLD (Haspelmath & Tadmor 2009; Tadmor, Haspelmath
+& Taylor 2010) ukazuje, že nejodolnější jsou prostorové vztahy, části těla
+a smyslové vnímání a že jména se půjčují snáz než slovesa; přesné podíly
+pro Swadeshův seznam se nepodařilo ověřit. Retence kontaktu 85–88 % za
+tisíciletí.
+
+Dvě zjištění: (1) míšení závisí jen na součinu síla vazby × prestiž
+elity (prestiž 1 s vazbou 0,3 dá totéž co 2 s 0,15); (2) elita bez konce
+dodávala výpůjčky celé tisíciletí, proto přibylo splynutí
+(`EliteAssimilation`). Samotné splynutí ale skoro nepomohlo, výpůjčky
+vzniknou během prvních generací. Rozhoduje síla vazby (4 seedy, dva
+jazyky, pozadí `normal`, jádro / výpůjčky v jádru):
+
+| `background_elite_link` | 1 000 let | 3 000 let | za tisíciletí (3 000) |
+|---|---|---|---|
+| 0,5 (dřív) | 0,767 / 0,151 | 0,575 / 0,249 | 0,832 |
+| 0,25 | 0,829 / 0,095 | 0,625 / 0,197 | 0,855 |
+| 0,15 | 0,867 / 0,057 | 0,671 / 0,154 | 0,875 |
+| **0,1** | 0,884 / 0,043 | 0,701 / 0,132 | 0,888 |
+| bez pozadí | 0,913 / 0,023 | 0,778 / 0,087 | 0,920 |
+
+Výchozí je 0,1: výpůjčky v jádru nejblíž pracovnímu cíli, retence na
+horní hraně pásma kontaktu. Autorova událost `Conquest` má dál vlastní
+výchozí hodnoty (prestiž 2, vazba 0,5): to je dobytí, ne drobná elita.
+
+Tempo `LexicalBorrowing` na výsledek měřitelně nepůsobí (násobek 0, 1
+i 10 dá v jádru po 3 000 letech 0,700 / 0,691 a výpůjčky 0,134 / 0,138).
+Navržená výpůjčka se ujme vzácně, protože jako neprůhledné slovo nemá
+výhodu motivace jako odvozenina (`Motivation`: odvozenina +0,15, výpůjčka
+0). Výpůjčky tak vznikají hlavně šířením nových slov souseda přes hranici
+a přes elity.
+
+Zbývající rozpory: kulturní slova se půjčují méně než základní (0,102
+proti 0,132), a izolovaný jazyk je s 90 % za první tisíciletí pod cílem
+95–97 %; kontakt proto ubere jen asi 1,6 bodu místo zhruba deseti.
 
 ### Výpůjčky
 

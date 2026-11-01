@@ -1,6 +1,7 @@
 """Pozadí dějin (``cee.v2.background``): události, které svět generuje sám."""
 
 from cee.v2.background import (
+    EliteAssimilation,
     ForeignElite,
     Plague,
     PrestigeShift,
@@ -45,7 +46,8 @@ def test_generator_je_deterministicky_a_mira_ridi_cetnost():
     # Cizí elitu dosadí jen soused jiného jazyka (b ↔ c).
     assert {(event.conqueror, event.region) for event in events if isinstance(event, ForeignElite)} <= {
         ("b", "c"), ("c", "b")}
-    # Po moru přijde obnova, po vzestupu obchodu úpadek.
+    # Po moru přijde obnova, po vzestupu obchodu úpadek, cizí elita splyne.
+    assert any(isinstance(event, EliteAssimilation) for event in events)
     assert any(isinstance(event, Recovery) for event in events)
     assert any(isinstance(event, TradeShift) and event.factor < 1 for event in events)
 
@@ -91,7 +93,9 @@ def test_presidleni_obchod_prestiz_a_cizi_elita():
     ForeignElite(125, "c", "x").apply(w, history, 5)
     elites = [g for g in w.group_ids() if "+" in g]
     assert len(elites) == 1 and w.groups[elites[0]].main_code.language == "a"
-    assert [event["kind"] for event in history.events] == ["foreign_elite"]
+    EliteAssimilation(300, "c", "x").apply(w, history, 12)
+    assert not [g for g in w.group_ids() if "+" in g]
+    assert [event["kind"] for event in history.events] == ["foreign_elite", "elite_assimilation"]
 
 
 def test_beh_s_pozadim_zapise_udalosti_do_historie():
@@ -101,7 +105,7 @@ def test_beh_s_pozadim_zapise_udalosti_do_historie():
     recorded = [event for event in simulation.history.events if event.get("background")]
     assert recorded
     assert {event["kind"] for event in recorded} <= {
-        "plague", "recovery", "resettlement", "trade", "prestige", "foreign_elite"}
+        "plague", "recovery", "resettlement", "trade", "prestige", "foreign_elite", "elite_assimilation"}
 
 
 def test_vypujcka_je_inovace_se_slovem_souseda_jineho_jazyka():

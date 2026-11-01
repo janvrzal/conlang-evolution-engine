@@ -34,7 +34,7 @@ TIMELINE = frozenset({
     "standard", "schools", "nativization", "revival_movement", "revival", "transmission_resumed", "preserve",
     "identity", "immigration",
     # pozadí dějin (události, které svět generuje sám)
-    "plague", "recovery", "resettlement", "trade", "prestige", "foreign_elite",
+    "plague", "recovery", "resettlement", "trade", "prestige", "foreign_elite", "elite_assimilation",
 })
 
 

@@ -3,13 +3,14 @@
 Ve skutečnosti se pořád něco děje: kraj vylidní mor a za pár generací se
 zase zaplní, část lidí se přestěhuje k sousedům, obchodní cesta zesílí
 a po čase upadne, kraj zbohatne nebo zchudne, soused jiného jazyka dosadí
-elitu. Tyhle drobné otřesy hýbou jazykem: přinášejí výpůjčky a míšení,
+elitu, která po několika generacích splyne s místními. Tyhle drobné otřesy hýbou jazykem: přinášejí výpůjčky a míšení,
 v malých populacích zesilují drift. Klidný svět bez nich mění slovní zásobu
 pomaleji než skutečné jazyky (kalibrace M7, retence).
 
 Autor volí jen míru (``Parameters.background_levels``: ``none``, ``calm``,
 ``normal``, ``turbulent``); četnosti druhů událostí jsou v
-``Parameters.background_rates``. Generátor je deterministický podle seedu
+``Parameters.background_rates``, rozsahy veličin v
+``Parameters.background_spans``. Generátor je deterministický podle seedu
 světa a vlastního proudu náhody, takže stejný svět dá stejné dějiny a na
 ostatní náhodu enginu nesahá. Události pracují s kraji; vesnice si najdou
 až při provedení, takže fungují i po přechodu k jinému jazyku nebo migraci.
@@ -143,10 +144,47 @@ class ForeignElite(WorldEvent):
         conqueror = seat_of(world, self.conqueror)
         if f"{seat.territory}+{conqueror}" in world.groups:
             return
+        params = world.params
         Conquest(self.year, conqueror, seat.territory, subjects,
-                 population=max(20, seat.population // 10)).apply(world, History(), tick)
+                 population=max(20, round(seat.population * params.background_elite_share)),
+                 prestige=params.background_elite_prestige,
+                 strength=params.background_elite_link).apply(world, History(), tick)
         history.record("foreign_elite", tick, self.year, conqueror=self.conqueror, region=self.region,
                        background=True)
+
+
+@dataclass(frozen=True)
+class EliteAssimilation(WorldEvent):
+    """Cizí elita v kraji splyne s místními a zanikne; výpůjčky po ní zůstanou.
+
+    Elity se do několika generací přestanou odlišovat (Normané v Anglii,
+    Varjagové na Rusi). Bez konce by elita dodávala výpůjčky navždy.
+    """
+
+    year: float
+    conqueror: str
+    region: str
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        rulers = groups_in(world, (self.conqueror,))
+        if not rulers:
+            return
+        language = world.groups[rulers[0]].main_code.language
+        ended = [group_id for group_id in groups_in(world, (self.region,))
+                 if "+" in group_id and world.groups[group_id].main_code.language == language]
+        for group_id in ended:
+            world.remove_group(group_id)
+        if ended:
+            history.record("elite_assimilation", tick, self.year, conqueror=self.conqueror, region=self.region,
+                           groups=ended, background=True)
+
+
+def _span(rng, spans: Mapping[str, Mapping[str, float]], name: str) -> float:
+    return float(rng.uniform(spans[name]["low"], spans[name]["high"]))
+
+
+def _steps(rng, spans: Mapping[str, Mapping[str, float]], name: str) -> int:
+    return int(rng.integers(int(spans[name]["low"]), int(spans[name]["high"]) + 1))
 
 
 def generate(
@@ -164,6 +202,7 @@ def generate(
     if scale <= 0.0:
         return []
     rates: Mapping[str, float] = params.background_rates
+    spans = params.background_spans
     rng = generator(seed, "background")
     neighbours = {region: sorted(set(near)) for region, near, _ in regions}
     language = {region: lang for region, _, lang in regions}
@@ -178,27 +217,31 @@ def generate(
                 if expected <= 0.0 or int(rng.poisson(expected)) == 0:
                     continue
                 if kind == "plague":
-                    mortality = round(float(rng.uniform(0.15, 0.4)), 2)
+                    mortality = round(_span(rng, spans, "plague_mortality"), 2)
                     events.append(Plague(year, (region,), mortality))
-                    later = year + STEP * int(rng.integers(2, 5))
+                    later = year + STEP * _steps(rng, spans, "recovery_steps")
                     if later < end:
                         events.append(Recovery(later, (region,), round(1.0 / (1.0 - mortality), 3)))
                 elif kind == "resettlement" and near:
                     target = near[int(rng.integers(len(near)))]
-                    events.append(Resettlement(year, region, target, round(float(rng.uniform(0.05, 0.15)), 2)))
+                    events.append(Resettlement(year, region, target, round(_span(rng, spans, "resettlement_share"), 2)))
                 elif kind == "trade" and near:
                     other = near[int(rng.integers(len(near)))]
                     pair = (min(region, other), max(region, other))
-                    factor = round(float(rng.uniform(1.5, 3.0)), 2)
+                    factor = round(_span(rng, spans, "trade_factor"), 2)
                     events.append(TradeShift(year, pair, factor))
-                    later = year + STEP * int(rng.integers(4, 13))
+                    later = year + STEP * _steps(rng, spans, "trade_steps")
                     if later < end:
                         events.append(TradeShift(later, pair, round(1.0 / factor, 3)))
                 elif kind == "prestige":
-                    events.append(PrestigeShift(year, region, round(float(rng.uniform(0.7, 1.4)), 2)))
+                    events.append(PrestigeShift(year, region, round(_span(rng, spans, "prestige_factor"), 2)))
                 elif kind == "foreign_elite":
                     foreign = [other for other in near if language.get(other) != language.get(region)]
                     if foreign:
-                        events.append(ForeignElite(year, foreign[int(rng.integers(len(foreign)))], region))
+                        conqueror = foreign[int(rng.integers(len(foreign)))]
+                        events.append(ForeignElite(year, conqueror, region))
+                        later = year + STEP * _steps(rng, spans, "elite_steps")
+                        if later < end:
+                            events.append(EliteAssimilation(later, conqueror, region))
         year += STEP
     return events

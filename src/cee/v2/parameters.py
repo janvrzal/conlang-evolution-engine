@@ -227,6 +227,26 @@ class Parameters:
     #: ``normal``: mor, přesídlení části lidí k sousedům, vzestup obchodní cesty
     #: k sousednímu kraji, změna prestiže kraje, cizí elita od souseda jiného
     #: jazyka. Autorský odhad, kalibruje se v M7 (retence slovní zásoby).
+    #: Rozsahy náhodných veličin pozadí dějin (rovnoměrně mezi mezemi): podíl
+    #: zemřelých při moru, podíl přesídlených, násobek obchodu a prestiže a
+    #: doby v krocích po 25 letech (obnova po moru, trvání obchodní cesty,
+    #: splynutí cizí elity s místními).
+    background_spans: Mapping[str, Mapping[str, float]] = field(default_factory=lambda: FrozenMapping({
+        name: {"low": low, "high": high} for name, (low, high) in {
+            "plague_mortality": (0.15, 0.4), "recovery_steps": (2, 4), "resettlement_share": (0.05, 0.15),
+            "trade_factor": (1.5, 3.0), "trade_steps": (4, 12), "prestige_factor": (0.7, 1.4),
+            "elite_steps": (4, 12),
+        }.items()
+    }))
+    #: Cizí elita z pozadí dějin (``background.ForeignElite``): prestiž elity,
+    #: síla její vazby ke každé poddané vesnici a podíl obyvatel sídla. Síla
+    #: vazby kalibrovaná na svět dvou jazyků s pozadím ``normal``
+    #: (``docs/engine-v2/17-pozadi-dejin.md``): 0,1 dá retenci 88 % za
+    #: tisíciletí a výpůjčky v základním slovníku 13 % za 3 000 let; dřívějších
+    #: 0,5 (jako ``events.Conquest``) dávalo 77 % a 25 %.
+    background_elite_prestige: float = 2.0
+    background_elite_link: float = 0.1
+    background_elite_share: float = 0.1
     background_rates: Mapping[str, float] = field(default_factory=lambda: FrozenMapping({
         "plague": 0.08, "resettlement": 0.12, "trade": 0.12, "prestige": 0.08, "foreign_elite": 0.02,
     }))
@@ -278,6 +298,7 @@ class Parameters:
         object.__setattr__(self, "pressure_weights", FrozenMapping(self.pressure_weights))
         object.__setattr__(self, "change_rates", FrozenMapping(self.change_rates))
         object.__setattr__(self, "background_rates", FrozenMapping(self.background_rates))
+        object.__setattr__(self, "background_spans", FrozenMapping(self.background_spans))
         for name in LEVEL_TABLES:
             object.__setattr__(self, name, FrozenMapping(getattr(self, name)))
 
