@@ -378,6 +378,7 @@ class World:
         # Nový kód se napojí na číslování a banku tvarů světa.
         for code in group.codes:
             code.forms.bind(self)
+            code.phonology.bind(self.registry)
         self.groups[group.id] = group
         return group
 

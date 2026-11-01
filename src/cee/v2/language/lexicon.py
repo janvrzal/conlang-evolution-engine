@@ -12,15 +12,17 @@ from __future__ import annotations
 import copy
 import itertools
 from array import array
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Literal, NamedTuple, Protocol
+from typing import Any, Literal, NamedTuple, Protocol
 
 import numpy as np
 import numpy.typing as npt
 
 from cee.v2.language.bank import FormBank
+from cee.v2.language.columns import DominantMap, MorphemeCounts, MorphemeSet, QueueMap
 from cee.v2.language.segments import Form
-from cee.v2.registry import Registry
+from cee.v2.registry import KINDS, Registry
 
 MorphemeKind = Literal["root", "affix", "word"]
 
@@ -268,15 +270,23 @@ class PhonologyState:
     ``restructured`` jsou morfémy, které si proces už zapsaly do podkladového
     tvaru. ``closed`` jsou procesy, které po ustálení přestaly být živé: nové
     slovo jimi už neprojde a nepřepsané morfémy zůstanou reliktní výjimkou.
+
+    Slovní zásoba, počty užití, dominantní kořeny a fronty fonologizace jsou
+    v polích podle čísel z registru světa (:mod:`cee.v2.language.columns`);
+    textové rozhraní (``in``, ``add``, ``get``, ``items``) zůstává.
+    Samostatný stav (bez světa) má vlastní registr, ke světu se připojí
+    metodou :meth:`bind` při přidání skupiny.
     """
 
+    registry: Registry = field(default_factory=Registry)
     #: Morfémy, které kód právě užívá jako dominantní slova pro své pojmy.
-    vocabulary: set[str] = field(default_factory=set)
-    #: Pojem → jeho dominantní kořen; kořen → pro kolik pojmů je dominantní.
-    #: Posun významu dá jednomu kořeni víc pojmů, a ten pak ze slovní zásoby
-    #: nesmí vypadnout, dokud ho užívá aspoň jeden z nich.
-    dominant: dict[str, str] = field(default_factory=dict)
-    uses: dict[str, int] = field(default_factory=dict)
+    vocabulary: MorphemeSet = field(init=False)
+    #: Pojem → jeho dominantní kořen. Posun významu dá jednomu kořeni víc
+    #: pojmů, a ten pak ze slovní zásoby nesmí vypadnout, dokud ho užívá aspoň
+    #: jeden z nich (počet pojmů kořene drží ``uses``).
+    dominant: DominantMap = field(init=False)
+    #: Morfém → pro kolik pojmů je dominantní kořenem (pole podle čísla morfému; chybí = 0).
+    uses: MorphemeCounts = field(init=False)
     #: Append-only vstupy pro inkrementální konzumenty; obsahují jen stabilní ID.
     dominant_log: list[tuple[str, str | None, str | None]] = field(default_factory=list)
     usage_log: list[tuple[str, int, int]] = field(default_factory=list)
@@ -284,14 +294,15 @@ class PhonologyState:
     lifecycle_log: list[tuple[str, str, str]] = field(default_factory=list)
     grammar_log: list[str] = field(default_factory=list)
     grammar_applied_log: list[str] = field(default_factory=list)
-    restructured: dict[str, set[str]] = field(default_factory=dict)
+    restructured: dict[str, MorphemeSet] = field(default_factory=dict)
     #: Kdy dosáhl změněný tvar procesu 100 %.
     fixed_since: dict[str, int] = field(default_factory=dict)
     closed: set[str] = field(default_factory=set)
-    #: Proces → seřazené (potřebný logit, morfém); viz ``restructure``.
-    pending: dict[str, list[tuple[float, str]]] = field(default_factory=dict)
-    #: Morfémy, které ve frontě procesu právě čekají (pro rychlé „už tam je?“).
-    queued: dict[str, set[str]] = field(default_factory=dict)
+    #: Proces → fronta fonologizace (potřebný logit a morfém, seřazeno; viz
+    #: :class:`ProcessQueue`) a morfémy, které v ní právě čekají (pro rychlé
+    #: „už tam je?“).
+    pending: QueueMap = field(init=False)
+    queued: dict[str, MorphemeSet] = field(default_factory=dict)
     #: Pořadí, ve kterém procesy kód zasáhly: chronologie změn tohoto kódu.
     #: Nezávisí na tom, kdy stejnou změnu vymyslel někdo jinde.
     order: dict[str, int] = field(default_factory=dict)
@@ -311,6 +322,38 @@ class PhonologyState:
     #: které vznikly. Nejsou součástí stavu jazyka.
     cache: dict[object, tuple[int, object]] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        morphemes = self.registry.morphemes
+        self.vocabulary = MorphemeSet(morphemes)
+        self.dominant = DominantMap(self.registry.concepts, morphemes)
+        self.uses = MorphemeCounts(morphemes)
+        self.pending = QueueMap(morphemes)
+
+    def bind(self, registry: Registry) -> None:
+        """Přepne číslování na registr světa; obsah se přenese podle jmen."""
+        if registry is self.registry:
+            return
+        vocabulary = list(self.vocabulary)
+        dominant = self.dominant.items()
+        uses = list(self.uses.items())
+        queues = {process: queue.pairs() for process, queue in self.pending.items()}
+        queued = {process: list(waiting) for process, waiting in self.queued.items()}
+        restructured = {process: list(done) for process, done in self.restructured.items()}
+        self.registry = registry
+        self.__post_init__()
+        self.vocabulary.update(vocabulary)
+        for concept, root in dominant:
+            self.dominant[concept] = root
+        self.uses.update(uses)
+        for process, pairs in queues.items():
+            self.pending[process] = pairs
+        self.queued = {process: MorphemeSet(registry.morphemes, names) for process, names in queued.items()}
+        self.restructured = {process: MorphemeSet(registry.morphemes, names) for process, names in restructured.items()}
+
+    def morpheme_set(self, items: Iterable[str] = ()) -> MorphemeSet:
+        """Nová množina morfémů nad číslováním tohoto kódu."""
+        return MorphemeSet(self.registry.morphemes, items)
+
     def set_dominant(self, concept: str, root: str | None) -> bool:
         """Změní dominantní kořen a zaznamená i přechodný stav bez kořene."""
         old = self.dominant.get(concept)
@@ -323,17 +366,18 @@ class PhonologyState:
         self.dominant_log.append((concept, old, root))
         return True
 
+    def uses_of(self, root: str) -> int:
+        """Pro kolik pojmů je kořen dominantní (0, když pro žádný)."""
+        return self.uses.get(root, 0)  # type: ignore[no-any-return]
+
     def adjust_uses(self, root: str, delta: int, *, missing: int = 0) -> int:
         """Upraví počet pojmů kořene a zaznamená změnu pro frekvenční indexy."""
         old = self.uses.get(root, missing)
         new = old + delta
-        if new > 0:
-            self.uses[root] = new
-        else:
-            self.uses.pop(root, None)
+        self.uses[root] = new  # nekladný počet položku odebere
         if new != old:
             self.usage_log.append((root, old, new))
-        return new
+        return new  # type: ignore[no-any-return]
 
     def enter_vocabulary(self, unit: str) -> bool:
         if unit in self.vocabulary:
@@ -370,10 +414,18 @@ class PhonologyState:
         stejné); hodnocení zvukových procesů ale smí zastarat o několik kroků,
         a s děděnou keší by historie nového kódu závisela na tom, kdy předlohu
         kdo hodnotil (paralelní běh, :mod:`cee.v2.parallel`). Kopie je i levnější.
+
+        Registr světa se nekopíruje: potomek patří do téhož světa a číslování
+        sdílí; pole a fronty se kopírují.
         """
         cache = self.cache
         self.cache = {}
+        registry = self.registry
+        memo: dict[int, Any] = {id(registry): registry}
+        for kind in KINDS:
+            numbering = registry.of(kind)
+            memo[id(numbering)] = numbering
         try:
-            return copy.deepcopy(self)
+            return copy.deepcopy(self, memo)
         finally:
             self.cache = cache

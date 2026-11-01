@@ -19,12 +19,12 @@ znovu zařadí do front ostatních živých procesů.
 
 from __future__ import annotations
 
-import bisect
 import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from cee.v2.history import History
+from cee.v2.language.columns import ProcessQueue
 from cee.v2.language.lexicon import PhonologyState, UnitForm
 from cee.v2.language.processes import Process
 from cee.v2.language.segments import Form
@@ -144,14 +144,18 @@ def _applies(world: World, code: Code, variable_id: str, morpheme_id: str) -> bo
 
 def _queue(world: World, code: Code, variable_id: str, morpheme_id: str) -> None:
     state = code.phonology
-    queue = state.pending.setdefault(variable_id, [])
-    waiting = state.queued.setdefault(variable_id, set())
+    queue = state.pending.get(variable_id)
+    if queue is None:
+        queue = state.pending[variable_id] = ProcessQueue(state.registry.morphemes)
+    waiting = state.queued.get(variable_id)
+    if waiting is None:
+        waiting = state.queued[variable_id] = state.morpheme_set()
     if morpheme_id in state.restructured.get(variable_id, ()):
         return
     if morpheme_id in waiting:
         return
     if _applies(world, code, variable_id, morpheme_id):
-        bisect.insort(queue, (_needed(world, variable_id, morpheme_id, code), morpheme_id))
+        queue.insert(_needed(world, variable_id, morpheme_id, code), morpheme_id)
         waiting.add(morpheme_id)
 
 
@@ -173,8 +177,6 @@ def activate(world: World, code: Code, variable_id: str) -> None:
     state = code.phonology
     if variable_id in state.pending or variable_id in state.closed:
         return
-    state.pending[variable_id] = []
-    state.queued[variable_id] = set()
     state.order[variable_id] = len(state.order)
     state.record_lifecycle("process", "activate", variable_id)
     # Celá slovní zásoba se posoudí jedním vyhledáním v tabulce procesu;
@@ -196,11 +198,12 @@ def activate(world: World, code: Code, variable_id: str) -> None:
     threshold = world.params.restructure_threshold
     base = math.log(threshold / (1 - threshold))
     leads = _leads(world, process, hits, code)
-    state.pending[variable_id] = sorted(
-        (base - lead - word_bias(world, variable_id, morpheme_id), morpheme_id)
-        for morpheme_id, lead in zip(hits, leads)
+    state.pending[variable_id] = ProcessQueue(
+        state.registry.morphemes,
+        ((base - lead - word_bias(world, variable_id, morpheme_id), morpheme_id)
+         for morpheme_id, lead in zip(hits, leads)),
     )
-    state.queued[variable_id] = set(hits)
+    state.queued[variable_id] = state.morpheme_set(hits)
 
 
 def enter_vocabulary(world: World, code: Code, morpheme_id: str) -> None:
@@ -234,13 +237,14 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
     code = group.main_code
     state = code.phonology
     assert world.table is not None
+    morphemes = state.registry.morphemes.names
     for variable_id in active_processes(state, world):
         share = changed_share(world, group_id, variable_id)
         queue = state.pending[variable_id]
         level = _logit(share) if share > 0 else -math.inf
         rewritten: list[str] = []
-        while queue and queue[0][0] < level:
-            _, morpheme_id = queue.pop(0)
+        while queue and queue.needed[0] < level:
+            morpheme_id = morphemes[queue.pop_first()]
             state.queued[variable_id].discard(morpheme_id)
             process = world.processes[variable_id]
             unit = world.unit_of(code, morpheme_id)
@@ -248,7 +252,7 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
             if new is None:
                 continue  # dřívější přepis jinou změnou mu vzal půdu
             code.forms.set(morpheme_id, UnitForm(new[0], new[1], unit.exponent))
-            state.restructured.setdefault(variable_id, set()).add(morpheme_id)
+            state.restructured.setdefault(variable_id, state.morpheme_set()).add(morpheme_id)
             state.version += 1
             rewritten.append(morpheme_id)
             # Nový tvar posoudí jen změny, které v něm podle předfiltru banky
@@ -266,7 +270,7 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
         if share >= 1.0:
             since = state.fixed_since.setdefault(variable_id, tick)
             if (tick - since) * dt >= world.params.closure_generations * group.generation_years:
-                relics = sorted(morpheme_id for _, morpheme_id in queue)
+                relics = sorted(queue.names())
                 state.closed.add(variable_id)
                 state.record_lifecycle("process", "close", variable_id)
                 del state.pending[variable_id]
