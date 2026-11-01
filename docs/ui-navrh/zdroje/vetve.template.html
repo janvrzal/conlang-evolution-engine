@@ -167,9 +167,10 @@ __NAMING__
   for (const X of [A, B]) X.L.forEach((l, li) => {
     if (!SLOT.has(l.id)) SLOT.set(l.id, SLOT.size);
     if (NAME.has(l.id)) return;
-    let name = l.parent === null ? (LEX = D.lex[l.code], languageName(l.code, ATTEMPT[l.code]).name) : czechLanguage(endonymAt(X, li, Math.min(END, l.end ?? END)).endonym);
-    if (names.includes(name)) { const r = RB[P[l.at_start[0]].region].name.toLowerCase(), stem = r.length > 3 ? r.replace(/[aeiouäöüy]+$/i, '') : r;
-      name = `${stem}ská ${l.parent === null ? name : NAME.get(X.L[l.parent].id)}`; }
+    const endo = l.parent === null ? (LEX = D.lex[l.code], languageName(l.code, ATTEMPT[l.code]).endonym) : endonymAt(X, li, Math.min(END, l.end ?? END)).endonym;
+    const origin = RB[P[l.at_start[0]].region].name, parentName = l.parent === null ? null : NAME.get(X.L[l.parent].id);
+    // Jazyk bez rodiče, který vznikl až během dějin (přechod), se jmenuje jako nový i ten starý: podle kraje.
+    let name = languageLabel(endo, parentName ?? (names.length ? czechLanguage(endo) : null), origin, new Set(names)).name;
     if (names.includes(name)) name += ` (${X === A ? 'A' : 'B'})`;
     names.push(name); NAME.set(l.id, name);
   });

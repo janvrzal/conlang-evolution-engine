@@ -53,3 +53,43 @@
     const ipa = compound(parts.map(p => LEX[p])), endonym = romanize(ipa);
     return { endonym, ipa, meaning, name: czechLanguage(endonym) };
   }
+  // --- česká jména: přívlastky krajů, dceřiné jazyky a nářečí ---
+  // Engine dodává vlastní jména jazyků (vyvíjejí se s jazykem), kraj vzniku
+  // a polohu nářečí (cee.v2.naming); tady se z nich skládá čeština.
+  function regionAdjective(name, gender) {
+    const end = { m: 'ý', f: 'á', n: 'é' }[gender || 'f'];
+    let stem = name.toLowerCase().replace(/[’]/g, '');
+    if (stem.length > 3) stem = stem.replace(/[aeiouyäöü]+$/, '') || stem;
+    if (/[kc]$/.test(stem)) return stem.slice(0, -1) + 'ck' + end;
+    if (/s$/.test(stem)) return stem + 'k' + end;
+    return stem + 'sk' + end;
+  }
+  // Dceřiný jazyk: vlastní jméno, když se už liší od ostatních; jinak podle kraje, kde vznikl.
+  function languageLabel(endonym, parentLabel, originName, taken) {
+    const own = czechLanguage(endonym);
+    if (parentLabel == null || !taken.has(own)) return { name: own, from: 'endonym' };
+    return { name: `${regionAdjective(originName, 'f')} ${parentLabel}`, from: 'region' };
+  }
+  const DIRECTION_CZ = { center: 'střední', north: 'severní', south: 'jižní', east: 'východní', west: 'západní',
+    northeast: 'severovýchodní', northwest: 'severozápadní', southeast: 'jihovýchodní', southwest: 'jihozápadní' };
+  const TERRAIN_CZ = { mountains: 'horské', island: 'ostrovní', hills: 'podhorské' };
+  // Nářečí jednoho jazyka, od nejobecnějšího jména k přesnějšímu, dokud se jména liší:
+  // 1. krajina (hory, ostrov) nebo směr od středu jazyka („východní“),
+  // 2. hlavní kraj („suské“), 3. směr uvnitř kraje a kraj („severní suské“).
+  function dialectLabels(facts, regionName) {
+    const levels = facts.map(f => {
+      const region = f.regions.length ? regionAdjective(regionName(f.regions[0]), 'n') : null;
+      return [TERRAIN_CZ[f.terrain] || DIRECTION_CZ[f.direction] || 'střední', region, region && `${DIRECTION_CZ[f.local || 'center']} ${region}`].filter(Boolean);
+    });
+    const pick = facts.map(() => 0);
+    for (let round = 0; round < 3; round++) {
+      const count = new Map(); facts.forEach((_, i) => { const l = levels[i][pick[i]]; count.set(l, (count.get(l) || 0) + 1); });
+      facts.forEach((_, i) => { if (count.get(levels[i][pick[i]]) > 1 && pick[i] + 1 < levels[i].length) pick[i] += 1; });
+    }
+    const used = new Map();
+    return facts.map((f, i) => {
+      if (f.sole) return 'jednotná řeč';
+      const label = levels[i][pick[i]], n = (used.get(label) || 0) + 1; used.set(label, n);
+      return `${label}${n > 1 ? ' ' + n : ''} nářečí`;
+    });
+  }

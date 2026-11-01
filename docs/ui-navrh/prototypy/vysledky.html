@@ -246,6 +246,46 @@ table.cmp { border-collapse: collapse; width: 100%; }
     const ipa = compound(parts.map(p => LEX[p])), endonym = romanize(ipa);
     return { endonym, ipa, meaning, name: czechLanguage(endonym) };
   }
+  // --- česká jména: přívlastky krajů, dceřiné jazyky a nářečí ---
+  // Engine dodává vlastní jména jazyků (vyvíjejí se s jazykem), kraj vzniku
+  // a polohu nářečí (cee.v2.naming); tady se z nich skládá čeština.
+  function regionAdjective(name, gender) {
+    const end = { m: 'ý', f: 'á', n: 'é' }[gender || 'f'];
+    let stem = name.toLowerCase().replace(/[’]/g, '');
+    if (stem.length > 3) stem = stem.replace(/[aeiouyäöü]+$/, '') || stem;
+    if (/[kc]$/.test(stem)) return stem.slice(0, -1) + 'ck' + end;
+    if (/s$/.test(stem)) return stem + 'k' + end;
+    return stem + 'sk' + end;
+  }
+  // Dceřiný jazyk: vlastní jméno, když se už liší od ostatních; jinak podle kraje, kde vznikl.
+  function languageLabel(endonym, parentLabel, originName, taken) {
+    const own = czechLanguage(endonym);
+    if (parentLabel == null || !taken.has(own)) return { name: own, from: 'endonym' };
+    return { name: `${regionAdjective(originName, 'f')} ${parentLabel}`, from: 'region' };
+  }
+  const DIRECTION_CZ = { center: 'střední', north: 'severní', south: 'jižní', east: 'východní', west: 'západní',
+    northeast: 'severovýchodní', northwest: 'severozápadní', southeast: 'jihovýchodní', southwest: 'jihozápadní' };
+  const TERRAIN_CZ = { mountains: 'horské', island: 'ostrovní', hills: 'podhorské' };
+  // Nářečí jednoho jazyka, od nejobecnějšího jména k přesnějšímu, dokud se jména liší:
+  // 1. krajina (hory, ostrov) nebo směr od středu jazyka („východní“),
+  // 2. hlavní kraj („suské“), 3. směr uvnitř kraje a kraj („severní suské“).
+  function dialectLabels(facts, regionName) {
+    const levels = facts.map(f => {
+      const region = f.regions.length ? regionAdjective(regionName(f.regions[0]), 'n') : null;
+      return [TERRAIN_CZ[f.terrain] || DIRECTION_CZ[f.direction] || 'střední', region, region && `${DIRECTION_CZ[f.local || 'center']} ${region}`].filter(Boolean);
+    });
+    const pick = facts.map(() => 0);
+    for (let round = 0; round < 3; round++) {
+      const count = new Map(); facts.forEach((_, i) => { const l = levels[i][pick[i]]; count.set(l, (count.get(l) || 0) + 1); });
+      facts.forEach((_, i) => { if (count.get(levels[i][pick[i]]) > 1 && pick[i] + 1 < levels[i].length) pick[i] += 1; });
+    }
+    const used = new Map();
+    return facts.map((f, i) => {
+      if (f.sole) return 'jednotná řeč';
+      const label = levels[i][pick[i]], n = (used.get(label) || 0) + 1; used.set(label, n);
+      return `${label}${n > 1 ? ' ' + n : ''} nářečí`;
+    });
+  }
 
   // --- jména krajů (z jazyka kraje) ---
   const RB = {};
@@ -276,21 +316,20 @@ table.cmp { border-collapse: collapse; width: 100%; }
     const ipa = compound(parts.map(c => formAt(c, i, y) || D.lex[L[li].code][c]));
     return { endonym: romanize(ipa), ipa, meaning };
   }
-  const NAMES = [];
+  // Jména jazyků (naming.js): protojazyk podle vlastního jména, dceřiný podle vlastního jména,
+  // když se už liší, jinak podle kraje vzniku.
+  const NAMES = [], NAME_FROM = [];
   L.forEach((l, li) => {
     const at = l.parent === null ? 0 : Math.min(END, l.end ?? END);
-    let name = l.parent === null ? (LEX = D.lex[l.code], languageName(l.code, ATTEMPT[l.code]).name) : czechLanguage(endonymAt(li, at).endonym);
-    // Dceřiný jazyk se stejným vlastním jménem dostane přívlastek podle kraje, kde vznikl (jako „moravská“).
-    if (NAMES.includes(name)) {
-      const r = RB[P[l.at_start[0]].region].name.toLowerCase(), stem = r.length > 3 ? r.replace(/[aeiouäöüy]+$/i, '') : r;
-      name = `${stem}ská ${NAMES[l.parent]}`;
-    }
-    NAMES.push(name);
+    const endo = l.parent === null ? (LEX = D.lex[l.code], languageName(l.code, ATTEMPT[l.code]).endonym) : endonymAt(li, at).endonym;
+    const origin = RB[P[l.at_start[0]].region].name;
+    const label = languageLabel(endo, l.parent === null ? null : NAMES[l.parent], origin, new Set(NAMES));
+    NAMES.push(label.name); NAME_FROM.push(label.from);
   });
   const color = li => `var(--l${li % 6})`;
   const cssColor = li => getComputedStyle(document.documentElement).getPropertyValue(`--l${li % 6}`).trim();
 
-  const UI = { year: 1500, lang: L.findIndex(l => P[l.at_start[0]]?.region === 'teth'), view: 'lang', concept: 'hand', col: null, playing: false };
+  const UI = { dia: null, year: 1500, lang: L.findIndex(l => P[l.at_start[0]]?.region === 'teth'), view: 'lang', concept: 'hand', col: null, playing: false };
   if (UI.lang < 0) UI.lang = 0;
 
   // --- mapa ---
@@ -343,7 +382,7 @@ table.cmp { border-collapse: collapse; width: 100%; }
     // jazyk vesnice; nářečí jemně světlostí
     P.forEach((_, i) => {
       const li = linAt(f, i); if (li < 0) return;
-      ctx.fillStyle = cssColor(li); ctx.globalAlpha = (li === UI.lang ? 0.62 : 0.42) - (f.dia[i] >= 0 ? (f.dia[i] % 3) * 0.08 : 0);
+      ctx.fillStyle = cssColor(li); ctx.globalAlpha = UI.dia != null ? (f.dia[i] === UI.dia ? 0.85 : 0.18) : (li === UI.lang ? 0.62 : 0.42) - (f.dia[i] >= 0 ? (f.dia[i] % 3) * 0.08 : 0);
       ctx.fill(G.cells[i]);
     });
     ctx.globalAlpha = 1;
@@ -447,6 +486,27 @@ table.cmp { border-collapse: collapse; width: 100%; }
     hit.addEventListener('pointerleave', () => { rtip.hidden = true; });
   }
 
+  // --- nářečí: fakta jako cee.v2.naming.dialects, česká jména z naming.js ---
+  const DIRS = ['east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'north', 'northeast'];
+  function dialectsOf(li, y) {
+    const f = frameAt(y), m = members(li, y); if (!m.length) return [];
+    const centre = ids => [d3.mean(ids, i => P[i].x), d3.mean(ids, i => P[i].y)], c = centre(m);
+    const radius = d3.max(m, i => Math.hypot(P[i].x - c[0], P[i].y - c[1])) || 0;
+    const clusters = d3.groups(m, i => f.dia[i]).sort((a, b) => a[0] - b[0]);
+    const facts = clusters.map(([id, ids]) => {
+      const cc = centre(ids), dx = cc[0] - c[0], dy = cc[1] - c[1];
+      const dir = Math.hypot(dx, dy) < 0.35 * radius ? 'center' : DIRS[Math.floor((((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360 + 22.5) % 360) / 45)];
+      const regions = d3.groups(ids, i => P[i].region).sort((a, b) => b[1].length - a[1].length || (a[0] < b[0] ? -1 : 1)).map(g => g[0]);
+      const terrains = new Set(regions.map(r => RB[r].terrain));
+      // směr uvnitř hlavního kraje (rozliší dvě nářečí téhož kraje)
+      const home = members(li, y).filter(i => P[i].region === regions[0]), hc = centre(home.length ? home : ids), lx = cc[0] - hc[0], ly = cc[1] - hc[1];
+      const local = Math.hypot(lx, ly) < 2 ? 'center' : DIRS[Math.floor((((Math.atan2(ly, lx) * 180 / Math.PI + 360) % 360 + 22.5) % 360) / 45)];
+      return { id, n: ids.length, regions, direction: dir, local, terrain: terrains.size === 1 ? [...terrains][0] : null, sole: clusters.length === 1 };
+    });
+    const labels = dialectLabels(facts, r => RB[r].name);
+    return facts.map((x, k) => ({ ...x, label: labels[k] }));
+  }
+
   // --- karta jazyka ---
   const insp = document.getElementById('insp');
   const plural = (n, a, b, c) => (n === 1 ? a : n >= 2 && n <= 4 ? b : c);
@@ -454,7 +514,7 @@ table.cmp { border-collapse: collapse; width: 100%; }
   function langCard() {
     const li = UI.lang, l = L[li], y = UI.year, f = frameAt(y), m = members(li, y), here = alive(li, y);
     const regions = [...new Set(m.map(i => P[i].region))], speakers = m.reduce((s, i) => s + f.pop[i], 0);
-    const dialects = new Set(m.map(i => f.dia[i]).filter(d => d >= 0)).size;
+    const dialects = new Set(m.map(i => f.dia[i]).filter(d => d >= 0)).size, dnames = dialectsOf(li, y);
     const endo = endonymAt(li, Math.min(y, l.end ?? END)), i0 = rep(li, Math.min(y, l.end ?? END));
     const origin = l.parent === null ? `protojazyk ${l.code === 'pra' ? 'západu' : 'východu'}` : `odštěpila se v roce ${l.start} od jazyka ${NAMES[l.parent]}`;
     const fate = l.end != null && l.end <= y ? `vymřela v roce ${l.end}: její vsi přešly k jazyku ${NAMES[linAt(frameAt(l.end), l.at_start[0])] || '?'}` : here ? 'živý jazyk' : `vznikne až v roce ${l.start}`;
@@ -470,13 +530,16 @@ table.cmp { border-collapse: collapse; width: 100%; }
         ${here ? `<dt>Mluvčí</dt><dd>${speakers.toLocaleString('cs')} v ${m.length} ${plural(m.length, 'vsi', 'vsích', 'vsích')}</dd>
         <dt>Kraje</dt><dd>${regions.map(r => RB[r].name).join(', ')}</dd>
         <dt>Nářečí</dt><dd>${dialects}</dd>` : ''}
+        <dt>Jméno</dt><dd>${l.parent === null ? 'z vlastního jména protojazyka' : NAME_FROM[li] === 'endonym' ? 'z vlastního jména, které se už liší od mateřského' : `podle kraje vzniku (${RB[P[l.at_start[0]].region].name}); vlastní jméno se zatím neliší`}</dd>
         ${Object.keys(pub).length && here ? `<dt>Na veřejnosti</dt><dd>${Object.entries(pub).map(([c, s]) => `${NAMES[familyOf(c)]} (${Math.round(s * 100)} %)`).join(', ')}</dd>` : ''}
       </dl>
+      ${here && dnames.length ? `<div><div class="caps" style="margin-bottom:4px">Nářečí v roce ${y}</div><ul class="langlist">${dnames.map(d => `<li><button data-dia="${d.id}" aria-pressed="${UI.dia === d.id}"><i style="background:${color(li)};opacity:${0.95 - (d.id % 3) * 0.2}"></i><span>${d.label}</span><small>${d.n} ${plural(d.n, 'ves', 'vsi', 'vsí')}</small></button></li>`).join('')}</ul></div>` : ''}
       <div><div class="caps" style="margin-bottom:4px">Slova: protojazyk a ${here ? `rok ${y}` : 'poslední podoba'}</div><ul class="words">${words}</ul>
         <button class="link" id="to-dict" style="margin-top:6px">Celý slovník →</button></div>
       <div><div class="caps" style="margin-bottom:4px">Všechny jazyky</div><ul class="langlist">${ORDER.map(k => { const on = alive(k, y);
         return `<li><button data-li="${k}" aria-pressed="${k === li}" class="${on ? '' : 'dead'}"><i style="background:${color(k)}"></i><span>${NAMES[k]}</span><small>${on ? members(k, y).length + ' vsí' : L[k].end && L[k].end <= y ? '†' + L[k].end : 'od ' + L[k].start}</small></button></li>`; }).join('')}</ul></div>`;
-    insp.querySelectorAll('[data-li]').forEach(b => b.addEventListener('click', () => { UI.lang = +b.dataset.li; render(); }));
+    insp.querySelectorAll('[data-li]').forEach(b => b.addEventListener('click', () => { UI.lang = +b.dataset.li; UI.dia = null; render(); }));
+    insp.querySelectorAll('[data-dia]').forEach(b => b.addEventListener('click', () => { UI.dia = UI.dia === +b.dataset.dia ? null : +b.dataset.dia; render(); }));
     document.getElementById('to-dict').addEventListener('click', () => setView('dict'));
   }
 

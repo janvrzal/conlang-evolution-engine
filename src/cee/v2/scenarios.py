@@ -304,6 +304,8 @@ class ProtoLanguage:
     stress_strength: Literal["weak", "strong"] = "weak"
     #: Slova zadaná autorem (pojem → IPA); ostatní vygeneruje :func:`protolanguage`.
     words: Mapping[str, str] = field(default_factory=dict)
+    #: Pojmy vlastního jména jazyka (``cee.v2.naming``); prázdné = ``("language",)``.
+    endonym: tuple[str, ...] = ()
 
 
 def region_world(
@@ -367,6 +369,8 @@ def region_world(
             if region.language is not None and region.language not in lineages:
                 raise ValueError(f"Region '{region.id}' má neznámý protojazyk '{region.language}'.")
         bases = _seed_lineages(world, languages, seed=seed, concepts=concepts, semantics=semantics)
+        world.endonyms = {language.id: tuple(getattr(language, "endonym", ())) for language in languages
+                          if getattr(language, "endonym", ())}
         if semantics and world.table is not None:
             world.derivational_suffix = world.table.parse(DERIVATIONAL_SUFFIX)
     else:

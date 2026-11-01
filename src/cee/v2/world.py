@@ -197,6 +197,9 @@ class World:
     states: dict[str, Any] = field(default_factory=dict)
     #: Spisovné jazyky států a regionů: ID státu či regionu → ID psaného kódu.
     standards: dict[str, str] = field(default_factory=dict)
+    #: Pojmy, ze kterých se skládá vlastní jméno jazyka (``cee.v2.naming``):
+    #: ID protojazyka → pojmy. Jen pro export; dynamiku neovlivní.
+    endonyms: dict[str, tuple[str, ...]] = field(default_factory=dict)
     #: Vazby oslabené hranicí států: (zdroj, cíl) → použitý násobek. Základní
     #: síla vazby je síla / násobek (``polity.refresh``).
     border_factors: dict[tuple[str, str], float] = field(default_factory=dict)

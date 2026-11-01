@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from cee.v2 import polity
+from cee.v2 import naming, polity
 
 if TYPE_CHECKING:
     from cee.v2.simulation import Simulation
@@ -73,6 +73,7 @@ def export(simulation: Simulation, *, events: frozenset[str] | None = TIMELINE) 
         "states": polity.states(world),
         "borders": polity.borders(world),
         "standards": dict(sorted(world.standards.items())),
+        "dialect_facts": dialect_facts(simulation),
         "census": polity.language_census(world),
         "events": [event for event in history.events if events is None or event["kind"] in events],
     }
@@ -103,6 +104,10 @@ def frame(simulation: Simulation) -> dict[str, Any]:
         },
         "census": polity.language_census(world),
         "states": [{"id": item["id"], "name": item["name"], "regions": item["regions"]} for item in polity.states(world)],
+        "endonyms": {} if snapshot is None else {
+            lineage: naming.endonym(world, groups) for lineage, groups in sorted(snapshot.languages.items())
+        },
+        "dialect_facts": dialect_facts(simulation),
     }
 
 
@@ -149,9 +154,23 @@ def lineages(simulation: Simulation) -> list[dict[str, Any]]:
         elif kind == "language_ended" and event["lineage"] in found:
             found[event["lineage"]]["end_year"] = event["year"]
     last = simulation.history.snapshots[-1].languages if simulation.history.snapshots else {}
+    world = simulation.world
     for lineage, item in found.items():
         item["groups"] = list(last.get(lineage, ()))
+        # Podklady pro jméno (``cee.v2.naming``): dnešní vlastní jméno a kde jazyk vznikl.
+        item["endonym"] = naming.endonym(world, item["groups"]) if item["groups"] else None
+        item["origin_region"] = naming.origin_region(world, [g for g in item["groups_at_start"] if g in world.groups])
     return sorted(found.values(), key=lambda item: (item["start_year"], item["id"]))
+
+
+def dialect_facts(simulation: Simulation) -> list[dict[str, Any]]:
+    """Nářečí posledního pozorování s fakty pro jméno (``cee.v2.naming.dialects``)."""
+    if not simulation.history.snapshots:
+        return []
+    snapshot = simulation.history.snapshots[-1]
+    lineage_of = {group: lineage for lineage, groups in snapshot.languages.items() for group in groups}
+    clusters = [[g for g in cluster if g in simulation.world.groups] for cluster in snapshot.dialects]
+    return naming.dialects(simulation.world, [c for c in clusters if c], lineage_of)
 
 
 def lexicon(world: World, group_id: str) -> dict[str, dict[str, Any]]:

@@ -76,10 +76,10 @@ jméno („řeč lidí“) s českou podobou na -ština, stát podle hlavního m
 
 Doplněno v revizi API 9: události `identity` a `immigration` (vlastnosti
 kraje „odtud potud“), jméno státu `name` u `state` a `secession` a vlastní
-slova protojazyka `languages[].words`. Zbývá:
-
-- Jména dceřiných jazyků a nářečí potřebují systém (zatím přívlastek podle
-  kraje vzniku, např. „suská tedština“).
+slova protojazyka `languages[].words`. Systém jmen jazyků a nářečí: engine
+dodává vývoj vlastního jména, kraj vzniku a polohu nářečí (`cee.v2.naming`,
+`languages[].endonym`), čeština se skládá v `zdroje/naming.js`
+(`languageLabel`, `dialectLabels`; Výsledky ukazují nářečí jménem). Zbývá:
 - Během přechodu k jinému jazyku pozorovatel hlásí krátké jazyky o jedné až
   třech vsích; obrazovka Větve je počítá k rodiči.
 - Ves při přechodu jazyka má dvě domácí skupiny (`ves`, `ves>jazyk:home`);

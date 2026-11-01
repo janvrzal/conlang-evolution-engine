@@ -36,7 +36,9 @@ v `src/cee/data/v2_example_world.json`.
   - `words`: slova, která zadal autor (pojem → tvar v IPA). Ostatní složí
     generátor; náhodu pro zadaný pojem spotřebuje stejně, takže zbytek
     slovníku zůstane, jak by byl (liší se jen při shodě s autorovým slovem).
-    Ověření hlásí neznámý pojem a hlásky, které engine nezná.
+    Ověření hlásí neznámý pojem a hlásky, které engine nezná;
+  - `endonym`: pojmy, ze kterých se skládá vlastní jméno jazyka
+    (např. `["person", "language"]`, „řeč lidí“); prázdné = `["language"]`.
 - **Regiony:**
   - poloha v km, relativní hustota, sousedé, počet vesnic (1–12) a
     prestiž;
@@ -61,6 +63,30 @@ provedením na kopii světa v pořadí roků. Tím se odhalí odkazy na
 neexistující státy a regiony, neznámé úrovně i chybné pořadí (rozpad
 před vznikem). `build` postaví svět a události, nebo vyhodí `SpecError`
 se všemi chybami.
+
+### Podklady pro jména jazyků a nářečí (`cee.v2.naming`)
+
+Engine jména neskládá v češtině. Dodává fakta a UI z nich jméno složí
+(pravidla jsou v `docs/ui-navrh/zdroje/naming.js`). Dynamiku ani otisk
+historie to neovlivní; počítá se jen v exportu a ve snímcích.
+
+- **Vlastní jméno jazyka** (`lineages[].endonym` v exportu, `endonyms`
+  v průběžném snímku): složenina dnešních tvarů pojmů z `endonym`
+  u nejlidnatější vesnice jazyka, zkrácená jako místní jména (první části
+  na slabiku). Mění se s jazykem, takže dceřiné jazyky mají jméno vyvinuté
+  z rodičovského, a když jazyk slovo nahradí jiným, změní se i jméno.
+- **Kraj vzniku** (`lineages[].origin_region`): kraj, kde ležela většina
+  vesnic jazyka při rozštěpení.
+- **Nářečí** (`dialect_facts` v exportu i snímku): vesnice, jazyk, kraje
+  podle počtu vesnic, směr od středu jazyka (osm směrů nebo `center`; osa y
+  k jihu), terén, je-li ve všech krajích stejný, a `sole`, má-li jazyk jen
+  jedno nářečí.
+
+Pravidla UI: dceřiný jazyk se jmenuje podle vlastního jména, jakmile se liší
+od jmen ostatních jazyků (*-ština*), jinak podle kraje vzniku („suská
+tedština“). Nářečí dostane nejobecnější jméno, které je v jazyce jedinečné:
+krajina (horské, ostrovní) nebo směr (východní), pak kraj (suské), pak směr
+v kraji a kraj (severní suské).
 
 ## Běh s průběhem (`cee.v2.runner`, `/api/v2`)
 

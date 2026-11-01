@@ -75,6 +75,8 @@ class LanguageSpec(_Model):
     stress_strength: Literal["weak", "strong"] = "weak"
     #: Slova, která zadal autor: pojem → tvar v IPA. Ostatní složí generátor.
     words: dict[str, str] = Field(default_factory=dict)
+    #: Pojmy, ze kterých se skládá vlastní jméno jazyka (např. ``["person", "language"]``).
+    endonym: list[str] = Field(default_factory=list)
 
 
 class RegionSpec(_Model):
@@ -364,6 +366,7 @@ def _world(spec: WorldSpec, params: Parameters) -> World:
             **({"consonants": tuple(language.consonants)} if language.consonants else {}),
             **({"vowels": tuple(language.vowels)} if language.vowels else {}),
             stress_rule=language.stress, stress_strength=language.stress_strength, words=dict(language.words),
+            endonym=tuple(language.endonym),
         )
         for language in spec.languages
     )
@@ -426,6 +429,9 @@ def _words(spec: WorldSpec) -> list[Issue]:
 
     known, table, issues = {*DEFAULT_CONCEPTS, *GRAMMATICAL_SOURCES}, default_table(), []
     for index, language in enumerate(spec.languages):
+        for position, concept in enumerate(language.endonym):
+            if concept not in known:
+                issues.append(Issue(f"languages.{index}.endonym.{position}", f"neznámý pojem '{concept}'"))
         for concept, form in sorted(language.words.items()):
             path = f"languages.{index}.words.{concept}"
             if concept not in known:

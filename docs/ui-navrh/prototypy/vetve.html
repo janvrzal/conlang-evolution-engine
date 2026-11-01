@@ -197,6 +197,46 @@ table.cmp { border-collapse: collapse; width: 100%; font-size: 13.5px; }
     const ipa = compound(parts.map(p => LEX[p])), endonym = romanize(ipa);
     return { endonym, ipa, meaning, name: czechLanguage(endonym) };
   }
+  // --- česká jména: přívlastky krajů, dceřiné jazyky a nářečí ---
+  // Engine dodává vlastní jména jazyků (vyvíjejí se s jazykem), kraj vzniku
+  // a polohu nářečí (cee.v2.naming); tady se z nich skládá čeština.
+  function regionAdjective(name, gender) {
+    const end = { m: 'ý', f: 'á', n: 'é' }[gender || 'f'];
+    let stem = name.toLowerCase().replace(/[’]/g, '');
+    if (stem.length > 3) stem = stem.replace(/[aeiouyäöü]+$/, '') || stem;
+    if (/[kc]$/.test(stem)) return stem.slice(0, -1) + 'ck' + end;
+    if (/s$/.test(stem)) return stem + 'k' + end;
+    return stem + 'sk' + end;
+  }
+  // Dceřiný jazyk: vlastní jméno, když se už liší od ostatních; jinak podle kraje, kde vznikl.
+  function languageLabel(endonym, parentLabel, originName, taken) {
+    const own = czechLanguage(endonym);
+    if (parentLabel == null || !taken.has(own)) return { name: own, from: 'endonym' };
+    return { name: `${regionAdjective(originName, 'f')} ${parentLabel}`, from: 'region' };
+  }
+  const DIRECTION_CZ = { center: 'střední', north: 'severní', south: 'jižní', east: 'východní', west: 'západní',
+    northeast: 'severovýchodní', northwest: 'severozápadní', southeast: 'jihovýchodní', southwest: 'jihozápadní' };
+  const TERRAIN_CZ = { mountains: 'horské', island: 'ostrovní', hills: 'podhorské' };
+  // Nářečí jednoho jazyka, od nejobecnějšího jména k přesnějšímu, dokud se jména liší:
+  // 1. krajina (hory, ostrov) nebo směr od středu jazyka („východní“),
+  // 2. hlavní kraj („suské“), 3. směr uvnitř kraje a kraj („severní suské“).
+  function dialectLabels(facts, regionName) {
+    const levels = facts.map(f => {
+      const region = f.regions.length ? regionAdjective(regionName(f.regions[0]), 'n') : null;
+      return [TERRAIN_CZ[f.terrain] || DIRECTION_CZ[f.direction] || 'střední', region, region && `${DIRECTION_CZ[f.local || 'center']} ${region}`].filter(Boolean);
+    });
+    const pick = facts.map(() => 0);
+    for (let round = 0; round < 3; round++) {
+      const count = new Map(); facts.forEach((_, i) => { const l = levels[i][pick[i]]; count.set(l, (count.get(l) || 0) + 1); });
+      facts.forEach((_, i) => { if (count.get(levels[i][pick[i]]) > 1 && pick[i] + 1 < levels[i].length) pick[i] += 1; });
+    }
+    const used = new Map();
+    return facts.map((f, i) => {
+      if (f.sole) return 'jednotná řeč';
+      const label = levels[i][pick[i]], n = (used.get(label) || 0) + 1; used.set(label, n);
+      return `${label}${n > 1 ? ' ' + n : ''} nářečí`;
+    });
+  }
 
   const RB = {};
   (() => { const taken = new Set(); for (const r of R) { LEX = D.lex[r.language]; Object.assign(r, placeName(r.id, r.terrain, 0, taken)); taken.add(r.name); RB[r.id] = r; } })();
@@ -227,9 +267,10 @@ table.cmp { border-collapse: collapse; width: 100%; font-size: 13.5px; }
   for (const X of [A, B]) X.L.forEach((l, li) => {
     if (!SLOT.has(l.id)) SLOT.set(l.id, SLOT.size);
     if (NAME.has(l.id)) return;
-    let name = l.parent === null ? (LEX = D.lex[l.code], languageName(l.code, ATTEMPT[l.code]).name) : czechLanguage(endonymAt(X, li, Math.min(END, l.end ?? END)).endonym);
-    if (names.includes(name)) { const r = RB[P[l.at_start[0]].region].name.toLowerCase(), stem = r.length > 3 ? r.replace(/[aeiouäöüy]+$/i, '') : r;
-      name = `${stem}ská ${l.parent === null ? name : NAME.get(X.L[l.parent].id)}`; }
+    const endo = l.parent === null ? (LEX = D.lex[l.code], languageName(l.code, ATTEMPT[l.code]).endonym) : endonymAt(X, li, Math.min(END, l.end ?? END)).endonym;
+    const origin = RB[P[l.at_start[0]].region].name, parentName = l.parent === null ? null : NAME.get(X.L[l.parent].id);
+    // Jazyk bez rodiče, který vznikl až během dějin (přechod), se jmenuje jako nový i ten starý: podle kraje.
+    let name = languageLabel(endo, parentName ?? (names.length ? czechLanguage(endo) : null), origin, new Set(names)).name;
     if (names.includes(name)) name += ` (${X === A ? 'A' : 'B'})`;
     names.push(name); NAME.set(l.id, name);
   });
