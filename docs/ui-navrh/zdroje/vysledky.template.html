@@ -1,0 +1,509 @@
+<title>Poloostrov: výsledky</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Piazzolla:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+@font-face { font-family: "Charis CEE"; src: url(data:font/woff2;base64,__CHARIS_REGULAR__) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+/* Layout: záložky výsledků; Jazyky = mapa vesnic obarvená jazykem nad řekou jazyků v čase, vpravo karta jazyka; Slovník = srovnávací tabulka a vrt slova. */
+:root {
+  --sea: #bccad0; --sea-line: #eef3f4; --land: #fbfbf9; --ink: #1b2830; --ink-2: #56656e; --ink-3: #a7b3b9; --rule: #d1d9dc;
+  --panel: #eef1f2; --field: #f7f9f9; --isogloss: #ae2a1f; --halo: rgba(251, 251, 249, 0.9); --grain: 0.07;
+  --l0: #2a6fc9; --l1: #c48a12; --l2: #16956a; --l3: #7d4fc0; --l4: #8a9a12; --l5: #c4508a;
+  --stratum-a: #e6ebec; --stratum-b: #dbe2e4;
+  --f-ui: "Piazzolla", Georgia, serif; --f-ipa: "Charis CEE", "Charis SIL", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --ink-3: #4d5a65; --rule: #26323d;
+    --panel: #111a22; --field: #16212b; --isogloss: #e8806f; --halo: rgba(23, 32, 42, 0.86); --grain: 0.05;
+    --l0: #4f8de0; --l1: #b47e18; --l2: #22a074; --l3: #9a72dc; --l4: #869217; --l5: #d05f98;
+    --stratum-a: #16212b; --stratum-b: #1c2833; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --ink-3: #4d5a65; --rule: #26323d;
+  --panel: #111a22; --field: #16212b; --isogloss: #e8806f; --halo: rgba(23, 32, 42, 0.86); --grain: 0.05;
+  --l0: #4f8de0; --l1: #b47e18; --l2: #22a074; --l3: #9a72dc; --l4: #869217; --l5: #d05f98;
+  --stratum-a: #16212b; --stratum-b: #1c2833; color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--panel); color: var(--ink); font-family: var(--f-ui); font-size: 15px; line-height: 1.4; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 10px; }
+* { box-sizing: border-box; }
+button, input, select { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--isogloss); outline-offset: 2px; }
+.ipa { font-family: var(--f-ipa); }
+.caps { text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; font-weight: 700; color: var(--ink-2); }
+.why { font-size: 13px; color: var(--ink-2); font-style: italic; line-height: 1.38; margin: 0; }
+
+.app { height: 100%; display: grid; gap: 10px 16px; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "top top" "tabs tabs" "main insp" "foot foot"; }
+.top { grid-area: top; display: flex; align-items: baseline; gap: 28px; flex-wrap: wrap; border-bottom: 1px solid var(--ink); padding-bottom: 8px; }
+.project { font-size: 22px; font-style: italic; }
+.project small { font-style: normal; font-size: 12px; color: var(--ink-2); margin-left: 8px; }
+.path { display: flex; gap: 4px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; align-items: baseline; }
+.path li { display: flex; align-items: baseline; gap: 4px; }
+.path li + li::before { content: ""; width: 22px; border-top: 1px dotted var(--ink-2); align-self: center; }
+.path a { color: var(--ink-2); text-decoration: none; padding: 2px 4px; }
+.path a b { font-weight: 500; font-size: 11px; margin-right: 4px; }
+.path a[aria-current="page"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--isogloss); }
+.saved { margin-left: auto; font-size: 12px; color: var(--ink-2); font-style: italic; }
+.tabs { grid-area: tabs; display: flex; gap: 22px; align-items: baseline; flex-wrap: wrap; }
+.tabs button, .tabs a { background: none; border: 0; padding: 2px 0; cursor: pointer; font-size: 17px; color: var(--ink-2); text-decoration: none; border-bottom: 2px solid transparent; }
+.tabs [aria-selected="true"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--ink); }
+.tabs [disabled] { opacity: 0.45; cursor: default; }
+.tabs .yr { margin-left: auto; display: flex; align-items: baseline; gap: 10px; }
+.tabs .yr b { font-size: 26px; font-variant-numeric: tabular-nums lining-nums; }
+.play { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--land); cursor: pointer; display: grid; place-items: center; align-self: center; }
+.play svg { fill: var(--ink); }
+
+/* jazyky */
+.main { grid-area: main; min-height: 0; min-width: 0; display: grid; gap: 8px; grid-template-rows: minmax(0, 1fr) auto; }
+.stage { position: relative; min-height: 0; overflow: hidden; background: var(--sea); border-radius: 2px; }
+.stage canvas { position: absolute; inset: 0; cursor: pointer; }
+.tip { position: absolute; pointer-events: none; background: var(--land); border: 1px solid var(--ink); padding: 4px 8px; font-size: 13px; border-radius: 2px; white-space: nowrap; z-index: 4; }
+.maplegend { position: absolute; left: 12px; bottom: 10px; background: var(--halo); padding: 6px 10px; border-radius: 2px; font-size: 12px; color: var(--ink-2); display: grid; gap: 3px; }
+.maplegend div { display: flex; gap: 8px; align-items: center; }
+.river { position: relative; height: 210px; }
+.river svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.river .area { cursor: pointer; }
+.river text { font-family: var(--f-ui); }
+.rtip { position: absolute; top: 0; pointer-events: none; background: var(--land); border: 1px solid var(--ink); padding: 5px 8px; font-size: 12.5px; border-radius: 2px; z-index: 4; min-width: 170px; }
+.rtip div { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+.rtip i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+/* karta */
+.insp { grid-area: insp; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; }
+.lang-title { display: flex; align-items: center; gap: 10px; }
+.lang-title i { width: 18px; height: 18px; border-radius: 3px; flex: none; }
+.lang-title h2 { margin: 0; font-size: 26px; line-height: 1.1; }
+.endo { font-size: 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.endo .ipa { font-size: 16px; }
+.facts { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 14px; }
+.facts dt { color: var(--ink-2); }
+.facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.words { list-style: none; margin: 0; padding: 0; display: grid; }
+.words li { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.words .g { color: var(--ink-2); font-size: 13px; }
+.words .p { font-family: var(--f-ipa); color: var(--ink-2); font-size: 15px; }
+.words .n { font-family: var(--f-ipa); font-size: 18px; text-align: right; }
+.tag { font-family: var(--f-ui); font-size: 11px; font-style: italic; color: var(--isogloss); margin-left: 4px; }
+.link { border: 0; background: none; padding: 0; cursor: pointer; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; font-size: 13px; text-align: left; }
+.link:hover { color: var(--ink); }
+.langlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.langlist button { width: 100%; display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: center; background: none; border: 0; padding: 4px 6px; border-radius: 2px; cursor: pointer; text-align: left; font-size: 14px; }
+.langlist button[aria-pressed="true"] { background: var(--field); font-weight: 700; }
+.langlist button.dead { color: var(--ink-2); font-style: italic; }
+.langlist i { width: 12px; height: 12px; border-radius: 2px; }
+.langlist small { color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: 12px; }
+
+/* slovník */
+.dict { grid-area: main; min-height: 0; min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
+.dict-head { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+.search { border: 0; border-bottom: 1px solid var(--ink-2); background: none; padding: 3px 0; width: 220px; }
+.table-wrap { overflow: auto; min-height: 0; border-top: 1px solid var(--ink); }
+table.cmp { border-collapse: collapse; width: 100%; }
+.cmp th { position: sticky; top: 0; background: var(--panel); text-align: left; font-weight: 500; font-size: 13px; padding: 8px 10px 6px; border-bottom: 1px solid var(--ink); vertical-align: bottom; z-index: 1; }
+.cmp th .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+.cmp th small { display: block; font-weight: 400; color: var(--ink-2); font-style: italic; }
+.cmp td { padding: 4px 10px; border-bottom: 1px solid var(--rule); font-family: var(--f-ipa); font-size: 18px; white-space: nowrap; cursor: pointer; }
+.cmp td.g { font-family: var(--f-ui); font-size: 14px; color: var(--ink-2); cursor: default; }
+.cmp td.proto { color: var(--ink-2); }
+.cmp td:hover:not(.g) { background: var(--field); }
+.cmp td[aria-selected="true"] { box-shadow: inset 0 -2px 0 var(--isogloss); }
+.cmp td.none { color: var(--ink-3); }
+.strata { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--ink); }
+.stratum { position: relative; padding: 6px 10px 6px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; }
+.stratum:nth-child(odd) { background: var(--stratum-a); }
+.stratum:nth-child(even) { background: var(--stratum-b); }
+.stratum .fm { font-family: var(--f-ipa); font-size: 20px; }
+.stratum .yr { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.stratum .why2 { grid-column: 1 / -1; font-size: 13px; color: var(--isogloss); }
+.stratum.future { opacity: 0.3; }
+
+.foot { grid-area: foot; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--rule); padding-top: 8px; font-size: 13px; color: var(--ink-2); }
+.foot b { color: var(--ink); }
+
+@media (max-width: 980px) {
+  html, body { height: auto; }
+  .app { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "top" "tabs" "main" "insp" "foot"; }
+  .main { grid-template-rows: 58vh auto; }
+  .dict { grid-template-rows: auto 60vh; }
+  .saved, .tabs .yr { margin-left: 0; }
+}
+</style>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="project">Poloostrov<small>2000 let, krok 25 let</small></div>
+    <nav aria-label="Postup práce"><ol class="path">
+      <li><a href="#svet"><b>1</b>Svět</a></li>
+      <li><a href="#proto"><b>2</b>Protojazyk</a></li>
+      <li><a href="#dejiny"><b>3</b>Dějiny</a></li>
+      <li><a href="#vysledky" aria-current="page"><b>4</b>Výsledky</a></li>
+      <li><a href="#vetve"><b>5</b>Větve</a></li>
+    </ol></nav>
+    <span class="saved">Běh z 1. 11. 2026 · 2000 let · 80 vsí</span>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-lang" aria-selected="true">Jazyky</button>
+    <button role="tab" id="tab-dict" aria-selected="false">Slovník</button>
+    <a href="https://claude.ai/artifact/6fFX1iTNUbjLt8eL43JoaJ" target="_blank" rel="noopener">Slovo v krajině ↗</a>
+    <button role="tab" disabled title="Navrhneme později">Mluvnice</button>
+    <div class="yr"><button class="play" id="play" aria-label="Přehrát"><svg id="play-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2l10 6-10 6z"/></svg></button><span class="caps">rok</span><b id="year"></b></div>
+  </div>
+
+  <section class="main" id="view-lang">
+    <div class="stage" id="stage">
+      <canvas id="map" aria-label="Mapa vesnic obarvená jazykem"></canvas>
+      <div class="tip" id="tip" hidden></div>
+      <div class="maplegend" id="maplegend"></div>
+    </div>
+    <div class="river" id="river"><svg id="river-svg" aria-label="Jazyky v čase: počet mluvčích"></svg><div class="rtip" id="rtip" hidden></div></div>
+  </section>
+
+  <section class="dict" id="view-dict" hidden>
+    <div class="dict-head">
+      <input class="search" id="search" type="search" placeholder="Hledat význam nebo tvar" aria-label="Hledat ve slovníku">
+      <span class="why">Klikni na tvar a vpravo uvidíš, jak k němu jazyk došel. Výpůjčky jsou označené.</span>
+    </div>
+    <div class="table-wrap"><table class="cmp" id="cmp"></table></div>
+  </section>
+
+  <aside class="insp" id="insp" aria-live="polite"></aside>
+
+  <footer class="foot" id="foot"></footer>
+</div>
+
+<script type="application/json" id="cee-data">__DATA__</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById('cee-data').textContent);
+  const END = D.end, P = D.places, R = D.regions, L = D.lineages, F = D.frames, CONCEPTS = Object.keys(D.gloss);
+  function hash(i, j) { let h = Math.imul(i, 374761393) + Math.imul(j, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+  let LEX = D.lex.pra;
+__NAMING__
+  // --- jména krajů (z jazyka kraje) ---
+  const RB = {};
+  (() => { const taken = new Set(); for (const r of R) { LEX = D.lex[r.language]; Object.assign(r, placeName(r.id, r.terrain, 0, taken)); taken.add(r.name); RB[r.id] = r; } })();
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+  const placeLabel = i => `${RB[P[i].region].name} ${ROMAN[+P[i].id.split('-v').pop()] || ''}`;
+
+  // --- tvary v čase ---
+  const entryAt = (c, i, y) => { const rows = D.forms[c][i]; let e = rows[0]; for (const r of rows) { if (r[0] <= y) e = r; else break; } return e; };
+  const str = e => (e && e[1] >= 0 ? D.strings[e[1]] : null);
+  const formAt = (c, i, y) => (D.forms[c] ? str(entryAt(c, i, y)) : null);
+  const frameAt = y => { let f = F[0]; for (const x of F) { if (x.year <= y) f = x; else break; } return f; };
+  const familyOf = code => L.findIndex(l => l.parent === null && l.code === code);
+  const linAt = (f, i) => (f.lin[i] >= 0 ? f.lin[i] : familyOf(f.code[i]));
+  function members(li, y) { const f = frameAt(y); return P.map((_, i) => i).filter(i => linAt(f, i) === li); }
+  function rep(li, y) {
+    const m = members(li, y), f = frameAt(y);
+    if (!m.length) return L[li].at_start[0] ?? 0;
+    return m.reduce((a, b) => (f.pop[b] > f.pop[a] ? b : a), m[0]);
+  }
+  const alive = (li, y) => members(li, y).length > 0;
+
+  // --- jména jazyků: endonym se vyvíjí s jazykem ---
+  const ATTEMPT = { pra: 3, vych: 0 };
+  const pattern = code => ENDONYMS[Math.floor(hash(nameSeed(code, ATTEMPT[code]), 9) * ENDONYMS.length)];
+  function endonymAt(li, y) {
+    const [parts, meaning] = pattern(L[li].code), i = rep(li, y);
+    const ipa = compound(parts.map(c => formAt(c, i, y) || D.lex[L[li].code][c]));
+    return { endonym: romanize(ipa), ipa, meaning };
+  }
+  const NAMES = [];
+  L.forEach((l, li) => {
+    const at = l.parent === null ? 0 : Math.min(END, l.end ?? END);
+    let name = l.parent === null ? (LEX = D.lex[l.code], languageName(l.code, ATTEMPT[l.code]).name) : czechLanguage(endonymAt(li, at).endonym);
+    // Dceřiný jazyk se stejným vlastním jménem dostane přívlastek podle kraje, kde vznikl (jako „moravská“).
+    if (NAMES.includes(name)) {
+      const r = RB[P[l.at_start[0]].region].name.toLowerCase(), stem = r.length > 3 ? r.replace(/[aeiouäöüy]+$/i, '') : r;
+      name = `${stem}ská ${NAMES[l.parent]}`;
+    }
+    NAMES.push(name);
+  });
+  const color = li => `var(--l${li % 6})`;
+  const cssColor = li => getComputedStyle(document.documentElement).getPropertyValue(`--l${li % 6}`).trim();
+
+  const UI = { year: 1500, lang: L.findIndex(l => P[l.at_start[0]]?.region === 'teth'), view: 'lang', concept: 'hand', col: null, playing: false };
+  if (UI.lang < 0) UI.lang = 0;
+
+  // --- mapa ---
+  const GEO = R.map(r => [r.x, r.y, r.terrain]);
+  const GI = P.map(p => RB[p.region].terrain === 'island');
+  function vnoise(x, y) { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1); return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1; }
+  function landField(x, y) {
+    let main = Infinity, island = Infinity;
+    P.forEach((p, n) => { const dx = p.x - x, dy = p.y - y, d = dx * dx + dy * dy; if (GI[n]) { if (d < island) island = d; } else if (d < main) main = d; });
+    const noise = vnoise(x / 24, y / 24) * 8 + vnoise(x / 8 + 40, y / 8) * 2.6;
+    const fm = 34 - Math.sqrt(main) + noise, fi = 34 - Math.sqrt(island) + noise;
+    if (fm > -14 && fi > -14) return Math.min(Math.max(fm, fi), -3 - Math.min(Math.abs(fm - fi), 6));
+    return Math.max(fm, fi);
+  }
+  const stage = document.getElementById('stage'), cv = document.getElementById('map'), ctx = cv.getContext('2d');
+  let G = null;
+  function layout() {
+    const W = stage.clientWidth, H = stage.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (!W || !H) return;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    const minx = -10, maxx = 345, miny = 50, maxy = 335, k = Math.min((W - 24) / (maxx - minx), (H - 24) / (maxy - miny));
+    const ox = (W - k * (maxx - minx)) / 2 - k * minx, oy = (H - k * (maxy - miny)) / 2 - k * miny;
+    const g = 3, nx = Math.ceil(W / g) + 1, ny = Math.ceil(H / g) + 1, values = new Float64Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) values[j * nx + i] = landField((i * g - ox) / k, (j * g - oy) / k);
+    const path = d3.geoPath(d3.geoTransform({ point(x, y) { this.stream.point(x * g, y * g); } }));
+    const shapes = d3.contours().size([nx, ny]).thresholds([0, -4, -9, -15, -22])(values).sort((a, b) => b.value - a.value).map(c => new Path2D(path(c)));
+    const pts = P.map(p => [ox + k * p.x, oy + k * p.y]);
+    const del = d3.Delaunay.from(pts), vor = del.voronoi([0, 0, W, H]);
+    const cells = P.map((_, i) => { const p = new Path2D(), poly = vor.cellPolygon(i); poly.forEach(([x, y], n) => (n ? p.lineTo(x, y) : p.moveTo(x, y))); p.closePath(); return p; });
+    const edges = [], { triangles, halfedges } = del, cc = vor.circumcenters;
+    for (let e = 0; e < halfedges.length; e++) { const o = halfedges[e]; if (o < e) continue;
+      const a = triangles[e], b = triangles[e % 3 === 2 ? e - 2 : e + 1], t1 = Math.floor(e / 3), t2 = Math.floor(o / 3);
+      edges.push({ a, b, x1: cc[2 * t1], y1: cc[2 * t1 + 1], x2: cc[2 * t2], y2: cc[2 * t2 + 1] }); }
+    G = { W, H, dpr, k, pts, del, cells, edges, land: shapes[0], lines: shapes.slice(1) };
+  }
+  const tok = () => { const cs = getComputedStyle(document.documentElement), t = n => cs.getPropertyValue(n).trim();
+    return { sea: t('--sea'), seaLine: t('--sea-line'), land: t('--land'), ink: t('--ink'), ink2: t('--ink-2'), ink3: t('--ink-3'), red: t('--isogloss'), halo: t('--halo'), font: t('--f-ui'), grain: parseFloat(t('--grain')) || 0 }; };
+  let grainP = null;
+  function grain() { if (grainP) return grainP; const c = document.createElement('canvas'); c.width = c.height = 192; const g = c.getContext('2d'); g.fillStyle = '#000';
+    for (let n = 0; n < 3200; n++) { g.globalAlpha = 0.25 + hash(n, 41) * 0.75; const s = 0.5 + hash(n, 37) * 1.1; g.fillRect(hash(n, 11) * 192, hash(n, 23) * 192, s, s); } return (grainP = ctx.createPattern(c, 'repeat')); }
+  function drawMap() {
+    if (!G) return;
+    const t = tok(), { W, H, dpr } = G, f = frameAt(UI.year);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = t.sea; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = t.seaLine; ctx.lineWidth = 0.8; G.lines.forEach((p, n) => { ctx.globalAlpha = 0.75 - n * 0.16; ctx.stroke(p); }); ctx.globalAlpha = 1;
+    ctx.fillStyle = t.land; ctx.fill(G.land);
+    ctx.save(); ctx.clip(G.land);
+    // jazyk vesnice; nářečí jemně světlostí
+    P.forEach((_, i) => {
+      const li = linAt(f, i); if (li < 0) return;
+      ctx.fillStyle = cssColor(li); ctx.globalAlpha = (li === UI.lang ? 0.62 : 0.42) - (f.dia[i] >= 0 ? (f.dia[i] % 3) * 0.08 : 0);
+      ctx.fill(G.cells[i]);
+    });
+    ctx.globalAlpha = 1;
+    if (t.grain) { ctx.globalAlpha = t.grain; ctx.fillStyle = grain(); ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    ctx.lineCap = 'round';
+    for (const e of G.edges) {
+      const la = linAt(f, e.a), lb = linAt(f, e.b), sameRegion = P[e.a].region === P[e.b].region;
+      if (la !== lb) { ctx.strokeStyle = t.ink; ctx.lineWidth = 1.8; ctx.setLineDash([]); }
+      else if (f.dia[e.a] !== f.dia[e.b]) { ctx.strokeStyle = t.ink2; ctx.lineWidth = 0.7; ctx.setLineDash([3, 3]); }
+      else continue;
+      ctx.beginPath(); ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); ctx.stroke();
+      void sameRegion;
+    }
+    ctx.setLineDash([]);
+    // druhý jazyk na veřejnosti (lingua franca): čárkovaný obrys kraje v barvě toho jazyka
+    for (const r of R) {
+      const pub = Object.entries(f.census[r.id]?.public || {}).filter(([, s]) => s >= 0.15);
+      for (const [code] of pub) {
+        ctx.strokeStyle = cssColor(familyOf(code)); ctx.lineWidth = 2.6; ctx.setLineDash([6, 4]); ctx.beginPath();
+        for (const e of G.edges) { const inA = P[e.a].region === r.id, inB = P[e.b].region === r.id; if (inA !== inB) { ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); } }
+        ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+    ctx.restore();
+    ctx.strokeStyle = t.ink; ctx.lineWidth = 1.1; ctx.stroke(G.land);
+    // jména jazyků
+    ctx.textAlign = 'center'; if ('letterSpacing' in ctx) ctx.letterSpacing = '0.22em';
+    L.forEach((l, li) => {
+      const m = P.map((_, i) => i).filter(i => linAt(f, i) === li); if (!m.length) return;
+      const x = d3.mean(m, i => G.pts[i][0]), y = d3.mean(m, i => G.pts[i][1]);
+      ctx.font = `700 ${G.W < 600 ? 10 : m.length > 20 ? 14 : 11.5}px ${t.font}`; const label = NAMES[li].toUpperCase();
+      ctx.lineWidth = 5; ctx.strokeStyle = t.halo; ctx.strokeText(label, x, y); ctx.fillStyle = t.ink; ctx.fillText(label, x, y);
+    });
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+    const ml = document.getElementById('maplegend');
+    const pubAny = R.some(r => Object.values(f.census[r.id]?.public || {}).some(s => s >= 0.15));
+    ml.innerHTML = `<div><svg width="26" height="8" aria-hidden="true"><line x1="0" y1="4" x2="26" y2="4" stroke="var(--ink)" stroke-width="1.8"/></svg>hranice jazyka</div>
+      <div><svg width="26" height="8" aria-hidden="true"><line x1="0" y1="4" x2="26" y2="4" stroke="var(--ink-2)" stroke-width="0.8" stroke-dasharray="3 3"/></svg>hranice nářečí</div>` +
+      (pubAny ? `<div><svg width="26" height="8" aria-hidden="true"><line x1="0" y1="4" x2="26" y2="4" stroke="${color(familyOf('pra'))}" stroke-width="2.6" stroke-dasharray="6 4"/></svg>na veřejnosti i ${NAMES[familyOf('pra')]}</div>` : '');
+  }
+  const tip = document.getElementById('tip');
+  cv.addEventListener('pointermove', ev => {
+    if (!G) return; const rect = cv.getBoundingClientRect(), x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+    const i = G.del.find(x, y), f = frameAt(UI.year), li = linAt(f, i), c = UI.concept;
+    tip.hidden = false; tip.style.left = Math.min(x + 14, G.W - 220) + 'px'; tip.style.top = (y + 14) + 'px';
+    tip.innerHTML = `<b>${placeLabel(i)}</b> · ${li >= 0 ? NAMES[li] : '—'} · ${D.gloss[c]}: <span class="ipa">${formAt(c, i, UI.year) ?? '∅'}</span>`;
+  });
+  cv.addEventListener('pointerleave', () => { tip.hidden = true; });
+  cv.addEventListener('click', ev => { const rect = cv.getBoundingClientRect(), i = G.del.find(ev.clientX - rect.left, ev.clientY - rect.top), li = linAt(frameAt(UI.year), i); if (li >= 0) { UI.lang = li; render(); } });
+
+  // --- řeka jazyků ---
+  const svg = d3.select('#river-svg'), rtip = document.getElementById('rtip');
+  const ORDER = (() => { const out = []; const add = p => { L.forEach((l, i) => { if (l.parent === p) { out.push(i); add(i); } }); }; add(null); return out; })();
+  const series = F.map(f => { const o = { year: f.year }; L.forEach((_, li) => { o[li] = 0; }); P.forEach((_, i) => { const li = linAt(f, i); if (li >= 0) o[li] += f.pop[i]; }); return o; });
+  function drawRiver() {
+    const el = document.getElementById('river'), W = el.clientWidth, H = el.clientHeight, m = { l: 0, r: 120, t: 26, b: 22 };
+    if (!W) return;
+    const x = d3.scaleLinear([0, END], [m.l, W - m.r]);
+    const stack = d3.stack().keys(ORDER).order(d3.stackOrderNone).offset(d3.stackOffsetNone)(series);
+    const max = d3.max(stack[stack.length - 1], d => d[1]), y = d3.scaleLinear([0, max], [H - m.b, m.t]);
+    const area = d3.area().x(d => x(d.data.year)).y0(d => y(d[0])).y1(d => y(d[1])).curve(d3.curveMonotoneX);
+    svg.attr('viewBox', `0 0 ${W} ${H}`);
+    let html = '';
+    for (let yr = 0; yr <= END; yr += 250) html += `<line x1="${x(yr)}" x2="${x(yr)}" y1="${m.t}" y2="${H - m.b}" stroke="var(--rule)" stroke-width="1"/><text x="${x(yr)}" y="${H - 6}" font-size="11" fill="var(--ink-2)" text-anchor="${yr === 0 ? 'start' : yr === END ? 'end' : 'middle'}">${yr}</text>`;
+    stack.forEach(s => {
+      const li = s.key, sel = li === UI.lang;
+      html += `<path class="area" data-li="${li}" d="${area(s)}" fill="${color(li)}" fill-opacity="${sel ? 0.95 : 0.6}" stroke="var(--panel)" stroke-width="1.5"><title>${NAMES[li]}</title></path>`;
+    });
+    // přímé popisky vpravo
+    const last = stack.map(s => ({ li: s.key, mid: (s[s.length - 1][0] + s[s.length - 1][1]) / 2, h: s[s.length - 1][1] - s[s.length - 1][0] })).filter(d => d.h > 0);
+    let prev = -Infinity;
+    last.sort((a, b) => y(a.mid) - y(b.mid)).forEach(d => { let ty = Math.max(y(d.mid) + 4, prev + 14); prev = ty;
+      html += `<text x="${x(END) + 8}" y="${ty}" font-size="12.5" fill="var(--ink)" font-weight="${d.li === UI.lang ? 700 : 400}">${NAMES[d.li]}</text>`; });
+    // vymřelé jazyky: popisek u konce
+    L.forEach((l, li) => { if (l.end != null && l.end < END) { const s = stack.find(z => z.key === li), pt = s.find(d => d.data.year === l.end - 50) || s[s.length - 1];
+      html += `<text x="${x(l.end) + 4}" y="${y(pt[0]) + 13}" font-size="11" font-style="italic" fill="var(--ink-2)">${NAMES[li]} †${l.end}</text>`; } });
+    // dějiny nad řekou
+    const hist = { state: e => `${e.year} stát`, standard: e => `${e.year} norma`, lingua_franca: e => `${e.year} lingua franca`, secession: e => `${e.year} odtržení`, schools: e => `${e.year} školy`, revival_movement: e => `${e.year} obrození`, collapse: e => `${e.year} zánik státu` };
+    let lastX = -Infinity;
+    D.events.filter(e => hist[e.kind]).forEach(e => { const xx = x(e.year); const lab = xx - lastX > 70; if (lab) lastX = xx;
+      html += `<line x1="${xx}" x2="${xx}" y1="${m.t - 6}" y2="${m.t + 2}" stroke="var(--ink-2)"/>` + (lab ? `<text x="${xx + 3}" y="${m.t - 10}" font-size="10.5" fill="var(--ink-2)">${hist[e.kind](e)}</text>` : ''); });
+    html += `<line id="rcursor" x1="${x(UI.year)}" x2="${x(UI.year)}" y1="${m.t - 4}" y2="${H - m.b}" stroke="var(--isogloss)" stroke-width="1.5"/>`;
+    html += `<rect id="rhit" x="${m.l}" y="0" width="${W - m.r - m.l}" height="${H}" fill="transparent" style="cursor:ew-resize"/>`;
+    svg.html(html);
+    const hit = svg.select('#rhit').node(), yearAt = px => Math.max(0, Math.min(END, Math.round(x.invert(px) / 50) * 50));
+    const pos = ev => { const r = hit.getBoundingClientRect(); return ev.clientX - r.left + m.l; };
+    let dragging = false;
+    hit.addEventListener('pointerdown', ev => { dragging = true; hit.setPointerCapture(ev.pointerId); UI.year = yearAt(pos(ev)); render(); });
+    hit.addEventListener('pointerup', ev => {
+      dragging = false;
+      const px = pos(ev), yy = ev.clientY - hit.getBoundingClientRect().top, yr = yearAt(px), row = series[F.findIndex(f => f.year === Math.max(50, yr))];
+      if (row) { let acc = 0; for (const li of ORDER) { const lo = acc; acc += row[li]; if (row[li] && y(acc) <= yy && yy <= y(lo)) { UI.lang = li; render(); break; } } }
+    });
+    hit.addEventListener('pointermove', ev => {
+      const px = pos(ev), yr = yearAt(px);
+      if (dragging) { UI.year = yr; render(); }
+      const row = series[F.findIndex(f => f.year === Math.max(50, yr))]; if (!row) return;
+      rtip.hidden = false; rtip.style.left = Math.min(px + 12, W - 190) + 'px';
+      rtip.innerHTML = `<b>${yr}</b>` + ORDER.filter(li => row[li] > 0).map(li => `<div><span><i style="background:${color(li)}"></i> ${NAMES[li]}</span><span>${row[li].toLocaleString('cs')}</span></div>`).join('');
+    });
+    hit.addEventListener('pointerleave', () => { rtip.hidden = true; });
+  }
+
+  // --- karta jazyka ---
+  const insp = document.getElementById('insp');
+  const plural = (n, a, b, c) => (n === 1 ? a : n >= 2 && n <= 4 ? b : c);
+  const SAMPLE = ['water', 'fire', 'mother', 'hand', 'eye', 'stone', 'night', 'king', 'mountain', 'road'];
+  function langCard() {
+    const li = UI.lang, l = L[li], y = UI.year, f = frameAt(y), m = members(li, y), here = alive(li, y);
+    const regions = [...new Set(m.map(i => P[i].region))], speakers = m.reduce((s, i) => s + f.pop[i], 0);
+    const dialects = new Set(m.map(i => f.dia[i]).filter(d => d >= 0)).size;
+    const endo = endonymAt(li, Math.min(y, l.end ?? END)), i0 = rep(li, Math.min(y, l.end ?? END));
+    const origin = l.parent === null ? `protojazyk ${l.code === 'pra' ? 'západu' : 'východu'}` : `odštěpila se v roce ${l.start} od jazyka ${NAMES[l.parent]}`;
+    const fate = l.end != null && l.end <= y ? `vymřela v roce ${l.end}: její vsi přešly k jazyku ${NAMES[linAt(frameAt(l.end), l.at_start[0])] || '?'}` : here ? 'živý jazyk' : `vznikne až v roce ${l.start}`;
+    const pub = {}; for (const r of regions) for (const [code, s] of Object.entries(f.census[r]?.public || {})) pub[code] = Math.max(pub[code] || 0, s);
+    const words = SAMPLE.map(c => { const e = entryAt(c, i0, Math.min(y, l.end ?? END)), now = str(e), proto = formAt(c, l.at_start[0], 50);
+      const loan = e && e[1] >= 0 && e[3] && e[3] !== l.code; return `<li><span class="g">${D.gloss[c]}</span><span class="p">*${proto ?? '∅'}</span><span class="n">${now ?? '∅'}${loan ? `<span class="tag">výp.</span>` : ''}</span></li>`; }).join('');
+    insp.innerHTML = `
+      <div class="lang-title"><i style="background:${color(li)}"></i><h2>${NAMES[li]}</h2></div>
+      <div class="endo">sami říkají <i>${endo.endonym}</i><span class="ipa">/${endo.ipa}/</span><span class="why">„${endo.meaning}“</span></div>
+      <dl class="facts">
+        <dt>Původ</dt><dd>${origin}</dd>
+        <dt>Stav v roce ${y}</dt><dd>${fate}</dd>
+        ${here ? `<dt>Mluvčí</dt><dd>${speakers.toLocaleString('cs')} v ${m.length} ${plural(m.length, 'vsi', 'vsích', 'vsích')}</dd>
+        <dt>Kraje</dt><dd>${regions.map(r => RB[r].name).join(', ')}</dd>
+        <dt>Nářečí</dt><dd>${dialects}</dd>` : ''}
+        ${Object.keys(pub).length && here ? `<dt>Na veřejnosti</dt><dd>${Object.entries(pub).map(([c, s]) => `${NAMES[familyOf(c)]} (${Math.round(s * 100)} %)`).join(', ')}</dd>` : ''}
+      </dl>
+      <div><div class="caps" style="margin-bottom:4px">Slova: protojazyk a ${here ? `rok ${y}` : 'poslední podoba'}</div><ul class="words">${words}</ul>
+        <button class="link" id="to-dict" style="margin-top:6px">Celý slovník →</button></div>
+      <div><div class="caps" style="margin-bottom:4px">Všechny jazyky</div><ul class="langlist">${ORDER.map(k => { const on = alive(k, y);
+        return `<li><button data-li="${k}" aria-pressed="${k === li}" class="${on ? '' : 'dead'}"><i style="background:${color(k)}"></i><span>${NAMES[k]}</span><small>${on ? members(k, y).length + ' vsí' : L[k].end && L[k].end <= y ? '†' + L[k].end : 'od ' + L[k].start}</small></button></li>`; }).join('')}</ul></div>`;
+    insp.querySelectorAll('[data-li]').forEach(b => b.addEventListener('click', () => { UI.lang = +b.dataset.li; render(); }));
+    document.getElementById('to-dict').addEventListener('click', () => setView('dict'));
+  }
+
+  // --- slovník ---
+  function columns() { const y = UI.year; return ORDER.filter(li => alive(li, y)); }
+  function renderTable() {
+    const q = document.getElementById('search').value.trim().toLowerCase(), cols = columns(), y = UI.year;
+    const protoA = L.findIndex(l => l.parent === null && l.code === 'pra'), protoB = L.findIndex(l => l.parent === null && l.code === 'vych');
+    let html = `<thead><tr><th>Význam</th><th>*${NAMES[protoA]}<small>rok 0</small></th><th>*${NAMES[protoB]}<small>rok 0</small></th>` +
+      cols.map(li => `<th><span class="sw" style="background:${color(li)}"></span>${NAMES[li]}<small>${endonymAt(li, y).endonym}, rok ${y}</small></th>`).join('') + '</tr></thead><tbody>';
+    for (const c of CONCEPTS) {
+      const pa = D.lex.pra[c], pb = D.lex.vych[c];
+      const cells = cols.map(li => { const i = rep(li, y), e = entryAt(c, i, y), f = str(e), loan = e && e[1] >= 0 && e[3] && e[3] !== L[li].code;
+        return { li, f, loan, src: loan ? NAMES[familyOf(e[3])] : null }; });
+      if (q && !D.gloss[c].toLowerCase().includes(q) && !cells.some(x => (x.f || '').includes(q)) && !(pa || '').includes(q)) continue;
+      html += `<tr><td class="g">${D.gloss[c]}</td><td class="proto">*${pa}</td><td class="proto">*${pb}</td>` +
+        cells.map(x => `<td data-c="${c}" data-li="${x.li}" class="${x.f ? '' : 'none'}" aria-selected="${UI.concept === c && UI.col === x.li}" title="${x.loan ? 'výpůjčka z jazyka ' + x.src : ''}">${x.f ?? '∅'}${x.loan ? '<span class="tag">výp.</span>' : ''}</td>`).join('') + '</tr>';
+    }
+    document.getElementById('cmp').innerHTML = html + '</tbody>';
+    document.querySelectorAll('#cmp td[data-c]').forEach(td => td.addEventListener('click', () => { UI.concept = td.dataset.c; UI.col = +td.dataset.li; UI.lang = UI.col; renderTable(); wordCard(); }));
+  }
+  const MOD = /[̀-ͯʰ-˿]/;
+  function segs(s) { const v = []; for (const ch of s) { if (v.length && (MOD.test(ch) || v[v.length - 1].endsWith('͡'))) v[v.length - 1] += ch; else v.push(ch); } return v; }
+  function diff(a, b) {
+    const A = segs(a), B = segs(b), n = A.length, m = B.length, d = Array.from({ length: n + 1 }, (_, i) => { const r = new Array(m + 1).fill(0); r[0] = i; return r; });
+    for (let j = 0; j <= m; j++) d[0][j] = j;
+    for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (A[i - 1] === B[j - 1] ? 0 : 1));
+    const ops = []; let i = n, j = m;
+    while (i > 0 || j > 0) { if (i > 0 && j > 0 && d[i][j] === d[i - 1][j - 1] + (A[i - 1] === B[j - 1] ? 0 : 1)) { if (A[i - 1] !== B[j - 1]) ops.push([A[i - 1], B[j - 1]]); i--; j--; }
+      else if (i > 0 && d[i][j] === d[i - 1][j] + 1) { ops.push([A[i - 1], '∅']); i--; } else { ops.push(['∅', B[j - 1]]); j--; } }
+    return { norm: d[n][m] / Math.max(n, m, 1), ops: ops.reverse() };
+  }
+  function wordCard() {
+    const li = UI.col ?? UI.lang, c = UI.concept, i = rep(li, Math.min(UI.year, L[li].end ?? END)), rows = D.forms[c][i];
+    const layers = rows.map((e, n) => ({ e, prev: rows[n - 1], from: n === 0 ? 0 : e[0], to: n + 1 < rows.length ? rows[n + 1][0] : END }));
+    const note = (p, e) => { const a = str(p), b = str(e); if (b === null) return 'slovo vymizelo';
+      if (e[3] && e[3] !== L[li].code) return `výpůjčka z jazyka ${NAMES[familyOf(e[3])]}`;
+      if (a === null) return `nové slovo: ${{ derivation: 'odvozenina', compounding: 'složenina', coinage: 'nový kořen' }[D.origins[e[2]]] || 'nové'}`;
+      const df = diff(a, b); if (df.norm > 0.6) return `nahrazeno: ${{ derivation: 'odvozenina', compounding: 'složenina', coinage: 'nový kořen', inherited: 'jiný kořen' }[D.origins[e[2]]] || 'jiný kořen'}`;
+      return [...new Map(df.ops.map(o => [o.join('>'), o])).values()].slice(0, 3).map(([x, y]) => `<span class="ipa">${x} → ${y}</span>`).join(' · '); };
+    insp.innerHTML = `<div><div class="caps">Vrt</div><div class="lang-title"><i style="background:${color(li)}"></i><h2>${D.gloss[c]}</h2></div>
+      <p class="why" style="margin-top:4px">${NAMES[li]}, ${placeLabel(i)}: jak se slovo měnilo od protojazyka.</p></div>
+      <ol class="strata">${layers.slice().reverse().map(Lr => { const f = str(Lr.e); return `<li class="stratum${Lr.from > UI.year ? ' future' : ''}" style="min-height:${Math.max(44, (Lr.to - Lr.from) * 0.12)}px">
+        <span class="fm">${Lr.prev ? '' : '*'}${f ?? '∅'}</span><span class="yr">${Lr.from}–${Lr.to}</span>${Lr.prev ? `<span class="why2">${note(Lr.prev, Lr.e)}</span>` : '<span class="why2" style="color:var(--ink-2)">protojazyk</span>'}</li>`; }).join('')}</ol>
+      <button class="link" id="back-lang">← Karta jazyka ${NAMES[li]}</button>`;
+    document.getElementById('back-lang').addEventListener('click', () => { UI.col = null; langCard(); });
+  }
+
+  // --- přepínání, čas ---
+  function setView(v) {
+    UI.view = v;
+    document.getElementById('tab-lang').setAttribute('aria-selected', String(v === 'lang'));
+    document.getElementById('tab-dict').setAttribute('aria-selected', String(v === 'dict'));
+    document.getElementById('view-lang').hidden = v !== 'lang'; document.getElementById('view-dict').hidden = v !== 'dict';
+    if (v === 'lang') { layout(); }
+    render();
+  }
+  document.getElementById('tab-lang').addEventListener('click', () => setView('lang'));
+  document.getElementById('tab-dict').addEventListener('click', () => setView('dict'));
+  document.getElementById('search').addEventListener('input', renderTable);
+  document.querySelectorAll('.path a').forEach(a => a.addEventListener('click', e => e.preventDefault()));
+  const playBtn = document.getElementById('play'), playIcon = document.getElementById('play-icon');
+  let timer = null;
+  function setPlaying(on) {
+    clearInterval(timer); UI.playing = on; playBtn.setAttribute('aria-label', on ? 'Zastavit' : 'Přehrát');
+    playIcon.innerHTML = on ? '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>' : '<path d="M4 2l10 6-10 6z"/>';
+    if (!on) return; if (UI.year >= END) UI.year = 0;
+    timer = setInterval(() => { if (UI.year >= END) { setPlaying(false); return; } UI.year += 50; render(); }, 260);
+  }
+  playBtn.addEventListener('click', () => setPlaying(!UI.playing));
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input')) return;
+    if (e.key === 'ArrowRight') { UI.year = Math.min(END, UI.year + 50); render(); }
+    else if (e.key === 'ArrowLeft') { UI.year = Math.max(0, UI.year - 50); render(); }
+  });
+  function render() {
+    document.getElementById('year').textContent = UI.year;
+    if (UI.view === 'lang') { drawMap(); drawRiver(); langCard(); }
+    else { renderTable(); if (UI.col != null) wordCard(); else langCard(); }
+    const y = UI.year, living = ORDER.filter(li => alive(li, y)), f = frameAt(y);
+    document.getElementById('foot').innerHTML = `<span><b>${living.length}</b> ${plural(living.length, 'jazyk', 'jazyky', 'jazyků')} a <b>${new Set(f.dia.filter(d => d >= 0)).size}</b> nářečí v roce ${y}</span>
+      <span>${L.length} jazyků za celé dějiny, ${L.filter(l => l.end != null).length} vymřel</span><span>${D.events.filter(e => e.kind === 'language_split').length} rozštěpení</span>`;
+  }
+  new ResizeObserver(() => { if (UI.view === 'lang') { layout(); drawMap(); drawRiver(); } }).observe(document.getElementById('view-lang'));
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => render());
+  new MutationObserver(() => render()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  layout(); render();
+  if (document.fonts) document.fonts.ready.then(() => { if (UI.view === 'lang') drawMap(); });
+})();
+</script>

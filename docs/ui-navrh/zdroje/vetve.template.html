@@ -1,0 +1,357 @@
+<title>Poloostrov: větve</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Piazzolla:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+@font-face { font-family: "Charis CEE"; src: url(data:font/woff2;base64,__CHARIS_REGULAR__) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+/* Layout: vlevo strom větví dějin, uprostřed dvě mapy vedle sebe (stejný rok) s řekami jazyků, vpravo co se mezi větvemi liší; červená = rozdíl. */
+:root {
+  --sea: #bccad0; --sea-line: #eef3f4; --land: #fbfbf9; --ink: #1b2830; --ink-2: #56656e; --ink-3: #a7b3b9; --rule: #d1d9dc;
+  --panel: #eef1f2; --field: #f7f9f9; --isogloss: #ae2a1f; --halo: rgba(251, 251, 249, 0.9); --grain: 0.07;
+  --l0: #2a6fc9; --l1: #c48a12; --l2: #16956a; --l3: #7d4fc0; --l4: #8a9a12; --l5: #c4508a;
+  --f-ui: "Piazzolla", Georgia, serif; --f-ipa: "Charis CEE", "Charis SIL", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --ink-3: #4d5a65; --rule: #26323d;
+    --panel: #111a22; --field: #16212b; --isogloss: #e8806f; --halo: rgba(23, 32, 42, 0.86); --grain: 0.05;
+    --l0: #4f8de0; --l1: #b47e18; --l2: #22a074; --l3: #9a72dc; --l4: #869217; --l5: #d05f98; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --ink-3: #4d5a65; --rule: #26323d;
+  --panel: #111a22; --field: #16212b; --isogloss: #e8806f; --halo: rgba(23, 32, 42, 0.86); --grain: 0.05;
+  --l0: #4f8de0; --l1: #b47e18; --l2: #22a074; --l3: #9a72dc; --l4: #869217; --l5: #d05f98; color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--panel); color: var(--ink); font-family: var(--f-ui); font-size: 15px; line-height: 1.4; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 10px; }
+* { box-sizing: border-box; }
+button, input, select { font: inherit; color: inherit; }
+button:focus-visible { outline: 2px solid var(--isogloss); outline-offset: 2px; }
+.ipa { font-family: var(--f-ipa); }
+.caps { text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; font-weight: 700; color: var(--ink-2); }
+.why { font-size: 13px; color: var(--ink-2); font-style: italic; line-height: 1.38; margin: 0; }
+.app { height: 100%; display: grid; gap: 10px 16px; grid-template-columns: 210px minmax(0, 1fr) 330px; grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "top top top" "tree main diff" "foot foot foot"; }
+.top { grid-area: top; display: flex; align-items: baseline; gap: 28px; flex-wrap: wrap; border-bottom: 1px solid var(--ink); padding-bottom: 8px; }
+.project { font-size: 22px; font-style: italic; }
+.project small { font-style: normal; font-size: 12px; color: var(--ink-2); margin-left: 8px; }
+.path { display: flex; gap: 4px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; align-items: baseline; }
+.path li { display: flex; align-items: baseline; gap: 4px; }
+.path li + li::before { content: ""; width: 22px; border-top: 1px dotted var(--ink-2); align-self: center; }
+.path a { color: var(--ink-2); text-decoration: none; padding: 2px 4px; }
+.path a b { font-weight: 500; font-size: 11px; margin-right: 4px; }
+.path a[aria-current="page"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--isogloss); }
+.yr { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.yr b { font-size: 26px; font-variant-numeric: tabular-nums lining-nums; }
+.play { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--land); cursor: pointer; display: grid; place-items: center; }
+.play svg { fill: var(--ink); }
+
+/* strom větví */
+.tree { grid-area: tree; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.tree svg { width: 100%; height: auto; display: block; }
+.branch { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 2px; background: var(--field); }
+.branch b { font-size: 16px; }
+.branch ul { margin: 0; padding-left: 16px; font-size: 13px; }
+.branch.b { border-color: var(--isogloss); }
+.add { background: none; border: 1px dashed var(--ink-2); color: var(--ink-2); padding: 5px 8px; border-radius: 2px; cursor: pointer; text-align: left; font-size: 14px; }
+
+/* mapy */
+.main { grid-area: main; min-height: 0; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) 150px; gap: 6px 10px; }
+.main h2 { margin: 0; font-size: 17px; display: flex; gap: 8px; align-items: baseline; }
+.main h2 small { font-size: 12.5px; font-weight: 400; color: var(--ink-2); font-style: italic; }
+.stage { position: relative; min-height: 0; overflow: hidden; background: var(--sea); border-radius: 2px; }
+.stage canvas { position: absolute; inset: 0; cursor: pointer; }
+.river { position: relative; min-height: 0; }
+.river svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.tip { position: absolute; pointer-events: none; background: var(--land); border: 1px solid var(--ink); padding: 4px 8px; font-size: 13px; border-radius: 2px; white-space: nowrap; z-index: 4; }
+
+/* rozdíly */
+.diff { grid-area: diff; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 4px; }
+.diff h3 { margin: 0 0 6px; }
+.big { font-size: 26px; font-weight: 700; line-height: 1.1; }
+table.cmp { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.cmp th { text-align: left; font-weight: 500; color: var(--ink-2); font-size: 12px; padding: 3px 4px; border-bottom: 1px solid var(--ink); }
+.cmp th.n, .cmp td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.cmp td { padding: 4px; border-bottom: 1px solid var(--rule); }
+.cmp td i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.cmp td.only { color: var(--isogloss); font-style: italic; }
+.cmp td.f { font-family: var(--f-ipa); font-size: 16px; }
+.cmp td.f.chg { color: var(--isogloss); }
+.delta { font-variant-numeric: tabular-nums; }
+.delta.minus, .delta.plus { color: var(--isogloss); }
+
+.foot { grid-area: foot; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--rule); padding-top: 8px; font-size: 13px; color: var(--ink-2); }
+.foot b { color: var(--ink); }
+
+@media (max-width: 1100px) {
+  html, body { height: auto; }
+  .app { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "top" "tree" "main" "diff" "foot"; }
+  .main { grid-template-rows: auto 46vh 150px; }
+  .yr { margin-left: 0; }
+}
+@media (max-width: 640px) { .main { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; } .stage { height: 46vh; } .river { height: 150px; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="project">Poloostrov<small>2000 let, krok 25 let</small></div>
+    <nav aria-label="Postup práce"><ol class="path">
+      <li><a href="#svet"><b>1</b>Svět</a></li>
+      <li><a href="#proto"><b>2</b>Protojazyk</a></li>
+      <li><a href="#dejiny"><b>3</b>Dějiny</a></li>
+      <li><a href="#vysledky"><b>4</b>Výsledky</a></li>
+      <li><a href="#vetve" aria-current="page"><b>5</b>Větve</a></li>
+    </ol></nav>
+    <div class="yr"><button class="play" id="play" aria-label="Přehrát"><svg id="play-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2l10 6-10 6z"/></svg></button><span class="caps">rok</span><b id="year"></b></div>
+  </header>
+
+  <aside class="tree" aria-label="Větve dějin">
+    <span class="caps">Větve dějin</span>
+    <svg id="tree-svg" viewBox="0 0 200 260" aria-hidden="true"></svg>
+    <div id="branches"></div>
+    <button class="add" id="add">+ Nová větev z roku <span id="add-year"></span></button>
+    <p class="why">Větev začne v roce pod kurzorem jako kopie dějin. Změníš v ní události a engine ji dopočítá jen od toho roku.</p>
+  </aside>
+
+  <section class="main">
+    <h2 id="title-a"></h2><h2 id="title-b"></h2>
+    <div class="stage" id="stage-a"><canvas id="map-a" aria-label="Mapa jazyků ve větvi A"></canvas><div class="tip" id="tip-a" hidden></div></div>
+    <div class="stage" id="stage-b"><canvas id="map-b" aria-label="Mapa jazyků ve větvi B"></canvas><div class="tip" id="tip-b" hidden></div></div>
+    <div class="river" id="river-a"><svg id="rsvg-a" aria-label="Jazyky v čase, větev A"></svg></div>
+    <div class="river" id="river-b"><svg id="rsvg-b" aria-label="Jazyky v čase, větev B"></svg></div>
+  </section>
+
+  <aside class="diff" id="diff" aria-live="polite"></aside>
+  <footer class="foot" id="foot"></footer>
+</div>
+
+<script type="application/json" id="cee-data">__DATA__</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById('cee-data').textContent);
+  const END = D.end, P = D.places, R = D.regions, RUNS = D.runs, CONCEPTS = Object.keys(D.gloss);
+  function hash(i, j) { let h = Math.imul(i, 374761393) + Math.imul(j, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+  let LEX = D.lex.pra;
+__NAMING__
+  const RB = {};
+  (() => { const taken = new Set(); for (const r of R) { LEX = D.lex[r.language]; Object.assign(r, placeName(r.id, r.terrain, 0, taken)); taken.add(r.name); RB[r.id] = r; } })();
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+  const placeLabel = i => `${RB[P[i].region].name} ${ROMAN[+P[i].id.split('-v').pop()] || ''}`;
+  const str = e => (e && e[1] >= 0 ? D.strings[e[1]] : null);
+
+  // --- dotazy nad jednou větví ---
+  function api(run) {
+    const L = run.lineages, F = run.frames;
+    const frameAt = y => { let f = F[0]; for (const x of F) { if (x.year <= y) f = x; else break; } return f; };
+    const familyOf = code => L.findIndex(l => l.parent === null && l.code === code);
+    const linAt = (f, i) => (f.lin[i] >= 0 ? f.lin[i] : familyOf(f.code[i]));
+    const entryAt = (c, i, y) => { const rows = run.forms[c][i]; let e = rows[0]; for (const r of rows) { if (r[0] <= y) e = r; else break; } return e; };
+    const formAt = (c, i, y) => str(entryAt(c, i, y));
+    const members = (li, y) => { const f = frameAt(y); return P.map((_, i) => i).filter(i => linAt(f, i) === li); };
+    const rep = (li, y) => { const m = members(li, y), f = frameAt(y); return m.length ? m.reduce((a, b) => (f.pop[b] > f.pop[a] ? b : a), m[0]) : (L[li].at_start[0] ?? 0); };
+    return { run, L, F, frameAt, familyOf, linAt, entryAt, formAt, members, rep };
+  }
+  const A = api(RUNS[0]), B = api(RUNS[1]);
+
+  // --- jména a barvy jazyků: společné pro obě větve podle ID linie ---
+  const ATTEMPT = { pra: 3, vych: 0 };
+  const pattern = code => ENDONYMS[Math.floor(hash(nameSeed(code, ATTEMPT[code]), 9) * ENDONYMS.length)];
+  function endonymAt(X, li, y) { const [parts, meaning] = pattern(X.L[li].code), i = X.rep(li, y);
+    const ipa = compound(parts.map(c => X.formAt(c, i, y) || D.lex[X.L[li].code][c])); return { endonym: romanize(ipa), ipa, meaning }; }
+  const NAME = new Map(), SLOT = new Map(), names = [];
+  for (const X of [A, B]) X.L.forEach((l, li) => {
+    if (!SLOT.has(l.id)) SLOT.set(l.id, SLOT.size);
+    if (NAME.has(l.id)) return;
+    let name = l.parent === null ? (LEX = D.lex[l.code], languageName(l.code, ATTEMPT[l.code]).name) : czechLanguage(endonymAt(X, li, Math.min(END, l.end ?? END)).endonym);
+    if (names.includes(name)) { const r = RB[P[l.at_start[0]].region].name.toLowerCase(), stem = r.length > 3 ? r.replace(/[aeiouäöüy]+$/i, '') : r;
+      name = `${stem}ská ${l.parent === null ? name : NAME.get(X.L[l.parent].id)}`; }
+    if (names.includes(name)) name += ` (${X === A ? 'A' : 'B'})`;
+    names.push(name); NAME.set(l.id, name);
+  });
+  // Barvy stačí odlišit mezi jazyky, které žijí současně (v kterékoli větvi): hladové barvení podle doby života.
+  (() => {
+    const span = new Map();
+    for (const X of [A, B]) X.L.forEach(l => { const [a, b] = span.get(l.id) || [Infinity, -Infinity]; span.set(l.id, [Math.min(a, l.start ?? 0), Math.max(b, (l.end ?? END) + 1)]); });
+    const ids = [...SLOT.keys()]; SLOT.clear();
+    for (const id of ids) {
+      const [a, b] = span.get(id), used = new Set(ids.filter(o => SLOT.has(o)).filter(o => { const [c, d] = span.get(o); return c < b && a < d; }).map(o => SLOT.get(o)));
+      let k = 0; while (used.has(k)) k++; SLOT.set(id, k);
+    }
+  })();
+  const nameOf = (X, li) => NAME.get(X.L[li].id);
+  const color = (X, li) => `var(--l${SLOT.get(X.L[li].id) % 6})`;
+  const cssColor = (X, li) => getComputedStyle(document.documentElement).getPropertyValue(`--l${SLOT.get(X.L[li].id) % 6}`).trim();
+
+  const UI = { year: 2000, place: P.findIndex(p => p.id === 'pelna-v0'), playing: false };
+
+  // --- mapy ---
+  function vnoise(x, y) { const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1); return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1; }
+  const GI = P.map(p => RB[p.region].terrain === 'island');
+  function landField(x, y) {
+    let main = Infinity, island = Infinity;
+    P.forEach((p, n) => { const dx = p.x - x, dy = p.y - y, d = dx * dx + dy * dy; if (GI[n]) { if (d < island) island = d; } else if (d < main) main = d; });
+    const noise = vnoise(x / 24, y / 24) * 8 + vnoise(x / 8 + 40, y / 8) * 2.6;
+    const fm = 34 - Math.sqrt(main) + noise, fi = 34 - Math.sqrt(island) + noise;
+    if (fm > -14 && fi > -14) return Math.min(Math.max(fm, fi), -3 - Math.min(Math.abs(fm - fi), 6));
+    return Math.max(fm, fi);
+  }
+  function geometry(stage, cv) {
+    const W = stage.clientWidth, H = stage.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (!W || !H) return null;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    const minx = -10, maxx = 345, miny = 50, maxy = 335, k = Math.min((W - 16) / (maxx - minx), (H - 16) / (maxy - miny));
+    const ox = (W - k * (maxx - minx)) / 2 - k * minx, oy = (H - k * (maxy - miny)) / 2 - k * miny;
+    const g = 3, nx = Math.ceil(W / g) + 1, ny = Math.ceil(H / g) + 1, values = new Float64Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) values[j * nx + i] = landField((i * g - ox) / k, (j * g - oy) / k);
+    const path = d3.geoPath(d3.geoTransform({ point(x, y) { this.stream.point(x * g, y * g); } }));
+    const shapes = d3.contours().size([nx, ny]).thresholds([0, -4, -9, -15])(values).sort((a, b) => b.value - a.value).map(c => new Path2D(path(c)));
+    const pts = P.map(p => [ox + k * p.x, oy + k * p.y]), del = d3.Delaunay.from(pts), vor = del.voronoi([0, 0, W, H]);
+    const cells = P.map((_, i) => { const p = new Path2D(), poly = vor.cellPolygon(i); poly.forEach(([x, y], n) => (n ? p.lineTo(x, y) : p.moveTo(x, y))); p.closePath(); return p; });
+    const edges = [], { triangles, halfedges } = del, cc = vor.circumcenters;
+    for (let e = 0; e < halfedges.length; e++) { const o = halfedges[e]; if (o < e) continue;
+      const a = triangles[e], b = triangles[e % 3 === 2 ? e - 2 : e + 1], t1 = Math.floor(e / 3), t2 = Math.floor(o / 3);
+      edges.push({ a, b, x1: cc[2 * t1], y1: cc[2 * t1 + 1], x2: cc[2 * t2], y2: cc[2 * t2 + 1] }); }
+    return { W, H, dpr, k, pts, del, cells, edges, land: shapes[0], lines: shapes.slice(1), ctx: cv.getContext('2d') };
+  }
+  const tok = () => { const cs = getComputedStyle(document.documentElement), t = n => cs.getPropertyValue(n).trim();
+    return { sea: t('--sea'), seaLine: t('--sea-line'), land: t('--land'), ink: t('--ink'), ink2: t('--ink-2'), red: t('--isogloss'), halo: t('--halo'), font: t('--f-ui') }; };
+  const MAPS = [{ X: A, stage: document.getElementById('stage-a'), cv: document.getElementById('map-a'), tip: document.getElementById('tip-a') },
+    { X: B, stage: document.getElementById('stage-b'), cv: document.getElementById('map-b'), tip: document.getElementById('tip-b') }];
+  function differs(y) { const fa = A.frameAt(y), fb = B.frameAt(y); return P.map((_, i) => { const la = A.linAt(fa, i), lb = B.linAt(fb, i); return (la >= 0 ? A.L[la].id : null) !== (lb >= 0 ? B.L[lb].id : null); }); }
+  function drawMap(M, diff) {
+    const G = M.G; if (!G) return;
+    const t = tok(), { W, H, dpr, ctx } = G, X = M.X, f = X.frameAt(UI.year);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = t.sea; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = t.seaLine; ctx.lineWidth = 0.8; G.lines.forEach((p, n) => { ctx.globalAlpha = 0.7 - n * 0.2; ctx.stroke(p); }); ctx.globalAlpha = 1;
+    ctx.fillStyle = t.land; ctx.fill(G.land);
+    ctx.save(); ctx.clip(G.land);
+    P.forEach((_, i) => { const li = X.linAt(f, i); if (li < 0) return; ctx.fillStyle = cssColor(X, li); ctx.globalAlpha = 0.5 - (f.dia[i] >= 0 ? (f.dia[i] % 3) * 0.07 : 0); ctx.fill(G.cells[i]); });
+    ctx.globalAlpha = 1;
+    for (const e of G.edges) { if (X.linAt(f, e.a) === X.linAt(f, e.b)) continue; ctx.strokeStyle = t.ink; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); ctx.stroke(); }
+    // rozdíl proti druhé větvi: červený obrys vsí, kde se mluví jiným jazykem
+    ctx.strokeStyle = t.red; ctx.lineWidth = 2.2; ctx.beginPath();
+    for (const e of G.edges) if (diff[e.a] !== diff[e.b]) { ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); }
+    ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = t.ink; ctx.lineWidth = 1; ctx.stroke(G.land);
+    const [px, py] = G.pts[UI.place]; ctx.strokeStyle = t.red; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.stroke();
+    ctx.textAlign = 'center'; if ('letterSpacing' in ctx) ctx.letterSpacing = '0.2em';
+    X.L.forEach((_, li) => { const m = P.map((__, i) => i).filter(i => X.linAt(f, i) === li); if (!m.length) return;
+      const x = d3.mean(m, i => G.pts[i][0]), y = d3.mean(m, i => G.pts[i][1]); ctx.font = `700 ${m.length > 20 ? 12 : 10}px ${t.font}`;
+      const label = nameOf(X, li).toUpperCase(); ctx.lineWidth = 4; ctx.strokeStyle = t.halo; ctx.strokeText(label, x, y); ctx.fillStyle = t.ink; ctx.fillText(label, x, y); });
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  }
+  MAPS.forEach(M => {
+    M.cv.addEventListener('pointermove', ev => { if (!M.G) return; const r = M.cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, i = M.G.del.find(x, y), X = M.X, li = X.linAt(X.frameAt(UI.year), i);
+      M.tip.hidden = false; M.tip.style.left = Math.min(x + 12, M.G.W - 200) + 'px'; M.tip.style.top = (y + 12) + 'px'; M.tip.innerHTML = `<b>${placeLabel(i)}</b> · ${li >= 0 ? nameOf(X, li) : '—'}`; });
+    M.cv.addEventListener('pointerleave', () => { M.tip.hidden = true; });
+    M.cv.addEventListener('click', ev => { const r = M.cv.getBoundingClientRect(); UI.place = M.G.del.find(ev.clientX - r.left, ev.clientY - r.top); render(); });
+  });
+
+  // --- řeky ---
+  function seriesOf(X) { return X.F.map(f => { const o = { year: f.year }; X.L.forEach((_, li) => { o[li] = 0; }); P.forEach((_, i) => { const li = X.linAt(f, i); if (li >= 0) o[li] += f.pop[i]; }); return o; }); }
+  function orderOf(X) { const out = []; const add = p => X.L.forEach((l, i) => { if (l.parent === p) { out.push(i); add(i); } }); add(null); return out; }
+  const SER = [seriesOf(A), seriesOf(B)], MAX = Math.max(...SER.map(s => d3.max(s, r => Object.keys(r).filter(k => k !== 'year').reduce((a, k) => a + r[k], 0))));
+  function drawRiver(X, ser, el, svgEl, fork) {
+    const W = el.clientWidth, H = el.clientHeight, m = { l: 0, r: 8, t: 14, b: 18 }; if (!W || !H) return;
+    const x = d3.scaleLinear([0, END], [m.l, W - m.r]), y = d3.scaleLinear([0, MAX], [H - m.b, m.t]), ord = orderOf(X);
+    const stack = d3.stack().keys(ord)(ser), area = d3.area().x(d => x(d.data.year)).y0(d => y(d[0])).y1(d => y(d[1])).curve(d3.curveMonotoneX);
+    let html = '';
+    for (let yr = 0; yr <= END; yr += 500) html += `<text x="${x(yr)}" y="${H - 4}" font-size="10.5" fill="var(--ink-2)" text-anchor="${yr === 0 ? 'start' : yr === END ? 'end' : 'middle'}">${yr}</text>`;
+    stack.forEach(s => { html += `<path d="${area(s)}" fill="${color(X, s.key)}" fill-opacity="0.7" stroke="var(--panel)" stroke-width="1.2"><title>${nameOf(X, s.key)}</title></path>`; });
+    if (fork != null) html += `<line x1="${x(fork)}" x2="${x(fork)}" y1="${m.t - 10}" y2="${H - m.b}" stroke="var(--isogloss)" stroke-dasharray="3 3"/><text x="${x(fork) + 4}" y="${m.t - 3}" font-size="10.5" fill="var(--isogloss)">větev od ${fork}</text>`;
+    html += `<line x1="${x(UI.year)}" x2="${x(UI.year)}" y1="${m.t - 4}" y2="${H - m.b}" stroke="var(--ink)" stroke-width="1.5"/>`;
+    html += `<rect class="hit" x="0" y="0" width="${W}" height="${H}" fill="transparent" style="cursor:ew-resize"/>`;
+    svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`); svgEl.innerHTML = html;
+    const hit = svgEl.querySelector('.hit'), yearAt = ev => { const r = hit.getBoundingClientRect(); return Math.max(0, Math.min(END, Math.round(x.invert(ev.clientX - r.left) / 50) * 50)); };
+    let drag = false;
+    hit.addEventListener('pointerdown', ev => { drag = true; hit.setPointerCapture(ev.pointerId); UI.year = yearAt(ev); render(); });
+    hit.addEventListener('pointermove', ev => { if (drag) { UI.year = yearAt(ev); render(); } });
+    hit.addEventListener('pointerup', () => { drag = false; });
+  }
+
+  // --- strom větví a rozdíly ---
+  const KIND = { annexation: 'připojení', collapse: 'zánik státu', state: 'vznik státu', secession: 'odtržení', language_policy: 'jazyková politika' };
+  function eventDiff() {
+    const key = e => JSON.stringify(e), ka = new Set(RUNS[0].spec_events.map(key)), kb = new Set(RUNS[1].spec_events.map(key)), out = [];
+    for (const e of RUNS[1].spec_events) if (!ka.has(key(e))) {
+      const old = RUNS[0].spec_events.find(o => o.kind === e.kind && o.year === e.year);
+      if (old && e.regions && old.regions) out.push(`${e.year} ${KIND[e.kind] || e.kind}: navíc ${e.regions.filter(r => !old.regions.includes(r)).map(r => RB[r].name).join(', ')}`);
+      else out.push(`${e.year} ${KIND[e.kind] || e.kind}: nově`);
+    }
+    for (const e of RUNS[0].spec_events) if (!kb.has(key(e)) && !RUNS[1].spec_events.some(o => o.kind === e.kind && o.year === e.year)) out.push(`${e.year} ${KIND[e.kind] || e.kind}${e.state ? ' (' + e.state + ')' : ''}: zrušeno`);
+    return out;
+  }
+  function renderTree() {
+    const svg = document.getElementById('tree-svg'), y = yr => 14 + yr / END * 230, fork = RUNS[1].fork;
+    svg.innerHTML = `<line x1="40" y1="${y(0)}" x2="40" y2="${y(END)}" stroke="var(--ink)" stroke-width="2"/>
+      <path d="M40 ${y(fork)} C 40 ${y(fork) + 18}, 110 ${y(fork) + 8}, 110 ${y(fork) + 34} L 110 ${y(END)}" fill="none" stroke="var(--isogloss)" stroke-width="2"/>
+      <circle cx="40" cy="${y(fork)}" r="4" fill="var(--isogloss)"/>
+      <text x="50" y="${y(fork) + 4}" font-size="11" fill="var(--isogloss)">${fork}</text>
+      ${[0, 500, 1000, 1500, 2000].map(v => `<text x="2" y="${y(v) + 4}" font-size="10" fill="var(--ink-2)">${v}</text>`).join('')}
+      <text x="46" y="${y(END) - 4}" font-size="12" fill="var(--ink)">A</text><text x="116" y="${y(END) - 4}" font-size="12" fill="var(--isogloss)">B</text>
+      <line x1="30" x2="130" y1="${y(UI.year)}" y2="${y(UI.year)}" stroke="var(--ink-2)" stroke-dasharray="2 3"/>`;
+    document.getElementById('branches').innerHTML = `
+      <div class="branch"><b>A · ${RUNS[0].name}</b><span class="why">dějiny, jak je máš v prototypu Dějin</span></div>
+      <div class="branch b"><b>B · ${RUNS[1].name}</b><span class="why">odbočuje v roce ${fork}</span><ul>${eventDiff().map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+    document.getElementById('add-year').textContent = UI.year;
+  }
+  const plural = (n, a, b, c) => (n === 1 ? a : n >= 2 && n <= 4 ? b : c);
+  function renderDiff() {
+    const y = UI.year, diff = differs(y), n = diff.filter(Boolean).length, fa = A.frameAt(y), fb = B.frameAt(y);
+    const ids = [...new Set([...orderOf(A).map(li => A.L[li].id), ...orderOf(B).map(li => B.L[li].id)])];
+    const speakers = (X, f, id) => { const li = X.L.findIndex(l => l.id === id); if (li < 0) return null; return P.reduce((s, _, i) => s + (X.linAt(f, i) === li ? f.pop[i] : 0), 0); };
+    const rows = ids.map(id => { const sa = speakers(A, fa, id), sb = speakers(B, fb, id); return { id, sa, sb }; }).filter(r => (r.sa || 0) + (r.sb || 0) > 0);
+    const sw = id => { const X = A.L.some(l => l.id === id) ? A : B, li = X.L.findIndex(l => l.id === id); return `<i style="background:${color(X, li)}"></i>${nameOf(X, li)}`; };
+    const i = UI.place, words = CONCEPTS.filter(c => !['we', 'good', 'speak', 'person'].includes(c)).map(c => ({ c, a: A.formAt(c, i, y), b: B.formAt(c, i, y) }));
+    const changed = words.filter(w => w.a !== w.b);
+    const la = A.linAt(fa, i), lb = B.linAt(fb, i);
+    document.getElementById('diff').innerHTML = `
+      <div><div class="caps">V roce ${y}</div><div class="big">${n} ${plural(n, 'ves mluví', 'vsi mluví', 'vsí mluví')} jinak</div>
+        <p class="why">${n ? 'Na mapách jsou obtažené červeně.' : y < RUNS[1].fork ? `Do roku ${RUNS[1].fork} jsou obě větve stejné.` : 'Jazyky jsou v obou větvích na stejných místech.'}</p></div>
+      <div><div class="caps" style="margin-bottom:4px">Mluvčí podle jazyka</div>
+        <table class="cmp"><thead><tr><th>Jazyk</th><th class="n">A</th><th class="n">B</th><th class="n">rozdíl</th></tr></thead><tbody>
+        ${rows.map(r => { const d = (r.sb ?? 0) - (r.sa ?? 0); return `<tr><td>${sw(r.id)}</td><td class="n${r.sa == null ? ' only' : ''}">${r.sa == null ? 'není' : r.sa.toLocaleString('cs')}</td><td class="n${r.sb == null ? ' only' : ''}">${r.sb == null ? 'není' : r.sb.toLocaleString('cs')}</td><td class="n delta ${d < 0 ? 'minus' : d > 0 ? 'plus' : ''}">${d === 0 ? '–' : (d > 0 ? '+' : '−') + Math.abs(d).toLocaleString('cs')}</td></tr>`; }).join('')}
+        </tbody></table></div>
+      <div><div class="caps" style="margin-bottom:4px">Ves ${placeLabel(i)}</div>
+        <p class="why" style="margin-bottom:6px">A: ${la >= 0 ? nameOf(A, la) : '—'} · B: ${lb >= 0 ? nameOf(B, lb) : '—'}. ${changed.length} z ${words.length} slov se liší. Jinou ves vybereš klikem do mapy.</p>
+        <table class="cmp"><thead><tr><th>Význam</th><th>A</th><th>B</th></tr></thead><tbody>
+        ${(changed.length ? changed : words.slice(0, 8)).slice(0, 18).map(w => `<tr><td>${D.gloss[w.c]}</td><td class="f">${w.a ?? '∅'}</td><td class="f${w.a !== w.b ? ' chg' : ''}">${w.b ?? '∅'}</td></tr>`).join('')}
+        </tbody></table></div>`;
+  }
+
+  // --- čas a vykreslení ---
+  const playBtn = document.getElementById('play'), playIcon = document.getElementById('play-icon'); let timer = null;
+  function setPlaying(on) { clearInterval(timer); UI.playing = on; playBtn.setAttribute('aria-label', on ? 'Zastavit' : 'Přehrát');
+    playIcon.innerHTML = on ? '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>' : '<path d="M4 2l10 6-10 6z"/>'; if (!on) return; if (UI.year >= END) UI.year = 0;
+    timer = setInterval(() => { if (UI.year >= END) { setPlaying(false); return; } UI.year += 50; render(); }, 280); }
+  playBtn.addEventListener('click', () => setPlaying(!UI.playing));
+  document.getElementById('add').addEventListener('click', () => { const b = document.getElementById('add'); b.textContent = 'V prototypu se nové větve nepočítají.'; setTimeout(() => { b.innerHTML = `+ Nová větev z roku <span id="add-year">${UI.year}</span>`; }, 2200); });
+  document.querySelectorAll('.path a').forEach(a => a.addEventListener('click', e => e.preventDefault()));
+  document.addEventListener('keydown', e => { if (e.key === 'ArrowRight') { UI.year = Math.min(END, UI.year + 50); render(); } else if (e.key === 'ArrowLeft') { UI.year = Math.max(0, UI.year - 50); render(); } });
+  function render() {
+    document.getElementById('year').textContent = UI.year;
+    document.getElementById('title-a').innerHTML = `A · ${RUNS[0].name}<small>rok ${UI.year}</small>`;
+    document.getElementById('title-b').innerHTML = `<span style="color:var(--isogloss)">B</span>&nbsp;· ${RUNS[1].name}<small>${UI.year < RUNS[1].fork ? 'zatím stejné jako A' : 'od roku ' + RUNS[1].fork + ' jinak'}</small>`;
+    const diff = differs(UI.year); MAPS.forEach(M => drawMap(M, diff));
+    drawRiver(A, SER[0], document.getElementById('river-a'), document.getElementById('rsvg-a'), null);
+    drawRiver(B, SER[1], document.getElementById('river-b'), document.getElementById('rsvg-b'), RUNS[1].fork);
+    renderTree(); renderDiff();
+    const living = X => new Set(P.map((_, i) => X.linAt(X.frameAt(UI.year), i)).filter(x => x >= 0)).size;
+    document.getElementById('foot').innerHTML = `<span>A: <b>${living(A)}</b> ${plural(living(A), 'jazyk', 'jazyky', 'jazyků')}</span><span>B: <b>${living(B)}</b> ${plural(living(B), 'jazyk', 'jazyky', 'jazyků')}</span><span>Obě větve sdílejí svět, protojazyky a los; liší se jen událostmi od roku ${RUNS[1].fork}.</span>`;
+  }
+  function relayout() { MAPS.forEach(M => { M.G = geometry(M.stage, M.cv); }); render(); }
+  new ResizeObserver(relayout).observe(document.querySelector('.main'));
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+  new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  relayout();
+  if (document.fonts) document.fonts.ready.then(render);
+})();
+</script>

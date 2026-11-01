@@ -1,0 +1,601 @@
+<title>Poloostrov: dějiny</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Piazzolla:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+@font-face { font-family: "Charis CEE"; src: url(data:font/woff2;base64,__CHARIS_REGULAR__) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+/* Layout: nahoře mapa světa v roce pod kurzorem, vpravo karta vybrané události, dole kronika: pruh pro každý stát, lingua francu a kraje. */
+:root {
+  --sea: #bccad0; --sea-line: #eef3f4; --land: #fbfbf9; --ink: #1b2830; --ink-2: #56656e; --ink-3: #a7b3b9; --rule: #d1d9dc;
+  --panel: #eef1f2; --field: #f7f9f9; --isogloss: #ae2a1f; --warn: #9a6a12; --halo: rgba(251, 251, 249, 0.9); --tint: rgba(174, 42, 31, 0.08);
+  --grain: 0.07; --f-ui: "Piazzolla", Georgia, serif; --f-ipa: "Charis CEE", "Charis SIL", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --ink-3: #4d5a65; --rule: #26323d;
+    --panel: #111a22; --field: #16212b; --isogloss: #e8806f; --warn: #d9a54a; --halo: rgba(23, 32, 42, 0.86); --tint: rgba(232, 128, 111, 0.16); --grain: 0.06; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --ink-3: #4d5a65; --rule: #26323d;
+  --panel: #111a22; --field: #16212b; --isogloss: #e8806f; --warn: #d9a54a; --halo: rgba(23, 32, 42, 0.86); --tint: rgba(232, 128, 111, 0.16); --grain: 0.06; color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--panel); color: var(--ink); font-family: var(--f-ui); font-size: 15px; line-height: 1.4; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 10px; }
+* { box-sizing: border-box; }
+button, input, select { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--isogloss); outline-offset: 2px; }
+.ipa { font-family: var(--f-ipa); }
+.caps { text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; font-weight: 700; color: var(--ink-2); }
+.why { font-size: 13px; color: var(--ink-2); font-style: italic; line-height: 1.38; margin: 0; }
+
+.app { height: 100%; display: grid; gap: 10px 14px; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "top top" "stage insp" "tl insp" "foot foot"; }
+.top { grid-area: top; display: flex; align-items: baseline; gap: 28px; flex-wrap: wrap; border-bottom: 1px solid var(--ink); padding-bottom: 8px; }
+.project { font-size: 22px; font-style: italic; }
+.project small { font-style: normal; font-size: 12px; color: var(--ink-2); margin-left: 8px; }
+.path { display: flex; gap: 4px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; align-items: baseline; }
+.path li { display: flex; align-items: baseline; gap: 4px; }
+.path li + li::before { content: ""; width: 22px; border-top: 1px dotted var(--ink-2); align-self: center; }
+.path a { color: var(--ink-2); text-decoration: none; padding: 2px 4px; }
+.path a b { font-weight: 500; font-size: 11px; margin-right: 4px; }
+.path a[aria-current="page"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--isogloss); }
+.saved { margin-left: auto; font-size: 12px; color: var(--ink-2); font-style: italic; }
+
+/* mapa */
+.stage { grid-area: stage; position: relative; min-height: 0; min-width: 0; overflow: hidden; background: var(--sea); border-radius: 2px; }
+.stage canvas { position: absolute; inset: 0; }
+.year-big { position: absolute; left: 18px; top: 12px; pointer-events: none; display: grid; gap: 2px; }
+.year-big b { font-size: 40px; line-height: 1; font-variant-numeric: lining-nums tabular-nums; }
+.year-big span { font-size: 13px; color: var(--ink-2); font-style: italic; }
+.legend { position: absolute; right: 14px; bottom: 12px; background: var(--halo); padding: 8px 10px; border-radius: 2px; display: grid; gap: 4px; font-size: 13px; max-width: 280px; }
+.legend div { display: flex; gap: 8px; align-items: center; }
+.legend canvas { position: static; width: 26px; height: 14px; flex: none; border: 1px solid var(--ink-2); }
+.pickhint { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); background: var(--isogloss); color: var(--land); padding: 4px 12px; border-radius: 2px; font-size: 13px; pointer-events: none; }
+
+/* kronika */
+.tl { grid-area: tl; display: grid; gap: 6px; min-width: 0; }
+.tl-head { display: flex; gap: 14px; align-items: center; position: relative; flex-wrap: wrap; }
+.btn { border: 1px solid var(--ink); background: none; padding: 4px 12px; border-radius: 2px; cursor: pointer; font-size: 14px; }
+.btn.primary { background: var(--ink); color: var(--panel); }
+.btn.primary:hover { background: var(--isogloss); border-color: var(--isogloss); }
+.menu { position: absolute; left: 90px; bottom: calc(100% + 4px); z-index: 5; background: var(--land); border: 1px solid var(--ink); border-radius: 2px; padding: 6px; display: grid; grid-template-columns: repeat(2, minmax(0, 240px)); gap: 2px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); }
+.menu button { text-align: left; background: none; border: 0; padding: 6px 8px; cursor: pointer; border-radius: 2px; display: grid; }
+.menu button:hover { background: var(--field); }
+.menu button small { font-size: 12px; color: var(--ink-2); font-style: italic; }
+.chron { position: relative; display: grid; grid-template-columns: 170px minmax(0, 1fr); border-top: 1px solid var(--ink); user-select: none; }
+.chron .lab { font-size: 13px; padding: 0 8px 0 0; display: flex; align-items: center; min-width: 0; border-bottom: 1px solid var(--rule); }
+.chron .lab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chron .lab.sub { color: var(--ink-2); font-style: italic; }
+.track { position: relative; height: 34px; border-bottom: 1px solid var(--rule); }
+.ruler { position: relative; height: 22px; cursor: ew-resize; }
+.ruler span { position: absolute; top: 4px; transform: translateX(-50%); font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.ruler i { position: absolute; bottom: 0; width: 1px; height: 5px; background: var(--ink-2); }
+.bar { position: absolute; top: 8px; height: 18px; border: 1px solid var(--ink); border-radius: 1px; overflow: hidden; display: flex; }
+.bar .p { height: 100%; flex: none; }
+.p-tolerant { background: var(--land); }
+.p-promoted { background: repeating-linear-gradient(135deg, var(--land) 0 3px, var(--ink-3) 3px 5px); }
+.p-enforced { background: var(--ink-2); }
+.mk { position: absolute; top: 5px; height: 24px; transform: translateX(-1px); border: 0; background: none; padding: 0 0 0 4px; cursor: grab; display: flex; align-items: center; gap: 3px; font-size: 12px; white-space: nowrap; border-left: 2px solid var(--ink); }
+.mk span { background: var(--halo); padding: 0 3px; border-radius: 1px; }
+.mk.ro { cursor: default; border-left-style: dotted; color: var(--ink-2); }
+.mk[aria-pressed="true"] { border-left-color: var(--isogloss); color: var(--isogloss); font-weight: 700; }
+.mk.err span { box-shadow: inset 0 -2px 0 var(--warn); }
+.mk.tight span { display: none; }
+.cursor { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px solid var(--isogloss); pointer-events: none; z-index: 3; }
+.cursor b { position: absolute; top: 1px; left: 3px; font-size: 11px; color: var(--isogloss); font-variant-numeric: tabular-nums; background: var(--panel); padding: 0 3px; }
+
+/* karta */
+.insp { grid-area: insp; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; }
+.title-input { width: 100%; border: 0; border-bottom: 1px solid var(--ink); background: none; font-size: 24px; font-weight: 700; padding: 2px 0; }
+.ledger { display: grid; }
+.row { display: grid; gap: 4px; padding: 9px 0; border-bottom: 1px solid var(--rule); }
+.row dt { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.row dd { margin: 0; }
+.seg { display: flex; flex-wrap: wrap; }
+.seg button { background: none; border: 0; padding: 3px 9px 4px; cursor: pointer; font-size: 14px; color: var(--ink-2); border-bottom: 2px solid transparent; }
+.seg button:first-child { padding-left: 0; }
+.seg button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--isogloss); }
+select, input[type="number"] { background: var(--field); border: 1px solid var(--rule); border-radius: 2px; padding: 4px 6px; }
+input[type="number"] { width: 80px; font-variant-numeric: tabular-nums; }
+.toggle { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+input[type="checkbox"] { accent-color: var(--ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chips span { border: 1px solid var(--rule); background: var(--field); border-radius: 2px; padding: 0 7px; font-size: 13px; }
+.pick { justify-self: start; border: 1px dashed var(--isogloss); color: var(--isogloss); background: none; padding: 3px 10px; border-radius: 2px; cursor: pointer; font-size: 13px; }
+.pick[aria-pressed="true"] { background: var(--isogloss); color: var(--land); border-style: solid; }
+.link { border: 0; background: none; padding: 0; cursor: pointer; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; font-size: 13px; }
+.danger { align-self: flex-start; background: none; border: 0; color: var(--isogloss); cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.checks li { padding-left: 14px; position: relative; }
+.checks li::before { content: ""; position: absolute; left: 0; top: 0.45em; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.checks li.ok::before { background: var(--ink-2); }
+.checks button { border: 0; background: none; padding: 0; cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 2px; }
+
+.foot { grid-area: foot; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--rule); padding-top: 8px; }
+.counts { font-size: 13px; color: var(--ink-2); }
+.counts b { color: var(--ink); }
+.foot .spacer { margin-left: auto; }
+.spec { width: 100%; display: grid; gap: 6px; }
+.spec pre { margin: 0; max-height: 220px; overflow: auto; background: var(--field); border: 1px solid var(--rule); padding: 10px; font: 12px/1.45 ui-monospace, Menlo, monospace; }
+
+@media (max-width: 980px) {
+  html, body { height: auto; }
+  .app { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 56vh auto auto auto; grid-template-areas: "top" "stage" "tl" "insp" "foot"; }
+  .chron { grid-template-columns: 110px minmax(0, 1fr); }
+  .legend { display: none; }
+  .menu { left: 0; grid-template-columns: minmax(0, 1fr); }
+  .saved { margin-left: 0; }
+}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="project">Poloostrov<small>2000 let, krok 25 let</small></div>
+    <nav aria-label="Postup práce"><ol class="path">
+      <li><a href="#svet"><b>1</b>Svět</a></li>
+      <li><a href="#proto"><b>2</b>Protojazyk</a></li>
+      <li><a href="#dejiny" aria-current="page"><b>3</b>Dějiny</a></li>
+      <li><a href="#vysledky"><b>4</b>Výsledky</a></li>
+      <li><a href="#vetve"><b>5</b>Větve</a></li>
+    </ol></nav>
+    <span class="saved" id="saved">Všechny změny uložené</span>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="map" aria-label="Mapa států v roce pod kurzorem"></canvas>
+    <div class="year-big"><b id="year-big"></b><span id="year-sub"></span></div>
+    <div class="legend" id="legend"></div>
+    <div class="pickhint" id="pickhint" hidden>Klikáním na mapě přidáváš a ubíráš kraje</div>
+  </main>
+
+  <section class="tl" aria-label="Kronika">
+    <div class="tl-head">
+      <span class="caps">Kronika</span>
+      <button class="btn primary" id="add" aria-haspopup="true" aria-expanded="false">+ Událost</button>
+      <div class="menu" id="menu" hidden></div>
+      <span class="why">Táhni kurzor po pravítku, události táhni po ose. Krok je 25 let.</span>
+    </div>
+    <div class="chron" id="chron"></div>
+  </section>
+
+  <aside class="insp" id="insp" aria-live="polite"></aside>
+
+  <footer class="foot">
+    <span class="counts" id="counts"></span>
+    <button class="btn" id="undo">Zpět</button>
+    <button class="btn" id="show-spec" aria-expanded="false">Popis dějin pro engine</button>
+    <span class="spacer"></span>
+    <button class="btn primary" id="run">Spustit 2000 let</button>
+    <div class="spec" id="spec" hidden>
+      <p class="why" id="spec-note" style="color:var(--warn)"></p>
+      <pre id="spec-json"></pre>
+    </div>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(() => {
+  const END = 2000, STEP = 25;
+  const GEO = [
+    ['Vardun', 40, 120, 'plain'], ['Selm', 85, 95, 'plain'], ['Orra', 70, 150, 'plain'], ['Kestrin', 120, 130, 'plain'],
+    ['Bal', 30, 175, 'plain'], ['Tumar', 110, 180, 'hills'], ['Hesk', 150, 90, 'hills'], ['Ivel', 160, 160, 'mountains'],
+    ['Dorn', 185, 115, 'mountains'], ['Kaar', 175, 210, 'hills'], ['Mirost', 225, 145, 'plain'], ['Pelna', 235, 95, 'plain'],
+    ['Soran', 270, 125, 'plain'], ['Ulm', 255, 185, 'hills'], ['Teth', 300, 165, 'plain'], ['Varra', 310, 100, 'plain'],
+    ['Nask', 60, 225, 'plain'], ['Ebb', 140, 240, 'plain'], ['Lisk', 105, 300, 'island'], ['Corrin', 210, 240, 'plain'],
+  ];
+  const OFFS = [[0, 0], [10, 0], [-5, 8.66], [-5, -8.66]];
+  const GP = [], GI = [];
+  GEO.forEach(([, x, y, t]) => OFFS.forEach(([dx, dy]) => { GP.push([x + dx, y + dy]); GI.push(t === 'island'); }));
+  function hash(i, j) { let h = Math.imul(i, 374761393) + Math.imul(j, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+  function vnoise(x, y) {
+    const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1);
+    return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
+  }
+  function landField(x, y) {
+    let main = Infinity, island = Infinity;
+    for (let n = 0; n < GP.length; n++) { const dx = GP[n][0] - x, dy = GP[n][1] - y, d = dx * dx + dy * dy; if (GI[n]) { if (d < island) island = d; } else if (d < main) main = d; }
+    const noise = vnoise(x / 24, y / 24) * 8 + vnoise(x / 8 + 40, y / 8) * 2.6;
+    const fm = 34 - Math.sqrt(main) + noise, fi = 34 - Math.sqrt(island) + noise;
+    if (fm > -14 && fi > -14) return Math.min(Math.max(fm, fi), -3 - Math.min(Math.abs(fm - fi), 6));
+    return Math.max(fm, fi);
+  }
+
+  const LEX = __LEXICON__;
+__NAMING__
+  const slug = s => s.toLowerCase();
+  const REGIONS = (() => { const taken = new Set(); return GEO.map(([g, x, y, terrain]) => { const r = { id: slug(g), x, y, terrain, ...placeName(slug(g), terrain, 0, taken) }; taken.add(r.name); return r; }); })();
+  const RB = Object.fromEntries(REGIONS.map(r => [r.id, r]));
+  const LANG = languageName('pra', 3);
+  const stateName = (capital, kind = 'království') => { const n = RB[capital] ? RB[capital].name : 'Nový'; const stem = n.replace(/[aeiouäöüy]+$/i, '') || n; return `${stem}ské ${kind}`; };
+  // Vlastnosti krajů v čase z editoru světa (jen ke čtení).
+  const REGION_PERIODS = [
+    { region: 'teth', year: 900, text: 'svébytná' }, { region: 'vardun', year: 1100, text: 'obchodní město' }, { region: 'lisk', year: 1600, text: 'jazyk chráněn' },
+  ];
+
+  // --- události ---
+  let uid = 0;
+  const ev = o => ({ uid: ++uid, ...o });
+  const WEST = ['vardun', 'selm', 'orra', 'kestrin', 'bal', 'tumar', 'hesk', 'ivel', 'nask', 'ebb'];
+  let E = [
+    ev({ kind: 'state', year: 700, id: 'zapad', name: stateName('vardun'), regions: WEST, capital: 'vardun', centralization: 'moderate', policy: 'promoted', border: 'closed' }),
+    ev({ kind: 'state', year: 950, id: 'vychod', name: stateName('pelna'), regions: ['pelna', 'soran', 'mirost', 'varra', 'teth', 'ulm'], capital: 'pelna', centralization: 'weak', policy: 'tolerant', border: 'normal' }),
+    ev({ kind: 'standard', year: 1100, of: 'zapad', literacy: 'elite' }),
+    ev({ kind: 'lingua_franca', year: 1200, source: 'vardun', regions: ['pelna', 'soran', 'mirost', 'ulm', 'kaar', 'corrin'], spread: 'common', nativize: false }),
+    ev({ kind: 'annexation', year: 1300, state: 'zapad', regions: ['kaar', 'corrin', 'dorn'] }),
+    ev({ kind: 'secession', year: 1450, id: 'teth', name: stateName('teth', 'knížectví'), regions: ['teth', 'varra'], capital: 'teth', centralization: 'moderate', policy: 'tolerant', border: 'normal' }),
+    ev({ kind: 'schools', year: 1600, of: 'zapad', coverage: 'mass', printing: true, diglossic: false }),
+    ev({ kind: 'language_policy', year: 1650, state: 'zapad', policy: 'enforced' }),
+    ev({ kind: 'revival', year: 1800, regions: ['teth', 'varra'], strength: 'national' }),
+    ev({ kind: 'collapse', year: 1850, state: 'vychod' }),
+  ];
+  const UI = { year: 1500, selected: E[0].uid, pick: false };
+  const history = [];
+  const remember = () => { history.push(JSON.stringify({ E, uid })); if (history.length > 80) history.shift(); saved(); };
+  function undo() { const s = history.pop(); if (!s) return; ({ E, uid } = JSON.parse(s)); if (!E.some(e => e.uid === UI.selected)) UI.selected = null; renderAll(); saved(); }
+
+  const KINDS = {
+    state: { cz: 'Vznik státu', short: 'vznik', desc: 'Kraje se spojí pod jednu vládu.' },
+    annexation: { cz: 'Připojení krajů', short: e => `+${e.regions.length} ${e.regions.length === 1 ? 'kraj' : e.regions.length < 5 ? 'kraje' : 'krajů'}`, desc: 'Stát získá další kraje.' },
+    secession: { cz: 'Odtržení', short: 'odtržení', desc: 'Kraje odejdou a založí vlastní stát.' },
+    collapse: { cz: 'Zánik státu', short: 'zánik', desc: 'Vláda padne, kraje zůstanou samy.' },
+    language_policy: { cz: 'Jazyková politika', short: e => POLICY[e.policy][0], desc: 'Stát změní, jak prosazuje svůj jazyk.' },
+    border_policy: { cz: 'Hranice', short: e => `hranice ${BORDER[e.border][0]}`, desc: 'Hranice se otevře nebo uzavře.' },
+    standard: { cz: 'Spisovná norma', short: 'norma', desc: 'Ustálí se, jak se jazyk píše.' },
+    schools: { cz: 'Školy', short: 'školy', desc: 'Norma se dostane k dětem.' },
+    lingua_franca: { cz: 'Lingua franca', short: e => `${RB[e.source]?.name || '?'} → ${e.regions.length}`, desc: 'Řeč jednoho kraje se stane řečí trhů a cest.' },
+    revival: { cz: 'Obrození', short: 'obrození', desc: 'Lidé se vracejí k jazyku, který ustupoval.' },
+    preserve: { cz: 'Ochrana jazyka', short: e => (e.preserved ? 'chráněn' : 'bez ochrany'), desc: 'Autorův zásah: jazyk nevymře.' },
+  };
+  const CENTRAL = { none: ['žádná', 'Kraje si vládnou samy; nic je netáhne k hlavnímu městu.'], weak: ['volná', 'Do hlavního města se jezdí jen občas.'],
+    moderate: ['běžná', 'Kraje míří do hlavního města za úřady a obchodem; jeho řeč se šíří.'], strong: ['pevná', 'Všechno vede do hlavního města; jeho mluva je vzorem celé země.'] };
+  const POLICY = { tolerant: ['snášenlivá', 'Stát nechá kraje mluvit, jak chtějí. Svůj jazyk používá jen správa.'],
+    promoted: ['podporuje', 'Úřady, soudy a trh mluví jazykem státu; kdo chce výš, naučí se ho. Doma se mluví dál po svém.'],
+    enforced: ['vynucuje', 'Jazyk státu se vynucuje i ve škole a doma. Jiné jazyky během pár generací ustupují.'] };
+  const BORDER = { open: ['otevřená', 'Přes hranici se volně chodí i žení; nářečí přes ni plynule přecházejí.'], normal: ['běžná', 'Hranice cestám a sňatkům brání, ale nezastaví je.'],
+    closed: ['zavřená', 'Přes hranici se skoro nechodí. Jazyk se na ní časem rozlomí.'] };
+  const LITERACY = { elite: ['jen dvůr', 'Číst a psát umí dvůr a kněží.'], towns: ['i města', 'Psát umí i měšťané a kupci.'], mass: ['všichni', 'Psát umí skoro každý.'] };
+  const COVERAGE = { towns: ['ve městech', 'Škola jen ve městech.'], mass: ['všude', 'Škola v každé vsi; norma se dostane ke všem dětem.'] };
+  const SPREAD = { rare: ['občas', 'Mluví jí jen kupci a poslové.'], common: ['běžně', 'Je to běžná řeč trhů a cest.'], universal: ['všude', 'Mluví jí skoro každý dospělý.'] };
+  const STRENGTH = { movement: ['hnutí', 'Vzdělanci sbírají slova a píšou mluvnice; jazyk pomalu sílí.'], national: ['národní', 'Jazyk se vrací do škol a úřadů a znovu se jím mluví doma.'] };
+
+  // --- přehrání dějin do roku ---
+  function situation(year) {
+    const states = new Map(), owner = new Map(), notes = [];
+    const sorted = E.slice().sort((a, b) => a.year - b.year || a.uid - b.uid);
+    for (const e of sorted) {
+      if (e.year > year) break;
+      const take = (st, ids) => { for (const id of ids) { const prev = owner.get(id); if (prev && prev !== st.id) states.get(prev)?.regions.delete(id); owner.set(id, st.id); st.regions.add(id); } };
+      if (e.kind === 'state' || e.kind === 'secession') {
+        const st = { id: e.id, name: e.name, capital: e.capital, regions: new Set(), policy: e.policy, border: e.border, centralization: e.centralization, from: e.year, standard: null, schools: null, uid: e.uid };
+        states.set(e.id, st); take(st, e.regions);
+      } else if (e.kind === 'annexation') {
+        const st = states.get(e.state); if (!st) { notes.push([e, 'Stát tou dobou neexistuje.']); continue; }
+        take(st, e.regions);
+        for (const [id, other] of states) if (other !== st && st.regions.has(other.capital)) { for (const r of other.regions) owner.delete(r); states.delete(id); notes.push([e, `${other.name} ztratí hlavní město a zanikne.`]); }
+      } else if (e.kind === 'collapse') {
+        const st = states.get(e.state); if (!st) { notes.push([e, 'Stát tou dobou neexistuje.']); continue; }
+        for (const r of st.regions) owner.delete(r); states.delete(e.state);
+      } else if (e.kind === 'language_policy' || e.kind === 'border_policy') {
+        const st = states.get(e.state); if (!st) { notes.push([e, 'Stát tou dobou neexistuje.']); continue; }
+        if (e.kind === 'language_policy') st.policy = e.policy; else st.border = e.border;
+      } else if (e.kind === 'standard' || e.kind === 'schools') {
+        const st = states.get(e.of); if (!st) { notes.push([e, 'Stát tou dobou neexistuje.']); continue; }
+        st[e.kind] = e.year;
+      }
+    }
+    for (const st of states.values()) for (const r of [...st.regions]) if (owner.get(r) !== st.id) st.regions.delete(r);
+    return { states, owner, notes };
+  }
+  const allStates = () => { const m = new Map(); for (const e of E) if (e.kind === 'state' || e.kind === 'secession') m.set(e.id, e); return m; };
+
+  // --- mapa ---
+  const stage = document.getElementById('stage'), cv = document.getElementById('map'), ctx = cv.getContext('2d');
+  let G = null;
+  function layout() {
+    const W = stage.clientWidth, H = stage.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    const minx = -10, maxx = 345, miny = 50, maxy = 335, k = Math.min((W - 24) / (maxx - minx), (H - 24) / (maxy - miny));
+    const ox = (W - k * (maxx - minx)) / 2 - k * minx, oy = (H - k * (maxy - miny)) / 2 - k * miny;
+    const g = 3, nx = Math.ceil(W / g) + 1, ny = Math.ceil(H / g) + 1, values = new Float64Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) values[j * nx + i] = landField((i * g - ox) / k, (j * g - oy) / k);
+    const path = d3.geoPath(d3.geoTransform({ point(x, y) { this.stream.point(x * g, y * g); } }));
+    const shapes = d3.contours().size([nx, ny]).thresholds([0, -4, -9, -15, -22])(values).sort((a, b) => b.value - a.value).map(c => new Path2D(path(c)));
+    const pts = REGIONS.map(r => [ox + k * r.x, oy + k * r.y]);
+    const del = d3.Delaunay.from(pts), vor = del.voronoi([0, 0, W, H]);
+    const cells = REGIONS.map((_, i) => { const p = new Path2D(), poly = vor.cellPolygon(i); poly.forEach(([x, y], n) => (n ? p.lineTo(x, y) : p.moveTo(x, y))); p.closePath(); return p; });
+    const edges = [];
+    const { triangles, halfedges } = del, cc = vor.circumcenters;
+    for (let e = 0; e < halfedges.length; e++) {
+      const o = halfedges[e]; if (o < e) continue;
+      const a = triangles[e], b = triangles[e % 3 === 2 ? e - 2 : e + 1], t1 = Math.floor(e / 3), t2 = Math.floor(o / 3);
+      edges.push({ a, b, x1: cc[2 * t1], y1: cc[2 * t1 + 1], x2: cc[2 * t2], y2: cc[2 * t2 + 1] });
+    }
+    G = { W, H, dpr, k, pts, del, cells, edges, land: shapes[0], lines: shapes.slice(1) };
+  }
+  const tokens = () => { const cs = getComputedStyle(document.documentElement), t = n => cs.getPropertyValue(n).trim();
+    return { sea: t('--sea'), seaLine: t('--sea-line'), land: t('--land'), ink: t('--ink'), ink2: t('--ink-2'), ink3: t('--ink-3'), red: t('--isogloss'), halo: t('--halo'), tint: t('--tint'), font: t('--f-ui'), grain: parseFloat(t('--grain')) || 0 }; };
+  const hatchCache = new Map();
+  function hatch(index, color) {
+    const key = index + color; if (hatchCache.has(key)) return hatchCache.get(key);
+    const c = document.createElement('canvas'); c.width = c.height = 12; const g = c.getContext('2d');
+    g.strokeStyle = color; g.lineWidth = 1; g.globalAlpha = 0.5;
+    const angle = [0, 1, 2, 3][index % 4];
+    g.beginPath();
+    if (angle === 0) { g.moveTo(0, 12); g.lineTo(12, 0); g.moveTo(-6, 6); g.lineTo(6, -6); g.moveTo(6, 18); g.lineTo(18, 6); }
+    else if (angle === 1) { g.moveTo(0, 0); g.lineTo(12, 12); g.moveTo(-6, 6); g.lineTo(6, 18); g.moveTo(6, -6); g.lineTo(18, 6); }
+    else if (angle === 2) { g.moveTo(0, 6); g.lineTo(12, 6); }
+    else { g.moveTo(6, 0); g.lineTo(6, 12); }
+    g.stroke();
+    const p = ctx.createPattern(c, 'repeat'); hatchCache.set(key, p); return p;
+  }
+  let grainP = null;
+  function grain() { if (grainP) return grainP; const c = document.createElement('canvas'); c.width = c.height = 192; const g = c.getContext('2d'); g.fillStyle = '#000';
+    for (let n = 0; n < 3200; n++) { g.globalAlpha = 0.25 + hash(n, 41) * 0.75; const s = 0.5 + hash(n, 37) * 1.1; g.fillRect(hash(n, 11) * 192, hash(n, 23) * 192, s, s); } return (grainP = ctx.createPattern(c, 'repeat')); }
+  const stateOrder = () => [...allStates().keys()];
+  function draw() {
+    if (!G) return;
+    const t = tokens(), { W, H, dpr } = G, sit = situation(UI.year), order = stateOrder(), sel = E.find(e => e.uid === UI.selected);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = t.sea; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = t.seaLine; ctx.lineWidth = 0.8; G.lines.forEach((p, n) => { ctx.globalAlpha = 0.75 - n * 0.16; ctx.stroke(p); }); ctx.globalAlpha = 1;
+    ctx.fillStyle = t.land; ctx.fill(G.land);
+    if (t.grain && !document.documentElement.matches('[data-theme="dark"]') && !(matchMedia('(prefers-color-scheme: dark)').matches && !document.documentElement.matches('[data-theme="light"]'))) {
+      ctx.save(); ctx.clip(G.land); ctx.globalAlpha = t.grain; ctx.fillStyle = grain(); ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    ctx.save(); ctx.clip(G.land);
+    // státy: šrafa a hranice
+    REGIONS.forEach((r, i) => { const st = sit.owner.get(r.id); if (!st) return; ctx.fillStyle = hatch(order.indexOf(st), t.ink2); ctx.fill(G.cells[i]); });
+    const selRegions = new Set(sel && sel.regions ? sel.regions : []);
+    REGIONS.forEach((r, i) => { if (selRegions.has(r.id)) { ctx.fillStyle = t.tint; ctx.fill(G.cells[i]); } });
+    ctx.strokeStyle = t.ink3; ctx.lineWidth = 0.6; ctx.beginPath();
+    for (const e of G.edges) { ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); } ctx.stroke();
+    ctx.strokeStyle = t.ink; ctx.lineWidth = 1.6; ctx.setLineDash([8, 3, 1.5, 3]); ctx.beginPath();
+    for (const e of G.edges) { const a = sit.owner.get(REGIONS[e.a].id) || null, b = sit.owner.get(REGIONS[e.b].id) || null; if (a !== b && (a || b)) { ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); } }
+    ctx.stroke(); ctx.setLineDash([]);
+    if (selRegions.size) { ctx.strokeStyle = t.red; ctx.lineWidth = 1.8; ctx.beginPath();
+      for (const e of G.edges) { if (selRegions.has(REGIONS[e.a].id) !== selRegions.has(REGIONS[e.b].id)) { ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); } } ctx.stroke(); }
+    ctx.restore();
+    ctx.strokeStyle = t.ink; ctx.lineWidth = 1.1; ctx.stroke(G.land);
+    // lingua franca a obrození, které v tomto roce platí
+    for (const e of E) if (e.kind === 'lingua_franca' && e.year <= UI.year) {
+      const s = RB[e.source]; if (!s) continue; const [sx, sy] = G.pts[REGIONS.indexOf(s)];
+      ctx.strokeStyle = e.uid === UI.selected ? t.red : t.ink2; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+      for (const id of e.regions) { const j = REGIONS.findIndex(r => r.id === id); if (j < 0) continue; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo((sx + G.pts[j][0]) / 2, Math.min(sy, G.pts[j][1]) - 30, G.pts[j][0], G.pts[j][1]); ctx.stroke(); }
+      ctx.setLineDash([]);
+    }
+    // body krajů, hlavní města, jména
+    ctx.textAlign = 'center'; if ('letterSpacing' in ctx) ctx.letterSpacing = '0.12em';
+    REGIONS.forEach((r, i) => {
+      const [x, y] = G.pts[i], capital = [...sit.states.values()].some(s => s.capital === r.id);
+      if (capital) { ctx.fillStyle = t.ink; ctx.fillRect(x - 4.5, y - 4.5, 9, 9); ctx.fillStyle = t.land; ctx.fillRect(x - 2, y - 2, 4, 4); }
+      else { ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fillStyle = selRegions.has(r.id) ? t.red : t.ink; ctx.fill(); }
+      ctx.font = `500 ${G.W < 600 ? 9 : 10.5}px ${t.font}`; const label = r.name.toUpperCase();
+      ctx.lineWidth = 4; ctx.strokeStyle = t.halo; ctx.strokeText(label, x, y - 9); ctx.fillStyle = UI.pick && selRegions.has(r.id) ? t.red : t.ink; ctx.fillText(label, x, y - 9);
+    });
+    // jména států
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0.28em';
+    for (const st of sit.states.values()) {
+      const idx = [...st.regions].map(id => REGIONS.findIndex(r => r.id === id)).filter(i => i >= 0); if (!idx.length) continue;
+      const x = d3.mean(idx, i => G.pts[i][0]), y = d3.max(idx, i => G.pts[i][1]) + 22;
+      ctx.font = `700 ${G.W < 600 ? 9 : 11}px ${t.font}`; const label = st.name.toUpperCase();
+      ctx.lineWidth = 5; ctx.strokeStyle = t.halo; ctx.strokeText(label, x, y); ctx.fillStyle = t.ink2; ctx.fillText(label, x, y);
+    }
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+    renderLegend(sit, order);
+  }
+  function renderLegend(sit, order) {
+    const t = tokens(), el = document.getElementById('legend');
+    const items = [...sit.states.values()].map(st => `<div><canvas data-i="${order.indexOf(st.id)}" width="26" height="14"></canvas><span><b>${st.name}</b><br><span class="why">${POLICY[st.policy][0]} jazyk, hranice ${BORDER[st.border][0]}${st.standard ? ', norma' : ''}${st.schools ? ', školy' : ''}</span></span></div>`);
+    el.innerHTML = items.join('') || '<span class="why">V tomto roce tu žádný stát není.</span>';
+    el.querySelectorAll('canvas').forEach(c => { const g = c.getContext('2d'); g.fillStyle = t.land; g.fillRect(0, 0, 26, 14); g.fillStyle = hatch(+c.dataset.i, t.ink2); g.fillRect(0, 0, 26, 14); });
+    document.getElementById('year-big').textContent = UI.year;
+    document.getElementById('year-sub').textContent = `${sit.states.size} ${sit.states.size === 1 ? 'stát' : sit.states.size < 5 && sit.states.size ? 'státy' : 'států'}, ${REGIONS.length - sit.owner.size} ${REGIONS.length - sit.owner.size === 1 ? 'kraj' : 'krajů'} bez vlády`;
+  }
+  cv.addEventListener('click', ev => {
+    const rect = cv.getBoundingClientRect(), i = G.del.find(ev.clientX - rect.left, ev.clientY - rect.top), r = REGIONS[i];
+    const sel = E.find(e => e.uid === UI.selected);
+    if (UI.pick && sel && sel.regions) {
+      remember(); const at = sel.regions.indexOf(r.id); if (at >= 0) sel.regions.splice(at, 1); else sel.regions.push(r.id);
+      if ((sel.kind === 'state' || sel.kind === 'secession') && !sel.regions.includes(sel.capital)) sel.capital = sel.regions[0] || null;
+      renderAll(); return;
+    }
+    const st = situation(UI.year).owner.get(r.id);
+    if (st) { UI.selected = allStates().get(st).uid; UI.pick = false; renderAll(); }
+  });
+
+  // --- kronika ---
+  const chron = document.getElementById('chron');
+  const laneOf = e => (e.kind === 'state' || e.kind === 'secession' ? e.id : e.kind === 'annexation' || e.kind === 'collapse' || e.kind === 'language_policy' || e.kind === 'border_policy' ? e.state
+    : e.kind === 'standard' || e.kind === 'schools' ? e.of : e.kind === 'lingua_franca' ? '_lf' : '_regions');
+  const pct = y => `${(y / END) * 100}%`;
+  function lifespan(st) {
+    const end = E.filter(e => e.kind === 'collapse' && e.state === st.id).map(e => e.year).sort((a, b) => a - b)[0];
+    let lost = null;
+    for (let y = st.year; y <= END && lost === null; y += STEP) { if (y > (end ?? END)) break; if (y > st.year && !situation(y).states.has(st.id)) lost = y; }
+    return [st.year, lost ?? end ?? END];
+  }
+  function renderChron() {
+    const states = allStates(), notes = situation(END).notes, bad = new Set(notes.map(n => n[0].uid));
+    let html = '<div></div><div class="ruler" id="ruler">';
+    for (let y = 0; y <= END; y += 100) html += `<i style="left:${pct(y)}"></i>` + (y % 250 === 0 ? `<span style="left:${pct(y)}${y === 0 ? ';transform:none' : y === END ? ';transform:translateX(-100%)' : ''}">${y}</span>` : '');
+    html += '</div>';
+    const lane = (label, key, sub, inner) => `<div class="lab${sub ? ' sub' : ''}"><span title="${label}">${label}</span></div><div class="track" data-lane="${key}">${inner}</div>`;
+    const markers = key => E.filter(e => laneOf(e) === key).map(e => {
+      const k = KINDS[e.kind], label = typeof k.short === 'function' ? k.short(e) : k.short;
+      return `<button class="mk${bad.has(e.uid) ? ' err' : ''}" data-uid="${e.uid}" style="left:${pct(e.year)}" aria-pressed="${e.uid === UI.selected}" title="${e.year}: ${k.cz}"><span>${label}</span></button>`;
+    }).join('');
+    for (const st of states.values()) {
+      const [from, to] = lifespan(st), segs = [];
+      let policy = st.policy, at = from;
+      for (const e of E.filter(x => x.kind === 'language_policy' && x.state === st.id && x.year > from && x.year < to).sort((a, b) => a.year - b.year)) { segs.push([at, e.year, policy]); policy = e.policy; at = e.year; }
+      segs.push([at, to, policy]);
+      const bar = `<div class="bar" style="left:${pct(from)};width:${(to - from) / END * 100}%">${segs.map(([a, b, p]) => `<div class="p p-${p}" style="width:${(b - a) / (to - from) * 100}%" title="${a}–${b}: ${POLICY[p][0]}"></div>`).join('')}</div>`;
+      html += lane(st.name, st.id, false, bar + markers(st.id));
+    }
+    html += lane('Lingua franca', '_lf', true, markers('_lf'));
+    html += lane('Kraje', '_regions', true, markers('_regions') + REGION_PERIODS.map(p => `<span class="mk ro" style="left:${pct(p.year)}" title="Nastaveno v editoru světa"><span>${RB[p.region].name}: ${p.text}</span></span>`).join(''));
+    html += `<div class="cursor" id="cursor" style="left:calc(170px + (100% - 170px) * ${UI.year / END})"><b>${UI.year}</b></div>`;
+    chron.innerHTML = html;
+    // Popisky blízkých značek by se překryly; skryjí se a zůstane jen čárka s titulkem.
+    chron.querySelectorAll('.track').forEach(tr => {
+      let right = -Infinity;
+      [...tr.querySelectorAll('.mk')].sort((a, b) => a.offsetLeft - b.offsetLeft).forEach(m => {
+        if (m.offsetLeft < right + 4) m.classList.add('tight'); else right = m.offsetLeft + m.offsetWidth;
+      });
+    });
+    const ruler = document.getElementById('ruler');
+    const yearAt = x => { const r = ruler.getBoundingClientRect(); return Math.max(0, Math.min(END, Math.round((x - r.left) / r.width * END / STEP) * STEP)); };
+    ruler.addEventListener('pointerdown', e => { ruler.setPointerCapture(e.pointerId); setYear(yearAt(e.clientX)); ruler.dataset.drag = '1'; });
+    ruler.addEventListener('pointermove', e => { if (ruler.dataset.drag) setYear(yearAt(e.clientX)); });
+    ruler.addEventListener('pointerup', () => { delete ruler.dataset.drag; });
+    chron.querySelectorAll('.mk[data-uid]').forEach(m => {
+      const e = E.find(x => x.uid === +m.dataset.uid);
+      m.addEventListener('pointerdown', p => { m.setPointerCapture(p.pointerId); m.dataset.x = p.clientX; m.dataset.moved = ''; });
+      m.addEventListener('pointermove', p => {
+        if (m.dataset.x === undefined || !m.hasPointerCapture(p.pointerId)) return;
+        if (!m.dataset.moved && Math.abs(p.clientX - m.dataset.x) < 4) return;
+        if (!m.dataset.moved) { remember(); m.dataset.moved = '1'; }
+        e.year = Math.max(0, Math.min(END, yearAt(p.clientX))); m.style.left = pct(e.year); m.title = `${e.year}: ${KINDS[e.kind].cz}`;
+      });
+      m.addEventListener('pointerup', () => { const moved = m.dataset.moved; delete m.dataset.x; UI.selected = e.uid; if (moved) UI.year = e.year; renderAll(); });
+      m.addEventListener('keydown', k => { if (k.key !== 'ArrowLeft' && k.key !== 'ArrowRight') return; k.preventDefault(); remember(); e.year = Math.max(0, Math.min(END, e.year + (k.key === 'ArrowRight' ? STEP : -STEP))); UI.selected = e.uid; renderAll(); chron.querySelector(`.mk[data-uid="${e.uid}"]`)?.focus(); });
+    });
+  }
+  function setYear(y) { UI.year = y; const c = document.getElementById('cursor'); c.style.left = `calc(170px + (100% - 170px) * ${y / END})`; c.querySelector('b').textContent = y; draw(); }
+
+  // --- karta události ---
+  const insp = document.getElementById('insp');
+  const seg = (field, table, value) => `<div class="seg" role="group">${Object.entries(table).map(([v, [l]]) => `<button type="button" data-field="${field}" data-v="${v}" aria-pressed="${v === value}">${l}</button>`).join('')}</div>`;
+  const row = (label, body, why) => `<div class="row"><dt class="caps">${label}</dt><dd>${body}</dd>${why ? `<dd class="why">${why}</dd>` : ''}</div>`;
+  const stateSelect = (field, value) => `<select data-field="${field}">${[...allStates().values()].map(s => `<option value="${s.id}"${s.id === value ? ' selected' : ''}>${s.name}</option>`).join('')}</select>`;
+  const regionChips = e => `<div class="chips">${e.regions.map(id => `<span>${RB[id]?.name || id}</span>`).join('') || '<span class="why" style="border:0;background:none;padding:0">žádné</span>'}</div>
+    <button type="button" class="pick" id="pick" aria-pressed="${UI.pick}">${UI.pick ? 'Hotovo' : 'Vybrat kraje na mapě'}</button>`;
+  function renderInspector() {
+    const e = E.find(x => x.uid === UI.selected);
+    document.getElementById('pickhint').hidden = !(UI.pick && e && e.regions);
+    if (!e) { renderOverview(); return; }
+    const k = KINDS[e.kind], notes = situation(END).notes.filter(n => n[0].uid === e.uid);
+    let body = '';
+    if (e.kind === 'state' || e.kind === 'secession') {
+      body += row('Kraje', regionChips(e), e.kind === 'secession' ? 'Kraje se odtrhnou od státu, ke kterému patřily.' : null);
+      body += row('Hlavní město', `<select data-field="capital">${e.regions.map(id => `<option value="${id}"${id === e.capital ? ' selected' : ''}>${RB[id].name}</option>`).join('')}</select>`, 'Řeč hlavního města má prestiž; ostatní kraje se k ní přibližují.');
+      body += row('Vláda', seg('centralization', CENTRAL, e.centralization), CENTRAL[e.centralization][1]);
+      body += row('Jazyková politika', seg('policy', POLICY, e.policy), POLICY[e.policy][1]);
+      body += row('Hranice', seg('border', BORDER, e.border), BORDER[e.border][1]);
+      const later = E.filter(x => [x.state, x.of].includes(e.id) && x.uid !== e.uid).sort((a, b) => a.year - b.year);
+      body += row('Co se se státem děje dál', later.map(x => `<button type="button" class="link" data-goto="${x.uid}">${x.year} ${KINDS[x.kind].cz.toLowerCase()}</button>`).join('<br>') || '<span class="why">Zatím nic. Přidej událost tlačítkem + Událost.</span>');
+    } else if (e.kind === 'annexation') {
+      body += row('Stát', stateSelect('state', e.state)) + row('Kraje', regionChips(e), k.desc + ' Když tím získá hlavní město jiného státu, ten zanikne.');
+    } else if (e.kind === 'collapse') {
+      body += row('Stát', stateSelect('state', e.state), 'Vláda padne a kraje zůstanou bez státu. Hranice zmizí, nářečí se začnou zase slévat.');
+    } else if (e.kind === 'language_policy') {
+      body += row('Stát', stateSelect('state', e.state)) + row('Nová politika', seg('policy', POLICY, e.policy), POLICY[e.policy][1]);
+    } else if (e.kind === 'border_policy') {
+      body += row('Stát', stateSelect('state', e.state)) + row('Hranice', seg('border', BORDER, e.border), BORDER[e.border][1]);
+    } else if (e.kind === 'standard') {
+      body += row('Stát', stateSelect('of', e.of), 'Písaři u dvora ustálí, jak se píše. Psaná podoba se pak mění pomaleji než mluvená.') + row('Kdo umí psát', seg('literacy', LITERACY, e.literacy), LITERACY[e.literacy][1]);
+    } else if (e.kind === 'schools') {
+      body += row('Stát', stateSelect('of', e.of)) + row('Kde', seg('coverage', COVERAGE, e.coverage), COVERAGE[e.coverage][1]);
+      body += row('Navíc', `<label class="toggle"><input type="checkbox" data-bool="printing"${e.printing ? ' checked' : ''}> Tisk</label><label class="toggle"><input type="checkbox" data-bool="diglossic"${e.diglossic ? ' checked' : ''}> Diglosie</label>`,
+        'Tisk: norma se šíří rychleji a mění se pomaleji. Diglosie: ve škole se píše normou, doma se dál mluví nářečím a obojí žije vedle sebe.');
+    } else if (e.kind === 'lingua_franca') {
+      body += row('Odkud', `<select data-field="source">${REGIONS.map(r => `<option value="${r.id}"${r.id === e.source ? ' selected' : ''}>${r.name}</option>`).join('')}</select>`, 'Řeč tohoto kraje se stane společnou řečí.');
+      body += row('Kde se jí mluví', regionChips(e)) + row('Jak moc', seg('spread', SPREAD, e.spread), SPREAD[e.spread][1]);
+      body += row('Doma', `<label class="toggle"><input type="checkbox" data-bool="nativize"${e.nativize ? ' checked' : ''}> Děti ji přejímají za mateřštinu</label>`, 'Pak může místní jazyk časem zaniknout.');
+    } else if (e.kind === 'revival') {
+      body += row('Kraje', regionChips(e)) + row('Síla', seg('strength', STRENGTH, e.strength), STRENGTH[e.strength][1]);
+    } else if (e.kind === 'preserve') {
+      body += row('Kraje', regionChips(e)) + row('Ochrana', `<label class="toggle"><input type="checkbox" data-bool="preserved"${e.preserved ? ' checked' : ''}> Jazyk nevymře</label>`, 'Autorův zásah mimo běh dějin: lidé jazyk dál předávají dětem.');
+    }
+    const title = e.kind === 'state' || e.kind === 'secession' ? `<input class="title-input" id="f-name" value="${e.name.replace(/"/g, '&quot;')}" aria-label="Jméno státu">` : `<div class="title-input" style="border-bottom-color:var(--rule)">${k.cz}</div>`;
+    insp.innerHTML = `<div><div class="caps">${k.cz}</div>${title}</div>
+      <dl class="ledger">${row('Rok', `<input type="number" id="f-year" min="0" max="${END}" step="${STEP}" value="${e.year}" aria-label="Rok">`)}${body}</dl>
+      ${notes.length ? `<ul class="checks">${notes.map(n => `<li>${n[1]}</li>`).join('')}</ul>` : ''}
+      <button type="button" class="danger" id="f-remove">Odstranit událost</button>`;
+    document.getElementById('f-year').addEventListener('change', x => { remember(); e.year = Math.max(0, Math.min(END, Math.round(+x.target.value / STEP) * STEP)); UI.year = e.year; renderAll(); });
+    const nm = document.getElementById('f-name'); if (nm) { nm.addEventListener('focus', () => remember(), { once: true }); nm.addEventListener('input', () => { e.name = nm.value; renderChron(); draw(); }); }
+    insp.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => { remember(); e[b.dataset.field] = b.dataset.v; renderAll(); }));
+    insp.querySelectorAll('select[data-field]').forEach(s => s.addEventListener('change', () => { remember(); e[s.dataset.field] = s.value; renderAll(); }));
+    insp.querySelectorAll('input[data-bool]').forEach(c => c.addEventListener('change', () => { remember(); e[c.dataset.bool] = c.checked; renderAll(); }));
+    insp.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => { const x = E.find(y => y.uid === +b.dataset.goto); UI.selected = x.uid; UI.year = x.year; UI.pick = false; renderAll(); }));
+    const pick = document.getElementById('pick'); if (pick) pick.addEventListener('click', () => { UI.pick = !UI.pick; renderInspector(); draw(); });
+    document.getElementById('f-remove').addEventListener('click', () => {
+      remember(); const gone = new Set([e.uid]);
+      if (e.kind === 'state' || e.kind === 'secession') E.filter(x => [x.state, x.of].includes(e.id)).forEach(x => gone.add(x.uid));
+      E = E.filter(x => !gone.has(x.uid)); UI.selected = null; UI.pick = false; renderAll();
+    });
+  }
+  function renderOverview() {
+    const notes = situation(END).notes;
+    insp.innerHTML = `<div><div class="caps">Dějiny</div><div class="title-input" style="border-bottom-color:var(--rule)">${E.length} událostí</div></div>
+      <p class="why">Vyber událost v kronice nebo stát na mapě. Novou přidáš tlačítkem + Událost; vznikne v roce pod kurzorem.</p>
+      <div><div class="caps" style="margin-bottom:6px">Kontrola</div><ul class="checks">${notes.length ? notes.map(([e, t]) => `<li><button type="button" data-goto="${e.uid}">${e.year} ${KINDS[e.kind].cz.toLowerCase()}: ${t}</button></li>`).join('') : '<li class="ok">Dějiny dávají smysl.</li>'}</ul></div>`;
+    insp.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => { const x = E.find(y => y.uid === +b.dataset.goto); UI.selected = x.uid; UI.year = x.year; renderAll(); }));
+  }
+
+  // --- nová událost ---
+  const menu = document.getElementById('menu'), add = document.getElementById('add');
+  menu.innerHTML = Object.entries(KINDS).map(([kind, k]) => `<button type="button" data-kind="${kind}">${k.cz}<small>${k.desc}</small></button>`).join('');
+  add.addEventListener('click', () => { menu.hidden = !menu.hidden; add.setAttribute('aria-expanded', String(!menu.hidden)); });
+  document.addEventListener('click', e => { if (!menu.hidden && !e.target.closest('#menu, #add')) { menu.hidden = true; add.setAttribute('aria-expanded', 'false'); } });
+  menu.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    remember(); menu.hidden = true; add.setAttribute('aria-expanded', 'false');
+    const kind = b.dataset.kind, sit = situation(UI.year), anyState = [...sit.states.keys()][0] || [...allStates().keys()][0] || null;
+    const base = { kind, year: UI.year };
+    if (kind === 'state' || kind === 'secession') { let n = allStates().size + 1, id = `stat-${n}`; while (allStates().has(id)) id = `stat-${++n}`; Object.assign(base, { id, name: 'Nový stát', regions: [], capital: null, centralization: 'moderate', policy: 'tolerant', border: 'normal' }); }
+    else if (kind === 'annexation') Object.assign(base, { state: anyState, regions: [] });
+    else if (kind === 'collapse') Object.assign(base, { state: anyState });
+    else if (kind === 'language_policy') Object.assign(base, { state: anyState, policy: 'promoted' });
+    else if (kind === 'border_policy') Object.assign(base, { state: anyState, border: 'closed' });
+    else if (kind === 'standard') Object.assign(base, { of: anyState, literacy: 'elite' });
+    else if (kind === 'schools') Object.assign(base, { of: anyState, coverage: 'mass', printing: true, diglossic: false });
+    else if (kind === 'lingua_franca') Object.assign(base, { source: REGIONS[0].id, regions: [], spread: 'common', nativize: false });
+    else if (kind === 'revival') Object.assign(base, { regions: [], strength: 'movement' });
+    else if (kind === 'preserve') Object.assign(base, { regions: [], preserved: true });
+    const e = ev(base); E.push(e); UI.selected = e.uid; UI.pick = !!e.regions; renderAll();
+  }));
+
+  // --- zápatí ---
+  function spec() {
+    const out = E.slice().sort((a, b) => a.year - b.year || a.uid - b.uid).map(e => {
+      const { uid: _u, name: _n, ...rest } = e;
+      if ((rest.kind === 'state' || rest.kind === 'secession') && !rest.capital) delete rest.capital;
+      return rest;
+    });
+    return { events: out };
+  }
+  function renderFooter() {
+    const states = allStates().size, notes = situation(END).notes.length;
+    document.getElementById('counts').innerHTML = `<b>${E.length}</b> událostí · <b>${states}</b> ${states === 1 ? 'stát' : states < 5 ? 'státy' : 'států'} · jazyk ${LANG.name}` + (notes ? ` · <span style="color:var(--warn)">${notes} k prověření</span>` : '');
+    if (!document.getElementById('spec').hidden) {
+      document.getElementById('spec-json').textContent = JSON.stringify(spec(), null, 1);
+      document.getElementById('spec-note').textContent = 'Jména států engine zatím neukládá; jsou jen v projektu aplikace.';
+    }
+    document.getElementById('undo').disabled = !history.length;
+  }
+  document.getElementById('undo').addEventListener('click', undo);
+  document.getElementById('show-spec').addEventListener('click', e => { const b = document.getElementById('spec'); b.hidden = !b.hidden; e.currentTarget.setAttribute('aria-expanded', String(!b.hidden)); renderFooter(); });
+  let toastTimer = null;
+  document.getElementById('run').addEventListener('click', () => { const s = document.getElementById('saved'); s.textContent = 'Běh se v prototypu nespouští.'; clearTimeout(toastTimer); toastTimer = setTimeout(() => { s.textContent = 'Všechny změny uložené'; }, 2400); });
+  document.querySelectorAll('.path a').forEach(a => a.addEventListener('click', x => x.preventDefault()));
+  let savedTimer = null;
+  function saved() { const s = document.getElementById('saved'); s.textContent = 'Ukládám…'; clearTimeout(savedTimer); savedTimer = setTimeout(() => { s.textContent = 'Všechny změny uložené'; }, 500); }
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input, select, textarea')) return;
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    else if (e.key === 'Escape') { UI.pick = false; UI.selected = null; renderAll(); }
+  });
+
+  function renderAll() { renderChron(); renderInspector(); draw(); renderFooter(); }
+  new ResizeObserver(() => { layout(); draw(); }).observe(stage);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { hatchCache.clear(); draw(); });
+  new MutationObserver(() => { hatchCache.clear(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  layout(); renderAll();
+  if (document.fonts) document.fonts.ready.then(draw);
+})();
+</script>

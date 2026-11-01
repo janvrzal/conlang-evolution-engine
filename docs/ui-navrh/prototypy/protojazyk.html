@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="cs">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}</style>
+<title>Poloostrov: protojazyk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Piazzolla:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+@font-face { font-family: "Charis CEE"; src: url(data:font/woff2;base64,) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+
+/* Layout: cesta práce nahoře; vlevo protojazyky a kde se jimi mluví, uprostřed hlásky (tabulka IPA a lichoběžník samohlásek), přízvuk a mluvnice, vpravo slovník. */
+:root {
+  --sea: #bccad0;
+  --sea-line: #eef3f4;
+  --land: #fbfbf9;
+  --ink: #1b2830;
+  --ink-2: #56656e;
+  --ink-3: #a7b3b9;
+  --rule: #d1d9dc;
+  --panel: #eef1f2;
+  --field: #f7f9f9;
+  --isogloss: #ae2a1f;
+  --tint: rgba(174, 42, 31, 0.08);
+  --f-ipa: "Charis CEE", "Charis SIL", "Gentium Plus", "Doulos SIL", serif;
+  --f-ui: "Piazzolla", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --ink-3: #4d5a65; --rule: #26323d;
+    --panel: #111a22; --field: #16212b; --isogloss: #e8806f; --tint: rgba(232, 128, 111, 0.1); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --ink-3: #4d5a65; --rule: #26323d;
+  --panel: #111a22; --field: #16212b; --isogloss: #e8806f; --tint: rgba(232, 128, 111, 0.1); color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--panel); color: var(--ink); font-family: var(--f-ui); font-size: 15px; line-height: 1.4; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 10px;
+}
+* { box-sizing: border-box; }
+button, input, select { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--isogloss); outline-offset: 2px; }
+.ipa { font-family: var(--f-ipa); }
+.caps { text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; font-weight: 700; color: var(--ink-2); }
+.why { font-size: 13px; color: var(--ink-2); font-style: italic; line-height: 1.4; margin: 0; }
+
+.app { height: 100%; display: grid; gap: 10px 22px; grid-template-columns: 220px minmax(0, 1fr) 340px; grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "top top top" "langs main lex" "foot foot foot"; }
+
+.top { grid-area: top; display: flex; align-items: baseline; gap: 28px; flex-wrap: wrap; border-bottom: 1px solid var(--ink); padding-bottom: 8px; }
+.project { font-size: 22px; font-style: italic; }
+.project small { font-style: normal; font-size: 12px; color: var(--ink-2); margin-left: 8px; }
+.path { display: flex; gap: 4px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; align-items: baseline; }
+.path li { display: flex; align-items: baseline; gap: 4px; }
+.path li + li::before { content: ""; width: 22px; border-top: 1px dotted var(--ink-2); align-self: center; }
+.path a { color: var(--ink-2); text-decoration: none; padding: 2px 4px; }
+.path a b { font-weight: 500; font-size: 11px; margin-right: 4px; }
+.path a[aria-current="page"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--isogloss); }
+.saved { margin-left: auto; font-size: 12px; color: var(--ink-2); font-style: italic; }
+
+/* protojazyky */
+.langs { grid-area: langs; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; }
+.lang-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.lang-list button { width: 100%; text-align: left; background: none; border: 0; padding: 6px 8px; border-radius: 2px; cursor: pointer; display: grid; }
+.lang-list button[aria-current="true"] { background: var(--ink); color: var(--panel); }
+.lang-list button small { font-size: 12px; opacity: 0.75; }
+.add { background: none; border: 1px dashed var(--ink-2); color: var(--ink-2); padding: 5px 8px; border-radius: 2px; cursor: pointer; text-align: left; font-size: 14px; }
+.minimap { width: 100%; aspect-ratio: 1.25; max-width: 100%; display: block; background: var(--sea); border-radius: 2px; }
+
+/* hlavní sloupec */
+.main { grid-area: main; min-width: 0; min-height: 0; overflow-y: auto; display: grid; gap: 26px; align-content: start; padding-right: 6px; }
+.name-row { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.name-input { border: 0; border-bottom: 1px solid var(--ink); background: none; font-size: 30px; font-weight: 700; padding: 2px 0; min-width: 0; width: 14ch; }
+.name-row > div { flex: 1 1 420px; min-width: 0; }
+.name-row .why { flex: 1 1 260px; }
+section h2 { margin: 0 0 4px; font-size: 20px; font-weight: 700; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+section h2 small { font-size: 13px; font-weight: 400; color: var(--ink-2); font-style: italic; }
+.phon { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 28px; align-items: start; margin-top: 18px; }
+.chart-wrap { overflow-x: auto; }
+table.chart { border-collapse: collapse; width: 100%; min-width: 620px; }
+.chart th { font-size: 10.5px; font-weight: 500; color: var(--ink-2); text-align: left; padding: 2px 4px; vertical-align: bottom; line-height: 1.15; }
+.chart thead th { writing-mode: horizontal-tb; text-align: center; }
+.chart td { border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); padding: 0; height: 34px; text-align: center; white-space: nowrap; }
+.chart td.na { background: repeating-linear-gradient(135deg, transparent 0 4px, var(--rule) 4px 5px); opacity: 0.5; }
+.ph { font-family: var(--f-ipa); font-size: 19px; background: none; border: 0; width: 26px; height: 30px; cursor: pointer; color: var(--ink-3); padding: 0; border-radius: 2px; }
+.ph:hover { color: var(--ink); background: var(--field); }
+.ph[aria-pressed="true"].lv-high { font-size: 24px; font-weight: 700; }
+.ph[aria-pressed="true"].lv-mid { font-size: 19px; }
+.ph[aria-pressed="true"].lv-low { font-size: 15px; color: var(--ink-2); }
+.freq .ph[aria-pressed="true"]::after { content: attr(data-dots); display: block; font: 7px/1 var(--f-ui); letter-spacing: 1px; color: var(--isogloss); margin-top: -2px; }
+.freq .ph[aria-pressed="false"] { opacity: 0.4; cursor: default; }
+.vowels text.v.on.lv-high { font-size: 25px; }
+.vowels text.v.on.lv-low { font-size: 16px; fill: var(--ink-2); font-weight: 400; }
+.ph[aria-pressed="true"] { color: var(--ink); font-weight: 700; }
+
+.vowels svg { width: 100%; height: auto; display: block; }
+.vowels text.v { font-family: var(--f-ipa); font-size: 20px; cursor: pointer; fill: var(--ink-3); }
+.vowels text.v.on { fill: var(--ink); font-weight: 700; }
+.vowels text.v:hover { fill: var(--isogloss); }
+.vowels text.axis { font-size: 10.5px; fill: var(--ink-2); font-family: var(--f-ui); }
+
+.sound { display: grid; gap: 10px; align-content: start; }
+.sample { display: flex; flex-wrap: wrap; gap: 14px 26px; }
+.sample div { display: grid; }
+.sample .ipa { font-size: 26px; line-height: 1.1; }
+.sample small { font-size: 12px; color: var(--ink-2); font-style: italic; }
+.link { justify-self: start; border: 0; background: none; padding: 0; cursor: pointer; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; font-size: 13px; }
+.link:hover { color: var(--isogloss); }
+.endo { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 14px; margin-top: 4px; }
+.endo i { font-size: 17px; }
+.endo .ipa { font-size: 16px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-end; }
+.chip { display: grid; justify-items: center; gap: 2px; cursor: grab; user-select: none; background: none; border: 0; padding: 0; }
+.chip .bar { width: 26px; background: var(--ink); border-radius: 1px 1px 0 0; }
+.chip .ipa { font-size: 18px; line-height: 1; }
+.chip.dragging { opacity: 0.35; }
+.chip.over .bar { background: var(--isogloss); }
+.chips.vow .bar { background: var(--ink-2); }
+
+.ledger { display: grid; gap: 0; }
+.opt { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 2px 10px; padding: 10px 0; border-bottom: 1px solid var(--rule); cursor: pointer; }
+.opt input { margin: 4px 0 0; accent-color: var(--isogloss); }
+.opt b { font-weight: 700; }
+.opt .why { grid-column: 2; }
+.seg { display: flex; flex-wrap: wrap; }
+.seg button { background: none; border: 0; padding: 3px 10px 4px; cursor: pointer; font-size: 14px; color: var(--ink-2); border-bottom: 2px solid transparent; }
+.seg button:first-child { padding-left: 0; }
+.seg button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--isogloss); }
+.stress-demo { display: flex; gap: 28px; flex-wrap: wrap; margin: 12px 0 8px; }
+.stress-demo div { display: grid; gap: 2px; }
+.stress-demo .w { font-family: var(--f-ipa); font-size: 26px; }
+.stress-demo .w span { color: var(--ink-3); }
+.stress-demo .w span.s { color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--ink); }
+.stress-demo small { font-size: 12px; color: var(--ink-2); }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 26px; }
+
+/* slovník */
+.lex { grid-area: lex; min-height: 0; display: flex; flex-direction: column; gap: 10px; border-left: 1px solid var(--rule); padding-left: 18px; }
+.lex-head { display: grid; gap: 8px; }
+.seed { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.seed output { font-variant-numeric: tabular-nums; font-weight: 700; }
+.btn { border: 1px solid var(--ink); background: none; padding: 5px 12px; border-radius: 2px; cursor: pointer; font-size: 14px; }
+.btn.primary { background: var(--ink); color: var(--panel); }
+.btn.primary:hover { background: var(--isogloss); border-color: var(--isogloss); }
+.search { width: 100%; border: 0; border-bottom: 1px solid var(--ink-2); background: none; padding: 4px 0; }
+.facts { font-size: 12.5px; color: var(--ink-2); }
+.words { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 1; }
+.words li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--rule); }
+.words .g { font-size: 14px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.words .f { font-family: var(--f-ipa); font-size: 19px; }
+.words .f .s { box-shadow: inset 0 -1.5px 0 var(--ink-2); }
+.words li.fresh .f { animation: ink 1.2s ease-out; }
+@keyframes ink { from { color: var(--isogloss); } to { color: var(--ink); } }
+@media (prefers-reduced-motion: reduce) { .words li.fresh .f { animation: none; } }
+
+.foot { grid-area: foot; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--rule); padding-top: 8px; }
+.counts { font-size: 13px; color: var(--ink-2); }
+.counts b { color: var(--ink); }
+.foot .spacer { margin-left: auto; }
+.toast { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); background: var(--ink); color: var(--panel); padding: 6px 14px; border-radius: 2px; font-size: 13px; font-style: italic; }
+
+@media (max-width: 1100px) {
+  .app { grid-template-columns: 200px minmax(0, 1fr); grid-template-areas: "top top" "langs main" "lex lex" "foot foot"; grid-template-rows: auto minmax(0, 1fr) 420px auto; }
+  .lex { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); padding-top: 10px; }
+}
+@media (max-width: 760px) {
+  html, body { height: auto; }
+  .app { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "top" "langs" "main" "lex" "foot"; }
+  .main { overflow: visible; }
+  .phon, .two { grid-template-columns: minmax(0, 1fr); }
+  .vowels { max-width: 340px; }
+  .minimap { max-width: 260px; }
+  .lex { max-height: 70vh; }
+  .saved { margin-left: 0; }
+}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="project">Poloostrov<small>2000 let, krok 25 let</small></div>
+    <nav aria-label="Postup práce">
+      <ol class="path">
+        <li><a href="#svet"><b>1</b>Svět</a></li>
+        <li><a href="#proto" aria-current="page"><b>2</b>Protojazyk</a></li>
+        <li><a href="#dejiny"><b>3</b>Dějiny</a></li>
+        <li><a href="#vysledky"><b>4</b>Výsledky</a></li>
+        <li><a href="#vetve"><b>5</b>Větve</a></li>
+      </ol>
+    </nav>
+    <span class="saved" id="saved">Všechny změny uložené</span>
+  </header>
+
+  <aside class="langs" aria-label="Protojazyky">
+    <span class="caps">Protojazyky</span>
+    <ul class="lang-list" id="lang-list"></ul>
+    <button class="add" id="add-lang">+ Přidat protojazyk</button>
+    <div>
+      <span class="caps">Kde se jím mluví na počátku</span>
+      <canvas class="minimap" id="minimap" aria-label="Kraje, které začínají tímto jazykem"></canvas>
+      <p class="why" id="where"></p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="name-row">
+      <div>
+        <input class="name-input" id="lang-name" aria-label="Jméno protojazyka">
+        <div class="endo" id="endo"></div>
+      </div>
+      <p class="why">Tohle je jazyk v roce 0, z něhož se všechno ostatní vyvine. Vybíráš hlásky, přízvuk a mluvnici; slova z nich složí engine. Jméno si jazyk dává sám ze svých slov.</p>
+    </div>
+
+    <section aria-labelledby="h-phon">
+      <h2 id="h-phon">Hlásky <small id="phon-count"></small></h2>
+      <div class="seg" id="chart-mode" role="group" aria-label="Co klikání dělá" style="margin:2px 0 6px">
+        <button type="button" data-mode="pick" aria-pressed="true">Vybírat hlásky</button>
+        <button type="button" data-mode="freq" aria-pressed="false">Nastavit četnost</button>
+      </div>
+      <p class="why" id="chart-help" style="margin-bottom:10px"></p>
+      <div class="chart-wrap"><table class="chart" id="chart"></table></div>
+      <div class="phon">
+        <div class="vowels"><svg id="vowels" viewBox="0 0 340 236" role="group" aria-label="Samohlásky"></svg></div>
+        <div class="sound">
+          <h2 style="font-size:16px">Jak jazyk zní <small>pár slov ze slovníku, mění se s četností</small></h2>
+          <div class="sample" id="sample"></div>
+          <button type="button" class="link" id="resample">Jiná slova</button>
+          <p class="why" id="freq-summary"></p>
+        </div>
+      </div>
+    </section>
+
+    <div class="two">
+      <section aria-labelledby="h-stress">
+        <h2 id="h-stress">Přízvuk</h2>
+        <div class="seg" id="stress-rule" role="group" aria-label="Místo přízvuku"></div>
+        <div class="stress-demo" id="stress-demo"></div>
+        <div class="seg" id="stress-strength" role="group" aria-label="Síla přízvuku"></div>
+        <p class="why" id="stress-why" style="margin-top:8px"></p>
+      </section>
+      <section aria-labelledby="h-gram">
+        <h2 id="h-gram">Mluvnice na počátku</h2>
+        <div class="ledger" id="grammar"></div>
+      </section>
+    </div>
+  </main>
+
+  <aside class="lex" aria-label="Slovník protojazyka">
+    <div class="lex-head">
+      <h2 style="margin:0;font-size:20px">Slovník <small style="font-size:13px;font-weight:400;font-style:italic;color:var(--ink-2)" id="lex-count"></small></h2>
+      <div class="seed"><span>Los</span><output id="seed"></output><button class="btn" id="reroll">Hodit znovu</button></div>
+      <div class="facts" id="facts"></div>
+      <input class="search" id="search" type="search" placeholder="Hledat význam nebo tvar" aria-label="Hledat ve slovníku">
+    </div>
+    <ul class="words" id="words"></ul>
+    <p class="why" id="lex-source"></p>
+  </aside>
+
+  <footer class="foot">
+    <span class="counts" id="counts"></span>
+    <span class="spacer"></span>
+    <button class="btn" id="back">← Svět</button>
+    <button class="btn primary" id="next">Pokračovat: Dějiny →</button>
+  </footer>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+  const CONCEPTS = [["i", "já", "bapijekʷ"], ["you", "ty", "sa"], ["we", "my", "pukah"], ["this", "tento", "puranakʷ"], ["that", "tamten", "ka"], ["who", "kdo", "kʷoɡa"], ["what", "co", "kʷo"], ["not", "ne", "lap"], ["all", "všechen", "pateb"], ["many", "mnoho", "rekedo"], ["one", "jeden", "dokʷehekʷ"], ["two", "dva", "bowa"], ["big", "velký", "rorakʷakʷ"], ["long", "dlouhý", "jo"], ["small", "malý", "ekʷa"], ["woman", "žena", "bupasi"], ["man", "muž", "mus"], ["person", "člověk", "lipopi"], ["fish", "ryba", "mopukem"], ["bird", "pták", "nanope"], ["dog", "pes", "amaba"], ["louse", "veš", "soɡema"], ["tree", "strom", "dapepe"], ["seed", "semeno", "ɡa"], ["leaf", "list", "serawa"], ["root", "kořen", "ta"], ["bark", "kůra", "saputu"], ["skin", "kůže", "sim"], ["flesh", "maso", "mapopa"], ["blood", "krev", "pokʷow"], ["bone", "kost", "tawip"], ["grease", "tuk", "pewam"], ["egg", "vejce", "nuhas"], ["horn", "roh", "bodawa"], ["tail", "ocas", "eti"], ["feather", "pero", "ɡekʷa"], ["hair", "vlasy", "bi"], ["head", "hlava", "atiko"], ["ear", "ucho", "kʷokʷokʷa"], ["eye", "oko", "bekʷeneh"], ["nose", "nos", "bedi"], ["mouth", "ústa", "tuke"], ["tooth", "zub", "ɡalesap"], ["tongue", "jazyk (v ústech)", "ɡuɡoka"], ["fingernail", "nehet", "pata"], ["foot", "chodidlo", "iti"], ["leg", "noha", "peɡa"], ["knee", "koleno", "leloda"], ["hand", "ruka", "ɡite"], ["belly", "břicho", "ko"], ["neck", "krk", "owa"], ["breasts", "prsa", "pasonakʷ"], ["heart", "srdce", "kise"], ["liver", "játra", "kakokʷo"], ["drink", "pít", "bas"], ["eat", "jíst", "hika"], ["bite", "kousat", "sibab"], ["see", "vidět", "pu"], ["hear", "slyšet", "kikʷahi"], ["know", "vědět", "pokeɡap"], ["sleep", "spát", "uta"], ["die", "umřít", "kʷude"], ["kill", "zabít", "te"], ["swim", "plavat", "apap"], ["fly", "letět", "pipaka"], ["walk", "jít", "tala"], ["come", "přijít", "deteko"], ["lie", "ležet", "liɡop"], ["sit", "sedět", "lewi"], ["stand", "stát", "kukato"], ["give", "dát", "rok"], ["say", "říct", "tu"], ["sun", "slunce", "pekakʷi"], ["moon", "měsíc", "laja"], ["star", "hvězda", "pepaj"], ["water", "voda", "kʷipakʷa"], ["rain", "déšť", "wumikʷo"], ["stone", "kámen", "jato"], ["sand", "písek", "mote"], ["earth", "země", "kituja"], ["cloud", "mrak", "sekʷakah"], ["smoke", "kouř", "iɡa"], ["fire", "oheň", "ape"], ["ash", "popel", "koker"], ["burn", "hořet", "kʷatap"], ["path", "stezka", "woheta"], ["mountain", "hora", "kʷa"], ["red", "červený", "notikʷu"], ["green", "zelený", "ku"], ["yellow", "žlutý", "wu"], ["white", "bílý", "pe"], ["black", "černý", "hipa"], ["night", "noc", "seba"], ["hot", "horký", "latop"], ["cold", "studený", "paha"], ["full", "plný", "kʷep"], ["new", "nový", "saka"], ["good", "dobrý", "aweho"], ["round", "kulatý", "webapa"], ["dry", "suchý", "mo"], ["name", "jméno", "depi"], ["father", "otec", "pap"], ["mother", "matka", "paped"], ["child", "dítě", "ɡepa"], ["family", "rod", "kupupu"], ["house", "dům", "kʷabani"], ["village", "ves", "kate"], ["town", "město", "diɡuno"], ["road", "cesta", "kʷapes"], ["river", "řeka", "kʷujo"], ["sea", "moře", "okʷo"], ["forest", "les", "meɡapi"], ["field", "pole", "kʷekʷote"], ["wind", "vítr", "tikʷapa"], ["thunder", "hrom", "akʷuɡe"], ["day", "den", "wi"], ["year", "rok", "raloto"], ["morning", "ráno", "kit"], ["food", "jídlo", "tehabe"], ["grain", "obilí", "we"], ["salt", "sůl", "pale"], ["animal", "zvíře", "pakʷa"], ["horse", "kůň", "kʷulat"], ["boat", "loď", "kʷita"], ["trade", "obchod", "daɡe"], ["king", "král", "ade"], ["law", "zákon", "eroh"], ["war", "válka", "pekʷ"], ["peace", "mír", "kapo"], ["god", "bůh", "aɡi"], ["spirit", "duch", "wame"], ["ritual", "obřad", "kaka"], ["write", "psát", "iso"], ["read", "číst", "tawino"], ["speak", "mluvit", "saru"], ["language", "řeč", "bodipe"], ["friend", "přítel", "tutat"], ["enemy", "nepřítel", "pek"], ["work", "práce", "kara"], ["make", "dělat", "puhudi"], ["carry", "nést", "kʷaɡik"], ["open", "otevřít", "kʷetida"], ["close", "zavřít", "de"], ["near", "blízko", "petomet"], ["far", "daleko", "pupudep"], ["old", "starý", "tawihek"], ["young", "mladý", "kʷibakʷ"], ["fast", "rychlý", "dape"], ["slow", "pomalý", "kʷoma"]];
+  const GEO = [["Vardun", 40, 120, "plain"], ["Selm", 85, 95, "plain"], ["Orra", 70, 150, "plain"], ["Kestrin", 120, 130, "plain"], ["Bal", 30, 175, "plain"], ["Tumar", 110, 180, "hills"], ["Hesk", 150, 90, "hills"], ["Ivel", 160, 160, "mountains"], ["Dorn", 185, 115, "mountains"], ["Kaar", 175, 210, "hills"], ["Mirost", 225, 145, "plain"], ["Pelna", 235, 95, "plain"], ["Soran", 270, 125, "plain"], ["Ulm", 255, 185, "hills"], ["Teth", 300, 165, "plain"], ["Varra", 310, 100, "plain"], ["Nask", 60, 225, "plain"], ["Ebb", 140, 240, "plain"], ["Lisk", 105, 300, "island"], ["Corrin", 210, 240, "plain"]];
+
+  // Tabulka souhlásek: řádky způsob, sloupce místo; v buňce neznělá, znělá. Jen hlásky, které engine zná.
+  const PLACES = ['bilabiální', 'labio&shy;dentální', 'zubní', 'dásňové', 'za&shy;dásňové', 'tvrdo&shy;patrové', 'měkko&shy;patrové', 'čípkové', 'hrtanové'];
+  const ROWS = [
+    ['ražené', [['p', 'b'], [], ['', ''], ['t', 'd'], [], ['c', 'ɟ'], ['k', 'ɡ'], ['q', 'ɢ'], ['ʔ']]],
+    ['ražené se zaokrouhlením', [[], [], [], [], [], [], ['kʷ', 'ɡʷ'], [], []]],
+    ['nosové', [['m'], ['ɱ'], [], ['n'], [], ['ɲ'], ['ŋ'], ['ɴ'], null]],
+    ['kmitavé', [[], [], [], ['r'], [], [], null, ['ʀ'], null]],
+    ['třené', [['ɸ', 'β'], ['f', 'v'], ['θ', 'ð'], ['s', 'z'], ['ʃ', 'ʒ'], ['', 'ʝ'], ['x', 'ɣ'], ['χ', 'ʁ'], ['h', 'ɦ']]],
+    ['polotřené', [[], [], [], ['t͡s', 'd͡z'], ['t͡ʃ', 'd͡ʒ'], ['t͡ɕ', 'd͡ʑ'], [], [], null]],
+    ['boční', [[], [], [], ['l', 'ɬ'], [], ['ʎ'], ['ʟ'], [], null]],
+    ['aproximanty', [['w'], ['ʋ'], [], ['ɹ'], [], ['j'], ['ɰ'], [], null]],
+  ];
+  // Samohlásky: [ipa, přednost 0 přední … 1 zadní, výška 0 zavřená … 1 otevřená].
+  const VOWELS = [
+    ['i', -0.04, 0], ['y', 0.06, 0], ['ɨ', 0.45, 0], ['ʉ', 0.55, 0], ['ɯ', 0.92, 0], ['u', 1.03, 0],
+    ['ɪ', 0.16, 0.15], ['ʏ', 0.27, 0.15], ['ʊ', 0.84, 0.15],
+    ['e', -0.04, 0.33], ['ø', 0.07, 0.33], ['ɘ', 0.45, 0.33], ['ɵ', 0.56, 0.33], ['ɤ', 0.92, 0.33], ['o', 1.03, 0.33],
+    ['ə', 0.5, 0.5],
+    ['ɛ', -0.04, 0.66], ['œ', 0.08, 0.66], ['ɞ', 0.56, 0.66], ['ʌ', 0.92, 0.66], ['ɔ', 1.03, 0.66],
+    ['æ', 0.04, 0.83],
+    ['a', -0.04, 1], ['ɶ', 0.08, 1], ['ɑ', 0.92, 1], ['ɒ', 1.03, 1],
+  ];
+  const VOWEL_SET = new Set(VOWELS.map(v => v[0]));
+
+  const STRESS = [
+    ['initial', 'na první', 'Slova mají přízvuk vpředu. Konce slov slábnou a časem se ztrácejí, jako v češtině nebo ve finštině.'],
+    ['second', 'na druhé', 'Přízvuk na druhé slabice. První slabika bývá slabá a může odpadnout.'],
+    ['antepenult', 'na třetí od konce', 'Přízvuk se pohybuje se délkou slova, jako v latině.'],
+    ['penult', 'na předposlední', 'Nejčastější volba na světě, jako v polštině. Konce slov drží.'],
+    ['final', 'na poslední', 'Přízvuk na konci. Začátky slov se zkracují, konec zůstává silný, jako ve francouzštině.'],
+  ];
+  const STRENGTH = [
+    ['weak', 'slabý', 'Slabiky drží svůj tvar, samohlásky se nezkracují.'],
+    ['strong', 'silný', 'Nepřízvučné samohlásky slábnou na ə a mizí. Koncovky se ztrácejí rychleji a slova se zkracují, jako v angličtině.'],
+  ];
+  const GRAMMAR = [
+    ['default', 'Výchozí', 'Pády, minulý čas a množné číslo vyjádřené koncovkou. Zápor před slovesem, volný slovosled.'],
+    ['substrate', 'Starobylá', 'Zápor za slovesem a pevný slovosled podmět–předmět–sloveso. Koncovky jako ve výchozí.'],
+    ['full', 'Otevřená', 'Jako výchozí, ale jazyk si může časem vytvořit i člen, budoucí čas a vid.'],
+  ];
+
+  const LANGS = [
+    { id: 'pra', name: '', attempt: 3, consonants: ['p', 't', 'k', 'kʷ', 'b', 'd', 'ɡ', 's', 'h', 'm', 'n', 'r', 'l', 'w', 'j'],
+      vowels: ['a', 'e', 'i', 'o', 'u'], stress: 'initial', strength: 'weak', grammar: 'default', seed: 4417, regions: GEO.map(g => g[0]), engine: true },
+  ];
+  let L = LANGS[0];
+
+  function hash(i, j) { let h = Math.imul(i, 374761393) + Math.imul(j, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+  let LEX = {};
+  // --- jména z protojazyka: tvar (IPA), přepis a význam ---
+  const NAME_MOD = /[̀-ͯʰ-˿]/;
+  function nameSegs(s) { const v = []; for (const ch of s) { if (v.length && (NAME_MOD.test(ch) || v[v.length - 1].endsWith('͡'))) v[v.length - 1] += ch; else v.push(ch); } return v; }
+  const ROM = { 'kʷ': 'kw', 'ɡʷ': 'gw', 'ɡ': 'g', 'ʃ': 'š', 'ʒ': 'ž', 't͡ʃ': 'č', 'd͡ʒ': 'dž', 't͡s': 'c', 'd͡z': 'dz', 'ŋ': 'ng', 'ɲ': 'ň', 'θ': 'th', 'ð': 'dh',
+    'x': 'ch', 'ɣ': 'gh', 'ʔ': '’', 'ə': 'e', 'ɛ': 'e', 'æ': 'ä', 'ø': 'ö', 'ɔ': 'o', 'ʊ': 'u', 'ɪ': 'i', 'y': 'ü', 'ɨ': 'y', 'β': 'v', 'ɸ': 'f', 'χ': 'ch',
+    'ʁ': 'r', 'ħ': 'h', 'ɦ': 'h', 'ʎ': 'ľ', 'ɬ': 'hl', 'c': 'ť', 'ɟ': 'ď', 'ɢ': 'g', 'ʋ': 'v', 'ɹ': 'r', 'ɰ': 'g', 'ʝ': 'j', 'ɑ': 'a', 'ɒ': 'o', 'ʌ': 'a' };
+  // Složeniny se ve jménech zkracují jako skutečná místní jména: první část na slabiku, celek nejvýš na tři slabiky.
+  const NAME_VOWEL = /^[aeiouyæøɛɔəɪʊɨʉɯɤʌœɞɶɑɒɘɵʏ]/;
+  function nameSyllables(ipa) {
+    const S = nameSegs(ipa), out = [[]];
+    S.forEach((x, i) => {
+      const cur = out[out.length - 1], hasV = cur.some(y => NAME_VOWEL.test(y));
+      if (hasV && (NAME_VOWEL.test(x) || (i + 1 < S.length && NAME_VOWEL.test(S[i + 1])))) out.push([x]); else cur.push(x);
+    });
+    return out.map(y => y.join(''));
+  }
+  function compound(parts) {
+    const syl = parts.map(nameSyllables), head = syl.slice(0, -1).map(x => x[0]), last = syl[syl.length - 1];
+    return [...head, ...last].slice(0, Math.max(2, head.length + 2)).join('');
+  }
+  const romanize = ipa => { const t = nameSegs(ipa).map(s => ROM[s] ?? s).join(''); return t.charAt(0).toUpperCase() + t.slice(1); };
+  const nameSeed = (key, attempt) => [...key].reduce((a, c) => (Math.imul(a, 31) + c.charCodeAt(0)) | 0, 7) + attempt * 7919;
+  const NOUNS = {
+    plain: [['field', 'n', 'Pole'], ['earth', 'f', 'Země'], ['river', 'f', 'Řeka'], ['road', 'f', 'Cesta'], ['village', 'f', 'Ves'], ['forest', 'm', 'Les'], ['grain', 'n', 'Obilí'], ['horse', 'm', 'Kůň']],
+    hills: [['forest', 'm', 'Les'], ['stone', 'm', 'Kámen'], ['tree', 'm', 'Strom'], ['path', 'f', 'Stezka'], ['root', 'm', 'Kořen']],
+    mountains: [['mountain', 'f', 'Hora'], ['stone', 'm', 'Kámen'], ['cloud', 'm', 'Mrak'], ['wind', 'm', 'Vítr'], ['thunder', 'm', 'Hrom'], ['star', 'f', 'Hvězda']],
+    island: [['sea', 'n', 'Moře'], ['boat', 'f', 'Loď'], ['fish', 'f', 'Ryba'], ['sand', 'm', 'Písek'], ['wind', 'm', 'Vítr']],
+  };
+  const ADJS = [['big', 'Velk'], ['small', 'Mal'], ['red', 'Červen'], ['white', 'Bíl'], ['black', 'Čern'], ['green', 'Zelen'], ['old', 'Star'],
+    ['new', 'Nov'], ['cold', 'Studen'], ['dry', 'Such'], ['long', 'Dlouh'], ['good', 'Dobr'], ['round', 'Kulat']];
+  // Jméno kraje: podstatné jméno podle krajiny, často s přívlastkem („Bílá řeka“).
+  function placeName(key, terrain, attempt, taken) {
+    for (let n = 0; n < 60; n++) {
+      const s = nameSeed(key, attempt * 60 + n), h = k => hash(s, k);
+      const nouns = NOUNS[terrain] || NOUNS.plain, [nc, gender, nCz] = nouns[Math.floor(h(1) * nouns.length)];
+      let ipa, meaning;
+      if (h(2) < 0.72) { const [ac, stem] = ADJS[Math.floor(h(3) * ADJS.length)]; ipa = compound([LEX[ac], LEX[nc]]); meaning = `${stem}${{ m: 'ý', f: 'á', n: 'é' }[gender]} ${nCz.toLowerCase()}`; }
+      else { ipa = compound([LEX[nc]]); meaning = nCz; }
+      const name = romanize(ipa);
+      if (!taken.has(name)) return { name, ipa, meaning };
+    }
+    return { name: romanize(LEX.village) + attempt, ipa: LEX.village, meaning: 'Ves' };
+  }
+  // Jméno jazyka: jak ho nazývají jeho mluvčí („naše řeč“), a česky odvozené -ština.
+  const ENDONYMS = [[['language'], 'řeč'], [['we', 'language'], 'naše řeč'], [['person', 'language'], 'řeč lidí'], [['speak'], 'mluvení'], [['good', 'language'], 'dobrá řeč'], [['person'], 'lidé']];
+  function czechLanguage(endonym) {
+    let stem = endonym.toLowerCase().replace(/[’]/g, '');
+    stem = stem.replace(/[aeiouäöüy]+$/, '') || stem;
+    return stem + 'ština';
+  }
+  function languageName(key, attempt) {
+    const s = nameSeed(key, attempt), [parts, meaning] = ENDONYMS[Math.floor(hash(s, 9) * ENDONYMS.length)];
+    const ipa = compound(parts.map(p => LEX[p])), endonym = romanize(ipa);
+    return { endonym, ipa, meaning, name: czechLanguage(endonym) };
+  }
+
+  // Pořadí hlásek = jak běžné jsou v jazycích světa (zhruba podle PHOIBLE); engine z pořadí odvodí četnost ve slovech.
+  const COMMON = ['m', 'k', 'j', 'p', 'w', 'n', 't', 's', 'ŋ', 'b', 'ɡ', 'd', 'h', 'l', 'ɲ', 'ʔ', 'f', 'r', 't͡ʃ', 'ʃ', 'z', 'v', 'd͡ʒ', 't͡s', 'x', 'c', 'ɟ', 'kʷ', 'ɡʷ',
+    'β', 'ɣ', 'ɸ', 'ʒ', 'ʋ', 'ɹ', 'q', 'χ', 'θ', 'ð', 'ʎ', 'ɬ', 'ɦ', 'd͡z', 't͡ɕ', 'd͡ʑ', 'ʁ', 'ɢ', 'ʝ', 'ɰ', 'ʀ', 'ɴ', 'ɱ', 'ʟ',
+    'i', 'a', 'u', 'e', 'o', 'ɛ', 'ɔ', 'ə', 'ɪ', 'ʊ', 'ɨ', 'æ', 'y', 'ɑ', 'ø', 'ɯ', 'ʌ', 'œ', 'ɤ', 'ɒ', 'ʉ', 'ʏ', 'ɘ', 'ɵ', 'ɞ', 'ɶ'];
+  const commonness = ipa => { const i = COMMON.indexOf(ipa); return i < 0 ? 999 : i; };
+  // Četnost: autor volí tři úrovně; engine dostane pořadí (častá napřed, uvnitř úrovně podle běžnosti ve světě).
+  const LEVELS = ['high', 'mid', 'low'], LEVEL_CZ = { high: 'častá', mid: 'běžná', low: 'vzácná' }, DOTS = { high: '●●●', mid: '●●', low: '●' };
+  let chartMode = 'pick';
+  const levelOf = ipa => (L.freq && L.freq[ipa]) || (commonness(ipa) < 12 ? 'high' : commonness(ipa) < 30 ? 'mid' : 'low');
+  function initFreq(lang) {
+    if (lang.freq) return; lang.freq = {};
+    for (const list of [lang.consonants, lang.vowels]) list.forEach((x, i) => { lang.freq[x] = i < list.length / 3 ? 'high' : i < 2 * list.length / 3 ? 'mid' : 'low'; });
+  }
+  const reorder = list => list.sort((a, b) => LEVELS.indexOf(levelOf(a)) - LEVELS.indexOf(levelOf(b)) || commonness(a) - commonness(b));
+
+  // --- generátor slov (postup enginu: Zipf podle pořadí, 1–3 slabiky, 15 % začíná samohláskou, 25 % končí souhláskou) ---
+  function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  const zipf = n => { const w = Array.from({ length: n }, (_, i) => 1 / Math.pow(i + 1, 0.7)); const s = w.reduce((a, b) => a + b, 0); return w.map(x => x / s); };
+  function pick(r, items, w) { let x = r(), i = 0; for (; i < items.length - 1; i++) { x -= w[i]; if (x < 0) break; } return items[i]; }
+  function lexicon(lang) {
+    const r = rng(lang.seed * 2654435761 % 4294967296), C = lang.consonants, V = lang.vowels, cw = zipf(C.length), vw = zipf(V.length), used = new Set(), out = [];
+    if (!C.length || !V.length) return [];
+    for (const [concept, gloss] of CONCEPTS) {
+      let word = [];
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const count = 1 + Math.floor(r() * 3); word = [];
+        for (let p = 0; p < count; p++) {
+          const syl = [];
+          if (!(p === 0 && r() < 0.15)) syl.push(pick(r, C, cw));
+          syl.push(pick(r, V, vw)); word.push(syl);
+        }
+        if (r() < 0.25) word[word.length - 1].push(pick(r, C, cw));
+        const flat = word.flat().join('');
+        if (word.flat().length >= 2 && !used.has(flat)) break;
+      }
+      used.add(word.flat().join(''));
+      out.push({ concept, gloss, syl: word });
+    }
+    return out;
+  }
+  // Slova přímo z enginu (výchozí pravardština); rozdělení na slabiky: souhláska před samohláskou začíná slabiku.
+  const MOD = /[̀-ͯʰ-˿]/;
+  function segs(s) { const v = []; for (const ch of s) { if (v.length && (MOD.test(ch) || v[v.length - 1].endsWith('͡'))) v[v.length - 1] += ch; else v.push(ch); } return v; }
+  function syllabify(form) {
+    const S = segs(form), out = [[]];
+    S.forEach((s, i) => {
+      const cur = out[out.length - 1], vowel = VOWEL_SET.has(s), nextVowel = i + 1 < S.length && VOWEL_SET.has(S[i + 1]);
+      if (!vowel && nextVowel && cur.some(x => VOWEL_SET.has(x))) out.push([s]);
+      else if (vowel && cur.some(x => VOWEL_SET.has(x))) out.push([s]);
+      else cur.push(s);
+    });
+    return out;
+  }
+  const engineWords = () => CONCEPTS.map(([concept, gloss, form]) => ({ concept, gloss, syl: syllabify(form) }));
+  function stressIndex(n, rule) {
+    if (rule === 'initial') return 0;
+    if (rule === 'second') return Math.min(1, n - 1);
+    if (rule === 'final') return n - 1;
+    if (rule === 'penult') return Math.max(0, n - 2);
+    return Math.max(0, n - 3);
+  }
+
+  // --- vykreslení ---
+  const $ = id => document.getElementById(id);
+  let words = [], previous = new Map();
+  function rank(ipa) { const list = VOWEL_SET.has(ipa) ? L.vowels : L.consonants; const i = list.indexOf(ipa); return i < 0 ? '' : i + 1; }
+  function toggle(ipa) {
+    const list = VOWEL_SET.has(ipa) ? L.vowels : L.consonants, i = list.indexOf(ipa);
+    if (chartMode === 'freq') {
+      if (i < 0) { toast('Nejdřív hlásku zařaď do jazyka.'); return; }
+      L.freq[ipa] = LEVELS[(LEVELS.indexOf(levelOf(ipa)) + 1) % 3]; reorder(list); changed(true); return;
+    }
+    if (i >= 0) { if (list.length === 1) { toast('Jazyk potřebuje aspoň jednu ' + (VOWEL_SET.has(ipa) ? 'samohlásku.' : 'souhlásku.')); return; } list.splice(i, 1); }
+    else { L.freq[ipa] = levelOf(ipa); list.push(ipa); }
+    reorder(list);
+    changed(true);
+  }
+  function renderChart() {
+    let html = '<thead><tr><th></th>' + PLACES.map(p => `<th>${p}</th>`).join('') + '</tr></thead><tbody>';
+    for (const [manner, cells] of ROWS) {
+      html += `<tr><th scope="row">${manner}</th>`;
+      for (const cell of cells) {
+        if (cell === null) { html += '<td class="na"></td>'; continue; }
+        html += '<td>' + cell.filter(Boolean).map(ipa => `<button class="ph lv-${levelOf(ipa)}" data-ipa="${ipa}" data-dots="${DOTS[levelOf(ipa)]}" aria-pressed="${L.consonants.includes(ipa)}" title="${ipa}${L.consonants.includes(ipa) ? ': ' + LEVEL_CZ[levelOf(ipa)] : ''}">${ipa}</button>`).join('') + '</td>';
+      }
+      html += '</tr>';
+    }
+    $('chart').innerHTML = html + '</tbody>';
+    $('chart').querySelectorAll('.ph').forEach(b => b.addEventListener('click', () => toggle(b.dataset.ipa)));
+  }
+  function renderVowels() {
+    const X = (f, h) => 74 + h * 56 + f * (254 - h * 56), Y = h => 26 + h * 186;
+    let svg = `<path d="M${X(0, 0)},${Y(0)} L${X(1, 0)},${Y(0)} L${X(1, 1)},${Y(1)} L${X(0, 1)},${Y(1)} Z" fill="none" stroke="var(--rule)" stroke-width="1"/>`;
+    for (const h of [0.33, 0.66]) svg += `<line x1="${X(0, h)}" y1="${Y(h)}" x2="${X(1, h)}" y2="${Y(h)}" stroke="var(--rule)" stroke-dasharray="2 3"/>`;
+    svg += `<line x1="${X(0.5, 0)}" y1="${Y(0)}" x2="${X(0.5, 1)}" y2="${Y(1)}" stroke="var(--rule)" stroke-dasharray="2 3"/>`;
+    svg += `<text class="axis" x="${X(0, 0)}" y="12" text-anchor="middle">přední</text><text class="axis" x="${X(1, 0)}" y="12" text-anchor="middle">zadní</text>`;
+    svg += `<text class="axis" x="2" y="${Y(0) + 4}">zavřené</text><text class="axis" x="2" y="${Y(1) + 4}">otevřené</text>`;
+    for (const [v, f, h] of VOWELS) {
+      const on = L.vowels.includes(v);
+      svg += `<text class="v${on ? ' on lv-' + levelOf(v) : ''}" x="${X(f, h)}" y="${Y(h) + 6}" text-anchor="middle" data-ipa="${v}" role="button" tabindex="0" aria-pressed="${on}">${v}</text>`;
+    }
+    $('vowels').innerHTML = svg;
+    $('vowels').querySelectorAll('text.v').forEach(t => {
+      t.addEventListener('click', () => toggle(t.dataset.ipa));
+      t.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(t.dataset.ipa); } });
+    });
+  }
+  let sampleSeed = 1;
+  function renderSample() {
+    const pool = words.filter(w => w.syl.flat().length >= 3), out = [];
+    for (let n = 0; n < 6 && pool.length; n++) out.push(pool.splice(Math.floor(hash(sampleSeed, n) * pool.length), 1)[0]);
+    $('sample').innerHTML = out.map(w => `<div><span class="ipa">${w.syl.flat().join('')}</span><small>${w.gloss}</small></div>`).join('');
+  }
+  function renderStress() {
+    $('stress-rule').innerHTML = STRESS.map(([v, l]) => `<button data-v="${v}" aria-pressed="${L.stress === v}">${l}</button>`).join('');
+    $('stress-strength').innerHTML = STRENGTH.map(([v, l]) => `<button data-v="${v}" aria-pressed="${L.strength === v}">${l} přízvuk</button>`).join('');
+    $('stress-rule').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { L.stress = b.dataset.v; changed(false); }));
+    $('stress-strength').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { L.strength = b.dataset.v; changed(false); }));
+    const samples = [3, 2, 1].map(n => words.find(w => w.syl.length === n)).filter(Boolean);
+    $('stress-demo').innerHTML = samples.map(w => {
+      const s = stressIndex(w.syl.length, L.stress);
+      return `<div><span class="w">${w.syl.map((syl, i) => `<span class="${i === s ? 's' : ''}">${syl.join('')}</span>`).join('')}</span><small>${w.gloss}</small></div>`;
+    }).join('');
+    $('stress-why').textContent = `${STRESS.find(x => x[0] === L.stress)[2]} ${STRENGTH.find(x => x[0] === L.strength)[2]}`;
+  }
+  function renderGrammar() {
+    $('grammar').innerHTML = GRAMMAR.map(([v, l, d]) => `<label class="opt"><input type="radio" name="grammar" value="${v}"${L.grammar === v ? ' checked' : ''}><b>${l}</b><p class="why">${d}</p></label>`).join('');
+    $('grammar').querySelectorAll('input').forEach(i => i.addEventListener('change', () => { L.grammar = i.value; changed(false); }));
+  }
+  function renderLexicon(flash) {
+    const q = $('search').value.trim().toLowerCase();
+    const list = words.filter(w => !q || w.gloss.toLowerCase().includes(q) || w.syl.flat().join('').includes(q));
+    $('words').innerHTML = list.map(w => {
+      const s = stressIndex(w.syl.length, L.stress), form = w.syl.flat().join(''), fresh = flash && previous.get(w.concept) !== form;
+      return `<li class="${fresh ? 'fresh' : ''}"><span class="g">${w.gloss}</span><span class="f">*${w.syl.map((syl, i) => `<span class="${i === s && w.syl.length > 1 ? 's' : ''}">${syl.join('')}</span>`).join('')}</span></li>`;
+    }).join('') || '<li><span class="g">Nic takového ve slovníku není.</span></li>';
+    $('lex-count').textContent = `${words.length} slov`;
+    $('seed').textContent = L.seed;
+    const lens = words.map(w => w.syl.flat().length), closed = words.filter(w => !VOWEL_SET.has(w.syl[w.syl.length - 1].slice(-1)[0])).length;
+    const avg = lens.reduce((a, b) => a + b, 0) / Math.max(1, lens.length);
+    $('facts').textContent = `Průměrně ${avg.toFixed(1).replace('.', ',')} hlásky na slovo · ${Math.round(100 * closed / Math.max(1, words.length))} % slov končí souhláskou · nejdelší *${words.reduce((a, w) => (w.syl.flat().length > a.syl.flat().length ? w : a), words[0] || { syl: [[]] }).syl.flat().join('')}`;
+  }
+  function nameLanguage() {
+    LEX = Object.fromEntries(words.map(w => [w.concept, w.syl.flat().join('')]));
+    if (!L.custom) { const before = L.name; Object.assign(L, languageName(L.id, L.attempt || 0)); if (before && before !== L.name) L.renamed = true; }
+    $('endo').innerHTML = L.custom ? '<span class="why">vlastní jméno</span> <button type="button" class="link" id="rename">Jméno z jazyka</button>'
+      : `<span>sami říkají <i>${L.endonym}</i></span><span class="ipa">/${L.ipa}/</span><span class="why">„${L.meaning}“</span><button type="button" class="link" id="rename">Jiné jméno</button>`;
+    $('rename').addEventListener('click', () => { L.attempt = (L.attempt || 0) + (L.custom ? 0 : 1); L.custom = false; renderAll(true); saved(); });
+  }
+  function renderLangs() {
+    $('lang-list').innerHTML = LANGS.map((l, i) => `<li><button data-i="${i}" aria-current="${l === L}">${l.name}<small>${l.regions.length} ${l.regions.length === 1 ? 'kraj' : l.regions.length < 5 ? 'kraje' : 'krajů'} · ${l.consonants.length + l.vowels.length} hlásek</small></button></li>`).join('');
+    $('lang-list').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { L = LANGS[+b.dataset.i]; renderAll(false); }));
+    $('lang-name').value = L.name;
+    $('where').textContent = L.regions.length ? `${L.regions.length} z ${GEO.length} krajů. Kraje se přiřazují v editoru světa.` : 'Zatím žádný kraj. Přiřaď ho v editoru světa.';
+    drawMinimap();
+  }
+  function drawMinimap() {
+    const cv = $('minimap'), w = cv.clientWidth, h = cv.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (!w) return;
+    cv.width = w * dpr; cv.height = h * dpr; const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cs = getComputedStyle(document.documentElement), t = n => cs.getPropertyValue(n).trim();
+    const k = Math.min(w / 360, h / 290), ox = (w - 340 * k) / 2 + 10 * k, oy = (h - 270 * k) / 2 - 55 * k;
+    c.fillStyle = t('--sea'); c.fillRect(0, 0, w, h);
+    c.fillStyle = t('--land');
+    for (const [, x, y] of GEO) { c.beginPath(); c.arc(ox + x * k, oy + y * k, 36 * k, 0, Math.PI * 2); c.fill(); }
+    const mine = new Set(L.regions);
+    for (const [name, x, y] of GEO) {
+      c.beginPath(); c.arc(ox + x * k, oy + y * k, mine.has(name) ? 3 : 2, 0, Math.PI * 2);
+      c.fillStyle = mine.has(name) ? t('--isogloss') : t('--ink-3'); c.fill();
+    }
+  }
+  function renderCounts() {
+    $('counts').innerHTML = `<b>${L.consonants.length}</b> souhlásek · <b>${L.vowels.length}</b> samohlásek · přízvuk ${STRESS.find(x => x[0] === L.stress)[1]} · mluvnice ${GRAMMAR.find(x => x[0] === L.grammar)[1].toLowerCase()}`;
+    $('phon-count').textContent = `${L.consonants.length} souhlásek, ${L.vowels.length} samohlásek`;
+  }
+
+  let savedTimer = null, toastTimer = null;
+  function saved() { $('saved').textContent = 'Ukládám…'; clearTimeout(savedTimer); savedTimer = setTimeout(() => { $('saved').textContent = 'Všechny změny uložené'; }, 500); }
+  function toast(text) { const el = $('toast'); el.textContent = text; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2600); }
+  const wordsOf = lang => (lang.engine ? engineWords() : lexicon(lang));
+  function changed(regenerate) {
+    if (regenerate) { L.engine = false; previous = new Map(words.map(w => [w.concept, w.syl.flat().join('')])); words = wordsOf(L); }
+    renderAll(regenerate); saved();
+  }
+  function renderMode() {
+    document.querySelector('.phon').parentElement.classList.toggle('freq', chartMode === 'freq');
+    $('chart-mode').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === chartMode)));
+    $('chart-help').textContent = chartMode === 'pick'
+      ? 'Klikni na hlásku v tabulce nebo v lichoběžníku a zařadíš ji do jazyka. Šrafovaná pole jsou artikulačně nemožná.'
+      : 'Klikáním přepínáš, jak často se hláska ve slovech objeví: velká a tři tečky je častá, malá a jedna tečka vzácná. Účinek uvidíš hned ve slovech.';
+    const by = lv => [...L.consonants, ...L.vowels].filter(x => levelOf(x) === lv);
+    $('freq-summary').innerHTML = LEVELS.map(lv => `<b>${LEVEL_CZ[lv]}</b> <span class="ipa">${by(lv).join(' ') || '–'}</span>`).join(' · ');
+  }
+  function renderAll(flash) {
+    initFreq(L);
+    if (!words.length || !flash) words = wordsOf(L);
+    $('lex-source').textContent = L.engine
+      ? `Slova vygeneroval engine (los ${L.seed}). Po změně hlásek nebo losu ukazuje stránka náhled složený stejným postupem; v aplikaci je dodá znovu engine.`
+      : 'Náhled složený stejným postupem jako v enginu. V aplikaci tvary dodá engine.';
+    nameLanguage(); renderLangs(); renderChart(); renderVowels(); renderSample(); renderMode(); renderStress(); renderGrammar(); renderLexicon(flash); renderCounts();
+  }
+
+  $('lang-name').addEventListener('input', e => { L.name = e.target.value; L.custom = true; renderLangs(); saved(); });
+  $('lang-name').addEventListener('change', () => nameLanguage());
+  $('resample').addEventListener('click', () => { sampleSeed += 1; renderSample(); });
+  $('chart-mode').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { chartMode = b.dataset.mode; renderChart(); renderVowels(); renderMode(); }));
+  $('search').addEventListener('input', () => renderLexicon(false));
+  $('reroll').addEventListener('click', () => { L.seed = 1 + Math.floor(Math.random() * 99999); changed(true); });
+  $('add-lang').addEventListener('click', () => {
+    const n = LANGS.length + 1;
+    LANGS.push({ id: 'jazyk-' + n, name: '', consonants: ['t', 'k', 'n', 's', 'm', 'l', 'p', 'r'], vowels: ['a', 'i', 'u'],
+      stress: 'penult', strength: 'weak', grammar: 'default', seed: 1000 + n * 37, regions: [] });
+    L = LANGS[LANGS.length - 1]; words = []; renderAll(false); saved();
+  });
+  document.querySelectorAll('.path a, #back, #next').forEach(a => a.addEventListener('click', e => { e.preventDefault(); if (a.getAttribute('aria-current') !== 'page') toast('Mezi obrazovkami se v prototypu nepřechází.'); }));
+  new ResizeObserver(drawMinimap).observe($('minimap'));
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawMinimap);
+  new MutationObserver(drawMinimap).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  renderAll(false);
+})();
+</script>
+
+</html>

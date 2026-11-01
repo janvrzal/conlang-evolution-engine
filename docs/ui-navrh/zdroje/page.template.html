@@ -1,0 +1,636 @@
+<title>Slovo v krajině</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Piazzolla:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+@font-face { font-family: "Charis CEE"; src: url(data:font/woff2;base64,__CHARIS_REGULAR__) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Charis CEE"; src: url(data:font/woff2;base64,__CHARIS_ITALIC__) format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+
+/* Layout: mapa přes celou plochu, na místech stojí přímo slova; vlevo rejstřík slov, vpravo vrt jednoho místa, dole čas. */
+:root {
+  --sea: #bccad0;
+  --sea-line: #eef3f4;
+  --land: #fbfbf9;
+  --ink: #1b2830;
+  --ink-2: #56656e;
+  --rule: #d1d9dc;
+  --panel: #eef1f2;
+  --stratum-a: #e6ebec;
+  --stratum-b: #dbe2e4;
+  --isogloss: #ae2a1f;
+  --halo: rgba(251, 251, 249, 0.88);
+  --grain: 0.07;
+  --f-ipa: "Charis CEE", "Charis SIL", "Gentium Plus", "Doulos SIL", serif;
+  --f-ui: "Piazzolla", Georgia, serif;
+  --f-sc: "Piazzolla", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --rule: #26323d;
+    --panel: #111a22; --stratum-a: #16212b; --stratum-b: #1c2833; --isogloss: #e8806f; --halo: rgba(23, 32, 42, 0.82);
+    --grain: 0.06; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --rule: #26323d;
+  --panel: #111a22; --stratum-a: #16212b; --stratum-b: #1c2833; --isogloss: #e8806f; --halo: rgba(23, 32, 42, 0.82);
+  --grain: 0.06; color-scheme: dark;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--panel); color: var(--ink); font-family: var(--f-ui); font-size: 15px; line-height: 1.4;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px; box-sizing: border-box;
+}
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--isogloss); outline-offset: 2px; }
+.ipa { font-family: var(--f-ipa); font-feature-settings: "kern"; }
+.sc { font-family: var(--f-sc); letter-spacing: 0.08em; }
+
+.app {
+  display: grid; height: 100%; gap: 12px;
+  grid-template-columns: 150px minmax(0, 1fr) 300px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: "lex stage core" "time time time";
+}
+
+/* rejstřík slov */
+.lexicon { grid-area: lex; display: flex; flex-direction: column; min-height: 0; }
+.lexicon h2 { margin: 2px 0 8px; font: 700 11px/1 var(--f-sc); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+.lexicon ol { list-style: none; margin: 0; padding: 0 4px 0 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.lexicon button {
+  width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  background: none; border: 0; padding: 4px 8px; text-align: left; cursor: pointer; border-radius: 3px; font-size: 15px;
+}
+.lexicon button span { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.lexicon button:hover { background: var(--stratum-a); }
+.lexicon button[aria-current="true"] { background: var(--ink); color: var(--panel); }
+.lexicon button[aria-current="true"] span { color: inherit; opacity: 0.7; }
+
+/* mapa */
+.stage { grid-area: stage; position: relative; min-height: 0; min-width: 0; overflow: hidden; background: var(--sea); border-radius: 2px; }
+.stage canvas { position: absolute; inset: 0; cursor: crosshair; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.place {
+  position: absolute; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer;
+  background: none; border: 0; padding: 2px 5px; display: grid; justify-items: center; line-height: 1.1;
+  text-shadow: 0 0 3px var(--halo), 0 0 6px var(--halo);
+}
+.place .nm { font: 500 10.5px/1 var(--f-sc); letter-spacing: 0.14em; color: var(--ink-2); }
+.place .fm { font-size: 19px; color: var(--ink); white-space: nowrap; }
+.place .fm.none { color: var(--ink-2); font-size: 16px; }
+.place .var { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.place .var i { font-family: var(--f-ui); font-style: italic; }
+.place[aria-pressed="true"] .nm { color: var(--isogloss); }
+.mode-all .place .fm, .mode-all .place .var { display: none; }
+.place .fm.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0% { color: var(--isogloss); transform: translateY(-3px); } 100% { color: var(--ink); transform: none; } }
+
+.headword { position: absolute; left: 20px; top: 16px; max-width: calc(100% - 40px); pointer-events: none; }
+.hw-gloss { font: 700 38px/1 var(--f-sc); letter-spacing: 0.08em; text-transform: uppercase; text-wrap: balance; }
+.hw-proto { margin-top: 6px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.hw-proto .ipa { font-size: 22px; }
+.hw-proto .hw-lang { font-size: 13px; color: var(--ink-2); font-style: italic; }
+
+.modes { position: absolute; right: 14px; top: 14px; display: flex; border: 1px solid var(--ink); border-radius: 3px; overflow: hidden; background: var(--land); }
+.modes button { border: 0; background: none; padding: 5px 10px; cursor: pointer; font-size: 13px; }
+.modes button[aria-pressed="true"] { background: var(--ink); color: var(--land); }
+
+.legend { position: absolute; left: 14px; bottom: 12px; display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); pointer-events: none; max-width: 360px; padding: 6px 8px; background: var(--halo); border-radius: 2px; }
+.legend div { display: flex; gap: 8px; align-items: center; }
+.legend svg { flex: none; }
+
+/* vrt */
+.core { grid-area: core; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; }
+.core .eyebrow { font: 700 11px/1 var(--f-sc); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+.core h2 { margin: 4px 0 0; font: 700 24px/1.15 var(--f-ui); letter-spacing: 0.01em; }
+.core .sub { margin: 4px 0 0; color: var(--ink-2); font-size: 14px; }
+.strata { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--ink); position: relative; }
+.stratum { position: relative; padding: 6px 10px 6px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; align-content: center; }
+.stratum:nth-child(odd) { background: var(--stratum-a); }
+.stratum:nth-child(even) { background: var(--stratum-b); }
+.stratum .fm { font-size: 20px; line-height: 1.15; overflow-wrap: anywhere; }
+.stratum .yr { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; align-self: start; padding-top: 4px; white-space: nowrap; }
+.stratum .why { grid-column: 1 / -1; font-size: 13px; color: var(--isogloss); }
+.stratum .why .ipa { font-size: 14px; }
+.stratum.future { opacity: 0.28; }
+.stratum.now::before { content: ""; position: absolute; left: -7px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: var(--isogloss); }
+.core .share { margin: 0; font-size: 14px; color: var(--ink-2); }
+.core h3 { margin: 4px 0 6px; font: 700 11px/1 var(--f-sc); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+.neigh { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.neigh button { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 5px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; cursor: pointer; text-align: left; }
+.neigh button:hover .nm { text-decoration: underline; }
+.neigh .fm { font-size: 17px; }
+.neigh .fm.diff { color: var(--isogloss); }
+.neigh .km { font-size: 12px; color: var(--ink-2); }
+
+/* čas */
+.time { grid-area: time; display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 4px 18px; align-items: center; }
+.play { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--land); cursor: pointer; display: grid; place-items: center; }
+.play svg { fill: var(--ink); }
+.clock { display: grid; line-height: 1; min-width: 92px; }
+.clock .yr { font: 500 34px/1 var(--f-ui); font-variant-numeric: tabular-nums lining-nums; }
+.clock small { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+.track { position: relative; height: 64px; min-width: 0; }
+.track svg.spark { position: absolute; left: 0; right: 0; top: 4px; width: 100%; height: 30px; }
+.track .axis { position: absolute; left: 0; right: 0; top: 34px; height: 1px; background: var(--ink); }
+.track .tick { position: absolute; top: 38px; transform: translateX(-50%); font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.track .ev { position: absolute; top: 0; height: 35px; border-left: 1.5px dotted var(--isogloss); }
+.track .ev span { position: absolute; top: 0; left: 4px; font-size: 11px; color: var(--isogloss); white-space: nowrap; }
+.track input { position: absolute; left: 0; right: 0; top: 0; width: 100%; height: 56px; margin: 0; background: transparent; appearance: none; -webkit-appearance: none; cursor: ew-resize; }
+.track input::-webkit-slider-runnable-track { height: 56px; background: transparent; }
+.track input::-moz-range-track { height: 56px; background: transparent; }
+.track input::-webkit-slider-thumb { -webkit-appearance: none; width: 3px; height: 56px; background: var(--ink); border-radius: 0; }
+.track input::-moz-range-thumb { width: 3px; height: 56px; background: var(--ink); border: 0; border-radius: 0; }
+.story { grid-column: 2 / -1; font-size: 14px; color: var(--ink-2); min-height: 1.4em; }
+.story b { color: var(--ink); font-weight: 700; }
+.stats { grid-column: 1 / 2; grid-row: 2; font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  .app { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 64vh auto auto;
+    grid-template-areas: "lex" "stage" "time" "core"; }
+  .lexicon ol { flex-direction: row; overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
+  .lexicon button { width: auto; white-space: nowrap; }
+  .hw-gloss { font-size: 30px; }
+  .hw-proto .ipa { font-size: 18px; }
+  .place .fm { font-size: 15px; }
+  .place .nm, .place .var { display: none; }
+  .legend { display: none; }
+  .modes button { padding: 4px 8px; font-size: 12px; }
+  .time { grid-template-columns: auto minmax(0, 1fr); }
+  .clock { grid-column: 2; grid-row: 1; }
+  .track { grid-column: 1 / -1; }
+  .story, .stats { grid-column: 1 / -1; grid-row: auto; white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) { .place .fm.flash { animation: none; } }
+</style>
+
+<div class="app" id="app">
+  <nav class="lexicon" aria-label="Slova">
+    <h2>Slova</h2>
+    <ol id="lexicon"></ol>
+  </nav>
+
+  <main class="stage" id="stage">
+    <canvas id="map" aria-label="Mapa poloostrova s tvary slova v každém kraji"></canvas>
+    <div class="labels" id="labels"></div>
+    <div class="headword">
+      <div class="hw-gloss" id="hw-gloss"></div>
+      <div class="hw-proto"><span class="ipa" id="hw-proto"></span><span class="hw-lang" id="hw-lang"></span></div>
+    </div>
+    <div class="modes" role="group" aria-label="Co ukázat">
+      <button id="mode-word" aria-pressed="true">Jedno slovo</button>
+      <button id="mode-all" aria-pressed="false">Všechna slova</button>
+    </div>
+    <div class="legend">
+      <div><svg width="28" height="8" aria-hidden="true"><line x1="0" y1="4" x2="28" y2="4" stroke="var(--isogloss)" stroke-width="2.4"/></svg><span id="legend-iso">Izoglosa: za čarou se slovo říká jinak. Silnější čára, větší rozdíl.</span></div>
+      <div><svg width="28" height="8" aria-hidden="true"><line x1="0" y1="4" x2="28" y2="4" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="7 3 1.5 3"/></svg><span>Hranice Vardunského království</span></div>
+    </div>
+  </main>
+
+  <aside class="core" id="core" aria-live="polite">
+    <div>
+      <div class="eyebrow">Vrt</div>
+      <h2 id="core-place"></h2>
+      <p class="sub" id="core-sub"></p>
+    </div>
+    <ol class="strata" id="strata"></ol>
+    <p class="share" id="core-share"></p>
+    <div>
+      <h3>Sousedé</h3>
+      <ul class="neigh" id="neigh"></ul>
+    </div>
+  </aside>
+
+  <footer class="time">
+    <button class="play" id="play" aria-label="Přehrát"><svg id="play-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2l10 6-10 6z"/></svg></button>
+    <div class="clock"><span class="yr" id="year"></span><small>rok od rozchodu</small></div>
+    <div class="track" id="track">
+      <svg class="spark" id="spark" viewBox="0 0 1000 30" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="axis"></div>
+      <input type="range" id="year-input" aria-label="Rok" min="0" step="50">
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="story" id="story"></div>
+  </footer>
+</div>
+
+<script type="application/json" id="cee-data">__DATA__</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById('cee-data').textContent);
+  const CONCEPTS = Object.keys(D.gloss);
+  const P = D.places, R = D.regions;
+  const RI = Object.fromEntries(R.map((r, i) => [r.id, i]));
+  const PI = Object.fromEntries(P.map((p, i) => [p.id, i]));
+  const villagesOf = R.map(r => P.map((p, i) => (p.region === r.id ? i : -1)).filter(i => i >= 0));
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+  const ORIGIN_CZ = { inherited: 'zděděné', derivation: 'odvozenina', compound: 'složenina', coinage: 'nové slovo', compounding: 'složenina', loan: 'výpůjčka' };
+  const STATE = D.states[0];
+  const inState = new Set(STATE ? STATE.regions : []);
+  const placeName = i => { const p = P[i]; const k = +p.id.split('-v')[1]; return `${R[RI[p.region]].name} ${ROMAN[k] || k + 1}`; };
+
+  const S = { concept: 'hand', year: D.end, place: PI['teth-v1'] ?? 0, mode: 'word', playing: false, timer: null };
+
+  // --- slova v čase ---
+  function entryAt(c, i, y) {
+    const rows = D.forms[c][i]; let e = rows[0];
+    for (const r of rows) { if (r[0] <= y) e = r; else break; }
+    return e;
+  }
+  const str = e => (e && e[1] >= 0 ? D.strings[e[1]] : null);
+  const formAt = (c, i, y) => str(entryAt(c, i, y));
+
+  const MOD = /[̀-ͯʰ-˿᷀-᷿]/;
+  const segCache = new Map();
+  function segs(s) {
+    let v = segCache.get(s); if (v) return v; v = [];
+    for (const ch of s) {
+      if (v.length && (MOD.test(ch) || v[v.length - 1].endsWith('͡'))) v[v.length - 1] += ch; else v.push(ch);
+    }
+    segCache.set(s, v); return v;
+  }
+  function align(a, b) {
+    const A = segs(a), B = segs(b), n = A.length, m = B.length;
+    const d = Array.from({ length: n + 1 }, (_, i) => { const row = new Array(m + 1).fill(0); row[0] = i; return row; });
+    for (let j = 0; j <= m; j++) d[0][j] = j;
+    for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (A[i - 1] === B[j - 1] ? 0 : 1));
+    const ops = []; let i = n, j = m;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && d[i][j] === d[i - 1][j - 1] + (A[i - 1] === B[j - 1] ? 0 : 1)) {
+        if (A[i - 1] !== B[j - 1]) ops.push([A[i - 1], B[j - 1]]); i--; j--;
+      } else if (i > 0 && d[i][j] === d[i - 1][j] + 1) { ops.push([A[i - 1], '∅']); i--; }
+      else { ops.push(['∅', B[j - 1]]); j--; }
+    }
+    return { norm: d[n][m] / Math.max(n, m, 1), ops: ops.reverse() };
+  }
+  const distCache = new Map();
+  function fdist(a, b) {
+    if (a === b) return 0; if (a === null || b === null) return 1;
+    const key = a < b ? a + '|' + b : b + '|' + a;
+    let v = distCache.get(key); if (v === undefined) { v = align(a, b).norm; distCache.set(key, v); }
+    return v;
+  }
+  function majority(c, r, y) {
+    const counts = new Map();
+    for (const i of villagesOf[r]) { const f = formAt(c, i, y); counts.set(f, (counts.get(f) || 0) + 1); }
+    const sorted = [...counts].sort((a, b) => b[1] - a[1]);
+    return { main: sorted[0][0], others: sorted.slice(1).map(x => x[0]).filter(x => x !== null) };
+  }
+  function distinctForms(c, y) { const s = new Set(); for (let i = 0; i < P.length; i++) { const f = formAt(c, i, y); if (f !== null) s.add(f); } return s.size; }
+  function plural(n, one, few, many) { return n === 1 ? one : (n >= 2 && n <= 4 ? few : many); }
+  const proto = c => formAt(c, PI['vardun-v0'], 0);
+  const dialectsAt = y => { let n = 1; for (const [yr, k] of D.dialects) if (yr <= y) n = k; return n; };
+
+  // --- mapa ---
+  const stage = document.getElementById('stage'), cv = document.getElementById('map'), ctx = cv.getContext('2d');
+  const labelsEl = document.getElementById('labels');
+  let G = null;
+
+  function hash(i, j) { let h = Math.imul(i, 374761393) + Math.imul(j, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+  function vnoise(x, y) {
+    const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1);
+    return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
+  }
+  const onIsland = P.map(p => R[RI[p.region]].terrain === 'island');
+  function landField(x, y) {
+    let main = Infinity, island = Infinity;
+    P.forEach((p, i) => {
+      const dx = p.x - x, dy = p.y - y, d = dx * dx + dy * dy;
+      if (onIsland[i]) { if (d < island) island = d; } else if (d < main) main = d;
+    });
+    const noise = vnoise(x / 24, y / 24) * 8 + vnoise(x / 8 + 40, y / 8) * 2.6;
+    const fm = 34 - Math.sqrt(main) + noise, fi = 34 - Math.sqrt(island) + noise;
+    // Ostrov od pevniny vždy dělí průliv.
+    if (fm > -14 && fi > -14) return Math.min(Math.max(fm, fi), -3 - Math.min(Math.abs(fm - fi), 6));
+    return Math.max(fm, fi);
+  }
+  function edgesOf(points, keep) {
+    const del = d3.Delaunay.from(points), vor = del.voronoi([-1e4, -1e4, 1e4, 1e4]);
+    const { triangles, halfedges } = del, cc = vor.circumcenters, out = [];
+    for (let e = 0; e < halfedges.length; e++) {
+      const o = halfedges[e]; if (o < e) continue;
+      const a = triangles[e], b = triangles[e % 3 === 2 ? e - 2 : e + 1];
+      if (!keep(a, b)) continue;
+      const t1 = Math.floor(e / 3), t2 = Math.floor(o / 3);
+      out.push({ a, b, x1: cc[2 * t1], y1: cc[2 * t1 + 1], x2: cc[2 * t2], y2: cc[2 * t2 + 1] });
+    }
+    return out;
+  }
+
+  function layout() {
+    const W = stage.clientWidth, H = stage.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    const pad = 24, xs = P.map(p => p.x), ys = P.map(p => p.y);
+    const minx = Math.min(...xs) - pad, maxx = Math.max(...xs) + pad, miny = Math.min(...ys) - pad, maxy = Math.max(...ys) + pad;
+    const top = W < 600 ? 84 : 104, bottom = W < 600 ? 10 : 56;
+    const k = Math.min((W - 24) / (maxx - minx), (H - top - bottom) / (maxy - miny));
+    const ox = (W - k * (maxx - minx)) / 2 - k * minx, oy = top + (H - top - bottom - k * (maxy - miny)) / 2 - k * miny;
+    const sx = x => ox + k * x, sy = y => oy + k * y;
+    const g = 4, nx = Math.ceil(W / g) + 1, ny = Math.ceil(H / g) + 1, values = new Float64Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) values[j * nx + i] = landField((i * g - ox) / k, (j * g - oy) / k);
+    const path = d3.geoPath(d3.geoTransform({ point(x, y) { this.stream.point(x * g, y * g); } }));
+    const contours = d3.contours().size([nx, ny]).thresholds([0, -4, -9, -15, -22])(values).sort((a, b) => b.value - a.value);
+    const shapes = contours.map(c => new Path2D(path(c)));
+    const vp = P.map(p => [sx(p.x), sy(p.y)]);
+    const villageEdges = edgesOf(vp, (a, b) => Math.hypot(P[a].x - P[b].x, P[a].y - P[b].y) <= 32).map(e => {
+      // Hrana Voronoiova diagramu u pobřeží míří daleko; izoglosa stačí kolem středu mezi vesnicemi.
+      const mx = (vp[e.a][0] + vp[e.b][0]) / 2, my = (vp[e.a][1] + vp[e.b][1]) / 2, L = 12 * k;
+      const clamp = (x, y) => { const d = Math.hypot(x - mx, y - my); return d <= L ? [x, y] : [mx + (x - mx) * L / d, my + (y - my) * L / d]; };
+      const [x1, y1] = clamp(e.x1, e.y1), [x2, y2] = clamp(e.x2, e.y2);
+      return { ...e, x1, y1, x2, y2 };
+    });
+    const rp = R.map(r => [sx(r.x), sy(r.y)]);
+    const borderEdges = edgesOf(rp, (a, b) => inState.has(R[a].id) !== inState.has(R[b].id) && Math.hypot(R[a].x - R[b].x, R[a].y - R[b].y) <= 80);
+    const marks = [];
+    R.forEach((r, ri) => {
+      if (r.terrain !== 'mountains' && r.terrain !== 'hills') return;
+      for (let n = 0; n < 7; n++) {
+        const ang = hash(ri, n) * Math.PI * 2, rad = (14 + hash(n, ri) * 18) * k / 2.4;
+        marks.push({ x: rp[ri][0] + Math.cos(ang) * rad * 1.5, y: rp[ri][1] + 26 + Math.sin(ang) * rad * 0.6, kind: r.terrain, s: Math.max(4, 3.2 * k) });
+      }
+    });
+    let stateLabel = null;
+    if (STATE) {
+      const pts = STATE.regions.map(id => rp[RI[id]]);
+      stateLabel = { x: d3.mean(pts, p => p[0]), y: Math.min(...pts.map(p => p[1])) - 34 * k / 2.4 };
+    }
+    G = { W, H, dpr, k, sx, sy, land: shapes[0], lines: shapes.slice(1), vp, rp, villageEdges, borderEdges, marks, stateLabel };
+    R.forEach((r, ri) => { const el = labelEls[ri]; el.style.left = rp[ri][0] + 'px'; el.style.top = (rp[ri][1] - 9 * k - 2) + 'px'; });
+  }
+
+  function tokens() {
+    const cs = getComputedStyle(document.documentElement), t = n => cs.getPropertyValue(n).trim();
+    return { sea: t('--sea'), seaLine: t('--sea-line'), land: t('--land'), ink: t('--ink'), ink2: t('--ink-2'), iso: t('--isogloss'), font: t('--f-sc'), grain: parseFloat(t('--grain')) || 0 };
+  }
+  const grainTiles = {};
+  function grainTile(light) {
+    if (grainTiles[light]) return grainTiles[light];
+    const c = document.createElement('canvas'); c.width = c.height = 192;
+    const g = c.getContext('2d'); g.fillStyle = light ? '#ffffff' : '#000000';
+    for (let n = 0; n < 3200; n++) {
+      const x = hash(n, 11) * 192, y = hash(n, 23) * 192, s = 0.5 + hash(n, 37) * 1.1;
+      g.globalAlpha = 0.25 + hash(n, 41) * 0.75; g.fillRect(x, y, s, s);
+    }
+    for (let n = 0; n < 90; n++) {
+      const x = hash(n, 53) * 192, y = hash(n, 59) * 192, a = hash(n, 61) * Math.PI;
+      g.globalAlpha = 0.35; g.fillRect(x, y, 4 + hash(n, 67) * 6, 0.6); g.save(); g.translate(x, y); g.rotate(a); g.fillRect(0, 0, 5, 0.5); g.restore();
+    }
+    return (grainTiles[light] = ctx.createPattern(c, 'repeat'));
+  }
+  function isDark(hex) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex); if (!m) return false;
+    const v = parseInt(m[1], 16); return ((v >> 16) * 0.3 + ((v >> 8) & 255) * 0.59 + (v & 255) * 0.11) < 110;
+  }
+
+  const allCache = new Map();
+  function allWeights(y) {
+    let w = allCache.get(y); if (w) return w;
+    w = G.villageEdges.map(e => { let s = 0; for (const c of CONCEPTS) s += fdist(formAt(c, e.a, y), formAt(c, e.b, y)); return s / CONCEPTS.length; });
+    allCache.set(y, w); return w;
+  }
+
+  function draw() {
+    if (!G) return;
+    const t = tokens(), { W, H, dpr } = G;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = t.sea; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = t.seaLine; ctx.lineWidth = 0.8;
+    G.lines.forEach((p, n) => { ctx.globalAlpha = 0.75 - n * 0.16; ctx.stroke(p); });
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = t.land; ctx.fill(G.land);
+    if (t.grain) {
+      ctx.save(); ctx.globalAlpha = t.grain; ctx.fillStyle = grainTile(isDark(t.land));
+      ctx.fillRect(0, 0, W, H); ctx.restore();
+    }
+    ctx.strokeStyle = t.ink; ctx.lineWidth = 1.1; ctx.stroke(G.land);
+
+    ctx.strokeStyle = t.ink2; ctx.lineWidth = 1; ctx.globalAlpha = 0.55;
+    for (const m of G.marks) {
+      ctx.beginPath();
+      if (m.kind === 'mountains') { ctx.moveTo(m.x - m.s, m.y + m.s * 0.5); ctx.lineTo(m.x, m.y - m.s * 0.6); ctx.lineTo(m.x + m.s, m.y + m.s * 0.5); }
+      else ctx.arc(m.x, m.y + m.s * 0.4, m.s * 0.8, Math.PI * 1.15, Math.PI * 1.85);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.save(); ctx.clip(G.land);
+    if (STATE && S.year >= STATE.from) {
+      ctx.strokeStyle = t.ink; ctx.lineWidth = 1.2; ctx.setLineDash([7, 3, 1.5, 3]);
+      ctx.beginPath(); for (const e of G.borderEdges) { ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); } ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.strokeStyle = t.iso; ctx.lineCap = 'round';
+    if (S.mode === 'word') {
+      for (const e of G.villageEdges) {
+        const w = fdist(formAt(S.concept, e.a, S.year), formAt(S.concept, e.b, S.year)); if (!w) continue;
+        ctx.lineWidth = 0.9 + 2.8 * w; ctx.globalAlpha = 0.95;
+        ctx.beginPath(); ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); ctx.stroke();
+      }
+    } else {
+      const ws = allWeights(S.year);
+      G.villageEdges.forEach((e, n) => {
+        const w = ws[n]; if (w < 0.004) return;
+        ctx.lineWidth = Math.min(7, 0.5 + w * 22); ctx.globalAlpha = Math.min(1, 0.3 + w * 6);
+        ctx.beginPath(); ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); ctx.stroke();
+      });
+    }
+    ctx.globalAlpha = 1; ctx.restore();
+
+    G.vp.forEach(([x, y], i) => {
+      const r = RI[P[i].region];
+      const same = S.mode === 'all' || formAt(S.concept, i, S.year) === majority(S.concept, r, S.year).main;
+      ctx.beginPath(); ctx.arc(x, y, 2.4, 0, Math.PI * 2);
+      if (same) { ctx.fillStyle = t.ink; ctx.fill(); } else { ctx.fillStyle = t.land; ctx.fill(); ctx.strokeStyle = t.iso; ctx.lineWidth = 1.3; ctx.stroke(); }
+    });
+    const [px, py] = G.vp[S.place];
+    ctx.strokeStyle = t.iso; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  // --- popisky krajů ---
+  const labelEls = R.map((r, ri) => {
+    const b = document.createElement('button'); b.className = 'place'; b.type = 'button';
+    b.innerHTML = `<span class="nm">${r.name.toUpperCase()}</span><span class="fm ipa"></span><span class="var ipa"></span>`;
+    b.addEventListener('click', () => { S.place = villagesOf[ri][0]; render(); });
+    labelsEl.appendChild(b); return b;
+  });
+  const lastForm = new Map();
+  function renderLabels(animate) {
+    R.forEach((r, ri) => {
+      const el = labelEls[ri], m = majority(S.concept, ri, S.year);
+      const fm = el.querySelector('.fm'), vr = el.querySelector('.var');
+      const text = m.main === null ? '∅' : m.main;
+      if (animate && lastForm.get(ri) !== undefined && lastForm.get(ri) !== text) {
+        fm.classList.remove('flash'); void fm.offsetWidth; fm.classList.add('flash');
+      }
+      lastForm.set(ri, text);
+      fm.textContent = text; fm.classList.toggle('none', m.main === null);
+      fm.title = m.main === null ? 'Pro tento význam se tu žádné slovo neužívá.' : '';
+      vr.innerHTML = m.others.length ? `<i>též</i> ${m.others.slice(0, 2).join(', ')}` : '';
+      el.setAttribute('aria-pressed', String(P[S.place].region === r.id));
+      el.setAttribute('aria-label', `${r.name}: ${text}`);
+    });
+  }
+
+  // --- vrt ---
+  function note(prev, e) {
+    const a = str(prev), b = str(e);
+    if (b === null) return 'slovo pro tento význam vymizelo';
+    const origin = D.origins[e[2]];
+    if (a === null) return `nové slovo: ${ORIGIN_CZ[origin] || origin}`;
+    const al = align(a, b);
+    if (al.norm > 0.6 || (origin !== D.origins[prev[2]] && origin !== 'inherited')) return `nahrazeno: ${ORIGIN_CZ[origin] || origin}`;
+    const seen = new Set(), parts = [];
+    for (const [x, y] of al.ops) { const k = x + '>' + y; if (seen.has(k)) continue; seen.add(k); parts.push(`<span class="ipa">${x} → ${y}</span>`); }
+    return parts.slice(0, 3).join(' · ');
+  }
+  function renderCore() {
+    const i = S.place, c = S.concept, rows = D.forms[c][i];
+    document.getElementById('core-place').textContent = placeName(i);
+    document.getElementById('core-sub').textContent = `Co se tu za 2000 let říkalo pro „${D.gloss[c]}“.`;
+    const layers = rows.map((e, n) => ({ e, prev: rows[n - 1], from: n === 0 ? D.start : e[0], to: n + 1 < rows.length ? rows[n + 1][0] : D.end }));
+    const list = document.getElementById('strata'); list.innerHTML = '';
+    for (const L of layers.slice().reverse()) {
+      const li = document.createElement('li'); li.className = 'stratum';
+      const h = Math.max(46, (L.to - L.from) * 0.14); li.style.minHeight = h + 'px';
+      if (L.from > S.year) li.classList.add('future');
+      if (L.from <= S.year && (S.year < L.to || (L.to === D.end && S.year === D.end))) li.classList.add('now');
+      const f = str(L.e);
+      li.innerHTML = `<span class="fm ipa">${f === null ? '∅' : (L.prev ? '' : '*') + f}</span><span class="yr">${L.from}–${L.to}</span>` +
+        (L.prev ? `<span class="why">${note(L.prev, L.e)}</span>` : `<span class="why" style="color:var(--ink-2)">zděděno z pravardštiny</span>`);
+      list.appendChild(li);
+    }
+    const here = formAt(c, i, S.year);
+    let same = 0; for (let j = 0; j < P.length; j++) if (j !== i && formAt(c, j, S.year) === here) same++;
+    document.getElementById('core-share').textContent = here === null
+      ? `V roce ${S.year} tu slovo pro „${D.gloss[c]}“ chybí.`
+      : `V roce ${S.year} se stejně říká v dalších ${same} ${plural(same, 'vsi', 'vsích', 'vsích')} z ${P.length - 1}.`;
+    const near = P.map((p, j) => ({ j, d: Math.hypot(p.x - P[i].x, p.y - P[i].y) })).filter(o => o.j !== i).sort((a, b) => a.d - b.d).slice(0, 5);
+    const ul = document.getElementById('neigh'); ul.innerHTML = '';
+    for (const o of near) {
+      const f = formAt(c, o.j, S.year), li = document.createElement('li'), b = document.createElement('button');
+      b.type = 'button';
+      b.innerHTML = `<span><span class="nm">${placeName(o.j)}</span> <span class="km">${Math.round(o.d)} km</span></span><span class="fm ipa${f !== here ? ' diff' : ''}">${f === null ? '∅' : f}</span>`;
+      b.addEventListener('click', () => { S.place = o.j; render(); });
+      li.appendChild(b); ul.appendChild(li);
+    }
+  }
+
+  // --- rejstřík, čas ---
+  const lexEl = document.getElementById('lexicon');
+  const lexButtons = CONCEPTS.map(c => {
+    const li = document.createElement('li'), b = document.createElement('button');
+    b.type = 'button'; b.innerHTML = `${D.gloss[c]}<span></span>`;
+    b.addEventListener('click', () => { S.concept = c; lastForm.clear(); render(); });
+    li.appendChild(b); lexEl.appendChild(li); return b;
+  });
+  const input = document.getElementById('year-input');
+  input.max = D.end; input.step = D.step;
+  input.addEventListener('input', () => { S.year = +input.value; render(true); });
+
+  const track = document.getElementById('track');
+  for (let y = 0; y <= D.end; y += 250) {
+    const el = document.createElement('span'); el.className = 'tick'; el.style.left = (y / D.end * 100) + '%'; el.textContent = y;
+    if (y === 0) el.style.transform = 'none'; if (y === D.end) el.style.transform = 'translateX(-100%)';
+    track.insertBefore(el, input);
+  }
+  for (const ev of D.events) {
+    const el = document.createElement('div'); el.className = 'ev'; el.style.left = (ev.year / D.end * 100) + '%';
+    el.innerHTML = `<span>${ev.title}</span>`; track.insertBefore(el, input);
+  }
+  function renderSpark() {
+    const svg = document.getElementById('spark'), pts = [];
+    let max = 1;
+    for (let y = 0; y <= D.end; y += D.step) {
+      const v = S.mode === 'word' ? distinctForms(S.concept, y) : dialectsAt(y);
+      pts.push([y, v]); if (v > max) max = v;
+    }
+    const X = y => y / D.end * 1000, Y = v => 30 - (v / max) * 26;
+    const line = pts.map(([y, v], n) => `${n ? 'L' : 'M'}${X(y).toFixed(1)},${Y(v).toFixed(1)}`).join('');
+    const nowX = X(S.year);
+    svg.innerHTML = `<path d="${line}L1000,30L0,30Z" fill="var(--ink)" opacity="0.10"/>` +
+      `<path d="${line}" fill="none" stroke="var(--ink)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>` +
+      `<rect x="${nowX}" y="0" width="${1000 - nowX}" height="30" fill="var(--panel)" opacity="0.55"/>`;
+  }
+  function renderTime() {
+    input.value = S.year;
+    document.getElementById('year').textContent = S.year;
+    const n = distinctForms(S.concept, S.year), dl = dialectsAt(S.year);
+    document.getElementById('stats').textContent = S.mode === 'word'
+      ? `1 jazyk · ${dl} nářečí · ${n} ${plural(n, 'tvar', 'tvary', 'tvarů')} slova „${D.gloss[S.concept]}“`
+      : `1 jazyk · ${dl} nářečí`;
+    const past = D.events.filter(e => e.year <= S.year).pop();
+    document.getElementById('story').innerHTML = past
+      ? `<b>${past.year} · ${past.title}.</b> ${past.text}`
+      : `<b>Rok 0.</b> Všech 80 vsí mluví stejně: pravardštinou.`;
+    renderSpark();
+  }
+
+  function render(animate = false) {
+    const c = S.concept;
+    document.getElementById('app').classList.toggle('mode-all', S.mode === 'all');
+    document.getElementById('hw-gloss').textContent = S.mode === 'word' ? D.gloss[c] : 'hranice nářečí';
+    document.getElementById('hw-proto').textContent = S.mode === 'word' ? '*' + proto(c) : '';
+    document.getElementById('hw-lang').textContent = S.mode === 'word' ? 'v pravardštině, rok 0' : `${CONCEPTS.length} slov naráz: kde se jich mezi sousedy liší nejvíc`;
+    document.getElementById('legend-iso').textContent = S.mode === 'word'
+      ? 'Izoglosa: za čarou se slovo říká jinak. Silnější čára, větší rozdíl.'
+      : 'Svazek izoglos: čím silnější čára, tím víc slov se přes ni liší.';
+    lexButtons.forEach((b, n) => {
+      b.setAttribute('aria-current', String(CONCEPTS[n] === c && S.mode === 'word'));
+      b.querySelector('span').textContent = distinctForms(CONCEPTS[n], S.year);
+    });
+    document.getElementById('mode-word').setAttribute('aria-pressed', String(S.mode === 'word'));
+    document.getElementById('mode-all').setAttribute('aria-pressed', String(S.mode === 'all'));
+    renderLabels(animate); renderCore(); renderTime(); draw();
+  }
+
+  document.getElementById('mode-word').addEventListener('click', () => { S.mode = 'word'; render(); });
+  document.getElementById('mode-all').addEventListener('click', () => { S.mode = 'all'; render(); });
+  lexButtons.forEach(b => b.addEventListener('click', () => { S.mode = 'word'; render(); }));
+
+  cv.addEventListener('click', ev => {
+    const rect = cv.getBoundingClientRect(), x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+    let best = -1, bd = 18;
+    G.vp.forEach(([px, py], i) => { const d = Math.hypot(px - x, py - y); if (d < bd) { bd = d; best = i; } });
+    if (best >= 0) { S.place = best; render(); }
+  });
+
+  const playBtn = document.getElementById('play'), playIcon = document.getElementById('play-icon');
+  function setPlaying(on) {
+    S.playing = on; clearInterval(S.timer);
+    playBtn.setAttribute('aria-label', on ? 'Zastavit' : 'Přehrát');
+    playIcon.innerHTML = on ? '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>' : '<path d="M4 2l10 6-10 6z"/>';
+    if (!on) return;
+    if (S.year >= D.end) { S.year = 0; lastForm.clear(); render(); }
+    S.timer = setInterval(() => {
+      if (S.year >= D.end) { setPlaying(false); return; }
+      S.year = Math.min(D.end, S.year + D.step); render(true);
+    }, 220);
+  }
+  playBtn.addEventListener('click', () => setPlaying(!S.playing));
+  document.addEventListener('keydown', ev => {
+    if (ev.target.closest('input, textarea')) return;
+    if (ev.key === ' ' && !ev.target.closest('button')) { ev.preventDefault(); setPlaying(!S.playing); }
+    else if (ev.key === 'ArrowRight') { S.year = Math.min(D.end, S.year + D.step); render(true); }
+    else if (ev.key === 'ArrowLeft') { S.year = Math.max(0, S.year - D.step); render(true); }
+    else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      const n = CONCEPTS.indexOf(S.concept) + (ev.key === 'ArrowDown' ? 1 : -1);
+      S.concept = CONCEPTS[(n + CONCEPTS.length) % CONCEPTS.length]; S.mode = 'word'; lastForm.clear(); render();
+    }
+  });
+
+  new ResizeObserver(() => { layout(); allCache.clear(); draw(); }).observe(stage);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  layout(); render();
+  if (document.fonts) document.fonts.ready.then(draw);
+})();
+</script>

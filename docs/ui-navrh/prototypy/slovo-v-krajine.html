@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="cs">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}</style>
+<title>Slovo v krajině</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Piazzolla:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+@font-face { font-family: "Charis CEE"; src: url(data:font/woff2;base64,) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Charis CEE"; src: url(data:font/woff2;base64,) format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+
+/* Layout: mapa přes celou plochu, na místech stojí přímo slova; vlevo rejstřík slov, vpravo vrt jednoho místa, dole čas. */
+:root {
+  --sea: #bccad0;
+  --sea-line: #eef3f4;
+  --land: #fbfbf9;
+  --ink: #1b2830;
+  --ink-2: #56656e;
+  --rule: #d1d9dc;
+  --panel: #eef1f2;
+  --stratum-a: #e6ebec;
+  --stratum-b: #dbe2e4;
+  --isogloss: #ae2a1f;
+  --halo: rgba(251, 251, 249, 0.88);
+  --grain: 0.07;
+  --f-ipa: "Charis CEE", "Charis SIL", "Gentium Plus", "Doulos SIL", serif;
+  --f-ui: "Piazzolla", Georgia, serif;
+  --f-sc: "Piazzolla", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --rule: #26323d;
+    --panel: #111a22; --stratum-a: #16212b; --stratum-b: #1c2833; --isogloss: #e8806f; --halo: rgba(23, 32, 42, 0.82);
+    --grain: 0.06; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --rule: #26323d;
+  --panel: #111a22; --stratum-a: #16212b; --stratum-b: #1c2833; --isogloss: #e8806f; --halo: rgba(23, 32, 42, 0.82);
+  --grain: 0.06; color-scheme: dark;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--panel); color: var(--ink); font-family: var(--f-ui); font-size: 15px; line-height: 1.4;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px; box-sizing: border-box;
+}
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--isogloss); outline-offset: 2px; }
+.ipa { font-family: var(--f-ipa); font-feature-settings: "kern"; }
+.sc { font-family: var(--f-sc); letter-spacing: 0.08em; }
+
+.app {
+  display: grid; height: 100%; gap: 12px;
+  grid-template-columns: 150px minmax(0, 1fr) 300px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: "lex stage core" "time time time";
+}
+
+/* rejstřík slov */
+.lexicon { grid-area: lex; display: flex; flex-direction: column; min-height: 0; }
+.lexicon h2 { margin: 2px 0 8px; font: 700 11px/1 var(--f-sc); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+.lexicon ol { list-style: none; margin: 0; padding: 0 4px 0 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.lexicon button {
+  width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  background: none; border: 0; padding: 4px 8px; text-align: left; cursor: pointer; border-radius: 3px; font-size: 15px;
+}
+.lexicon button span { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.lexicon button:hover { background: var(--stratum-a); }
+.lexicon button[aria-current="true"] { background: var(--ink); color: var(--panel); }
+.lexicon button[aria-current="true"] span { color: inherit; opacity: 0.7; }
+
+/* mapa */
+.stage { grid-area: stage; position: relative; min-height: 0; min-width: 0; overflow: hidden; background: var(--sea); border-radius: 2px; }
+.stage canvas { position: absolute; inset: 0; cursor: crosshair; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.place {
+  position: absolute; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer;
+  background: none; border: 0; padding: 2px 5px; display: grid; justify-items: center; line-height: 1.1;
+  text-shadow: 0 0 3px var(--halo), 0 0 6px var(--halo);
+}
+.place .nm { font: 500 10.5px/1 var(--f-sc); letter-spacing: 0.14em; color: var(--ink-2); }
+.place .fm { font-size: 19px; color: var(--ink); white-space: nowrap; }
+.place .fm.none { color: var(--ink-2); font-size: 16px; }
+.place .var { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.place .var i { font-family: var(--f-ui); font-style: italic; }
+.place[aria-pressed="true"] .nm { color: var(--isogloss); }
+.mode-all .place .fm, .mode-all .place .var { display: none; }
+.place .fm.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0% { color: var(--isogloss); transform: translateY(-3px); } 100% { color: var(--ink); transform: none; } }
+
+.headword { position: absolute; left: 20px; top: 16px; max-width: calc(100% - 40px); pointer-events: none; }
+.hw-gloss { font: 700 38px/1 var(--f-sc); letter-spacing: 0.08em; text-transform: uppercase; text-wrap: balance; }
+.hw-proto { margin-top: 6px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.hw-proto .ipa { font-size: 22px; }
+.hw-proto .hw-lang { font-size: 13px; color: var(--ink-2); font-style: italic; }
+
+.modes { position: absolute; right: 14px; top: 14px; display: flex; border: 1px solid var(--ink); border-radius: 3px; overflow: hidden; background: var(--land); }
+.modes button { border: 0; background: none; padding: 5px 10px; cursor: pointer; font-size: 13px; }
+.modes button[aria-pressed="true"] { background: var(--ink); color: var(--land); }
+
+.legend { position: absolute; left: 14px; bottom: 12px; display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); pointer-events: none; max-width: 360px; padding: 6px 8px; background: var(--halo); border-radius: 2px; }
+.legend div { display: flex; gap: 8px; align-items: center; }
+.legend svg { flex: none; }
+
+/* vrt */
+.core { grid-area: core; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; }
+.core .eyebrow { font: 700 11px/1 var(--f-sc); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+.core h2 { margin: 4px 0 0; font: 700 24px/1.15 var(--f-ui); letter-spacing: 0.01em; }
+.core .sub { margin: 4px 0 0; color: var(--ink-2); font-size: 14px; }
+.strata { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--ink); position: relative; }
+.stratum { position: relative; padding: 6px 10px 6px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; align-content: center; }
+.stratum:nth-child(odd) { background: var(--stratum-a); }
+.stratum:nth-child(even) { background: var(--stratum-b); }
+.stratum .fm { font-size: 20px; line-height: 1.15; overflow-wrap: anywhere; }
+.stratum .yr { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; align-self: start; padding-top: 4px; white-space: nowrap; }
+.stratum .why { grid-column: 1 / -1; font-size: 13px; color: var(--isogloss); }
+.stratum .why .ipa { font-size: 14px; }
+.stratum.future { opacity: 0.28; }
+.stratum.now::before { content: ""; position: absolute; left: -7px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: var(--isogloss); }
+.core .share { margin: 0; font-size: 14px; color: var(--ink-2); }
+.core h3 { margin: 4px 0 6px; font: 700 11px/1 var(--f-sc); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+.neigh { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.neigh button { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 5px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; cursor: pointer; text-align: left; }
+.neigh button:hover .nm { text-decoration: underline; }
+.neigh .fm { font-size: 17px; }
+.neigh .fm.diff { color: var(--isogloss); }
+.neigh .km { font-size: 12px; color: var(--ink-2); }
+
+/* čas */
+.time { grid-area: time; display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 4px 18px; align-items: center; }
+.play { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--land); cursor: pointer; display: grid; place-items: center; }
+.play svg { fill: var(--ink); }
+.clock { display: grid; line-height: 1; min-width: 92px; }
+.clock .yr { font: 500 34px/1 var(--f-ui); font-variant-numeric: tabular-nums lining-nums; }
+.clock small { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+.track { position: relative; height: 64px; min-width: 0; }
+.track svg.spark { position: absolute; left: 0; right: 0; top: 4px; width: 100%; height: 30px; }
+.track .axis { position: absolute; left: 0; right: 0; top: 34px; height: 1px; background: var(--ink); }
+.track .tick { position: absolute; top: 38px; transform: translateX(-50%); font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.track .ev { position: absolute; top: 0; height: 35px; border-left: 1.5px dotted var(--isogloss); }
+.track .ev span { position: absolute; top: 0; left: 4px; font-size: 11px; color: var(--isogloss); white-space: nowrap; }
+.track input { position: absolute; left: 0; right: 0; top: 0; width: 100%; height: 56px; margin: 0; background: transparent; appearance: none; -webkit-appearance: none; cursor: ew-resize; }
+.track input::-webkit-slider-runnable-track { height: 56px; background: transparent; }
+.track input::-moz-range-track { height: 56px; background: transparent; }
+.track input::-webkit-slider-thumb { -webkit-appearance: none; width: 3px; height: 56px; background: var(--ink); border-radius: 0; }
+.track input::-moz-range-thumb { width: 3px; height: 56px; background: var(--ink); border: 0; border-radius: 0; }
+.story { grid-column: 2 / -1; font-size: 14px; color: var(--ink-2); min-height: 1.4em; }
+.story b { color: var(--ink); font-weight: 700; }
+.stats { grid-column: 1 / 2; grid-row: 2; font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  .app { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 64vh auto auto;
+    grid-template-areas: "lex" "stage" "time" "core"; }
+  .lexicon ol { flex-direction: row; overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
+  .lexicon button { width: auto; white-space: nowrap; }
+  .hw-gloss { font-size: 30px; }
+  .hw-proto .ipa { font-size: 18px; }
+  .place .fm { font-size: 15px; }
+  .place .nm, .place .var { display: none; }
+  .legend { display: none; }
+  .modes button { padding: 4px 8px; font-size: 12px; }
+  .time { grid-template-columns: auto minmax(0, 1fr); }
+  .clock { grid-column: 2; grid-row: 1; }
+  .track { grid-column: 1 / -1; }
+  .story, .stats { grid-column: 1 / -1; grid-row: auto; white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) { .place .fm.flash { animation: none; } }
+</style>
+
+<div class="app" id="app">
+  <nav class="lexicon" aria-label="Slova">
+    <h2>Slova</h2>
+    <ol id="lexicon"></ol>
+  </nav>
+
+  <main class="stage" id="stage">
+    <canvas id="map" aria-label="Mapa poloostrova s tvary slova v každém kraji"></canvas>
+    <div class="labels" id="labels"></div>
+    <div class="headword">
+      <div class="hw-gloss" id="hw-gloss"></div>
+      <div class="hw-proto"><span class="ipa" id="hw-proto"></span><span class="hw-lang" id="hw-lang"></span></div>
+    </div>
+    <div class="modes" role="group" aria-label="Co ukázat">
+      <button id="mode-word" aria-pressed="true">Jedno slovo</button>
+      <button id="mode-all" aria-pressed="false">Všechna slova</button>
+    </div>
+    <div class="legend">
+      <div><svg width="28" height="8" aria-hidden="true"><line x1="0" y1="4" x2="28" y2="4" stroke="var(--isogloss)" stroke-width="2.4"/></svg><span id="legend-iso">Izoglosa: za čarou se slovo říká jinak. Silnější čára, větší rozdíl.</span></div>
+      <div><svg width="28" height="8" aria-hidden="true"><line x1="0" y1="4" x2="28" y2="4" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="7 3 1.5 3"/></svg><span>Hranice Vardunského království</span></div>
+    </div>
+  </main>
+
+  <aside class="core" id="core" aria-live="polite">
+    <div>
+      <div class="eyebrow">Vrt</div>
+      <h2 id="core-place"></h2>
+      <p class="sub" id="core-sub"></p>
+    </div>
+    <ol class="strata" id="strata"></ol>
+    <p class="share" id="core-share"></p>
+    <div>
+      <h3>Sousedé</h3>
+      <ul class="neigh" id="neigh"></ul>
+    </div>
+  </aside>
+
+  <footer class="time">
+    <button class="play" id="play" aria-label="Přehrát"><svg id="play-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2l10 6-10 6z"/></svg></button>
+    <div class="clock"><span class="yr" id="year"></span><small>rok od rozchodu</small></div>
+    <div class="track" id="track">
+      <svg class="spark" id="spark" viewBox="0 0 1000 30" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="axis"></div>
+      <input type="range" id="year-input" aria-label="Rok" min="0" step="50">
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="story" id="story"></div>
+  </footer>
+</div>
+
+<script type="application/json" id="cee-data">{"start":0,"end":2000,"step":50,"regions":[{"id":"vardun","name":"Vardun","x":40.0,"y":120.0,"terrain":"plain","identity":"shared"},{"id":"selm","name":"Selm","x":85.0,"y":95.0,"terrain":"plain","identity":"shared"},{"id":"orra","name":"Orra","x":70.0,"y":150.0,"terrain":"plain","identity":"shared"},{"id":"kestrin","name":"Kestrin","x":120.0,"y":130.0,"terrain":"plain","identity":"shared"},{"id":"bal","name":"Bal","x":30.0,"y":175.0,"terrain":"plain","identity":"shared"},{"id":"tumar","name":"Tumar","x":110.0,"y":180.0,"terrain":"hills","identity":"shared"},{"id":"hesk","name":"Hesk","x":150.0,"y":90.0,"terrain":"hills","identity":"shared"},{"id":"ivel","name":"Ivel","x":160.0,"y":160.0,"terrain":"mountains","identity":"shared"},{"id":"dorn","name":"Dorn","x":185.0,"y":115.0,"terrain":"mountains","identity":"shared"},{"id":"kaar","name":"Kaar","x":175.0,"y":210.0,"terrain":"hills","identity":"shared"},{"id":"mirost","name":"Mirost","x":225.0,"y":145.0,"terrain":"plain","identity":"shared"},{"id":"pelna","name":"Pelna","x":235.0,"y":95.0,"terrain":"plain","identity":"shared"},{"id":"sorrow","name":"Soran","x":270.0,"y":125.0,"terrain":"plain","identity":"shared"},{"id":"ulm","name":"Ulm","x":255.0,"y":185.0,"terrain":"hills","identity":"shared"},{"id":"teth","name":"Teth","x":300.0,"y":165.0,"terrain":"plain","identity":"distinct"},{"id":"varra","name":"Varra","x":310.0,"y":100.0,"terrain":"plain","identity":"distinct"},{"id":"nask","name":"Nask","x":60.0,"y":225.0,"terrain":"plain","identity":"shared"},{"id":"ebb","name":"Ebb","x":140.0,"y":240.0,"terrain":"plain","identity":"shared"},{"id":"lisk","name":"Lisk","x":105.0,"y":300.0,"terrain":"island","identity":"distinct"},{"id":"corrin","name":"Corrin","x":210.0,"y":240.0,"terrain":"plain","identity":"shared"}],"places":[{"id":"bal-v0","region":"bal","x":30.0,"y":175.0},{"id":"bal-v1","region":"bal","x":40.0,"y":175.0},{"id":"bal-v2","region":"bal","x":25.0,"y":183.6602540378444},{"id":"bal-v3","region":"bal","x":24.999999999999996,"y":166.3397459621556},{"id":"corrin-v0","region":"corrin","x":210.0,"y":240.0},{"id":"corrin-v1","region":"corrin","x":220.0,"y":240.0},{"id":"corrin-v2","region":"corrin","x":205.0,"y":248.6602540378444},{"id":"corrin-v3","region":"corrin","x":205.0,"y":231.3397459621556},{"id":"dorn-v0","region":"dorn","x":185.0,"y":115.0},{"id":"dorn-v1","region":"dorn","x":195.0,"y":115.0},{"id":"dorn-v2","region":"dorn","x":180.0,"y":123.66025403784438},{"id":"dorn-v3","region":"dorn","x":180.0,"y":106.33974596215562},{"id":"ebb-v0","region":"ebb","x":140.0,"y":240.0},{"id":"ebb-v1","region":"ebb","x":150.0,"y":240.0},{"id":"ebb-v2","region":"ebb","x":135.0,"y":248.6602540378444},{"id":"ebb-v3","region":"ebb","x":135.0,"y":231.3397459621556},{"id":"hesk-v0","region":"hesk","x":150.0,"y":90.0},{"id":"hesk-v1","region":"hesk","x":160.0,"y":90.0},{"id":"hesk-v2","region":"hesk","x":145.0,"y":98.66025403784438},{"id":"hesk-v3","region":"hesk","x":145.0,"y":81.33974596215562},{"id":"ivel-v0","region":"ivel","x":160.0,"y":160.0},{"id":"ivel-v1","region":"ivel","x":170.0,"y":160.0},{"id":"ivel-v2","region":"ivel","x":155.0,"y":168.6602540378444},{"id":"ivel-v3","region":"ivel","x":155.0,"y":151.3397459621556},{"id":"kaar-v0","region":"kaar","x":175.0,"y":210.0},{"id":"kaar-v1","region":"kaar","x":185.0,"y":210.0},{"id":"kaar-v2","region":"kaar","x":170.0,"y":218.6602540378444},{"id":"kaar-v3","region":"kaar","x":170.0,"y":201.3397459621556},{"id":"kestrin-v0","region":"kestrin","x":120.0,"y":130.0},{"id":"kestrin-v1","region":"kestrin","x":130.0,"y":130.0},{"id":"kestrin-v2","region":"kestrin","x":115.0,"y":138.6602540378444},{"id":"kestrin-v3","region":"kestrin","x":115.0,"y":121.33974596215562},{"id":"lisk-v0","region":"lisk","x":105.0,"y":300.0},{"id":"lisk-v1","region":"lisk","x":115.0,"y":300.0},{"id":"lisk-v2","region":"lisk","x":100.0,"y":308.66025403784437},{"id":"lisk-v3","region":"lisk","x":100.0,"y":291.33974596215563},{"id":"mirost-v0","region":"mirost","x":225.0,"y":145.0},{"id":"mirost-v1","region":"mirost","x":235.0,"y":145.0},{"id":"mirost-v2","region":"mirost","x":220.0,"y":153.6602540378444},{"id":"mirost-v3","region":"mirost","x":220.0,"y":136.3397459621556},{"id":"nask-v0","region":"nask","x":60.0,"y":225.0},{"id":"nask-v1","region":"nask","x":70.0,"y":225.0},{"id":"nask-v2","region":"nask","x":55.0,"y":233.6602540378444},{"id":"nask-v3","region":"nask","x":54.99999999999999,"y":216.3397459621556},{"id":"orra-v0","region":"orra","x":70.0,"y":150.0},{"id":"orra-v1","region":"orra","x":80.0,"y":150.0},{"id":"orra-v2","region":"orra","x":65.0,"y":158.6602540378444},{"id":"orra-v3","region":"orra","x":65.0,"y":141.3397459621556},{"id":"pelna-v0","region":"pelna","x":235.0,"y":95.0},{"id":"pelna-v1","region":"pelna","x":245.0,"y":95.0},{"id":"pelna-v2","region":"pelna","x":230.0,"y":103.66025403784438},{"id":"pelna-v3","region":"pelna","x":230.0,"y":86.33974596215562},{"id":"selm-v0","region":"selm","x":85.0,"y":95.0},{"id":"selm-v1","region":"selm","x":95.0,"y":95.0},{"id":"selm-v2","region":"selm","x":80.0,"y":103.66025403784438},{"id":"selm-v3","region":"selm","x":80.0,"y":86.33974596215562},{"id":"sorrow-v0","region":"sorrow","x":270.0,"y":125.0},{"id":"sorrow-v1","region":"sorrow","x":280.0,"y":125.0},{"id":"sorrow-v2","region":"sorrow","x":265.0,"y":133.6602540378444},{"id":"sorrow-v3","region":"sorrow","x":265.0,"y":116.33974596215562},{"id":"teth-v0","region":"teth","x":300.0,"y":165.0},{"id":"teth-v1","region":"teth","x":310.0,"y":165.0},{"id":"teth-v2","region":"teth","x":295.0,"y":173.6602540378444},{"id":"teth-v3","region":"teth","x":295.0,"y":156.3397459621556},{"id":"tumar-v0","region":"tumar","x":110.0,"y":180.0},{"id":"tumar-v1","region":"tumar","x":120.0,"y":180.0},{"id":"tumar-v2","region":"tumar","x":105.0,"y":188.6602540378444},{"id":"tumar-v3","region":"tumar","x":105.0,"y":171.3397459621556},{"id":"ulm-v0","region":"ulm","x":255.0,"y":185.0},{"id":"ulm-v1","region":"ulm","x":265.0,"y":185.0},{"id":"ulm-v2","region":"ulm","x":250.0,"y":193.6602540378444},{"id":"ulm-v3","region":"ulm","x":250.0,"y":176.3397459621556},{"id":"vardun-v0","region":"vardun","x":40.0,"y":120.0},{"id":"vardun-v1","region":"vardun","x":50.0,"y":120.0},{"id":"vardun-v2","region":"vardun","x":35.0,"y":128.6602540378444},{"id":"vardun-v3","region":"vardun","x":34.99999999999999,"y":111.33974596215562},{"id":"varra-v0","region":"varra","x":310.0,"y":100.0},{"id":"varra-v1","region":"varra","x":320.0,"y":100.0},{"id":"varra-v2","region":"varra","x":305.0,"y":108.66025403784438},{"id":"varra-v3","region":"varra","x":305.0,"y":91.33974596215562}],"gloss":{"water":"voda","fire":"oheň","stone":"kámen","sun":"slunce","moon":"měsíc","night":"noc","day":"den","mother":"matka","father":"otec","child":"dítě","dog":"pes","fish":"ryba","bird":"pták","tree":"strom","eye":"oko","ear":"ucho","hand":"ruka","heart":"srdce","blood":"krev","bone":"kost","eat":"jíst","drink":"pít","die":"umřít","come":"přijít","big":"velký","small":"malý","black":"černý","white":"bílý","cold":"studený","far":"daleko","road":"cesta","boat":"loď","field":"pole","house":"dům","name":"jméno","king":"král"},"strings":["kʷipakʷa","kʷibakʷa","kipaka","kipaɡa","t͡ʃipaka","t͡ʃipəkə","kʷipaɡʷa","wumiɡʷo","kʷibaɡʷa","ape","abe","abɛ","apɛ","apə","apæ","jato","jado","jaθo","pekakʷi","pækakʷi","pɛkakʷi","pəkakʷi","wika","peɡakʷi","pɛɡakʷi","pəɡakʷi","pəɡaki","pøkakʷi","pjekakʷi","pjækakʷi","pɛkaɡʷi","pekaki","pækaki","pækat͡ʃi","pɛkaki","pɛkat͡ʃi","pekat͡ʃi","pekaɡʷi","pækaɡʷi","pøkaɡʷi","pæɡakʷi","pɛɡaɡʷi","laja","sebapekakʷi","sæbapekakʷi","sɛbapɛkakʷi","sɛbapɛɡakʷi","səbapəɡakʷi","səbapəɡaki","sæbapɛkakʷi","sæbapɛɡaɡi","sɛbapɛɡaki","sæbəpøkəkʷi","søbəpøkəkʷi","lajə","sɛbapɛkaɡʷi","sakaka","sɛbabɛɡaɡʷi","seba","sæba","søba","søβa","wi","pekakʷika","pɛkakʷika","pəkakʷika","pøkakʷika","pækakʷika","pikakʷika","pɛkaɡʷika","pɛɡaɡʷiɡa","paped","papød","pabed","pabɛd","papɛd","pɛɡakʷiɡa","pɛɡakiɡa","pəɡakiɡa","papəd","bupasi","pekakika","pækat͡ʃika","pɛkakika","pekat͡ʃika","pøkat͡ʃika","pøkakika","pækakika","papæd","pøkaɡʷika","pap","ɡepa","ɡæpa","ɡøpa","ɡeba","ɡɛba","ɡəpa","ɡɛpa","ɡjepa","ɡjøpa","ɡepə","ɡøpə","ɡəba","amaba","aməbə","mopukem","mobukem","mobukɛm","mopukɛm","mopuɡɛm","mopuɡəm","mopukəm","mobuɡɛm","mobuɡəm","mopukæm","mopukøm","mobuɡem","nanope","nanopɛ","nanobe","nanobɛ","nanopə","nanəpə","nanopø","nanoβɛ","dapepe","dapøpø","dabebe","dabɛbɛ","dapɛpɛ","dapəpə","məɡapi","bekʷeneh","bɛkʷɛnɛh","bəkʷənəh","bəɡənəh","bɛkʷɛnɛ","bəkʷənə","bjekʷeneh","bjɛkʷɛnɛh","bjəkʷənəh","bɛɡʷɛnɛh","bəkʷɛnɛh","bɛkɛnɛh","bøkʷønøh","bækʷeneh","bækʷønøh","bekʷənəh","bøkʷənəh","bəɡʷənəh","bækʷɛnɛh","kʷokʷokʷa","serawa","sɛrawa","sərawa","kokoka","kʷwokʷokʷa","kʷoɡʷoɡʷa","ɡite","ɡitɛ","ɡidɛ","ɡidə","ɡitø","ɡitæ","ɡitə","d͡ʒitɛ","d͡ʒitø","ɡide","ɡiθɛ","d͡ʒiθɛ","kise","kisɛ","kisə","kisø","kʲisɛ","kakokʷoka","pokʷow","nodʲikʷuɡa","nodʲikuɡa","notikʷuɡa","notikuɡa","pokow","not͡sikuka","not͡siɡuɡa","notikʷuka","not͡sikʷuka","pokʷəw","poɡʷow","noθikʷuka","tawip","hika","hiɡa","hikə","bas","bah","kʷude","kʷudɛ","kʷudə","kudə","kʷudø","kudɛ","kʷudæ","deteko","dæteko","dætøko","dɛtɛko","dətɛko","dətəko","døtøko","dætæko","detəkə","døtəkə","dɛθɛko","dætɛko","rorakʷakʷ","roraxʷakʷ","rworakʷakʷ","rorəkʷəkʷ","roraɡʷakʷ","ekʷa","ækʷa","ɛkʷa","əkʷa","əka","əɡa","økʷa","jekʷa","jækʷa","ɛɡʷa","eka","æka","ækə","ɛka","ɛkə","æɡʷa","øɡʷa","eɡʷa","hipa","hiba","pe","pæ","pɛ","pə","pø","paha","apelap","abɛlap","apɛlap","apəlap","apølap","apælap","pahə","pupudep","pupudæp","pubudep","pubudɛp","pupudɛp","pupudəp","pupudøp","kʷapes","kapes","kapɛs","kʷapɛs","kapəs","kapæs","kʷapæs","sim","kʷapøs","kapøs","kʷabɛs","kʷapɛh","kʷita","kʷida","kida","kita","t͡ʃita","kʷiθa","kʷekʷote","kʷɛkʷotɛ","kʷækʷote","kʷɛkʷodɛ","kʷəkʷodə","kəkodə","kəɡodə","kʷəkʷotə","kʷɛɡʷodɛ","kʷɛxʷotɛ","kʷəxʷotə","kʷəkʷotɛ","kɛkotɛ","kʷækʷotæ","kʷøkʷotø","kʷɛɡʷotɛ","kʷɛkʷoθɛ","kʷækʷotɛ","kʷabani","kabani","iɡaɡa","iɡaka","kʷabanʲi","kʷabəni","depi","dæpi","debi","dɛbi","dɛpi","dəpi","døbi","døpi","ade","adɛ","adə","adæ","adø"],"origins":["inherited","derivation","compounding"],"forms":{"water":[[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0],[1050,1,0]],[[50,0,0],[1100,1,0]],[[50,0,0],[1100,1,0]],[[50,0,0],[1150,1,0]],[[50,0,0],[1850,2,0],[1900,3,0]],[[50,0,0],[1900,3,0]],[[50,0,0],[1900,2,0],[1950,3,0]],[[50,0,0],[1900,3,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0],[1150,2,0],[1350,4,0],[1700,5,0]],[[50,0,0],[1050,2,0],[1300,4,0],[1750,5,0]],[[50,0,0],[1100,2,0],[1300,4,0],[1750,5,0]],[[50,0,0],[1200,2,0],[1350,4,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0],[1400,6,0],[1600,7,0]],[[50,0,0],[1400,6,0],[1650,-1,0],[1700,7,0]],[[50,0,0],[1450,6,0],[1750,7,0]],[[50,0,0],[1450,6,0],[1650,8,0],[1700,7,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]],[[50,0,0]]],"fire":[[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0],[1100,10,0],[1700,11,0]],[[50,9,0],[1100,10,0],[1650,11,0]],[[50,9,0],[1150,10,0],[1700,11,0]],[[50,9,0],[1150,10,0],[1650,11,0]],[[50,9,0],[1350,12,0],[1550,13,0]],[[50,9,0],[1400,12,0],[1550,13,0]],[[50,9,0],[1350,12,0],[1550,13,0]],[[50,9,0],[1350,12,0],[1500,13,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0],[1600,14,0]],[[50,9,0]],[[50,9,0],[1400,12,0],[1950,13,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0],[1600,12,0]],[[50,9,0],[1600,12,0]],[[50,9,0],[1700,12,0]],[[50,9,0],[1600,12,0]],[[50,9,0],[1300,12,0],[1800,13,0]],[[50,9,0]],[[50,9,0],[1250,12,0],[1850,13,0]],[[50,9,0]],[[50,9,0],[1150,12,0]],[[50,9,0],[1150,12,0]],[[50,9,0],[1150,12,0]],[[50,9,0],[1200,12,0]],[[50,9,0],[950,12,0]],[[50,9,0],[1050,12,0]],[[50,9,0],[800,12,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0],[600,13,0]],[[50,9,0],[750,13,0]],[[50,9,0],[600,13,0]],[[50,9,0],[800,13,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0],[1350,12,0]],[[50,9,0],[1400,12,0]],[[50,9,0],[1350,12,0]],[[50,9,0],[1400,12,0]],[[50,9,0],[1250,12,0],[1600,11,0]],[[50,9,0],[1200,10,0],[1250,11,0]],[[50,9,0],[1250,11,0]],[[50,9,0],[1300,12,0],[1600,11,0]],[[50,9,0],[1450,14,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0],[1050,12,0]],[[50,9,0],[1050,12,0]],[[50,9,0],[1000,12,0]],[[50,9,0],[1000,12,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0]],[[50,9,0],[850,12,0],[1950,-1,0]],[[50,9,0],[900,12,0],[2000,-1,0]],[[50,9,0],[900,12,0],[2000,-1,0]],[[50,9,0],[850,12,0]]],"stone":[[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0],[1950,16,0]],[[50,15,0],[1950,16,0]],[[50,15,0],[1950,16,0]],[[50,15,0],[1900,16,0]],[[50,15,0],[1450,16,0]],[[50,15,0],[1450,16,0]],[[50,15,0],[1400,16,0]],[[50,15,0],[1450,16,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0],[1650,16,0]],[[50,15,0],[1850,16,0]],[[50,15,0],[1850,16,0]],[[50,15,0],[1800,16,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0],[1450,16,0]],[[50,15,0],[1200,16,0]],[[50,15,0],[1250,16,0]],[[50,15,0],[1600,16,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0],[1400,17,0]],[[50,15,0],[1350,17,0]],[[50,15,0],[1250,17,0]],[[50,15,0],[1300,17,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]],[[50,15,0]]],"sun":[[[50,18,0],[1600,19,0]],[[50,18,0],[1550,19,0]],[[50,18,0],[1550,19,0]],[[50,18,0],[1600,19,0]],[[50,18,0],[1750,20,0],[1850,21,0]],[[50,18,0],[1750,20,0],[1800,21,0]],[[50,18,0],[1050,22,1],[1100,18,0],[1750,20,0],[1850,21,0]],[[50,18,0],[1750,20,0],[1800,21,0]],[[50,18,0],[1250,23,0],[1450,24,0],[1700,25,0],[1850,26,0]],[[50,18,0],[1300,23,0],[1450,24,0],[1600,25,0],[1850,26,0]],[[50,18,0],[1300,23,0],[1400,24,0],[1600,25,0],[1900,26,0]],[[50,18,0],[1350,23,0],[1500,24,0],[1600,25,0],[1800,26,0]],[[50,18,0],[1550,19,0]],[[50,18,0],[1650,19,0]],[[50,18,0],[1550,19,0]],[[50,18,0],[1550,19,0]],[[50,18,0],[1600,27,0]],[[50,18,0],[1600,19,0]],[[50,18,0],[1550,27,0]],[[50,18,0],[1600,19,0]],[[50,18,0],[800,28,0],[1550,29,0]],[[50,18,0],[650,28,0],[1550,-1,0],[1700,29,0]],[[50,18,0],[750,28,0],[1600,29,0]],[[50,18,0],[850,28,0],[1550,29,0]],[[50,18,0],[1650,20,0],[1850,30,0]],[[50,18,0],[1650,20,0],[1850,30,0]],[[50,18,0],[1800,20,0],[1900,30,0]],[[50,18,0],[1650,20,0],[1900,30,0]],[[50,18,0],[1550,19,0]],[[50,18,0],[1550,27,0]],[[50,18,0],[1250,20,0],[2000,21,0]],[[50,18,0],[1550,19,0]],[[50,18,0],[1200,20,0],[1550,21,0]],[[50,18,0],[1200,20,0],[1550,21,0]],[[50,18,0],[1250,20,0],[1500,21,0]],[[50,18,0],[1200,20,0],[1600,21,0]],[[50,18,0],[1100,31,0],[1250,32,0],[1300,33,0],[1950,-1,0]],[[50,18,0],[1000,31,0],[1200,32,0],[1250,33,0],[1850,-1,0]],[[50,18,0],[900,20,0],[1050,34,0],[1250,35,0],[1950,-1,0]],[[50,18,0],[1100,31,0],[1150,36,0],[1300,33,0],[1950,-1,0]],[[50,18,0],[2000,19,0]],[[50,18,0],[1950,19,0]],[[50,18,0],[1650,19,0]],[[50,18,0],[2000,19,0]],[[50,18,0],[1550,27,0]],[[50,18,0],[600,37,0],[1950,38,0]],[[50,18,0],[650,37,0],[1500,39,0]],[[50,18,0],[1600,19,0]],[[50,18,0],[1150,19,0],[2000,-1,0]],[[50,18,0],[1100,19,0],[1950,-1,0]],[[50,18,0],[1150,19,0],[1900,-1,0]],[[50,18,0],[1150,27,0],[1950,-1,0]],[[50,18,0],[1550,19,0]],[[50,18,0],[1600,19,0]],[[50,18,0],[1550,19,0]],[[50,18,0],[800,23,0],[1600,40,0]],[[50,18,0],[1250,27,0],[1700,-1,0]],[[50,18,0],[1250,27,0],[1800,-1,0]],[[50,18,0],[1250,27,0],[1700,-1,0]],[[50,18,0],[1250,27,0],[1800,-1,0]],[[50,18,0],[1100,37,0],[1350,30,0],[2000,-1,0]],[[50,18,0],[1200,37,0],[1350,30,0],[1850,41,0],[2000,-1,0]],[[50,18,0],[1100,37,0],[1350,30,0],[1800,41,0],[2000,-1,0]],[[50,18,0],[1150,37,0],[1400,30,0],[1650,41,0],[1950,-1,0]],[[50,18,0],[1400,19,0]],[[50,18,0],[1450,19,0]],[[50,18,0],[1450,19,0]],[[50,18,0],[1400,19,0]],[[50,18,0],[1050,20,0],[2000,-1,0]],[[50,18,0],[1050,20,0]],[[50,18,0],[1100,20,0],[2000,-1,0]],[[50,18,0],[1050,20,0]],[[50,18,0],[1550,19,0]],[[50,18,0],[1600,19,0]],[[50,18,0],[1400,37,0],[1550,38,0]],[[50,18,0],[1550,19,0]],[[50,18,0],[950,20,0],[1300,19,0]],[[50,18,0],[950,23,0],[1050,24,0],[1250,40,0]],[[50,18,0],[1250,19,0]],[[50,18,0],[900,20,0],[1250,19,0]]],"moon":[[[50,42,0],[1350,-1,0],[1500,43,2],[1600,-1,0],[1650,42,0]],[[50,42,0],[1300,-1,0],[1650,42,0]],[[50,42,0],[1300,-1,0],[1550,43,2],[1600,44,2],[1650,42,0]],[[50,42,0],[1250,-1,0],[1650,42,0]],[[50,42,0],[1950,-1,0]],[[50,42,0],[2000,-1,0]],[[50,42,0],[1950,-1,0]],[[50,42,0]],[[50,42,0],[1650,-1,0],[1700,45,2],[1800,46,2],[1900,47,2],[1950,48,2]],[[50,42,0],[1650,-1,0],[1750,44,2],[1850,49,2],[1950,50,2]],[[50,42,0],[1650,-1,0],[1750,45,2],[1800,46,2],[1900,47,2],[1950,48,2]],[[50,42,0],[1600,-1,0],[1650,45,2],[1800,46,2],[2000,51,2]],[[50,42,0],[1400,-1,0],[1750,42,0]],[[50,42,0],[1300,-1,0],[1700,42,0]],[[50,42,0],[1300,-1,0],[1700,42,0]],[[50,42,0],[1250,-1,0],[1700,42,0]],[[50,42,0],[1300,-1,0],[1800,42,0]],[[50,42,0],[1250,-1,0],[1850,42,0]],[[50,42,0],[1250,-1,0],[1750,42,0]],[[50,42,0],[1200,-1,0],[1750,42,0]],[[50,42,0],[1300,-1,0]],[[50,42,0],[1350,-1,0]],[[50,42,0],[1350,-1,0]],[[50,42,0],[1200,-1,0],[1250,42,0],[1350,-1,0]],[[50,42,0],[1850,-1,0],[1900,45,2]],[[50,42,0],[1900,-1,0],[1950,45,2]],[[50,42,0],[1900,-1,0],[1950,45,2]],[[50,42,0],[1800,-1,0],[1900,45,2]],[[50,42,0],[1250,-1,0],[1700,42,0]],[[50,42,0],[1250,-1,0],[1700,42,0]],[[50,42,0],[1250,-1,0],[1650,42,0]],[[50,42,0],[1100,-1,0],[1700,42,0]],[[50,42,0]],[[50,42,0]],[[50,42,0]],[[50,42,0]],[[50,42,0],[1700,-1,0],[1850,52,2],[1950,-1,0]],[[50,42,0],[1650,-1,0],[1750,53,2],[1800,-1,0]],[[50,42,0],[1700,-1,0]],[[50,42,0],[1750,-1,0]],[[50,42,0],[1100,-1,0],[1650,42,0]],[[50,42,0],[1150,-1,0],[1700,42,0]],[[50,42,0],[1150,-1,0],[1700,42,0]],[[50,42,0],[1150,-1,0],[1650,42,0]],[[50,42,0],[1350,-1,0],[1550,43,2],[1650,-1,0],[1700,42,0]],[[50,42,0],[1300,-1,0],[1700,42,0]],[[50,42,0],[1300,-1,0],[1650,42,0]],[[50,42,0],[1350,-1,0],[1650,42,0]],[[50,42,0],[1450,-1,0]],[[50,42,0],[1500,-1,0]],[[50,42,0],[1500,-1,0]],[[50,42,0],[850,54,0],[1500,-1,0]],[[50,42,0],[1250,-1,0],[1650,42,0]],[[50,42,0],[1250,-1,0],[1650,42,0]],[[50,42,0],[1250,-1,0],[1650,42,0]],[[50,42,0],[1250,-1,0],[1700,42,0]],[[50,42,0],[1400,-1,0],[1850,45,2],[2000,55,2]],[[50,42,0],[1450,-1,0],[1500,56,1],[1600,-1,0],[1750,45,2],[1850,-1,0]],[[50,42,0],[1500,-1,0]],[[50,42,0],[1450,-1,0],[1850,45,2],[1950,-1,0]],[[50,42,0],[1500,-1,0],[1550,57,2]],[[50,42,0],[1450,55,2],[1550,57,2]],[[50,42,0],[1550,-1,0],[1600,55,2],[1650,57,2]],[[50,42,0],[1550,-1,0],[1600,57,2]],[[50,42,0],[1150,-1,0],[1450,43,2],[1600,-1,0],[1750,42,0]],[[50,42,0],[1150,-1,0],[1800,42,0]],[[50,42,0],[1150,-1,0],[1750,42,0]],[[50,42,0],[1150,-1,0],[1700,42,0]],[[50,42,0],[1500,-1,0],[1600,56,1]],[[50,42,0],[1500,-1,0],[1650,56,1],[2000,-1,0]],[[50,42,0],[1450,-1,0],[1600,56,1]],[[50,42,0],[1500,-1,0],[1550,56,1],[2000,-1,0]],[[50,42,0],[1300,-1,0],[1650,42,0]],[[50,42,0],[1300,-1,0],[1650,42,0]],[[50,42,0],[1300,-1,0],[1650,42,0]],[[50,42,0],[1300,-1,0],[1650,42,0]],[[50,42,0],[1950,-1,0]],[[50,42,0],[1950,-1,0]],[[50,42,0],[1950,-1,0]],[[50,42,0],[1950,-1,0]]],"night":[[[50,58,0],[1600,59,0]],[[50,58,0],[1550,59,0]],[[50,58,0],[1550,59,0]],[[50,58,0],[1600,59,0]],[[50,58,0]],[[50,58,0],[2000,59,0]],[[50,58,0]],[[50,58,0]],[[50,58,0],[1550,60,0]],[[50,58,0],[1600,60,0]],[[50,58,0],[1550,60,0]],[[50,58,0],[1550,60,0]],[[50,58,0],[1600,60,0]],[[50,58,0],[1650,59,0]],[[50,58,0],[1650,60,0]],[[50,58,0],[1650,59,0]],[[50,58,0]],[[50,58,0]],[[50,58,0]],[[50,58,0]],[[50,58,0],[1550,59,0]],[[50,58,0],[1600,59,0]],[[50,58,0],[1600,59,0]],[[50,58,0],[1550,59,0]],[[50,58,0],[1950,59,0]],[[50,58,0],[1950,59,0]],[[50,58,0],[1900,59,0]],[[50,58,0],[1950,59,0]],[[50,58,0],[1650,59,0]],[[50,58,0],[1600,59,0]],[[50,58,0],[1650,59,0]],[[50,58,0],[1600,59,0]],[[50,58,0],[1550,60,0]],[[50,58,0],[1550,60,0]],[[50,58,0],[1600,60,0]],[[50,58,0],[1550,60,0]],[[50,58,0],[1250,59,0]],[[50,58,0],[1200,59,0]],[[50,58,0],[1250,59,0]],[[50,58,0],[1250,59,0]],[[50,58,0],[2000,59,0]],[[50,58,0],[1950,59,0]],[[50,58,0],[2000,59,0]],[[50,58,0],[2000,59,0]],[[50,58,0],[1900,59,0]],[[50,58,0],[1950,59,0]],[[50,58,0],[1900,59,0]],[[50,58,0],[1600,59,0]],[[50,58,0],[1200,60,0]],[[50,58,0],[1250,60,0]],[[50,58,0],[1350,59,0]],[[50,58,0],[1150,60,0]],[[50,58,0],[1850,59,0]],[[50,58,0],[1700,59,0]],[[50,58,0],[1700,59,0]],[[50,58,0],[1600,59,0]],[[50,58,0],[1300,60,0]],[[50,58,0],[1250,60,0],[2000,61,0]],[[50,58,0],[1250,60,0]],[[50,58,0],[1250,60,0],[2000,61,0]],[[50,58,0],[1450,59,0]],[[50,58,0],[1450,59,0]],[[50,58,0],[1500,59,0]],[[50,58,0],[1450,59,0]],[[50,58,0],[2000,59,0]],[[50,58,0],[2000,59,0]],[[50,58,0],[2000,59,0]],[[50,58,0],[2000,59,0]],[[50,58,0],[1400,60,0]],[[50,58,0],[1400,59,0]],[[50,58,0],[1400,59,0]],[[50,58,0],[1400,60,0]],[[50,58,0],[1550,59,0]],[[50,58,0],[1600,59,0]],[[50,58,0],[1550,59,0]],[[50,58,0],[1550,59,0]],[[50,58,0],[1400,60,0]],[[50,58,0],[1450,60,0],[1500,61,0]],[[50,58,0],[1400,60,0],[1850,61,0]],[[50,58,0],[1400,60,0]]],"day":[[[50,62,0],[1200,-1,0],[1650,62,0]],[[50,62,0],[1200,-1,0],[1250,62,0],[1300,-1,0],[1650,62,0]],[[50,62,0],[1250,-1,0],[1650,62,0]],[[50,62,0],[1350,-1,0],[1650,62,0]],[[50,62,0],[1550,-1,0],[1650,63,1],[1750,64,1]],[[50,62,0],[1550,-1,0],[1650,63,1],[1750,64,1]],[[50,62,0],[1550,-1,0],[1700,63,1],[1750,64,1]],[[50,62,0],[1600,-1,0],[1650,63,1],[1700,64,1]],[[50,62,0],[1650,-1,0]],[[50,62,0],[1650,-1,0]],[[50,62,0],[1650,-1,0]],[[50,62,0],[1700,-1,0]],[[50,62,0],[1300,-1,0],[1350,63,1],[1450,-1,0],[1700,62,0]],[[50,62,0],[1350,-1,0],[1800,62,0]],[[50,62,0],[1300,-1,0],[1750,62,0]],[[50,62,0],[1350,-1,0],[1700,62,0]],[[50,62,0],[1350,-1,0],[1750,62,0]],[[50,62,0],[1400,-1,0],[1800,62,0]],[[50,62,0],[1400,-1,0],[1750,62,0]],[[50,62,0],[1350,-1,0],[1800,62,0]],[[50,62,0],[1200,-1,0]],[[50,62,0],[1200,-1,0]],[[50,62,0],[1150,-1,0],[1200,62,0],[1300,-1,0]],[[50,62,0],[1150,-1,0],[1200,62,0],[1300,-1,0]],[[50,62,0],[1200,-1,0],[1500,63,1],[1600,64,1],[2000,-1,0]],[[50,62,0],[1250,-1,0],[1500,63,1],[1600,64,1],[1900,-1,0]],[[50,62,0],[1100,-1,0],[1350,63,1],[1450,-1,0],[1600,64,1],[2000,-1,0]],[[50,62,0],[1250,63,1],[1300,-1,0],[1550,63,1],[1600,64,1]],[[50,62,0],[1200,-1,0],[1650,62,0]],[[50,62,0],[1200,-1,0],[1250,62,0],[1300,-1,0],[1700,62,0]],[[50,62,0],[1200,-1,0],[1250,62,0],[1300,-1,0],[1650,62,0]],[[50,62,0],[1350,-1,0],[1650,62,0]],[[50,62,0],[1300,64,1],[1700,65,1]],[[50,62,0],[1350,64,1],[1650,65,1]],[[50,62,0],[1400,64,1],[1600,65,1]],[[50,62,0],[1350,-1,0],[1400,64,1],[1600,65,1]],[[50,62,0],[1450,-1,0]],[[50,62,0],[1500,-1,0]],[[50,62,0],[1500,-1,0]],[[50,62,0],[1500,-1,0]],[[50,62,0],[1400,-1,0],[1650,62,0]],[[50,62,0],[1450,-1,0],[1700,62,0]],[[50,62,0],[1350,-1,0],[1750,62,0]],[[50,62,0],[1350,-1,0],[1700,62,0]],[[50,62,0],[1450,-1,0],[1650,62,0]],[[50,62,0],[1450,-1,0],[1650,62,0]],[[50,62,0],[1300,-1,0],[1650,62,0]],[[50,62,0],[1150,-1,0],[1250,62,0],[1300,-1,0],[1650,62,0]],[[50,62,0],[1300,-1,0],[1350,66,1],[1500,-1,0],[1800,67,1]],[[50,62,0],[1300,-1,0],[1400,66,1],[1500,-1,0]],[[50,62,0],[1300,-1,0],[1350,66,1],[1500,-1,0]],[[50,62,0],[1250,-1,0],[1350,66,1],[1500,-1,0],[2000,67,1]],[[50,62,0],[1300,-1,0],[1650,62,0]],[[50,62,0],[1250,-1,0],[1650,62,0]],[[50,62,0],[1300,-1,0],[1650,62,0]],[[50,62,0],[1250,-1,0],[1550,67,1],[1650,62,0]],[[50,62,0],[1250,-1,0],[1700,64,1],[1750,-1,0],[1800,64,1],[1850,-1,0]],[[50,62,0],[1250,-1,0]],[[50,62,0],[1150,-1,0],[1250,62,0],[1300,-1,0]],[[50,62,0],[1300,-1,0],[1550,64,1],[1800,-1,0]],[[50,62,0],[800,63,1],[950,68,1],[1400,-1,0],[1450,64,1],[1650,-1,0],[1700,69,1],[2000,70,1]],[[50,62,0],[750,63,1],[1350,64,1],[1400,-1,0],[1700,69,1],[1800,70,1]],[[50,62,0],[800,63,1],[1250,-1,0],[1700,69,1],[1750,70,1]],[[50,62,0],[800,63,1],[1350,64,1],[1450,-1,0],[1650,70,1]],[[50,62,0],[1300,-1,0],[1850,62,0]],[[50,62,0],[1350,-1,0],[1800,62,0]],[[50,62,0],[1350,-1,0],[1800,62,0]],[[50,62,0],[1300,-1,0],[1750,62,0]],[[50,62,0],[1300,-1,0]],[[50,62,0],[1300,-1,0]],[[50,62,0],[1350,-1,0],[1400,67,1],[1450,-1,0],[1500,67,1],[1600,-1,0]],[[50,62,0],[1300,-1,0]],[[50,62,0],[1350,-1,0],[1650,62,0]],[[50,62,0],[1350,-1,0],[1650,62,0]],[[50,62,0],[1300,-1,0],[1650,62,0]],[[50,62,0],[1350,-1,0],[1650,62,0]],[[50,62,0],[1400,-1,0]],[[50,62,0],[1400,-1,0]],[[50,62,0],[1350,-1,0]],[[50,62,0],[1400,-1,0],[1550,67,1],[1600,-1,0]]],"mother":[[[50,71,0],[1050,-1,0],[1650,71,0]],[[50,71,0],[1100,-1,0],[1650,71,0]],[[50,71,0],[1000,-1,0],[1650,71,0]],[[50,71,0],[1150,-1,0],[1650,72,0]],[[50,71,0],[1050,73,0],[1450,74,0],[1900,-1,0]],[[50,71,0],[1100,73,0],[1500,74,0],[1800,-1,0],[1850,74,0],[1900,-1,0]],[[50,71,0],[1100,73,0],[1500,74,0],[1800,-1,0]],[[50,71,0],[1150,73,0],[1500,74,0],[1950,-1,0]],[[50,71,0],[1250,75,0],[1300,-1,0],[1600,64,1],[1750,76,1],[1800,77,1],[1900,78,1]],[[50,71,0],[1300,-1,0],[1650,64,1],[1750,76,1],[1800,78,1]],[[50,71,0],[1250,75,0],[1300,-1,0],[1700,76,1],[1900,78,1]],[[50,71,0],[1250,-1,0],[1700,76,1],[1800,77,1]],[[50,71,0],[1050,-1,0],[1700,75,0],[1850,79,0]],[[50,71,0],[1000,-1,0],[1700,71,0]],[[50,71,0],[1000,-1,0],[1450,63,1],[1550,67,1],[1600,-1,0],[1700,75,0],[1950,79,0]],[[50,71,0],[1000,-1,0],[1450,64,1],[1600,-1,0],[1750,75,0],[1850,79,0]],[[50,71,0],[950,-1,0],[1400,63,1],[1600,66,1],[1650,-1,0],[1850,79,0]],[[50,71,0],[1000,-1,0],[1050,80,0],[1100,-1,0],[1350,63,1],[1400,-1,0],[1700,75,0],[1850,79,0]],[[50,71,0],[650,-1,0],[700,71,0],[950,-1,0],[1250,63,1],[1300,-1,0],[1400,63,1],[1550,66,1],[1600,-1,0],[1750,75,0],[1850,79,0]],[[50,71,0],[600,80,0],[750,71,0],[850,-1,0],[900,80,0],[1000,-1,0],[1150,63,1],[1200,-1,0],[1250,64,1],[1450,-1,0],[1800,75,0],[1850,79,0]],[[50,71,0],[1150,-1,0],[1450,63,1],[1600,67,1],[1750,-1,0]],[[50,71,0],[1200,-1,0],[1450,63,1],[1600,67,1],[1850,-1,0]],[[50,71,0],[1150,-1,0],[1500,63,1],[1600,67,1],[1750,-1,0]],[[50,71,0],[1200,-1,0],[1550,66,1],[1650,-1,0]],[[50,71,0],[1500,75,0],[1900,-1,0],[2000,69,1]],[[50,71,0],[1500,75,0],[1900,-1,0],[2000,69,1]],[[50,71,0],[1500,75,0],[1850,-1,0],[1950,69,1]],[[50,71,0],[1550,75,0],[1950,-1,0],[2000,69,1]],[[50,71,0],[550,-1,0],[600,63,1],[650,-1,0],[700,71,0],[1100,-1,0],[1750,75,0],[1800,79,0]],[[50,71,0],[600,63,1],[700,71,0],[1100,-1,0],[1650,75,0],[1700,79,0]],[[50,71,0],[1050,-1,0],[1500,63,1],[1550,66,1],[1600,-1,0],[1700,75,0],[1800,79,0]],[[50,71,0],[1150,-1,0],[1700,75,0],[1800,79,0]],[[50,71,0],[1050,75,0]],[[50,71,0],[1100,75,0]],[[50,71,0],[1050,75,0]],[[50,71,0],[1100,75,0]],[[50,71,0],[650,75,0],[950,-1,0],[1200,81,1],[1250,-1,0],[1500,82,1],[1600,-1,0],[1800,82,1],[2000,-1,0]],[[50,71,0],[650,75,0],[1000,-1,0],[1050,83,1],[1150,-1,0],[1400,81,1],[1450,84,1],[1500,85,1],[1700,-1,0]],[[50,71,0],[650,75,0],[950,-1,0],[1200,86,1],[1300,85,1],[1450,87,1],[1500,82,1],[1550,85,1],[1950,-1,0]],[[50,71,0],[700,75,0],[900,-1,0],[1000,64,1],[1050,-1,0],[1400,82,1],[1450,-1,0],[1500,82,1],[1550,-1,0],[1600,85,1],[1750,-1,0],[1800,85,1]],[[50,71,0],[1100,-1,0],[1700,72,0]],[[50,71,0],[1150,-1,0],[1300,63,1],[1400,-1,0],[1700,71,0]],[[50,71,0],[1000,-1,0],[1700,71,0],[1750,88,0]],[[50,71,0],[1200,-1,0],[1700,72,0]],[[50,71,0],[1150,-1,0],[1350,63,1],[1450,-1,0],[1650,71,0]],[[50,71,0],[1150,-1,0],[1350,63,1],[1400,-1,0],[1650,75,0],[1850,79,0]],[[50,71,0],[1050,-1,0],[1100,75,0],[1150,-1,0],[1650,75,0],[1850,79,0]],[[50,71,0],[1100,75,0],[1150,-1,0],[1650,75,0],[1800,79,0]],[[50,71,0],[750,-1,0],[1050,63,1],[1100,66,1],[1400,-1,0],[1450,66,1],[1950,-1,0]],[[50,71,0],[800,-1,0],[950,63,1],[1000,-1,0],[1300,66,1],[1350,-1,0],[1500,66,1],[1850,-1,0]],[[50,71,0],[600,75,0],[650,-1,0],[1000,63,1],[1100,66,1],[1400,-1,0],[1450,66,1],[2000,-1,0]],[[50,71,0],[700,-1,0],[750,71,0],[800,-1,0],[1050,63,1],[1100,66,1],[1350,-1,0],[1450,66,1],[2000,-1,0]],[[50,71,0],[950,-1,0],[1050,71,0],[1150,-1,0],[1650,75,0],[1850,79,0]],[[50,71,0],[1000,-1,0],[1100,71,0],[1150,-1,0],[1650,75,0],[1900,79,0]],[[50,71,0],[1050,-1,0],[1650,75,0],[1850,79,0]],[[50,71,0],[1000,-1,0],[1650,75,0],[1900,79,0]],[[50,71,0],[1000,-1,0],[1300,66,1],[1950,-1,0],[2000,89,1]],[[50,71,0],[1050,-1,0],[1450,64,1],[1900,-1,0]],[[50,71,0],[1000,-1,0],[1350,64,1],[1400,-1,0],[1450,64,1],[2000,-1,0]],[[50,71,0],[1000,-1,0],[1100,63,1],[1200,-1,0],[1450,66,1]],[[50,71,0],[1050,75,0],[1500,-1,0],[1600,69,1],[1700,70,1],[1750,-1,0]],[[50,71,0],[1000,75,0],[1550,-1,0]],[[50,71,0],[1100,75,0],[1500,-1,0]],[[50,71,0],[1150,75,0],[1550,-1,0],[2000,70,1]],[[50,71,0],[1200,72,0],[1250,-1,0],[1400,67,1],[1600,-1,0],[1800,72,0]],[[50,71,0],[1250,-1,0],[1400,63,1],[1450,67,1],[1600,-1,0],[1800,72,0]],[[50,71,0],[1100,-1,0],[1350,63,1],[1400,-1,0],[1450,67,1],[1550,-1,0],[1700,72,0]],[[50,71,0],[1200,-1,0],[1400,63,1],[1450,-1,0],[1750,72,0]],[[50,71,0],[850,-1,0],[1050,64,1],[1250,-1,0],[1300,64,1]],[[50,71,0],[850,-1,0],[1000,63,1],[1050,-1,0],[1100,64,1],[1200,-1,0],[1250,64,1]],[[50,71,0],[900,-1,0],[1050,64,1],[1250,63,1],[1350,67,1]],[[50,71,0],[850,-1,0],[900,63,1],[1000,64,1],[1200,-1,0],[1300,64,1]],[[50,71,0],[1100,-1,0],[1650,75,0],[1850,79,0]],[[50,71,0],[1100,-1,0],[1650,75,0],[1850,79,0]],[[50,71,0],[1050,-1,0],[1500,67,1],[1600,-1,0],[1650,75,0],[1850,79,0]],[[50,71,0],[1050,-1,0],[1650,75,0],[1800,79,0]],[[50,71,0],[800,75,0],[1050,-1,0],[1100,64,1],[1500,-1,0],[2000,63,1]],[[50,71,0],[750,75,0],[1050,-1,0],[1100,64,1],[1450,-1,0],[1750,67,1],[1850,-1,0]],[[50,71,0],[800,75,0],[1000,-1,0],[1200,64,1],[1300,-1,0],[1350,67,1],[1450,-1,0],[1800,64,1],[1950,-1,0]],[[50,71,0],[800,75,0],[1050,-1,0],[1100,64,1],[1400,67,1],[1600,-1,0]]],"father":[[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]],[[50,90,0]]],"child":[[[50,91,0],[1950,92,0]],[[50,91,0]],[[50,91,0],[1400,93,0]],[[50,91,0],[1650,93,0]],[[50,91,0],[1050,94,0],[1750,95,0]],[[50,91,0],[1050,94,0],[1750,95,0]],[[50,91,0],[950,94,0],[1750,95,0]],[[50,91,0],[1000,94,0],[1750,95,0]],[[50,91,0],[1500,96,0]],[[50,91,0],[1450,96,0]],[[50,91,0],[1400,97,0],[1450,96,0]],[[50,91,0],[1500,96,0]],[[50,91,0],[1550,93,0]],[[50,91,0],[1550,93,0]],[[50,91,0],[1550,93,0]],[[50,91,0],[1550,93,0]],[[50,91,0],[1550,93,0]],[[50,91,0],[1500,93,0]],[[50,91,0],[1500,93,0]],[[50,91,0],[1600,93,0]],[[50,91,0],[700,98,0],[1600,99,0]],[[50,91,0],[600,98,0],[1550,99,0]],[[50,91,0],[700,98,0],[1500,99,0]],[[50,91,0],[700,98,0],[1500,99,0]],[[50,91,0],[1650,97,0]],[[50,91,0],[1650,97,0]],[[50,91,0],[1800,97,0]],[[50,91,0],[1650,97,0]],[[50,91,0],[1550,93,0]],[[50,91,0],[1500,93,0]],[[50,91,0],[1500,93,0]],[[50,91,0],[1500,93,0]],[[50,91,0],[1200,97,0],[1750,96,0]],[[50,91,0],[1200,97,0],[1750,96,0]],[[50,91,0],[1250,97,0],[1700,96,0]],[[50,91,0],[1200,97,0],[1750,96,0]],[[50,91,0],[1200,93,0]],[[50,91,0],[1200,93,0]],[[50,91,0],[1150,93,0]],[[50,91,0],[1200,93,0]],[[50,91,0]],[[50,91,0]],[[50,91,0]],[[50,91,0]],[[50,91,0],[1450,93,0]],[[50,91,0],[1500,93,0]],[[50,91,0],[1450,93,0]],[[50,91,0],[1450,93,0]],[[50,91,0],[1100,93,0]],[[50,91,0],[1100,93,0]],[[50,91,0],[1100,93,0]],[[50,91,0],[850,100,0],[1100,101,0]],[[50,91,0],[1550,93,0]],[[50,91,0],[1600,93,0]],[[50,91,0],[1900,92,0]],[[50,91,0],[1600,93,0]],[[50,91,0],[1200,93,0]],[[50,91,0],[1250,93,0]],[[50,91,0],[1200,93,0]],[[50,91,0],[1200,93,0]],[[50,91,0],[1350,97,0],[1750,95,0],[2000,102,0]],[[50,91,0],[1350,97,0],[1650,95,0],[2000,102,0]],[[50,91,0],[1400,97,0],[1750,95,0],[1950,102,0]],[[50,91,0],[1450,97,0],[1650,95,0],[1950,102,0]],[[50,91,0],[1200,93,0]],[[50,91,0]],[[50,91,0],[1250,93,0]],[[50,91,0],[1300,93,0]],[[50,91,0],[1050,97,0],[1850,96,0]],[[50,91,0],[1050,97,0],[1850,96,0]],[[50,91,0],[1100,97,0],[1850,96,0]],[[50,91,0],[1050,97,0],[1800,96,0]],[[50,91,0],[2000,92,0]],[[50,91,0],[1600,92,0]],[[50,91,0],[1600,92,0]],[[50,91,0],[1600,92,0]],[[50,91,0],[950,97,0],[1200,92,0]],[[50,91,0],[1050,97,0],[1200,92,0]],[[50,91,0],[1250,92,0]],[[50,91,0],[1000,97,0],[1200,92,0]]],"dog":[[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0],[850,104,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]],[[50,103,0]]],"fish":[[[50,105,0]],[[50,105,0]],[[50,105,0]],[[50,105,0]],[[50,105,0],[1100,106,0],[1650,107,0]],[[50,105,0],[1100,106,0],[1650,107,0]],[[50,105,0],[1150,106,0],[1650,107,0]],[[50,105,0],[1150,106,0],[1600,107,0]],[[50,105,0],[1300,108,0],[1400,109,0],[1500,110,0]],[[50,105,0],[1350,108,0],[1400,109,0],[1550,110,0]],[[50,105,0],[1300,108,0],[1400,109,0],[1500,110,0]],[[50,105,0],[1300,108,0],[1500,111,0],[1550,110,0]],[[50,105,0],[1200,108,0],[1650,112,0],[1950,113,0]],[[50,105,0],[1200,108,0]],[[50,105,0],[1550,114,0]],[[50,105,0],[1200,108,0],[1900,111,0]],[[50,105,0],[2000,114,0]],[[50,105,0],[1600,114,0]],[[50,105,0],[1250,108,0],[1900,111,0]],[[50,105,0],[1250,108,0],[1850,111,0]],[[50,105,0],[1350,108,0],[1950,111,0]],[[50,105,0]],[[50,105,0],[1400,108,0],[1900,111,0]],[[50,105,0],[1400,108,0],[1900,111,0]],[[50,105,0],[1550,108,0]],[[50,105,0],[1550,108,0]],[[50,105,0],[1550,108,0]],[[50,105,0],[1600,108,0]],[[50,105,0],[1250,108,0],[1800,111,0]],[[50,105,0],[1250,108,0],[1700,111,0]],[[50,105,0],[1250,108,0],[1800,111,0]],[[50,105,0],[1300,108,0],[1800,111,0]],[[50,105,0],[1150,108,0]],[[50,105,0],[1150,108,0]],[[50,105,0],[1150,108,0]],[[50,105,0],[1150,108,0]],[[50,105,0],[750,108,0]],[[50,105,0],[800,108,0]],[[50,105,0],[800,108,0]],[[50,105,0],[850,108,0]],[[50,105,0],[2000,114,0]],[[50,105,0],[2000,114,0]],[[50,105,0],[1650,114,0]],[[50,105,0]],[[50,105,0]],[[50,105,0]],[[50,105,0]],[[50,105,0]],[[50,105,0],[1150,114,0]],[[50,105,0],[1100,114,0]],[[50,105,0],[1150,114,0]],[[50,105,0],[850,111,0]],[[50,105,0],[1600,114,0]],[[50,105,0],[1650,114,0]],[[50,105,0],[1550,114,0]],[[50,105,0],[1600,114,0]],[[50,105,0],[1300,115,0]],[[50,105,0],[1300,115,0]],[[50,105,0],[1250,115,0]],[[50,105,0],[1250,115,0]],[[50,105,0],[1150,116,0],[1200,112,0]],[[50,105,0],[1150,116,0],[1200,112,0]],[[50,105,0],[1200,112,0]],[[50,105,0],[1100,116,0],[1250,112,0]],[[50,105,0],[1400,114,0]],[[50,105,0],[1450,114,0]],[[50,105,0],[1450,114,0]],[[50,105,0],[1450,114,0]],[[50,105,0],[950,108,0]],[[50,105,0],[1000,108,0]],[[50,105,0],[1000,108,0]],[[50,105,0],[1000,108,0]],[[50,105,0]],[[50,105,0]],[[50,105,0],[2000,114,0]],[[50,105,0],[2000,114,0]],[[50,105,0],[850,108,0]],[[50,105,0],[800,108,0]],[[50,105,0],[900,108,0]],[[50,105,0],[850,108,0]]],"bird":[[[50,117,0]],[[50,117,0]],[[50,117,0],[1300,118,0]],[[50,117,0],[1300,118,0]],[[50,117,0],[1000,119,0],[1450,120,0]],[[50,117,0],[1000,119,0],[1450,120,0]],[[50,117,0],[950,119,0],[1500,120,0]],[[50,117,0],[1000,119,0],[1500,120,0]],[[50,117,0],[1250,118,0]],[[50,117,0],[1300,118,0],[1800,121,0]],[[50,117,0],[1250,118,0],[1900,121,0]],[[50,117,0],[1250,118,0]],[[50,117,0],[1050,118,0]],[[50,117,0],[1150,118,0]],[[50,117,0],[1150,118,0]],[[50,117,0],[1100,118,0]],[[50,117,0],[1150,118,0]],[[50,117,0],[1300,118,0]],[[50,117,0],[1150,118,0]],[[50,117,0],[1200,118,0]],[[50,117,0],[1250,118,0]],[[50,117,0],[1350,118,0]],[[50,117,0],[1250,118,0]],[[50,117,0],[1250,118,0]],[[50,117,0],[1500,118,0]],[[50,117,0],[1500,118,0]],[[50,117,0],[1450,118,0]],[[50,117,0],[1550,118,0]],[[50,117,0],[1150,118,0]],[[50,117,0],[1200,118,0]],[[50,117,0],[1200,118,0]],[[50,117,0],[1200,118,0]],[[50,117,0],[1050,118,0]],[[50,117,0],[1050,118,0]],[[50,117,0],[1050,118,0]],[[50,117,0],[1100,118,0]],[[50,117,0],[650,118,0]],[[50,117,0],[650,118,0]],[[50,117,0],[650,118,0]],[[50,117,0],[600,118,0]],[[50,117,0],[600,122,0]],[[50,117,0],[550,122,0]],[[50,117,0],[600,122,0]],[[50,117,0],[1600,123,0]],[[50,117,0],[1150,118,0]],[[50,117,0],[1150,118,0]],[[50,117,0],[1050,118,0]],[[50,117,0],[1050,118,0]],[[50,117,0],[500,122,0]],[[50,117,0],[500,122,0]],[[50,117,0],[500,122,0]],[[50,117,0],[500,122,0]],[[50,117,0],[1100,118,0]],[[50,117,0],[1300,118,0]],[[50,117,0],[1250,118,0]],[[50,117,0],[1150,118,0]],[[50,117,0],[1000,118,0]],[[50,117,0],[850,118,0]],[[50,117,0],[1050,118,0]],[[50,117,0],[1100,118,0]],[[50,117,0],[1050,118,0],[1600,120,0]],[[50,117,0],[850,118,0],[1200,120,0],[2000,124,0]],[[50,117,0],[1100,118,0],[1250,120,0]],[[50,117,0],[1150,118,0],[1600,120,0],[2000,124,0]],[[50,117,0],[1200,123,0]],[[50,117,0],[1250,123,0]],[[50,117,0],[1250,123,0]],[[50,117,0],[1300,123,0]],[[50,117,0],[900,118,0]],[[50,117,0],[1000,118,0]],[[50,117,0],[950,118,0]],[[50,117,0],[950,118,0]],[[50,117,0],[1200,118,0]],[[50,117,0],[1200,118,0]],[[50,117,0],[1150,118,0]],[[50,117,0],[1150,118,0]],[[50,117,0],[750,118,0]],[[50,117,0],[750,118,0]],[[50,117,0],[750,118,0]],[[50,117,0],[750,118,0]]],"tree":[[[50,125,0]],[[50,125,0]],[[50,125,0]],[[50,125,0],[1700,126,0]],[[50,125,0],[1150,127,0],[1550,128,0]],[[50,125,0],[1100,127,0],[1550,128,0]],[[50,125,0],[1150,127,0],[1550,128,0]],[[50,125,0],[1150,127,0],[1500,128,0]],[[50,125,0],[1250,129,0],[1550,130,0],[1800,118,0]],[[50,125,0],[1300,129,0],[1550,130,0],[1950,-1,0]],[[50,125,0],[1300,129,0],[1550,130,0],[1750,118,0],[1900,121,0]],[[50,125,0],[1250,129,0],[1500,130,0],[1800,-1,0],[1850,118,0],[1950,-1,0]],[[50,125,0],[1100,129,0]],[[50,125,0],[1200,129,0]],[[50,125,0],[1150,129,0]],[[50,125,0],[1100,129,0],[1900,130,0]],[[50,125,0],[1550,126,0]],[[50,125,0],[1600,126,0]],[[50,125,0],[1200,129,0],[1900,130,0]],[[50,125,0],[1200,129,0],[1850,130,0]],[[50,125,0],[1300,129,0],[1950,130,0]],[[50,125,0],[1400,129,0],[2000,130,0]],[[50,125,0],[1300,129,0],[1950,130,0]],[[50,125,0],[1300,129,0],[1900,130,0]],[[50,125,0],[1500,129,0]],[[50,125,0],[1500,129,0]],[[50,125,0],[1500,129,0]],[[50,125,0],[1550,129,0]],[[50,125,0],[1200,129,0],[1800,130,0]],[[50,125,0],[1200,129,0],[1700,130,0]],[[50,125,0],[1200,129,0],[1850,130,0]],[[50,125,0],[1200,129,0],[1850,130,0]],[[50,125,0],[1100,129,0],[1400,131,0]],[[50,125,0],[1100,129,0],[1450,-1,0],[1500,131,0]],[[50,125,0],[1100,129,0],[1500,-1,0],[1550,131,0]],[[50,125,0],[1150,129,0],[1450,131,0]],[[50,125,0],[650,129,0]],[[50,125,0],[650,129,0]],[[50,125,0],[650,129,0]],[[50,125,0],[700,129,0]],[[50,125,0]],[[50,125,0]],[[50,125,0]],[[50,125,0]],[[50,125,0],[1450,126,0]],[[50,125,0],[1200,129,0]],[[50,125,0],[1100,129,0]],[[50,125,0],[1150,129,0],[1850,130,0]],[[50,125,0],[1100,126,0]],[[50,125,0],[1100,126,0]],[[50,125,0],[1100,126,0]],[[50,125,0],[850,130,0]],[[50,125,0],[1500,129,0],[1900,130,0]],[[50,125,0],[1600,126,0]],[[50,125,0],[1250,129,0],[1950,130,0]],[[50,125,0],[1150,129,0],[1950,130,0]],[[50,125,0],[1050,129,0]],[[50,125,0],[1250,126,0]],[[50,125,0],[1050,129,0]],[[50,125,0],[1200,126,0]],[[50,125,0],[1100,129,0]],[[50,125,0],[1150,129,0]],[[50,125,0],[1100,129,0],[1800,128,0]],[[50,125,0],[1200,129,0]],[[50,125,0],[1250,126,0]],[[50,125,0]],[[50,125,0],[1550,129,0]],[[50,125,0],[1350,126,0]],[[50,125,0],[950,129,0]],[[50,125,0],[1000,129,0]],[[50,125,0],[950,129,0]],[[50,125,0],[950,129,0]],[[50,125,0]],[[50,125,0],[1200,129,0],[2000,130,0]],[[50,125,0],[1600,129,0],[1900,130,0]],[[50,125,0],[1200,129,0],[1850,130,0]],[[50,125,0],[800,129,0]],[[50,125,0],[800,129,0]],[[50,125,0],[800,129,0]],[[50,125,0],[800,129,0]]],"eye":[[[50,132,0],[1250,133,0],[1800,134,0]],[[50,132,0],[700,133,0],[1800,134,0]],[[50,132,0],[900,133,0],[1800,134,0]],[[50,132,0],[1200,133,0],[1750,134,0]],[[50,132,0],[1400,133,0]],[[50,132,0],[1400,133,0]],[[50,132,0],[1400,133,0]],[[50,132,0],[1400,133,0]],[[50,132,0],[1200,133,0],[1500,134,0],[1850,135,0]],[[50,132,0],[800,133,0],[1500,134,0],[1850,135,0]],[[50,132,0],[1200,133,0],[1500,134,0],[1900,135,0]],[[50,132,0],[1200,133,0],[1450,134,0],[1800,135,0]],[[50,132,0],[1050,133,0],[1850,134,0]],[[50,132,0],[1100,133,0],[1800,134,0]],[[50,132,0],[1000,133,0],[1800,134,0]],[[50,132,0],[1050,133,0],[1850,134,0]],[[50,132,0],[1050,133,0],[1700,136,0],[1800,137,0]],[[50,132,0],[1000,133,0],[1650,136,0],[1850,137,0]],[[50,132,0],[1050,133,0],[1800,134,0]],[[50,132,0],[1000,133,0],[1750,136,0],[1800,137,0]],[[50,132,0],[800,138,0],[1200,139,0],[1800,140,0]],[[50,132,0],[650,138,0],[1300,139,0],[1900,140,0]],[[50,132,0],[750,138,0],[1250,139,0],[1850,140,0]],[[50,132,0],[850,138,0],[1250,139,0],[1850,140,0]],[[50,132,0],[1450,133,0]],[[50,132,0],[1400,133,0]],[[50,132,0],[1450,133,0],[2000,141,0]],[[50,132,0],[1450,133,0]],[[50,132,0],[1100,133,0],[1800,134,0]],[[50,132,0],[1150,133,0],[1700,134,0]],[[50,132,0],[1150,133,0],[1750,134,0]],[[50,132,0],[1100,133,0],[1800,134,0]],[[50,132,0],[1000,133,0],[1750,142,0]],[[50,132,0],[1050,133,0],[1750,142,0]],[[50,132,0],[1000,133,0],[1700,142,0]],[[50,132,0],[1000,133,0],[1750,142,0]],[[50,132,0],[550,133,0],[1100,143,0]],[[50,132,0],[550,133,0],[1000,143,0]],[[50,132,0],[550,133,0],[1050,143,0]],[[50,132,0],[500,133,0],[1100,143,0]],[[50,132,0],[1550,144,0]],[[50,132,0],[1500,145,0],[1600,146,0]],[[50,132,0],[1500,144,0]],[[50,132,0],[1200,133,0]],[[50,132,0],[950,133,0],[1750,134,0]],[[50,132,0],[1000,133,0],[1800,134,0]],[[50,132,0],[1000,133,0],[1800,134,0]],[[50,132,0],[1050,133,0],[1800,134,0]],[[50,132,0],[1050,144,0]],[[50,132,0],[1050,144,0]],[[50,132,0],[500,133,0]],[[50,132,0],[850,147,0],[1000,148,0]],[[50,132,0],[1050,133,0],[1850,134,0]],[[50,132,0],[1100,133,0],[1900,134,0]],[[50,132,0],[1100,133,0],[1850,134,0]],[[50,132,0],[1050,133,0],[1850,134,0]],[[50,132,0],[800,133,0],[2000,141,0]],[[50,132,0],[800,133,0],[2000,149,0]],[[50,132,0],[800,133,0]],[[50,132,0],[750,133,0]],[[50,132,0],[850,133,0],[1350,141,0],[2000,149,0]],[[50,132,0],[800,133,0],[1400,141,0]],[[50,132,0],[750,133,0],[1300,141,0],[1950,149,0]],[[50,132,0],[800,133,0],[1400,141,0]],[[50,132,0],[1150,144,0]],[[50,132,0],[1200,144,0]],[[50,132,0],[1200,144,0]],[[50,132,0],[1250,144,0]],[[50,132,0],[850,133,0],[1850,134,0]],[[50,132,0],[950,133,0],[1600,139,0]],[[50,132,0],[900,133,0]],[[50,132,0],[900,133,0],[1900,134,0]],[[50,132,0],[1100,133,0],[1800,134,0]],[[50,132,0],[1100,133,0],[1850,134,0]],[[50,132,0],[1050,133,0],[1550,136,0],[1800,137,0]],[[50,132,0],[1050,133,0],[1800,134,0]],[[50,132,0],[750,133,0],[1450,150,0]],[[50,132,0],[750,133,0],[1450,150,0]],[[50,132,0],[750,133,0],[1300,150,0]],[[50,132,0],[750,133,0],[1350,150,0]]],"ear":[[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0],[1050,152,0],[1300,153,0],[1750,154,0]],[[50,151,0],[1100,-1,0],[1150,152,0],[1350,153,0],[1800,154,0]],[[50,151,0],[1100,152,0],[1300,153,0],[1900,154,0]],[[50,151,0],[1050,152,0],[1300,153,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0],[1150,155,0]],[[50,151,0],[1050,155,0]],[[50,151,0],[1100,155,0]],[[50,151,0],[1150,155,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0],[1200,156,0]],[[50,151,0],[1250,156,0]],[[50,151,0],[1150,156,0]],[[50,151,0],[1650,156,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0],[2000,157,0]],[[50,151,0]],[[50,151,0]],[[50,151,0],[1400,157,0]],[[50,151,0],[1400,157,0]],[[50,151,0],[1400,157,0]],[[50,151,0],[1400,157,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]],[[50,151,0]]],"hand":[[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0],[1700,159,0],[2000,160,0]],[[50,158,0],[1700,159,0],[2000,160,0]],[[50,158,0],[1700,159,0],[2000,160,0]],[[50,158,0],[1700,159,0],[1950,160,0]],[[50,158,0],[1350,159,0],[1450,160,0],[1700,161,0]],[[50,158,0],[1400,159,0],[1500,160,0],[1600,161,0]],[[50,158,0],[1350,159,0],[1450,160,0],[1600,161,0]],[[50,158,0],[1400,159,0],[1500,160,0],[1600,161,0]],[[50,158,0],[1650,162,0]],[[50,158,0]],[[50,158,0],[1650,162,0]],[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0],[1600,163,0]],[[50,158,0],[1650,163,0]],[[50,158,0],[1400,159,0]],[[50,158,0]],[[50,158,0]],[[50,158,0],[1650,163,0]],[[50,158,0],[1650,159,0],[1900,160,0]],[[50,158,0],[1650,159,0],[1850,160,0]],[[50,158,0],[1750,159,0],[1900,160,0]],[[50,158,0],[1650,159,0],[1900,160,0]],[[50,158,0],[1300,159,0],[1850,164,0]],[[50,158,0]],[[50,158,0],[1250,159,0],[2000,164,0]],[[50,158,0]],[[50,158,0],[1150,159,0],[1350,165,0]],[[50,158,0],[1150,159,0],[1400,165,0]],[[50,158,0],[1150,159,0],[1400,165,0]],[[50,158,0],[1200,159,0],[1400,165,0]],[[50,158,0],[1550,162,0],[1850,166,0]],[[50,158,0],[1600,162,0],[1800,166,0]],[[50,158,0],[850,159,0],[1800,165,0]],[[50,158,0],[1550,162,0],[1700,166,0]],[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0],[1250,163,0]],[[50,158,0],[1250,163,0]],[[50,158,0],[1200,163,0]],[[50,158,0],[1300,163,0]],[[50,158,0],[1600,163,0]],[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0],[1300,162,0]],[[50,158,0],[1400,159,0]],[[50,158,0],[1250,162,0]],[[50,158,0],[1300,162,0]],[[50,158,0],[1250,159,0],[1600,160,0]],[[50,158,0],[1200,167,0],[1350,160,0]],[[50,158,0],[1250,167,0],[1300,160,0]],[[50,158,0],[1350,159,0],[1600,160,0]],[[50,158,0],[1450,163,0]],[[50,158,0]],[[50,158,0],[1550,163,0]],[[50,158,0],[1450,163,0]],[[50,158,0],[1050,159,0],[1400,168,0],[1750,169,0]],[[50,158,0],[1050,159,0],[1750,165,0]],[[50,158,0],[1000,159,0],[1450,168,0],[1750,169,0]],[[50,158,0],[1000,159,0],[1750,165,0]],[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0]],[[50,158,0],[950,159,0]],[[50,158,0],[900,159,0]],[[50,158,0],[1050,159,0]],[[50,158,0],[900,159,0]]],"heart":[[[50,170,0]],[[50,170,0]],[[50,170,0]],[[50,170,0]],[[50,170,0],[1600,171,0]],[[50,170,0],[1600,171,0]],[[50,170,0],[1650,171,0]],[[50,170,0],[1550,171,0]],[[50,170,0],[1300,171,0],[1500,172,0]],[[50,170,0],[1350,171,0],[1500,172,0]],[[50,170,0],[1300,171,0],[1500,172,0]],[[50,170,0],[1300,171,0],[1500,172,0]],[[50,170,0],[1150,171,0],[1900,172,0]],[[50,170,0],[1200,171,0],[2000,172,0]],[[50,170,0],[1200,171,0]],[[50,170,0],[1200,171,0],[1850,172,0]],[[50,170,0],[1650,173,0]],[[50,170,0]],[[50,170,0],[1200,171,0],[1850,172,0]],[[50,170,0],[1250,171,0],[1850,172,0]],[[50,170,0],[1350,171,0],[1850,172,0]],[[50,170,0]],[[50,170,0],[1400,171,0],[1900,172,0]],[[50,170,0],[1350,171,0],[1850,172,0]],[[50,170,0],[1550,171,0]],[[50,170,0],[1550,171,0]],[[50,170,0],[1550,171,0]],[[50,170,0],[1600,171,0]],[[50,170,0],[1250,171,0],[1800,172,0]],[[50,170,0],[1250,171,0],[1700,172,0]],[[50,170,0],[1250,171,0],[1800,172,0]],[[50,170,0],[1250,171,0],[1800,172,0]],[[50,170,0],[1100,171,0],[1400,174,0]],[[50,170,0],[1100,171,0],[1350,174,0]],[[50,170,0],[1100,171,0],[1350,174,0]],[[50,170,0],[1150,171,0],[1350,174,0]],[[50,170,0],[750,171,0]],[[50,170,0],[750,171,0]],[[50,170,0],[750,171,0]],[[50,170,0],[850,171,0]],[[50,170,0]],[[50,170,0]],[[50,170,0]],[[50,170,0]],[[50,170,0]],[[50,170,0]],[[50,170,0],[1150,171,0],[1850,172,0]],[[50,170,0]],[[50,170,0],[1150,173,0],[1850,-1,0],[1950,175,1]],[[50,170,0],[1200,173,0],[1850,-1,0],[1900,175,1]],[[50,170,0],[1200,173,0],[1750,-1,0],[1900,175,1]],[[50,170,0],[1150,173,0],[1800,-1,0],[1850,175,1]],[[50,170,0]],[[50,170,0]],[[50,170,0]],[[50,170,0]],[[50,170,0],[1250,171,0],[2000,-1,0]],[[50,170,0],[1250,173,0],[1950,-1,0]],[[50,170,0],[1250,171,0]],[[50,170,0],[1250,173,0],[2000,-1,0]],[[50,170,0],[1150,171,0],[1950,-1,0]],[[50,170,0],[1150,171,0],[1950,-1,0]],[[50,170,0],[1150,171,0],[1900,-1,0]],[[50,170,0],[1250,171,0],[1950,-1,0]],[[50,170,0]],[[50,170,0]],[[50,170,0]],[[50,170,0]],[[50,170,0],[950,171,0]],[[50,170,0],[1000,171,0]],[[50,170,0],[950,171,0]],[[50,170,0],[1000,171,0]],[[50,170,0]],[[50,170,0],[1250,171,0],[1850,172,0]],[[50,170,0]],[[50,170,0]],[[50,170,0],[850,171,0]],[[50,170,0],[800,171,0]],[[50,170,0],[850,171,0]],[[50,170,0],[800,171,0]]],"blood":[[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0],[1700,177,1],[1950,178,1]],[[50,176,0],[1650,-1,0],[1700,179,1],[1800,177,1],[1950,178,1],[2000,177,1]],[[50,176,0],[1650,-1,0],[1700,179,1],[1950,180,1]],[[50,176,0],[1700,-1,0],[1750,177,1]],[[50,176,0],[1550,-1,0],[1650,176,0]],[[50,176,0],[1600,-1,0],[1650,176,0]],[[50,176,0],[1600,-1,0],[1750,176,0]],[[50,176,0],[1600,-1,0],[1650,176,0]],[[50,176,0],[1450,-1,0],[1600,176,0]],[[50,176,0],[1500,-1,0],[1550,176,0]],[[50,176,0],[1500,-1,0],[1650,176,0]],[[50,176,0],[1350,-1,0],[1450,176,0]],[[50,176,0],[1600,-1,0],[1850,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0],[1500,-1,0],[1900,176,0]],[[50,176,0],[1800,-1,0]],[[50,176,0],[1800,-1,0]],[[50,176,0],[1800,-1,0]],[[50,176,0],[1800,-1,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0],[1050,181,0],[1350,-1,0],[1650,182,1],[1750,183,1]],[[50,176,0],[1000,181,0],[1400,-1,0],[1650,182,1],[1750,-1,0],[1800,183,1]],[[50,176,0],[950,181,0],[1400,-1,0],[1650,182,1],[1800,183,1],[1850,-1,0],[1900,183,1]],[[50,176,0],[1050,181,0],[1350,-1,0],[1800,183,1]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0],[1550,-1,0],[1600,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0],[1450,-1,0],[1600,184,1],[1650,185,1],[2000,182,1]],[[50,176,0],[1400,-1,0],[1500,184,1],[1650,-1,0],[1750,185,1],[1850,182,1]],[[50,176,0],[1450,-1,0],[1600,184,1],[1750,185,1],[1800,-1,0],[1850,185,1],[1900,182,1]],[[50,176,0],[850,186,0],[1400,-1,0],[1500,184,1],[1650,-1,0],[1800,185,1],[1900,182,1]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0],[2000,-1,0]],[[50,176,0],[1950,-1,0]],[[50,176,0],[1850,-1,0]],[[50,176,0],[1950,-1,0]],[[50,176,0],[1400,187,0]],[[50,176,0],[1400,187,0]],[[50,176,0],[1400,187,0]],[[50,176,0],[1400,187,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0],[1450,-1,0],[1500,188,1]],[[50,176,0],[1450,188,1]],[[50,176,0],[1400,-1,0],[1450,188,1]],[[50,176,0],[1400,188,1]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]],[[50,176,0]]],"bone":[[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]],[[50,189,0]]],"eat":[[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0],[1750,191,0]],[[50,190,0],[1750,191,0]],[[50,190,0],[1650,191,0]],[[50,190,0],[1700,191,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0],[850,192,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0],[1200,191,0]],[[50,190,0],[1200,191,0]],[[50,190,0],[1250,191,0]],[[50,190,0],[1200,191,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]],[[50,190,0]]],"drink":[[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0]],[[50,193,0],[1700,194,0]],[[50,193,0],[1700,194,0]],[[50,193,0],[1750,194,0]],[[50,193,0],[1700,194,0]]],"die":[[[50,195,0]],[[50,195,0]],[[50,195,0]],[[50,195,0]],[[50,195,0],[1600,196,0]],[[50,195,0],[1600,196,0]],[[50,195,0],[1650,196,0]],[[50,195,0],[1550,196,0]],[[50,195,0],[1300,196,0],[1750,197,0],[1850,198,0]],[[50,195,0],[1350,196,0],[1700,197,0],[1900,198,0],[1950,197,0]],[[50,195,0],[1300,196,0],[1700,197,0],[1900,198,0]],[[50,195,0],[1300,196,0],[1800,197,0],[1900,198,0],[1950,197,0]],[[50,195,0],[1150,196,0]],[[50,195,0],[1200,196,0]],[[50,195,0],[1200,196,0]],[[50,195,0],[1200,196,0]],[[50,195,0],[1600,199,0]],[[50,195,0]],[[50,195,0],[1200,196,0]],[[50,195,0],[1250,196,0]],[[50,195,0],[1350,196,0]],[[50,195,0],[1900,199,0]],[[50,195,0],[1400,196,0],[1950,197,0]],[[50,195,0],[1400,196,0]],[[50,195,0],[1550,196,0]],[[50,195,0],[1550,196,0]],[[50,195,0],[1550,196,0]],[[50,195,0],[1600,196,0]],[[50,195,0],[1250,196,0],[1850,197,0]],[[50,195,0],[1250,196,0]],[[50,195,0],[1250,196,0]],[[50,195,0],[1250,196,0]],[[50,195,0],[1100,196,0]],[[50,195,0],[1100,196,0]],[[50,195,0],[1100,196,0]],[[50,195,0],[1150,196,0]],[[50,195,0],[750,196,0],[1150,200,0]],[[50,195,0],[750,196,0],[1050,200,0]],[[50,195,0],[750,196,0],[1100,200,0]],[[50,195,0],[850,196,0],[1200,200,0]],[[50,195,0]],[[50,195,0]],[[50,195,0],[1750,201,0]],[[50,195,0]],[[50,195,0],[1500,199,0]],[[50,195,0],[1550,199,0]],[[50,195,0],[1450,199,0]],[[50,195,0],[1500,199,0]],[[50,195,0],[1150,199,0]],[[50,195,0],[1150,199,0]],[[50,195,0],[1150,199,0]],[[50,195,0],[850,197,0]],[[50,195,0],[1600,201,0]],[[50,195,0],[1650,199,0]],[[50,195,0],[1600,201,0]],[[50,195,0]],[[50,195,0],[1250,199,0]],[[50,195,0],[1250,199,0]],[[50,195,0],[1200,199,0]],[[50,195,0],[1200,199,0]],[[50,195,0],[1200,196,0]],[[50,195,0],[1200,196,0]],[[50,195,0],[1200,196,0]],[[50,195,0],[1250,196,0]],[[50,195,0],[1450,201,0]],[[50,195,0],[1450,201,0]],[[50,195,0],[1450,201,0]],[[50,195,0],[1450,201,0]],[[50,195,0],[950,196,0]],[[50,195,0],[1000,196,0]],[[50,195,0],[950,196,0]],[[50,195,0],[1000,196,0]],[[50,195,0]],[[50,195,0],[1250,196,0]],[[50,195,0]],[[50,195,0],[2000,201,0]],[[50,195,0],[850,196,0]],[[50,195,0],[800,196,0]],[[50,195,0],[850,196,0]],[[50,195,0],[800,196,0]]],"come":[[[50,202,0],[1600,203,0]],[[50,202,0],[1550,203,0]],[[50,202,0],[1550,203,0]],[[50,202,0],[1600,203,0],[1700,204,0]],[[50,202,0],[1700,205,0]],[[50,202,0],[1650,205,0],[1850,206,0]],[[50,202,0],[1700,205,0]],[[50,202,0],[1700,205,0]],[[50,202,0],[1350,205,0],[1600,207,0]],[[50,202,0],[1400,205,0],[1600,207,0]],[[50,202,0],[1350,205,0],[1550,207,0]],[[50,202,0],[1400,205,0],[1600,207,0]],[[50,202,0],[1550,208,0]],[[50,202,0],[1550,208,0]],[[50,202,0],[1550,208,0]],[[50,202,0],[1550,208,0]],[[50,202,0],[1550,208,0]],[[50,202,0],[1600,208,0]],[[50,202,0],[1550,208,0]],[[50,202,0],[1600,208,0]],[[50,202,0],[1400,205,0],[2000,207,0]],[[50,202,0],[1600,204,0]],[[50,202,0],[1550,203,0]],[[50,202,0],[1500,208,0]],[[50,202,0],[1600,205,0]],[[50,202,0],[1600,205,0]],[[50,202,0],[1750,205,0]],[[50,202,0],[1600,205,0]],[[50,202,0],[1300,205,0],[1850,207,0]],[[50,202,0],[1550,208,0]],[[50,202,0],[1250,205,0],[2000,207,0]],[[50,202,0],[1500,208,0]],[[50,202,0],[1150,205,0],[1700,206,0]],[[50,202,0],[1150,205,0],[1700,206,0]],[[50,202,0],[1150,205,0],[1600,206,0]],[[50,202,0],[1200,205,0],[1650,206,0]],[[50,202,0],[1200,203,0],[1450,204,0]],[[50,202,0],[1050,205,0]],[[50,202,0],[800,205,0]],[[50,202,0],[1200,208,0]],[[50,202,0],[2000,203,0]],[[50,202,0],[1900,203,0]],[[50,202,0],[1750,209,0]],[[50,202,0],[2000,203,0]],[[50,202,0],[1450,208,0]],[[50,202,0],[1500,208,0]],[[50,202,0],[1450,208,0]],[[50,202,0],[1450,208,0]],[[50,202,0],[1100,208,0]],[[50,202,0],[1100,208,0]],[[50,202,0],[1100,208,0]],[[50,202,0],[850,210,0],[1100,211,0]],[[50,202,0],[1600,208,0]],[[50,202,0],[1600,208,0]],[[50,202,0],[1600,209,0]],[[50,202,0],[1600,203,0]],[[50,202,0],[1250,208,0]],[[50,202,0],[1250,208,0]],[[50,202,0],[1200,208,0]],[[50,202,0],[1200,208,0]],[[50,202,0],[1250,205,0]],[[50,202,0],[1250,205,0]],[[50,202,0],[1250,205,0]],[[50,202,0],[1300,205,0]],[[50,202,0],[1250,208,0]],[[50,202,0],[1450,209,0]],[[50,202,0],[1450,209,0]],[[50,202,0],[1350,208,0]],[[50,202,0],[1050,205,0],[1400,212,0]],[[50,202,0],[1050,205,0]],[[50,202,0],[1000,205,0],[1450,212,0]],[[50,202,0],[1000,205,0],[1650,212,0]],[[50,202,0],[1550,203,0]],[[50,202,0],[1550,203,0]],[[50,202,0],[1550,203,0]],[[50,202,0],[1550,203,0],[2000,209,0]],[[50,202,0],[950,205,0],[1400,213,0]],[[50,202,0],[900,205,0],[1400,213,0]],[[50,202,0],[900,205,0],[1250,213,0]],[[50,202,0],[850,205,0],[1300,213,0]]],"big":[[[50,214,0],[700,215,0]],[[50,214,0],[550,215,0]],[[50,214,0],[650,215,0]],[[50,214,0],[650,215,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0],[1900,216,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0],[1400,215,0]],[[50,214,0],[1400,215,0]],[[50,214,0],[1450,215,0]],[[50,214,0],[1500,215,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0],[600,217,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0],[500,217,0]],[[50,214,0],[550,217,0]],[[50,214,0],[550,217,0]],[[50,214,0],[600,217,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0],[2000,218,0]],[[50,214,0]],[[50,214,0]],[[50,214,0],[1400,218,0]],[[50,214,0],[1200,218,0]],[[50,214,0],[1250,218,0]],[[50,214,0],[1450,218,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]],[[50,214,0]]],"small":[[[50,219,0],[1500,220,0]],[[50,219,0],[1500,220,0]],[[50,219,0],[1500,220,0]],[[50,219,0],[1500,220,0]],[[50,219,0],[1750,221,0]],[[50,219,0],[1750,221,0]],[[50,219,0],[1750,221,0]],[[50,219,0],[1750,221,0]],[[50,219,0],[1450,221,0],[1600,222,0],[1800,223,0],[1850,224,0]],[[50,219,0],[1450,221,0],[1550,222,0],[1800,224,0]],[[50,219,0],[1400,221,0],[1550,222,0],[1850,223,0],[1900,224,0]],[[50,219,0],[1500,221,0],[1550,222,0],[1750,223,0],[1800,224,0]],[[50,219,0],[1550,220,0]],[[50,219,0],[1550,220,0]],[[50,219,0],[1600,225,0]],[[50,219,0],[1550,225,0]],[[50,219,0],[1650,225,0]],[[50,219,0]],[[50,219,0],[1500,220,0]],[[50,219,0],[1650,220,0]],[[50,219,0],[1550,220,0]],[[50,219,0],[700,226,0],[1550,227,0]],[[50,219,0],[1550,220,0]],[[50,219,0],[1500,220,0]],[[50,219,0],[1650,221,0],[1950,228,0]],[[50,219,0],[1650,221,0],[2000,228,0]],[[50,219,0],[1800,221,0],[1950,228,0]],[[50,219,0],[1650,221,0],[2000,228,0]],[[50,219,0],[1500,220,0]],[[50,219,0],[1550,220,0]],[[50,219,0],[1550,220,0]],[[50,219,0],[1500,220,0]],[[50,219,0],[1200,221,0],[1750,222,0]],[[50,219,0],[1200,221,0],[1700,222,0]],[[50,219,0],[1250,221,0],[1600,222,0]],[[50,219,0],[1200,221,0],[1650,222,0]],[[50,219,0],[1000,229,0],[1100,230,0],[1800,231,0]],[[50,219,0],[1000,229,0],[1100,230,0],[1800,231,0]],[[50,219,0],[900,221,0],[950,232,0],[1800,233,0]],[[50,219,0],[1000,229,0],[1150,230,0]],[[50,219,0],[1950,220,0]],[[50,219,0],[1850,220,0]],[[50,219,0],[1950,220,0]],[[50,219,0],[1900,220,0]],[[50,219,0],[1450,220,0]],[[50,219,0],[1500,220,0]],[[50,219,0],[1450,220,0]],[[50,219,0],[1350,220,0]],[[50,219,0],[1150,225,0]],[[50,219,0],[1200,225,0]],[[50,219,0],[1200,225,0]],[[50,219,0],[1150,225,0]],[[50,219,0],[1600,220,0]],[[50,219,0],[1600,220,0]],[[50,219,0],[1600,220,0]],[[50,219,0],[1550,220,0]],[[50,219,0],[1250,220,0],[1950,234,0]],[[50,219,0],[1250,220,0],[1950,234,0]],[[50,219,0],[1250,225,0],[2000,235,0]],[[50,219,0],[1250,225,0],[2000,235,0]],[[50,219,0],[1250,236,0],[1350,228,0]],[[50,219,0],[1300,236,0],[1350,228,0]],[[50,219,0],[1250,236,0],[1350,234,0]],[[50,219,0],[1350,234,0]],[[50,219,0],[1450,220,0]],[[50,219,0],[1450,220,0]],[[50,219,0],[1550,220,0]],[[50,219,0],[1450,220,0]],[[50,219,0],[1050,221,0]],[[50,219,0],[1050,221,0]],[[50,219,0],[1100,221,0]],[[50,219,0],[1050,221,0]],[[50,219,0],[1500,220,0]],[[50,219,0],[1550,220,0]],[[50,219,0],[1500,220,0]],[[50,219,0],[1450,220,0]],[[50,219,0],[950,221,0],[1650,220,0]],[[50,219,0],[1050,221,0],[1700,220,0]],[[50,219,0],[1250,221,0],[1500,220,0]],[[50,219,0],[900,221,0],[1650,220,0]]],"black":[[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0],[1150,238,0]],[[50,237,0],[1100,238,0]],[[50,237,0],[1150,238,0]],[[50,237,0],[1150,238,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0],[1600,238,0]],[[50,237,0],[1200,238,0]],[[50,237,0],[1250,238,0]],[[50,237,0],[1600,238,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]],[[50,237,0]]],"white":[[[50,239,0],[1950,240,0]],[[50,239,0]],[[50,239,0],[2000,240,0]],[[50,239,0],[1900,240,0]],[[50,239,0],[1600,241,0],[1850,242,0]],[[50,239,0],[1600,241,0],[1800,242,0]],[[50,239,0],[1650,241,0],[1850,242,0]],[[50,239,0],[1550,241,0],[1800,242,0]],[[50,239,0],[1300,241,0],[1500,242,0]],[[50,239,0],[1350,241,0],[1550,242,0]],[[50,239,0],[1300,241,0],[1500,242,0]],[[50,239,0],[1300,241,0],[1500,242,0]],[[50,239,0],[1150,241,0],[1950,242,0]],[[50,239,0],[1200,241,0]],[[50,239,0],[1200,241,0]],[[50,239,0],[1200,241,0],[1900,242,0]],[[50,239,0],[1600,240,0]],[[50,239,0],[1600,240,0]],[[50,239,0],[1200,241,0],[1900,242,0]],[[50,239,0],[1250,241,0],[1850,242,0]],[[50,239,0],[1350,241,0],[1950,242,0]],[[50,239,0],[1600,240,0]],[[50,239,0],[1400,241,0],[1900,242,0]],[[50,239,0],[1350,241,0],[1900,242,0]],[[50,239,0],[1550,241,0]],[[50,239,0],[1550,241,0]],[[50,239,0],[1550,241,0]],[[50,239,0],[1600,241,0]],[[50,239,0],[1250,241,0],[1800,242,0]],[[50,239,0],[1250,241,0],[1700,242,0]],[[50,239,0],[1250,241,0],[1800,242,0]],[[50,239,0],[1250,241,0],[1800,242,0]],[[50,239,0],[1100,241,0],[1450,242,0]],[[50,239,0],[1100,241,0],[1500,242,0]],[[50,239,0],[1100,241,0],[1450,242,0]],[[50,239,0],[1150,241,0],[1550,242,0]],[[50,239,0],[750,241,0]],[[50,239,0],[750,241,0]],[[50,239,0],[750,241,0]],[[50,239,0],[800,241,0]],[[50,239,0],[1850,240,0]],[[50,239,0],[1950,240,0]],[[50,239,0],[1650,240,0]],[[50,239,0],[2000,240,0]],[[50,239,0],[1950,240,0]],[[50,239,0],[2000,240,0]],[[50,239,0],[1150,241,0]],[[50,239,0],[1900,240,0]],[[50,239,0],[1150,240,0]],[[50,239,0],[1100,240,0]],[[50,239,0],[1150,240,0]],[[50,239,0],[1200,243,0]],[[50,239,0],[1550,240,0]],[[50,239,0],[1600,240,0]],[[50,239,0],[1550,240,0]],[[50,239,0],[1550,240,0]],[[50,239,0],[1250,241,0]],[[50,239,0],[1250,243,0]],[[50,239,0],[1250,241,0]],[[50,239,0],[1250,240,0]],[[50,239,0],[1150,241,0]],[[50,239,0],[1150,241,0]],[[50,239,0],[1150,241,0]],[[50,239,0],[1250,241,0]],[[50,239,0],[1400,240,0]],[[50,239,0],[1400,240,0]],[[50,239,0],[1400,240,0]],[[50,239,0],[1400,240,0]],[[50,239,0],[950,241,0]],[[50,239,0],[1000,241,0]],[[50,239,0],[950,241,0]],[[50,239,0],[1000,241,0]],[[50,239,0],[1800,240,0]],[[50,239,0],[1250,241,0],[2000,242,0]],[[50,239,0],[1550,240,0]],[[50,239,0],[1600,240,0]],[[50,239,0],[850,241,0],[1450,240,0]],[[50,239,0],[800,241,0],[1450,240,0]],[[50,239,0],[850,241,0],[1400,240,0]],[[50,239,0],[800,241,0],[1350,240,0]]],"cold":[[[50,244,0],[1400,-1,0],[1450,245,2],[1650,244,0]],[[50,244,0],[1400,-1,0],[1450,245,2],[1650,244,0]],[[50,244,0],[1400,-1,0],[1450,245,2],[1650,244,0]],[[50,244,0],[1350,-1,0],[1500,245,2],[1650,244,0]],[[50,244,0],[1700,-1,0],[1800,246,2],[1950,-1,0],[2000,246,2]],[[50,244,0],[1700,-1,0],[1850,246,2],[2000,-1,0]],[[50,244,0],[1700,-1,0],[1750,246,2],[1850,-1,0]],[[50,244,0],[1700,-1,0],[1750,246,2],[1950,-1,0]],[[50,244,0],[1550,-1,0],[1650,247,2],[1800,248,2]],[[50,244,0],[1500,-1,0],[1700,247,2],[1750,-1,0],[1800,248,2]],[[50,244,0],[1450,-1,0],[1650,248,2],[1800,-1,0],[1850,247,2],[1900,248,2]],[[50,244,0],[1550,-1,0],[1900,247,2]],[[50,244,0],[1250,-1,0],[1550,245,2],[1600,-1,0],[1750,244,0]],[[50,244,0],[1200,-1,0],[1700,244,0]],[[50,244,0],[1200,-1,0],[1250,244,0],[1300,-1,0],[1700,244,0]],[[50,244,0],[1250,-1,0],[1700,244,0]],[[50,244,0],[1350,-1,0],[1600,249,2],[1700,-1,0],[1800,244,0]],[[50,244,0],[1400,-1,0],[1600,245,2],[1650,-1,0],[1700,244,0]],[[50,244,0],[1400,-1,0],[1600,249,2],[1700,-1,0],[1750,244,0]],[[50,244,0],[1300,-1,0],[1550,245,2],[1600,-1,0],[1700,244,0]],[[50,244,0],[1250,-1,0],[1500,245,2],[1900,-1,0]],[[50,244,0],[1300,-1,0],[1550,245,2],[1700,249,2],[1950,-1,0]],[[50,244,0],[1250,-1,0],[1550,245,2],[1900,-1,0]],[[50,244,0],[1250,-1,0],[1500,249,2],[1850,-1,0]],[[50,244,0],[1650,-1,0],[1700,247,2]],[[50,244,0],[1650,-1,0],[1800,247,2]],[[50,244,0],[1600,-1,0],[1750,247,2]],[[50,244,0],[1600,-1,0],[1700,247,2]],[[50,244,0],[1350,-1,0],[1650,244,0]],[[50,244,0],[1300,-1,0],[1650,244,0]],[[50,244,0],[1400,-1,0],[1500,245,2],[1550,249,2],[1600,-1,0],[1650,244,0]],[[50,244,0],[1300,-1,0],[1650,244,0]],[[50,244,0]],[[50,244,0]],[[50,244,0]],[[50,244,0]],[[50,244,0],[1250,-1,0],[1300,245,2],[1450,249,2],[1600,-1,0]],[[50,244,0],[1300,-1,0],[1350,249,2],[1650,-1,0],[1700,249,2],[1750,-1,0]],[[50,244,0],[1250,-1,0],[1300,249,2],[1600,-1,0]],[[50,244,0],[1250,-1,0],[1350,245,2],[1450,249,2],[1550,-1,0]],[[50,244,0],[1350,-1,0],[1400,245,2],[1650,244,0]],[[50,244,0],[1300,-1,0],[1400,245,2],[1650,244,0]],[[50,244,0],[1350,-1,0],[1450,245,2],[1650,244,0]],[[50,244,0],[1300,-1,0],[1450,245,2],[1650,244,0]],[[50,244,0],[1350,-1,0],[1450,245,2],[1500,249,2],[1550,-1,0],[1650,244,0]],[[50,244,0],[1300,-1,0],[1400,245,2],[1500,249,2],[1650,244,0]],[[50,244,0],[1300,-1,0],[1350,245,2],[1450,249,2],[1650,244,0]],[[50,244,0],[1350,-1,0],[1650,244,0]],[[50,244,0],[1050,-1,0],[1100,244,0],[1150,-1,0],[1250,245,2],[1350,250,2]],[[50,244,0],[900,-1,0],[950,245,2],[1050,244,0],[1150,-1,0],[1250,250,2]],[[50,244,0],[1000,-1,0],[1050,244,0],[1100,-1,0],[1300,245,2],[1350,250,2]],[[50,244,0],[850,251,0],[1000,245,2],[1200,-1,0],[1300,245,2],[1350,250,2]],[[50,244,0],[1350,-1,0],[1400,245,2],[1600,249,2],[1650,244,0]],[[50,244,0],[1350,-1,0],[1450,245,2],[1650,244,0]],[[50,244,0],[1300,-1,0],[1400,245,2],[1600,250,2],[1650,244,0]],[[50,244,0],[1300,-1,0],[1450,245,2],[1650,244,0]],[[50,244,0],[1400,-1,0],[1750,247,2],[2000,-1,0]],[[50,244,0],[1400,-1,0],[1750,250,2],[2000,-1,0]],[[50,244,0],[1350,-1,0],[1800,247,2],[1900,-1,0]],[[50,244,0],[1350,-1,0],[1450,247,2],[1650,-1,0],[1800,249,2],[1850,-1,0]],[[50,244,0],[1550,-1,0],[1650,247,2],[1800,-1,0],[1950,247,2],[2000,-1,0]],[[50,244,0],[1600,-1,0]],[[50,244,0],[1500,-1,0],[1700,247,2],[1750,246,2],[1800,-1,0],[1850,246,2],[2000,-1,0]],[[50,244,0],[1500,-1,0],[1650,246,2],[1750,-1,0],[1950,246,2]],[[50,244,0],[1250,-1,0],[1350,245,2],[1400,-1,0],[1450,250,2],[1650,-1,0],[1700,244,0]],[[50,244,0],[1250,-1,0],[1350,245,2],[1450,250,2],[1650,-1,0],[1700,244,0]],[[50,244,0],[1350,-1,0],[1400,245,2],[1550,250,2],[1650,-1,0],[1700,244,0]],[[50,244,0],[1400,-1,0],[1450,250,2],[1650,-1,0],[1700,244,0]],[[50,244,0],[850,-1,0],[900,245,2],[1050,247,2],[1150,-1,0],[1250,247,2],[1500,-1,0],[1850,247,2]],[[50,244,0],[850,-1,0],[900,245,2],[1050,247,2],[1150,-1,0],[1300,247,2],[1350,-1,0],[1950,247,2]],[[50,244,0],[900,245,2],[1100,247,2],[1150,-1,0],[1250,247,2],[1450,-1,0],[1850,250,2]],[[50,244,0],[850,245,2],[1050,247,2],[1200,-1,0],[1350,247,2],[1400,-1,0],[1600,247,2],[1650,-1,0],[1750,247,2],[1800,-1,0],[1900,247,2]],[[50,244,0],[1350,-1,0],[1400,245,2],[1600,-1,0],[1650,244,0]],[[50,244,0],[1300,-1,0],[1650,244,0]],[[50,244,0],[1350,-1,0],[1500,245,2],[1550,-1,0],[1650,244,0]],[[50,244,0],[1300,-1,0],[1650,244,0]],[[50,244,0],[1400,-1,0],[1450,247,2]],[[50,244,0],[1350,-1,0],[1600,247,2]],[[50,244,0],[1400,-1,0],[1550,247,2],[1650,-1,0],[1850,247,2]],[[50,244,0],[1400,-1,0],[1500,247,2]]],"far":[[[50,252,0],[1450,253,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1050,254,0],[1650,255,0]],[[50,252,0],[1100,254,0],[1650,255,0]],[[50,252,0],[1100,254,0],[1650,255,0]],[[50,252,0],[1150,254,0],[1600,255,0]],[[50,252,0],[1300,256,0],[1700,257,0]],[[50,252,0],[1400,256,0],[1600,257,0]],[[50,252,0],[1300,256,0],[1600,257,0]],[[50,252,0],[1300,256,0],[1600,257,0]],[[50,252,0],[1450,253,0]],[[50,252,0],[1250,256,0]],[[50,252,0],[1400,253,0]],[[50,252,0],[1400,253,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1450,253,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1250,256,0],[2000,257,0]],[[50,252,0],[1350,256,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1400,256,0],[1950,257,0]],[[50,252,0],[1500,258,0]],[[50,252,0],[1600,256,0]],[[50,252,0],[1600,256,0]],[[50,252,0],[1600,256,0]],[[50,252,0],[1600,256,0]],[[50,252,0],[1300,256,0],[1850,257,0]],[[50,252,0],[1250,256,0],[2000,257,0]],[[50,252,0],[1250,256,0],[2000,257,0]],[[50,252,0],[1450,253,0]],[[50,252,0],[1150,256,0]],[[50,252,0],[1150,256,0]],[[50,252,0],[1150,256,0]],[[50,252,0],[1200,256,0]],[[50,252,0],[900,256,0]],[[50,252,0],[800,256,0]],[[50,252,0],[800,256,0]],[[50,252,0],[850,256,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1500,258,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1450,258,0]],[[50,252,0],[1500,258,0]],[[50,252,0],[1050,253,0]],[[50,252,0],[1000,253,0]],[[50,252,0],[1050,253,0]],[[50,252,0],[850,257,0]],[[50,252,0],[1450,253,0]],[[50,252,0],[1450,253,0]],[[50,252,0],[1450,253,0]],[[50,252,0],[1450,253,0]],[[50,252,0],[1200,253,0]],[[50,252,0],[1200,253,0]],[[50,252,0],[1150,253,0]],[[50,252,0],[1150,253,0]],[[50,252,0],[1200,256,0]],[[50,252,0],[1250,256,0]],[[50,252,0],[1250,256,0]],[[50,252,0],[1300,256,0]],[[50,252,0],[1250,258,0]],[[50,252,0],[1300,253,0]],[[50,252,0],[1350,253,0]],[[50,252,0],[1350,253,0]],[[50,252,0],[1000,256,0]],[[50,252,0],[1050,256,0]],[[50,252,0],[1000,256,0]],[[50,252,0],[1000,256,0]],[[50,252,0],[1450,253,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[1450,253,0]],[[50,252,0],[1500,253,0]],[[50,252,0],[850,256,0]],[[50,252,0],[800,256,0]],[[50,252,0],[900,256,0]],[[50,252,0],[850,256,0]]],"road":[[[50,259,0]],[[50,259,0]],[[50,259,0]],[[50,259,0],[1450,260,0]],[[50,259,0],[600,260,0],[1650,261,0]],[[50,259,0],[750,260,0],[1650,261,0]],[[50,259,0],[1700,262,0]],[[50,259,0],[650,260,0],[1600,261,0]],[[50,259,0],[1300,262,0],[1700,261,0]],[[50,259,0],[1350,260,0],[1400,261,0]],[[50,259,0],[1350,262,0],[1750,261,0],[1900,263,0]],[[50,259,0],[1350,262,0],[1450,261,0]],[[50,259,0],[1550,260,0],[1600,264,0]],[[50,259,0],[1250,262,0],[1550,261,0]],[[50,259,0],[1550,265,0]],[[50,259,0],[1550,265,0]],[[50,259,0],[2000,265,0]],[[50,259,0],[1600,265,0]],[[50,259,0],[1600,265,0]],[[50,259,0],[1250,262,0]],[[50,259,0],[450,260,0],[1400,261,0]],[[50,259,0]],[[50,259,0],[350,260,0]],[[50,259,0],[1650,265,0]],[[50,259,0],[1150,260,0],[1600,261,0]],[[50,259,0],[1100,260,0],[1600,261,0]],[[50,259,0],[1150,260,0],[1600,261,0]],[[50,259,0],[1200,260,0],[1600,261,0]],[[50,259,0],[1300,262,0]],[[50,259,0],[1300,262,0]],[[50,259,0],[1250,262,0]],[[50,259,0],[1650,265,0]],[[50,259,0],[1150,262,0],[1900,266,0]],[[50,259,0],[1150,262,0],[1850,266,0]],[[50,259,0],[1150,262,0],[1950,266,0]],[[50,259,0],[1200,262,0],[1950,266,0]],[[50,259,0],[850,260,0],[900,261,0]],[[50,259,0],[800,260,0],[1000,261,0]],[[50,259,0],[800,262,0],[850,261,0]],[[50,259,0],[800,260,0],[850,261,0]],[[50,259,0],[2000,265,0]],[[50,259,0],[2000,265,0]],[[50,259,0],[1650,265,0]],[[50,259,0]],[[50,259,0],[1450,260,0]],[[50,259,0],[1200,260,0]],[[50,259,0]],[[50,259,0],[1100,260,0]],[[50,259,0],[1150,265,0],[2000,264,0]],[[50,259,0],[1100,265,0],[1850,264,0]],[[50,259,0],[1150,265,0],[1900,264,0]],[[50,259,0],[1150,267,0],[1900,268,0]],[[50,259,0],[1600,265,0]],[[50,259,0],[750,260,0],[1650,264,0]],[[50,259,0],[1400,260,0],[1550,264,0]],[[50,259,0],[1600,265,0]],[[50,259,0],[1300,267,0]],[[50,259,0],[1250,267,0]],[[50,259,0],[1250,267,0],[1500,268,0]],[[50,259,0],[1200,260,0],[1250,268,0]],[[50,259,0],[1250,262,0]],[[50,259,0],[1250,262,0]],[[50,259,0],[1250,262,0],[1800,269,0]],[[50,259,0],[1300,262,0]],[[50,259,0],[1400,265,0]],[[50,259,0],[1450,265,0]],[[50,259,0],[1450,265,0]],[[50,259,0],[1450,265,0]],[[50,259,0],[1000,262,0],[1850,261,0]],[[50,259,0],[1050,262,0]],[[50,259,0],[1000,262,0]],[[50,259,0],[1000,262,0],[1800,261,0]],[[50,259,0]],[[50,259,0]],[[50,259,0],[2000,265,0]],[[50,259,0],[2000,265,0]],[[50,259,0],[850,262,0],[1750,270,0]],[[50,259,0],[850,262,0],[1700,270,0]],[[50,259,0],[900,262,0],[1750,270,0]],[[50,259,0],[850,262,0],[1700,270,0]]],"boat":[[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0],[2000,272,0]],[[50,271,0]],[[50,271,0],[2000,272,0]],[[50,271,0],[2000,272,0]],[[50,271,0],[1500,272,0],[1950,273,0]],[[50,271,0],[1550,272,0],[2000,273,0]],[[50,271,0],[1500,272,0],[1950,273,0]],[[50,271,0],[1500,272,0],[2000,273,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0],[1950,272,0]],[[50,271,0],[1950,272,0]],[[50,271,0],[1900,272,0]],[[50,271,0],[1900,272,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0],[1250,274,0],[1400,275,0]],[[50,271,0]],[[50,271,0],[1150,274,0],[1400,275,0]],[[50,271,0],[1300,274,0],[1400,275,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0],[1800,272,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0],[1200,276,0]],[[50,271,0],[1300,276,0]],[[50,271,0],[1250,276,0]],[[50,271,0],[1250,276,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]],[[50,271,0]]],"field":[[[50,277,0],[1300,278,0]],[[50,277,0],[1550,279,0]],[[50,277,0],[1250,278,0]],[[50,277,0],[1250,278,0]],[[50,277,0],[1450,278,0],[2000,280,0]],[[50,277,0],[1450,278,0]],[[50,277,0],[1450,278,0],[2000,280,0]],[[50,277,0],[1450,278,0],[2000,280,0]],[[50,277,0],[1200,278,0],[1550,280,0],[1750,281,0],[1900,282,0],[1950,283,0]],[[50,277,0],[1200,278,0],[1550,280,0],[1700,281,0],[1900,283,0]],[[50,277,0],[1250,278,0],[1550,280,0],[1700,281,0],[1950,283,0]],[[50,277,0],[1250,278,0],[1500,280,0],[1800,281,0],[1900,282,0],[1950,283,0]],[[50,277,0],[1050,278,0]],[[50,277,0],[1100,278,0]],[[50,277,0],[1100,278,0]],[[50,277,0],[1050,278,0]],[[50,277,0],[1150,278,0],[1950,284,0]],[[50,277,0],[1100,278,0]],[[50,277,0],[1100,278,0]],[[50,277,0],[1150,278,0]],[[50,277,0],[1250,278,0]],[[50,277,0],[1300,278,0]],[[50,277,0],[1250,278,0],[1950,284,0]],[[50,277,0],[1250,278,0]],[[50,277,0],[1450,278,0],[1950,280,0],[2000,285,0]],[[50,277,0],[1500,278,0],[1950,280,0],[2000,285,0]],[[50,277,0],[1450,278,0],[1900,280,0],[2000,285,0]],[[50,277,0],[1500,278,0],[1900,280,0]],[[50,277,0],[1100,278,0],[1500,286,0],[1850,287,0]],[[50,277,0],[1150,278,0],[1450,286,0]],[[50,277,0],[1200,278,0],[1550,286,0]],[[50,277,0],[1150,278,0]],[[50,277,0],[1000,278,0],[1750,288,0]],[[50,277,0],[1050,278,0],[1750,288,0]],[[50,277,0],[1050,278,0],[1700,288,0]],[[50,277,0],[1050,278,0],[1750,288,0]],[[50,277,0],[600,278,0],[1200,289,0]],[[50,277,0],[600,278,0],[1050,289,0]],[[50,277,0],[600,278,0],[1150,289,0]],[[50,277,0],[550,278,0],[1200,289,0]],[[50,277,0],[2000,290,0]],[[50,277,0],[1900,279,0],[2000,290,0]],[[50,277,0],[1650,290,0]],[[50,277,0],[2000,279,0]],[[50,277,0],[1100,278,0]],[[50,277,0],[1100,278,0]],[[50,277,0],[1050,278,0]],[[50,277,0],[1050,278,0]],[[50,277,0],[1150,290,0]],[[50,277,0],[1100,290,0]],[[50,277,0],[500,278,0]],[[50,277,0],[1150,291,0]],[[50,277,0],[1100,278,0]],[[50,277,0],[1150,278,0]],[[50,277,0],[1100,278,0],[2000,284,0]],[[50,277,0],[1100,278,0],[2000,284,0]],[[50,277,0],[900,278,0],[1950,292,0]],[[50,277,0],[800,278,0],[1950,292,0]],[[50,277,0],[1000,278,0],[2000,292,0]],[[50,277,0],[850,278,0],[2000,292,0]],[[50,277,0],[1000,278,0],[1300,292,0]],[[50,277,0],[850,278,0],[1350,292,0],[1850,285,0]],[[50,277,0],[1050,278,0],[1300,292,0],[1800,285,0]],[[50,277,0],[1150,278,0],[1350,292,0],[1650,285,0]],[[50,277,0],[1400,278,0]],[[50,277,0],[1450,290,0]],[[50,277,0],[1400,278,0]],[[50,277,0],[1450,290,0]],[[50,277,0],[800,-1,0],[850,277,0],[900,278,0],[1400,293,0]],[[50,277,0],[950,278,0],[1600,293,0]],[[50,277,0],[900,278,0],[1450,293,0]],[[50,277,0],[950,278,0],[1550,293,0]],[[50,277,0],[1150,278,0]],[[50,277,0],[1150,278,0]],[[50,277,0],[1100,278,0]],[[50,277,0],[1150,278,0]],[[50,277,0],[750,278,0],[1500,294,0]],[[50,277,0],[750,278,0],[1500,294,0]],[[50,277,0],[750,278,0],[1500,294,0]],[[50,277,0],[750,278,0],[1400,294,0]]],"house":[[[50,295,0],[1400,-1,0],[1650,295,0]],[[50,295,0],[1400,-1,0],[1650,295,0]],[[50,295,0],[1250,-1,0],[1650,295,0]],[[50,295,0],[1400,-1,0],[1450,295,0],[1500,-1,0],[1650,296,0]],[[50,295,0],[1900,-1,0]],[[50,295,0],[1850,-1,0]],[[50,295,0],[1750,-1,0]],[[50,295,0],[1800,-1,0],[1850,295,0],[1900,-1,0]],[[50,295,0],[1750,296,0],[1800,-1,0],[2000,297,1]],[[50,295,0],[1750,296,0],[1800,-1,0]],[[50,295,0],[1750,-1,0],[1800,295,0],[1850,-1,0]],[[50,295,0],[1750,296,0],[1850,-1,0],[2000,297,1]],[[50,295,0],[1350,-1,0],[1700,295,0]],[[50,295,0],[1350,-1,0],[1700,295,0]],[[50,295,0],[1350,-1,0],[1700,295,0]],[[50,295,0],[1450,-1,0],[1700,295,0]],[[50,295,0],[1300,-1,0],[1700,295,0]],[[50,295,0],[1300,-1,0],[1700,295,0]],[[50,295,0],[1250,-1,0],[1700,295,0]],[[50,295,0],[1250,-1,0],[1700,295,0]],[[50,295,0],[1300,-1,0]],[[50,295,0],[1200,-1,0]],[[50,295,0],[1200,-1,0],[2000,298,1]],[[50,295,0],[1250,-1,0]],[[50,295,0],[1700,299,0],[1850,-1,0]],[[50,295,0],[1700,299,0],[1800,-1,0]],[[50,295,0],[1700,299,0],[1850,-1,0]],[[50,295,0],[1700,299,0],[1850,-1,0]],[[50,295,0],[1300,-1,0],[1650,295,0]],[[50,295,0],[1250,-1,0],[1300,295,0],[1350,-1,0],[1650,295,0]],[[50,295,0],[1350,-1,0],[1650,295,0]],[[50,295,0],[1300,-1,0],[1500,298,1],[1600,-1,0],[1650,295,0]],[[50,295,0]],[[50,295,0]],[[50,295,0]],[[50,295,0]],[[50,295,0],[950,296,0],[1850,-1,0],[1950,298,1]],[[50,295,0],[950,296,0],[1850,-1,0],[1900,298,1]],[[50,295,0],[900,296,0],[1750,-1,0],[1900,298,1]],[[50,295,0],[900,296,0],[1850,-1,0],[1900,298,1]],[[50,295,0],[1350,-1,0],[1650,295,0]],[[50,295,0],[1400,-1,0],[1700,295,0]],[[50,295,0],[1350,-1,0],[1700,295,0]],[[50,295,0],[1350,-1,0],[1650,295,0]],[[50,295,0],[1350,-1,0],[1650,295,0]],[[50,295,0],[1300,-1,0],[1350,295,0],[1450,-1,0],[1650,295,0]],[[50,295,0],[1450,-1,0],[1500,295,0],[1550,-1,0],[1650,295,0]],[[50,295,0],[1500,-1,0],[1650,295,0]],[[50,295,0],[2000,-1,0]],[[50,295,0]],[[50,295,0],[2000,-1,0]],[[50,295,0],[850,300,0],[2000,-1,0]],[[50,295,0],[1450,-1,0],[1650,295,0]],[[50,295,0],[1250,-1,0],[1300,295,0],[1500,-1,0],[1650,295,0]],[[50,295,0],[1450,-1,0],[1650,295,0]],[[50,295,0],[1450,-1,0],[1650,295,0]],[[50,295,0]],[[50,295,0]],[[50,295,0]],[[50,295,0]],[[50,295,0]],[[50,295,0],[2000,-1,0]],[[50,295,0]],[[50,295,0]],[[50,295,0],[1350,-1,0],[1700,295,0]],[[50,295,0],[1350,-1,0],[1700,295,0]],[[50,295,0],[1350,-1,0],[1700,295,0]],[[50,295,0],[1400,-1,0],[1700,295,0]],[[50,295,0]],[[50,295,0]],[[50,295,0]],[[50,295,0]],[[50,295,0],[1450,-1,0],[1650,295,0]],[[50,295,0],[1450,-1,0],[1650,295,0]],[[50,295,0],[1500,-1,0],[1650,295,0]],[[50,295,0],[1450,-1,0],[1650,295,0]],[[50,295,0],[1350,-1,0],[1400,298,1]],[[50,295,0],[1300,-1,0],[1350,298,1]],[[50,295,0],[1400,298,1]],[[50,295,0],[1350,298,1]]],"name":[[[50,301,0],[2000,302,0]],[[50,301,0]],[[50,301,0],[2000,302,0]],[[50,301,0],[1950,302,0]],[[50,301,0],[1050,303,0],[1650,304,0]],[[50,301,0],[1100,303,0],[1650,304,0]],[[50,301,0],[1100,303,0],[1700,304,0]],[[50,301,0],[1150,303,0],[1650,304,0]],[[50,301,0],[1350,305,0],[1550,306,0]],[[50,301,0],[1400,305,0],[1550,306,0]],[[50,301,0],[1350,305,0],[1550,306,0]],[[50,301,0],[1350,305,0],[1550,306,0]],[[50,301,0],[1600,307,0]],[[50,301,0],[1250,305,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[2000,302,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[1250,305,0],[1950,306,0]],[[50,301,0],[1400,305,0],[1950,306,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[1600,305,0]],[[50,301,0],[1600,305,0]],[[50,301,0],[1600,305,0]],[[50,301,0],[1600,305,0]],[[50,301,0],[1300,305,0],[1800,306,0]],[[50,301,0],[1300,305,0],[1750,306,0]],[[50,301,0],[1250,305,0],[1850,306,0]],[[50,301,0],[2000,302,0]],[[50,301,0],[1150,305,0],[1750,306,0]],[[50,301,0],[1150,305,0],[1700,306,0]],[[50,301,0],[1150,305,0],[1650,306,0]],[[50,301,0],[1200,305,0],[1650,306,0]],[[50,301,0],[950,305,0]],[[50,301,0],[1000,305,0]],[[50,301,0],[800,305,0]],[[50,301,0],[850,305,0]],[[50,301,0],[2000,302,0]],[[50,301,0],[2000,302,0]],[[50,301,0],[1700,302,0]],[[50,301,0]],[[50,301,0],[1950,302,0]],[[50,301,0],[2000,302,0]],[[50,301,0]],[[50,301,0]],[[50,301,0],[1150,302,0]],[[50,301,0],[1150,302,0]],[[50,301,0],[1150,302,0]],[[50,301,0],[1150,308,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[1650,302,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[1300,308,0]],[[50,301,0],[1250,308,0]],[[50,301,0],[1250,308,0]],[[50,301,0],[1250,308,0]],[[50,301,0],[1100,303,0],[1250,304,0]],[[50,301,0],[1100,303,0],[1250,304,0]],[[50,301,0],[1200,303,0],[1250,304,0]],[[50,301,0],[1100,303,0],[1300,304,0]],[[50,301,0],[1400,302,0]],[[50,301,0],[1450,302,0]],[[50,301,0],[1450,302,0]],[[50,301,0],[1450,302,0]],[[50,301,0],[1050,305,0]],[[50,301,0],[1050,305,0]],[[50,301,0],[1000,305,0]],[[50,301,0],[1000,305,0]],[[50,301,0],[2000,302,0]],[[50,301,0],[2000,302,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[1600,302,0]],[[50,301,0],[850,305,0],[1450,302,0]],[[50,301,0],[850,305,0],[1450,302,0]],[[50,301,0],[900,305,0],[1400,302,0]],[[50,301,0],[850,305,0],[1350,302,0]]],"king":[[[50,309,0]],[[50,309,0]],[[50,309,0]],[[50,309,0]],[[50,309,0],[1750,310,0]],[[50,309,0],[1750,310,0]],[[50,309,0],[1750,310,0]],[[50,309,0],[1700,310,0]],[[50,309,0],[1450,310,0],[1750,311,0]],[[50,309,0],[1450,310,0],[1800,311,0]],[[50,309,0],[1350,310,0],[1900,311,0]],[[50,309,0],[1450,310,0]],[[50,309,0],[1600,312,0]],[[50,309,0],[1650,312,0]],[[50,309,0],[1550,312,0]],[[50,309,0],[1550,312,0]],[[50,309,0],[1650,313,0]],[[50,309,0],[1600,312,0]],[[50,309,0],[1550,313,0]],[[50,309,0],[1600,312,0]],[[50,309,0],[1650,312,0]],[[50,309,0]],[[50,309,0]],[[50,309,0],[1650,312,0]],[[50,309,0],[1650,310,0]],[[50,309,0],[1650,310,0]],[[50,309,0],[1800,310,0]],[[50,309,0],[1650,310,0]],[[50,309,0],[1550,312,0]],[[50,309,0],[1550,313,0]],[[50,309,0],[1250,310,0]],[[50,309,0],[1600,312,0]],[[50,309,0],[1200,310,0]],[[50,309,0],[1200,310,0]],[[50,309,0],[1200,310,0]],[[50,309,0],[1200,310,0]],[[50,309,0],[1500,313,0]],[[50,309,0],[1550,313,0]],[[50,309,0],[850,310,0]],[[50,309,0],[1500,313,0]],[[50,309,0],[2000,312,0]],[[50,309,0],[2000,312,0]],[[50,309,0],[1650,312,0]],[[50,309,0]],[[50,309,0],[1550,313,0]],[[50,309,0]],[[50,309,0],[1500,313,0]],[[50,309,0]],[[50,309,0],[1150,312,0]],[[50,309,0],[1100,312,0]],[[50,309,0],[1150,312,0]],[[50,309,0],[850,311,0]],[[50,309,0],[1550,312,0]],[[50,309,0],[1600,312,0]],[[50,309,0],[1550,312,0]],[[50,309,0],[1600,312,0]],[[50,309,0],[1250,313,0]],[[50,309,0],[1250,313,0]],[[50,309,0],[1250,313,0]],[[50,309,0],[1250,313,0]],[[50,309,0],[1300,310,0]],[[50,309,0],[1350,310,0]],[[50,309,0],[1300,310,0]],[[50,309,0],[1400,310,0]],[[50,309,0],[1400,312,0]],[[50,309,0],[1450,312,0]],[[50,309,0],[1450,312,0]],[[50,309,0],[1400,312,0]],[[50,309,0],[1050,310,0]],[[50,309,0],[1050,310,0]],[[50,309,0],[1050,310,0]],[[50,309,0],[1000,310,0]],[[50,309,0],[2000,312,0]],[[50,309,0],[1650,312,0]],[[50,309,0],[1550,312,0]],[[50,309,0],[1850,312,0]],[[50,309,0],[950,310,0]],[[50,309,0],[900,310,0]],[[50,309,0],[1100,310,0]],[[50,309,0],[900,310,0]]]},"states":[{"id":"vard","name":"Vardunské království","regions":["vardun","selm","orra","kestrin","bal","tumar","hesk","ivel","nask","ebb"],"capital":"vardun","from":700}],"events":[{"year":700,"title":"Vardunské království","text":"Deset západních krajů pod jedním trůnem. Hranice je zavřená."},{"year":1100,"title":"Psaná norma","text":"Písaři ve Vardunu ustálí, jak se píše. Číst umí jen vrstva u dvora."},{"year":1600,"title":"Tisk a školy","text":"Škola v každé vsi království. Norma se dostává k dětem."}],"dialects":[[100,1],[200,1],[300,1],[400,1],[500,1],[600,1],[700,1],[800,1],[900,2],[1000,6],[1100,9],[1200,12],[1300,13],[1400,14],[1500,17],[1600,16],[1700,14],[1800,13],[1900,13],[2000,13]]}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById('cee-data').textContent);
+  const CONCEPTS = Object.keys(D.gloss);
+  const P = D.places, R = D.regions;
+  const RI = Object.fromEntries(R.map((r, i) => [r.id, i]));
+  const PI = Object.fromEntries(P.map((p, i) => [p.id, i]));
+  const villagesOf = R.map(r => P.map((p, i) => (p.region === r.id ? i : -1)).filter(i => i >= 0));
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+  const ORIGIN_CZ = { inherited: 'zděděné', derivation: 'odvozenina', compound: 'složenina', coinage: 'nové slovo', compounding: 'složenina', loan: 'výpůjčka' };
+  const STATE = D.states[0];
+  const inState = new Set(STATE ? STATE.regions : []);
+  const placeName = i => { const p = P[i]; const k = +p.id.split('-v')[1]; return `${R[RI[p.region]].name} ${ROMAN[k] || k + 1}`; };
+
+  const S = { concept: 'hand', year: D.end, place: PI['teth-v1'] ?? 0, mode: 'word', playing: false, timer: null };
+
+  // --- slova v čase ---
+  function entryAt(c, i, y) {
+    const rows = D.forms[c][i]; let e = rows[0];
+    for (const r of rows) { if (r[0] <= y) e = r; else break; }
+    return e;
+  }
+  const str = e => (e && e[1] >= 0 ? D.strings[e[1]] : null);
+  const formAt = (c, i, y) => str(entryAt(c, i, y));
+
+  const MOD = /[̀-ͯʰ-˿᷀-᷿]/;
+  const segCache = new Map();
+  function segs(s) {
+    let v = segCache.get(s); if (v) return v; v = [];
+    for (const ch of s) {
+      if (v.length && (MOD.test(ch) || v[v.length - 1].endsWith('͡'))) v[v.length - 1] += ch; else v.push(ch);
+    }
+    segCache.set(s, v); return v;
+  }
+  function align(a, b) {
+    const A = segs(a), B = segs(b), n = A.length, m = B.length;
+    const d = Array.from({ length: n + 1 }, (_, i) => { const row = new Array(m + 1).fill(0); row[0] = i; return row; });
+    for (let j = 0; j <= m; j++) d[0][j] = j;
+    for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (A[i - 1] === B[j - 1] ? 0 : 1));
+    const ops = []; let i = n, j = m;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && d[i][j] === d[i - 1][j - 1] + (A[i - 1] === B[j - 1] ? 0 : 1)) {
+        if (A[i - 1] !== B[j - 1]) ops.push([A[i - 1], B[j - 1]]); i--; j--;
+      } else if (i > 0 && d[i][j] === d[i - 1][j] + 1) { ops.push([A[i - 1], '∅']); i--; }
+      else { ops.push(['∅', B[j - 1]]); j--; }
+    }
+    return { norm: d[n][m] / Math.max(n, m, 1), ops: ops.reverse() };
+  }
+  const distCache = new Map();
+  function fdist(a, b) {
+    if (a === b) return 0; if (a === null || b === null) return 1;
+    const key = a < b ? a + '|' + b : b + '|' + a;
+    let v = distCache.get(key); if (v === undefined) { v = align(a, b).norm; distCache.set(key, v); }
+    return v;
+  }
+  function majority(c, r, y) {
+    const counts = new Map();
+    for (const i of villagesOf[r]) { const f = formAt(c, i, y); counts.set(f, (counts.get(f) || 0) + 1); }
+    const sorted = [...counts].sort((a, b) => b[1] - a[1]);
+    return { main: sorted[0][0], others: sorted.slice(1).map(x => x[0]).filter(x => x !== null) };
+  }
+  function distinctForms(c, y) { const s = new Set(); for (let i = 0; i < P.length; i++) { const f = formAt(c, i, y); if (f !== null) s.add(f); } return s.size; }
+  function plural(n, one, few, many) { return n === 1 ? one : (n >= 2 && n <= 4 ? few : many); }
+  const proto = c => formAt(c, PI['vardun-v0'], 0);
+  const dialectsAt = y => { let n = 1; for (const [yr, k] of D.dialects) if (yr <= y) n = k; return n; };
+
+  // --- mapa ---
+  const stage = document.getElementById('stage'), cv = document.getElementById('map'), ctx = cv.getContext('2d');
+  const labelsEl = document.getElementById('labels');
+  let G = null;
+
+  function hash(i, j) { let h = Math.imul(i, 374761393) + Math.imul(j, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+  function vnoise(x, y) {
+    const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1);
+    return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
+  }
+  const onIsland = P.map(p => R[RI[p.region]].terrain === 'island');
+  function landField(x, y) {
+    let main = Infinity, island = Infinity;
+    P.forEach((p, i) => {
+      const dx = p.x - x, dy = p.y - y, d = dx * dx + dy * dy;
+      if (onIsland[i]) { if (d < island) island = d; } else if (d < main) main = d;
+    });
+    const noise = vnoise(x / 24, y / 24) * 8 + vnoise(x / 8 + 40, y / 8) * 2.6;
+    const fm = 34 - Math.sqrt(main) + noise, fi = 34 - Math.sqrt(island) + noise;
+    // Ostrov od pevniny vždy dělí průliv.
+    if (fm > -14 && fi > -14) return Math.min(Math.max(fm, fi), -3 - Math.min(Math.abs(fm - fi), 6));
+    return Math.max(fm, fi);
+  }
+  function edgesOf(points, keep) {
+    const del = d3.Delaunay.from(points), vor = del.voronoi([-1e4, -1e4, 1e4, 1e4]);
+    const { triangles, halfedges } = del, cc = vor.circumcenters, out = [];
+    for (let e = 0; e < halfedges.length; e++) {
+      const o = halfedges[e]; if (o < e) continue;
+      const a = triangles[e], b = triangles[e % 3 === 2 ? e - 2 : e + 1];
+      if (!keep(a, b)) continue;
+      const t1 = Math.floor(e / 3), t2 = Math.floor(o / 3);
+      out.push({ a, b, x1: cc[2 * t1], y1: cc[2 * t1 + 1], x2: cc[2 * t2], y2: cc[2 * t2 + 1] });
+    }
+    return out;
+  }
+
+  function layout() {
+    const W = stage.clientWidth, H = stage.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    const pad = 24, xs = P.map(p => p.x), ys = P.map(p => p.y);
+    const minx = Math.min(...xs) - pad, maxx = Math.max(...xs) + pad, miny = Math.min(...ys) - pad, maxy = Math.max(...ys) + pad;
+    const top = W < 600 ? 84 : 104, bottom = W < 600 ? 10 : 56;
+    const k = Math.min((W - 24) / (maxx - minx), (H - top - bottom) / (maxy - miny));
+    const ox = (W - k * (maxx - minx)) / 2 - k * minx, oy = top + (H - top - bottom - k * (maxy - miny)) / 2 - k * miny;
+    const sx = x => ox + k * x, sy = y => oy + k * y;
+    const g = 4, nx = Math.ceil(W / g) + 1, ny = Math.ceil(H / g) + 1, values = new Float64Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) values[j * nx + i] = landField((i * g - ox) / k, (j * g - oy) / k);
+    const path = d3.geoPath(d3.geoTransform({ point(x, y) { this.stream.point(x * g, y * g); } }));
+    const contours = d3.contours().size([nx, ny]).thresholds([0, -4, -9, -15, -22])(values).sort((a, b) => b.value - a.value);
+    const shapes = contours.map(c => new Path2D(path(c)));
+    const vp = P.map(p => [sx(p.x), sy(p.y)]);
+    const villageEdges = edgesOf(vp, (a, b) => Math.hypot(P[a].x - P[b].x, P[a].y - P[b].y) <= 32).map(e => {
+      // Hrana Voronoiova diagramu u pobřeží míří daleko; izoglosa stačí kolem středu mezi vesnicemi.
+      const mx = (vp[e.a][0] + vp[e.b][0]) / 2, my = (vp[e.a][1] + vp[e.b][1]) / 2, L = 12 * k;
+      const clamp = (x, y) => { const d = Math.hypot(x - mx, y - my); return d <= L ? [x, y] : [mx + (x - mx) * L / d, my + (y - my) * L / d]; };
+      const [x1, y1] = clamp(e.x1, e.y1), [x2, y2] = clamp(e.x2, e.y2);
+      return { ...e, x1, y1, x2, y2 };
+    });
+    const rp = R.map(r => [sx(r.x), sy(r.y)]);
+    const borderEdges = edgesOf(rp, (a, b) => inState.has(R[a].id) !== inState.has(R[b].id) && Math.hypot(R[a].x - R[b].x, R[a].y - R[b].y) <= 80);
+    const marks = [];
+    R.forEach((r, ri) => {
+      if (r.terrain !== 'mountains' && r.terrain !== 'hills') return;
+      for (let n = 0; n < 7; n++) {
+        const ang = hash(ri, n) * Math.PI * 2, rad = (14 + hash(n, ri) * 18) * k / 2.4;
+        marks.push({ x: rp[ri][0] + Math.cos(ang) * rad * 1.5, y: rp[ri][1] + 26 + Math.sin(ang) * rad * 0.6, kind: r.terrain, s: Math.max(4, 3.2 * k) });
+      }
+    });
+    let stateLabel = null;
+    if (STATE) {
+      const pts = STATE.regions.map(id => rp[RI[id]]);
+      stateLabel = { x: d3.mean(pts, p => p[0]), y: Math.min(...pts.map(p => p[1])) - 34 * k / 2.4 };
+    }
+    G = { W, H, dpr, k, sx, sy, land: shapes[0], lines: shapes.slice(1), vp, rp, villageEdges, borderEdges, marks, stateLabel };
+    R.forEach((r, ri) => { const el = labelEls[ri]; el.style.left = rp[ri][0] + 'px'; el.style.top = (rp[ri][1] - 9 * k - 2) + 'px'; });
+  }
+
+  function tokens() {
+    const cs = getComputedStyle(document.documentElement), t = n => cs.getPropertyValue(n).trim();
+    return { sea: t('--sea'), seaLine: t('--sea-line'), land: t('--land'), ink: t('--ink'), ink2: t('--ink-2'), iso: t('--isogloss'), font: t('--f-sc'), grain: parseFloat(t('--grain')) || 0 };
+  }
+  const grainTiles = {};
+  function grainTile(light) {
+    if (grainTiles[light]) return grainTiles[light];
+    const c = document.createElement('canvas'); c.width = c.height = 192;
+    const g = c.getContext('2d'); g.fillStyle = light ? '#ffffff' : '#000000';
+    for (let n = 0; n < 3200; n++) {
+      const x = hash(n, 11) * 192, y = hash(n, 23) * 192, s = 0.5 + hash(n, 37) * 1.1;
+      g.globalAlpha = 0.25 + hash(n, 41) * 0.75; g.fillRect(x, y, s, s);
+    }
+    for (let n = 0; n < 90; n++) {
+      const x = hash(n, 53) * 192, y = hash(n, 59) * 192, a = hash(n, 61) * Math.PI;
+      g.globalAlpha = 0.35; g.fillRect(x, y, 4 + hash(n, 67) * 6, 0.6); g.save(); g.translate(x, y); g.rotate(a); g.fillRect(0, 0, 5, 0.5); g.restore();
+    }
+    return (grainTiles[light] = ctx.createPattern(c, 'repeat'));
+  }
+  function isDark(hex) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex); if (!m) return false;
+    const v = parseInt(m[1], 16); return ((v >> 16) * 0.3 + ((v >> 8) & 255) * 0.59 + (v & 255) * 0.11) < 110;
+  }
+
+  const allCache = new Map();
+  function allWeights(y) {
+    let w = allCache.get(y); if (w) return w;
+    w = G.villageEdges.map(e => { let s = 0; for (const c of CONCEPTS) s += fdist(formAt(c, e.a, y), formAt(c, e.b, y)); return s / CONCEPTS.length; });
+    allCache.set(y, w); return w;
+  }
+
+  function draw() {
+    if (!G) return;
+    const t = tokens(), { W, H, dpr } = G;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = t.sea; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = t.seaLine; ctx.lineWidth = 0.8;
+    G.lines.forEach((p, n) => { ctx.globalAlpha = 0.75 - n * 0.16; ctx.stroke(p); });
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = t.land; ctx.fill(G.land);
+    if (t.grain) {
+      ctx.save(); ctx.globalAlpha = t.grain; ctx.fillStyle = grainTile(isDark(t.land));
+      ctx.fillRect(0, 0, W, H); ctx.restore();
+    }
+    ctx.strokeStyle = t.ink; ctx.lineWidth = 1.1; ctx.stroke(G.land);
+
+    ctx.strokeStyle = t.ink2; ctx.lineWidth = 1; ctx.globalAlpha = 0.55;
+    for (const m of G.marks) {
+      ctx.beginPath();
+      if (m.kind === 'mountains') { ctx.moveTo(m.x - m.s, m.y + m.s * 0.5); ctx.lineTo(m.x, m.y - m.s * 0.6); ctx.lineTo(m.x + m.s, m.y + m.s * 0.5); }
+      else ctx.arc(m.x, m.y + m.s * 0.4, m.s * 0.8, Math.PI * 1.15, Math.PI * 1.85);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.save(); ctx.clip(G.land);
+    if (STATE && S.year >= STATE.from) {
+      ctx.strokeStyle = t.ink; ctx.lineWidth = 1.2; ctx.setLineDash([7, 3, 1.5, 3]);
+      ctx.beginPath(); for (const e of G.borderEdges) { ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); } ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.strokeStyle = t.iso; ctx.lineCap = 'round';
+    if (S.mode === 'word') {
+      for (const e of G.villageEdges) {
+        const w = fdist(formAt(S.concept, e.a, S.year), formAt(S.concept, e.b, S.year)); if (!w) continue;
+        ctx.lineWidth = 0.9 + 2.8 * w; ctx.globalAlpha = 0.95;
+        ctx.beginPath(); ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); ctx.stroke();
+      }
+    } else {
+      const ws = allWeights(S.year);
+      G.villageEdges.forEach((e, n) => {
+        const w = ws[n]; if (w < 0.004) return;
+        ctx.lineWidth = Math.min(7, 0.5 + w * 22); ctx.globalAlpha = Math.min(1, 0.3 + w * 6);
+        ctx.beginPath(); ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); ctx.stroke();
+      });
+    }
+    ctx.globalAlpha = 1; ctx.restore();
+
+    G.vp.forEach(([x, y], i) => {
+      const r = RI[P[i].region];
+      const same = S.mode === 'all' || formAt(S.concept, i, S.year) === majority(S.concept, r, S.year).main;
+      ctx.beginPath(); ctx.arc(x, y, 2.4, 0, Math.PI * 2);
+      if (same) { ctx.fillStyle = t.ink; ctx.fill(); } else { ctx.fillStyle = t.land; ctx.fill(); ctx.strokeStyle = t.iso; ctx.lineWidth = 1.3; ctx.stroke(); }
+    });
+    const [px, py] = G.vp[S.place];
+    ctx.strokeStyle = t.iso; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  // --- popisky krajů ---
+  const labelEls = R.map((r, ri) => {
+    const b = document.createElement('button'); b.className = 'place'; b.type = 'button';
+    b.innerHTML = `<span class="nm">${r.name.toUpperCase()}</span><span class="fm ipa"></span><span class="var ipa"></span>`;
+    b.addEventListener('click', () => { S.place = villagesOf[ri][0]; render(); });
+    labelsEl.appendChild(b); return b;
+  });
+  const lastForm = new Map();
+  function renderLabels(animate) {
+    R.forEach((r, ri) => {
+      const el = labelEls[ri], m = majority(S.concept, ri, S.year);
+      const fm = el.querySelector('.fm'), vr = el.querySelector('.var');
+      const text = m.main === null ? '∅' : m.main;
+      if (animate && lastForm.get(ri) !== undefined && lastForm.get(ri) !== text) {
+        fm.classList.remove('flash'); void fm.offsetWidth; fm.classList.add('flash');
+      }
+      lastForm.set(ri, text);
+      fm.textContent = text; fm.classList.toggle('none', m.main === null);
+      fm.title = m.main === null ? 'Pro tento význam se tu žádné slovo neužívá.' : '';
+      vr.innerHTML = m.others.length ? `<i>též</i> ${m.others.slice(0, 2).join(', ')}` : '';
+      el.setAttribute('aria-pressed', String(P[S.place].region === r.id));
+      el.setAttribute('aria-label', `${r.name}: ${text}`);
+    });
+  }
+
+  // --- vrt ---
+  function note(prev, e) {
+    const a = str(prev), b = str(e);
+    if (b === null) return 'slovo pro tento význam vymizelo';
+    const origin = D.origins[e[2]];
+    if (a === null) return `nové slovo: ${ORIGIN_CZ[origin] || origin}`;
+    const al = align(a, b);
+    if (al.norm > 0.6 || (origin !== D.origins[prev[2]] && origin !== 'inherited')) return `nahrazeno: ${ORIGIN_CZ[origin] || origin}`;
+    const seen = new Set(), parts = [];
+    for (const [x, y] of al.ops) { const k = x + '>' + y; if (seen.has(k)) continue; seen.add(k); parts.push(`<span class="ipa">${x} → ${y}</span>`); }
+    return parts.slice(0, 3).join(' · ');
+  }
+  function renderCore() {
+    const i = S.place, c = S.concept, rows = D.forms[c][i];
+    document.getElementById('core-place').textContent = placeName(i);
+    document.getElementById('core-sub').textContent = `Co se tu za 2000 let říkalo pro „${D.gloss[c]}“.`;
+    const layers = rows.map((e, n) => ({ e, prev: rows[n - 1], from: n === 0 ? D.start : e[0], to: n + 1 < rows.length ? rows[n + 1][0] : D.end }));
+    const list = document.getElementById('strata'); list.innerHTML = '';
+    for (const L of layers.slice().reverse()) {
+      const li = document.createElement('li'); li.className = 'stratum';
+      const h = Math.max(46, (L.to - L.from) * 0.14); li.style.minHeight = h + 'px';
+      if (L.from > S.year) li.classList.add('future');
+      if (L.from <= S.year && (S.year < L.to || (L.to === D.end && S.year === D.end))) li.classList.add('now');
+      const f = str(L.e);
+      li.innerHTML = `<span class="fm ipa">${f === null ? '∅' : (L.prev ? '' : '*') + f}</span><span class="yr">${L.from}–${L.to}</span>` +
+        (L.prev ? `<span class="why">${note(L.prev, L.e)}</span>` : `<span class="why" style="color:var(--ink-2)">zděděno z pravardštiny</span>`);
+      list.appendChild(li);
+    }
+    const here = formAt(c, i, S.year);
+    let same = 0; for (let j = 0; j < P.length; j++) if (j !== i && formAt(c, j, S.year) === here) same++;
+    document.getElementById('core-share').textContent = here === null
+      ? `V roce ${S.year} tu slovo pro „${D.gloss[c]}“ chybí.`
+      : `V roce ${S.year} se stejně říká v dalších ${same} ${plural(same, 'vsi', 'vsích', 'vsích')} z ${P.length - 1}.`;
+    const near = P.map((p, j) => ({ j, d: Math.hypot(p.x - P[i].x, p.y - P[i].y) })).filter(o => o.j !== i).sort((a, b) => a.d - b.d).slice(0, 5);
+    const ul = document.getElementById('neigh'); ul.innerHTML = '';
+    for (const o of near) {
+      const f = formAt(c, o.j, S.year), li = document.createElement('li'), b = document.createElement('button');
+      b.type = 'button';
+      b.innerHTML = `<span><span class="nm">${placeName(o.j)}</span> <span class="km">${Math.round(o.d)} km</span></span><span class="fm ipa${f !== here ? ' diff' : ''}">${f === null ? '∅' : f}</span>`;
+      b.addEventListener('click', () => { S.place = o.j; render(); });
+      li.appendChild(b); ul.appendChild(li);
+    }
+  }
+
+  // --- rejstřík, čas ---
+  const lexEl = document.getElementById('lexicon');
+  const lexButtons = CONCEPTS.map(c => {
+    const li = document.createElement('li'), b = document.createElement('button');
+    b.type = 'button'; b.innerHTML = `${D.gloss[c]}<span></span>`;
+    b.addEventListener('click', () => { S.concept = c; lastForm.clear(); render(); });
+    li.appendChild(b); lexEl.appendChild(li); return b;
+  });
+  const input = document.getElementById('year-input');
+  input.max = D.end; input.step = D.step;
+  input.addEventListener('input', () => { S.year = +input.value; render(true); });
+
+  const track = document.getElementById('track');
+  for (let y = 0; y <= D.end; y += 250) {
+    const el = document.createElement('span'); el.className = 'tick'; el.style.left = (y / D.end * 100) + '%'; el.textContent = y;
+    if (y === 0) el.style.transform = 'none'; if (y === D.end) el.style.transform = 'translateX(-100%)';
+    track.insertBefore(el, input);
+  }
+  for (const ev of D.events) {
+    const el = document.createElement('div'); el.className = 'ev'; el.style.left = (ev.year / D.end * 100) + '%';
+    el.innerHTML = `<span>${ev.title}</span>`; track.insertBefore(el, input);
+  }
+  function renderSpark() {
+    const svg = document.getElementById('spark'), pts = [];
+    let max = 1;
+    for (let y = 0; y <= D.end; y += D.step) {
+      const v = S.mode === 'word' ? distinctForms(S.concept, y) : dialectsAt(y);
+      pts.push([y, v]); if (v > max) max = v;
+    }
+    const X = y => y / D.end * 1000, Y = v => 30 - (v / max) * 26;
+    const line = pts.map(([y, v], n) => `${n ? 'L' : 'M'}${X(y).toFixed(1)},${Y(v).toFixed(1)}`).join('');
+    const nowX = X(S.year);
+    svg.innerHTML = `<path d="${line}L1000,30L0,30Z" fill="var(--ink)" opacity="0.10"/>` +
+      `<path d="${line}" fill="none" stroke="var(--ink)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>` +
+      `<rect x="${nowX}" y="0" width="${1000 - nowX}" height="30" fill="var(--panel)" opacity="0.55"/>`;
+  }
+  function renderTime() {
+    input.value = S.year;
+    document.getElementById('year').textContent = S.year;
+    const n = distinctForms(S.concept, S.year), dl = dialectsAt(S.year);
+    document.getElementById('stats').textContent = S.mode === 'word'
+      ? `1 jazyk · ${dl} nářečí · ${n} ${plural(n, 'tvar', 'tvary', 'tvarů')} slova „${D.gloss[S.concept]}“`
+      : `1 jazyk · ${dl} nářečí`;
+    const past = D.events.filter(e => e.year <= S.year).pop();
+    document.getElementById('story').innerHTML = past
+      ? `<b>${past.year} · ${past.title}.</b> ${past.text}`
+      : `<b>Rok 0.</b> Všech 80 vsí mluví stejně: pravardštinou.`;
+    renderSpark();
+  }
+
+  function render(animate = false) {
+    const c = S.concept;
+    document.getElementById('app').classList.toggle('mode-all', S.mode === 'all');
+    document.getElementById('hw-gloss').textContent = S.mode === 'word' ? D.gloss[c] : 'hranice nářečí';
+    document.getElementById('hw-proto').textContent = S.mode === 'word' ? '*' + proto(c) : '';
+    document.getElementById('hw-lang').textContent = S.mode === 'word' ? 'v pravardštině, rok 0' : `${CONCEPTS.length} slov naráz: kde se jich mezi sousedy liší nejvíc`;
+    document.getElementById('legend-iso').textContent = S.mode === 'word'
+      ? 'Izoglosa: za čarou se slovo říká jinak. Silnější čára, větší rozdíl.'
+      : 'Svazek izoglos: čím silnější čára, tím víc slov se přes ni liší.';
+    lexButtons.forEach((b, n) => {
+      b.setAttribute('aria-current', String(CONCEPTS[n] === c && S.mode === 'word'));
+      b.querySelector('span').textContent = distinctForms(CONCEPTS[n], S.year);
+    });
+    document.getElementById('mode-word').setAttribute('aria-pressed', String(S.mode === 'word'));
+    document.getElementById('mode-all').setAttribute('aria-pressed', String(S.mode === 'all'));
+    renderLabels(animate); renderCore(); renderTime(); draw();
+  }
+
+  document.getElementById('mode-word').addEventListener('click', () => { S.mode = 'word'; render(); });
+  document.getElementById('mode-all').addEventListener('click', () => { S.mode = 'all'; render(); });
+  lexButtons.forEach(b => b.addEventListener('click', () => { S.mode = 'word'; render(); }));
+
+  cv.addEventListener('click', ev => {
+    const rect = cv.getBoundingClientRect(), x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+    let best = -1, bd = 18;
+    G.vp.forEach(([px, py], i) => { const d = Math.hypot(px - x, py - y); if (d < bd) { bd = d; best = i; } });
+    if (best >= 0) { S.place = best; render(); }
+  });
+
+  const playBtn = document.getElementById('play'), playIcon = document.getElementById('play-icon');
+  function setPlaying(on) {
+    S.playing = on; clearInterval(S.timer);
+    playBtn.setAttribute('aria-label', on ? 'Zastavit' : 'Přehrát');
+    playIcon.innerHTML = on ? '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>' : '<path d="M4 2l10 6-10 6z"/>';
+    if (!on) return;
+    if (S.year >= D.end) { S.year = 0; lastForm.clear(); render(); }
+    S.timer = setInterval(() => {
+      if (S.year >= D.end) { setPlaying(false); return; }
+      S.year = Math.min(D.end, S.year + D.step); render(true);
+    }, 220);
+  }
+  playBtn.addEventListener('click', () => setPlaying(!S.playing));
+  document.addEventListener('keydown', ev => {
+    if (ev.target.closest('input, textarea')) return;
+    if (ev.key === ' ' && !ev.target.closest('button')) { ev.preventDefault(); setPlaying(!S.playing); }
+    else if (ev.key === 'ArrowRight') { S.year = Math.min(D.end, S.year + D.step); render(true); }
+    else if (ev.key === 'ArrowLeft') { S.year = Math.max(0, S.year - D.step); render(true); }
+    else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      const n = CONCEPTS.indexOf(S.concept) + (ev.key === 'ArrowDown' ? 1 : -1);
+      S.concept = CONCEPTS[(n + CONCEPTS.length) % CONCEPTS.length]; S.mode = 'word'; lastForm.clear(); render();
+    }
+  });
+
+  new ResizeObserver(() => { layout(); allCache.clear(); draw(); }).observe(stage);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  layout(); render();
+  if (document.fonts) document.fonts.ready.then(draw);
+})();
+</script>
+
+</html>
