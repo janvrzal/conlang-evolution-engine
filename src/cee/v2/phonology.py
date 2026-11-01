@@ -230,9 +230,9 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
             # Nový tvar posoudí jen změny, které v něm podle předfiltru banky
             # mohou mít místo; u ostatních by fronta nic neudělala.
             bank = world.form_bank()
-            possible = bank.possible(bank.id_of(new[0]), code.stress_rule)
+            rewritten_id, rule = bank.id_of(new[0]), code.stress_rule
             for other in active_processes(state, world):
-                if other != variable_id and world.processes[other].key in possible:
+                if other != variable_id and bank.may_apply(rewritten_id, rule, world.processes[other].key):
                     _queue(world, code, other, morpheme_id)
         if rewritten:
             history.record(
