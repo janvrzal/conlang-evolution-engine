@@ -44,6 +44,12 @@ class FormBank:
         self._derived: dict[str, list[float | None]] = {}
         self._arrays: dict[str, FloatArray] = {}
         self._lengths = np.zeros(64, dtype=np.int64)
+        #: Hlásky všech tvarů za sebou (``_flat``), kde tvar začíná (``_starts``)
+        #: a hlásky, které se do pole ještě nepřepsaly (``_pending``).
+        self._starts = np.zeros(64, dtype=np.int64)
+        self._flat = np.zeros(1024, dtype=np.int64)
+        self._flat_size = 0
+        self._pending: list[int] = []
         self._tables: dict[tuple[str, StressRule], ProcessTable] = {}
         #: Tabulky v pořadí vzniku a jejich masky (cíl, levý a pravý soused)
         #: složené do matic pro hromadný předfiltr.
@@ -65,8 +71,56 @@ class FormBank:
             self.forms.append(form)
             if found >= len(self._lengths):
                 self._lengths = np.concatenate([self._lengths, np.zeros(len(self._lengths), dtype=np.int64)])
+                self._starts = np.concatenate([self._starts, np.zeros(len(self._starts), dtype=np.int64)])
             self._lengths[found] = len(form)
+            self._starts[found] = self._flat_size + len(self._pending)
+            self._pending.extend(form)
         return found
+
+    def _segments(self) -> npt.NDArray[np.int64]:
+        """Hlásky všech tvarů za sebou; doplní, co se od posledního čtení přidalo."""
+        if self._pending:
+            top = self._flat_size + len(self._pending)
+            if top > len(self._flat):
+                grown = np.zeros(max(top, 2 * len(self._flat)), dtype=np.int64)
+                grown[: self._flat_size] = self._flat[: self._flat_size]
+                self._flat = grown
+            self._flat[self._flat_size : top] = self._pending
+            self._flat_size = top
+            self._pending.clear()
+        return self._flat
+
+    def has_site(self, masks: tuple[npt.NDArray[np.bool_], ...], form_ids: IntArray) -> npt.NDArray[np.bool_]:
+        """Pro každý tvar: má v něm změna s maskami (cíl, levý, pravý soused) vůbec místo?
+
+        Stejná podmínka jako v :meth:`screen`, ale pro jednu změnu a mnoho tvarů
+        najednou. Podmínky přízvuku a pozice místa jen dál zužují, takže „ne“
+        je jisté a „ano“ se ověří aplikací změny.
+        """
+        flat = self._segments()
+        lengths = self._lengths[form_ids]
+        result = np.zeros(len(form_ids), dtype=bool)
+        filled = np.flatnonzero(lengths > 0)
+        if not len(filled):
+            return result
+        lengths = lengths[filled]
+        ends = np.cumsum(lengths)
+        begins = ends - lengths
+        total = int(ends[-1])
+        # Pozice hlásek vybraných tvarů v poli ``flat``.
+        positions = np.arange(total) + np.repeat(self._starts[form_ids[filled]] - begins, lengths)
+        segments = flat[positions]
+        boundary = self.table.boundary
+        previous = np.empty_like(segments)
+        previous[1:] = segments[:-1]
+        previous[begins] = boundary
+        following = np.empty_like(segments)
+        following[:-1] = segments[1:]
+        following[ends - 1] = boundary
+        target, left, right = masks
+        hit = target[segments] & left[previous] & right[following]
+        result[filled] = np.add.reduceat(hit.astype(np.int64), begins) > 0
+        return result
 
     def lengths(self, form_ids: IntArray) -> IntArray:
         return self._lengths[form_ids]
@@ -167,6 +221,12 @@ class ProcessTable:
         self.rule = rule
         #: Řádek tabulky v pořadí vzniku banky (viz ``FormBank.screen``).
         self.index = index
+        everything = np.ones(len(bank.table.vowel_mask), dtype=bool)
+        #: Masky hlásek, které mohou být cílem změny a jejími sousedy.
+        self._masks = tuple(
+            everything if getattr(process, side) is None else getattr(process, side).mask
+            for side in ("target", "left", "right")
+        )
         self._results = np.full(max(64, len(bank)), UNKNOWN, dtype=np.int64)
 
     def _grow(self, top: int) -> None:
@@ -200,9 +260,15 @@ class ProcessTable:
             self._results = grown
         found = self._results[form_ids]
         missing = np.unique(form_ids[found == UNKNOWN])
+        missing_before = missing
+        if len(missing):
+            # Tvary bez místa pro změnu se hromadně označí, aplikuje se jen na zbytek.
+            possible = self.bank.has_site(self._masks, missing)
+            self._results[missing[~possible]] = UNCHANGED
+            missing = missing[possible]
         for form_id in missing.tolist():
             changed = self.process.apply(self.bank.forms[form_id], self.bank.table, self.rule)
             self._results[form_id] = UNCHANGED if changed is None else self.bank.id_of(changed)
-        if len(missing):
+        if len(missing_before):
             found = self._results[form_ids]
         return found
