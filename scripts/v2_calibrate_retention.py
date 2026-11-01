@@ -39,7 +39,7 @@ YEARS = (1000, 2000, 3000)
 
 
 def world(seed: int, scale: float, population: float = 500.0, background: str = "none",
-          contact: bool = False):
+          contact: bool = False, overrides: tuple[tuple[str, float], ...] = ()):
     """Šest krajů 3 × 2; s ``contact`` mluví spodní řada jazykem ``b``."""
     regions = tuple(
         Region(f"r{i}", (60.0 * (i % 3), 60.0 * (i // 3)), language="b" if contact and i >= 3 else "a",
@@ -49,7 +49,12 @@ def world(seed: int, scale: float, population: float = 500.0, background: str = 
         for i in range(6)
     )
     rates = {change.kind: scale for change in LEXICAL_CHANGES}
-    params = Parameters(change_rates=rates, population_per_density=population)
+    # ``w.jméno=váha`` přepíše váhu tlaku (``Parameters.pressure_weights``),
+    # ``r.druh=násobek`` tempo jedné změny (``Parameters.change_rates``).
+    weights = {name[2:]: value for name, value in overrides if name.startswith("w.")}
+    rates.update({name[2:]: scale * value for name, value in overrides if name.startswith("r.")})
+    fields = {name: value for name, value in overrides if not name.startswith(("w.", "r."))}
+    params = Parameters(change_rates=rates, population_per_density=population, pressure_weights=weights, **fields)
     languages = (ProtoLanguage("a"), ProtoLanguage("b")) if contact else (ProtoLanguage("a"),)
     built = region_world(regions, seed=seed, languages=languages, semantics=True, params=params)
     events = generate([(r.id, r.neighbours, r.language) for r in regions], start=0.0, end=float(YEARS[-1]),
@@ -74,9 +79,13 @@ def inherited(world_) -> dict[str, dict[str, set[str]]]:
     return found
 
 
-def kept(world_, group_id: str, start: dict[str, set[str]]) -> tuple[list[bool], list[bool], list[bool]]:
-    """Zděděné slovo vlastního jazyka (jádro, rozšíření) a výpůjčka (jádro)."""
-    core, extension, loans = [], [], []
+def kept(world_, group_id: str, start: dict[str, set[str]]) -> tuple[list[bool], list[bool], list[bool], list[bool]]:
+    """Zděděné slovo vlastního jazyka (jádro, rozšíření) a výpůjčka (jádro, rozšíření).
+
+    Výpůjčka je slovo s morfémem jiného jazyka, ať je v dárci zděděné, nebo nové.
+    """
+    language = world_.groups[group_id].main_code.language
+    core, extension, loans, cultural = [], [], [], []
     for variable_id, variable in world_.variables.items():
         if variable.kind != "lexical":
             continue
@@ -85,33 +94,36 @@ def kept(world_, group_id: str, start: dict[str, set[str]]) -> tuple[list[bool],
             continue
         variant = world_.variants[distribution.dominant()[0]]
         own = variant.origin.change is None and variant.id in start.get(variable_id, ())
+        morpheme = variant.payload.get("morpheme")
+        foreign = morpheme is not None and world_.morphemes[str(morpheme)].language != language
         concept = variable.key.split(":", 1)[-1]
         (core if concept in SWADESH_CORE else extension).append(own)
-        if concept in SWADESH_CORE:
-            loans.append(variant.origin.change is None and not own)
-    return core, extension, loans
+        (loans if concept in SWADESH_CORE else cultural).append(foreign)
+    return core, extension, loans, cultural
 
 
-def run(job: tuple[int, float, float, str, bool]) -> dict:
-    seed, scale, population, background, contact = job
-    w, events = world(seed, scale, population, background, contact)
+def run(job: tuple[int, float, float, str, bool, tuple[tuple[str, float], ...]]) -> dict:
+    seed, scale, population, background, contact, overrides = job
+    w, events = world(seed, scale, population, background, contact, overrides)
     start = inherited(w)
     simulation = Simulation(w, events=events)
     out = {"seed": seed, "scale": scale, "population": population, "background": background,
-           "contact": contact}
+           "contact": contact, "set": " ".join(f"{name}={value:g}" for name, value in overrides)}
     for year in YEARS:
         simulation.run(float(year))
-        core, extension, loans = [], [], []
+        core, extension, loans, cultural = [], [], [], []
         for group_id in w.group_ids():
             group = w.groups[group_id]
             # Cizí elity (``kraj+dobyvatel``) nejsou mluvčí místního jazyka.
             if group.written or group.domain != "home" or "+" in group_id:
                 continue
-            c, e, b = kept(w, group_id, start.get(group.main_code.language, {}))
+            c, e, b, k = kept(w, group_id, start.get(group.main_code.language, {}))
             core += c
             extension += e
             loans += b
-        out[year] = (sum(core) / len(core), sum(extension) / len(extension), sum(loans) / len(loans))
+            cultural += k
+        out[year] = (sum(core) / len(core), sum(extension) / len(extension), sum(loans) / len(loans),
+                     sum(cultural) / len(cultural))
     return out
 
 
@@ -121,26 +133,31 @@ def main() -> None:
     parser.add_argument("--populations", type=float, nargs="+", default=[500.0])
     parser.add_argument("--backgrounds", nargs="+", default=["none"])
     parser.add_argument("--contact", action="store_true", help="druhý jazyk v polovině krajů")
+    parser.add_argument("--set", nargs="+", default=[""], metavar="NÁZEV=HODNOTA[,NÁZEV=HODNOTA]",
+                        help="varianty přepisů číselných polí Parameters, každá zvlášť")
     parser.add_argument("--seeds", default="1-8")
     # Jeden běh potřebuje asi 1,5 GB paměti; víc procesů na 16 GB stroji vede do swapu.
     parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
     first, last = (int(x) for x in args.seeds.split("-"))
-    jobs = [(seed, scale, population, background, args.contact) for scale in args.scales
-            for population in args.populations for background in args.backgrounds
+    variants = [tuple((name, float(value)) for name, value in (item.split("=") for item in option.split(",") if item))
+                for option in args.set]
+    jobs = [(seed, scale, population, background, args.contact, overrides) for scale in args.scales
+            for population in args.populations for background in args.backgrounds for overrides in variants
             for seed in range(first, last + 1)]
     with multiprocessing.get_context("spawn").Pool(args.workers) as pool:
         results = pool.map(run, jobs)
-    for key in sorted({(r["scale"], r["population"], r["background"]) for r in results}):
-        rows = [r for r in results if (r["scale"], r["population"], r["background"]) == key]
-        scale, population, background = key
-        line = [f"škála {scale:<4} populace {population:<5.0f} pozadí {background:<9}"]
+    for key in sorted({(r["scale"], r["population"], r["background"], r["set"]) for r in results}):
+        rows = [r for r in results if (r["scale"], r["population"], r["background"], r["set"]) == key]
+        scale, population, background, overrides = key
+        line = [f"škála {scale:<4} populace {population:<5.0f} pozadí {background:<9} {overrides}"]
         for year in YEARS:
             core = statistics.mean(r[year][0] for r in rows)
             ext = statistics.mean(r[year][1] for r in rows)
             loans = statistics.mean(r[year][2] for r in rows)
+            cultural = statistics.mean(r[year][3] for r in rows)
             line.append(f"{year}: jádro {core:.3f} ({core ** (1000 / year):.3f}/tis.) rozšíření {ext:.3f}"
-                        f" výpůjčky {loans:.3f}")
+                        f" výpůjčky {loans:.3f}/{cultural:.3f}")
         print(" | ".join(line), flush=True)
     print(json.dumps(results))
 

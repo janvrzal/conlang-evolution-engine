@@ -47,47 +47,72 @@ i otisky (`scripts/v2_digests.py`) zůstaly beze změny.
 
 ## Kalibrace retence
 
-`scripts/v2_calibrate_retention.py --backgrounds none normal turbulent [--contact] --seeds 1-8`.
+`scripts/v2_calibrate_retention.py --backgrounds none normal turbulent [--contact] [--set …] --seeds 1-8`.
 Šest krajů 3 × 2 po třech vesnicích, populace 500 na hustotu. S
 `--contact` mluví spodní řada jazykem `b`. Zděděné slovo je jen to, které
-měl jazyk skupiny na počátku; slovo druhého jazyka je výpůjčka. Cizí elity
-se nepočítají. Číslo je podíl Swadeshova jádra (100 pojmů) se zděděným
-slovem, průměr 8 seedů.
+měl jazyk skupiny na počátku. Výpůjčka je každé slovo s morfémem druhého
+jazyka, ať je v dárci zděděné, nebo nové. Cizí elity se nepočítají. Číslo
+je podíl Swadeshova jádra (100 pojmů) se zděděným slovem, průměr 8 seedů.
+`--set` přidá varianty přepisů `Parameters` (`w.tlak=váha` pro
+`pressure_weights`, `r.změna=násobek` pro `change_rates`).
 
-| Svět | Pozadí | 1 000 let | 2 000 let | 3 000 let | za tisíciletí (3 000) | výpůjčky v jádru (3 000) |
+| Svět | Pozadí | 1 000 let | 2 000 let | 3 000 let | za tisíciletí (3 000) | výpůjčky v jádru / ve zbytku (3 000) |
 |---|---|---|---|---|---|---|
 | izolovaný | none | 0,982 | 0,876 | 0,815 | 0,934 | 0 |
 | izolovaný | normal | 0,980 | 0,877 | 0,814 | 0,934 | 0 |
 | izolovaný | turbulent | 0,982 | 0,874 | 0,794 | 0,926 | 0 |
-| dva jazyky | none | 0,982 | 0,885 | 0,810 | 0,932 | 0,001 |
-| dva jazyky | normal | 0,851 | 0,703 | 0,577 | 0,832 | 0,108 |
-| dva jazyky | turbulent | 0,822 | 0,563 | 0,424 | 0,751 | 0,174 |
+| dva jazyky | none | 0,982 | 0,885 | 0,810 | 0,932 | 0,071 / 0,072 |
+| dva jazyky | normal | 0,851 | 0,703 | 0,577 | 0,832 | 0,253 / 0,306 |
 
 Cíle: izolovaný jazyk asi 95–97 % za tisíciletí (islandština; Bergsland
 & Vogt 1962), jazyk v kontaktu asi 85–88 %.
 
 Rozklad podle druhu (dva jazyky, `normal`, vždy jen jeden druh, 4 seedy,
-1 000 let): mor, přesídlení, obchod i prestiž dávají jádro 0,978 a nulové
-výpůjčky, cizí elita jádro 0,856 a výpůjčky 0,105.
+1 000 let): mor, přesídlení, obchod i prestiž nechají jádro na 0,978,
+cizí elita ho sníží na 0,856.
 
-### Co z toho plyne
+### Zahřívání: proč je první tisíciletí pomalé
 
-- **Izolovaný svět pozadí skoro nemění.** Mor zesílí drift jen na pár
-  generací a přesídlení a obchod uvnitř jednoho jazyka nepřinesou nic
-  nového. Retence 93,4 % za tisíciletí je o 2–3 body pod cílem. Hlavní
-  vadou je tvar křivky: první tisíciletí 98 %, druhé 89 %, třetí 93 %
-  (zpoždění prvního tisíciletí, zvlášť k diagnóze).
-- **Kontakt přes hranici sám výpůjčky nedělá.** V `transmission` míchá
-  vazba mezi jazyky cizí varianty jen přes filtr přenositelnosti
-  (`contact.borrowing_factor`). Jedna slabá pohraniční vazba mezi několika
-  domácími dá výpůjčce malý podíl, ale nikdy převahu. Proto nic
-  nepřinese ani zesílený obchod, ani přesídlení k sousedům jiného jazyka.
-- **Všechny výpůjčky přináší cizí elita** (silné vazby ke všem poddaným,
-  prestiž 2). Kontaktní svět při `normal` sice padne do cíle (85,1 %
-  v prvním tisíciletí), ale jen díky druhu s četností 0,02 na století.
-  Je to křehké a neodpovídá to skutečnosti: většina výpůjček vzniká
-  obchodem a dvojjazyčností, přičemž se nejdřív půjčují kulturní slova
-  (Thomason & Kaufman 1988). V modelu se kulturní slova půjčují jen
-  o málo víc než jádro (0,838 proti 0,851).
-- Konstanty se kvůli cílům neladily. Další krok je změna modelu:
-  výpůjčky z potřeby a od dvojjazyčných mluvčích v obchodním kontaktu.
+Protojazyk startuje bez jakékoli variability: každá vesnice má pro každý
+pojem jediné slovo. Souběžné varianty (rozpracované inovace a synonyma)
+se teprve hromadí. Podíl menšinových variant (izolovaný svět, seed 1):
+
+| rok | 250 | 500 | 1 000 | 1 500 | 2 000 | 2 500 | 3 000 |
+|---|---|---|---|---|---|---|---|
+| zděděné jádro i zbytek | 1,000 | 1,000 | 0,989 | 0,947 | 0,885 | 0,858 | 0,840 |
+| menšinový podíl variant | 0,004 | 0,008 | 0,027 | 0,041 | 0,056 | 0,055 | 0,064 |
+
+Variabilita se ustálí kolem roku 2 000. Mezi lety 2 000 a 3 000 vychází
+retence asi 95 % za tisíciletí, tedy uvnitř cíle pro izolovaný jazyk.
+Průměr 93,4 % kazí první tisíciletí, které je téměř bez změn, a hned po
+něm druhé, které je rychlé, protože se nahromaděné varianty právě
+prosazují. Zažitost (`entrenchment`) a konformita tempo brzdí, ale tvar
+křivky zůstává i bez nich. Jasnost slova (`lexical_clarity`) na retenci
+skoro nepůsobí. Náprava (počáteční variabilita protojazyka, nebo jeho
+zahřátí před začátkem) je změna modelu, která pohne všemi otisky; zatím
+nezavedena.
+
+### Výpůjčky
+
+Kontakt přes hranici výpůjčky dělá, ale jen ze slov, která v sousedním
+jazyce nově vznikla: inovace má sociální ocenění (`LexicalActuation`)
+v každé skupině, i v cizí. Zděděné slovo souseda přichází vazbou jako
+varianta bez ocenění a nikdy nepřeváží. Proto vznikla změna
+`LexicalBorrowing` (`changes/lexicon.py`): skupina převezme slovo souseda
+jiného jazyka s mírou úměrnou podílu vstupu z cizího jazyka (otevřenost ×
+síla vazby × prestiž dárce) a přenositelnosti slova
+(`contact.borrowing_factor`, vzácná slova snáz). Dál se výpůjčka šíří
+jako každá inovace.
+
+Výpůjčka se ujme podobně jako domácí inovace: podílu 0,1 ve vesnici
+dosáhne 3 % výpůjček, 10 % posunů významu a 13 % odvozenin (1 000 let,
+seed 1). Nad 0,5 se v prvním tisíciletí nedostane skoro žádná inovace,
+takže ani stonásobné tempo výpůjček retenci prvních 3 000 let skoro
+nezmění (dva jazyky bez pozadí: výpůjčky v jádru 0,071 → 0,075).
+Tempo `LexicalBorrowing.base_rate` (1e-3) proto zůstává nekalibrované:
+kalibrovat jde až v ustáleném stavu, po vyřešení zahřívání.
+
+Kulturní slova se v modelu půjčují jen o málo víc než základní (0,306
+proti 0,253 při `normal`). Ve WOLD je rozdíl mnohem větší (Haspelmath
+& Tadmor 2009); rozšíření slovníku v kalibraci ale není opravdová
+kulturní slovní zásoba, takže srovnání je jen orientační.

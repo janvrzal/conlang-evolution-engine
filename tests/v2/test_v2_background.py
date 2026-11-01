@@ -102,3 +102,36 @@ def test_beh_s_pozadim_zapise_udalosti_do_historie():
     assert recorded
     assert {event["kind"] for event in recorded} <= {
         "plague", "recovery", "resettlement", "trade", "prestige", "foreign_elite"}
+
+
+def test_vypujcka_je_inovace_se_slovem_souseda_jineho_jazyka():
+    import numpy as np
+
+    from cee.v2.changes.base import InnovationContext
+    from cee.v2.changes.lexicon import LexicalBorrowing
+    from cee.v2.scenarios import ProtoLanguage, Region, region_world
+
+    regions = (Region("p", (0.0, 0.0), language="a", villages=1, neighbours=("q",)),
+               Region("q", (30.0, 0.0), language="b", villages=1, neighbours=("p",)))
+    w = region_world(regions, languages=(ProtoLanguage("a"), ProtoLanguage("b")), semantics=True)
+    change = LexicalBorrowing()
+    home, donor = w.groups["p-v0"], "q-v0"
+    context = InnovationContext(w, home, home.main_code, 1, 25.0)
+    sites = change.sites(context)
+    assert sites and change.total_rate(context) > 0
+    # Základní slovo se půjčuje méně než vzácné (přenositelnost × 1 − frekvence).
+    rates = dict(zip(sites, change.rates(context, sites)))
+    by_frequency = sorted(sites, key=lambda site: (w.concept_frequency(site.split(":", 1)[1]), site))
+    assert rates[by_frequency[-1]] < rates[by_frequency[0]]
+    site = by_frequency[0]
+    variant = change.propose(context, site, np.random.default_rng(1), 0)
+    source = w.variants[w.dominant(donor, site)[0]]
+    assert variant is not None and variant.origin.change == "lexical_borrowing"
+    assert variant.origin.parent == source.id
+    assert variant.payload["morpheme"] == source.payload["morpheme"]
+    assert w.morphemes[variant.payload["morpheme"]].language == "b"
+
+    alone = region_world((Region("p", (0.0, 0.0), language="a", villages=1),), languages=(ProtoLanguage("a"),),
+                         semantics=True)
+    group = alone.groups["p-v0"]
+    assert change.total_rate(InnovationContext(alone, group, group.main_code, 1, 25.0)) == 0

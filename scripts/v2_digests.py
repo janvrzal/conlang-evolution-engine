@@ -64,6 +64,17 @@ celé IPA v tabulce hlásek otisky nezměnilo):
     shift        5462ab0d60b7091fe6afc589f11722a29ab0450310bfbaafe6d273cab9a37d2e
     island-city  2467a8174cef5f6431a37686106d7e9d5a3d6b2c7a63142eeaea36c49596994e
     valley-50    011ca86444d970a59367396e7b99739907ef765e0edacab462c51a34f77a56db
+
+Reference výpůjček (2026-11-01; změna ``changes.lexicon.LexicalBorrowing``,
+působí jen ve světech s více jazyky, proto se změnil jen ``shift``; pozadí
+dějin s výchozí mírou ``none`` otisky nezměnilo):
+    phonology    8c5c7a9213138b3eebef7b843fe335138dc254bbfea4345f0462af4e81a7258e
+    morphology   4513fcc9c32e4e23c025804f6e3edac03f5cb5f6bca79afd4608a3ed01fd1a4e
+    syntax       360182dca78fade984da6794b855bf35e76210bd56e4d56c46c6bcb4bcbe025d
+    grid-5x5     e1cd39209596a00f1b423802e53e4681081d0de1a5ce623a6dc0fa223e68a0fa
+    shift        629d8d5a56b6d6bf2f687e5f21954196027ba8d86002f63e3933cb068cc30460
+    island-city  2467a8174cef5f6431a37686106d7e9d5a3d6b2c7a63142eeaea36c49596994e
+    valley-50    011ca86444d970a59367396e7b99739907ef765e0edacab462c51a34f77a56db
 """
 
 from __future__ import annotations

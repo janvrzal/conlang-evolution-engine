@@ -474,7 +474,86 @@ def _derivations(context: InnovationContext) -> dict[str, list[tuple[str, str]]]
     return index
 
 
+class LexicalBorrowing(Change):
+    """Výpůjčka: skupina převezme slovo sousedního jazyka pro pojem, který už má.
+
+    Vazba mezi jazyky propouští cizí varianty i bez této změny (filtr
+    :func:`cee.v2.contact.borrowing_factor`), jenže jako zděděné slovo
+    dárce, které nemá sociální ocenění inovace (:class:`LexicalActuation`),
+    takže se bez cizí elity neprosadí. Ve skutečnosti slovo přinese
+    dvojjazyčný mluvčí (obchodník, sousedka z druhé strany hranice) a dál se
+    šíří jako každá inovace (Weinreich 1953, Thomason & Kaufman 1988).
+    Míra je úměrná podílu vstupu z cizího jazyka (síla vazby × prestiž
+    dárce, jako v :func:`cee.v2.transmission.mixing_matrix`) a přenositelnosti
+    slova: vzácná slova se půjčují snáz než základní (Haspelmath & Tadmor
+    2009). Dárce se vybere podle stejné váhy.
+    """
+
+    kind = "lexical_borrowing"
+    target = "lexical"
+    pressures = LEXICAL_PRESSURES
+    rate_basis = "year"
+    base_rate = 1e-3
+
+    def sites(self, context: InnovationContext) -> Sequence[str]:
+        if not _donors(context):
+            return ()
+        return context.code.repertoire.variable_ids_of("lexical")
+
+    def rates(self, context: InnovationContext, sites: Sequence[str]) -> list[float]:
+        from cee.v2.contact import borrowing_factor
+
+        exposure = sum(weight for weight, _ in _donors(context))
+        return [self.base_rate * exposure * borrowing_factor(context.world, site) for site in sites]
+
+    def rate(self, context: InnovationContext, site: str) -> float:
+        return self.rates(context, [site])[0]
+
+    def propose(
+        self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
+    ) -> Variant | None:
+        world = context.world
+        donors = _donors(context)
+        weights = np.array([weight for weight, _ in donors])
+        _, donor = donors[int(rng.choice(len(donors), p=weights / weights.sum()))]
+        found = world.dominant(donor, site)
+        if found is None:
+            return None
+        source = world.variants[found[0]]
+        morpheme = source.payload.get("morpheme")
+        if not isinstance(morpheme, str) or world.morphemes[morpheme].language == context.code.language:
+            return None
+        if context.code.phonology.dominant.get(concept_of(site)) == morpheme:
+            return None
+        parts = (context.group.id, context.code.id, site, context.tick, index)
+        return Variant(
+            id=stable_id("variant", self.kind, *parts),
+            variable=site,
+            payload={**source.payload, "origin": "loan"},
+            origin=Origin(self.kind, context.tick, context.year, context.group.id, parent=source.id),
+        )
+
+
+def _donors(context: InnovationContext) -> list[tuple[float, str]]:
+    """Sousedé jiného jazyka a jejich podíl na vstupu skupiny: (váha, skupina).
+
+    Váha je otevřenost × síla vazby × prestiž dárce / součet přes všechny
+    sousedy (řádek :func:`cee.v2.transmission.mixing_matrix` pro ``alpha`` 1).
+    """
+    world, group = context.world, context.group
+    if world.table is None or group.written or len({g.main_code.language for g in world.groups.values()}) < 2:
+        return []
+    links = [(link.strength * world.groups[link.target].prestige, link.target) for link in world.neighbors(group.id)
+             if not world.groups[link.target].written]
+    total = sum(weight for weight, _ in links)
+    if total <= 0.0:
+        return []
+    language = context.code.language
+    return [(group.openness * weight / total, target) for weight, target in links
+            if weight > 0.0 and world.groups[target].main_code.language != language]
+
+
 LEXICAL_CHANGES: tuple[Change, ...] = (
     LexicalCoinage(), SemanticShift(), Conversion(), Derivation(), Compounding(),
-    TabooReplacement(), Contamination(), BackFormation(),
+    TabooReplacement(), Contamination(), BackFormation(), LexicalBorrowing(),
 )

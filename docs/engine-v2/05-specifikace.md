@@ -1150,7 +1150,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3; aktualizováno po části D (proz�
 | ~~Náboženská změna~~ | vyřešeno v M6b (`ReligiousChange`) |
 | Migrace nemění velikost sídel (populace jsou stacionární) | podle potřeby UI |
 | Svět bez událostí mezi zásahy autora: od 2026-11-01 je pozadí dějin (`cee.v2.background`, `WorldSpec.background`: mor a obnova, přesídlení, obchod, prestiž kraje, cizí elita; `17-pozadi-dejin.md`). Výchozí míra `none`, četnosti jsou odhad | M7 (kalibrace četností) |
-| Obchod a sousedství přes jazykovou hranici výpůjčky nepřinesou: vazba mezi jazyky jen propouští cizí varianty filtrem přenositelnosti a slabá pohraniční vazba jim nedá převahu. Všechny výpůjčky ve světě dvou jazyků přináší cizí elita, kulturní slova se půjčují jen o málo víc než jádro (`17-pozadi-dejin.md`) | M7 (výpůjčky z potřeby a od dvojjazyčných) |
+| Retence slovní zásoby má zahřívání: protojazyk začíná bez variability, první tisíciletí je téměř bez změn (98 %), druhé rychlé (89 %), ustálený stav asi 95 % za tisíciletí (`17-pozadi-dejin.md`). Na tom závisí i kalibrace tempa výpůjček (`LexicalBorrowing`, zatím 1e-3) | M7 (počáteční variabilita protojazyka) |
 | Výpůjčka nového pojmu nebo kategorie (změna `Výpůjčka`): všechny jazyky mají stejnou sadu pojmů | až budou pojmy přibývat (M6, události) |
 | Příbuzné jazyky se po rozpadu mísí bez filtru, protože mají stejnou linii; filtr by měl záviset na pozorované vzdálenosti | M6 (linie jazyků) |
 | Konstanty kontaktu (filtry, váha interference, rychlost přechodu) jsou odhad | M7 |
