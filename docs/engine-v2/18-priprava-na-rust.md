@@ -36,7 +36,27 @@ Každý krok je malý commit, po každém `scripts/v2_digests.py` beze změny
 Podle závislostí, každý modul za stávajícím rozhraním (PyO3, maturin),
 s testem shody proti zlatým datům:
 
-1. tabulka hlásek (s vytvářením hlásek až při prvním zápisu, viz Známé mezery), banka tvarů, tabulky procesů;
+1. tabulka hlásek (s vytvářením hlásek až při prvním zápisu, viz Známé mezery), banka tvarů, tabulky procesů.
+   **Banka tvarů a tabulky procesů hotovo 2026-11-02** (`zadani-rust-b1.md`):
+   - crate `rust/cee_core` (PyO3 0.30, maturin, modul `cee_core`, verze
+     rozhraní 1): plochá aréna tvarů, bitové předfiltry, tabulky výsledků
+     a aplikace procesu se všemi sedmi operacemi;
+   - `cee.v2.native` rozšíření načte. Bez něj, s `CEE_NATIVE=0` nebo při
+     jiné verzi rozhraní počítá Python;
+   - otisky jsou bitově stejné v obou režimech, celé sady s Rustem 1 070
+     prošlo a bez něj 1 065 prošlo a 5 přeskočeno;
+   - zlatá data `tests/v2/data/golden_bank.json.gz` (21 093 aplikací);
+   - zisk je malý: valley-50 asi −5 % (31 proti 34 s), grid-5x5 v šumu,
+     protože zbývající cena je Python obal kolem 4 milionů jednotlivých
+     volání `may_apply` z `phonology.restructure`. Velký zisk přijde
+     s dávkovými voláními v kroku 2;
+   - operace `change` a `tone` (nejbližší hláska) počítá dál Python
+     a Rustu je doplňuje mapou, o kterou si sám řekne. Tabulka hlásek
+     zůstala v Pythonu;
+   - překlad: čistý release asi 10 s, po drobné změně asi 2,4 s;
+   - sestavení: `maturin build --release`. Do sdíleného venv se
+     rozšíření neinstaluje; agent ho dal do
+     `rust/cee_core/target/py` a ten přidal do `PYTHONPATH`.
 2. aplikace zvukových změn a fonologizace;
 3. hodnocení (artikulace, funkční zátěž, lexikální jasnost) a tlaky;
 4. přenos (míšení, výběr, drift) a živé fondy;
