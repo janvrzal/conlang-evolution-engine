@@ -42,13 +42,20 @@ def mixing_matrix(world: World, group_ids: Sequence[str], alpha: float) -> Float
     rozdělí mezi sousedy úměrně síle vazby a prestiži zdroje (na ``alpha``).
     Skupina bez sousedů se učí jen sama od sebe.
     """
-    index = {group_id: position for position, group_id in enumerate(group_ids)}
-    weights = np.zeros((len(group_ids), len(group_ids)))
-    for (source, target), link in world.links.items():
-        if source in index and target in index:
-            weights[index[source], index[target]] = (
-                link.strength * world.groups[target].prestige**alpha
-            )
+    # Vazby z CSR tabulky světa (obnoví se jen po změně vazeb). Každá dvojice
+    # (zdroj, cíl) je v tabulce jednou, takže se buňky jen přiřazují a pořadí
+    # položek na výsledku nezáleží. Mocninu prestiže počítáme po skupinách
+    # v Pythonu (stejné ``**`` jako dřív), v poli už jen násobíme.
+    table = world.link_table()
+    numbers = world.registry.groups.numbers
+    size = len(group_ids)
+    place = np.full(table.groups, -1, dtype=np.intp)
+    place[np.array([numbers[group_id] for group_id in group_ids], dtype=np.intp)] = np.arange(size)
+    power = np.array([world.groups[group_id].prestige**alpha for group_id in group_ids])
+    rows, columns = place[table.source], place[table.indices]
+    kept = (rows >= 0) & (columns >= 0)
+    weights = np.zeros((size, size))
+    weights[rows[kept], columns[kept]] = table.strength[kept] * power[columns[kept]]
     totals = weights.sum(axis=1)
     openness = np.array([world.groups[group_id].openness for group_id in group_ids])
     openness = np.where(totals > 0, openness, 0.0)

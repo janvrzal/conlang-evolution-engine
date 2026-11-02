@@ -25,7 +25,9 @@ _MOTIVATION = {
 
 
 def _has_morpheme(batch: PressureBatch) -> FloatArray:
-    return batch.slot_values(lambda variant: 1.0 if "morpheme" in variant.payload else 0.0)
+    """1 pro slot s variantou, která nese morfém (sloupec ``morpheme`` tabulky variant), jinak 0."""
+    found = (batch.slot_column("morpheme", -1.0) >= 0).astype(np.float64)
+    return found.reshape(len(batch.slots), 1, -1)  # type: ignore[no-any-return]
 
 
 class LexicalClarity(Pressure):
@@ -180,9 +182,12 @@ class Motivation(Pressure):
     def scores(self, batch: PressureBatch) -> FloatArray:
         if batch.world.table is None:
             return np.zeros_like(batch.freqs)
+        # Kód původu slova (sloupec ``origin``) → váha; −1 (chybí) ukazuje na poslední prvek, nulu.
+        names = batch.world.columns.variants.payload_origins.names
+        weights = np.array([_MOTIVATION.get(name, 0.0) for name in names] + [0.0])
+        codes = batch.slot_column("origin", -1.0).astype(np.intp)
         result: FloatArray = np.broadcast_to(
-            batch.slot_values(lambda variant: _MOTIVATION.get(str(variant.payload.get("origin")), 0.0)),
-            batch.freqs.shape,
+            weights[codes].reshape(len(batch.slots), 1, -1), batch.freqs.shape
         ).copy()
         return result
 
@@ -223,6 +228,8 @@ class LexicalActuation(Actuation):
     """Sociální ocenění nového slova; jen ve světě s hláskovými tvary."""
 
     name = "lexical_actuation"
+
+    requires_morpheme = True
 
     def applies(self, payload: Mapping[str, object]) -> bool:
         return "morpheme" in payload
