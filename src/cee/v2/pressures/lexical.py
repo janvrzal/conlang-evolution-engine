@@ -170,6 +170,9 @@ class Entrenchment(Pressure):
         )
         dominant = (batch.freqs >= 0.5).astype(np.float64)
         strength = world.params.entrenchment_strength
+        exponent = world.params.entrenchment_frequency_exponent
+        if exponent != 1.0:
+            frequency = frequency**exponent
         result: FloatArray = strength * frequency[:, None, None] * dominant * _has_morpheme(batch)
         return result
 

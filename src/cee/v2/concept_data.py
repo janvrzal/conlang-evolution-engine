@@ -31,8 +31,11 @@ from typing import Any
 #: Domény enginu.
 DOMAINS = ("core", "learned", "culture", "religion", "power")
 #: Převod frekvence z dat na stupnici enginu: ``log10`` výskytů na milion
-#: (asi 3 a 3 000) → frekvence enginu (rozpětí dřívějších generovaných
-#: frekvencí), mezi nimi log-lineárně, mimo oříznuto.
+#: v kotvách (asi 3 a 3 000) → frekvence enginu (rozpětí dřívějších
+#: generovaných frekvencí), mezi nimi log-lineárně, mimo oříznuto. Na
+#: absolutní frekvenci stojí prahy morfologie (``conserved_frequency`` 0,7),
+#: proto se kotvy nemění; jak silně frekvence chrání slova před výměnou,
+#: ladí ``Parameters.entrenchment_frequency_exponent``.
 LOG_FREQUENCY_ANCHORS = (0.5, 3.5)
 FREQUENCY_RANGE = (0.05, 0.9)
 

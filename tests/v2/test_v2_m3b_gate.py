@@ -75,13 +75,19 @@ def check_metrika_1(world):
 
 
 def check_metrika_2(worlds_seq):
+    # Horních 30 % pojmů podle frekvence se nahrazuje pomaleji než ostatní.
+    # Pagel a kol. (2007) mají poměr rychlostí 0,70 (``v2_calibrate_frequency.py``);
+    # 0,85 je rezerva na šum dvou seedů. Dřívější „aspoň dvakrát pomaleji“
+    # data nepodporují.
     frequent, rare = [], []
     for world in worlds_seq:
+        ordered = sorted(world.concept_frequencies, key=lambda concept: (world.concept_frequency(concept), concept))
+        top = set(ordered[int(len(ordered) * 0.7):])
         for group in world.group_ids():
             for variable_id, concept in _lexical(world):
                 replaced = _dominant(world, group, variable_id).origin.change is not None
-                (frequent if world.concept_frequency(concept) >= 0.5 else rare).append(replaced)
-    assert statistics.mean(frequent) < statistics.mean(rare) / 2
+                (frequent if concept in top else rare).append(replaced)
+    assert statistics.mean(frequent) < 0.85 * statistics.mean(rare)
 
 
 def check_nova_slova(worlds_seq):

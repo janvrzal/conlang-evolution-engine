@@ -144,8 +144,8 @@ Frekvence z dat jsou užší než generované: aspoň 0,5 má 24 pojmů ze 149
   frekvence (0 = nejvzácnější), pod 0,5 = náhodný výběr; 0,29–0,41,
   20/20 seedů (s generovanými frekvencemi 0,25–0,35).
 - **Metrika 2 M3b** (časté pojmy, frekvence aspoň 0,5, se nahrazují
-  aspoň dvakrát pomaleji než ostatní): 20/20 → 16/20 seedů (p 0,11),
-  menší vzorek častých pojmů. V sadě prochází.
+  aspoň dvakrát pomaleji než ostatní): 20/20 → 16/20 seedů (p 0,11).
+  Nahrazena cílem z dat, viz níže.
 - Audit ostatních bran (seedy 101–120) v šumu, jazyk trhu M6b 15/20 →
   20/20; celá sada prošla.
 - **Retence** (8 seedů, jádro, po tisíciletích): izolovaný jazyk 0,825 /
@@ -154,3 +154,43 @@ Frekvence z dat jsou užší než generované: aspoň 0,5 má 24 pojmů ze 149
   (dvacet pojmů 0,9), teď mají frekvenci podle dat. Pro srovnání:
   glotochronologie udává pro stoslovný Swadeshův seznam asi 86 % za
   tisíciletí.
+
+## Frekvence a rychlost výměny slov (kalibrace 2026-11-02)
+
+Pagel, Atkinson & Meade (2007; Concepticon `Pagel-2007-200`, CC BY 4.0)
+změřili rychlost výměny slov pro 200 pojmů Swadeshova seznamu. Rychlost
+s frekvencí klesá jen mírně (sklon −0,18 v log10, r = −0,36 s frekvencemi
+z dat; −0,17 a −0,38 s frekvencemi Pagel a kol.): horních 30 % pojmů podle
+frekvence se vyměňuje rychlostí **0,70** ostatních (0,70–0,73 pro horních
+10–50 %). Dřívější brána metriky 2 („aspoň dvakrát pomaleji“) tedy data
+nepodporuje. Nově (schváleno uživatelem): horních 30 % pojmů podle pořadí
+frekvence se nahrazuje pomaleji, poměr pod 0,85 (rezerva na šum dvou
+seedů); 20/20 seedů 101–120.
+
+Engine (`scripts/v2_calibrate_frequency.py`, kalibrační svět retence,
+8 seedů, 2 000 let) chrání častá slova mnohem silněji:
+
+| nastavení | poměr horních 30 % / ostatních | podíl nahrazených | pojmů bez výměny |
+|---|---|---|---|
+| převod šířky 3 (dnes), `entrenchment_strength` 0,3 | 0,26 | 0,24 | 77 ze 149 |
+| převod šířky 4,5 | 0,68 | 0,26 | 72 |
+| převod šířky 6 | 0,86 | 0,26 | 69 |
+| šířka 3, síla 0,1 | 0,88 | 0,30 | 37 |
+| šířka 3, síla 0 | 1,03 | 0,37 | 20 |
+| šířka 3, exponent frekvence 0,5 | 0,03 | 0,14 | 103 |
+| šířka 3, exponent 0,25 | 0,24 | 0,02 | 115 |
+
+- Širší převod (4,5) odpovídá Pagel a kol., ale nejvyšší frekvence pojmu
+  klesne na 0,66 a prahy morfologie (`conserved_frequency` 0,7) přestanou
+  fungovat: padaly brány „častá slova si drží nepravidelnost“ (M3, S2)
+  a liturgie (M6b). Převod proto zůstal šířky 3.
+- Exponent frekvence (`Parameters.entrenchment_frequency_exponent`,
+  výchozí 1 = beze změny) ochranu nesrovná: zvýší ji vzácným pojmům
+  a výměna skoro ustane.
+- **Strukturální rozdíl**: v enginu se ochrana zažitého slova chová jako
+  práh. Polovina pojmů se za 2 000 let nevymění v žádné vesnici ani
+  v jednom seedu, zbytek se mění hodně. U Pagel a kol. se rychlosti liší
+  plynule (0,09–9,27 na 10 000 let) a nejstabilnější pojem by za 2 000 let
+  vypadl asi ve 2 % případů. Jedním parametrem to nenaladit; souvisí to
+  i s tím, u kterých pojmů jde nějakou změnu vůbec navrhnout. Otevřené pro
+  kalibraci výměny slov (M7).

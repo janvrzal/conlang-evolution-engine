@@ -128,6 +128,12 @@ class Parameters:
     #: zažitost cíl splní (0,9: 96 %), ale potlačí i učené výpůjčky a
     #: nářeční rozrůznění (brány M6b), viz ``docs/engine-v2/17-pozadi-dejin.md``.
     entrenchment_strength: float = 0.3
+    #: Jak moc výhoda zažitého slova závisí na frekvenci pojmu: síla ×
+    #: frekvence ** exponent. 1 = úměrně frekvenci, 0 = stejně pro všechny
+    #: pojmy. Kalibruje se na poměr rychlostí výměny horních 30 % pojmů
+    #: podle frekvence proti ostatním u Pagel a kol. (2007): 0,70
+    #: (``scripts/v2_calibrate_frequency.py``).
+    entrenchment_frequency_exponent: float = 1.0
     #: Souběžná variabilita slovní zásoby protojazyka (``cee.v2.variation``):
     #: násobek naměřené hustoty menšinových variant (0 = protojazyk bez
     #: variability) a nejvyšší součet jejich podílů u pojmu ve vesnici, aby
