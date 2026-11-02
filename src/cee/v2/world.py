@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from array import array
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Literal, Mapping, Sequence, cast
 
@@ -14,6 +15,7 @@ from cee.v2.language.processes import Process, StressRule
 from cee.v2.language.segments import SegmentTable, default_table
 from cee.v2.parameters import Parameters
 from cee.v2.pools import LivePools
+from cee.v2.registry import RegisteredDict, Registry
 from cee.v2.repertoire import Distribution, Origin, Repertoire, Variable, Variant
 from cee.v2.rng import stable_id, stable_int
 from cee.v2.semantics import ConceptGraph
@@ -161,6 +163,9 @@ class Link:
 class World:
     seed: int
     start_year: float = 0.0
+    #: Číselné registry entit (morfémy, varianty, proměnné, pojmy, skupiny,
+    #: procesy). Patří světu a kopíruje se s ním; viz :mod:`cee.v2.registry`.
+    registry: Registry = field(default_factory=Registry)
     territories: dict[str, Territory] = field(default_factory=dict)
     groups: dict[str, SpeechGroup] = field(default_factory=dict)
     links: dict[tuple[str, str], Link] = field(default_factory=dict)
@@ -191,6 +196,11 @@ class World:
     bank: FormBank | None = None
     #: Výchozí tvar každého morfému (neměnný), aby se netvořil při každém čtení.
     default_units: dict[str, UnitForm] = field(default_factory=dict)
+    #: Číslo výchozího tvaru morfému v bance tvarů (odvozeno z ``default_units``).
+    default_form_ids: dict[str, int] = field(default_factory=dict)
+    #: Seedované sklony slov ke změně (``phonology.word_bias``): číslo procesu
+    #: → pole podle čísla lexému, NaN = ještě neurčeno. Odvozená keš.
+    word_biases: dict[int, array] = field(default_factory=dict)  # type: ignore[type-arg]
     #: Kalibrační konstanty dynamiky tohoto světa (neměnné, sdílí je kopie stavu).
     params: Parameters = field(default_factory=Parameters)
     #: Státy světa (``cee.v2.polity``) podle ID; vznikají událostí ``State``.
@@ -212,6 +222,12 @@ class World:
     varied: bool = False
 
     def __post_init__(self) -> None:
+        # Slovníky entit zapisují nové klíče do registru (číslo = pořadí vzniku).
+        self.groups = RegisteredDict(self.registry, "group", self.groups)
+        self.variables = RegisteredDict(self.registry, "variable", self.variables)
+        self.variants = RegisteredDict(self.registry, "variant", self.variants)
+        self.morphemes = RegisteredDict(self.registry, "morpheme", self.morphemes)
+        self.processes = RegisteredDict(self.registry, "process", self.processes)
         if not isinstance(self.concept_frequencies, FrequencyMap):
             self.concept_frequencies = FrequencyMap(self.concept_frequencies)
 
@@ -319,13 +335,10 @@ class World:
 
     def unit_of(self, code: Code, morpheme_id: str) -> UnitForm:
         """Aktuální stav tvaru slova (tvar, hranice koncovky, koncovka) v kódu."""
-        # Průchod vrstvami úložiště tvarů (``FormStore.get``) bez dalšího volání.
-        layer: FormStore | None = code.forms
-        while layer is not None:
-            stored = layer._own.get(morpheme_id)
-            if stored is not None:
-                return stored
-            layer = layer._base
+        stored = code.forms.get(morpheme_id)
+        return self._default_unit(morpheme_id) if stored is None else stored
+
+    def _default_unit(self, morpheme_id: str) -> UnitForm:
         default = self.default_units.get(morpheme_id)
         if default is None:
             morpheme = self.morphemes[morpheme_id]
@@ -336,7 +349,27 @@ class World:
 
     def form_of(self, code: Code, morpheme_id: str) -> tuple[int, ...]:
         """Aktuální podkladový tvar morfému v daném kódu."""
-        return self.unit_of(code, morpheme_id).form
+        form = code.forms.form(morpheme_id)
+        return self._default_unit(morpheme_id).form if form is None else form
+
+    def form_id_of(self, code: Code, morpheme_id: str) -> int:
+        """Číslo podkladového tvaru morfému v bance tvarů světa.
+
+        Totéž co ``form_bank().id_of(form_of(code, morpheme_id))`` bez hašování
+        n-tice hlásek: úložiště tvarů kódu drží číslo tvaru přímo.
+        """
+        store = code.forms
+        if store.context is not self:
+            return self.form_bank().id_of(self.form_of(code, morpheme_id))
+        form_id = store.form_id(morpheme_id)
+        if form_id >= 0:
+            return form_id
+        found = self.default_form_ids.get(morpheme_id)
+        if found is None:
+            found = self.default_form_ids[morpheme_id] = self.form_bank().id_of(
+                self._default_unit(morpheme_id).form
+            )
+        return found
 
     def materialize(self, group_id: str) -> None:
         """Zapíše živé proměnné skupiny do jejího repertoáru (před odebráním či kopií)."""
@@ -368,6 +401,10 @@ class World:
             raise ValueError(f"Skupina '{group.id}' už existuje.")
         if group.territory not in self.territories:
             raise ValueError(f"Území '{group.territory}' skupiny '{group.id}' neexistuje.")
+        # Nový kód se napojí na číslování a banku tvarů světa.
+        for code in group.codes:
+            code.forms.bind(self)
+            code.phonology.bind(self.registry)
         self.groups[group.id] = group
         return group
 

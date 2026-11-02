@@ -114,7 +114,7 @@ class AssessmentVocabularyIndex:
                 vocabulary.vowels.update(segment for segment in new if world.table.is_vowel(segment))
                 vocabulary.forms[unit] = new
                 position = self.positions[unit]
-                vocabulary.ids[position] = world.form_bank().id_of(new)
+                vocabulary.ids[position] = world.form_id_of(code, unit)
                 self.changes.append(position)
             if frequency_key != self.frequency_token or lexical:
                 # Výběr se nemění (frekvence pojmů, nebo změna slovníku mimo vzorek).
