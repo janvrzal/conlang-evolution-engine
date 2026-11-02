@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "cee_core"
+version = "0.1.0"
+description = "Jádro enginu CEE v2 v Rustu (banka tvarů, tabulky procesů)"
+requires-python = ">=3.11"
+
+[tool.maturin]
+module-name = "cee_core"
+features = ["python", "extension-module"]

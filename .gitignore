@@ -53,3 +53,6 @@ response.json
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Rust
+rust/**/target/

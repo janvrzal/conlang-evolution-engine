@@ -13,15 +13,24 @@ počítá jednou pro každý *různý* tvar:
 
 Čísla tvarů jsou interní: záleží na pořadí, ve kterém se tvary objevily,
 proto se podle nich nikdy neřadí ani nic nevypisuje.
+
+**Jádro v Rustu.** Je-li k dispozici rozšíření ``cee_core`` (viz
+:mod:`cee.v2.native`), počítá dávkové výpočty (předfiltry, tabulky procesů,
+aplikace procesu na nové tvary) ono; Python dál drží seznam tvarů a slovník
+tvar → číslo jako zdroj pravdy, každý nový tvar posílá do Rustu a tvary
+vzniklé v Rustu si hned převezme (:meth:`FormBank._adopt`), takže čísla zůstávají
+stejná. Výsledky jsou bitově stejné s Rustem i bez něj. Kopie a pickle banky
+Rust nenesou, po obnově se postaví znovu z tvarů a změn.
 """
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable
 
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2 import native
 from cee.v2.language.processes import Process, StressRule
 from cee.v2.language.segments import Form, SegmentTable
 
@@ -68,23 +77,110 @@ class FormBank:
         self._screened: list[int] = []
         self._rows: dict[int, int] = {}
         self._rule_bits: dict[StressRule, int] = {}
+        #: Pravidlo přízvuku → klíč změny → její řádek, jen pro změny, které mají
+        #: tabulku s tímto pravidlem (rychlá odpověď ``may_apply`` bez složených klíčů).
+        self._rule_rows: dict[StressRule, dict[str, int]] = {}
         self._possible: dict[tuple[int, StressRule], tuple[int, set[str]]] = {}
+        #: Zrcadlo v Rustu (``None`` = počítá Python); viz :mod:`cee.v2.native`.
+        self._native: Any = native.new_bank(table)
 
     def __len__(self) -> int:
         return len(self.forms)
 
+    def __getstate__(self) -> dict[str, Any]:
+        # Rust nelze zkopírovat ani uložit; po obnově se postaví znovu.
+        state = self.__dict__.copy()
+        state["_native"] = None
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self._rule_rows = {}
+        for key, rule in self._tables:
+            self._rule_rows.setdefault(rule, {})[key] = self._proc_index[key]
+        self._native = native.new_bank(self.table)
+        if self._native is not None:
+            self._restore_native()
+
+    def _restore_native(self) -> None:
+        """Naplní novou banku v Rustu stávajícími tvary a změnami."""
+        count = len(self.forms)
+        flat = self._segments()[: self._flat_size]
+        self._native.push_many(np.ascontiguousarray(flat, dtype=np.int64), self._lengths[:count].copy())
+        for row, process in enumerate(self._procs):
+            self._register_native(row, process)
+
+    def _register_native(self, row: int, process: Process) -> None:
+        """Předá Rustu změnu: operaci, masky hlásek a parametry."""
+        everything = np.ones(len(self.table.vowel_mask), dtype=bool)
+        masks = [
+            everything if pattern is None else pattern.mask
+            for pattern in (process.target, process.left, process.right, process.right2)
+        ]
+        self._native.register_proc(
+            row, native.OPERATIONS.index(process.operation),
+            {None: 0, "stressed": 1, "unstressed": 2}[process.stress], process.medial,
+            -1 if process.segment is None else process.segment, *masks,
+        )
+
+    def _add(self, form: Form) -> int:
+        """Zapíše nový tvar do seznamu, slovníku a polí hlásek (bez Rustu)."""
+        found = self._ids[form] = len(self.forms)
+        self.forms.append(form)
+        if found >= len(self._lengths):
+            self._lengths = np.concatenate([self._lengths, np.zeros(len(self._lengths), dtype=np.int64)])
+            self._starts = np.concatenate([self._starts, np.zeros(len(self._starts), dtype=np.int64)])
+        self._lengths[found] = len(form)
+        self._starts[found] = self._flat_size + len(self._pending)
+        self._pending.extend(form)
+        return found
+
     def id_of(self, form: Form) -> int:
         found = self._ids.get(form)
         if found is None:
-            found = self._ids[form] = len(self.forms)
-            self.forms.append(form)
-            if found >= len(self._lengths):
-                self._lengths = np.concatenate([self._lengths, np.zeros(len(self._lengths), dtype=np.int64)])
-                self._starts = np.concatenate([self._starts, np.zeros(len(self._starts), dtype=np.int64)])
-            self._lengths[found] = len(form)
-            self._starts[found] = self._flat_size + len(self._pending)
-            self._pending.extend(form)
+            found = self._add(form)
+            if self._native is not None:
+                self._native.push(form)
         return found
+
+    def _adopt(self, first: int, flat: IntArray, lengths: IntArray) -> None:
+        """Převezme tvary, které vznikly v Rustu (výsledky procesů), pod stejnými čísly."""
+        if not len(lengths):
+            return
+        assert first == len(self.forms), "banka v Rustu se rozešla s Pythonem"
+        values = flat.tolist()
+        begin = 0
+        for length in lengths.tolist():
+            self._add(tuple(values[begin : begin + length]))
+            begin += length
+
+    def _resolve(self, row: int, segments: list[int]) -> None:
+        """Doplní Rustu výstupy operace ``change`` či ``tone`` pro hlásky, které si vyžádal.
+
+        Nejbližší hlásku hledá tabulka hlásek (``SegmentTable.changed``), ne Rust;
+        výstup je čistá funkce hlásky, takže se spočítá jednou.
+        """
+        process, table = self._procs[row], self.table
+        if process.operation == "tone":
+            assert process.tone is not None
+            outputs = [table.with_tone(segment, process.tone) for segment in segments]
+        else:
+            outputs = [table.changed(segment, process.changes, process.allow) for segment in segments]
+        self._native.set_map(
+            row, np.array(segments, dtype=np.int64),
+            np.array([-1 if output is None else output for output in outputs], dtype=np.int64),
+        )
+
+    def _native_results(self, row: int, rule: StressRule, form_ids: IntArray) -> IntArray:
+        """``ProcessTable.results`` v Rustu, včetně doplnění map a převzetí nových tvarů."""
+        ids = np.ascontiguousarray(form_ids, dtype=np.int64)
+        code = native.RULES.index(rule)
+        while True:
+            needs, found, first, flat, lengths = self._native.results(row, code, ids)
+            self._adopt(first, flat, lengths)
+            if found is not None:
+                return found
+            self._resolve(row, needs)
 
     def _segments(self) -> npt.NDArray[np.int64]:
         """Hlásky všech tvarů za sebou; doplní, co se od posledního čtení přidalo."""
@@ -176,18 +272,20 @@ class FormBank:
                     everything if getattr(process, side) is None else getattr(process, side).mask
                     for side in ("target", "left", "right")
                 ))
+                if self._native is not None:
+                    self._register_native(row, process)
             table = self._tables[key] = ProcessTable(self, process, rule, row)
             self._order.append(table)
+            self._rule_rows.setdefault(rule, {})[process.key] = row
             self._rule_bits[rule] = self._rule_bits.get(rule, 0) | (1 << row)
         return table
 
     def possible(self, form_id: int, rule: StressRule) -> set[str]:
         """Klíče změn (s pravidlem přízvuku ``rule``), které v tvaru mohou mít místo."""
-        self.screen(form_id)
         cached = self._possible.get((form_id, rule))
         if cached is not None and cached[0] == len(self._order):
             return cached[1]
-        bits = self._rows.get(form_id, 0) & self._rule_bits.get(rule, 0)
+        bits = self._row_bits(form_id) & self._rule_bits.get(rule, 0)
         found: set[str] = set()
         while bits:
             low = bits & -bits
@@ -198,9 +296,19 @@ class FormBank:
 
     def may_apply(self, form_id: int, rule: StressRule, key: str) -> bool:
         """Totéž co ``key in possible(form_id, rule)`` bez sestavování množiny."""
+        rows = self._rule_rows.get(rule)
+        row = None if rows is None else rows.get(key)
+        if self._native is not None:
+            return row is not None and self._native.may_apply(form_id, row)
         self.screen(form_id)
-        row = self._proc_index.get(key)
-        return row is not None and (key, rule) in self._tables and bool((self._rows.get(form_id, 0) >> row) & 1)
+        return row is not None and bool((self._rows.get(form_id, 0) >> row) & 1)
+
+    def _row_bits(self, form_id: int) -> int:
+        """Bity změn, které v tvaru mohou mít místo (bit = řádek v ``_procs``)."""
+        if self._native is not None:
+            return sum(word << (64 * position) for position, word in enumerate(self._native.rows_of(form_id)))
+        self.screen(form_id)
+        return self._rows.get(form_id, 0)
 
     def _site_bits(self, segment: int) -> tuple[int, int, int]:
         """Bity změn, kterým hláska může být cílem, levým a pravým sousedem."""
@@ -233,6 +341,9 @@ class FormBank:
         přízvuku a pozice místa jen dál zužují, takže předfiltr nic neodmítne
         neprávem.
         """
+        if self._native is not None:
+            self._native.screen(form_id)
+            return
         if len(self._screened) <= form_id:
             self._screened.extend([0] * (form_id + 1 - len(self._screened)))
         if self._screened[form_id] >= len(self._procs):
@@ -267,7 +378,9 @@ class ProcessTable:
             everything if getattr(process, side) is None else getattr(process, side).mask
             for side in ("target", "left", "right")
         )
+        #: V Rustu se výsledky drží v jeho tabulce a tohle pole zůstává prázdné.
         self._results = np.full(max(64, len(bank)), UNKNOWN, dtype=np.int64)
+        self._rule_code = native.RULES.index(rule)
 
     def _grow(self, top: int) -> None:
         if top >= len(self._results):
@@ -277,6 +390,13 @@ class ProcessTable:
 
     def result(self, form_id: int) -> int:
         """Totéž co :meth:`results` pro jeden tvar (bez režie polí)."""
+        handle = self.bank._native
+        if handle is not None and self.index >= 0:
+            answer: int = handle.result(self.index, self._rule_code, form_id)
+            if answer > -3:
+                return answer
+            # Rust potřebuje doplnit mapu hlásek nebo vznikl nový tvar.
+            return int(self.bank._native_results(self.index, self.rule, np.array([form_id], dtype=np.int64))[0])
         if form_id >= len(self._results):
             self._grow(form_id)
         found: int = self._results.item(form_id)
@@ -294,6 +414,8 @@ class ProcessTable:
         """Číslo výsledného tvaru pro každý tvar (``UNCHANGED``, když se nemění)."""
         if len(form_ids) == 0:
             return form_ids
+        if self.bank._native is not None and self.index >= 0:
+            return self.bank._native_results(self.index, self.rule, form_ids)
         top = int(form_ids.max())
         if top >= len(self._results):
             grown = np.full(max(top + 1, 2 * len(self._results)), UNKNOWN, dtype=np.int64)
