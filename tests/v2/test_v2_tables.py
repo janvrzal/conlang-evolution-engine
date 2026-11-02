@@ -184,3 +184,15 @@ def test_pokracovani_z_checkpointu_dava_stejne_sloupce():
     for name in one:
         assert np.array_equal(one[name], two[name], equal_nan=True), name
     assert straight.world.registry.morphemes.names == resumed.world.registry.morphemes.names
+
+
+def test_line_doplneny_tvar_obnovi_numpy_kopii():
+    world = village_grid(3, seed=2, phonology=True)
+    table, numbers = world.columns.morphemes, world.registry.morphemes
+    code = next(iter(world.groups.values())).main_code
+    waiting = [m for m in world.morphemes if table.form[numbers.number(m)] == UNSET and code.forms.form_id(m) < 0]
+    assert waiting
+    number = numbers.number(waiting[0])
+    assert table.arrays()["form"][number] == UNSET
+    found = world.form_id_of(code, waiting[0])
+    assert found >= 0 and table.arrays()["form"][number] == found

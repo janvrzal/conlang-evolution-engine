@@ -384,6 +384,8 @@ class World:
         found = self.form_bank().id_of(self._default_unit(morpheme_id).form)
         if number is not None and number < len(column):
             column[number] = found
+            # Numpy kopie sloupců (``arrays()``) se musí obnovit i po líném doplnění.
+            self.columns.morphemes.version += 1
         return found
 
     def materialize(self, group_id: str) -> None:
