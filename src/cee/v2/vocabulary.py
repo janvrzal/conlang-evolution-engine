@@ -70,8 +70,7 @@ RELATION_KINDS = ("polysemy", "derivation", "colexification")
 RELATION_DIRECTIONS = ("to", "from", "both")
 DEFAULT_DIRECTION = {"polysemy": "both", "derivation": "from", "colexification": "both"}
 #: Váha vztahu bez zadání, ve stejných jednotkách jako data (počet rodin, resp. jazyků):
-#: medián dat je 1 u posunů a odvození, 9 u kolexifikací; posun a odvození dostanou 2,
-#: aby šly dohledat i s mírou posunů enginu.
+#: posun a odvození 2 (data: medián 1, průměr 1,8 a 1,5), kolexifikace 9 (medián dat 9).
 DEFAULT_WEIGHT = {"polysemy": 2, "derivation": 2, "colexification": 9}
 
 #: ID vlastního pojmu: písmena, číslice, ``_``, ``.`` a ``-``; začíná písmenem nebo číslicí.

@@ -324,3 +324,18 @@ def test_datovy_soubor_semantiky_katalogu_nese_citace_licence_a_otisky():
     assert all(len(row) == 5 and row[0] != row[1] for row in data["relations"])
     assert len(data["relations"]) > 5000 and set(data["aliases"]) <= set(DEFAULT_CONCEPTS)
     assert vocabulary.CATALOG_SEMANTICS.stat().st_size < 2_000_000
+
+
+def test_poradi_vlastnich_pojmu_ve_specifikaci_nemeni_svet():
+    concepts = [
+        {"id": "drak", "related": [{"concept": "fire", "kind": "derivation"}]},
+        {"id": "elf", "domain": "religion", "related": [{"concept": "drak"}]},
+        {"id": "zork"},
+    ]
+    worlds = [build(small(vocabulary=200, concepts=order))[0] for order in (concepts, concepts[::-1])]
+    first, second = worlds
+    assert first.vocabulary.ids == second.vocabulary.ids
+    assert first.concept_frequencies == second.concept_frequencies
+    assert first.semantics.relations == second.semantics.relations
+    assert {item.id: item.form for item in first.morphemes.values()} == {
+        item.id: item.form for item in second.morphemes.values()}
