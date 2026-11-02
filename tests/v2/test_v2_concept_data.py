@@ -40,3 +40,16 @@ def test_katalog_a_pojem_mimo_data():
     assert concept_data.info("vymysleny-pojem") is None
     assert concept_data.domain("vymysleny-pojem") == "core"
     assert 0.2 < concept_data.borrowed("vymysleny-pojem") < 0.5
+
+
+def test_frekvence_z_dat_pokryji_pojmy_enginu_a_davaji_smysl():
+    data = concept_data.frequencies()
+    assert data["alignment"]["leipzig_vs_calude"]["correlation"] > 0.8
+    assert {source["license"].split()[0] for source in data["sources"]} == {"CC"}
+    for concept in DEFAULT_CONCEPTS:
+        value = concept_data.frequency(concept)
+        assert value is not None and 0.05 <= value <= 0.9
+    # Funkční slova a základní slovesa jsou častější než vzácné části těla a přírody.
+    assert concept_data.frequency("not") > concept_data.frequency("heart") > concept_data.frequency("louse")
+    assert concept_data.frequency("say") > concept_data.frequency("bite")
+    assert concept_data.frequency("vymysleny-pojem") is None

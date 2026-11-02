@@ -92,7 +92,35 @@ půjčitelnost katalogu, dokud je autor nezadá.
    - **sémantické vztahy**: posuny významu z DatSemShift a kolexifikace
      z CLICS, CC BY 4.0. Výřez `build_v2_core_semantics.py` je jen pro
      149 pojmů a pro katalog se přegeneruje;
-   - **frekvence pojmů**: engine je dnes generuje (prvních 20 pojmů 0,9,
-     ostatní log-rovnoměrně náhodně), WOLD je nemá. Hledáme zdroj
-     s licencí CC0, CC BY, MIT nebo BSD. `wordfreq` má data pod CC BY-SA,
-     a proto nejde.
+   - **frekvence pojmů**: data jsou hotová (viz níže); zbývá je použít
+     v enginu místo generovaných.
+
+## Frekvence pojmů (data hotová 2026-11-02)
+
+`cee.v2.concept_data.log_frequency` a `frequency` čtou
+`cee/data/v2_concept_frequencies.json` (`scripts/build_v2_concept_frequencies.py`):
+
+- **Calude & Pagel (2011)**, seznam `Calude-2011-200` v Concepticonu
+  (CC BY 4.0): log10 výskytů na milion slov pro 200 pojmů Swadeshova
+  seznamu v 17 jazycích, průměr jazyků;
+- **Leipzig Corpora Collection** (korpusy ke stažení pod CC BY; Goldhahn,
+  Eckart & Quasthoff 2012) se slovy WOLD: angličtina, nizozemština,
+  rumunština, indonéština, vietnamština (zprávy a Wikipedie, 300 tisíc
+  vět), svahilština a malgaština (Wikipedie, 100 tisíc vět). Slovo
+  sdílené více významy se dělí, víceslovná slova se vynechají. Každý jazyk
+  se posune na stupnici Calude & Pagel a jazyky se zprůměrují. Na 182
+  společných pojmech je korelace s Calude & Pagel 0,92.
+- Odmítnuté zdroje: `wordfreq` (CC BY-SA), NoRaRe (CC BY-NC), Google Books
+  Ngram (CC BY 3.0, ale jen angličtina a 7 GB dat).
+
+Pokrytí: pojmy enginu 95 z Calude & Pagel a 54 z korpusů. Katalog 182
+z Calude & Pagel, 1 271 z korpusů a 5 odhadem z vlastností WOLD. Nejčastější
+pojmy enginu jsou *not, one, this, I, all, what, say*, nejvzácnější *bark,
+thunder, fingernail, louse*; *war* vychází vysoko (2,99), protože polovina
+korpusů jsou zprávy.
+
+Převod na stupnici enginu: log10 0,5 → 0,05 a 3,5 → 0,9, mezi nimi
+log-lineárně, mimo oříznuto (`LOG_FREQUENCY_ANCHORS`, `FREQUENCY_RANGE`).
+Pojmy enginu pak mají medián 0,25 a kvartily 0,18 a 0,37; 0,9 mají
+čtyři. Generované frekvence měly dvacet pojmů s 0,9 a ostatní
+log-rovnoměrně 0,05–0,8.
