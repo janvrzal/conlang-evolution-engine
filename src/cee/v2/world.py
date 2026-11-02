@@ -19,7 +19,7 @@ from cee.v2.registry import RegisteredDict, Registry
 from cee.v2.repertoire import Distribution, Origin, Repertoire, Variable, Variant
 from cee.v2.rng import stable_id, stable_int
 from cee.v2.semantics import ConceptGraph
-from cee.v2.tables import WorldColumns
+from cee.v2.tables import LinkDict, LinkTable, WorldColumns
 
 TerritoryLevel = Literal["world", "continent", "region", "area", "settlement"]
 TERRITORY_LEVELS: tuple[TerritoryLevel, ...] = ("world", "continent", "region", "area", "settlement")
@@ -168,7 +168,7 @@ class World:
     #: procesy). Patří světu a kopíruje se s ním; viz :mod:`cee.v2.registry`.
     registry: Registry = field(default_factory=Registry)
     #: Sloupcové tabulky morfémů, variant a proměnných (:mod:`cee.v2.tables`),
-    #: udržované spolu se slovníky světa.
+    #: udržované spolu se slovníky světa; vazby jako CSR dává ``link_table()``.
     columns: WorldColumns = field(init=False, repr=False)
     territories: dict[str, Territory] = field(default_factory=dict)
     groups: dict[str, SpeechGroup] = field(default_factory=dict)
@@ -231,9 +231,14 @@ class World:
         self.variables = RegisteredDict(self.registry, "variable", self.variables, self.columns.variables)
         self.variants = RegisteredDict(self.registry, "variant", self.variants, self.columns.variants)
         self.morphemes = RegisteredDict(self.registry, "morpheme", self.morphemes, self.columns.morphemes)
+        self.links = LinkDict(self.registry, self.links)
         self.processes = RegisteredDict(self.registry, "process", self.processes)
         if not isinstance(self.concept_frequencies, FrequencyMap):
             self.concept_frequencies = FrequencyMap(self.concept_frequencies)
+
+    def link_table(self) -> LinkTable:
+        """Vazby jako řídká matice CSR podle čísel skupin (přepočítá se jen po změně vazeb)."""
+        return cast(LinkDict, self.links).table()
 
     def distribution(self, group_id: str, variable_id: str) -> Distribution | None:
         """Jediné správné čtení stavu: živá proměnná má přednost před repertoárem."""

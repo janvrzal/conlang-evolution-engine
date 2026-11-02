@@ -8,7 +8,7 @@ import numpy as np
 from cee.v2.events import Border, Contact
 from cee.v2.scenarios import kingdom, language_shift, village_grid
 from cee.v2.simulation import Simulation
-from cee.v2.tables import MORPHEME_KINDS, UNSET, VARIABLE_KINDS
+from cee.v2.tables import LINK_KINDS, MORPHEME_KINDS, UNSET, VARIABLE_KINDS
 
 
 def check_morphemes(world):
@@ -77,9 +77,32 @@ def check_variants_and_variables(world):
         assert (None if default == UNSET else registry.variants.name(default)) == variable.default
 
 
+def check_links(world):
+    table = world.link_table()
+    groups = world.registry.groups
+    assert len(table) == len(world.links) and table.groups == len(groups)
+    assert table.indptr[0] == 0 and table.indptr[-1] == len(table)
+    keys = list(world.links)
+    found = {}
+    for source in range(table.groups):
+        row = table.row(source)
+        targets = table.indices[row]
+        assert list(targets) == sorted(targets)
+        for target, strength, kind, position in zip(
+            targets, table.strength[row], table.kind[row], table.position[row]
+        ):
+            key = (groups.name(source), groups.name(int(target)))
+            link = world.links[key]
+            assert link.strength == strength and LINK_KINDS[kind] == link.kind
+            assert keys[position] == key  # pořadí vkládání se dá obnovit
+            found[key] = True
+    assert len(found) == len(world.links)
+
+
 def check_all(world):
     check_morphemes(world)
     check_variants_and_variables(world)
+    check_links(world)
 
 
 def test_sloupce_odpovidaji_objektum_po_behu_s_udalostmi():
@@ -89,7 +112,7 @@ def test_sloupce_odpovidaji_objektum_po_behu_s_udalostmi():
     simulation = Simulation(world, events=events)
     simulation.run(800)
     check_all(simulation.world)
-    assert len(simulation.world.morphemes) > 0
+    assert len(simulation.world.morphemes) > 0 and len(simulation.world.links) > 0
 
 
 def test_sloupce_odpovidaji_objektum_u_morfologie_a_prechodu_jazyka():
@@ -110,6 +133,20 @@ def test_sloupce_odpovidaji_objektum_u_statu():
     check_all(simulation.world)
 
 
+def test_vazby_po_zmene_se_prepocitaji_a_nezastaraji():
+    world = village_grid(3, seed=2)
+    first = world.link_table()
+    assert world.link_table() is first  # beze změny se nestaví znovu
+    key = next(iter(world.links))
+    link = world.links[key]
+    world.links[key] = type(link)(link.source, link.target, 0.123, "strong")
+    check_links(world)
+    world.remove_group("v00-00")
+    check_links(world)
+    world.links.clear()
+    assert len(world.link_table()) == 0
+
+
 def test_kopie_sveta_nesdili_sloupce_a_zustavaji_shodne():
     world = village_grid(3, seed=2, morphology=True, semantics=True)
     simulation = Simulation(world)
@@ -127,6 +164,10 @@ def test_kopie_sveta_nesdili_sloupce_a_zustavaji_shodne():
     for name, column in copied.columns.morphemes.arrays().items():
         assert np.array_equal(column, arrays_before[name], equal_nan=True)
     check_all(simulation.world)
+    link = next(iter(copied.links.values()))
+    copied.links[(link.source, link.target)] = type(link)(link.source, link.target, 0.5, link.kind)
+    check_links(copied)
+    check_links(simulation.world)
 
 
 def test_pokracovani_z_checkpointu_dava_stejne_sloupce():

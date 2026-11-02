@@ -1,14 +1,16 @@
 """Tabulky světa jako sloupce (krok A4 přípravy na Rust).
 
-Slovníky objektů světa (``world.morphemes``, ``variants``, ``variables``)
-zůstávají zdrojem pravdy a veřejným API. Vedle nich se udržují
+Slovníky objektů světa (``world.morphemes``, ``variants``, ``variables``,
+``links``) zůstávají zdrojem pravdy a veřejným API. Vedle nich se udržují
 sloupce indexované čísly z registru (:mod:`cee.v2.registry`), nad kterými
 budou pracovat číselná jádra:
 
 - :class:`MorphemeTable`, :class:`VariantTable`, :class:`VariableTable` se
   plní při uložení entity do slovníku světa (``RegisteredDict.__setitem__``).
   Entity jsou neměnné, takže se sloupec mění jen přepsáním celé položky;
-  přepsání zapíše řádek znovu na stejné číslo.
+  přepsání zapíše řádek znovu na stejné číslo;
+- :class:`LinkDict` je slovník vazeb, který počítá změny, a z něj se na
+  požádání (a jen po změně) staví řídká matice :class:`LinkTable` ve tvaru CSR.
 
 Pravidla jsou stejná jako v registru:
 
@@ -35,19 +37,20 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import numpy as np
 import numpy.typing as npt
 
-from cee.v2.registry import Numbering
+from cee.v2.registry import Numbering, Registry
 
 if TYPE_CHECKING:
     from cee.v2.language.lexicon import Morpheme
     from cee.v2.repertoire import Variable, Variant
-    from cee.v2.world import World
+    from cee.v2.world import Link, World
 
 #: V celočíselných sloupcích: hodnota není (``None``, žádný odkaz).
 UNSET = -1
 
-#: Kódy ``Morpheme.kind`` a ``Variable.kind`` (pořadí = kód).
+#: Kódy ``Morpheme.kind``, ``Variable.kind`` a ``Link.kind`` (pořadí = kód).
 MORPHEME_KINDS = ("root", "affix", "word")
 VARIABLE_KINDS = ("process", "lexical", "form", "construction", "prosody")
+LINK_KINDS = ("weak", "strong")
 
 #: (jméno, typ pole, výplň) – pole jsou ``array.array`` typů ``i`` (int32), ``b`` (int8), ``d`` (float64).
 _Spec = tuple[tuple[str, str, float], ...]
@@ -268,3 +271,124 @@ class WorldColumns:
     def table(self, kind: str) -> MorphemeTable | VariantTable | VariableTable | None:
         """Tabulka pro druh entity registru, nebo ``None`` (skupiny, pojmy a procesy tabulku nemají)."""
         return {"morpheme": self.morphemes, "variant": self.variants, "variable": self.variables}.get(kind)
+
+
+# --- vazby --------------------------------------------------------------------
+
+
+class LinkTable:
+    """Vazby jako řídká matice CSR podle čísel skupin (``world.registry.groups``).
+
+    Řádek *s* (zdroj, skupina se učí) obsahuje položky ``indptr[s]:indptr[s+1]``:
+
+    - ``indices`` (``int32``): číslo cíle (od koho se učí), uvnitř řádku vzestupně;
+    - ``strength`` (``float64``) a ``kind`` (``int8``, kód ``LINK_KINDS``);
+    - ``source`` (``int32``): řádek každé položky (rozvinuté ``indptr``);
+    - ``position`` (``int32``): pořadí položky ve slovníku ``world.links``
+      (vkládací pořadí). Číslo skupiny pořadí nerozhoduje: kdo potřebuje
+      sčítat či vybírat ve vkládacím pořadí, seřadí položky podle ``position``
+      (``np.argsort``), podle řetězců pak přes ``Numbering.ranks``.
+
+    Tabulka je snímek k ``version`` slovníku vazeb; mění-li se vazby, staví
+    se znovu (:meth:`LinkDict.table`).
+    """
+
+    __slots__ = ("version", "groups", "indptr", "indices", "strength", "kind", "source", "position")
+
+    def __init__(
+        self, version: int, groups: int, source: npt.NDArray[np.int32], target: npt.NDArray[np.int32],
+        strength: npt.NDArray[np.float64], kind: npt.NDArray[np.int8],
+    ) -> None:
+        order = np.lexsort((target, source))
+        self.version = version
+        self.groups = groups
+        self.source = source[order]
+        self.indices = target[order]
+        self.strength = strength[order]
+        self.kind = kind[order]
+        self.position = order.astype(np.int32)
+        counts = np.bincount(self.source, minlength=groups)
+        self.indptr = np.concatenate([[0], np.cumsum(counts)]).astype(np.int32)
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def row(self, source: int) -> slice:
+        return slice(int(self.indptr[source]), int(self.indptr[source + 1]))
+
+
+class LinkDict(dict):  # type: ignore[type-arg]
+    """Slovník vazeb (zdroj, cíl) → ``Link``, který počítá změny a staví z nich CSR.
+
+    Chová se jako obyčejný slovník včetně pořadí vkládání. Každá změna (zápis,
+    odebrání, ``update``, ``clear``) zvýší ``version``; ``table()`` postaví
+    :class:`LinkTable` znovu jen tehdy, když se verze nebo počet skupin od
+    posledního stavění změnily. Kopie slovníku (deepcopy, pickle) se skládá
+    z registru a obsahu, tabulku si postaví sama.
+    """
+
+    __slots__ = ("_registry", "version", "_table")
+
+    def __init__(self, registry: Registry, items: Any = ()) -> None:
+        dict.__init__(self, items)
+        self._registry = registry
+        self.version = 0
+        self._table: LinkTable | None = None
+
+    def __setitem__(self, key: tuple[str, str], value: Link) -> None:
+        self.version += 1
+        dict.__setitem__(self, key, value)
+
+    def __delitem__(self, key: tuple[str, str]) -> None:
+        self.version += 1
+        dict.__delitem__(self, key)
+
+    def pop(self, key: Any, *default: Any) -> Any:
+        self.version += 1
+        return dict.pop(self, key, *default)
+
+    def popitem(self) -> tuple[tuple[str, str], Link]:
+        self.version += 1
+        return dict.popitem(self)
+
+    def clear(self) -> None:
+        self.version += 1
+        dict.clear(self)
+
+    def setdefault(self, key: tuple[str, str], default: Any = None) -> Any:
+        if key not in self:
+            self[key] = default
+        return dict.__getitem__(self, key)
+
+    def update(self, source: Any = (), /, **values: Any) -> None:
+        self.version += 1
+        dict.update(self, source, **values)
+
+    def __ior__(self, source: Any) -> LinkDict:  # type: ignore[override,misc]
+        self.update(source)
+        return self
+
+    def copy(self) -> dict:  # type: ignore[type-arg,override]
+        """Obyčejný slovník (kopie nemá vlastní verzi)."""
+        return dict(self)
+
+    def table(self) -> LinkTable:
+        """Vazby jako CSR podle čísel skupin; přepočítá se jen po změně vazeb či přibytku skupin."""
+        built = self._table
+        groups = self._registry.groups
+        if built is not None and built.version == self.version and built.groups == len(groups):
+            return built
+        count = len(self)
+        source = np.fromiter((groups.intern(key[0]) for key in self), np.int32, count)
+        target = np.fromiter((groups.intern(key[1]) for key in self), np.int32, count)
+        strength = np.fromiter((link.strength for link in self.values()), np.float64, count)
+        kind = np.fromiter((LINK_KINDS.index(link.kind) for link in self.values()), np.int8, count)
+        built = self._table = LinkTable(self.version, len(groups), source, target, strength, kind)
+        return built
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (_restore_links, (self._registry, dict(self)))
+
+
+def _restore_links(registry: Registry, items: dict[tuple[str, str], Any]) -> LinkDict:
+    return LinkDict(registry, items)
