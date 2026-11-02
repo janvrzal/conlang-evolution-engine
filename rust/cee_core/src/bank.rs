@@ -8,10 +8,10 @@
 //! Nic tu nezávisí na pořadí průchodu slovníkem s náhodným hasherem:
 //! vyhledání tvaru používá pevný hasher a tvary se řadí jen podle čísla.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::hash::{BuildHasherDefault, Hasher};
 
-use crate::process::{apply, has_site, missing_map, Proc, Scratch, RULE_COUNT};
+use crate::process::{apply, apply_cut, has_site, missing_map, Proc, Scratch, RULE_COUNT};
 
 /// V tabulce procesu: tvar se zatím nezkoumal.
 pub const UNKNOWN: i64 = -2;
@@ -71,6 +71,21 @@ struct Table {
 pub enum Outcome {
     Done(Vec<i64>),
     Needs(Vec<i32>),
+}
+
+/// Hlásky, jejichž výstup operace `change` či `tone` musí napřed spočítat
+/// Python, podle řádku změny.
+pub type MapNeeds = BTreeMap<usize, BTreeSet<i32>>;
+
+/// Výsledek aplikace změny na tvar i s hranicí kmen | koncovka.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Applied {
+    /// Chybí mapa hlásek (viz `MapNeeds`), nic se nespočítalo.
+    Blocked,
+    /// Změna tvar nemění, nebo by slovo zaniklo.
+    Unchanged,
+    /// Nový tvar (číslo v bance) a nová hranice kmen | koncovka (−1 = žádná).
+    Changed { form: u32, cut: i32 },
 }
 
 pub struct Bank {
@@ -481,6 +496,99 @@ impl Bank {
         };
         self.store(row, rule, form_id, value);
         Ok(if self.len() > before { CREATED } else { value })
+    }
+
+    /// Výsledek procesu pro jeden tvar jako `result`, ale nevrací kódy chyb:
+    /// `None` znamená, že chybí mapa hlásek (zapsaná do `needs`), jinak číslo
+    /// výsledného tvaru nebo `UNCHANGED`. Nový tvar vzniklý aplikací si
+    /// převezme Python z `take_created`.
+    pub fn lookup(
+        &mut self,
+        row: usize,
+        rule: u8,
+        form_id: usize,
+        needs: &mut MapNeeds,
+    ) -> Result<Option<i64>, String> {
+        Ok(match self.result(row, rule, form_id)? {
+            NEEDS_MAP => {
+                self.collect_needs(row, rule, form_id, needs);
+                None
+            }
+            CREATED => Some(self.stored(row, rule, form_id)),
+            found => Some(found),
+        })
+    }
+
+    fn collect_needs(&mut self, row: usize, rule: u8, form_id: usize, needs: &mut MapNeeds) {
+        let (start, length) = (self.starts[form_id], self.lengths[form_id] as usize);
+        let mut missing = BTreeSet::new();
+        missing_map(
+            &self.procs[row],
+            &self.flat[start..start + length],
+            &self.vowel,
+            self.boundary,
+            rule,
+            &mut self.scratch,
+            &mut missing,
+        );
+        if !missing.is_empty() {
+            needs.entry(row).or_default().extend(missing);
+        }
+    }
+
+    /// Aplikace změny na konkrétní tvar i s hranicí kmen | koncovka (`cut`,
+    /// −1 = žádná): `Process.apply_tracked`. Tabulka výsledků se nepoužije
+    /// ani nezmění; nový tvar se zařadí do banky.
+    pub fn apply_tracked(
+        &mut self,
+        row: usize,
+        rule: u8,
+        form_id: usize,
+        cut: i32,
+        needs: &mut MapNeeds,
+    ) -> Result<Applied, String> {
+        if form_id >= self.len() {
+            return Err(format!("tvar č. {form_id} neexistuje"));
+        }
+        if row >= self.procs.len() || rule as usize >= RULE_COUNT {
+            return Err("neznámá změna nebo pravidlo přízvuku".into());
+        }
+        let (start, length) = (self.starts[form_id], self.lengths[form_id] as usize);
+        let mut missing = BTreeSet::new();
+        missing_map(
+            &self.procs[row],
+            &self.flat[start..start + length],
+            &self.vowel,
+            self.boundary,
+            rule,
+            &mut self.scratch,
+            &mut missing,
+        );
+        if !missing.is_empty() {
+            needs.entry(row).or_default().extend(missing);
+            return Ok(Applied::Blocked);
+        }
+        let changed = apply_cut(
+            &self.procs[row],
+            &self.flat[start..start + length],
+            &self.vowel,
+            self.boundary,
+            rule,
+            cut,
+            &mut self.scratch,
+        );
+        Ok(match changed {
+            None => Applied::Unchanged,
+            Some((form, cut)) => Applied::Changed {
+                form: self.intern(&form),
+                cut,
+            },
+        })
+    }
+
+    /// Hlásky tvaru (pro testy a převody).
+    pub fn form_of(&self, form_id: usize) -> &[i32] {
+        self.form(form_id)
     }
 
     /// Uložené výsledky tabulky (pro testy a ladění); chybějící jsou `UNKNOWN`.

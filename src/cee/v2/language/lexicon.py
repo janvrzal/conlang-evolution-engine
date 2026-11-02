@@ -243,6 +243,29 @@ class FormStore:
         self._boundary[number] = UNSET if unit.boundary is None else unit.boundary
         self._exponent[number] = exponent
 
+    @property
+    def frozen(self) -> bool:
+        return self._frozen
+
+    def raw(self) -> tuple[array, array, array]:  # type: ignore[type-arg]
+        """Živá pole (tvar, hranice koncovky, koncovka) podle čísla morfému pro jádro v Rustu; nezapisovat."""
+        return self._form, self._boundary, self._exponent
+
+    def put(self, number: int, form_id: int, boundary: int, exponent: int) -> None:
+        """Totéž co :meth:`set` z čísel: číslo tvaru v bance, hranice (−1 = žádná), číslo koncovky (−1 = žádná)."""
+        if self._frozen:
+            raise RuntimeError("Zmrazené tvary nelze měnit; použij branch().")
+        missing = number + 1 - len(self._form)
+        if missing > 0:
+            filler = array("i", [UNSET]) * missing
+            self._form.extend(filler)
+            self._boundary.extend(filler)
+            self._exponent.extend(filler)
+        self._form[number] = form_id
+        self._boundary[number] = boundary
+        self._exponent[number] = exponent
+        self.log.append(self._morphemes.names[number])
+
     def freeze(self) -> FormStore:
         self._frozen = True
         return self

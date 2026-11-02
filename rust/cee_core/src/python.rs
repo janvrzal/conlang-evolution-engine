@@ -4,12 +4,16 @@
 //! jednom. Jednotlivé dotazy (`result`, `may_apply`) jsou jen pro horké cesty,
 //! které volají Python po jednom tvaru.
 
+use std::collections::BTreeMap;
+
 use numpy::{PyArray1, PyReadonlyArray1};
+use pyo3::buffer::{Element, PyBuffer, PyUntypedBuffer};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
 use crate::bank::{Bank, Outcome};
+use crate::phonology::{self, Needs, Params, Target, Units};
 use crate::process::Proc;
 
 fn failure(message: String) -> PyErr {
@@ -20,6 +24,159 @@ fn slice<'a, T: numpy::Element>(array: &'a PyReadonlyArray1<'_, T>) -> PyResult<
     array
         .as_slice()
         .map_err(|_| failure("pole musí být souvislé".into()))
+}
+
+/// Pole z Pythonu (`array.array`, `bytearray`, numpy) držená po dobu jednoho
+/// volání. Během něj Python nic nemění (drží se zámek GIL), po návratu se
+/// zpřístupnění pole uvolní a Python smí pole zase měnit či zvětšovat.
+struct Held<T: Element>(Option<PyBuffer<T>>);
+
+impl<T: Element> Held<T> {
+    fn new(object: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let buffer = PyUntypedBuffer::get(object)?;
+        // Prázdné pole nemusí mít platnou ani zarovnanou adresu; nečte se.
+        if buffer.item_count() == 0 {
+            return Ok(Held(None));
+        }
+        let buffer = buffer.into_typed::<T>()?;
+        if !buffer.is_c_contiguous() {
+            return Err(failure("pole musí být souvislé".into()));
+        }
+        Ok(Held(Some(buffer)))
+    }
+
+    fn all(objects: &[Bound<'_, PyAny>]) -> PyResult<Vec<Self>> {
+        objects.iter().map(Held::new).collect()
+    }
+
+    fn view(&self) -> &[T] {
+        match self.0.as_ref().and_then(|buffer| buffer.as_slice_ptr()) {
+            // SAFETY: pole je souvislé a po dobu volání (zámek GIL) ho nikdo
+            // nemění ani nezmenšuje, drží ho `PyBuffer`; jádro ho jen čte.
+            Some(pointer) => unsafe { &*pointer.as_ptr() },
+            None => &[],
+        }
+    }
+}
+
+/// Čtyři seznamy a příznaky z Pythonu: fronty živých procesů kódu.
+type RawTargets<'py> = (
+    Vec<i64>,
+    Vec<Bound<'py, PyAny>>,
+    Vec<Bound<'py, PyAny>>,
+    Vec<Bound<'py, PyAny>>,
+    Vec<bool>,
+);
+
+/// Co jádro fonologizace čte: tvary kódu, sloupce světa a fronty procesů.
+struct Inputs {
+    store: [Held<i32>; 3],
+    defaults: [Held<i32>; 4],
+    queued: Vec<Held<u8>>,
+    restructured: Vec<Held<u8>>,
+    bias: Vec<Held<f64>>,
+    rows: Vec<i64>,
+    reductive: Vec<bool>,
+}
+
+impl Inputs {
+    fn new(
+        store: &(Bound<'_, PyAny>, Bound<'_, PyAny>, Bound<'_, PyAny>),
+        defaults: &(
+            Bound<'_, PyAny>,
+            Bound<'_, PyAny>,
+            Bound<'_, PyAny>,
+            Bound<'_, PyAny>,
+        ),
+        targets: &RawTargets<'_>,
+    ) -> PyResult<Inputs> {
+        let (rows, queued, restructured, bias, reductive) = targets;
+        if [
+            queued.len(),
+            restructured.len(),
+            bias.len(),
+            rows.len(),
+            reductive.len(),
+        ]
+        .iter()
+        .any(|&size| size != rows.len())
+        {
+            return Err(failure("seznamy front mají různou délku".into()));
+        }
+        Ok(Inputs {
+            store: [
+                Held::new(&store.0)?,
+                Held::new(&store.1)?,
+                Held::new(&store.2)?,
+            ],
+            defaults: [
+                Held::new(&defaults.0)?,
+                Held::new(&defaults.1)?,
+                Held::new(&defaults.2)?,
+                Held::new(&defaults.3)?,
+            ],
+            queued: Held::all(queued)?,
+            restructured: Held::all(restructured)?,
+            bias: Held::all(bias)?,
+            rows: rows.clone(),
+            reductive: reductive.clone(),
+        })
+    }
+
+    fn units(&self) -> Units<'_> {
+        Units {
+            form: self.store[0].view(),
+            cut: self.store[1].view(),
+            exponent: self.store[2].view(),
+            default_form: self.defaults[0].view(),
+            default_cut: self.defaults[1].view(),
+            default_exponent: self.defaults[2].view(),
+            lexeme: self.defaults[3].view(),
+        }
+    }
+
+    fn targets(&self) -> Vec<Target<'_>> {
+        (0..self.rows.len())
+            .map(|index| Target {
+                row: self.rows[index],
+                queued: self.queued[index].view(),
+                restructured: self.restructured[index].view(),
+                bias: self.bias[index].view(),
+                reductive: self.reductive[index],
+            })
+            .collect()
+    }
+}
+
+type NeedsOut = (
+    Vec<(usize, usize)>,
+    Vec<usize>,
+    Vec<usize>,
+    Vec<(usize, Vec<i32>)>,
+);
+
+/// Co má Python doplnit: sklony (fronta, morfém), četnosti (lexém), výchozí
+/// tvary (morfém) a mapy hlásek (řádek změny, hlásky).
+fn needs_out(needs: Needs) -> NeedsOut {
+    (
+        needs.bias.into_iter().collect(),
+        needs.freq.into_iter().collect(),
+        needs.forms.into_iter().collect(),
+        needs
+            .maps
+            .into_iter()
+            .map(|(row, segments)| (row, segments.into_iter().collect()))
+            .collect(),
+    )
+}
+
+/// Zařazení do front jako tři pole: fronta, morfém, potřebný logit.
+fn inserts_out(inserts: &[phonology::Insert]) -> (Vec<usize>, Vec<usize>, Vec<f64>) {
+    (
+        inserts.iter().map(|insert| insert.target).collect(),
+        inserts.iter().map(|insert| insert.morpheme).collect(),
+        inserts.iter().map(|insert| insert.needed).collect(),
+    )
 }
 
 /// Banka tvarů a tabulky procesů v Rustu; zrcadlo `FormBank` z Pythonu.
@@ -177,6 +334,197 @@ impl NativeBank {
     /// Bity změn s možným místem v tvaru po 64bitových slovech od nejnižšího.
     fn rows_of(&mut self, form_id: usize) -> PyResult<Vec<u64>> {
         self.bank.rows_of(form_id).map_err(failure)
+    }
+
+    /// Cyklus fonologizace jednoho procesu (`phonology.restructure`): odebírá
+    /// z čela fronty (`queue` = potřebné logity a čísla morfémů), dokud je
+    /// logit pod `level`, přepisuje tvary a zařazuje přepsané morfémy do front
+    /// ostatních procesů (`targets`, bez č. `skip`).
+    ///
+    /// Vrací `(needs, odebráno, morfémy, tvary, hranice, koncovky, fronty,
+    /// zařazené morfémy, jejich logity, první_nové_číslo, nové_hlásky,
+    /// nové_délky)`. Je-li `needs` neprázdné, krok se zastavil před dalším
+    /// morfémem: Python má zapsat, co se do té doby stalo, doplnit chybějící
+    /// údaje a zavolat znovu.
+    #[pyo3(signature = (rule, base, lead_scale, store, defaults, targets, freq, row, queue, level, skip))]
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    fn restructure_step<'py>(
+        &mut self,
+        py: Python<'py>,
+        rule: u8,
+        base: f64,
+        lead_scale: f64,
+        store: (Bound<'py, PyAny>, Bound<'py, PyAny>, Bound<'py, PyAny>),
+        defaults: (
+            Bound<'py, PyAny>,
+            Bound<'py, PyAny>,
+            Bound<'py, PyAny>,
+            Bound<'py, PyAny>,
+        ),
+        targets: RawTargets<'py>,
+        freq: BTreeMap<usize, f64>,
+        row: usize,
+        queue: (Bound<'py, PyAny>, Bound<'py, PyAny>),
+        level: f64,
+        skip: usize,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        let inputs = Inputs::new(&store, &defaults, &targets)?;
+        let (needed, morphemes) = (Held::<f64>::new(&queue.0)?, Held::<i32>::new(&queue.1)?);
+        let params = Params {
+            rule,
+            base,
+            lead_scale,
+        };
+        let out = phonology::step(
+            &mut self.bank,
+            &params,
+            &inputs.units(),
+            row,
+            needed.view(),
+            morphemes.view(),
+            level,
+            &inputs.targets(),
+            skip,
+            &freq,
+        )
+        .map_err(failure)?;
+        let (first, flat, lengths) = self.bank.take_created();
+        let (queues, inserted, logits) = inserts_out(&out.inserts);
+        (
+            needs_out(out.needs),
+            out.popped,
+            out.rewrites
+                .iter()
+                .map(|item| item.morpheme)
+                .collect::<Vec<_>>(),
+            out.rewrites
+                .iter()
+                .map(|item| item.form)
+                .collect::<Vec<_>>(),
+            out.rewrites.iter().map(|item| item.cut).collect::<Vec<_>>(),
+            out.rewrites
+                .iter()
+                .map(|item| item.exponent)
+                .collect::<Vec<_>>(),
+            queues,
+            inserted,
+            logits,
+            first,
+            flat,
+            lengths,
+        )
+            .into_pyobject(py)
+    }
+
+    /// Zařazení jednoho morfému do front živých procesů
+    /// (`phonology.enter_vocabulary`, `requeue`).
+    ///
+    /// Vrací `(needs, fronty, morfémy, logity, první_nové_číslo, nové_hlásky,
+    /// nové_délky)`; s neprázdným `needs` se nezařadilo nic.
+    #[pyo3(signature = (rule, base, lead_scale, store, defaults, targets, freq, morpheme))]
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    fn queue_morpheme<'py>(
+        &mut self,
+        py: Python<'py>,
+        rule: u8,
+        base: f64,
+        lead_scale: f64,
+        store: (Bound<'py, PyAny>, Bound<'py, PyAny>, Bound<'py, PyAny>),
+        defaults: (
+            Bound<'py, PyAny>,
+            Bound<'py, PyAny>,
+            Bound<'py, PyAny>,
+            Bound<'py, PyAny>,
+        ),
+        targets: RawTargets<'py>,
+        freq: BTreeMap<usize, f64>,
+        morpheme: usize,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        let inputs = Inputs::new(&store, &defaults, &targets)?;
+        let params = Params {
+            rule,
+            base,
+            lead_scale,
+        };
+        let (found, needs) = phonology::queue_morpheme(
+            &mut self.bank,
+            &params,
+            &inputs.units(),
+            &inputs.targets(),
+            morpheme,
+            &freq,
+        )
+        .map_err(failure)?;
+        let (first, flat, lengths) = self.bank.take_created();
+        let (queues, inserted, logits) = inserts_out(&found);
+        (
+            needs_out(needs),
+            queues,
+            inserted,
+            logits,
+            first,
+            flat,
+            lengths,
+        )
+            .into_pyobject(py)
+    }
+
+    /// Fronta procesu při aktivaci (`phonology.activate`) ze slovní zásoby
+    /// (příznaky `vocabulary`); `targets` má právě jednu položku, proces sám.
+    ///
+    /// Vrací `(needs, morfémy, logity, první_nové_číslo, nové_hlásky,
+    /// nové_délky)`; morfémy jsou seřazené podle (logit, číslo morfému).
+    #[pyo3(signature = (rule, base, lead_scale, store, defaults, targets, freq, row, vocabulary))]
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    fn activate<'py>(
+        &mut self,
+        py: Python<'py>,
+        rule: u8,
+        base: f64,
+        lead_scale: f64,
+        store: (Bound<'py, PyAny>, Bound<'py, PyAny>, Bound<'py, PyAny>),
+        defaults: (
+            Bound<'py, PyAny>,
+            Bound<'py, PyAny>,
+            Bound<'py, PyAny>,
+            Bound<'py, PyAny>,
+        ),
+        targets: RawTargets<'py>,
+        freq: BTreeMap<usize, f64>,
+        row: usize,
+        vocabulary: Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        let inputs = Inputs::new(&store, &defaults, &targets)?;
+        let words = Held::<u8>::new(&vocabulary)?;
+        let params = Params {
+            rule,
+            base,
+            lead_scale,
+        };
+        let all = inputs.targets();
+        let [own] = all.as_slice() else {
+            return Err(failure("aktivace čeká právě jednu frontu".into()));
+        };
+        let out = phonology::activate(
+            &mut self.bank,
+            &params,
+            &inputs.units(),
+            row,
+            words.view(),
+            own,
+            &freq,
+        )
+        .map_err(failure)?;
+        let (first, flat, lengths) = self.bank.take_created();
+        (
+            needs_out(out.needs),
+            out.morphemes,
+            out.needed,
+            first,
+            flat,
+            lengths,
+        )
+            .into_pyobject(py)
     }
 
     /// Uložené výsledky tabulky jako pole (−2 = nezkoumáno); pro testy.

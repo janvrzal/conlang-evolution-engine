@@ -1,9 +1,10 @@
 //! Jádro enginu CEE v2 v Rustu.
 //!
-//! Čistá logika (``bank``, ``process``) nezná Python; vazba na něj je
+//! Čistá logika (``bank``, ``process``, ``phonology``) nezná Python; vazba na něj je
 //! v ``python.rs`` a sestavuje se jen s vlastností ``python``.
 
 pub mod bank;
+pub mod phonology;
 pub mod process;
 
 #[cfg(feature = "python")]
@@ -11,4 +12,4 @@ mod python;
 
 /// Verze rozhraní mezi Pythonem a Rustem. Python rozšíření nepoužije, když se
 /// číslo liší od toho, které čeká (jiný worktree, starší sestavení).
-pub const INTERFACE_VERSION: u32 = 1;
+pub const INTERFACE_VERSION: u32 = 2;
