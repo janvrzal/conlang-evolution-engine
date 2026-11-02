@@ -41,17 +41,19 @@ from pathlib import Path
 
 import numpy as np
 
-from cee.v2 import variation
+from cee.v2 import concept_data, variation
 from cee.v2.changes import LEXICAL_CHANGES
 from cee.v2.changes.base import InnovationContext
 from cee.v2.parameters import Parameters
-from cee.v2.scenarios import ProtoLanguage, Region, region_world, village_grid
+from cee.v2.scenarios import DEFAULT_CONCEPTS, ProtoLanguage, Region, region_world, village_grid
 from cee.v2.simulation import Simulation
 from cee.v2.variation import REACH, model_terms, source_graph, village_features
 
 OUT = Path(__file__).resolve().parents[1] / "src" / "cee" / "data" / "v2_standing_variation.json"
-#: Hranice košů frekvence pojmu (kvartily výchozí sady pojmů).
-EDGES = (0.12, 0.25, 0.56)
+#: Hranice košů frekvence pojmu: kvartily frekvencí výchozí sady pojmů z dat
+#: (``cee.v2.concept_data.frequency``).
+EDGES = tuple(round(float(np.quantile([concept_data.frequency(concept) for concept in DEFAULT_CONCEPTS], q)), 3)
+              for q in (0.25, 0.5, 0.75))
 #: Menšinová varianta pod tímto podílem se nepočítá.
 MIN_SHARE = 1e-3
 QUANTILES = (0.0, 0.01, *(round(q, 2) for q in np.linspace(0.05, 0.95, 19)), 0.99, 1.0)

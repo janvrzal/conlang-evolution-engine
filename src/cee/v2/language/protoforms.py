@@ -11,6 +11,7 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
+from cee.v2 import concept_data
 from cee.v2.language.segments import Form, SegmentTable
 from cee.v2.rng import RandomSource, generator
 
@@ -33,8 +34,11 @@ def protolanguage(
 
     Hlásky mají Zipfovské rozdělení četnosti (první v seznamu nejčastější),
     jako v reálných inventářích. Homofony se v protojazyce nepřipouštějí.
-    Frekvence pojmů je log-rovnoměrná; prvních 20 pojmů (zájmena a základní
-    slova Swadeshova seznamu) má frekvenci vysokou.
+    Frekvence pojmu je z dat (``cee.v2.concept_data.frequency``: Calude
+    & Pagel 2011 a korpusy Leipzig), pokud ho data znají. Pojem mimo data
+    (vlastní pojem autora) dostane generovanou: log-rovnoměrnou, prvních 20
+    pojmů vysokou. Náhoda se na generované frekvence spotřebuje vždy, takže
+    tvary slov na zdroji frekvencí nezávisí.
 
     ``fixed`` jsou slova, která zadal autor (pojem → IPA). Generátor pro ně
     náhodu spotřebuje stejně, takže ostatní slova zůstanou, jak by byla; liší
@@ -68,10 +72,14 @@ def protolanguage(
         word = fixed.get(concept, word)
         used.add(word)
         forms[concept] = word
-    frequencies = {
+    generated = {
         concept: float(0.9 if index < 20 else np.exp(rng.uniform(np.log(0.05), np.log(0.8))))
         for index, concept in enumerate(dict.fromkeys(concepts))
     }
+    frequencies = {}
+    for concept, value in generated.items():
+        known = concept_data.frequency(concept)
+        frequencies[concept] = value if known is None else known
     return forms, frequencies
 
 

@@ -108,6 +108,17 @@ bez sémantiky, phonology, je beze změny):
     shift        ddb8bc542e421d6ca32bc9dbdda2768496e72cb3b87fbab8cfb408c57b93771c
     island-city  a557c9ff15e9dbc96bd7c3c4b8031618bbaa4783524362c29ba91d9e7ec7411c
     valley-50    f138e7187f19d5f02581c5be0d3c6067f6d1ff95ff41c0eddb458b6ba4d0f3d2
+Reference frekvencí pojmů z dat (2026-11-02; ``protolanguage`` bere frekvence
+z ``cee.v2.concept_data`` (Calude & Pagel 2011, korpusy Leipzig) místo
+generovaných, koše souběžné variability podle nich přeměřeny; tvary slov
+protojazyka beze změny):
+    phonology    37e949768bf1f5fe2e0bdb106d39cbf199b842c24750ced943ca4c4ba9f7d2f4
+    morphology   1f082a14909f724f98a7fe6aa39c4d8fff092f32ac126b3d217d94eb824e423c
+    syntax       c270c0b059eb21af1bb0fa68a17f6efd69eb895040cfafdb11c5d4e04a7ef531
+    grid-5x5     f00c56442b3e798fe844df0678d7637de59906480528ce0acb416056efd2dc1f
+    shift        45300517345cc5ff3e22a1ff39bf1b1e48b0365662a8e33ada1a95088b06872c
+    island-city  d8801215f07f7ad45b657d15ca4c1def5d4678706c1af0603e4ca4eb08ffd2a7
+    valley-50    a035aa06625e0293f67f487f69ba174367ae6c9e7f478402b2e5e118c01a8f7b
 """
 
 from __future__ import annotations

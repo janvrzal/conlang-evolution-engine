@@ -124,3 +124,33 @@ log-lineárně, mimo oříznuto (`LOG_FREQUENCY_ANCHORS`, `FREQUENCY_RANGE`).
 Pojmy enginu pak mají medián 0,25 a kvartily 0,18 a 0,37; 0,9 mají
 čtyři. Generované frekvence měly dvacet pojmů s 0,9 a ostatní
 log-rovnoměrně 0,05–0,8.
+
+## Frekvence v enginu (nasazeno 2026-11-02)
+
+`protolanguage` bere frekvenci pojmu z dat, pokud ji data znají; pojem
+mimo data (vlastní pojem autora) dostane generovanou jako dřív. Náhoda se
+na generované frekvence spotřebuje vždy, takže tvary slov protojazyka se
+nezměnily. Hranice košů souběžné variability jsou kvartily frekvencí
+výchozí sady pojmů z dat (0,182 / 0,254 / 0,368, dříve 0,12 / 0,25 / 0,56)
+a variabilita je podle nich přeměřená.
+
+Frekvence z dat jsou užší než generované: aspoň 0,5 má 24 pojmů ze 149
+(dříve 45). Dopady:
+
+- **Brána výpůjček M5** měřila poměr průměrné frekvence přejatých pojmů
+  k průměru všech (pod 0,7); s užšími frekvencemi vycházel 0,61–0,78 (9/20
+  seedů), ačkoli výpůjčky jsou dál ze vzácnější části slovní zásoby.
+  Nově (schváleno uživatelem) měří průměrné pořadí přejatých pojmů podle
+  frekvence (0 = nejvzácnější), pod 0,5 = náhodný výběr; 0,29–0,41,
+  20/20 seedů (s generovanými frekvencemi 0,25–0,35).
+- **Metrika 2 M3b** (časté pojmy, frekvence aspoň 0,5, se nahrazují
+  aspoň dvakrát pomaleji než ostatní): 20/20 → 16/20 seedů (p 0,11),
+  menší vzorek častých pojmů. V sadě prochází.
+- Audit ostatních bran (seedy 101–120) v šumu, jazyk trhu M6b 15/20 →
+  20/20; celá sada prošla.
+- **Retence** (8 seedů, jádro, po tisíciletích): izolovaný jazyk 0,825 /
+  0,913 / 0,968 (dříve 0,868 / 0,938 / 0,952), kontakt 0,830 / 0,901 /
+  0,944. Základní slova byla dřív chráněná vysokou generovanou frekvencí
+  (dvacet pojmů 0,9), teď mají frekvenci podle dat. Pro srovnání:
+  glotochronologie udává pro stoslovný Swadeshův seznam asi 86 % za
+  tisíciletí.

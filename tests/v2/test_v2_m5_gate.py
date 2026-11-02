@@ -130,10 +130,15 @@ def check_vypujcky(world):
         code = world.groups[group].main_code
         assert all(set(world.form_of(code, root)) <= set(contact.inventory(world, code))
                    for root in loans.values())
+    # Výpůjčky jsou ze vzácnější části slovní zásoby: průměrné pořadí
+    # přejatých pojmů podle frekvence (0 = nejvzácnější, 1 = nejčastější) je
+    # pod 0,5, kterou by dal náhodný výběr. Pořadí nezávisí na tom, jak
+    # rozprostřené frekvence jsou (poměr průměrů ano: s frekvencemi z dat
+    # vychází blíž k 1 než s dřívějšími generovanými).
     loans = [concept for group in world.group_ids() for concept in _loans(world, group)]
-    assert statistics.mean(world.concept_frequency(concept) for concept in loans) < 0.7 * statistics.mean(
-        world.concept_frequencies.values()
-    )
+    ordered = sorted(world.concept_frequencies, key=lambda concept: (world.concept_frequency(concept), concept))
+    rank = {concept: index / (len(ordered) - 1) for index, concept in enumerate(ordered)}
+    assert statistics.mean(rank[concept] for concept in loans) < 0.5
 
 
 def check_bez_dvojjazycnosti(world):
