@@ -34,8 +34,8 @@ def check_morphemes(world):
         boundary = table.boundary[number]
         assert (None if boundary == UNSET else boundary) == morpheme.boundary
         form = table.form[number]
-        if world.table is not None:
-            assert form == world.form_bank().id_of(morpheme.form)
+        if form != UNSET:  # doplněno při prvním použití tvaru
+            assert world.form_bank().forms[form] == morpheme.form
     # Python čte int a float, ne numpy skaláry.
     if len(table.present):
         assert type(table.frequency[0]) is float and type(table.lexeme[0]) is int

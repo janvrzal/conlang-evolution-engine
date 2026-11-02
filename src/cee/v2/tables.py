@@ -126,8 +126,11 @@ class MorphemeTable(_Columns):
     - ``present``: 1 = morfém je ve slovníku světa (číslo může být v registru
       obsazené i bez uloženého morfému, třeba jako koncovka v ``FormStore``);
     - ``form``: číslo výchozího tvaru v ``FormBank`` světa, −1 = tvar se zatím
-      nezařadil do banky (svět bez hláskových tvarů); doplní ho
-      ``World.form_id_of``;
+      do banky nezařadil. Doplňuje se při prvním použití (``World.form_id_of``),
+      ne při uložení: většina nově vzniklých morfémů (zaniklé lexikální
+      inovace) se nikdy nepoužije a zařazení všech by banku, a s ní tabulky
+      procesů, výrazně zvětšilo. Jádro, které číslo potřebuje, ho při −1
+      vyžádá přes ``World.form_id_of``;
     - ``frequency`` (``float64``): tokenová frekvence morfému;
     - ``kind``: kód ``MORPHEME_KINDS`` (0 kořen, 1 koncovka, 2 tvar slova);
     - ``language``: číslo linie jazyka (``languages``);
@@ -159,7 +162,7 @@ class MorphemeTable(_Columns):
         exponent = UNSET if morpheme.exponent is None else numbering.intern(morpheme.exponent)
         self._grow(max(number, lexeme, exponent) + 1)
         self.present[number] = 1
-        self.form[number] = world.form_bank().id_of(morpheme.form) if world.table is not None else UNSET
+        self.form[number] = UNSET
         self.frequency[number] = morpheme.frequency
         self.kind[number] = MORPHEME_KINDS.index(morpheme.kind)
         self.language[number] = self.languages.intern(morpheme.language)
