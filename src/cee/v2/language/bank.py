@@ -77,6 +77,9 @@ class FormBank:
         self._screened: list[int] = []
         self._rows: dict[int, int] = {}
         self._rule_bits: dict[StressRule, int] = {}
+        #: Pravidlo přízvuku → klíč změny → její řádek, jen pro změny, které mají
+        #: tabulku s tímto pravidlem (rychlá odpověď ``may_apply`` bez složených klíčů).
+        self._rule_rows: dict[StressRule, dict[str, int]] = {}
         self._possible: dict[tuple[int, StressRule], tuple[int, set[str]]] = {}
         #: Zrcadlo v Rustu (``None`` = počítá Python); viz :mod:`cee.v2.native`.
         self._native: Any = native.new_bank(table)
@@ -92,6 +95,9 @@ class FormBank:
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
+        self._rule_rows = {}
+        for key, rule in self._tables:
+            self._rule_rows.setdefault(rule, {})[key] = self._proc_index[key]
         self._native = native.new_bank(self.table)
         if self._native is not None:
             self._restore_native()
@@ -270,6 +276,7 @@ class FormBank:
                     self._register_native(row, process)
             table = self._tables[key] = ProcessTable(self, process, rule, row)
             self._order.append(table)
+            self._rule_rows.setdefault(rule, {})[process.key] = row
             self._rule_bits[rule] = self._rule_bits.get(rule, 0) | (1 << row)
         return table
 
@@ -289,11 +296,12 @@ class FormBank:
 
     def may_apply(self, form_id: int, rule: StressRule, key: str) -> bool:
         """Totéž co ``key in possible(form_id, rule)`` bez sestavování množiny."""
-        row = self._proc_index.get(key)
+        rows = self._rule_rows.get(rule)
+        row = None if rows is None else rows.get(key)
         if self._native is not None:
-            return row is not None and (key, rule) in self._tables and bool(self._native.may_apply(form_id, row))
+            return row is not None and self._native.may_apply(form_id, row)
         self.screen(form_id)
-        return row is not None and (key, rule) in self._tables and bool((self._rows.get(form_id, 0) >> row) & 1)
+        return row is not None and bool((self._rows.get(form_id, 0) >> row) & 1)
 
     def _row_bits(self, form_id: int) -> int:
         """Bity změn, které v tvaru mohou mít místo (bit = řádek v ``_procs``)."""
