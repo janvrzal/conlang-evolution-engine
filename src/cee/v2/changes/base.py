@@ -10,6 +10,7 @@ import numpy as np
 
 from cee.v2.pressures.base import Pressure
 from cee.v2.repertoire import VariableKind, Variant
+from cee.v2.rng import RandomSource
 
 if TYPE_CHECKING:
     from cee.v2.world import Code, SpeechGroup, World
@@ -53,7 +54,7 @@ class Change(ABC):
 
     @abstractmethod
     def propose(
-        self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
+        self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
         """Nová varianta pro ``site``; ``index`` odliší více inovací v kroku."""
 

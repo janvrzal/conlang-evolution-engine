@@ -172,6 +172,12 @@ class Stream:
         return sum(poisson_inversion(part, self.random()) for _ in range(chunks))
 
 
+#: Zdroj náhody pro ``Change.propose``: ``Stream`` v simulaci, ``numpy`` generátor
+#: jen v ``variation.seed`` (tvorba světa, ta zůstává na numpy). Změny používají
+#: společnou podmnožinu ``integers(n)``, ``choice(n, p=...)`` a ``normal(mean, sd)``.
+RandomSource = Stream | np.random.Generator
+
+
 def cumulative(weights: Sequence[float] | npt.NDArray[np.float64]) -> list[float]:
     """Kumulativní součty vah počítané postupně v ``f64`` v pořadí indexů.
 

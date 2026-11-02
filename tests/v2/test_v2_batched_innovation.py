@@ -9,7 +9,7 @@ import pytest
 
 import cee.v2.simulation
 from cee.v2.changes import DEFAULT_CHANGES, InnovationContext
-from cee.v2.rng import hash_poisson
+from cee.v2.rng import Stream, hash_poisson
 from cee.v2.scenarios import Language, Place, contact_world, village_grid
 from cee.v2.simulation import Simulation
 from cee.v2.transmission import _normalized
@@ -178,14 +178,16 @@ def test_hash_poisson_statistics() -> None:
         assert abs(var - lam) < 4.0 * sd_var, f"Rozptyl {var} se liší od lam {lam}"
 
 
-def test_innovate_skips_generator_when_zero_count(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Při nulovém vylosovaném počtu inovací se cee.v2.simulation.generator vůbec nevolá."""
+def test_innovate_skips_stream_when_zero_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Při nulovém vylosovaném počtu inovací se cee.v2.simulation.Stream vůbec nevytváří."""
     called_keys: list[tuple[object, ...]] = []
-    real_generator = cee.v2.simulation.generator
 
-    def spy_generator(seed: int, *parts: object) -> np.random.Generator:
-        called_keys.append((seed, *parts))
-        return real_generator(seed, *parts)
+    class SpyStream(Stream):
+        __slots__ = ()
+
+        def __init__(self, seed: int, *parts: object) -> None:
+            called_keys.append((seed, *parts))
+            super().__init__(seed, *parts)
 
     poisson_results: list[np.ndarray] = []
     real_hash_poisson = cee.v2.simulation.hash_poisson
@@ -201,7 +203,7 @@ def test_innovate_skips_generator_when_zero_count(monkeypatch: pytest.MonkeyPatc
         poisson_results.append(res)
         return res
 
-    monkeypatch.setattr(cee.v2.simulation, "generator", spy_generator)
+    monkeypatch.setattr(cee.v2.simulation, "Stream", SpyStream)
     monkeypatch.setattr(cee.v2.simulation, "hash_poisson", spy_hash_poisson)
 
     world = village_grid(4, seed=5, phonology=True)

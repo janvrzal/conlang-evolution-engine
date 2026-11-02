@@ -15,7 +15,7 @@ from cee.v2.history import History
 from cee.v2.observe import LineageTracker, Snapshot, observe
 from cee.v2.pools import PoolBlock
 from cee.v2.repertoire import Distribution
-from cee.v2.rng import generator, hash_poisson, stable_int
+from cee.v2.rng import Stream, cumulative, hash_poisson, stable_int
 from cee.v2.transmission import TransmissionParams, prepare, transmit
 from cee.v2.world import World
 
@@ -337,7 +337,7 @@ class Simulation:
         sites, weights = change.weighted_sites(context) if weighted is None else weighted
         if not sites:
             return
-        rng = generator(
+        rng = Stream(
             self.world.seed,
             "innovation",
             self.tick,
@@ -345,9 +345,13 @@ class Simulation:
             context.code.id,
             change.kind,
         )
+        cumulated = None if weights is None else cumulative(weights)
         live = self.world.live
         for index in range(count):
-            site = sites[int(rng.choice(len(sites), p=weights))]
+            if cumulated is None:
+                site = sites[rng.integers(len(sites))]
+            else:
+                site = sites[Stream.pick(cumulated, rng.random())]
             variant = change.propose(context, site, rng, index)
             if variant is None:
                 continue

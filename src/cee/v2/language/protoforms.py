@@ -12,7 +12,7 @@ from typing import Mapping, Sequence
 import numpy as np
 
 from cee.v2.language.segments import Form, SegmentTable
-from cee.v2.rng import generator
+from cee.v2.rng import RandomSource, generator
 
 DEFAULT_CONSONANTS = ("p", "t", "k", "b", "d", "ɡ", "m", "n", "s", "l", "r", "w", "j", "h")
 DEFAULT_VOWELS = ("a", "e", "i", "o", "u")
@@ -83,7 +83,7 @@ def _zipf(count: int) -> np.ndarray:
 def coin(
     table: SegmentTable,
     vocabulary: Mapping[str, Form],
-    rng: np.random.Generator,
+    rng: RandomSource,
     avoid: set[Form],
 ) -> Form | None:
     """Nový kořen ze slabik, které jazyk užívá, a délky běžného slova.
