@@ -1,5 +1,7 @@
 """Instituce enginu v2 (milník M6a): psaný kód, čtení, škola a norma."""
 
+import dataclasses
+
 import numpy as np
 
 from cee.v2 import institutions, syntax
@@ -34,6 +36,12 @@ def test_kodifikace_zmrazi_prevladajici_variantu_a_skupiny_ji_znaji():
 
 def test_cteni_prenasi_jen_slova_skola_hlavne_stavbu():
     world = _world()
+    # Čtení šetří častá slova (``reading_core_resistance``), vzácná přináší skoro plně.
+    lexical = [v for v, variable in world.variables.items() if variable.kind == "lexical"]
+    assert institutions.reading_factor(world, "lexical:water") == 1.0 - world.concept_frequency("water")
+    assert max(institutions.reading_factor(world, v) for v in lexical) == 1.0 - min(
+        world.concept_frequency(v.split(":", 1)[1]) for v in lexical)
+    world.params = dataclasses.replace(world.params, reading_core_resistance=0.0)
     assert institutions.reading_factor(world, "lexical:water") == 1.0
     assert institutions.reading_factor(world, "construction:NEG") == 0.0
     assert institutions.school_factor(world, "construction:NEG") == 1.0

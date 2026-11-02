@@ -148,6 +148,13 @@ class Parameters:
     child_threshold: float = 0.2
     #: Jak velkou část vstupu gramotného mluvčího tvoří psaný kód (jen slova).
     reading_weight: float = 0.1
+    #: Jak moc čtení šetří častá slova: vliv psaného kódu na pojem je
+    #: ``1 − reading_core_resistance · frekvence pojmu``. 1 = jako liturgie
+    #: (učená slova bývají vzácná, základní slovní zásoba se čtením vrací
+    #: málo; arabské dialekty si drží vlastní základní slova), 0 = čtení
+    #: vrací všechna slova stejně. Rovnováha mluvené a psané řeči se liší
+    #: svět od světa; autor ji ladí tímto a ``reading_weight``.
+    reading_core_resistance: float = 1.0
     #: Jak velkou část vstupu dětí při plné školní docházce tvoří psaný kód.
     #: Škola učí slova, tvary a konstrukce; výslovnost si děti nesou z domova a
     #: podle písma se mění jen výjimečně (výslovnost podle pravopisu).

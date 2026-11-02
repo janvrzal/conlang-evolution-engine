@@ -59,7 +59,7 @@ def test_vychozi_hodnoty_jsou_dosavadni_konstanty():
     defaults = {
         "analogy_l2_boost": 4.0, "clarity_short_factor": 1.5, "dispersion_factor": 4.0,
         "interference_weight": 0.5, "school_correction": 0.8, "shift_rate": 1.0,
-        "shift_exponent": 1.31, "child_threshold": 0.2, "reading_weight": 0.1,
+        "shift_exponent": 1.31, "child_threshold": 0.2, "reading_weight": 0.1, "reading_core_resistance": 1.0,
         "school_weight": 0.3, "liturgy_weight": 0.1, "grammar_threshold": 0.85,
         "conserved_frequency": 0.7, "analogy_threshold": 0.85, "restructure_threshold": 0.85,
         "word_bias_sd": 1.5, "frequency_lead": 1.0, "closure_generations": 2.0,

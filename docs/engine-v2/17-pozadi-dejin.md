@@ -134,6 +134,70 @@ Svět dvou jazyků (8 seedů, jádro / výpůjčky v jádru): bez pozadí 0,915,
 `normal` přestřelí: výpůjčky přináší hlavně cizí elita, jejíž síla
 (`events.Conquest`: prestiž 2, vazba 0,5 ke všem poddaným) je odhad.
 
+#### Množství podle světa a šíření po grafu vazeb (2026-11-02)
+
+Jedna naměřená hustota pro všechny světy nestačila. Na 150 sítích (řady
+6 a 12 vesnic, mřížky 3 × 3 a 4 × 4, kraje; otevřenost 0,05–0,8; populace
+125–2 000) drží vesnice po 2 000 letech 0,05–2,2násobek toho, co jí
+rozdání dalo: řídká vesnice s malou otevřeností desetinu, otevřená vesnice
+v husté síti dvojnásobek. Ve světě S4 (řada šesti vesnic, otevřenost 0,1)
+dostala vesnice 171 menšinových variant a udržela 133; brána Fergusonovy
+diglosie pak závisela na tom, jak rychle přebytek vyhasne (20/20 seedů před
+zavedením variability, 10/20 po něm).
+
+Nově:
+
+- **Model vesnice** (`village_model` v datech): ustálený počet menšinových
+  variant a jejich masa (součet podílů) jako tabulka otevřenost × populace
+  (bilineárně v logaritmech) a člen efektivního počtu zdrojových vesnic.
+  Naměřeno na 420 sítích (6 typů, 5 otevřeností, 7 populací, 2 seedy,
+  5 530 vesnic); rozptyl reziduí ×1,38 u počtu, ×1,26 u masy.
+- **Graf vazeb** (`variation.source_graph`): `G = (I − 0,9·B)⁻¹`,
+  `B[j, k] = o_j · w_jk`. Efektivní počet zdrojů (inverzní Simpsonův index
+  řádku `G`) vysvětlí rozdíl tvarů sítě, který prostý počet sousedů
+  nevysvětlil (kraje se slabými vazbami přes hranici −20 % → −2 %, dlouhé
+  řady +20 % → +15 %).
+- **Šíření po grafu**: varianta z původce `i` má ve vesnici `j` podíl
+  `vrchol · graph_scale · G[j, i] / G[i, i]` (`graph_scale` naměřen na
+  týchž sítích, 1,6–2,4 podle koše frekvence) místo pevného útlumu podle
+  počtu vazeb.
+- **Dávkování**: `_factors` z očekávaných hodnot dopočte pro každého
+  původce činitel hustoty a vrcholového podílu, aby každá vesnice dostala
+  cíl z modelu, vydělený naměřenou ztrátou rozdání (`delivery`: 0,90 počtu,
+  0,86 masy; část navržených variant nejde vytvořit a strop menšin ořízne
+  masu).
+
+Ověření na 150 sítích (poměr ustáleného a rozdaného stavu, 10.–90.
+percentil konfigurací): dřív 0,18–1,62 u počtu a 0,39–2,08 u masy, nyní
+0,86–1,41 a 0,84–1,58, medián 1,16 a 1,14 (rozdání spíš mírně pod ustáleným
+stavem). Plný engine (zvukové změny, gramatika) drží stejnou slovníkovou
+variabilitu jako jen lexikální změny (kraj i řada, do 2 %).
+
+Retence izolovaného světa (8 seedů, jádro) po tisíciletích: dříve 0,899 /
+0,923 / 0,952, nyní 0,868 / 0,938 / 0,952; kontakt 0,870 / 0,922 / 0,939
+(dříve 0,913 / 0,910 / 0,930). První tisíciletí je rychlejší asi ze dvou
+třetin kvůli šíření po grafu: sousedé v kraji se silnými vazbami dostanou
+variantu skoro celou a varianta souvislá přes kraj snáz vyhraje (šíření po
+počtu vazeb se stejným množstvím: 0,888). Zbytek je větší masa. Retence
+původních slov po tisíciletích roste i v ustáleném jazyce (pojmy se mění
+různě rychle, rychlé padnou první), proto rychlejší první tisíciletí není
+celé přechodný jev.
+
+**Čtení šetří častá slova** (`Parameters.reading_core_resistance`, výchozí
+1): vliv psaného kódu na pojem je `1 − odolnost · frekvence`, jako
+u liturgie. Dřív čtení vracelo všechna slova stejně a lidová řeč pod
+diglosní školou vrátila polovinu rozdílů v základní slovní zásobě k psané
+normě za 500 let (s variabilitou i bez ní; bez ní byl rozdíl před školou
+malý a brána diglosie to nepoznala). Rovnováha mluvené a psané řeči se liší
+svět od světa; autor ji ladí `reading_core_resistance` a `reading_weight`
+ve specifikaci světa (`parameters`). Brána Fergusonovy diglosie na
+seedech 101–120: 12/20 se starým čtením, 17/20 s novým.
+
+Audit všech stochastických bran (seedy 101–120) proti stavu po A6:
+Fergusonova diglosie 11/20 → 17/20, ostatní beze změny nad šum (nejmenší
+p 0,49; zvukové metriky M3b 20/20 → 18/20, migrace M6b 14/20 → 12/20),
+32 bran projde všude před i po. Celá sada 1 062 testů prošla.
+
 ### Kalibrace cizí elity
 
 Pracovní cíl (odhad, ne naměřená data): výpůjčky v základním slovníku

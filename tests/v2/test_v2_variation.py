@@ -1,9 +1,9 @@
 """Souběžná variabilita slovní zásoby protojazyka (``cee.v2.variation``)."""
 
 from cee.v2.parameters import Parameters
-from cee.v2.scenarios import ProtoLanguage, Region, region_world
+from cee.v2.scenarios import ProtoLanguage, Region, region_world, village_grid
 from cee.v2.simulation import Simulation
-from cee.v2.variation import measured
+from cee.v2.variation import measured, source_graph, target, village_features
 
 
 def world(scale=1.0, languages=("a",)):
@@ -64,3 +64,35 @@ def test_varianty_se_nesiri_do_jineho_jazyka():
             morpheme = w.variants[variant].payload.get("morpheme")
             if w.variants[variant].origin.change and morpheme:
                 assert w.morphemes[morpheme].language == language
+
+
+def minority_entries(w):
+    return sum(len(shares) - 1 for shares in state(w).values())
+
+
+def test_mnozstvi_variability_se_ridi_otevrenosti_a_populaci_vesnice():
+    model = measured()["village_model"]
+    assert target(model, (0.5, 500.0, 3.0))[0] > 2 * target(model, (0.05, 500.0, 3.0))[0]
+    # Malá vesnice drží méně variant, zato silnějších (drift).
+    small, large = target(model, (0.1, 125.0, 3.0)), target(model, (0.1, 2000.0, 3.0))
+    assert small[0] < large[0] and small[1] / small[0] > large[1] / large[0]
+    worlds = {openness: village_grid(6, seed=3, semantics=True, openness=openness) for openness in (0.05, 0.5)}
+    for w in worlds.values():
+        Simulation(w)
+    assert minority_entries(worlds[0.5]) > 1.5 * minority_entries(worlds[0.05])
+
+
+def test_graf_vazeb_slaba_hranice_propusti_mene():
+    w = world()
+    groups = [g for g in w.group_ids() if not w.groups[g].written]
+    graph = source_graph(w, groups)
+    index = {g: i for i, g in enumerate(groups)}
+    origin = groups[0]
+    region = origin.split("-", 1)[0]
+    same = [g for g in groups if g.split("-", 1)[0] == region and g != origin]
+    other = [g for g in groups if g.split("-", 1)[0] != region]
+    assert same and other
+    # Vazby uvnitř kraje jsou silné, přes hranici slabé: varianta z vesnice
+    # dosáhne k sousedům v kraji výrazně víc než za hranici.
+    assert min(graph[index[g], index[origin]] for g in same) > 2 * max(graph[index[g], index[origin]] for g in other)
+    assert all(value[2] > 0 for value in village_features(w, groups, graph).values())

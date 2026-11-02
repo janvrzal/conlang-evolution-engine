@@ -97,6 +97,17 @@ zůstala na numpy a svět po ``build()`` je beze změny. Vědomá změna otisků
     shift        a512ae04fdc30e0367b025182a579422a687706e3366a64b1c97bec072abf829
     island-city  2435b71bc725c5eb22d1f6fb18225df6077e3f2ec4d37dfd018facd45b105391
     valley-50    768ddc6716549b2d31332b4d90fc5be2f8c5e006a30281e98fef91c530db1839
+Reference variability podle světa (2026-11-02; ``variation.seed`` dávkuje
+variabilitu každé vesnici podle naměřeného modelu vesnice a šíří ji po grafu
+vazeb, čtení šetří častá slova ``Parameters.reading_core_resistance``; svět
+bez sémantiky, phonology, je beze změny):
+    phonology    3ffcb70c000f5624e98a927ee24163bff04a28f8dae527151cb2622ca804b8f5
+    morphology   7ffa92b662336c5faf8741f12176cc274b90cc98bb39a75014904e87e97e6b74
+    syntax       108cfeeb9c23e7d8c4a3084b20dd9c277d4f4e5ee68b54f5929399923766a9d0
+    grid-5x5     376109562b71f977ae4c479cab2283a2bf4b3d5c27018ff45002933d0ec37ee0
+    shift        ddb8bc542e421d6ca32bc9dbdda2768496e72cb3b87fbab8cfb408c57b93771c
+    island-city  a557c9ff15e9dbc96bd7c3c4b8031618bbaa4783524362c29ba91d9e7ec7411c
+    valley-50    f138e7187f19d5f02581c5be0d3c6067f6d1ff95ff41c0eddb458b6ba4d0f3d2
 """
 
 from __future__ import annotations

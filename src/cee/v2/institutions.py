@@ -38,7 +38,13 @@ def liturgy_factor(world: World, variable_id: str) -> float:
 
 
 def reading_factor(world: World, variable_id: str) -> float:
-    return READING.get(world.variables[variable_id].kind, 0.0)
+    variable = world.variables[variable_id]
+    factor = READING.get(variable.kind, 0.0)
+    if variable.kind == "lexical":
+        # Čtení přináší hlavně učená slova; častá slova šetří podle
+        # ``Parameters.reading_core_resistance`` (1 = jako liturgie).
+        factor *= 1.0 - world.params.reading_core_resistance * world.concept_frequency(variable.key)
+    return factor
 
 
 def school_factor(world: World, variable_id: str) -> float:
