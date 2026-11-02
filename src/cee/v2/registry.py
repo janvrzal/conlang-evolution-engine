@@ -141,21 +141,25 @@ class RegisteredDict(dict):  # type: ignore[type-arg]
     Lexikální proměnná (klíč = pojem) zapíše do registru i svůj pojem.
     """
 
-    __slots__ = ("_registry", "_kind", "_numbering")
+    __slots__ = ("_registry", "_kind", "_numbering", "_table")
 
-    def __init__(self, registry: Registry, kind: str, items: Any = ()) -> None:
+    def __init__(self, registry: Registry, kind: str, items: Any = (), table: Any = None) -> None:
         dict.__init__(self)
         self._registry = registry
         self._kind = kind
         self._numbering = registry.of(kind)
+        #: Sloupcová tabulka entit (:mod:`cee.v2.tables`), do které se každé uložení zapíše.
+        self._table = table
         for key, value in dict(items).items():
             self[key] = value
 
     def __setitem__(self, key: str, value: Any) -> None:
-        self._numbering.intern(key)
+        number = self._numbering.intern(key)
         if self._kind == "variable" and getattr(value, "kind", None) == "lexical":
             self._registry.concepts.intern(value.key)
         dict.__setitem__(self, key, value)
+        if self._table is not None:
+            self._table.store(number, value)
 
     def setdefault(self, key: str, default: Any = None) -> Any:
         if key not in self:
@@ -177,11 +181,12 @@ class RegisteredDict(dict):  # type: ignore[type-arg]
     def __reduce__(self) -> tuple[Any, ...]:
         # Kopie (deepcopy, pickle) se skládá z registru a obsahu; registr se
         # tak v rámci jedné kopie světa sdílí s kopií slovníku.
-        return (_restore, (self._registry, self._kind, dict(self)))
+        # Stejně tak sloupcová tabulka (patří světu, v kopii je jedna).
+        return (_restore, (self._registry, self._kind, dict(self), self._table))
 
 
-def _restore(registry: Registry, kind: str, items: dict[str, Any]) -> RegisteredDict:
+def _restore(registry: Registry, kind: str, items: dict[str, Any], table: Any = None) -> RegisteredDict:
     """Obnoví slovník ze stavu kopie; registr už čísla zná, neříká se mu nic nového."""
-    restored = RegisteredDict(registry, kind)
+    restored = RegisteredDict(registry, kind, table=table)
     dict.update(restored, items)
     return restored
