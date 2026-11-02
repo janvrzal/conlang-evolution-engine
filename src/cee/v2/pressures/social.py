@@ -41,13 +41,15 @@ class Actuation(Pressure):
 
     def scores(self, batch: PressureBatch) -> FloatArray:
         result = np.zeros_like(batch.freqs)
-        variants = batch.world.variants
+        # Buňky (řádek, slot) s inovací (varianta nese změnu) z tabulky variant,
+        # v pořadí řádků a slotů jako dřív.
+        numbers = batch.slot_numbers()
+        mask = batch.slot_column("change", -1.0) >= 0
+        if self.requires_morpheme:
+            mask &= batch.slot_column("morpheme", -1.0) >= 0
+        found_rows, found_slots = np.nonzero(mask & (numbers >= 0))
         cells = [
-            (row, slot, variant)
-            for row, slots in enumerate(batch.slots)
-            for slot, variant in enumerate(slots)
-            if variant is not None and variants[variant].origin.change is not None
-            and self.applies(variants[variant].payload)
+            (int(row), int(slot), batch.slots[row][slot]) for row, slot in zip(found_rows, found_slots)
         ]
         if not cells:
             return result
@@ -62,6 +64,9 @@ class Actuation(Pressure):
         slots = np.array([slot for _, slot, _ in cells])
         result[rows, :, slots] = values.T
         return result
+
+    #: Působí jen na varianty s morfémem (lexikální ocenění); jinak na každou inovaci.
+    requires_morpheme = False
 
     def applies(self, payload: Mapping[str, object]) -> bool:
         return True

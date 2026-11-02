@@ -91,12 +91,21 @@ def word_bias(world: World, variable_id: str, morpheme_id: str) -> float:
     Hodnota je čistá funkce (seed, proces, lexém, ``word_bias_sd``); svět si ji
     pamatuje v poli podle čísla lexému (jedno pole na proces).
     """
-    lexeme = world.morphemes[morpheme_id].lexeme_id
     registry = world.registry
+    # Lexém ze sloupce morfémů (číslo morfému lexému); bez řádku sloupce slovník.
+    numbers = registry.morphemes.numbers
+    lexemes = world.columns.morphemes.lexeme
+    found = numbers.get(morpheme_id)
+    lexeme_number = lexemes[found] if found is not None and found < len(lexemes) else -1
+    if lexeme_number < 0:
+        lexeme = world.morphemes[morpheme_id].lexeme_id
+        lexeme_number = numbers[lexeme]
+    else:
+        lexeme = registry.morphemes.names[lexeme_number]
     process = registry.processes.numbers.get(variable_id)
     if process is None:
         return _draw_bias(world, variable_id, lexeme)
-    number = registry.morphemes.numbers[lexeme]
+    number = lexeme_number
     column = world.word_biases.get(process)
     if column is None:
         column = world.word_biases[process] = array("d")

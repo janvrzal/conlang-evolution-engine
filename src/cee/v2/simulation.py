@@ -467,13 +467,14 @@ class Simulation:
         self, block: PoolBlock, before: np.ndarray, after: np.ndarray
     ) -> list[tuple[str, dict[str, Any]]]:
         """Milníky, ustálení a zánik inovací v jednom bloku; vše vektorově."""
-        variants = self.world.variants
         group_ids = self.world.live.group_ids
-        innovation = np.array(
-            [[slot is not None and variants[slot].origin.change is not None for slot in row]
-             for row in block.slots],
-            dtype=bool,
+        # Inovace = varianta, kterou vytvořila změna (sloupec ``change`` tabulky variant).
+        numbers = self.world.registry.variants.numbers
+        slot_numbers = np.array(
+            [[-1 if slot is None else numbers[slot] for slot in row] for row in block.slots], dtype=np.intp
         ).reshape(len(block), 1, block.capacity)
+        change = self.world.columns.variants.arrays()["change"]
+        innovation = (slot_numbers >= 0) & (change[slot_numbers] >= 0) if len(change) else slot_numbers < -1
         records: list[tuple[str, dict[str, Any]]] = []
 
         def describe(row: int, slot: int, **extra: Any) -> dict[str, Any]:

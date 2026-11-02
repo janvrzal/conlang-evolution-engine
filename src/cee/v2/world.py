@@ -19,6 +19,7 @@ from cee.v2.registry import RegisteredDict, Registry
 from cee.v2.repertoire import Distribution, Origin, Repertoire, Variable, Variant
 from cee.v2.rng import stable_id, stable_int
 from cee.v2.semantics import ConceptGraph
+from cee.v2.tables import LinkDict, LinkTable, WorldColumns
 
 TerritoryLevel = Literal["world", "continent", "region", "area", "settlement"]
 TERRITORY_LEVELS: tuple[TerritoryLevel, ...] = ("world", "continent", "region", "area", "settlement")
@@ -166,6 +167,9 @@ class World:
     #: Číselné registry entit (morfémy, varianty, proměnné, pojmy, skupiny,
     #: procesy). Patří světu a kopíruje se s ním; viz :mod:`cee.v2.registry`.
     registry: Registry = field(default_factory=Registry)
+    #: Sloupcové tabulky morfémů, variant a proměnných (:mod:`cee.v2.tables`),
+    #: udržované spolu se slovníky světa; vazby jako CSR dává ``link_table()``.
+    columns: WorldColumns = field(init=False, repr=False)
     territories: dict[str, Territory] = field(default_factory=dict)
     groups: dict[str, SpeechGroup] = field(default_factory=dict)
     links: dict[tuple[str, str], Link] = field(default_factory=dict)
@@ -196,8 +200,6 @@ class World:
     bank: FormBank | None = None
     #: Výchozí tvar každého morfému (neměnný), aby se netvořil při každém čtení.
     default_units: dict[str, UnitForm] = field(default_factory=dict)
-    #: Číslo výchozího tvaru morfému v bance tvarů (odvozeno z ``default_units``).
-    default_form_ids: dict[str, int] = field(default_factory=dict)
     #: Seedované sklony slov ke změně (``phonology.word_bias``): číslo procesu
     #: → pole podle čísla lexému, NaN = ještě neurčeno. Odvozená keš.
     word_biases: dict[int, array] = field(default_factory=dict)  # type: ignore[type-arg]
@@ -222,14 +224,21 @@ class World:
     varied: bool = False
 
     def __post_init__(self) -> None:
-        # Slovníky entit zapisují nové klíče do registru (číslo = pořadí vzniku).
+        # Slovníky entit zapisují nové klíče do registru (číslo = pořadí vzniku)
+        # a morfémy, varianty a proměnné i do sloupcových tabulek.
+        self.columns = WorldColumns(self)
         self.groups = RegisteredDict(self.registry, "group", self.groups)
-        self.variables = RegisteredDict(self.registry, "variable", self.variables)
-        self.variants = RegisteredDict(self.registry, "variant", self.variants)
-        self.morphemes = RegisteredDict(self.registry, "morpheme", self.morphemes)
+        self.variables = RegisteredDict(self.registry, "variable", self.variables, self.columns.variables)
+        self.variants = RegisteredDict(self.registry, "variant", self.variants, self.columns.variants)
+        self.morphemes = RegisteredDict(self.registry, "morpheme", self.morphemes, self.columns.morphemes)
+        self.links = LinkDict(self.registry, self.links)
         self.processes = RegisteredDict(self.registry, "process", self.processes)
         if not isinstance(self.concept_frequencies, FrequencyMap):
             self.concept_frequencies = FrequencyMap(self.concept_frequencies)
+
+    def link_table(self) -> LinkTable:
+        """Vazby jako řídká matice CSR podle čísel skupin (přepočítá se jen po změně vazeb)."""
+        return cast(LinkDict, self.links).table()
 
     def distribution(self, group_id: str, variable_id: str) -> Distribution | None:
         """Jediné správné čtení stavu: živá proměnná má přednost před repertoárem."""
@@ -364,11 +373,19 @@ class World:
         form_id = store.form_id(morpheme_id)
         if form_id >= 0:
             return form_id
-        found = self.default_form_ids.get(morpheme_id)
-        if found is None:
-            found = self.default_form_ids[morpheme_id] = self.form_bank().id_of(
-                self._default_unit(morpheme_id).form
-            )
+        # Výchozí tvar: číslo v bance drží sloupec morfémů (doplněný při uložení
+        # morfému, nebo zde, když svět tabulku hlásek dostal až později).
+        column = self.columns.morphemes.form
+        number = self.registry.morphemes.numbers.get(morpheme_id)
+        if number is not None and number < len(column):
+            found = column[number]
+            if found >= 0:
+                return found  # type: ignore[no-any-return]
+        found = self.form_bank().id_of(self._default_unit(morpheme_id).form)
+        if number is not None and number < len(column):
+            column[number] = found
+            # Numpy kopie sloupců (``arrays()``) se musí obnovit i po líném doplnění.
+            self.columns.morphemes.version += 1
         return found
 
     def materialize(self, group_id: str) -> None:
