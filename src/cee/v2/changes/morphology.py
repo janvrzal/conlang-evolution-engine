@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import ClassVar, Mapping, Sequence, cast
 
-import numpy as np
-
 from cee.v2 import morphology
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.morphology import FormChange
 from cee.v2.pressures import Actuation, Conformity, Pressure
 from cee.v2.pressures.morphological import Conservation, Distinctiveness, Teachability, Uniformity
 from cee.v2.repertoire import Origin, Variable, Variant
+from cee.v2.rng import RandomSource
 
 MORPH_PRESSURES: Mapping[type[Pressure], float] = {
     Uniformity: 1.0,
@@ -87,7 +86,7 @@ class AnalogicalChange(Change):
         return cast(list[str], cached[1])
 
     def propose(
-        self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
+        self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
         change = self._sites(context)[site]
         _, variant = morphology.register(

@@ -39,6 +39,7 @@ from cee.v2.pressures import (
     Pressure,
 )
 from cee.v2.repertoire import Origin, Variable, Variant
+from cee.v2.rng import RandomSource
 
 Domain = Literal["consonant", "vowel", "structure"]
 
@@ -621,7 +622,7 @@ class SoundChange(Change):
         return found
 
     def propose(
-        self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
+        self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
         process, _ = self._supported(context)[site]
         _, variant = register(

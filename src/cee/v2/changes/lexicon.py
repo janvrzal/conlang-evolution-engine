@@ -38,7 +38,7 @@ from cee.v2.pressures.lexical import (
     Taboo,
 )
 from cee.v2.repertoire import Origin, Variant
-from cee.v2.rng import stable_id
+from cee.v2.rng import RandomSource, stable_id
 
 LEXICAL_PRESSURES: Mapping[type[Pressure], float] = {
     LexicalClarity: 1.0,
@@ -84,7 +84,7 @@ class LexicalCoinage(Change):
         return context.code.repertoire.variable_ids_of("lexical")
 
     def propose(
-        self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
+        self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
         parts = (context.group.id, context.code.id, site, context.tick, index)
         payload: dict[str, object] = {"lexeme": stable_id("lexeme", self.kind, *parts)}
@@ -124,7 +124,7 @@ def _roots(context: InnovationContext) -> dict[str, Form]:
     }
 
 
-def _coin_form(context: InnovationContext, rng: np.random.Generator) -> Form | None:
+def _coin_form(context: InnovationContext, rng: RandomSource) -> Form | None:
     assert context.world.table is not None
     roots = _roots(context)
     return coin(context.world.table, roots, rng, set(roots.values()))
@@ -174,7 +174,7 @@ class SemanticChange(Change):
     @abstractmethod
     def build(
         self, context: InnovationContext, site: str, option: dict[str, object], parts: tuple,
-        rng: np.random.Generator,
+        rng: RandomSource,
     ) -> dict[str, object] | None:
         """Payload nové varianty, nebo ``None``, když cesta dnes nejde."""
 
@@ -246,7 +246,7 @@ class SemanticChange(Change):
         return index.sorted_sites, index._weights
 
     def propose(
-        self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
+        self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
         options = self._sites(context)[site]
         weights = np.array([weight for weight, _ in options])
@@ -510,7 +510,7 @@ class LexicalBorrowing(Change):
         return self.rates(context, [site])[0]
 
     def propose(
-        self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
+        self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
         world = context.world
         donors = _donors(context)

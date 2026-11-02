@@ -14,14 +14,13 @@ from __future__ import annotations
 
 from typing import ClassVar, Mapping, Sequence
 
-import numpy as np
-
 from cee.v2 import syntax
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.constructions import Construction, catalog_for
 from cee.v2.pressures import Actuation, Conformity, Pressure
 from cee.v2.pressures.syntactic import Ambiguity, Economy, Expressivity, Fusion, Learnability
 from cee.v2.repertoire import Origin, Variant
+from cee.v2.rng import RandomSource
 
 SYNTAX_PRESSURES: Mapping[type[Pressure], float] = {
     Expressivity: 1.0,
@@ -43,7 +42,7 @@ class SyntacticChange(Change):
     template: ClassVar[str]
 
     def next(
-        self, context: InnovationContext, current: Construction, rng: np.random.Generator
+        self, context: InnovationContext, current: Construction, rng: RandomSource
     ) -> Construction | None:
         raise NotImplementedError
 
@@ -59,7 +58,7 @@ class SyntacticChange(Change):
         return found
 
     def propose(
-        self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
+        self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
         current = syntax.dominant(context.world, context.group.id, site.split(":", 1)[1])
         if current is None or not self.applies(context, current):
@@ -78,7 +77,7 @@ def _sources(context: InnovationContext, function: str) -> list[str]:
     return [concept for concept in catalog_for(context.world)[function].sources if concept in dominant]
 
 
-def _pick(options: Sequence[str], rng: np.random.Generator) -> str:
+def _pick(options: Sequence[str], rng: RandomSource) -> str:
     return options[int(rng.integers(len(options)))]
 
 
@@ -276,7 +275,7 @@ class CategoryLoss(SyntacticChange):
         return self.base_rate * self._pressure(context, current)
 
     def next(
-        self, context: InnovationContext, current: Construction, rng: np.random.Generator
+        self, context: InnovationContext, current: Construction, rng: RandomSource
     ) -> Construction | None:
         return Construction(current.function, "zero")
 

@@ -32,7 +32,7 @@ from cee.v2.language.lexicon import PhonologyState, UnitForm
 from cee.v2.language.processes import Process
 from cee.v2.language.segments import Form
 from cee.v2.repertoire import Distribution, Origin, Variable, Variant
-from cee.v2.rng import generator, stable_id
+from cee.v2.rng import Stream, stable_id
 
 if TYPE_CHECKING:
     from cee.v2.world import Code, World
@@ -118,7 +118,7 @@ def word_bias(world: World, variable_id: str, morpheme_id: str) -> float:
 
 
 def _draw_bias(world: World, variable_id: str, lexeme: str) -> float:
-    return float(generator(world.seed, "word-bias", variable_id, lexeme).normal(0.0, world.params.word_bias_sd))
+    return Stream(world.seed, "word-bias", variable_id, lexeme).normal(0.0, world.params.word_bias_sd)
 
 
 def _lead(world: World, process: Process, morpheme_id: str, code: Code | None = None) -> float:

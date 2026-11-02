@@ -86,6 +86,17 @@ jen světy se sémantikou; svět bez ní je beze změny):
     shift        b1b7266fd342099cf16515d3a652f16e5bc51e035a9aa164fbd3b1954c72103e
     island-city  4c1c53554286862612aa9377fdc26831c88cd1c28da557d5218156262564cd2b
     valley-50    13556259eaec43e0ae265487f8c645e48a91b2fd0b867e2ba9faba77f7c4ca22
+Reference přenositelné náhody (2026-11-02, krok A6 přípravy na Rust; losy během
+simulace jdou přes ``rng.Stream`` místo ``numpy.random.Generator``: výběr místa
+inovace, návrhy změn, sklony slov, velká λ v ``hash_poisson``; tvorba světa
+zůstala na numpy a svět po ``build()`` je beze změny. Vědomá změna otisků):
+    phonology    3ffcb70c000f5624e98a927ee24163bff04a28f8dae527151cb2622ca804b8f5
+    morphology   22bdbef0509feac65bf8d14a1f3e183b5aac6ab2237190c51817de5b8c634ee0
+    syntax       1e3bb9676c9f59d211168b489223f9dd3caaceba28ebc243984141075167d3d6
+    grid-5x5     967217a5e6adbdafce1fa1f9220ec2820ca813ca7aa95eb632a733b81a0b2179
+    shift        a512ae04fdc30e0367b025182a579422a687706e3366a64b1c97bec072abf829
+    island-city  2435b71bc725c5eb22d1f6fb18225df6077e3f2ec4d37dfd018facd45b105391
+    valley-50    768ddc6716549b2d31332b4d90fc5be2f8c5e006a30281e98fef91c530db1839
 """
 
 from __future__ import annotations

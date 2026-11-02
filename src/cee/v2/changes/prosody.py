@@ -14,6 +14,7 @@ from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.processes import StressRule
 from cee.v2.pressures import Actuation, Conformity, Pressure
 from cee.v2.repertoire import Origin, Variant
+from cee.v2.rng import RandomSource
 
 PROSODY_PRESSURES: Mapping[type[Pressure], float] = {
     Conformity: 0.1,
@@ -51,7 +52,7 @@ class StressShift(Change):
         return ()
 
     def propose(
-        self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
+        self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
         current = prosody.dominant_rule(context.world, context.group.id)
         targets = STRESS_SHIFT_PRIORS.get(current)
@@ -85,7 +86,7 @@ class StressStrengthChange(Change):
         return ()
 
     def propose(
-        self, context: InnovationContext, site: str, rng: np.random.Generator, index: int
+        self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
         current = prosody.dominant_strength(context.world, context.group.id)
         target_strength: Literal["weak", "strong"] = "strong" if current == "weak" else "weak"
