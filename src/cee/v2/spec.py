@@ -7,9 +7,13 @@ v ``Parameters`` a autor je smí přepsat v ``parameters``.
 
 - :class:`WorldSpec` je pydantic model; ``WorldSpec.model_json_schema()``
   dá UI schéma formuláře a :func:`levels` možnosti slovních úrovní.
-- :func:`check` vrátí seznam chyb s cestou k poli (prázdný = v pořádku);
-  události ověří zkušebním provedením na kopii světa v pořadí roků.
+- :func:`check` vrátí seznam chyb a varování s cestou k poli (bez chyb = svět
+  jde postavit); události ověří zkušebním provedením na kopii světa v pořadí
+  roků. Varování (``Issue.severity == "warning"``) svět nezastaví, jen upozorní,
+  například že jiný slovník dá jiné výsledky než výchozí.
 - :func:`build` postaví svět a události, nebo vyhodí :class:`SpecError`.
+- Slovník: ``vocabulary`` (kolik pojmů) a ``concepts`` (vlastní pojmy),
+  viz :mod:`cee.v2.vocabulary`.
 
 Formát má verzi ``FORMAT``; mění se jen přidáváním polí.
 """
@@ -22,6 +26,8 @@ from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from cee.v2 import concept_data
+from cee.v2 import vocabulary as vocab
 from cee.v2.events import WorldEvent
 from cee.v2.history import History
 from cee.v2.parameters import LEVEL_TABLES, Parameters
@@ -100,6 +106,53 @@ class RegionSpec(_Model):
     preserve: bool = False
     #: Podíl přistěhovalců za generaci (obchodní město).
     immigration: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class RelatedSpec(_Model):
+    """Příbuzný pojem vlastního pojmu pro posuny významu (``vocabulary.Related``)."""
+
+    #: ID pojmu světa (výchozího, z katalogu nebo jiného vlastního).
+    concept: str = Field(min_length=1)
+    #: ``polysemy`` (posun významu), ``derivation`` (odvození), ``colexification`` (kolexifikace).
+    kind: Literal["polysemy", "derivation", "colexification"] = "polysemy"
+    #: ``to``: slovo vlastního pojmu se posune k druhému pojmu (resp. druhý se z něj odvodí);
+    #: ``from``: opačně; ``both``: oběma směry. Bez zadání ``both`` u posunu významu a ``from``
+    #: u odvození (druhý pojem je základ vlastního). Kolexifikace je vždy oboustranná.
+    direction: Literal["to", "from", "both"] | None = None
+    #: Síla dokladu v jednotkách dat (počet rodin, resp. jazyků); ``None`` = typická hodnota dat
+    #: (``vocabulary.DEFAULT_WEIGHT``).
+    weight: int | None = Field(default=None, ge=1, le=100000)
+
+
+class ConceptSpec(_Model):
+    """Vlastní pojem autora světa, vymyšlený nebo reálný (``vocabulary.CustomConcept``)."""
+
+    id: str = Field(min_length=1, pattern=vocab.ID_PATTERN.pattern)
+    #: Anglický glos. Shoduje-li se s glosem Concepticonu či názvem významu WOLD,
+    #: převezmou se data jako při vazbě; jinak je to jen popisek.
+    gloss: str | None = None
+    #: Vazba na význam WOLD (např. ``"6-1"``) nebo Concepticon (ID); jen jedna.
+    #: S vazbou se doména, půjčitelnost, frekvence a slovní druh převezmou z dat.
+    wold: str | None = None
+    concepticon: int | None = Field(default=None, ge=1)
+    #: Doména (``concept_data.DOMAINS``); bez ní z vazby, jinak ``core``.
+    domain: Literal["core", "learned", "culture", "religion", "power"] | None = None
+    #: Frekvence na stupnici enginu (``concept_data.FREQUENCY_RANGE``); bez ní z vazby,
+    #: jinak průměr katalogu (domény pojmu, je-li zadaná).
+    frequency: float | None = Field(default=None, ge=concept_data.FREQUENCY_RANGE[0],
+                                    le=concept_data.FREQUENCY_RANGE[1])
+    #: Slovní druh; bez něj z vazby (kategorie WOLD), jinak podstatné jméno.
+    word_class: Literal["noun", "verb", "uninflected"] | None = None
+    #: Půjčitelnost 0 až 1; bez ní z vazby, jinak průměr katalogu (domény pojmu).
+    borrowed: float | None = Field(default=None, ge=0.0, le=1.0)
+    related: list[RelatedSpec] = Field(default_factory=list)
+
+    def custom(self) -> vocab.CustomConcept:
+        return vocab.CustomConcept(
+            self.id, self.gloss, self.wold, self.concepticon, self.domain, self.frequency, self.word_class,
+            self.borrowed, tuple(vocab.Related(item.concept, item.kind, item.direction, item.weight)
+                                 for item in self.related),
+        )
 
 
 class _Event(_Model):
@@ -269,6 +322,12 @@ class WorldSpec(_Model):
     languages: list[LanguageSpec] = Field(min_length=1)
     regions: list[RegionSpec] = Field(min_length=1)
     events: list[EventSpec] = Field(default_factory=list)
+    #: Kolik pojmů se simuluje: 149 výchozích (beze změny výsledků) až celý katalog WOLD
+    #: (``vocabulary.max_size()``); větší slovník = výchozí pojmy + další z katalogu v pořadí
+    #: ``concept_data.catalog_order``. Jiný slovník dá jiné výsledky (varování v ``check``).
+    vocabulary: int = Field(default=vocab.DEFAULT_SIZE, ge=vocab.DEFAULT_SIZE)
+    #: Vlastní pojmy autora (vymyšlené i reálné), navíc ke slovníku.
+    concepts: list[ConceptSpec] = Field(default_factory=list)
     #: Posun významu slov (sémantický graf); vypnutí běh zrychlí.
     semantics: bool = True
     #: Vzdálenost vesnic v regionu (km) a délka generace (roky).
@@ -289,10 +348,24 @@ class WorldSpec(_Model):
 
 @dataclass(frozen=True)
 class Issue:
-    """Chyba popisu světa: cesta k poli (``events.2.capital``) a zpráva."""
+    """Chyba nebo varování popisu světa: cesta k poli (``events.2.capital``) a zpráva.
+
+    ``severity``: ``error`` svět nepustí, ``warning`` jen upozorní (svět jde postavit).
+    """
 
     path: str
     message: str
+    severity: Literal["error", "warning"] = "error"
+
+
+def errors(issues: list[Issue]) -> list[Issue]:
+    """Jen chyby ze seznamu :func:`check`."""
+    return [issue for issue in issues if issue.severity == "error"]
+
+
+def warnings(issues: list[Issue]) -> list[Issue]:
+    """Jen varování ze seznamu :func:`check`."""
+    return [issue for issue in issues if issue.severity == "warning"]
 
 
 class SpecError(ValueError):
@@ -337,6 +410,7 @@ MESSAGES = {
     "string_type": "musí být text",
     "list_type": "musí být seznam",
     "tuple_type": "musí být dvojice čísel",
+    "string_pattern_mismatch": "smí obsahovat jen písmena, číslice, _ . - a začít písmenem nebo číslicí",
 }
 
 
@@ -386,6 +460,7 @@ def _world(spec: WorldSpec, params: Parameters) -> World:
     world = region_world(
         regions, seed=spec.seed, semantics=spec.semantics, village_spacing=spec.village_spacing,
         generation_years=spec.generation_years, params=params, languages=languages,
+        vocabulary=vocab.resolve(spec.vocabulary, [item.custom() for item in spec.concepts]),
     )
     world.start_year = spec.start_year
     return world
@@ -396,20 +471,27 @@ def _ordered(spec: WorldSpec) -> list[tuple[int, Any]]:
 
 
 def check(data: dict[str, Any] | WorldSpec) -> list[Issue]:
-    """Chyby popisu světa (prázdný seznam = svět jde postavit a spustit)."""
+    """Chyby a varování popisu světa; bez chyb (:func:`errors`) se svět dá postavit a spustit.
+
+    Chyby jdou před varováními. Varování svět nezastaví: například jiný slovník
+    než výchozí (``vocabulary``, ``concepts``) dá jiné výsledky než výchozí svět.
+    """
     spec, issues = parse(data)
     if spec is None:
         return issues
     params, issues = _parameters(spec)
     if params is None:
         return issues
+    found = _vocabulary(spec)
+    if errors(found):
+        return found
     issues = _words(spec)
     if issues:
-        return issues
+        return [*issues, *found]
     try:
         world = _world(spec, params)
     except ValueError as error:
-        return [Issue("regions", str(error))]
+        return [Issue("regions", str(error)), *found]
     if spec.background not in params.background_levels:
         issues.append(Issue("background", f"neznámá míra pozadí dějin '{spec.background}'; možnosti: "
                             + ", ".join(sorted(params.background_levels))))
@@ -426,16 +508,35 @@ def check(data: dict[str, Any] | WorldSpec) -> list[Issue]:
             issues.append(Issue(f"events.{index}", f"neznámé ID {error.args[0]!r}"))
         except ValueError as error:
             issues.append(Issue(f"events.{index}", str(error)))
-    return issues
+    if not spec.semantics and any(item.related for item in spec.concepts):
+        found.append(Issue("semantics", "příbuzné pojmy vlastních pojmů se bez sémantiky (semantics: false) "
+                           "nepoužijí", "warning"))
+    return [*issues, *found]
+
+
+def _vocabulary(spec: WorldSpec) -> list[Issue]:
+    """Chyby a varování slovníku: velikost, vlastní pojmy a jejich příbuzné pojmy."""
+    return [Issue(problem.path, problem.message, problem.severity)
+            for problem in vocab.validate(spec.vocabulary, [item.custom() for item in spec.concepts])]
+
+
+def vocabulary_options() -> dict[str, Any]:
+    """Možnosti slovníku pro UI: výchozí a největší velikost, předvolby, domény, druhy vztahů."""
+    return {
+        "default": vocab.DEFAULT_SIZE, "max": vocab.max_size(), "presets": list(vocab.PRESET_SIZES),
+        "domains": list(concept_data.DOMAINS), "word_classes": list(vocab.WORD_CLASSES),
+        "relation_kinds": list(vocab.RELATION_KINDS), "relation_directions": list(vocab.RELATION_DIRECTIONS),
+        "default_weight": dict(vocab.DEFAULT_WEIGHT), "frequency_range": list(concept_data.FREQUENCY_RANGE),
+    }
 
 
 def _words(spec: WorldSpec) -> list[Issue]:
     """Slova zadaná autorem: známý pojem a hlásky, které engine umí."""
     from cee.v2.language.constructions import GRAMMATICAL_SOURCES
     from cee.v2.language.segments import TONE_CODES, default_table
-    from cee.v2.scenarios import DEFAULT_CONCEPTS
 
-    known, table, issues = {*DEFAULT_CONCEPTS, *GRAMMATICAL_SOURCES}, default_table(), []
+    known, table, issues = {*vocab.base_ids(spec.vocabulary), *GRAMMATICAL_SOURCES,
+                            *(item.id for item in spec.concepts)}, default_table(), []
     for index, language in enumerate(spec.languages):
         for position, tone in enumerate(language.tones):
             if tone not in TONE_CODES:
@@ -464,8 +565,8 @@ def _words(spec: WorldSpec) -> list[Issue]:
 
 
 def build(data: dict[str, Any] | WorldSpec) -> tuple[World, list[WorldEvent], WorldSpec]:
-    """Svět, události a ověřený popis; při chybě :class:`SpecError` se všemi chybami."""
-    issues = check(data)
+    """Svět, události a ověřený popis; při chybě :class:`SpecError` se všemi chybami (varování nezastaví)."""
+    issues = errors(check(data))
     if issues:
         raise SpecError(issues)
     spec, _ = parse(data)

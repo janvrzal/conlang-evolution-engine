@@ -29,6 +29,7 @@ def protolanguage(
     coda_share: float = 0.25,
     fixed: Mapping[str, str] | None = None,
     tones: Sequence[str] = (),
+    known_frequencies: Mapping[str, float] | None = None,
 ) -> tuple[dict[str, str], dict[str, float]]:
     """Tvary a frekvence pojmů; stejný seed dá stejný protojazyk.
 
@@ -76,9 +77,12 @@ def protolanguage(
         concept: float(0.9 if index < 20 else np.exp(rng.uniform(np.log(0.05), np.log(0.8))))
         for index, concept in enumerate(dict.fromkeys(concepts))
     }
+    given = known_frequencies or {}
     frequencies = {}
     for concept, value in generated.items():
-        known = concept_data.frequency(concept)
+        known = given.get(concept)
+        if known is None:
+            known = concept_data.frequency(concept)
         frequencies[concept] = value if known is None else known
     return forms, frequencies
 

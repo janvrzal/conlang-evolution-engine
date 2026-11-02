@@ -83,3 +83,14 @@ def test_engine_skonci_s_aplikaci():
     )
     parent.wait()
     assert child.wait(timeout=8) == 0
+
+
+def test_overeni_vraci_varovani_slovniku_s_vaznosti_a_beh_je_nezastavi():
+    assert v2.schema()["vocabulary"]["default"] == 149
+    warned = v2.validate({**SPEC, "vocabulary": 200})
+    assert warned["ok"] is True
+    assert [(item["path"], item["severity"]) for item in warned["issues"]] == [("vocabulary", "warning")]
+    mixed = v2.validate({**SPEC, "vocabulary": 200, "concepts": [{"id": "a", "related": [{"concept": "nic"}]}]})
+    assert mixed["ok"] is False
+    assert [item["severity"] for item in mixed["issues"]] == ["error", "warning", "warning"]
+    assert v2.start_run({**SPEC, "vocabulary": 200, "end_year": 5})["status"] in {"running", "done"}
