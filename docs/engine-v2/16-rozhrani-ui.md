@@ -54,12 +54,41 @@ v `src/cee/data/v2_example_world.json`.
   v [`15-staty-lingua-franca.md`](15-staty-lingua-franca.md).
 - **Svět:** `seed`, `semantics` (posun významu; vypnutí běh zrychlí asi
   o třetinu), rozestup vesnic, délka generace a `parameters`.
+- **Slovník** (`vocabulary`, `concepts`; podrobně v
+  [`19-pojmy.md`](19-pojmy.md)):
+  - `vocabulary`: celé číslo, kolik pojmů se simuluje. Výchozí 149
+    (`DEFAULT_CONCEPTS`, beze změny výsledků), nejvýš 1 453 (celý katalog
+    WOLD); předvolby 149, 200, 500, 1 000. Větší slovník = výchozí pojmy +
+    další z katalogu v pevném pořadí (Swadeshův seznam, pak podle
+    frekvence). `spec.vocabulary_options()` a `GET /api/v2/schema`
+    (`vocabulary`) vrací meze, předvolby, domény, slovní druhy a druhy
+    vztahů pro formulář;
+  - `concepts`: vlastní pojmy, vymyšlené i reálné. Povinné je `id`
+    (písmena, číslice, `_ . -`). Volitelně `gloss` (anglický glos),
+    `wold` nebo `concepticon` (vazba na data: pak se doména, půjčitelnost,
+    frekvence a slovní druh vezmou z nich), `domain` (`core, learned,
+    culture, religion, power`), `frequency` (0,05–0,9), `word_class`
+    (`noun, verb, uninflected`), `borrowed` (0–1) a `related`: seznam
+    příbuzných pojmů pro posuny významu s `concept` (ID pojmu světa), `kind`
+    (`polysemy, derivation, colexification`), `direction` (`to, from, both`)
+    a `weight` (síla dokladu, počet rodin či jazyků). Co autor nezadá, doplní
+    engine (doména `core`, průměr katalogu pro půjčitelnost a frekvenci,
+    podstatné jméno); které pole doplnil, říká `Vocabulary.describe()`
+    (`defaulted`). Slova (`languages[].words`, `endonym`) smějí používat
+    i vlastní a rozšiřující pojmy.
 
 `WorldSpec.model_json_schema()` dává UI schéma formuláře a `levels()`
 možnosti slovních úrovní (terén, identita, politika…) podle tabulek
 `Parameters`.
 
-**Ověření** (`check`) vrací seznam chyb s cestou k poli a českou zprávou.
+**Ověření** (`check`) vrací seznam chyb a varování s cestou k poli a českou
+zprávou. Položka (`Issue`) má `severity`: `error` (svět nejde postavit)
+nebo `warning` (svět jde postavit a spustit, jen upozorní). Chyby jdou
+před varováními; `spec.errors(issues)` a `spec.warnings(issues)` je oddělí.
+Varování dnes hlásí: jiný slovník než výchozí (`vocabulary` ≠ 149 nebo
+`concepts` neprázdné) dá jiné výsledky než výchozí svět; vlastní pojem
+se stejným významem WOLD, jaký už slovník má; příbuzné pojmy při vypnuté
+sémantice, které se nepoužijí. `build` varování ignoruje.
 Například `events.1`: „Stát 'nikdo' neexistuje; nejdřív ho založ událostí
 State.“, nebo `regions.0.foo`: „neznámé pole“. Události se ověří zkušebním
 provedením na kopii světa v pořadí roků. Tím se odhalí odkazy na
@@ -95,15 +124,15 @@ v kraji a kraj (severní suské).
 
 | Endpoint | Co dělá |
 |---|---|
-| `GET /api/v2/schema` | JSON schéma popisu, možnosti úrovní, druhy událostí |
-| `POST /api/v2/validate` | `{"ok", "issues": [{"path", "message"}]}` |
+| `GET /api/v2/schema` | JSON schéma popisu, možnosti úrovní, druhy událostí a možnosti slovníku (`vocabulary`) |
+| `POST /api/v2/validate` | `{"ok", "issues": [{"path", "message", "severity"}]}`; `ok` je pravda, když nejsou chyby (varování `ok` nemění) |
 | `POST /api/v2/runs` | spustí běh na pozadí, vrátí `run_id` (202); neplatný popis vrátí 422 se seznamem chyb |
 | `GET /api/v2/runs/{id}?since=N` | stav, rok, průběh 0–1, čas a nové snímky od indexu `N` |
 | `GET /api/v2/runs/{id}/result` | úplný export (409, dokud běh neskončil) |
 | `DELETE /api/v2/runs/{id}` | zruší běh po dokončení rozpracovaného kroku |
 
-Revize API je 8; UI vyžaduje aspoň svou revizi, takže starší UI dál
-funguje. Běhy žijí v paměti serveru, drží se posledních osm dokončených.
+Revize API je 10 (10 přidala slovník a `severity` u položek ověření);
+UI vyžaduje aspoň svou revizi, takže starší UI dál funguje. Běhy žijí v paměti serveru, drží se posledních osm dokončených.
 Běh je deterministický: stejný popis dá bitově stejný export.
 
 **Snímek** (`export.frame`) vzniká po každém pozorování (každé 4 kroky,
