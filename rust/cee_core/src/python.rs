@@ -153,10 +153,12 @@ type NeedsOut = (
     Vec<usize>,
     Vec<usize>,
     Vec<(usize, Vec<i32>)>,
+    Vec<usize>,
 );
 
 /// Co má Python doplnit: sklony (fronta, morfém), četnosti (lexém), výchozí
-/// tvary (morfém) a mapy hlásek (řádek změny, hlásky).
+/// tvary (morfém), mapy hlásek (řádek změny, hlásky) a fronty, jejichž tabulka
+/// procesu se má založit.
 fn needs_out(needs: Needs) -> NeedsOut {
     (
         needs.bias.into_iter().collect(),
@@ -167,6 +169,7 @@ fn needs_out(needs: Needs) -> NeedsOut {
             .into_iter()
             .map(|(row, segments)| (row, segments.into_iter().collect()))
             .collect(),
+        needs.tables.into_iter().collect(),
     )
 }
 

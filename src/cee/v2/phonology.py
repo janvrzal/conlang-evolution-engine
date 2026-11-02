@@ -23,6 +23,7 @@ import bisect
 import math
 from array import array
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -45,10 +46,13 @@ if TYPE_CHECKING:
 # ``closure_generations``, ``activation_share``).
 
 
+# Čistá funkce řetězce; krok ``restructure`` ji volá pro každý proces a skupinu a tisíckrát za běh.
+@lru_cache(maxsize=None)
 def none_id(variable_id: str) -> str:
     return stable_id("variant", "none", variable_id)
 
 
+@lru_cache(maxsize=None)
 def changed_id(variable_id: str) -> str:
     return stable_id("variant", "changed", variable_id)
 
@@ -302,12 +306,19 @@ def _targets(
 
     ``strict`` je pravidlo ``restructure``: proces, jehož tabulka s pravidlem
     přízvuku kódu v bance ještě není, se přeskočí (řádek −1), stejně jako ho
-    přeskočil ``FormBank.may_apply``. Jinak se tabulka založí (jako v ``_applies``).
+    přeskočil ``FormBank.may_apply``. Jinak (``_queue``) se tabulka zakládá, ale
+    až když na proces dojde (řádek −2 a ``needs``): ``_applies`` ji zakládal také
+    jen pro slovo, které se nezapsalo a nečeká, a na existenci tabulky závisí
+    ``may_apply`` v pozdějším ``restructure``.
     """
     state = code.phonology
     bank = world.form_bank()
     processes = world.processes
-    known = bank._rule_rows.get(rule) if strict else None
+    known = bank._rule_rows.get(rule)
+    numbers = world.registry.processes.numbers
+    columns = world.word_biases
+    size = len(world.registry.morphemes)
+    waiting_of, done_of = state.queued, state.restructured
     rows: list[int] = []
     queued: list[Any] = []
     restructured: list[Any] = []
@@ -315,17 +326,17 @@ def _targets(
     reductive: list[bool] = []
     for variable_id in actives:
         process = processes[variable_id]
-        column = _bias_column(world, variable_id)
-        if column is None:
-            return None
-        if strict:
-            rows.append(-1 if known is None else known.get(process.key, -1))
-        else:
-            rows.append(bank.process_table(process, rule).index)
-        waiting = state.queued.get(variable_id)
+        column = columns.get(numbers.get(variable_id, -1))
+        if column is None or len(column) < size:
+            column = _bias_column(world, variable_id)
+            if column is None:
+                return None
+        row = None if known is None else known.get(process.key)
+        rows.append((-1 if strict else -2) if row is None else row)
+        waiting = waiting_of.get(variable_id)
         if waiting is None:
-            waiting = state.queued[variable_id] = state.morpheme_set()
-        done = state.restructured.get(variable_id)
+            waiting = waiting_of[variable_id] = state.morpheme_set()
+        done = done_of.get(variable_id)
         queued.append(waiting.flags)
         restructured.append(_EMPTY_FLAGS if done is None else done.flags)
         biases.append(column)
@@ -355,11 +366,11 @@ def _frequencies(world: World, code: Code, lexemes: Any, known: dict[int, float]
 
 
 def _resolve(
-    world: World, code: Code, needs: tuple[Any, Any, Any, Any], variable_ids: list[str],
-    known: dict[int, float],
+    world: World, code: Code, needs: tuple[Any, ...], variable_ids: list[str],
+    known: dict[int, float], rows: list[int], rule: StressRule,
 ) -> None:
-    """Doplní, co Rust vyžádal: sklony slov, četnosti, výchozí tvary a mapy hlásek."""
-    biases, frequencies, forms, maps = needs
+    """Doplní, co Rust vyžádal: sklony slov, četnosti, výchozí tvary, mapy hlásek a tabulky procesů."""
+    biases, frequencies, forms, maps, tables = needs
     names = world.registry.morphemes.names
     for target, morpheme in biases:
         word_bias(world, variable_ids[target], names[morpheme])
@@ -370,10 +381,13 @@ def _resolve(
     bank = world.form_bank()
     for row, segments in maps:
         bank._resolve(row, segments)
+    for target in tables:
+        rows[target] = bank.process_table(world.processes[variable_ids[target]], rule).index
 
 
 def _complete(
-    world: World, code: Code, variable_ids: list[str], known: dict[int, float], call: Any,
+    world: World, code: Code, variable_ids: list[str], known: dict[int, float], rows: list[int], rule: StressRule,
+    call: Any,
 ) -> tuple[Any, ...]:
     """Zavolá Rust a dokud vyžaduje doplnění, doplňuje a volá znovu; vrací úplnou odpověď.
 
@@ -391,7 +405,7 @@ def _complete(
         if needs == previous:
             raise RuntimeError(f"Rust opakovaně vyžaduje totéž, bez pokroku: {needs!r}")
         previous = needs
-        _resolve(world, code, needs, variable_ids, known)
+        _resolve(world, code, needs, variable_ids, known, rows, rule)
 
 
 def _queue_all(world: World, code: Code, morpheme_id: str) -> None:
@@ -414,7 +428,7 @@ def _queue_all(world: World, code: Code, morpheme_id: str) -> None:
     store = code.forms.raw()
     code_rule = native.RULES.index(rule)
     answer = _complete(
-        world, code, actives, known,
+        world, code, actives, known, targets[0], rule,
         lambda: handle.queue_morpheme(code_rule, base, lead, store, columns, targets, known, number),
     )
     _, queue_ids, morphemes, logits = answer[:4]
@@ -445,7 +459,7 @@ def _activate_native(world: World, code: Code, variable_id: str) -> bool:
     store, columns, code_rule = code.forms.raw(), _columns(world), native.RULES.index(rule)
     known: dict[int, float] = {}
     answer = _complete(
-        world, code, [variable_id], known,
+        world, code, [variable_id], known, targets[0], rule,
         lambda: handle.activate(code_rule, base, lead, store, columns, targets, known, row, state.vocabulary.flags),
     )
     _, morphemes, logits = answer[:3]
@@ -605,7 +619,7 @@ def _pop_native(
         if not popped and needs == previous:
             raise RuntimeError(f"Rust opakovaně vyžaduje totéž, bez pokroku: {needs!r}")
         previous = needs
-        _resolve(world, code, needs, order, known)
+        _resolve(world, code, needs, order, known, held.rows, rule)
 
 
 def restructure(world: World, group_id: str, tick: int, dt: float, history: History, year: float) -> None:
@@ -621,7 +635,10 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
         share = changed_share(world, group_id, variable_id)
         queue = state.pending[variable_id]
         level = _logit(share) if share > 0 else -math.inf
-        rewritten = None if handle is None else _pop_native(world, code, handle, variable_id, kit, live, queue, level)
+        if handle is not None and (not queue.needed or queue.needed[0] >= level):
+            rewritten: list[str] | None = []  # nic nedošlo na práh
+        else:
+            rewritten = None if handle is None else _pop_native(world, code, handle, variable_id, kit, live, queue, level)
         if rewritten is None:
             rewritten = _pop_python(world, code, variable_id, queue, level)
         if rewritten:

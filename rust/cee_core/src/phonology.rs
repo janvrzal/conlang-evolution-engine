@@ -30,6 +30,14 @@ use crate::bank::{Applied, Bank, MapNeeds, Outcome, UNCHANGED};
 /// V polích: položka není nastavena.
 pub const UNSET: i32 = -1;
 
+/// `Target::row`: fronta se přeskočí.
+pub const SKIP: i64 = -1;
+/// `Target::row`: tabulka procesu s tímto pravidlem přízvuku v bance ještě není.
+/// Založí ji Python (`FormBank.process_table`), ale až když na frontu dojde:
+/// morfém, který se už zapsal nebo čeká, tabulku nezakládá (kdo má tabulku,
+/// rozhoduje u přepsaných slov předfiltr, viz `restructure`).
+pub const NO_TABLE: i64 = -2;
+
 /// Podkladové tvary kódu (`FormStore`) a výchozí sloupce morfémů světa.
 pub struct Units<'a> {
     pub form: &'a [i32],
@@ -82,8 +90,9 @@ impl Units<'_> {
 
 /// Jedna fronta, do které se může zařadit: živý proces kódu.
 pub struct Target<'a> {
-    /// Řádek změny v bance, −1 = fronta se přeskočí (tabulka s tímto
-    /// pravidlem přízvuku neexistuje, nebo je to proces, který se právě řeší).
+    /// Řádek změny v bance. `SKIP` = fronta se přeskočí (tabulka s tímto
+    /// pravidlem přízvuku neexistuje a nemá se zakládat); `NO_TABLE` = tabulka
+    /// neexistuje a založí se, až na ni dojde (viz `Needs::tables`).
     pub row: i64,
     /// Morfémy, které v frontě čekají, a které si změnu už zapsaly (příznaky).
     pub queued: &'a [u8],
@@ -117,6 +126,8 @@ pub struct Needs {
     pub forms: BTreeSet<usize>,
     /// Mapy hlásek pro operace `change` a `tone`.
     pub maps: MapNeeds,
+    /// Fronty (podle čísla), jejichž tabulka procesu se má v bance založit.
+    pub tables: BTreeSet<usize>,
 }
 
 impl Needs {
@@ -205,15 +216,19 @@ fn queue_into(
     let lexeme = units.lexeme_of(morpheme)?;
     let mut found = Vec::new();
     for (index, target) in targets.iter().enumerate() {
-        if Some(index) == skip || target.row < 0 {
+        if Some(index) == skip || target.row == SKIP {
+            continue;
+        }
+        if flagged(target.restructured, morpheme) || flagged(target.queued, morpheme) {
+            continue;
+        }
+        if target.row == NO_TABLE {
+            needs.tables.insert(index);
             continue;
         }
         let row = target.row as usize;
         // Předfiltr banky (bity hlásek) je nutná podmínka výsledku tabulky.
-        if !bank.may_apply(form_id, row)?
-            || flagged(target.restructured, morpheme)
-            || flagged(target.queued, morpheme)
-        {
+        if !bank.may_apply(form_id, row)? {
             continue;
         }
         match bank.lookup(row, params.rule, form_id, &mut needs.maps)? {
@@ -620,6 +635,32 @@ mod tests {
         let (found, _) =
             queue_morpheme(&mut bank, &PARAMS, &units, &targets, 1, &Frequencies::new()).unwrap();
         assert!(found.is_empty());
+    }
+
+    #[test]
+    fn tabulka_se_zaklada_az_kdyz_na_frontu_dojde() {
+        let mut bank = bank();
+        let kata = bank.push(&[1, 0, 2, 0]).unwrap() as i32;
+        let (forms, lexeme, none) = ([kata], [0], [-1]);
+        let units = units(&forms, &lexeme, &none);
+        let bias = [0.0];
+        let waiting = [1u8];
+        // Fronta bez tabulky a morfém, který v ní už čeká: tabulka se nezakládá.
+        let targets = [target(NO_TABLE, &waiting, &bias, false)];
+        let (found, needs) =
+            queue_morpheme(&mut bank, &PARAMS, &units, &targets, 0, &Frequencies::new()).unwrap();
+        assert!(found.is_empty() && needs.is_empty());
+        // Nečeká-li, Rust o tabulku požádá a nic nezařadí.
+        let targets = [target(NO_TABLE, &[], &bias, false)];
+        let (found, needs) =
+            queue_morpheme(&mut bank, &PARAMS, &units, &targets, 0, &Frequencies::new()).unwrap();
+        assert!(found.is_empty());
+        assert_eq!(needs.tables.iter().copied().collect::<Vec<_>>(), vec![0]);
+        // Přeskočená fronta (strict) nezakládá nic.
+        let targets = [target(SKIP, &[], &bias, false)];
+        let (found, needs) =
+            queue_morpheme(&mut bank, &PARAMS, &units, &targets, 0, &Frequencies::new()).unwrap();
+        assert!(found.is_empty() && needs.is_empty());
     }
 
     #[test]
