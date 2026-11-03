@@ -109,6 +109,12 @@ stavy mají `Default`, `Clone` a `serde`.
   `census`, `lineages`, `dialect_facts`, `endonym`). Scénáře a `WorldSpec` už vytvářejí
   `PendingEvent` se správným druhem a parametry; skutečné `State`, `Conquest`, … přidá R1d.
 
+### Smluvené body mezi fázemi (`phases/hooks.rs`)
+
+Přenos (R1a) předává důsledky do jiných oblastí přes pevné funkce v `phases/hooks.rs`: `follow_vocabulary`
+(R1b), `adopt` (R1d), `activate` → `activate_process` (R1b) nebo `activate_analogy` (R1c), `record_grammar` (R1c),
+`is_sound_process` (R1b). Vlastník mění jen tělo funkce, podpisy jsou pevné; změnu podpisu sloučí hlavní agent.
+
 ### Změny (`Change`)
 
 `changes::Change` je jediné rozhraní, kterým fáze inovací zná druhy změn: `kind`, `weighted_sites`,

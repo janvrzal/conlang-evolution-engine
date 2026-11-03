@@ -19,6 +19,7 @@
 
 pub mod communities;
 pub mod events;
+pub mod hooks;
 pub mod innovation;
 pub mod observe;
 pub mod rebuild;

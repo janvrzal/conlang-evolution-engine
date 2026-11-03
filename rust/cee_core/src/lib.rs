@@ -29,6 +29,7 @@ mod code_state_python;
 mod index_python;
 #[cfg(feature = "python")]
 mod innovation_python;
+#[cfg(feature = "python")]
 mod observe_python;
 #[cfg(feature = "python")]
 mod pressures_python;
