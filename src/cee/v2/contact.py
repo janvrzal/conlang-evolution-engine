@@ -18,12 +18,14 @@ vymře a v novém jazyce po něm zůstane substrát.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2 import phases_transmission as phases
 from cee.v2.history import History
 from cee.v2.language.segments import Form
 
@@ -32,6 +34,7 @@ if TYPE_CHECKING:
     from cee.v2.world import Code, World
 
 FloatArray = npt.NDArray[np.float64]
+IntArray = npt.NDArray[np.intp]
 
 #: Filtr výpůjček podle typu proměnné. U slov se násobí váhou pojmu
 #: (:func:`transfer`, dřív ``1 − frekvence``: základní slovní zásoba se půjčuje
@@ -118,6 +121,62 @@ def borrowing_factor(world: World, variable_id: str, channel: str = "neighbor") 
     return factor
 
 
+def variable_columns(world: World, variable_ids: Sequence[str]) -> VariableColumns:
+    """Vlastnosti proměnných bloku jako sloupce (jednou za blok a krok, pro všechny faktory kanálů)."""
+    variables = [world.variables[variable_id] for variable_id in variable_ids]
+    kinds = np.array([phases.KINDS.index(variable.kind) for variable in variables], dtype=np.intp)
+    lexical = kinds == phases.LEXICAL
+    concepts = tuple(variable.key if is_word else "" for variable, is_word in zip(variables, lexical))
+    frequency = np.array(
+        [world.concept_frequency(concept) if is_word else 0.0 for concept, is_word in zip(concepts, lexical)],
+        dtype=np.float64,
+    )
+    return VariableColumns(kinds, concepts, frequency)
+
+
+@dataclass(frozen=True, slots=True)
+class VariableColumns:
+    """Druh (kód ``phases_transmission.KINDS``), pojem a frekvence pojmu každé proměnné bloku.
+
+    Pojem (``""`` u proměnných, které nejsou slova) a jeho frekvence slouží
+    jen u slov; jinde jsou výplň.
+    """
+
+    kinds: IntArray
+    concepts: tuple[str, ...]
+    frequency: FloatArray
+
+    def domain_weights(self, world: World, channel: str) -> FloatArray:
+        """Váha domény pojmu v kanálu pro každou proměnnou (1 u proměnných, které nejsou slova)."""
+        lexical = self.kinds == phases.LEXICAL
+        return np.array(
+            [domain_weight(world, channel, concept) if is_word else 1.0
+             for concept, is_word in zip(self.concepts, lexical)],
+            dtype=np.float64,
+        )
+
+
+def borrowing_factors(world: World, columns: VariableColumns, channel: str = "neighbor") -> FloatArray:
+    """Filtr výpůjček kanálu pro každou proměnnou bloku (po prvcích jako :func:`borrowing_factor`).
+
+    Mocnina v přenositelnosti pojmu (:func:`transfer`) zůstává po pojmech v
+    Pythonu (``numpy.power`` se v posledním bitu může lišit od ``**``).
+    """
+    lexical = columns.kinds == phases.LEXICAL
+    transfer_of = np.array(
+        [transfer(world, concept) if is_word else 1.0 for concept, is_word in zip(columns.concepts, lexical)],
+        dtype=np.float64,
+    )
+    return phases.borrowing_factors(
+        columns.kinds, phases.kind_table(BORROWING), transfer_of, columns.domain_weights(world, channel)
+    )
+
+
+def interference_factors(world: World, columns: VariableColumns) -> FloatArray:
+    """Filtr interference pro každou proměnnou bloku (po prvcích jako :func:`interference_factor`)."""
+    return phases.interference_factors(columns.kinds, phases.kind_table(INTERFERENCE))
+
+
 # --- kanály vazeb mezi jazyky ---------------------------------------------------
 
 #: Kanály, které se v přenosu odlišují od obecného kontaktu sousedů (pořadí je pevné).
@@ -149,16 +208,22 @@ def channel_shares(
     elite = np.zeros((size, size))
     if "elite" in distinct:
         sources = np.array([world.groups[group_id].elite for group_id in group_ids])
-        elite = np.broadcast_to(np.where(sources, 1.0, 0.0), (size, size)).copy()
+        elite = phases.elite_shares(sources)
         shares["elite"] = elite
     if "trade" in distinct and world.trade:
         place = {group_id: position for position, group_id in enumerate(group_ids)}
-        trade = np.zeros((size, size))
+        rows: list[int] = []
+        columns: list[int] = []
+        values: list[float] = []
         for first, second in sorted(world.trade):
             if first in place and second in place:
-                trade[place[first], place[second]] = world.trade_share(first, second)
-                trade[place[second], place[first]] = world.trade_share(second, first)
-        shares["trade"] = trade * (1.0 - elite)
+                rows += [place[first], place[second]]
+                columns += [place[second], place[first]]
+                values += [world.trade_share(first, second), world.trade_share(second, first)]
+        shares["trade"] = phases.trade_shares(
+            size, np.array(rows, dtype=np.intp), np.array(columns, dtype=np.intp),
+            np.array(values, dtype=np.float64), elite,
+        )
     return shares
 
 
