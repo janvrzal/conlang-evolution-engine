@@ -508,7 +508,7 @@ impl AssessIndex {
         g: usize,
         variable: u32,
         needs: &mut Needs,
-    ) -> Option<FormEntry> {
+    ) -> Result<Option<FormEntry>, String> {
         let group = self.groups.entry(ctx.inp.tokens[g]).or_default();
         form_assess::lookup(&self.forms, &mut group.form, ctx, g, variable, needs)
     }

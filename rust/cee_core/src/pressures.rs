@@ -264,7 +264,7 @@ pub fn gather(
                     roots: &step.roots,
                 };
                 for &g in &columns {
-                    if let Some(entry) = index.form_lookup(&ctx, g, rows.variable[row], needs) {
+                    if let Some(entry) = index.form_lookup(&ctx, g, rows.variable[row], needs)? {
                         let at = local * chunk.groups + g;
                         out.values[at] = [
                             entry.gain,

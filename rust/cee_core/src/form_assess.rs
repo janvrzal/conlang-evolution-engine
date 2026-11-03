@@ -400,7 +400,8 @@ fn evaluate(
 }
 
 /// Hodnocení změny tvaru `variable` v kódu skupiny `g`: uložená hodnota, nebo spočtená teď.
-/// `None`, když výpočet čeká na výchozí tvar morfému (zapsáno do `needs`).
+/// `Ok(None)`, když výpočet čeká na výchozí tvar morfému (zapsáno do `needs`); chyba, když změna
+/// tvaru není zaregistrovaná (rukojeť indexu se nahradila a popis řádků zůstal).
 pub fn lookup(
     registry: &FormRegistry,
     state: &mut FormState,
@@ -408,8 +409,10 @@ pub fn lookup(
     g: usize,
     variable: u32,
     needs: &mut Needs,
-) -> Option<FormEntry> {
-    let (ordinal, change) = registry.get(variable)?;
+) -> Result<Option<FormEntry>, String> {
+    let (ordinal, change) = registry
+        .get(variable)
+        .ok_or_else(|| format!("změna tvaru č. {variable} není zaregistrovaná"))?;
     let version = ctx.inp.versions[g];
     if state.synced != Some(version) {
         state.slots.clear();
@@ -438,18 +441,18 @@ pub fn lookup(
             }
             Err(morpheme) => {
                 needs.morph_defaults.insert(morpheme);
-                return None;
+                return Ok(None);
             }
         }
     }
     let slot = state.slots[ordinal];
-    Some(FormEntry {
+    Ok(Some(FormEntry {
         present: slot.state == 2,
         gain: slot.gain,
         frequency: slot.frequency,
         before: slot.before,
         after: slot.after,
-    })
+    }))
 }
 
 #[cfg(test)]
@@ -671,6 +674,7 @@ mod tests {
         let first = fixture([&none, &none, &none], change, &[], &[], |ctx, _, _| {
             lookup(&registry, &mut state, ctx, 0, 12, &mut needs)
         })
+        .expect("zaregistrováno")
         .expect("hodnota");
         assert!(first.present && !first.after);
         assert!(needs.morph_defaults.is_empty());
