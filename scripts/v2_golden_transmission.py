@@ -3,8 +3,8 @@
 Za běhu scénářů (grid-5x5, shift, valley-50 zkráceně, svět s elitou a obchodem
 a svět s církví, školou a liturgií, aby se pokryly všechny kanály) zaznamená
 každé volání čisté funkce nad poli, jak ho udělal Python (``CEE_NATIVE=0``),
-s vstupem i výstupem. Rust implementace funkcí se pak ověří bit po bitu stejným
-souborem (``tests/v2/test_v2_golden_transmission.py``).
+s vstupem i výstupem. Rust implementace (``hear``, ``settle``, ``normalized``) se ověřuje bit po bitu
+stejným souborem (``tests/v2/test_v2_golden_transmission.py`` a ``test_v2_native_transmission.py``).
 
 Soubor ``tests/v2/data/golden_transmission.json.gz`` obsahuje:
 

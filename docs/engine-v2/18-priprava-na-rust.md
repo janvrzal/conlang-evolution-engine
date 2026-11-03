@@ -152,6 +152,54 @@ s testem shody proti zlatým datům:
      stavu indexů na čísla z registru. Indexy pak přejdou do Rustu celé
      i s testy (tyto testy se pak vědomě přepíšou na nové rozhraní);
 4. přenos (míšení, výběr, drift) a živé fondy. **Příprava hotova 2026-11-03** (řádky A5 a A7): rozhraní pro Rust jsou funkce `cee.v2.phases_transmission` se zlatými daty; živé fondy jsou řídké, přenos se počítá nad hustými bloky kvůli pořadí sčítání. Čas přenosu je ale z 36 % ve tlacích, ne v číslech přenosu, takže zisk Rustu v tomto kroku bude malý, dokud tlaky a hodnocení nepřejdou na čísla z registru;
+   **Hotovo 2026-11-03** (`zadani-rust-b4.md`, verze rozhraní 4):
+   - **Krok 1, pevné pořadí míšení** (samostatný commit): `phases_transmission.mix`
+     sčítá místo BLAS postupně přes zdroje (pro cílovou skupinu součiny
+     `váha × podíl` zleva doprava podle vzestupného čísla zdroje, nulové váhy se
+     přeskočí; viz kapitola Pořadí sčítání v míšení níže). Na zlatých vstupech se
+     staré a nové míšení liší jen v posledních bitech (nejvyšší relativní rozdíl
+     `2,2e-16` u `mix`, `4,6e-16` u `hear`). **Otisky historie všech sedmi světů
+     z `scripts/v2_digests.py` zůstaly stejné**, změnily se jen otisky *stavu*
+     světa připnuté v `tests/v2/test_v2_edits.py` (sedm světů) a zlatá data
+     přenosu. Audit bran a retenci po změně jsme nespouštěli (stroj byl přetížený,
+     koordinátor je zrušil); běžel jen audit před změnou. Důvod, proč to neškodí:
+     historie, tedy to, co brány měří, je bitově stejná ve všech sedmi světech;
+     rozdíl je ve stavu frekvencí v řádu `1e-16`;
+   - **Fondy v Rustu**: `cee_core.NativeCells` drží řídké buňky bloku (řádek =
+     proměnná, buňky seřazené podle slotu a skupiny, `pools.rs`) po celý běh; Python
+     (`PoolBlock`) drží rukojeť a veřejné rozhraní `LivePools` je beze změny. Stejné
+     rozhraní má Python `PyCells` (bez rozšíření nebo s `CEE_NATIVE=0`); uložení
+     (pickle, checkpointy) je neutrální pole, takže stav jde obnovit v obou režimech.
+     Hustý pohled `block.freqs` a `previous` a výsledky přenosu jsou pole `Slab`
+     sdílená s `numpy` bez kopie; Rust je přepíše, jen když na ně nikdo
+     neodkazuje, takže starý pohled zůstane, jaký byl. Malá pole (čísla variant ve
+     slotech, klíče, „kdo proměnnou má“) zůstala v Pythonu a do přenosu jdou jako pohledy;
+   - **Přenos v Rustu** (`transmission.rs`): `hear` a `settle` jsou funkce nad poli a
+     tentýž kód běží v `NativeCells.transmit`. Jedno volání na blok a krok: Rust
+     zamíchá, po kusech řádků zavolá Python pro tlaky (`fitness(od, do, podíly,
+     slyšené)`, jediné zpětné volání) a vybere, přičte drift a ustálí; vstupy kroku
+     (síť po komponentách, kanály, kohorty, klíče driftu) se předají jednou za krok
+     (`NativeStep`). Do Pythonu se vrací nové podíly a základny jako pohledy; `stage`
+     a `commit` je převezmou bez kopie. Až tlaky přejdou do Rustu, zpětné volání
+     nahradí jejich výpočet nad stejnými poli (`heard`, `current`, výstup `fitness`
+     tvaru kusu) a řetězec míšení, tlaky, výběr poběží celý v Rustu bez Pythonu (B6);
+   - **`exp`, `log`, `cos`**: Rust je počítá knihovnou systému a `settle` v Rustu
+     se používá jen tehdy, když zkouška `native.libm_matches()` (20 000 náhodných
+     vstupů, včetně celého `hash_normal`) ukáže bitovou shodu s `numpy`. Jinak počítá
+     `settle` Python (míšení a fondy zůstanou v Rustu). Na tomto stroji shodují;
+   - **vlákna**: `CEE_THREADS` (výchozí 1) dělí míšení, výběr a přípravu řádků po
+     souvislých úsecích proměnných; každý úsek zapisuje do vlastního výstupu a nic se
+     mezi vlákny nesčítá (`std::thread::scope`, bez nové závislosti). Test ověřuje
+     stejné bity pro 1, 2, 3, 5, 7 a 20 vláken i celý běh s `CEE_THREADS=3`;
+   - **ověření**: zlatá data přenosu (`golden_transmission.json.gz`, přegenerovaná
+     v kroku 1) projdou přes Rust (`test_v2_native_transmission.py`), dále náhodné sítě
+     o 1 až 300 skupinách a 1 až 16 slotech, shoda `NativeCells` s `PyCells` při náhodných
+     operacích a celý běh s Rustem, bez něj i při neshodě knihovny;
+   - **zůstalo v Pythonu**: příprava kroku (`mixing_from_links`, komponenty, podíly kanálů),
+     faktory kanálů po proměnných bloku, klíče driftu (`stable_int`), tlaky
+     (`Pressure.scores`) a vše za přenosem (události, slovní zásoba, aktivace); `mix`
+     jako samostatná funkce má jen Python (Rust ho má uvnitř `hear`). Fondy, které by
+     měly přejít spolu s tlaky: malá pole slotů a `LivePools` (`load`, `innovate`, `release`);
 5. hledání míst inovací a změny;
 6. hlavní smyčka `Simulation`; Python zůstane pro popis světa, export,
    kalibrační skripty a API; desktopová aplikace (Tauri) může engine volat
@@ -169,6 +217,32 @@ lišit. Postup: jednotlivé funkce porovnávat s tolerancí v řádu posledního
 bitu, otisky při přechodu jednou vědomě vyměnit a nový stav ověřit celou
 sadou bran a statistickým srovnáním na seedech. Od té chvíle jsou
 referencí otisky z Rustu.
+
+### Pořadí sčítání v míšení
+
+`phases_transmission.mix` násobila matici vazeb s hodnotami přes BLAS (`matrix @ flat`).
+Pořadí sčítání v BLAS závisí na knihovně, její verzi a tvaru matice (proto se
+dřív násobila každá propojená komponenta zvlášť); Rust ho bitově nezopakuje.
+Nové pořadí je **postupně přes zdroje**: pro cílovou skupinu `i` je výsledek
+`((0 + w[i,j₁] × x[j₁]) + w[i,j₂] × x[j₂]) + …`, kde `j₁ < j₂ < …` jsou zdroje s
+nenulovou vahou. Součin se zaokrouhlí zvlášť a pak se přičte (žádné FMA; Rust ho
+sám nikdy nesloučí), nulové váhy se přeskočí (nulový součin součet nezmění, takže
+výsledek nezávisí na počtu nulových sloupců matice ani na rozdělení na komponenty).
+V numpy se to počítá po „pořadí v řádku“ (`_by_rank`): k-tá nenulová buňka každého
+řádku najednou, tedy tolik kroků, kolik má nejhustší řádek sousedů, a práce
+úměrná počtu vazeb, ne čtverci počtu skupin.
+
+Vědomá změna otisků, kterou nese jen pořadí sčítání: nic jiného (konstanty,
+`Parameters`, brány) se neměnilo. Ověřeno tím, že staré a nové míšení se na
+stejném vstupu liší jen v posledních bitech (relativně do `5e-16`). Otisky
+historie se nezměnily vůbec (všech sedm světů z `scripts/v2_digests.py`), otisky
+stavu světa v `tests/v2/test_v2_edits.py` ano.
+
+Zbývající součty přenosu: `normalized` sčítá seřazené podíly slotů zleva doprava
+(v Rustu totéž), `mixing_from_links` sčítá řádky `numpy.sum` a zůstává v Pythonu
+(příprava kroku, ne horká cesta; kdyby přešla do Rustu, platí `pairwise_sum` a
+hlídač `sums_match`), `settle` jinak sčítá jen po prvcích (přesné součty a
+součiny).
 
 ## Nevýhody, se kterými počítat
 
