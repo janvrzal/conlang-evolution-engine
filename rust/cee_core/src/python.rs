@@ -6,21 +6,26 @@
 
 use std::collections::BTreeMap;
 
-use numpy::{PyArray1, PyReadonlyArray1};
+use numpy::ndarray::Dimension;
+use numpy::{PyArray1, PyReadonlyArray, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods};
 use pyo3::buffer::{Element, PyBuffer, PyUntypedBuffer};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
+use crate::assess::{Assessed, Matrix};
 use crate::bank::{Bank, Outcome};
 use crate::phonology::{self, Needs, Params, Target, Units};
 use crate::process::Proc;
+use crate::support::{self, Contexts, Masks};
 
 fn failure(message: String) -> PyErr {
     PyValueError::new_err(message)
 }
 
-fn slice<'a, T: numpy::Element>(array: &'a PyReadonlyArray1<'_, T>) -> PyResult<&'a [T]> {
+fn slice<'a, T: numpy::Element, D: Dimension>(
+    array: &'a PyReadonlyArray<'_, T, D>,
+) -> PyResult<&'a [T]> {
     array
         .as_slice()
         .map_err(|_| failure("pole musí být souvislé".into()))
@@ -191,10 +196,19 @@ pub struct NativeBank {
 #[pymethods]
 impl NativeBank {
     /// `boundary` je číslo hranice slova (počet hlásek), `vowel` maska
-    /// samohlásek s hranicí na konci.
+    /// samohlásek s hranicí na konci; `glide` je maska polosamohlásek (sonorita 3)
+    /// stejné délky, bez ní se hodnocení příznakovosti slabik nepočítá správně.
     #[new]
-    fn new(boundary: i32, vowel: PyReadonlyArray1<'_, bool>) -> PyResult<Self> {
-        let bank = Bank::new(boundary, slice(&vowel)?.to_vec()).map_err(failure)?;
+    #[pyo3(signature = (boundary, vowel, glide=None))]
+    fn new(
+        boundary: i32,
+        vowel: PyReadonlyArray1<'_, bool>,
+        glide: Option<PyReadonlyArray1<'_, bool>>,
+    ) -> PyResult<Self> {
+        let mut bank = Bank::new(boundary, slice(&vowel)?.to_vec()).map_err(failure)?;
+        if let Some(glide) = glide {
+            bank.set_glide(slice(&glide)?.to_vec()).map_err(failure)?;
+        }
         Ok(NativeBank { bank })
     }
 
@@ -322,6 +336,95 @@ impl NativeBank {
     /// doplnit mapu) nebo −4 (vznikl nový tvar, převezme ho `results`).
     fn result(&mut self, row: usize, rule: u8, form_id: usize) -> PyResult<i64> {
         self.bank.result(row, rule, form_id).map_err(failure)
+    }
+
+    /// Hodnocení změny `row` (pravidlo přízvuku `rule`) nad maticí slovních zásob
+    /// (`cee.v2.assessment._assess_batch`): `ids` a `weights` jsou řádky matice
+    /// za sebou, `offsets` jejich meze (řádků + 1 čísel) a `width` šířka matice
+    /// v Pythonu (nejdelší řádek); podle ní se sčítá jako `numpy`.
+    ///
+    /// Vrací `(needs, hmota, krátká hmota, příznakovost, počty dvojic, první,
+    /// druhá, počty samohlásek před, samohlásky před, počty po, samohlásky po,
+    /// první_nové_číslo, nové_hlásky, nové_délky)`. Je-li `needs` neprázdné,
+    /// nic se nespočítalo: Python doplní mapy (`set_map`) a zeptá se znovu.
+    #[pyo3(signature = (row, rule, ids, weights, offsets, width, want_vowels))]
+    #[allow(clippy::too_many_arguments)]
+    fn assess_rows<'py>(
+        &mut self,
+        py: Python<'py>,
+        row: usize,
+        rule: u8,
+        ids: PyReadonlyArray1<'py, i64>,
+        weights: PyReadonlyArray1<'py, f64>,
+        offsets: PyReadonlyArray1<'py, i64>,
+        width: usize,
+        want_vowels: bool,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        let matrix = Matrix {
+            ids: slice(&ids)?,
+            weights: slice(&weights)?,
+            offsets: slice(&offsets)?,
+            width,
+        };
+        let assessed = self
+            .bank
+            .assess_rows(row, rule, &matrix, want_vowels)
+            .map_err(failure)?;
+        let (first, flat, lengths) = self.bank.take_created();
+        let (needs, rows) = match assessed {
+            Assessed::Needs(needs) => (needs, Vec::new()),
+            Assessed::Done(rows) => (Vec::new(), rows),
+        };
+        let floats = |pick: fn(&crate::assess::RowAssessment) -> f64| {
+            PyArray1::from_vec(py, rows.iter().map(pick).collect::<Vec<f64>>())
+        };
+        let counts = |pick: fn(&crate::assess::RowAssessment) -> usize| {
+            PyArray1::from_vec(
+                py,
+                rows.iter().map(|r| pick(r) as i64).collect::<Vec<i64>>(),
+            )
+        };
+        let pairs: Vec<(u32, u32)> = rows.iter().flat_map(|r| r.pairs.iter().copied()).collect();
+        let before: Vec<i64> = rows
+            .iter()
+            .flat_map(|r| r.before.iter().map(|&s| i64::from(s)))
+            .collect();
+        let after: Vec<i64> = rows
+            .iter()
+            .flat_map(|r| r.after.iter().map(|&s| i64::from(s)))
+            .collect();
+        PyTuple::new(
+            py,
+            [
+                needs.into_pyobject(py)?.into_any(),
+                floats(|r| r.mass).into_any(),
+                floats(|r| r.short).into_any(),
+                floats(|r| r.marked).into_any(),
+                counts(|r| r.pairs.len()).into_any(),
+                PyArray1::from_vec(
+                    py,
+                    pairs.iter().map(|p| i64::from(p.0)).collect::<Vec<i64>>(),
+                )
+                .into_any(),
+                PyArray1::from_vec(
+                    py,
+                    pairs.iter().map(|p| i64::from(p.1)).collect::<Vec<i64>>(),
+                )
+                .into_any(),
+                counts(|r| r.before.len()).into_any(),
+                PyArray1::from_vec(py, before).into_any(),
+                counts(|r| r.after.len()).into_any(),
+                PyArray1::from_vec(py, after).into_any(),
+                first.into_pyobject(py)?.into_any(),
+                PyArray1::from_vec(py, flat).into_any(),
+                PyArray1::from_vec(py, lengths).into_any(),
+            ],
+        )
+    }
+
+    /// Příznakovost slabičné stavby tvaru (`cee.v2.assessment.markedness`); pro testy.
+    fn markedness(&mut self, form_id: usize) -> PyResult<f64> {
+        self.bank.markedness_of(form_id).map_err(failure)
     }
 
     /// Předfiltr jednoho tvaru (`FormBank.screen`).
@@ -541,10 +644,120 @@ impl NativeBank {
     }
 }
 
+/// Párový součet jako `np.sum` (viz `assess::pairwise_sum`); pro testy shody.
+#[pyfunction]
+fn pairwise_sum(values: PyReadonlyArray1<'_, f64>) -> PyResult<f64> {
+    Ok(crate::assess::pairwise_sum(slice(&values)?))
+}
+
+/// Opora procesů zvukových změn (`support::supports`) nad počty prostředí.
+///
+/// `target`, `left`, `right` jsou masky „proces × sloupec hlásky“ (sloupce jsou
+/// hlásky `columns`, seřazené), `right2` masky druhé následující hlásky jen
+/// procesů v `right2_rows` (v pořadí řádků ve `right2`); `stressed_rows`
+/// a `unstressed_rows` jsou procesy s podmínkou přízvuku. Prostředí mají čísla
+/// hlásek, příznak přízvuku a počty; `vowel` je maska samohlásek podle čísla
+/// hlásky. Vrací pole opor po procesech, nebo `None`, když některé prostředí
+/// obsahuje hlásku mimo `columns`.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn sound_supports<'py>(
+    py: Python<'py>,
+    columns: PyReadonlyArray1<'py, i64>,
+    target: PyReadonlyArray2<'py, bool>,
+    left: PyReadonlyArray2<'py, bool>,
+    right: PyReadonlyArray2<'py, bool>,
+    right2: PyReadonlyArray2<'py, bool>,
+    right2_rows: PyReadonlyArray1<'py, i64>,
+    stressed_rows: PyReadonlyArray1<'py, i64>,
+    unstressed_rows: PyReadonlyArray1<'py, i64>,
+    segment: PyReadonlyArray1<'py, i64>,
+    previous: PyReadonlyArray1<'py, i64>,
+    following: PyReadonlyArray1<'py, i64>,
+    following2: PyReadonlyArray1<'py, i64>,
+    stressed: PyReadonlyArray1<'py, bool>,
+    vowel: PyReadonlyArray1<'py, bool>,
+    count: PyReadonlyArray1<'py, i64>,
+) -> PyResult<Option<Bound<'py, PyArray1<i64>>>> {
+    let shape = |array: &PyReadonlyArray2<'py, bool>| (array.shape()[0], array.shape()[1]);
+    let (processes, width) = shape(&target);
+    if shape(&left) != (processes, width)
+        || shape(&right) != (processes, width)
+        || slice(&columns)?.len() != width
+    {
+        return Err(failure("masky procesů mají různý tvar".into()));
+    }
+    let (second_rows, second_width) = shape(&right2);
+    if second_rows != slice(&right2_rows)?.len() || (second_rows > 0 && second_width != width) {
+        return Err(failure(
+            "masky druhé následující hlásky mají špatný tvar".into(),
+        ));
+    }
+    let mut second_row = vec![-1_i64; processes];
+    let mut stress = vec![support::STRESS_ANY; processes];
+    for (position, &row) in slice(&right2_rows)?.iter().enumerate() {
+        *second_row
+            .get_mut(row as usize)
+            .ok_or_else(|| failure("proces mimo masky".into()))? = position as i64;
+    }
+    for (rows, kind) in [
+        (&stressed_rows, support::STRESS_STRESSED),
+        (&unstressed_rows, support::STRESS_UNSTRESSED),
+    ] {
+        for &row in slice(rows)? {
+            *stress
+                .get_mut(row as usize)
+                .ok_or_else(|| failure("proces mimo masky".into()))? = kind;
+        }
+    }
+    let size = slice(&count)?.len();
+    let positions = [
+        slice(&segment)?,
+        slice(&previous)?,
+        slice(&following)?,
+        slice(&following2)?,
+    ];
+    if positions.iter().any(|column| column.len() != size) || slice(&stressed)?.len() != size {
+        return Err(failure("sloupce prostředí mají různou délku".into()));
+    }
+    // Maska samohlásek se čte podle čísla hlásky: musí pokrýt všechna čísla.
+    let vowels = slice(&vowel)?;
+    if positions[0]
+        .iter()
+        .any(|&number| number < 0 || number as usize >= vowels.len())
+    {
+        return Err(failure("hláska mimo masku samohlásek".into()));
+    }
+    let masks = Masks {
+        width,
+        target: slice(&target)?,
+        left: slice(&left)?,
+        right: slice(&right)?,
+        right2: slice(&right2)?,
+        right2_row: &second_row,
+        stress: &stress,
+    };
+    let contexts = Contexts {
+        columns: slice(&columns)?,
+        segment: positions[0],
+        previous: positions[1],
+        following: positions[2],
+        following2: positions[3],
+        stressed: slice(&stressed)?,
+        vowel: vowels,
+        count: slice(&count)?,
+    };
+    Ok(support::supports(&masks, &contexts).map(|found| PyArray1::from_vec(py, found)))
+}
+
 #[pymodule]
 mod cee_core {
     use pyo3::prelude::*;
 
+    #[pymodule_export]
+    use super::pairwise_sum;
+    #[pymodule_export]
+    use super::sound_supports;
     #[pymodule_export]
     use super::NativeBank;
 

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from cee.v2.language.segments import SegmentTable
 
 #: Verze rozhraní, kterou tento Python čeká (viz ``INTERFACE_VERSION`` v Rustu).
-INTERFACE_VERSION = 2
+INTERFACE_VERSION = 3
 
 #: Čísla operací a pravidel přízvuku, jak je zná Rust (``process.rs``).
 OPERATIONS = ("change", "replace", "delete", "insert_before", "insert_after", "merge_next", "tone")
@@ -52,6 +52,36 @@ def enabled() -> bool:
     return os.environ.get("CEE_NATIVE", "") != "0" and available()
 
 
+_SUMS: bool | None = None
+
+
+def sums_match() -> bool:
+    """Sčítá ``numpy`` na tomto stroji párově stejně jako Rust (``pairwise_sum``)?
+
+    Hodnocení v Rustu musí dát bit po bitu totéž co ``np.sum`` po řádcích. Jiná
+    verze ``numpy`` či jiná architektura by mohla sčítat v jiném pořadí; pak se
+    hodnocení nepočítá v Rustu, ale v Pythonu, ať se otisky neliší. Ověří se jednou
+    na polích všech délek, které model používá (a nad ně).
+    """
+    global _SUMS
+    if _SUMS is None:
+        _SUMS = False
+        module = _load()
+        if module is not None:
+            import numpy as np
+
+            rng = np.random.default_rng(20261103)
+            ok = True
+            for width in (*range(1, 40), 64, 119, 120, 127, 128, 129, 200, 513):
+                rows = rng.random((3, width)) * rng.choice([1.0, 100.0, 1e-3], size=(3, width))
+                ok &= all(
+                    module.pairwise_sum(np.ascontiguousarray(row)).hex() == float(total).hex()
+                    for row, total in zip(rows, rows.sum(axis=1))
+                )
+            _SUMS = bool(ok)
+    return _SUMS
+
+
 def status() -> str:
     """Čitelný popis pro výpisy skriptů: ``rust`` či ``python`` a důvod."""
     if os.environ.get("CEE_NATIVE", "") == "0":
@@ -61,10 +91,37 @@ def status() -> str:
     return "python (rozšíření cee_core není k dispozici)"
 
 
+def kernel(name: str) -> Any | None:
+    """Funkce jádra v Rustu (bez banky tvarů), nebo ``None`` bez Rustu.
+
+    Jádra, která nepotřebují stav (opora zvukových změn), jsou funkce modulu
+    ``cee_core``; volající při ``None`` počítá v Pythonu totéž.
+    """
+    if not enabled():
+        return None
+    module = _load()
+    assert module is not None
+    return getattr(module, name)
+
+
 def new_bank(table: SegmentTable) -> Any | None:
     """Prázdná banka v Rustu nad tabulkou hlásek, nebo ``None`` bez Rustu."""
     if not enabled():
         return None
     module = _load()
     assert module is not None
-    return module.NativeBank(table.boundary, table.vowel_mask)
+    return module.NativeBank(table.boundary, table.vowel_mask, glide_mask(table))
+
+
+def glide_mask(table: SegmentTable) -> Any:
+    """Maska polosamohlásek (``SegmentTable.sonority == 3``) s hranicí slova na konci.
+
+    Vektorově to samé, co ``sonority``: ne slabičná, sonorantní a nesouhláskové.
+    """
+    import numpy as np
+
+    vectors, index = table.vectors, table.index
+    syllabic = vectors[:, index["syl"]] == 1
+    sonorant = vectors[:, index["son"]] == 1
+    consonantal = vectors[:, index["cons"]] == 1
+    return np.append(~syllabic & sonorant & ~consonantal, False)

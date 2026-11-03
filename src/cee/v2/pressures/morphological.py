@@ -6,8 +6,9 @@ from typing import Callable, cast
 
 import numpy as np
 
+from cee.v2.language.form_assessment_index import assess
 from cee.v2.language.morphology import FormChange
-from cee.v2.morphology import FormAssessment, assess
+from cee.v2.morphology import FormAssessment
 from cee.v2.phonology import changed_id
 from cee.v2.pressures.base import FloatArray, Pressure, PressureBatch
 

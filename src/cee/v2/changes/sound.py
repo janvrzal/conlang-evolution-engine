@@ -16,6 +16,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Literal, Mapping, Sequence, cast
+from weakref import WeakKeyDictionary
 
 if TYPE_CHECKING:
     from cee.v2.world import Code, World
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2 import native
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.index import ContextIndex
 from cee.v2.language.processes import Process, StressRule, stressed_nucleus
@@ -197,7 +199,7 @@ class _Candidates:
         self.masks = _Columns(processes, table, inventory)
         self.right2_rows = self.masks.right2_rows
         # Identifikátor proměnné a jen první kandidát se stejnou změnou.
-        self.variable_ids = [Variable("process", process.key).id for process in processes]
+        self.variable_ids = [_variable_id(process) for process in processes]
         seen: set[str] = set()
         self.first = []
         for index, variable_id in enumerate(self.variable_ids):
@@ -251,7 +253,7 @@ class _CombinedSoundCandidates:
             seen: set[str] = set()
             uniq: list[tuple[str, Process]] = []
             for proc in procs:
-                var_id = Variable("process", proc.key).id
+                var_id = _variable_id(proc)
                 if var_id not in seen:
                     seen.add(var_id)
                     uniq.append((var_id, proc))
@@ -268,6 +270,8 @@ class _CombinedSoundCandidates:
                                       dtype=np.intp)
         self.unstressed_rows = np.array([i for i, p in enumerate(all_processes) if p.stress == "unstressed"],
                                         dtype=np.intp)
+        #: Pole předaná jádru v Rustu (sestaví se při prvním použití).
+        self._kernel_arguments: tuple[npt.NDArray[np.int64], ...] | None = None
 
     def eval_supports(
         self,
@@ -279,8 +283,41 @@ class _CombinedSoundCandidates:
         counts_int64: npt.NDArray[np.int64],
         table: SegmentTable,
     ) -> npt.NDArray[np.int64]:
+        """Opory všech kandidátů nad počty (rozdíly počtů) prostředí; Rust, nebo Python."""
         if not self.all_processes or len(counts_int64) == 0:
             return np.zeros(len(self.all_processes), dtype=np.int64)
+        kernel = native.kernel("sound_supports")
+        if kernel is not None:
+            masks = self.masks
+            arguments = self._kernel_arguments
+            if arguments is None:
+                arguments = self._kernel_arguments = (
+                    masks.cols.astype(np.int64), masks.target, masks.left, masks.right, masks.right2,
+                    masks.right2_rows.astype(np.int64), self.stressed_rows.astype(np.int64),
+                    self.unstressed_rows.astype(np.int64),
+                )
+            # Hláska mimo inventář (prostředí slova, které zmizelo) nemá sloupec v maskách:
+            # Rust pak vrátí ``None`` a tu dopočítá Python z úplných masek procesů.
+            found = kernel(
+                *arguments, np.ascontiguousarray(seg, dtype=np.int64), np.ascontiguousarray(prev, dtype=np.int64),
+                np.ascontiguousarray(foll, dtype=np.int64), np.ascontiguousarray(foll2, dtype=np.int64),
+                np.ascontiguousarray(str_arr, dtype=bool), table.vowel_mask, np.ascontiguousarray(counts_int64, dtype=np.int64),
+            )
+            if found is not None:
+                result: npt.NDArray[np.int64] = found
+                return result
+        return self.eval_supports_python(prev, seg, foll, str_arr, foll2, counts_int64, table)
+
+    def eval_supports_python(
+        self,
+        prev: npt.NDArray[np.intp],
+        seg: npt.NDArray[np.intp],
+        foll: npt.NDArray[np.intp],
+        str_arr: npt.NDArray[np.bool_],
+        foll2: npt.NDArray[np.intp],
+        counts_int64: npt.NDArray[np.int64],
+        table: SegmentTable,
+    ) -> npt.NDArray[np.int64]:
         masks = self.masks
         mask = masks.gather("target", seg) & masks.gather("left", prev) & masks.gather("right", foll)
         if len(self.right2_rows):
@@ -636,12 +673,48 @@ def _present(table: SegmentTable, inventory: Sequence[int], pattern: Pattern) ->
     return [segment for segment in inventory if segment in pattern]
 
 
+#: Čisté funkce tabulky hlásek, které sestavování kandidátů volá pro každý inventář znovu
+#: se stejnými argumenty; pamatují se po tabulce (slabě, tabulka s nimi nezmizí z paměti).
+_SINGLES: WeakKeyDictionary[SegmentTable, dict[int, Pattern]] = WeakKeyDictionary()
+_DELTAS: WeakKeyDictionary[SegmentTable, dict[tuple[int, int], tuple[tuple[str, str], ...]]] = WeakKeyDictionary()
+
+
 def _single(table: SegmentTable, segment: int) -> Pattern:
-    return table.segments([table.ipa[segment]])
+    found = _SINGLES.setdefault(table, {})
+    pattern = found.get(segment)
+    if pattern is None:
+        pattern = found[segment] = table.segments([table.ipa[segment]])
+    return pattern
+
+
+#: Hotové procesy podle všech argumentů (včetně typů hodnot). Vzory hlásek jsou v tabulce
+#: pamatované, takže stejný proces z jiného inventáře má stejné argumenty a sdílí instanci:
+#: ``Process`` je neměnný, klíč se počítá jednou. Při zaplnění se paměť vyprázdní.
+_MADE: dict[tuple[object, ...], Process] = {}
+_MADE_LIMIT = 1 << 17
+_PROCESS_IDS: dict[str, str] = {}
 
 
 def _make(family: str, label: str, **fields: object) -> Process:
-    return Process(family=family, label=label, **fields)  # type: ignore[arg-type]
+    key = (family, label, *fields.items(), *map(type, fields.values()))
+    try:
+        found = _MADE.get(key)
+    except TypeError:  # nehašovatelný argument: bez paměti
+        return Process(family=family, label=label, **fields)  # type: ignore[arg-type]
+    if found is None:
+        if len(_MADE) >= _MADE_LIMIT:
+            _MADE.clear()
+        found = _MADE[key] = Process(family=family, label=label, **fields)  # type: ignore[arg-type]
+    return found
+
+
+def _variable_id(process: Process) -> str:
+    """Identifikátor proměnné procesu (``Variable("process", key).id``), pamatovaný po klíči."""
+    key = process.key
+    found = _PROCESS_IDS.get(key)
+    if found is None:
+        found = _PROCESS_IDS[key] = Variable("process", key).id
+    return found
 
 
 class Voicing(SoundChange):
@@ -1082,9 +1155,14 @@ class Prothesis(SoundChange):
 
 
 def _feature_delta(table: SegmentTable, source: int, target: int) -> tuple[tuple[str, str], ...]:
-    symbols = {1: "+", -1: "-", 0: "0"}
-    return tuple(sorted((name, symbols[table.feature(target, name)]) for name in table.names
-                        if table.feature(source, name) != table.feature(target, name)))
+    found = _DELTAS.setdefault(table, {})
+    delta = found.get((source, target))
+    if delta is None:
+        symbols = {1: "+", -1: "-", 0: "0"}
+        delta = found[(source, target)] = tuple(sorted(
+            (name, symbols[table.feature(target, name)]) for name in table.names
+            if table.feature(source, name) != table.feature(target, name)))
+    return delta
 
 
 class SecondaryPalatalization(SoundChange):

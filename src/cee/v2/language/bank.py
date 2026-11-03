@@ -185,6 +185,30 @@ class FormBank:
                 return found
             self._resolve(row, needs)
 
+    def assess_rows(
+        self, process: Process, rule: StressRule, ids: IntArray, weights: FloatArray, offsets: IntArray,
+        width: int, want_vowels: bool,
+    ) -> tuple[Any, ...]:
+        """Hodnocení procesu nad maticí slovních zásob v Rustu (``assess.rs``).
+
+        Vstupy a výstupy viz ``NativeBank.assess_rows``; mapy hlásek, které si
+        Rust vyžádá, doplní banka stejně jako u ``results``. Nové tvary, které
+        při tom vzniknou, si převezme. Vrací pole bez ``needs`` a bez nových tvarů.
+        """
+        assert self._native is not None
+        row = self.process_table(process, rule).index
+        code = native.RULES.index(rule)
+        arrays = (
+            np.ascontiguousarray(ids, dtype=np.int64), np.ascontiguousarray(weights, dtype=np.float64),
+            np.ascontiguousarray(offsets, dtype=np.int64),
+        )
+        while True:
+            answer = self._native.assess_rows(row, code, *arrays, width, want_vowels)
+            self._adopt(*answer[-3:])
+            if not answer[0]:
+                return tuple(answer[1:-3])
+            self._resolve(row, answer[0])
+
     def _segments(self) -> npt.NDArray[np.int64]:
         """Hlásky všech tvarů za sebou; doplní, co se od posledního čtení přidalo."""
         if self._pending:
