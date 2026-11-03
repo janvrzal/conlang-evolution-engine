@@ -44,6 +44,9 @@ class Change(ABC):
     #: Očekávaný počet inovací na jedno místo a jednotku tempa.
     base_rate: ClassVar[float]
     rate_basis: ClassVar[RateBasis]
+    #: Sloupec dávky míst, kterou změnu počítá index míst světa (jen změny, které ji mají na vlastní třídě;
+    #: viz :mod:`cee.v2.changes.sites`).
+    site_column: ClassVar[int]
 
     @abstractmethod
     def sites(self, context: InnovationContext) -> Sequence[str]:

@@ -216,8 +216,9 @@ class PythonSites:
         def compensated(function: int) -> bool:
             found = 0.0
             for deputy in span("deputy_start", "deputies", function):
-                if current[deputy] is not None:
-                    kind = current[deputy][0]
+                found_deputy = current[deputy]
+                if found_deputy is not None:
+                    kind = found_deputy[0]
                     carries = kind == FIXED if catalog["template"][deputy] == ORDER else kind != ZERO
                     if carries:
                         found = max(found, catalog["coverage"][deputy])
@@ -364,8 +365,17 @@ class SiteIndex:
         self._functions = names
         position = {name: at for at, name in enumerate(names)}
         concepts = world.registry.concepts
-        template, word_class, class_, cell, has_cell, has_orders, coverage = [], [], [], [], [], [], []
-        source_start, sources, donor_start, donors, deputy_start, deputies = [0], [], [0], [], [0], []
+        template: list[int] = []
+        word_class: list[int] = []
+        class_: list[int] = []
+        cell: list[int] = []
+        has_cell: list[bool] = []
+        has_orders: list[bool] = []
+        coverage: list[float] = []
+        source_start, donor_start, deputy_start = [0], [0], [0]
+        sources: list[int] = []
+        donors: list[int] = []
+        deputies: list[int] = []
         for name in names:
             entry = entries[name]
             template.append(TEMPLATES[entry.template])
@@ -469,7 +479,7 @@ class SiteIndex:
                 changed.append((code, key))
         if not changed:
             return
-        table = world.columns.morphemes
+        table: Any = world.columns.morphemes
         columns = [table.kind, table.word_class, table.cell, table.lexeme, table.exponent, table.boundary]
         tokens = [code.forms.token for code, _ in changed]
         flags = [code.phonology.vocabulary.flags for code, _ in changed]
@@ -529,7 +539,7 @@ class SiteIndex:
             cached = self._site_cache[token] = (
                 ids, np.array([concepts.get(item.split(":", 1)[1]) for item in ids], dtype=np.int32),
             )
-        return cached[1]  # type: ignore[no-any-return]
+        return cached[1]
 
     def _taboo_numbers(self, world: World, context: InnovationContext, concepts: Any) -> npt.NDArray[np.int32]:
         taboo = context.group.taboo
@@ -539,7 +549,7 @@ class SiteIndex:
             cached = self._taboo_cache[token] = (
                 taboo, np.array([concepts.get(concept) for concept in sorted(taboo)], dtype=np.int32),
             )
-        return cached[1]  # type: ignore[no-any-return]
+        return cached[1]
 
     def _constructions(self, world: World, variants: npt.NDArray[np.int32]) -> None:
         """Druh a stupeň konstrukcí, které se objevily mezi dominantními variantami."""
@@ -672,4 +682,4 @@ def site_index(world: World) -> SiteIndex:
     if index is None:
         handle = native.new_site_index() if world.table is not None and world.form_bank()._native is not None else None
         index = world.sites = SiteIndex(handle)
-    return index  # type: ignore[no-any-return]
+    return index
