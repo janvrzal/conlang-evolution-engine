@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from cee.v2 import contact
+
 if TYPE_CHECKING:
     from cee.v2.world import World
 
@@ -34,7 +36,12 @@ def liturgy_factor(world: World, variable_id: str) -> float:
     variable = world.variables[variable_id]
     if variable.kind != "lexical":
         return 0.0
-    return 1.0 - world.concept_frequency(variable.key)
+    # Liturgie přináší hlavně slova víry (kanál ``liturgy``, doména ``religion``)
+    # a vzácná slova. Půjčitelnost ze WOLD (``contact.transfer``) se tu nepoužije:
+    # podíl vstupu je omezený na 1 a ostrý poměr půjčitelností by ho nasytil.
+    factor = 1.0 - world.concept_frequency(variable.key)
+    weight = contact.domain_weight(world, "liturgy", variable.key)
+    return factor if weight == 1.0 else factor * weight
 
 
 def reading_factor(world: World, variable_id: str) -> float:
@@ -42,13 +49,23 @@ def reading_factor(world: World, variable_id: str) -> float:
     factor = READING.get(variable.kind, 0.0)
     if variable.kind == "lexical":
         # Čtení přináší hlavně učená slova; častá slova šetří podle
-        # ``Parameters.reading_core_resistance`` (1 = jako liturgie).
+        # ``Parameters.reading_core_resistance`` (1 = jako liturgie) a doména
+        # ``learned`` má v kanálu ``reading`` vyšší váhu.
         factor *= 1.0 - world.params.reading_core_resistance * world.concept_frequency(variable.key)
+        weight = contact.domain_weight(world, "reading", variable.key)
+        if weight != 1.0:
+            factor *= weight
     return factor
 
 
 def school_factor(world: World, variable_id: str) -> float:
-    return SCHOOL.get(world.variables[variable_id].kind, 0.0)
+    variable = world.variables[variable_id]
+    factor = SCHOOL.get(variable.kind, 0.0)
+    if variable.kind == "lexical":
+        weight = contact.domain_weight(world, "school", variable.key)
+        if weight != 1.0:
+            factor *= weight
+    return factor
 
 
 def standard_of(world: World, group_id: str) -> str | None:

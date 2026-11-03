@@ -55,16 +55,27 @@ class Border(WorldEvent):
 
 @dataclass(frozen=True)
 class Contact(WorldEvent):
-    """Skupiny začnou spolu mluvit (obchod, sousedství, dobytí)."""
+    """Skupiny začnou spolu mluvit (obchod, sousedství, dobytí).
+
+    S ``trade`` je vazba obchodní cesta: slova přes ni procházejí kanálem
+    ``trade`` (``Parameters.channel_domains``, hlavně kultura a věci), jinak
+    je to obecný kontakt sousedů.
+    """
 
     year: float
     pairs: tuple[tuple[str, str], ...]
     strength: float = 0.5
     kind: LinkKind = "weak"
+    trade: bool = False
 
     def apply(self, world: World, history: History, tick: int) -> None:
         for first, second in self.pairs:
             world.connect(first, second, self.strength, self.kind)
+            key = (first, second) if first < second else (second, first)
+            if self.trade:
+                world.trade[key] = world.links[(first, second)].strength
+            else:
+                world.trade.pop(key, None)
         history.record("contact", tick, self.year, pairs=[list(pair) for pair in self.pairs],
                        strength=self.strength)
 
@@ -429,7 +440,7 @@ class Conquest(WorldEvent):
         elite = world.add_group(SpeechGroup(
             id=f"{self.territory}+{origin.id}", territory=self.territory, population=self.population,
             codes=[origin.main_code.branch()], generation_years=origin.generation_years,
-            prestige=self.prestige, openness=origin.openness,
+            prestige=self.prestige, openness=origin.openness, elite=True,
         ))
         for subject in self.subjects:
             world.connect(elite.id, subject, self.strength, "weak")

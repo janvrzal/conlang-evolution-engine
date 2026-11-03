@@ -16,8 +16,12 @@ from cee.v2.spec import ConceptSpec, WorldSpec, build, check, errors, vocabulary
 #: Otisk historie světa `small` s výchozím slovníkem, změřený před zavedením slovníku
 #: (tóny, vlastní slovo, plná gramatika, 500 let).
 # Otisk výchozího světa ze specifikace; mění se jen se změnou modelu
-# (naposledy plynulá výměna slov, ``Parameters.lexical_appeal_sd``), ne se slovníkem.
-DEFAULT_DIGEST = "5de1a5d5e5849a0eb006b3afcabbceded87c2c07ab78aed8b9ae9c71a39b763e"
+# (naposledy domény slov v kanálech kontaktu, ``Parameters.channel_domains`` a
+# ``borrowability_strength``), ne se slovníkem.
+DEFAULT_DIGEST = "72f4e72ea9e86ca1b1fcaee736693bdf76f1838578affb5d1d257c7e59321b28"
+#: Tentýž svět s neutrálními vahami domén a vypnutou půjčitelností: otisk před doménami
+#: (plynulá výměna slov).
+NEUTRAL_DIGEST = "5de1a5d5e5849a0eb006b3afcabbceded87c2c07ab78aed8b9ae9c71a39b763e"
 
 
 def small(**extra):
@@ -30,20 +34,36 @@ def small(**extra):
     return spec
 
 
-def test_vychozi_svet_ze_specifikace_ma_stejny_otisk_jako_pred_slovnikem():
-    data = {
+def _default_spec(**extra):
+    return {
         "seed": 3, "end_year": 500,
         "languages": [{"id": "a"}, {"id": "b", "grammar": "full", "tones": ["˥", "˩"], "words": {"hand": "ruka"}}],
         "regions": [
             {"id": "r1", "position": [0, 0], "neighbours": ["r2"], "villages": 3, "language": "a"},
             {"id": "r2", "position": [50, 0], "neighbours": ["r1"], "villages": 3, "language": "b"},
         ],
+        **extra,
     }
+
+
+def _digest(data):
     world, events, spec = build(data)
     simulation = Simulation(world, events=events)
     simulation.run(spec.end_year)
-    assert simulation.history.digest() == DEFAULT_DIGEST
+    return simulation.history.digest()
+
+
+def test_vychozi_svet_ze_specifikace_ma_stejny_otisk_jako_pred_slovnikem():
+    data = _default_spec()
+    assert _digest(data) == DEFAULT_DIGEST
     assert check(data) == []
+
+
+def test_vychozi_svet_ze_specifikace_s_neutralnimi_domenami_ma_otisk_pred_nimi():
+    neutral = {"borrowability_strength": 0.0, "channel_domains": {
+        channel: dict.fromkeys(concept_data.DOMAINS, 1.0)
+        for channel in ("neighbor", "elite", "trade", "liturgy", "reading", "school")}}
+    assert _digest(_default_spec(parameters=neutral)) == NEUTRAL_DIGEST
 
 
 def test_vychozi_slovnik_je_dnesni():

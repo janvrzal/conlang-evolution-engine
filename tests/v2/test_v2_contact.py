@@ -3,18 +3,19 @@
 from cee.v2 import contact, morphology
 from cee.v2.events import LanguageShift
 from cee.v2.history import History
+from cee.v2.parameters import Parameters
 from cee.v2.scenarios import SYNTAX_GRAMMAR, Language, Place, contact_world, language_shift
 from cee.v2.simulation import Simulation
 
 NO_CASE = {name: construction for name, construction in SYNTAX_GRAMMAR.items() if name != "OBJ"}
 
 
-def _pair(seed=1):
+def _pair(seed=1, params=None):
     return contact_world([
         Language("a", (Place("a0", (0.0, 0.0)),)),
         Language("b", (Place("b0", (100.0, 0.0)),), grammar=NO_CASE,
                  consonants=("t", "k", "s", "n", "m", "l", "ʃ", "f", "x", "v", "r", "j")),
-    ], seed=seed)
+    ], seed=seed, params=params)
 
 
 def test_jazyky_maji_vlastni_slova_a_bunky():
@@ -30,7 +31,8 @@ def test_jazyky_maji_vlastni_slova_a_bunky():
 
 
 def test_filtr_vypujcek_a_interference_podle_thomasona_a_kaufmana():
-    world = _pair()
+    # Filtr podle frekvence; půjčitelnost z WOLD (``borrowability_strength``) je vypnutá.
+    world = _pair(params=Parameters(borrowability_strength=0.0))
     frequent = max(world.concept_frequencies, key=world.concept_frequencies.get)
     rare = min(world.concept_frequencies, key=world.concept_frequencies.get)
     assert contact.borrowing_factor(world, f"lexical:{rare}") > contact.borrowing_factor(world, f"lexical:{frequent}")

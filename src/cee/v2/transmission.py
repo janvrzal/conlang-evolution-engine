@@ -109,16 +109,29 @@ def _channel(items: Sequence[tuple[int, int, float]], factor: Callable[[World, s
 
 
 @dataclass(frozen=True, slots=True)
+class CrossFlow:
+    """Vazby mezi jazyky jednoho kanálu (po komponentách sítě, viz :func:`_mix`).
+
+    Kanály ``elite`` a ``trade`` se oddělují od obecného kontaktu sousedů jen
+    tehdy, mají-li v ``Parameters.channel_domains`` jiné váhy domén
+    (:func:`cee.v2.contact.distinct_channels`); jinak je jediný kanál ``neighbor``.
+    """
+
+    channel: str
+    blocks: Sequence[FloatArray]
+
+
+@dataclass(frozen=True, slots=True)
 class StepInputs:
     """Vstupy jednoho kroku sdílené všemi bloky živých proměnných."""
 
     group_ids: Sequence[str]
     #: Míšení po komponentách sítě, viz :func:`_mix`. ``blocks`` jsou vazby
-    #: uvnitř jazyka (a vlastní skupina), ``cross`` vazby mezi jazyky; ty
-    #: procházejí filtrem přenositelnosti (prázdné, když žádné nejsou).
+    #: uvnitř jazyka (a vlastní skupina), ``cross`` vazby mezi jazyky podle
+    #: kanálů; ty procházejí filtrem přenositelnosti (prázdné, když žádné nejsou).
     members: Sequence[npt.NDArray[np.intp]]
     blocks: Sequence[FloatArray]
-    cross: Sequence[FloatArray]
+    cross: Sequence[CrossFlow]
     alone: npt.NDArray[np.intp]
     alone_weight: FloatArray
     renewal: FloatArray
@@ -150,7 +163,7 @@ def _components(mixing: FloatArray) -> list[npt.NDArray[np.intp]]:
     return [np.array(items, dtype=np.intp) for _, items in sorted(members.items())]
 
 
-def _mix(inputs: StepInputs, values: FloatArray, cross: bool = False) -> FloatArray:
+def _mix(inputs: StepInputs, values: FloatArray, cross: Sequence[FloatArray] | None = None) -> FloatArray:
     """Vážený vstup od sousedů: ``values`` má skupiny na ose 1.
 
     Násobí se zvlášť každá propojená komponenta. Knihovna BLAS totiž sčítá v
@@ -159,10 +172,10 @@ def _mix(inputs: StepInputs, values: FloatArray, cross: bool = False) -> FloatAr
     Osamocené skupiny (učí se jen samy od sebe) se vyřídí najednou.
     """
     result = np.zeros_like(values)
-    if len(inputs.alone) and not cross:
+    if len(inputs.alone) and cross is None:
         shape = (1, -1) + (1,) * (values.ndim - 2)
         result[:, inputs.alone] = inputs.alone_weight.reshape(shape) * values[:, inputs.alone]
-    for members, matrix in zip(inputs.members, inputs.cross if cross else inputs.blocks):
+    for members, matrix in zip(inputs.members, inputs.blocks if cross is None else cross):
         part = values[:, members]
         flat = np.moveaxis(part, 1, 0).reshape(len(members), -1)
         mixed = (matrix @ flat).reshape((len(members), part.shape[0], *part.shape[2:]))
@@ -180,12 +193,21 @@ def prepare(world: World, group_ids: Sequence[str], params: TransmissionParams, 
     alone = np.array([members[0] for members in components if len(members) == 1], dtype=np.intp)
     languages = np.array([group.main_code.language for group in groups])
     foreign = languages[:, None] != languages[None, :]
-    cross = [] if not foreign.any() else [
-        np.where(foreign[np.ix_(members, members)], mixing[np.ix_(members, members)], 0.0)
-        for members in linked
-    ]
-    if cross and not any(block.any() for block in cross):
-        cross = []
+    cross: list[CrossFlow] = []
+    if foreign.any():
+        distinct = contact.distinct_channels(world.params)
+        shares = contact.channel_shares(world, group_ids, distinct) if distinct else {}
+        # Obecný kontakt je to, co nepatří elitě ani obchodu; bez odlišných kanálů celá vazba.
+        neighbor = 1.0 - sum(shares.values()) if shares else None
+        for channel, fraction in (("neighbor", neighbor), *shares.items()):
+            blocks = [
+                np.where(foreign[np.ix_(members, members)],
+                         mixing[np.ix_(members, members)] if fraction is None
+                         else mixing[np.ix_(members, members)] * fraction[np.ix_(members, members)], 0.0)
+                for members in linked
+            ]
+            if any(block.any() for block in blocks):
+                cross.append(CrossFlow(channel, blocks))
     index = {group_id: position for position, group_id in enumerate(group_ids)}
     learners = [
         (index[group.id], index[group.main_code.l1_source],
@@ -301,17 +323,20 @@ def transmit(
     current, previous, present = block.freqs, block.previous, block.present
     heard = _mix(inputs, current)
     weight = _mix(inputs, present.astype(np.float64))
-    if inputs.cross:
-        # Vazby mezi jazyky: jen tolik, kolik filtr přenositelnosti propustí.
-        factor = np.array([contact.borrowing_factor(world, variable_id) for variable_id in block.variable_ids])
-        heard = heard + factor[:, None, None] * _mix(inputs, current, cross=True)
-        weight = weight + factor[:, None] * _mix(inputs, present.astype(np.float64), cross=True)
+    for flow in inputs.cross:
+        # Vazby mezi jazyky: jen tolik, kolik filtr přenositelnosti propustí
+        # (podle pojmu a kanálu: obecný kontakt, elita, obchod).
+        factor = np.array([contact.borrowing_factor(world, variable_id, flow.channel)
+                           for variable_id in block.variable_ids])
+        heard = heard + factor[:, None, None] * _mix(inputs, current, cross=flow.blocks)
+        weight = weight + factor[:, None] * _mix(inputs, present.astype(np.float64), cross=flow.blocks)
     # Skupiny bez této proměnné se z míšení vyřadí a zbytek vstupu se převáží.
     heard = np.where(weight[:, :, None] > 0, heard / np.where(weight > 0, weight, 1.0)[:, :, None], 0)
     for channel in inputs.channels:
         # Interference (L2 mluvčí nesou svůj první jazyk), čtení a škola.
         factor = np.array([channel.factor(world, variable_id) for variable_id in block.variable_ids])
-        share = factor[:, None] * channel.weights[None, :]
+        # Váha domény nad 1 smí podíl zvýšit nejvýš na celý vstup.
+        share = np.minimum(factor[:, None] * channel.weights[None, :], 1.0)
         share = np.where(present[:, channel.sources], share, 0.0)[:, :, None]
         heard[:, channel.learners] = (
             (1.0 - share) * heard[:, channel.learners] + share * current[:, channel.sources]

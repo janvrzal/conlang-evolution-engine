@@ -520,10 +520,18 @@ class LexicalBorrowing(Change):
         return context.code.repertoire.variable_ids_of("lexical")
 
     def rates(self, context: InnovationContext, sites: Sequence[str]) -> list[float]:
-        from cee.v2.contact import borrowing_factor
+        from cee.v2.contact import borrowing_factor, distinct_channels
 
-        exposure = sum(weight for weight, _ in _donors(context))
-        return [self.base_rate * exposure * borrowing_factor(context.world, site) for site in sites]
+        world = context.world
+        donors = _donors(context)
+        distinct = distinct_channels(world.params)
+        if not distinct:
+            exposure = sum(weight for weight, _ in donors)
+            return [self.base_rate * exposure * borrowing_factor(world, site) for site in sites]
+        # Elita a obchod mají jiné váhy domén: míra je součet přes kanály dárců.
+        channels = _channel_exposures(context, donors, distinct)
+        return [self.base_rate * sum(exposure * borrowing_factor(world, site, channel)
+                                     for channel, exposure in channels) for site in sites]
 
     def rate(self, context: InnovationContext, site: str) -> float:
         return self.rates(context, [site])[0]
@@ -531,9 +539,21 @@ class LexicalBorrowing(Change):
     def propose(
         self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
+        from cee.v2.contact import borrowing_factor, distinct_channels, donor_channels
+
         world = context.world
         donors = _donors(context)
         weights = np.array([weight for weight, _ in donors])
+        distinct = distinct_channels(world.params)
+        if distinct:
+            # Dárce se vybírá podle toho, kolik slov pojmu jeho kanály propustí.
+            weights = np.array([
+                weight * sum(share * borrowing_factor(world, site, channel)
+                             for channel, share in donor_channels(world, context.group.id, other, distinct))
+                for weight, other in donors
+            ])
+            if weights.sum() <= 0.0:
+                return None
         _, donor = donors[int(rng.choice(len(donors), p=weights / weights.sum()))]
         found = world.dominant(donor, site)
         if found is None:
@@ -551,6 +571,19 @@ class LexicalBorrowing(Change):
             payload={**source.payload, "origin": "loan"},
             origin=Origin(self.kind, context.tick, context.year, context.group.id, parent=source.id),
         )
+
+
+def _channel_exposures(
+    context: InnovationContext, donors: Sequence[tuple[float, str]], distinct: Sequence[str]
+) -> list[tuple[str, float]]:
+    """Podíl vstupu skupiny od cizích dárců podle kanálů, seřazeno podle názvu kanálu."""
+    from cee.v2.contact import donor_channels
+
+    totals: dict[str, float] = {}
+    for weight, donor in donors:
+        for channel, share in donor_channels(context.world, context.group.id, donor, distinct):
+            totals[channel] = totals.get(channel, 0.0) + weight * share
+    return sorted(totals.items())
 
 
 def _donors(context: InnovationContext) -> list[tuple[float, str]]:

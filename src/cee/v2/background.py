@@ -91,7 +91,11 @@ class Resettlement(WorldEvent):
 
 @dataclass(frozen=True)
 class TradeShift(WorldEvent):
-    """Obchodní cesta mezi dvěma sousedními kraji zesílí (``factor`` > 1) nebo upadne."""
+    """Obchodní cesta mezi dvěma sousedními kraji zesílí (``factor`` > 1) nebo upadne.
+
+    Přidaná síla vazeb je podíl kanálu ``trade`` (``World.trade``); upadne-li
+    cesta zpět na původní sílu, podíl zmizí.
+    """
 
     year: float
     regions: tuple[str, str]
@@ -106,6 +110,14 @@ class TradeShift(WorldEvent):
             pair = {region_of(world, a), region_of(world, b)}
             if pair == {first, second}:
                 world.connect(a, b, link.strength * self.factor, link.kind)
+                # Co obchodní cesta přidala (nebo ubrala) ze síly vazby, patří kanálu
+                # ``trade``; po jejím úpadku zůstane obecný kontakt sousedů.
+                kept = world.links[(a, b)].strength
+                carried = world.trade.get((a, b), 0.0) + link.strength * (self.factor - 1.0)
+                if carried > 0.0:
+                    world.trade[(a, b)] = min(kept, carried)
+                else:
+                    world.trade.pop((a, b), None)
                 changed += 1
         history.record("trade", tick, self.year, regions=[first, second], factor=self.factor, links=changed,
                        background=True)
