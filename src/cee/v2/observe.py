@@ -2,22 +2,101 @@
 
 Jazyky ani strom jazyků nejsou vstupem simulace. Počítají se zde ze
 skutečného stavu repertoárů.
+
+**Jádro v Rustu.** Je-li k dispozici rozšíření ``cee_core`` (viz :mod:`cee.v2.native`),
+počítá celé pozorování jedno volání ``observe_step`` (``rust/cee_core/src/observe.rs``):
+rysy skupin (vložení podílů, čtverce, kategorie tvarů příbuzných slov a editační
+vzdálenosti tvarů), kandidáty sloučení, obě průměrné vazby a na přání matici vzdáleností
+kódů. Python skládá jen vstup z polí (:func:`_gather`: pohledy na bloky živých fondů,
+dominantní kořeny a tvary skupin jako CSR, polohy a vazby) a zapisuje výsledek.
+Bez rozšíření, s ``CEE_NATIVE=0`` nebo bez bitové shody knihovny (``native.observe_matches``)
+počítá totéž Python nad týmiž poli; výsledky jsou bit po bitu stejné.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Sequence
+from typing import Any, Sequence
 
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2 import native
 from cee.v2.language.segments import SegmentTable
 from cee.v2.rng import stable_id, stable_int
 from cee.v2.world import World
 
+IntArray = npt.NDArray[np.int64]
 FloatArray = npt.NDArray[np.float64]
+
+
+#: Blok fondů pro pozorování: podíly ``(řádky, skupiny, sloty)``, kdo proměnnou má
+#: ``(řádky, skupiny)``, vybrané řádky (podle druhu proměnné) a pořadí proměnných při
+#: výběru vzorku (nižší číslo je dřív).
+Pool = tuple[FloatArray, npt.NDArray[np.bool_], IntArray, IntArray]
+
+#: Klíč výběru vzorku proměnných (stabilní hash jména): jméno se hašuje jednou za běh.
+_SAMPLING_KEYS: dict[str, int] = {}
+
+
+def _ranks(names: Sequence[str]) -> IntArray:
+    """Pořadí proměnných při výběru vzorku sloupců: podle stabilního hashe, při shodě podle jména."""
+    keys = np.empty(len(names), dtype=np.uint64)
+    for position, name in enumerate(names):
+        key = _SAMPLING_KEYS.get(name)
+        if key is None:
+            key = _SAMPLING_KEYS[name] = stable_int("observe", name)
+        keys[position] = key
+    order = np.argsort(keys, kind="stable")
+    if len(order) > 1 and (keys[order][1:] == keys[order][:-1]).any():
+        order = np.array(sorted(range(len(names)), key=lambda at: (int(keys[at]), names[at])), dtype=np.int64)
+    ranks = np.empty(len(names), dtype=np.int64)
+    ranks[order] = np.arange(len(names), dtype=np.int64)
+    return ranks
+
+
+def _pools(world: World, kinds: Sequence[str], ranked: bool = True) -> list[Pool]:
+    """Bloky živých fondů s řádky proměnných daných druhů; hustý pohled se nekopíruje."""
+    chosen = []
+    names: list[str] = []
+    for pool in world.live.iter_blocks():
+        rows = [row for row, variable_id in enumerate(pool.variable_ids)
+                if world.variables[variable_id].kind in kinds]
+        if rows:
+            chosen.append((pool, rows))
+            if ranked:
+                names += [pool.variable_ids[row] for row in rows]
+    ranks = _ranks(names) if ranked else np.zeros(sum(len(rows) for _, rows in chosen), dtype=np.int64)
+    result: list[Pool] = []
+    start = 0
+    for pool, rows in chosen:
+        result.append((
+            np.ascontiguousarray(pool.freqs), np.ascontiguousarray(pool.present),
+            np.asarray(rows, dtype=np.int64), ranks[start : start + len(rows)],
+        ))
+        start += len(rows)
+    return result
+
+
+def _distance_totals(pools: Sequence[Pool], live: int, chunk: int = 4_000_000) -> FloatArray:
+    """Součet variačních vzdáleností kódů přes vybrané proměnné (bez dělení jejich počtem).
+
+    Pro jednu proměnnou je vzdálenost ½ Σ |p − q|: 0 pro shodné rozdělení, 1 pro zcela odlišné
+    varianty. Výpočet běží po blocích proměnných, aby paměť nerostla se čtvercem počtu skupin
+    krát počet proměnných. Součet ``float32`` přes řádky a sloty je ``np.sum(axis=(0, 3))``:
+    po řádcích párový součet přes sloty; ``float64`` se sčítá až mezi bloky.
+    """
+    total = np.zeros((live, live))
+    for freqs, present, rows, _ in pools:
+        capacity = freqs.shape[2]
+        # float32 stačí: vzdálenost slouží ke shlukování, ne k dalšímu výpočtu.
+        values = np.where(present[rows, :, None], freqs[rows], 0.0).astype(np.float32)
+        step = max(1, chunk // max(1, live * live * capacity))
+        for start in range(0, len(rows), step):
+            part = values[start : start + step]
+            total += 0.5 * np.abs(part[:, :, None, :] - part[:, None, :, :]).sum(axis=(0, 3))
+    return total
 
 
 def distance_matrix(
@@ -34,23 +113,9 @@ def distance_matrix(
     (:func:`cognate_matrix`). Výpočet běží po blocích proměnných, aby
     paměť nerostla se čtvercem počtu skupin krát počet proměnných.
     """
-    live = world.live
-    count = len(live.group_ids)
-    total = np.zeros((count, count))
-    lexical = [variable_id for variable_id, variable in world.variables.items()
-               if variable.kind == "lexical"]
-    for pool in live.iter_blocks():
-        rows = [row for row, variable_id in enumerate(pool.variable_ids)
-                if world.variables[variable_id].kind in kinds]
-        if not rows:
-            continue
-        # float32 stačí: vzdálenost slouží ke shlukování, ne k dalšímu výpočtu.
-        freqs = np.where(pool.present[rows, :, None], pool.freqs[rows], 0.0).astype(np.float32)
-        step = max(1, chunk // max(1, count * count * pool.capacity))
-        for start in range(0, len(rows), step):
-            part = freqs[start : start + step]
-            total += 0.5 * np.abs(part[:, :, None, :] - part[:, None, :, :]).sum(axis=(0, 3))
-    result: FloatArray = total / max(1, len(lexical))
+    live = len(world.live.group_ids)
+    lexical = sum(variable.kind == "lexical" for variable in world.variables.values())
+    result: FloatArray = _distance_totals(_pools(world, kinds, ranked=False), live, chunk) / max(1, lexical)
     return result
 
 
@@ -151,6 +216,17 @@ def code_distances(world: World) -> FloatArray:
     tvarů (M1) má stejnou vzdálenost jako :func:`distance_matrix`.
     """
     lexical = sum(variable.kind == "lexical" for variable in world.variables.values())
+    live = len(world.live.group_ids)
+    if native.observe_enabled():
+        inp = _gather(world, np.arange(live, dtype=np.int64), lexical=lexical, ranked=False)
+        module = native.kernel("observe_distance_totals")
+        assert module is not None
+        distances: FloatArray = module(_native_pools(inp), live, 4_000_000, native.threads()) / max(1, lexical)
+        if inp.forms is not None:
+            cognate = native.kernel("observe_cognate_totals")
+            assert cognate is not None
+            distances = distances + FORM_WEIGHT * cognate(live, _native_forms(inp.forms)) / max(1, lexical)
+        return distances
     distances = distance_matrix(world, kinds=("lexical", "construction"))
     if world.table is not None:
         distances = distances + FORM_WEIGHT * cognate_matrix(world, world.live.group_ids) / max(1, lexical)
@@ -248,33 +324,199 @@ def observe(
     spoken = [index for index, group_id in enumerate(world.live.group_ids)
               if not world.groups[group_id].written and world.groups[group_id].domain == "home"]
     group_ids = [world.live.group_ids[index] for index in spoken]
-    distances = None
-    if keep_distances:
-        distances = code_distances(world)
-        if len(spoken) != len(world.live.group_ids):
-            distances = distances[np.ix_(spoken, spoken)]
-    features = _features(world, group_ids)
-    dialects = tuple(
-        tuple(group_ids[index] for index in cluster)
-        for cluster in constrained_average_linkage(world, group_ids, dialect_threshold, features=features)
-    )
     member_of = {group: lineage for lineage, members in tracker.lineages.items() for group in members}
-    language_clusters = [
-        [group_ids[index] for index in cluster]
-        for cluster in constrained_average_linkage(
-            world, group_ids, language_threshold, features=features,
-            labels=[member_of.get(group_id) for group_id in group_ids],
-            margin=HYSTERESIS * language_threshold,
+    codes = {lineage: number for number, lineage in enumerate(sorted(tracker.lineages))}
+    labels = np.array([codes[member_of[group_id]] if group_id in member_of else -1 for group_id in group_ids],
+                      dtype=np.int64)
+    margin = HYSTERESIS * language_threshold
+    inp = _gather(world, np.array(spoken, dtype=np.int64))
+    distances = None
+    if native.observe_enabled():
+        step = native.kernel("observe_step")
+        assert step is not None
+        links, places = _geometry(world, group_ids)
+        dialect_clusters, language_clusters, distances, _ = step(
+            _native_pools(inp), inp.live, inp.columns, None if inp.forms is None else _native_forms(inp.forms),
+            inp.lexical, links, places, labels, (dialect_threshold, language_threshold, margin),
+            keep_distances, native.threads(), False,
         )
-    ]
-    languages, events = tracker.update(language_clusters, tick)
+    else:
+        if keep_distances:
+            distances = code_distances(world)
+            if len(spoken) != len(world.live.group_ids):
+                distances = distances[np.ix_(spoken, spoken)]
+        features = _features(inp)
+        pairs = _candidates(*_geometry(world, group_ids))
+        dialect_clusters = constrained_average_linkage(features, pairs, dialect_threshold)
+        language_clusters = constrained_average_linkage(
+            features, pairs, language_threshold, labels=labels, margin=margin,
+        )
+    dialects = tuple(tuple(group_ids[index] for index in cluster) for cluster in dialect_clusters)
+    languages, events = tracker.update([[group_ids[index] for index in cluster] for cluster in language_clusters], tick)
     return (
         Snapshot(tick, year, tuple(group_ids), distances, dialects, languages),
         events,
     )
 
 
-# --- pozorování bez matice všech dvojic ---------------------------------------
+# --- vstup pozorování z polí --------------------------------------------------
+#
+# Obě cesty (Rust i Python) čtou tatáž pole: pohledy na bloky živých fondů, dominantní
+# kořeny a tvary skupin jako CSR (pojem, kořen a číslo tvaru v tabulce různých tvarů), polohy
+# a vazby skupin jako čísla. Tvary patří bance světa; do banky se při pozorování nic
+# nezařazuje (výchozí tvary morfémů, které v ní ještě nejsou, se předají podle obsahu).
+
+
+@dataclass
+class _Forms:
+    """Dominantní kořeny a tvary všech živých skupin (pořadí pojmů je pořadí vložení do slovníku)."""
+
+    ptr: IntArray             # (živé skupiny + 1)
+    concept: npt.NDArray[np.int32]
+    root: npt.NDArray[np.int32]
+    form: npt.NDArray[np.int32]  # číslo do tabulky různých tvarů
+    form_ptr: IntArray        # (tvary + 1)
+    form_flat: npt.NDArray[np.int32]
+    ranks: npt.NDArray[np.int32]  # pořadí pojmů podle názvu
+    vectors: npt.NDArray[np.int8]
+
+    def form_of(self, form: int) -> tuple[int, ...]:
+        return tuple(self.form_flat[self.form_ptr[form] : self.form_ptr[form + 1]].tolist())
+
+
+@dataclass
+class _Input:
+    world: World
+    #: Počet živých skupin a čísla mluvených skupin mezi nimi.
+    live: int
+    columns: IntArray
+    pools: list[Pool]
+    forms: _Forms | None
+    #: Počet lexikálních proměnných světa.
+    lexical: int
+
+
+def _view(buffer: Any, dtype: Any) -> npt.NDArray[Any]:
+    """Pohled na pole ``array.array`` bez kopie (prázdné pole nelze mapovat)."""
+    return np.frombuffer(buffer, dtype=dtype) if len(buffer) else np.zeros(0, dtype=dtype)
+
+
+def _forms_input(world: World) -> _Forms | None:
+    """Dominantní kořeny a tvary živých skupin jako pole; ``None`` ve světě bez tabulky hlásek."""
+    if world.table is None:
+        return None
+    bank = world.form_bank()
+    names = world.registry.morphemes.names
+    defaults = _view(world.columns.morphemes.form, np.int32)  # type: ignore[attr-defined]
+    bank_size = len(bank.forms)
+    local: dict[tuple[int, ...], int] = {}
+
+    def by_content(content: tuple[int, ...]) -> int:
+        found = bank._ids.get(content)
+        return found if found is not None else bank_size + local.setdefault(content, len(local))
+
+    ptr, concepts, roots, forms = [0], [], [], []
+    for group_id in world.live.group_ids:
+        code = world.groups[group_id].main_code
+        dominant = code.phonology.dominant
+        count = len(dominant.order)
+        if count:
+            concept = np.fromiter(dominant.order, dtype=np.int32, count=count)
+            root = _view(dominant.roots, np.int32)[concept]
+            store = code.forms
+            if store.context is world:
+                stored = _view(store.raw()[0], np.int32)
+                form = np.full(count, -1, dtype=np.int64)
+                inside = root < len(stored)
+                form[inside] = stored[root[inside]]
+                # Výchozí tvar: číslo v bance, nebo (ještě nezařazený) záporné číslo podle kořene.
+                missing = form < 0
+                inside = missing & (root < len(defaults))
+                form[inside] = defaults[root[inside]]
+                form[form < 0] = -(root[form < 0].astype(np.int64) + 1)
+            else:
+                form = np.array([by_content(world.form_of(code, names[number])) for number in root.tolist()],
+                                dtype=np.int64)
+            concepts.append(concept)
+            roots.append(root)
+            forms.append(form)
+        ptr.append(ptr[-1] + count)
+    concept = np.concatenate(concepts) if concepts else np.zeros(0, dtype=np.int32)
+    root = np.concatenate(roots) if roots else np.zeros(0, dtype=np.int32)
+    form = np.concatenate(forms) if forms else np.zeros(0, dtype=np.int64)
+    unresolved = form < 0
+    if unresolved.any():
+        pending = np.unique(-form[unresolved] - 1)
+        found = np.array([by_content(world.morphemes[names[number]].form) for number in pending.tolist()],
+                         dtype=np.int64)
+        form[unresolved] = found[np.searchsorted(pending, -form[unresolved] - 1)]
+    distinct, inverse = np.unique(form, return_inverse=True)
+    banked = distinct[distinct < bank_size]
+    lengths = bank._lengths[banked]
+    starts = bank._starts[banked]
+    offsets = np.concatenate([[0], np.cumsum(lengths)]).astype(np.int64)
+    gathered = np.repeat(starts - offsets[:-1], lengths) + np.arange(int(offsets[-1]), dtype=np.int64)
+    flat = bank._segments()[gathered].astype(np.int32)
+    extra = [content for content, _ in sorted(local.items(), key=lambda item: item[1])]
+    extra = [extra[int(number) - bank_size] for number in distinct[distinct >= bank_size]]
+    if extra:
+        lengths = np.concatenate([lengths, [len(content) for content in extra]]).astype(np.int64)
+        offsets = np.concatenate([[0], np.cumsum(lengths)]).astype(np.int64)
+        flat = np.concatenate([flat, np.array([hlaska for content in extra for hlaska in content], dtype=np.int32)])
+    return _Forms(
+        np.asarray(ptr, dtype=np.int64), concept, root, inverse.reshape(-1).astype(np.int32), offsets, flat,
+        world.registry.concepts.ranks(), np.ascontiguousarray(world.table.vectors),
+    )
+
+
+def _gather(world: World, columns: IntArray, *, lexical: int | None = None, ranked: bool = True) -> _Input:
+    """Vstup pozorování pro mluvené skupiny ``columns`` (čísla mezi živými skupinami)."""
+    if lexical is None:
+        lexical = sum(variable.kind == "lexical" for variable in world.variables.values())
+    return _Input(
+        world, len(world.live.group_ids), columns, _pools(world, ("lexical", "construction"), ranked),
+        _forms_input(world), lexical,
+    )
+
+
+def _geometry(
+    world: World, group_ids: Sequence[str]
+) -> tuple[tuple[IntArray, IntArray], tuple[IntArray, FloatArray, FloatArray]]:
+    """Vazby mezi skupinami (dvojice pozic) a polohy skupin, které ji mají (pozice, x, y)."""
+    numbers = world.registry.groups.numbers
+    where = np.full(len(world.registry.groups.names), -1, dtype=np.int64)
+    where[np.array([numbers[group_id] for group_id in group_ids], dtype=np.int64)] = np.arange(len(group_ids))
+    table = world.link_table()
+    source, target = where[table.source], where[table.indices]
+    keep = (source >= 0) & (target >= 0) & (source != target)
+    slots: list[int] = []
+    xs: list[float] = []
+    ys: list[float] = []
+    for position, group_id in enumerate(group_ids):
+        xy = world.position_of(group_id)
+        if xy is not None:
+            slots.append(position)
+            xs.append(float(xy[0]))
+            ys.append(float(xy[1]))
+    return (
+        (np.ascontiguousarray(source[keep]), np.ascontiguousarray(target[keep])),
+        (np.array(slots, dtype=np.int64), np.array(xs, dtype=np.float64), np.array(ys, dtype=np.float64)),
+    )
+
+
+def _native_pools(inp: _Input) -> list[tuple[Any, ...]]:
+    return [tuple(pool) for pool in inp.pools]
+
+
+def _native_forms(forms: _Forms) -> tuple[Any, ...]:
+    """Tvary skupin pro Rust (viz ``FormsIn`` v ``observe_python.rs``)."""
+    return (
+        forms.ptr, forms.concept, forms.root, forms.form, forms.form_ptr, forms.form_flat, forms.ranks,
+        forms.vectors, FEATURE_SCALE,
+    )
+
+
+# --- pozorování bez matice všech dvojic (Python reference) ---------------------
 #
 # Vzdálenost dvou skupin je táž jako v ``code_distances``: rozdíl rozdělení
 # variant (½ Σ |p − q| přes živé proměnné slov a konstrukcí) plus rozdíl
@@ -295,7 +537,6 @@ NEAREST = 4
 
 @dataclass
 class _Features:
-    group_ids: list[str]
     shares: FloatArray            # (skupiny, kategorie variant)
     squares: FloatArray           # Σ‖p‖² za skupinu
     forms: list[dict[int, float]]  # skupina → {kategorie tvaru: 1}
@@ -303,18 +544,16 @@ class _Features:
     lexical: int
 
 
-def _features(world: World, group_ids: Sequence[str]) -> _Features:
-    live = world.live
-    columns = [live.group_index[group_id] for group_id in group_ids]
+def _features(inp: _Input) -> _Features:
+    """Rysy mluvených skupin ``inp.columns`` (Python reference téhož, co počítá Rust)."""
+    columns = inp.columns
     parts, owners = [], []
-    for pool in live.iter_blocks():
-        rows = [row for row, variable_id in enumerate(pool.variable_ids)
-                if world.variables[variable_id].kind in ("lexical", "construction")]
-        if not rows:
-            continue
-        freqs = np.where(pool.present[np.ix_(rows, columns)][:, :, None], pool.freqs[rows][:, columns], 0.0)
-        parts.append(np.transpose(freqs, (1, 0, 2)).reshape(len(columns), -1))
-        owners += [pool.variable_ids[row] for row in rows for _ in range(pool.capacity)]
+    ranks: list[int] = []
+    for freqs, present, rows, row_ranks in inp.pools:
+        freq = np.where(present[np.ix_(rows, columns)][:, :, None], freqs[rows][:, columns], 0.0)
+        parts.append(np.transpose(freq, (1, 0, 2)).reshape(len(columns), -1))
+        owners += [len(ranks) + index for index in range(len(rows)) for _ in range(freqs.shape[2])]
+        ranks += row_ranks.tolist()
     shares = np.concatenate(parts, axis=1) if parts else np.zeros((len(columns), 0))
     scale = 1.0
     if len(shares):
@@ -325,42 +564,62 @@ def _features(world: World, group_ids: Sequence[str]) -> _Features:
             # Nestranný odhad z pevného výběru proměnných (stabilní hash), aby
             # paměť rostla jen s počtem skupin: proměnné se berou v pořadí hashe,
             # dokud se nevyčerpá rozpočet sloupců.
-            width: dict[str, int] = {}
+            width: dict[int, int] = {}
             for column in np.flatnonzero(varying):
                 width[owners[column]] = width.get(owners[column], 0) + 1
             kept, used = set(), 0
-            for name in sorted(width, key=lambda name: (stable_int("observe", name), name)):
-                if used + width[name] > SAMPLED:
+            for owner in sorted(width, key=ranks.__getitem__):
+                if used + width[owner] > SAMPLED:
                     break
-                kept.add(name)
-                used += width[name]
-            varying &= np.array([name in kept for name in owners])
+                kept.add(owner)
+                used += width[owner]
+            varying &= np.array([owner in kept for owner in owners])
             scale = total / max(1, used)
         shares = _embedded(shares[:, varying], np.sqrt(scale))
-    forms: list[dict[int, float]] = [{} for _ in group_ids]
-    spread: list[dict[int, float]] = [{} for _ in group_ids]
-    if world.table is not None:
-        codes = [world.groups[group_id].main_code for group_id in group_ids]
-        categories: dict[tuple[str, str, tuple[int, ...]], int] = {}
-        members: dict[tuple[str, str], list[tuple[int, ...]]] = {}
-        chosen: list[list[tuple[str, str, tuple[int, ...]]]] = [[] for _ in group_ids]
-        for index, code in enumerate(codes):
-            for concept, root in code.phonology.dominant.items():
-                key = (concept, root, world.form_of(code, root))
-                if key not in categories:
-                    categories[key] = len(categories)
-                    members.setdefault((concept, root), []).append(key[2])
-                chosen[index].append(key)
-        for index, keys in enumerate(chosen):
-            for key in keys:
-                column = categories[key]
-                forms[index][column] = 1.0
-                for other in members[(key[0], key[1])]:
-                    if other != key[2]:
-                        spread[index][categories[(key[0], key[1], other)]] = form_distance(world, key[2], other)
-    lexical = sum(variable.kind == "lexical" for variable in world.variables.values())
+    forms: list[dict[int, float]] = [{} for _ in columns]
+    spread: list[dict[int, float]] = [{} for _ in columns]
+    if inp.forms is not None:
+        forms, spread = _categories(inp.world, inp.forms, columns)
     squares = (shares.astype(np.float64) ** 2).sum(axis=1)
-    return _Features(list(group_ids), shares, squares, forms, spread, max(1, lexical))
+    return _Features(shares, squares, forms, spread, max(1, inp.lexical))
+
+
+def _categories(
+    world: World, source: _Forms, columns: IntArray
+) -> tuple[list[dict[int, float]], list[dict[int, float]]]:
+    """Kategorie tvarů dominantních kořenů skupin a vzdálenosti mezi tvary téhož kořene pojmu."""
+    contents: dict[int, tuple[int, ...]] = {}
+
+    def content(form: int) -> tuple[int, ...]:
+        found = contents.get(form)
+        if found is None:
+            found = contents[form] = source.form_of(form)
+        return found
+
+    categories: dict[tuple[int, int, int], int] = {}
+    members: dict[tuple[int, int], list[int]] = {}
+    chosen: list[list[tuple[int, int, int]]] = [[] for _ in columns]
+    ptr = source.ptr
+    for index, group in enumerate(columns.tolist()):
+        begin, end = int(ptr[group]), int(ptr[group + 1])
+        entries = zip(source.concept[begin:end].tolist(), source.root[begin:end].tolist(),
+                      source.form[begin:end].tolist())
+        for key in entries:
+            if key not in categories:
+                categories[key] = len(categories)
+                members.setdefault((key[0], key[1]), []).append(key[2])
+            chosen[index].append(key)
+    forms: list[dict[int, float]] = [{} for _ in columns]
+    spread: list[dict[int, float]] = [{} for _ in columns]
+    for index, keys in enumerate(chosen):
+        for key in keys:
+            forms[index][categories[key]] = 1.0
+            for other in members[(key[0], key[1])]:
+                if other != key[2]:
+                    spread[index][categories[(key[0], key[1], other)]] = form_distance(
+                        world, content(key[2]), content(other)
+                    )
+    return forms, spread
 
 
 #: Hranice intervalů vložení podílů: jemné u 0 a u 1, kde žijí menšinové
@@ -390,21 +649,18 @@ def _embedded(shares: FloatArray, factor: float = 1.0) -> FloatArray:
     return result
 
 
-def _candidates(world: World, group_ids: Sequence[str]) -> list[tuple[int, int]]:
+def _candidates(
+    links: tuple[IntArray, IntArray], places: tuple[IntArray, FloatArray, FloatArray]
+) -> list[tuple[int, int]]:
     """Dvojice, které se smějí přímo sloučit: vazby a nejbližší sousedé na mapě."""
-    index = {group_id: position for position, group_id in enumerate(group_ids)}
     pairs = set()
-    for (source, target), _ in world.links.items():
-        if source in index and target in index and source != target:
-            first, second = index[source], index[target]
+    for first, second in zip(links[0].tolist(), links[1].tolist()):
+        if first != second:
             pairs.add((min(first, second), max(first, second)))
-    placed = [(position, world.position_of(group_id)) for position, group_id in enumerate(group_ids)]
-    placed = [(position, xy) for position, xy in placed if xy is not None]
-    if len(placed) > 1:
-        xs = np.array([xy[0] for _, xy in placed])
-        ys = np.array([xy[1] for _, xy in placed])
+    slots, xs, ys = places
+    if len(slots) > 1:
         extent = max(float(xs.max() - xs.min()), float(ys.max() - ys.min()), 1e-9)
-        size = extent / max(1.0, np.sqrt(len(placed) / 2.0))
+        size = extent / max(1.0, np.sqrt(len(slots) / 2.0))
         cells: dict[tuple[int, int], list[int]] = {}
         for slot, (x, y) in enumerate(zip(xs, ys)):
             cells.setdefault((int(x // size), int(y // size)), []).append(slot)
@@ -423,35 +679,35 @@ def _candidates(world: World, group_ids: Sequence[str]) -> list[tuple[int, int]]
                 if len(found) >= NEAREST and sorted(found)[NEAREST - 1][0] <= (radius) * size:
                     break
             for _, other in sorted(found)[:NEAREST]:
-                first, second = placed[slot][0], placed[other][0]
+                first, second = int(slots[slot]), int(slots[other])
                 pairs.add((min(first, second), max(first, second)))
     return sorted(pairs)
 
 
 def constrained_average_linkage(
-    world: World, group_ids: Sequence[str], threshold: float, *,
-    labels: Sequence[str | None] | None = None, margin: float = 0.0, features: _Features | None = None,
+    features: _Features, pairs: Sequence[tuple[int, int]], threshold: float, *,
+    labels: Sequence[int] | IntArray | None = None, margin: float = 0.0,
 ) -> list[list[int]]:
     """Průměrná vazba mezi sousedícími shluky až do prahu (lineární v počtu skupin).
 
-    S ``labels`` (dosavadní linie skupin) a ``margin`` hystereze: dvojice téže
-    linie je o ``margin`` blíž, dvojice dvou různých známých linií dál.
+    ``pairs`` jsou kandidáti sloučení (:func:`_candidates`). S ``labels`` (číslo dosavadní linie
+    skupin, −1 žádná) a ``margin`` hystereze: dvojice téže linie je o ``margin`` blíž, dvojice
+    dvou různých známých linií dál.
     """
-    count = len(group_ids)
+    count = len(features.squares)
     clusters = [[index] for index in range(count)]
     if count < 2:
         return clusters
-    feats = features if features is not None else _features(world, group_ids)
     size = np.ones(count)
-    shares = feats.shares.copy()
-    squares = feats.squares.copy()
-    forms = [dict(item) for item in feats.forms]
-    spread = [dict(item) for item in feats.spread]
+    shares = features.shares.copy()
+    squares = features.squares.copy()
+    forms = [dict(item) for item in features.forms]
+    spread = [dict(item) for item in features.spread]
     label_counts: list[dict[str, float]] = [
-        {} if labels is None or labels[index] is None else {str(labels[index]): 1.0} for index in range(count)
+        {} if labels is None or labels[index] < 0 else {str(labels[index]): 1.0} for index in range(count)
     ]
     neighbours: list[set[int]] = [set() for _ in range(count)]
-    for first, second in _candidates(world, group_ids):
+    for first, second in pairs:
         neighbours[first].add(second)
         neighbours[second].add(first)
 
@@ -460,7 +716,7 @@ def constrained_average_linkage(
         value = 0.5 * (squares[a] / na + squares[b] / nb) - float(shares[a] @ shares[b]) / (na * nb)
         small, large = (spread[a], forms[b]) if len(spread[a]) <= len(forms[b]) else (forms[b], spread[a])
         value += FORM_WEIGHT * sum(weight * large.get(column, 0.0) for column, weight in small.items()) / (na * nb)
-        value /= feats.lexical
+        value /= features.lexical
         if margin:
             same = sum(weight * label_counts[b].get(label, 0.0) for label, weight in label_counts[a].items())
             known = sum(label_counts[a].values()) * sum(label_counts[b].values())

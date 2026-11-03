@@ -13,6 +13,7 @@ pub mod form_assess;
 pub mod form_restructure;
 pub mod index;
 pub mod morphology_index;
+pub mod observe;
 pub mod phonology;
 pub mod pools;
 pub mod pressures;
@@ -28,6 +29,7 @@ mod code_state_python;
 mod index_python;
 #[cfg(feature = "python")]
 mod innovation_python;
+mod observe_python;
 #[cfg(feature = "python")]
 mod pressures_python;
 #[cfg(feature = "python")]

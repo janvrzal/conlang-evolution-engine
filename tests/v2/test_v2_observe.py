@@ -4,10 +4,13 @@ import json
 
 import numpy as np
 
+from cee.v2 import observe as observation
 from cee.v2.events import Contact
 from cee.v2.export import FORMAT, TIMELINE, export, lineages
 from cee.v2.observe import (
-    _features,
+    _candidates,
+    _gather,
+    _geometry,
     code_distances,
     cognate_matrix,
     constrained_average_linkage,
@@ -45,6 +48,18 @@ def test_svet_bez_tvaru_ma_vzdalenost_jen_ze_slov():
     world = village_grid(3, seed=1)
     Simulation(world).run(500)
     assert np.array_equal(code_distances(world), distance_matrix(world))
+
+
+def _features(world, group_ids):
+    """Rysy mluvených skupin ``group_ids`` (Python reference nad poli, která dostává i Rust)."""
+    columns = np.array([world.live.group_index[group_id] for group_id in group_ids], dtype=np.int64)
+    return observation._features(_gather(world, columns))
+
+
+def _linkage(world, group_ids, threshold, features, labels=None, margin=0.0):
+    """Průměrná vazba mluvených skupin s kandidáty z vazeb a map."""
+    pairs = _candidates(*_geometry(world, group_ids))
+    return constrained_average_linkage(features, pairs, threshold, labels=labels, margin=margin)
 
 
 def _pairwise(features, first, second):
@@ -92,8 +107,8 @@ def test_vazba_shluku_ze_souctu_je_prumer_vsech_dvojic():
             forms[column] = forms.get(column, 0.0) + weight
     total += sum(weight * forms.get(column, 0.0) for column, weight in spread.items()) / (na * nb)
     assert abs(total / features.lexical - brute) < 1e-6  # vložení je ve float32
-    assert constrained_average_linkage(world, ids, 0.0, features=features) == [[index] for index in range(len(ids))]
-    assert constrained_average_linkage(world, ids, 10.0, features=features) == [list(range(len(ids)))]
+    assert _linkage(world, ids, 0.0, features) == [[index] for index in range(len(ids))]
+    assert _linkage(world, ids, 10.0, features) == [list(range(len(ids)))]
 
 
 def test_hystereze_drzi_spojene_a_oddelene_skupiny():
@@ -101,10 +116,8 @@ def test_hystereze_drzi_spojene_a_oddelene_skupiny():
     ids = list(world.live.group_ids)
     features = _features(world, ids)
     distance = _pairwise(features, 0, 1)
-    together = constrained_average_linkage(world, ids[:2], distance - 0.01, features=_features(world, ids[:2]),
-                                           labels=["x", "x"], margin=0.02)
-    apart = constrained_average_linkage(world, ids[:2], distance + 0.01, features=_features(world, ids[:2]),
-                                        labels=["x", "y"], margin=0.02)
+    together = _linkage(world, ids[:2], distance - 0.01, _features(world, ids[:2]), labels=[0, 0], margin=0.02)
+    apart = _linkage(world, ids[:2], distance + 0.01, _features(world, ids[:2]), labels=[0, 1], margin=0.02)
     assert together == [[0, 1]] and apart == [[0], [1]]
 
 

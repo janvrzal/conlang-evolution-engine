@@ -773,6 +773,12 @@ mod cee_core {
     #[pymodule_export]
     use crate::innovation_python::innovation_totals;
     #[pymodule_export]
+    use crate::observe_python::{
+        observe_candidates, observe_cognate_totals, observe_distance_totals, observe_dot_probe,
+        observe_edit_distances, observe_floor_divide_probe, observe_hypot_probe, observe_linkage,
+        observe_native_dot, observe_step,
+    };
+    #[pymodule_export]
     use crate::pressures_python::{pressure_scores, take_created, AssessIndex, PressureStep};
     #[pymodule_export]
     use crate::python_pools::{
