@@ -24,7 +24,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from cee.v2 import contact, institutions, native  # noqa: E402
+from cee.v2 import contact, institutions, native, phases_transmission  # noqa: E402
+from cee.v2 import pools as pools_module  # noqa: E402
 from cee.v2 import simulation as simulation_module  # noqa: E402
 from cee.v2 import transmission as transmission_module  # noqa: E402
 from cee.v2.pressures import base as pressure_base  # noqa: E402
@@ -54,11 +55,14 @@ def patch(owner: Any, names: tuple[str, ...], prefix: str) -> None:
 
 
 def install() -> None:
-    patch(Simulation, ("_transmit", "_changes", "_follow_vocabulary", "_activations", "_trace", "_observe",
-                       "_innovate"), "Simulation.")
+    patch(Simulation, ("_transmit", "_plan", "_changes", "_crossings", "_follow_vocabulary", "_activations",
+                       "_trace_cells", "_trace", "_observe", "_innovate"), "Simulation.")
     patch(simulation_module, ("prepare", "transmit"), "Simulation.")
-    patch(transmission_module, ("mixing_matrix", "_components", "_mix", "fitness_of", "_normalized", "hash_normal"),
-          "transmission.")
+    patch(transmission_module, ("mixing_matrix", "fitness_of", "_channels"), "transmission.")
+    # Čisté funkce polí (po dělení přenosu); ``mix`` a ``normalized`` se volají i uvnitř ``hear`` a ``settle``.
+    patch(phases_transmission, ("mixing_from_links", "components", "mix", "hear", "settle", "normalized"), "arrays.")
+    patch(pools_module.PoolBlock, ("set_state", "stage_state", "commit_state", "_dense_arrays", "add_share"), "pools.")
+    patch(pools_module.LivePools, ("get", "dominant", "frequency", "innovate", "release", "load"), "pools.")
     patch(contact, ("channel_shares", "distinct_channels", "borrowing_factor", "interference_factor"), "contact.")
     patch(institutions, ("reading_factor", "school_factor", "liturgy_factor"), "institutions.")
     patch(pressure_base.PressureBatch, ("slot_numbers", "slot_column", "slot_values", "payload"), "batch.")
@@ -128,25 +132,30 @@ def main() -> None:
     print(f"{'část (včetně podřízených volání)':50s} {'s':>7s} {'%':>6s} {'volání':>9s}")
     groups = (
         ("přenos celkem (_transmit)", ("Simulation._transmit",)),
-        ("  prepare", ("Simulation.prepare",)),
-        ("    mixing_matrix", ("transmission.mixing_matrix",)),
-        ("    _components", ("transmission._components",)),
-        ("    contact.channel_shares + distinct_channels", ("contact.channel_shares", "contact.distinct_channels")),
-        ("  transmit", ("Simulation.transmit",)),
-        ("    míšení (_mix)", ("transmission._mix",)),
-        ("    filtr kontaktu (borrowing_factor)", ("contact.borrowing_factor",)),
-        ("    interference_factor", ("contact.interference_factor",)),
-        ("    instituce (čtení, škola, liturgie)",
+        ("  prepare (matice vazeb, komponenty, kanály)", ("Simulation.prepare",)),
+        ("    mixing_from_links", ("arrays.mixing_from_links",)),
+        ("    components", ("arrays.components",)),
+        ("    kanály elity a obchodu (channel_shares)", ("contact.channel_shares", "contact.distinct_channels")),
+        ("  transmit (blok po bloku)", ("Simulation.transmit",)),
+        ("    hear (míšení, kontakt, kanály)", ("arrays.hear",)),
+        ("      z toho mix", ("arrays.mix",)),
+        ("      filtr kontaktu (borrowing_factor, po jedné)", ("contact.borrowing_factor",)),
+        ("      instituce (čtení, škola, liturgie, po jedné)",
          ("institutions.reading_factor", "institutions.school_factor", "institutions.liturgy_factor")),
         ("    tlaky (fitness_of)", ("transmission.fitness_of",)),
         ("      PressureBatch (slot_numbers, column, values, payload)",
          ("batch.__init__", "batch.slot_numbers", "batch.slot_column", "batch.slot_values", "batch.payload")),
-        ("    výběr (_normalized)", ("transmission._normalized",)),
-        ("    drift (hash_normal)", ("transmission.hash_normal",)),
-        ("  _changes (milníky, převod slotů na čísla)", ("Simulation._changes",)),
+        ("    settle (výběr, trend, drift, ustálení)", ("arrays.settle",)),
+        ("      z toho normalized", ("arrays.normalized",)),
+        ("  _plan (události z polí + řídký zápis stavu)", ("Simulation._plan",)),
+        ("    z toho _changes (milníky, převod slotů)", ("Simulation._changes",)),
+        ("    z toho stage_state (hustý -> řídký)", ("pools.stage_state",)),
+        ("  commit_state", ("pools.commit_state",)),
         ("  _follow_vocabulary", ("Simulation._follow_vocabulary",)),
-        ("  _activations (převod slotů)", ("Simulation._activations",)),
-        ("  _trace", ("Simulation._trace",)),
+        ("  fondy: release", ("pools.release",)),
+        ("fondy: innovate (add_share)", ("pools.innovate",)),
+        ("fondy: get + dominant + frequency", ("pools.get", "pools.dominant", "pools.frequency")),
+        ("fondy: hustý pohled z řídkého (_dense_arrays)", ("pools._dense_arrays",)),
         ("Simulation._innovate", ("Simulation._innovate",)),
         ("Simulation._observe", ("Simulation._observe",)),
     )
