@@ -304,8 +304,10 @@ impl AssessIndex {
         groups: &[usize],
         tick: i64,
         needs: &mut Needs,
-    ) -> Result<Vec<Option<Assessment>>, String> {
-        let mut out: Vec<Option<Assessment>> = vec![None; groups.len()];
+        out: &mut Vec<Option<Assessment>>,
+    ) -> Result<(), String> {
+        out.clear();
+        out.resize(groups.len(), None);
         let mut stale: Vec<usize> = Vec::new();
         for (at, &g) in groups.iter().enumerate() {
             let version = inp.versions[g];
@@ -324,14 +326,14 @@ impl AssessIndex {
             }
         }
         if stale.is_empty() {
-            return Ok(out);
+            return Ok(());
         }
         let mut ready = true;
         for &at in &stale {
             ready &= self.ensure_sample(bank, groups[at], inp, needs);
         }
         if !ready {
-            return Ok(out);
+            return Ok(());
         }
         let info = self
             .processes
@@ -394,7 +396,7 @@ impl AssessIndex {
                 }
             }
         }
-        Ok(out)
+        Ok(())
     }
 
     /// Hodnocení jednoho vzorku (skupiny `g`) po aplikaci procesu; `None`, chybí-li odpověď na `needs`.

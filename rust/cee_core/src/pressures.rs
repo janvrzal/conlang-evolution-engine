@@ -20,7 +20,7 @@
 
 use crate::assess_index::{AssessIndex, Inputs, Needs};
 use crate::bank::Bank;
-use crate::transmission::hash_normal;
+use crate::transmission::{hash_normal_mixed, splitmix64};
 
 /// Čísla druhů proměnných (pořadí `cee.v2.tables.VARIABLE_KINDS`).
 pub const PROCESS: u8 = 0;
@@ -163,6 +163,9 @@ pub struct Chunk<'a> {
 pub struct Gathered {
     values: Vec<[f64; 5]>,
     present: Vec<bool>,
+    /// Pracovní pole (dosažené skupiny řádku a nalezená hodnocení), aby se ve smyčce nealokovalo.
+    columns: Vec<usize>,
+    found: Vec<Option<crate::assess_index::Assessment>>,
 }
 
 impl Gathered {
@@ -208,14 +211,15 @@ pub fn gather(
         let changed = rows.changed[row];
         if (kind == PROCESS || kind == FORM) && changed >= 0 {
             let slot = changed as usize;
-            let columns: Vec<usize> = (0..chunk.groups)
-                .filter(|&g| reached(chunk, local, g, slot))
-                .collect();
+            let mut columns = std::mem::take(&mut out.columns);
+            columns.clear();
+            columns.extend((0..chunk.groups).filter(|&g| reached(chunk, local, g, slot)));
             if columns.is_empty() {
+                out.columns = columns;
                 continue;
             }
             if kind == PROCESS {
-                let found = index.assess(
+                index.assess(
                     bank,
                     inp,
                     &mut state.memo,
@@ -224,9 +228,10 @@ pub fn gather(
                     &columns,
                     params.tick,
                     needs,
+                    &mut out.found,
                 )?;
-                for (&g, value) in columns.iter().zip(found) {
-                    if let Some(value) = value {
+                for (&g, value) in columns.iter().zip(&out.found) {
+                    if let Some(value) = *value {
                         let at = local * chunk.groups + g;
                         out.values[at] = [
                             value.coverage,
@@ -260,6 +265,7 @@ pub fn gather(
                     }
                 }
             }
+            out.columns = columns;
         } else if kind == LEXICAL
             && params.has_table
             && plan.kinds[LEXICAL as usize]
@@ -343,6 +349,9 @@ pub struct Scorer<'a> {
     pub plan: &'a Plan,
     pub chunk: &'a Chunk<'a>,
     pub gathered: &'a Gathered,
+    /// Počítat tlak i ve slotech, které kohorta neslyší? Tam výběr tlak nečte (`slyšený × exp(…)` je nula),
+    /// takže přenos je vynechává; zlatá data a zkoušky chtějí celé pole.
+    pub exhaustive: bool,
 }
 
 /// Skóre lexikální jasnosti buňky (`cee.v2.language.lexical_index.clarity_scores`).
@@ -480,9 +489,15 @@ impl Scorer<'_> {
                         if step.variant_change[n] < 0 || (lexical && step.variant_morpheme[n] < 0) {
                             continue;
                         }
-                        let key = step.variant_keys[n];
+                        // Klíč varianty se promíchá jednou pro všechny skupiny.
+                        let mixed = splitmix64(step.variant_keys[n]);
                         for g in 0..groups {
-                            let noise = hash_normal(step.actuation_keys[g], key);
+                            if !self.exhaustive
+                                && self.chunk.heard[(local * groups + g) * slots + slot] <= 0.0
+                            {
+                                continue;
+                            }
+                            let noise = hash_normal_mixed(step.actuation_keys[g], mixed);
                             add(
                                 &mut out[g * slots + slot],
                                 weight * (ACTUATION_SPREAD * noise).clamp(-1.0, 1.0),
@@ -745,6 +760,7 @@ mod tests {
             plan: &plan,
             chunk: &chunk,
             gathered: &gathered,
+            exhaustive: true,
         };
         let mut out = [0.0; 4];
         scorer.row(0, &mut out);
@@ -767,5 +783,25 @@ mod tests {
         assert_eq!(cell.to_bits(), 0.0_f64.to_bits());
         add(&mut cell, 0.25);
         assert_eq!(cell, 0.25);
+    }
+}
+
+#[cfg(test)]
+mod mixed_tests {
+    use crate::transmission::{hash_normal, hash_normal_mixed, splitmix64};
+
+    #[test]
+    fn sum_s_promichanym_klicem_je_stejny_jako_hash_normal() {
+        for (row, column) in [
+            (0_u64, 0_u64),
+            (1, 2),
+            (u64::MAX, 12345),
+            (987654321, u64::MAX),
+        ] {
+            assert_eq!(
+                hash_normal(row, column).to_bits(),
+                hash_normal_mixed(row, splitmix64(column)).to_bits()
+            );
+        }
     }
 }

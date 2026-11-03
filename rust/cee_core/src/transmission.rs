@@ -356,7 +356,7 @@ fn normalize_cell(array: &[f64], fallback: &[f64], out: &mut [f64], sorted: &mut
     }
 }
 
-fn splitmix64(value: u64) -> u64 {
+pub fn splitmix64(value: u64) -> u64 {
     let mut value = value.wrapping_add(0x9E37_79B9_7F4A_7C15);
     value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
@@ -368,7 +368,13 @@ const FLOAT53: f64 = (1_u64 << 53) as f64;
 /// Hodnota N(0, 1) závislá jen na páru klíčů (`rng.hash_normal` s `pairwise`):
 /// Box–Muller z dvou čísel splitmixu. Používá `ln` a `cos` knihovny systému.
 pub fn hash_normal(row_key: u64, column_key: u64) -> f64 {
-    let first = splitmix64(row_key ^ splitmix64(column_key));
+    hash_normal_mixed(row_key, splitmix64(column_key))
+}
+
+/// Totéž co `hash_normal`, ale s už promíchaným klíčem sloupce (`splitmix64(klíč)`), aby se při
+/// mnoha řádcích na jeden sloupec míchal jednou.
+pub fn hash_normal_mixed(row_key: u64, mixed_column: u64) -> f64 {
+    let first = splitmix64(row_key ^ mixed_column);
     let second = splitmix64(first);
     let uniform_a = ((first >> 11) as f64 + 0.5) / FLOAT53;
     let uniform_b = ((second >> 11) as f64 + 0.5) / FLOAT53;

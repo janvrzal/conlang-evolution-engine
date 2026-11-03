@@ -751,6 +751,7 @@ impl NativeCells {
                             &current_all.data[cells.clone()],
                             &heard_data.data,
                             threads,
+                            false,
                             &mut pressure_scratch,
                             &mut found,
                         )?;

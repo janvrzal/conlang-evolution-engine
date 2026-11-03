@@ -262,8 +262,8 @@ impl AssessIndex {
         }
         let mut needs = Needs::default();
         let mut bank = bank.borrow_mut();
-        let found = self
-            .inner
+        let mut found = Vec::new();
+        self.inner
             .assess(
                 &mut bank.bank,
                 &inp,
@@ -273,6 +273,7 @@ impl AssessIndex {
                 &groups,
                 tick,
                 &mut needs,
+                &mut found,
             )
             .map_err(failure)?;
         let mut flat = Vec::with_capacity(5 * found.len());
@@ -526,6 +527,7 @@ fn pass(
     rows: &RowsArgs<'_>,
     chunk: &Chunk<'_>,
     threads: usize,
+    exhaustive: bool,
     gathered: &mut Gathered,
     out: &mut [f64],
 ) -> PyResult<Option<Needs>> {
@@ -614,6 +616,7 @@ fn pass(
         plan: &me.plan,
         chunk,
         gathered,
+        exhaustive,
     };
     if threads <= 1 || chunk.count < 2 {
         for local in 0..chunk.count {
@@ -709,6 +712,7 @@ pub fn fitness_chunk(
     current: &[f64],
     heard: &[f64],
     threads: usize,
+    exhaustive: bool,
     gathered: &mut Gathered,
     out: &mut Vec<f64>,
 ) -> PyResult<()> {
@@ -723,7 +727,7 @@ pub fn fitness_chunk(
         heard,
     };
     for _ in 0..MAX_PASSES {
-        match pass(py, step, rows, &chunk, threads, gathered, out)? {
+        match pass(py, step, rows, &chunk, threads, exhaustive, gathered, out)? {
             None => return Ok(()),
             Some(needs) => supply(py, step, needs)?,
         }
@@ -735,7 +739,8 @@ pub fn fitness_chunk(
 
 /// Zkušební vstup: tlaky jednoho kusu s vlastním `PressureStep` (zlatá data a zkoušky).
 #[pyfunction]
-#[pyo3(signature = (step, rows, current, heard, first=0, threads=1))]
+#[pyo3(signature = (step, rows, current, heard, first=0, threads=1, exhaustive=true))]
+#[allow(clippy::too_many_arguments)]
 pub fn pressure_scores<'py>(
     py: Python<'py>,
     step: &Bound<'py, PressureStep>,
@@ -744,6 +749,7 @@ pub fn pressure_scores<'py>(
     heard: numpy::PyReadonlyArray3<'py, f64>,
     first: usize,
     threads: usize,
+    exhaustive: bool,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let dims = current.shape();
     if heard.shape() != dims {
@@ -768,6 +774,7 @@ pub fn pressure_scores<'py>(
             .as_slice()
             .map_err(|_| fail("pole musí být souvislé"))?,
         threads,
+        exhaustive,
         &mut gathered,
         &mut out,
     )?;
