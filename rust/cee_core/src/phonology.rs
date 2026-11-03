@@ -115,6 +115,19 @@ pub struct Params {
 /// Četnosti užití lexémů, které Python už spočítal (podle čísla lexému).
 pub type Frequencies = BTreeMap<usize, f64>;
 
+/// Zdroj četností užití lexémů (`usage_frequency` kořene): hotová mapa od Pythonu,
+/// nebo výpočet z dominantních kořenů kódu (`code_state::LiveUsage`). `None` =
+/// četnost nejde určit, volající ji vyžádá jako `Needs::freq`.
+pub trait Frequency {
+    fn of(&self, lexeme: usize) -> Option<f64>;
+}
+
+impl Frequency for Frequencies {
+    fn of(&self, lexeme: usize) -> Option<f64> {
+        self.get(&lexeme).copied()
+    }
+}
+
 /// Co musí Python doplnit, než se výpočet dokončí.
 #[derive(Default, Debug)]
 pub struct Needs {
@@ -169,14 +182,14 @@ fn needed(
     index: usize,
     morpheme: usize,
     lexeme: usize,
-    freq: &Frequencies,
+    freq: &dyn Frequency,
     needs: &mut Needs,
 ) -> Option<f64> {
     let mut lead = 0.0;
     let mut complete = true;
     if target.reductive {
-        match freq.get(&lexeme) {
-            Some(&frequency) => lead = params.lead_scale * (2.0 * frequency - 1.0),
+        match freq.of(lexeme) {
+            Some(frequency) => lead = params.lead_scale * (2.0 * frequency - 1.0),
             None => {
                 needs.freq.insert(lexeme);
                 complete = false;
@@ -210,7 +223,7 @@ fn queue_into(
     skip: Option<usize>,
     morpheme: usize,
     form_id: usize,
-    freq: &Frequencies,
+    freq: &dyn Frequency,
     needs: &mut Needs,
 ) -> Result<Vec<Insert>, String> {
     let lexeme = units.lexeme_of(morpheme)?;
@@ -254,7 +267,7 @@ pub fn queue_morpheme(
     units: &Units,
     targets: &[Target],
     morpheme: usize,
-    freq: &Frequencies,
+    freq: &dyn Frequency,
 ) -> Result<(Vec<Insert>, Needs), String> {
     let mut needs = Needs::default();
     let Some(unit) = units.get(morpheme) else {
@@ -297,7 +310,7 @@ pub fn step(
     level: f64,
     targets: &[Target],
     skip: usize,
-    freq: &Frequencies,
+    freq: &dyn Frequency,
 ) -> Result<StepOut, String> {
     let mut out = StepOut::default();
     while out.popped < queue_needed.len() && queue_needed[out.popped] < level {
@@ -369,7 +382,8 @@ pub fn activate(
     row: usize,
     vocabulary: &[u8],
     target: &Target,
-    freq: &Frequencies,
+    freq: &dyn Frequency,
+    names: Option<&[String]>,
 ) -> Result<ActivateOut, String> {
     let mut out = ActivateOut::default();
     let words: Vec<usize> = (0..vocabulary.len())
@@ -407,11 +421,17 @@ pub fn activate(
     if !out.needs.is_empty() {
         return Ok(out);
     }
+    // Shodné logity (buňky téhož lexému) řadí jméno morfému, jako `ProcessQueue`;
+    // bez jmen (testy jádra) číslo.
     pairs.sort_by(|left, right| {
+        let tie = match names {
+            Some(names) => names[left.1].as_bytes().cmp(names[right.1].as_bytes()),
+            None => left.1.cmp(&right.1),
+        };
         left.0
             .partial_cmp(&right.0)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then(left.1.cmp(&right.1))
+            .then(tie)
     });
     out.needed = pairs.iter().map(|pair| pair.0).collect();
     out.morphemes = pairs.iter().map(|pair| pair.1).collect();
@@ -683,6 +703,7 @@ mod tests {
             &[1, 1, 1],
             &target,
             &Frequencies::new(),
+            None,
         )
         .unwrap();
         assert!(out.needs.is_empty());
@@ -700,6 +721,7 @@ mod tests {
             &[1, 1, 0],
             &target,
             &Frequencies::new(),
+            None,
         )
         .unwrap();
         assert_eq!(out.morphemes, vec![0, 1]); // shodné logity: podle čísla
