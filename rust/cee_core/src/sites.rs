@@ -7,8 +7,8 @@
 //! počítá Python výchozím postupem.
 //!
 //! **Sloupce výstupu** (pořadí je dohodnuté s Pythonem, `cee.v2.language.site_index`):
-//! expresivní tvoření, sedm sémantických změn, vyrovnání, rozšíření a deset
-//! syntaktických změn.
+//! expresivní tvoření, sedm sémantických změn, vyrovnání, rozšíření, deset
+//! syntaktických změn a výpůjčky slov.
 //!
 //! **Syntaktická místa** jsou funkce katalogu (pořadí podle jména): konstrukce, která
 //! ve skupině převažuje, je číslo varianty a její druh a stupeň jsou sloupce
@@ -25,12 +25,13 @@ use crate::index::Fx;
 use crate::morphology_index::MorphIndex;
 use crate::semantic_index::{SemanticIndex, KINDS as SEMANTIC};
 
-pub const COLUMNS: usize = 1 + SEMANTIC + 2 + SYNTAX;
+pub const COLUMNS: usize = 1 + SEMANTIC + 2 + SYNTAX + 1;
 pub const COL_COINAGE: usize = 0;
 pub const COL_SEMANTIC: usize = 1;
 pub const COL_LEVELING: usize = COL_SEMANTIC + SEMANTIC;
 pub const COL_EXTENSION: usize = COL_LEVELING + 1;
 pub const COL_SYNTAX: usize = COL_EXTENSION + 1;
+pub const COL_BORROWING: usize = COL_SYNTAX + SYNTAX;
 /// Počet syntaktických změn: opis, přiklonka, srůst, exaptace, zánik kategorie,
 /// posílení, zeslabení a obnova záporu, ustálení a uvolnění slovosledu.
 pub const SYNTAX: usize = 10;
@@ -194,6 +195,20 @@ struct Found {
     rates: Vec<f64>,
 }
 
+/// Výpůjčky slov: podíl vstupu skupiny od cizích dárců podle kanálu a filtr výpůjček
+/// podle kanálu a pojmu (obojí spočítá Python z kontaktu mezi jazyky).
+pub struct Borrowing<'a> {
+    pub channels: usize,
+    /// Více kanálů s různými vahami domén: míra místa je součet přes kanály.
+    pub distinct: bool,
+    /// Skupina × kanál; skupina bez dárců (`donors` nepravda) výpůjčky nemá.
+    pub exposure: &'a [f64],
+    pub donors: &'a [bool],
+    /// Kanál × číslo pojmu.
+    pub factors: &'a [f64],
+    pub concepts: usize,
+}
+
 /// Vstup dávky: skupiny (kódy) a jejich dnešní stav, který nenese žádný index.
 pub struct Request<'a> {
     pub tokens: &'a [i64],
@@ -209,6 +224,7 @@ pub struct Request<'a> {
     pub coinage_scale: f64,
     pub analogy_boost: f64,
     pub loss_boost: f64,
+    pub borrowing: Option<Borrowing<'a>>,
 }
 
 #[derive(Default)]
@@ -219,6 +235,7 @@ pub struct SiteIndex {
     pub constructions: Constructions,
     results: FxMap<i64, Found>,
     current: Vec<Option<(i8, i8)>>,
+    rates: Vec<f64>,
 }
 
 impl SiteIndex {
@@ -264,6 +281,14 @@ impl SiteIndex {
                 totals[row + COL_EXTENSION] =
                     uniform(request.bases[COL_EXTENSION], i64::from(extension), scale);
             }
+            if let Some(borrowing) = &request.borrowing {
+                if borrowing.donors[group] {
+                    let (found, total) =
+                        self.borrowing(token, group, borrowing, request.bases[COL_BORROWING]);
+                    counts[row + COL_BORROWING] = found as i64;
+                    totals[row + COL_BORROWING] = total;
+                }
+            }
             if functions > 0 {
                 let variants = &request.variants[group * functions..(group + 1) * functions];
                 let mut result = self.results.remove(&token).unwrap_or_default();
@@ -286,6 +311,41 @@ impl SiteIndex {
             }
         }
         (totals, counts)
+    }
+
+    /// Počet míst výpůjček (lexikální proměnné kódu) a součet jejich měr: `base × podíl × filtr`
+    /// u jednoho kanálu, `base × Σ podíl × filtr` u více kanálů; součet párový jako `np.sum`.
+    fn borrowing(
+        &mut self,
+        token: i64,
+        group: usize,
+        borrowing: &Borrowing<'_>,
+        base: f64,
+    ) -> (usize, f64) {
+        let mut rates = std::mem::take(&mut self.rates);
+        rates.clear();
+        let channels = borrowing.channels;
+        let exposure = &borrowing.exposure[group * channels..(group + 1) * channels];
+        self.semantic.for_each_site(token, |concept| {
+            let at = |channel: usize| borrowing.factors[channel * borrowing.concepts + concept];
+            if borrowing.distinct {
+                let mut sum = 0.0;
+                for (channel, &share) in exposure.iter().enumerate() {
+                    sum += share * at(channel);
+                }
+                rates.push(base * sum);
+            } else {
+                rates.push(base * exposure[0] * at(0));
+            }
+        });
+        let total = if rates.is_empty() {
+            0.0
+        } else {
+            pairwise_sum(&rates)
+        };
+        let found = rates.len();
+        self.rates = rates;
+        (found, total)
     }
 
     /// Funkce, které jsou místy syntaktických změn skupiny (čísla funkcí katalogu,
@@ -500,6 +560,7 @@ mod tests {
             coinage_scale: 1.0,
             analogy_boost: 0.0,
             loss_boost: 1.0,
+            borrowing: None,
         };
         let (totals, counts) = index.totals(&request);
         // Funkce 0 bez koncovky a se zdrojem: opis; záporka před slovesem: posílení.

@@ -31,7 +31,7 @@ from cee.v2.changes.sites import column_totals, native_column
 from cee.v2.language.lexicon import Morpheme
 from cee.v2.language.protoforms import coin
 from cee.v2.language.segments import Form
-from cee.v2.language.site_index import COL_COINAGE, COL_SEMANTIC, site_index
+from cee.v2.language.site_index import COL_BORROWING, COL_COINAGE, COL_SEMANTIC, site_index
 from cee.v2.pressures import Appeal, Conformity, Pressure
 from cee.v2.pressures.lexical import (
     Entrenchment,
@@ -570,6 +570,7 @@ class LexicalBorrowing(Change):
     """
 
     kind = "lexical_borrowing"
+    site_column = COL_BORROWING
     target = "lexical"
     pressures = LEXICAL_PRESSURES
     rate_basis = "year"
@@ -596,6 +597,45 @@ class LexicalBorrowing(Change):
 
     def rate(self, context: InnovationContext, site: str) -> float:
         return self.rates(context, [site])[0]
+
+    def total_rate(self, context: InnovationContext) -> float:
+        if native_column(self) is None:
+            return super().total_rate(context)
+        return column_totals(self, [context])[0]
+
+    def total_rates(self, contexts: Sequence[InnovationContext]) -> list[float]:
+        if native_column(self) is None:
+            return super().total_rates(contexts)
+        return column_totals(self, contexts)
+
+    def borrowing_inputs(
+        self, contexts: Sequence[InnovationContext]
+    ) -> tuple[int, bool, np.ndarray, list[bool], np.ndarray] | None:
+        """Vstupy dávky míst výpůjček: podíl vstupu od dárců podle kanálu a filtr výpůjček podle kanálu a pojmu.
+
+        Dárci (sousedé jiného jazyka) a jejich podíly počítá Python z kontaktu; v jednojazyčném světě
+        se nepočítá nic. Součet měr míst (``rates`` níže) dělá index míst světa.
+        """
+        from cee.v2.contact import distinct_channels
+
+        world = contexts[0].world
+        if world.table is None or len({g.main_code.language for g in world.groups.values()}) < 2:
+            return None
+        donors = [_donors(context) for context in contexts]
+        distinct = distinct_channels(world.params)
+        if not distinct:
+            channels: tuple[str, ...] = ("neighbor",)
+            exposure = np.array([sum(weight for weight, _ in found) for found in donors], dtype=np.float64)
+        else:
+            exposures = [_channel_exposures(context, found, distinct) if found else [] for context, found in
+                         zip(contexts, donors)]
+            channels = tuple(sorted({channel for row in exposures for channel, _ in row}))
+            exposure = np.zeros((len(contexts), len(channels)), dtype=np.float64)
+            for group, row in enumerate(exposures):
+                for channel, share in row:
+                    exposure[group, channels.index(channel)] = share
+        factors = site_index(world).borrowing_factors(world, channels)
+        return (len(channels), bool(distinct), exposure.ravel(), [bool(found) for found in donors], factors)
 
     def propose(
         self, context: InnovationContext, site: str, rng: RandomSource, index: int

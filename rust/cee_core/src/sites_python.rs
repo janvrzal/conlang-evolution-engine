@@ -11,10 +11,19 @@ use pyo3::prelude::*;
 use crate::morphology_index::{CodeInput, Columns, Store};
 use crate::python::{failure, slice, Held, NativeBank};
 use crate::semantic_index::{self, Graph};
-use crate::sites::{self, Catalog, Request};
+use crate::sites::{self, Borrowing, Catalog, Request};
 
 /// Tři pole úložiště tvarů kódu: tvar, hranice, koncovka.
 type Triple<'py> = (Bound<'py, PyAny>, Bound<'py, PyAny>, Bound<'py, PyAny>);
+
+/// Výpůjčky: kanály, zda jsou odlišné, podíl vstupu (skupina × kanál), skupiny s dárci a filtr (kanál × pojem).
+type BorrowingIn<'py> = (
+    usize,
+    bool,
+    PyReadonlyArray1<'py, f64>,
+    Vec<bool>,
+    PyReadonlyArray1<'py, f64>,
+);
 
 /// Počty a součty dávky: součty (skupina × sloupec) a počty míst.
 type TotalsOut<'py> = (Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<i64>>);
@@ -267,6 +276,7 @@ impl SiteIndex {
         semantic_on: Vec<bool>,
         bases: PyReadonlyArray1<'py, f64>,
         scales: (f64, f64, f64),
+        borrowing: Option<BorrowingIn<'py>>,
     ) -> PyResult<TotalsOut<'py>> {
         let groups = tokens.len();
         let functions = self.inner.catalog.count;
@@ -294,6 +304,21 @@ impl SiteIndex {
             coinage_scale: scales.0,
             analogy_boost: scales.1,
             loss_boost: scales.2,
+            borrowing: match &borrowing {
+                Some((channels, distinct, exposure, donors, factors)) => {
+                    let factors = slice(factors)?;
+                    let concepts = factors.len() / (*channels).max(1);
+                    Some(Borrowing {
+                        channels: *channels,
+                        distinct: *distinct,
+                        exposure: slice(exposure)?,
+                        donors,
+                        factors,
+                        concepts,
+                    })
+                }
+                None => None,
+            },
         };
         let (totals, counts) = self.inner.totals(&request);
         Ok((

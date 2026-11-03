@@ -19,7 +19,7 @@ import numpy as np
 import numpy.typing as npt
 
 from cee.v2.changes.base import Change, InnovationContext
-from cee.v2.language.site_index import COL_COINAGE, site_index
+from cee.v2.language.site_index import COL_BORROWING, COL_COINAGE, site_index
 
 
 def native_column(change: Change) -> int | None:
@@ -36,7 +36,8 @@ def column_totals(change: Change, contexts: Sequence[InnovationContext]) -> list
         return []
     world = contexts[0].world
     scale = change.rate_scale(contexts[0]) if column == COL_COINAGE else 1.0
-    totals, _ = site_index(world).batch(world, list(contexts), {column: change.base_rate}, scale)
+    borrowing = change.borrowing_inputs(contexts) if column == COL_BORROWING else None  # type: ignore[attr-defined]
+    totals, _ = site_index(world).batch(world, list(contexts), {column: change.base_rate}, scale, borrowing)
     return [float(value) for value in totals[:, column]]
 
 
@@ -57,6 +58,7 @@ def rate_sums(
     bases: dict[int, float] = {}
     positions: dict[int, int] = {}
     scale = 1.0
+    borrowing = None
     for position, change in enumerate(changes):
         column = native_column(change)
         if column is not None:
@@ -64,9 +66,11 @@ def rate_sums(
             positions[position] = column
             if column == COL_COINAGE:
                 scale = change.rate_scale(contexts[0])
+            if column == COL_BORROWING:
+                borrowing = change.borrowing_inputs(contexts)  # type: ignore[attr-defined]
     found: dict[int, list[float]] = {}
     if positions:
-        totals, _ = site_index(world).batch(world, list(contexts), bases, scale)
+        totals, _ = site_index(world).batch(world, list(contexts), bases, scale, borrowing)
         for position, column in positions.items():
             found[position] = totals[:, column].tolist()
     found.update(batch_total_rates(changes, contexts))

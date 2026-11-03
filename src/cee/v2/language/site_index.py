@@ -34,8 +34,8 @@ if TYPE_CHECKING:
     from cee.v2.changes.base import InnovationContext
     from cee.v2.world import Code, World
 
-#: Sloupce výstupu dávky: expresivní tvoření, sedm sémantických změn, vyrovnání, rozšíření
-#: a deset syntaktických změn (stejné pořadí jako ``sites::COLUMNS`` v Rustu).
+#: Sloupce výstupu dávky: expresivní tvoření, sedm sémantických změn, vyrovnání, rozšíření,
+#: deset syntaktických změn a výpůjčky slov (stejné pořadí jako ``sites::COLUMNS`` v Rustu).
 SYNTAX_KINDS = (
     "periphrasis", "cliticization", "affixation", "exaptation", "category_loss",
     "negation_reinforcement", "negation_reduction", "negation_renewal", "order_fixation", "order_relaxation",
@@ -45,7 +45,8 @@ COL_SEMANTIC = 1
 COL_LEVELING = COL_SEMANTIC + len(semantic.KINDS)
 COL_EXTENSION = COL_LEVELING + 1
 COL_SYNTAX = COL_EXTENSION + 1
-COLUMNS = COL_SYNTAX + len(SYNTAX_KINDS)
+COL_BORROWING = COL_SYNTAX + len(SYNTAX_KINDS)
+COLUMNS = COL_BORROWING + 1
 
 #: Šablony funkcí, druhy konstrukcí a stupně opisu jako čísla (viz ``sites.rs``).
 TEMPLATES = {"inflection": 0, "negation": 1, "order": 2}
@@ -124,7 +125,7 @@ class PythonSites:
     def totals(
         self, tokens: list[int], variants: npt.NDArray[np.int32], l2_share: npt.NDArray[np.float64],
         lexical: npt.NDArray[np.int64], morph_on: list[bool], semantic_on: list[bool],
-        bases: npt.NDArray[np.float64], scales: tuple[float, float, float],
+        bases: npt.NDArray[np.float64], scales: tuple[float, float, float], borrowing: Any = None,
     ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.int64]]:
         coinage_scale, analogy_boost, loss_boost = scales
         groups, functions = len(tokens), self.catalog.get("count", 0)
@@ -147,6 +148,9 @@ class PythonSites:
                 counts[group, COL_LEVELING], counts[group, COL_EXTENSION] = leveling, extension
                 totals[group, COL_LEVELING] = uniform(float(bases[COL_LEVELING]), leveling, scale)
                 totals[group, COL_EXTENSION] = uniform(float(bases[COL_EXTENSION]), extension, scale)
+            if borrowing is not None and borrowing[3][group]:
+                found, total = self._borrowing(token, group, borrowing, float(bases[COL_BORROWING]))
+                counts[group, COL_BORROWING], totals[group, COL_BORROWING] = found, total
             if functions:
                 sites, rates = self._syntax(
                     token, variants[group * functions:(group + 1) * functions], bases, float(l2_share[group]), loss_boost,
@@ -160,6 +164,25 @@ class PythonSites:
                     else:
                         totals[group, COL_SYNTAX + kind] = uniform(float(bases[COL_SYNTAX + kind]), found, 1.0)
         return totals, counts
+
+    def _borrowing(self, token: int, group: int, borrowing: Any, base: float) -> tuple[int, float]:
+        """Počet míst výpůjček a součet jejich měr (viz ``sites::SiteIndex::borrowing``)."""
+        channels, distinct, exposure, _, factors = borrowing
+        slot = self.semantic.slots.get(token)
+        concepts = len(factors) // max(channels, 1)
+        shares = [float(exposure[group * channels + channel]) for channel in range(channels)]
+        rates = []
+        for concept in self.semantic.by_name:
+            if slot is None or concept >= len(slot.site) or not slot.site[concept]:
+                continue
+            if distinct:
+                total = 0.0
+                for channel, share in enumerate(shares):
+                    total += share * float(factors[channel * concepts + concept])
+                rates.append(base * total)
+            else:
+                rates.append(base * shares[0] * float(factors[concept]))
+        return len(rates), (phases.rate_total(rates) if rates else 0.0)
 
     def syntax_sites(self, token: int, kind: int) -> tuple[npt.NDArray[np.uint32], npt.NDArray[np.float64]]:
         sites, rates = self._results.get(token, ([[] for _ in SYNTAX_KINDS], []))
@@ -300,6 +323,8 @@ class SiteIndex:
         self._known_variants: set[int] = set()
         self._site_cache: dict[int, tuple[Any, Any]] = {}
         self._taboo_cache: dict[int, tuple[Any, Any]] = {}
+        self._borrowing_key: tuple[Any, ...] | None = None
+        self._borrowing_cache = np.zeros(0, dtype=np.float64)
 
     def __getstate__(self) -> dict[str, Any]:
         return {"native": self.native}
@@ -413,7 +438,11 @@ class SiteIndex:
         morphemes, concepts = world.registry.morphemes, world.registry.concepts
         sources, bases = [], []
         for number in numbers:
-            morpheme = world.morphemes[names[number]]
+            morpheme = world.morphemes.get(names[number])
+            if morpheme is None:  # číslo kořene, který svět nezná: bez odvození
+                sources.append(-1)
+                bases.append(-1)
+                continue
             derived = morpheme.etymology == "derivation" and len(morpheme.sources) == 1
             sources.append(concepts.get(morpheme.sources[0]) if derived else -1)
             bases.append(-1 if morpheme.base is None else morphemes.get(morpheme.base, -3))
@@ -543,6 +572,7 @@ class SiteIndex:
 
     def batch(
         self, world: World, contexts: list[InnovationContext], bases: dict[int, float], coinage_scale: float,
+        borrowing: tuple[int, bool, npt.NDArray[np.float64], list[bool], npt.NDArray[np.float64]] | None = None,
     ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.int64]]:
         """Celkové míry a počty míst (skupina × sloupec) všech druhů změn v ``bases`` (sloupec → základní míra)."""
         self.refresh(world, contexts)
@@ -577,8 +607,27 @@ class SiteIndex:
             np.array([ctx.code.l2_share for ctx in contexts], dtype=np.float64),
             np.array([len(ctx.code.repertoire.variable_ids_of("lexical")) for ctx in contexts], dtype=np.int64),
             morph_on, semantic_on, base, (coinage_scale, params.analogy_l2_boost, params.category_loss_l2_boost),
+            borrowing,
         )
         return np.asarray(totals).reshape(groups, COLUMNS), np.asarray(counts).reshape(groups, COLUMNS)
+
+    def borrowing_factors(self, world: World, channels: tuple[str, ...]) -> npt.NDArray[np.float64]:
+        """Filtr výpůjček slov podle kanálu a čísla pojmu (kanál × pojem, po řádcích); drží se, dokud se svět nezmění."""
+        from cee.v2.contact import borrowing_factor
+
+        names = world.registry.concepts.names
+        key = (id(world.params), len(names), channels)
+        if self._borrowing_key != key:
+            variables = world.variables
+            self._borrowing_key = key
+            self._borrowing_cache = np.array(
+                [
+                    borrowing_factor(world, f"lexical:{name}", channel) if f"lexical:{name}" in variables else 0.0
+                    for channel in channels for name in names
+                ],
+                dtype=np.float64,
+            )
+        return self._borrowing_cache
 
     # --- čtení míst -------------------------------------------------------------
 

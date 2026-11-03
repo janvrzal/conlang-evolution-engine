@@ -484,6 +484,19 @@ impl SemanticIndex {
             .collect()
     }
 
+    /// Zavolá `visit` pro pojem každého místa kódu (lexikální proměnné) v pořadí jmen pojmů.
+    pub fn for_each_site(&self, token: i64, mut visit: impl FnMut(usize)) {
+        let Some(slot) = self.slot(token) else {
+            return;
+        };
+        for &concept in &self.by_name {
+            let concept = concept as usize;
+            if concept < slot.site.len() && slot.site[concept] {
+                visit(concept);
+            }
+        }
+    }
+
     /// Dominantní kořeny, které index započítal (pro syntax a testy).
     pub fn dominant(&self, token: i64) -> &[i32] {
         self.slot(token).map_or(&[], |s| &s.dominant)
