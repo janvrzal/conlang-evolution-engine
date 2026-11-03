@@ -66,7 +66,7 @@ impl Proc {
 }
 
 /// Indexy samohlásek (jader) tvaru.
-fn nuclei(form: &[i32], vowel: &[bool], out: &mut Vec<usize>) {
+pub(crate) fn nuclei(form: &[i32], vowel: &[bool], out: &mut Vec<usize>) {
     out.clear();
     for (index, &segment) in form.iter().enumerate() {
         if vowel[segment as usize] {
@@ -76,7 +76,7 @@ fn nuclei(form: &[i32], vowel: &[bool], out: &mut Vec<usize>) {
 }
 
 /// Přízvučné jádro podle pravidla (`None`, když tvar nemá samohlásku).
-fn stressed_nucleus(found: &[usize], rule: u8) -> Option<usize> {
+pub(crate) fn stressed_nucleus(found: &[usize], rule: u8) -> Option<usize> {
     let count = found.len();
     if count == 0 {
         return None;

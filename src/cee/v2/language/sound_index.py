@@ -331,3 +331,102 @@ class SoundIndex:
             c.stressed[ids], c.following2[ids].astype(np.intp), slot.counts[ids].astype(np.intp),
         )
 
+
+class NativeSoundIndex:
+    """Tentýž index v Rustu (``cee_core.SoundIndex``); rozhraní jako :class:`SoundIndex`.
+
+    Stav je v Rustu. Python posílá jednou za tik pro všechny kódy tři pohledy na
+    pole (tvary kódu, výchozí tvary světa, příznaky slovní zásoby) a doplní, co
+    si Rust vyžádá: výchozí tvary, které ještě nejsou v bance, a sadu kandidátů
+    pro nový inventář (sestavuje ji Python, ``changes.sound``). Rust nelze zkopírovat
+    ani uložit, proto se při kopii a uložení exportují jen započítané tvary a
+    pravidla (``counted_form``, ``counted_rule``) a podle nich se stav obnoví.
+    """
+
+    native = True
+
+    def __init__(self, handle: Any, scales: list[float]) -> None:
+        self._handle = handle
+        self._scales = list(scales)
+        self._tokens: set[int] = set()
+        #: Uložený stav, který se do Rustu vrátí při příštím dorovnání (banku mít po ruce).
+        self._restore: dict[int, tuple[npt.NDArray[np.int32], npt.NDArray[np.int8]]] = {}
+
+    def __getstate__(self) -> dict[str, Any]:
+        saved = {token: self._handle.export(token) for token in self._tokens if token not in self._restore}
+        saved.update(self._restore)
+        return {"scales": self._scales, "saved": {t: (f.copy(), r.copy()) for t, (f, r) in saved.items()}}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        from cee.v2 import native
+
+        module = native._load()
+        assert module is not None, "uložený svět čeká rozšíření cee_core"
+        self._scales = state["scales"]
+        self._handle = module.SoundIndex(self._scales)
+        self._restore = state["saved"]
+        self._tokens = set(self._restore)
+
+    @staticmethod
+    def _bank(world: World) -> Any:
+        bank = world.form_bank()._native
+        assert bank is not None
+        return bank
+
+    def sync(self, world: World, codes: list[Code], catalog: Catalog, force: bool = False) -> None:
+        table = world.table
+        assert table is not None
+        bank = self._bank(world)
+        for token, (forms, rules) in list(self._restore.items()):
+            self._handle.import_group(bank, token, forms, rules)
+        self._restore.clear()
+        tokens = [code.forms.token for code in codes]
+        self._tokens.update(tokens)
+        rules = [RULES.index(code.stress_rule) for code in codes]
+        flags = [code.phonology.vocabulary.flags for code in codes]
+        forms = [code.forms.raw()[0] for code in codes]
+        defaults = [world.columns.morphemes.form] * len(codes)
+        names = world.registry.morphemes.names
+        for _ in range(64):
+            missing, sets = self._handle.sync(bank, tokens, rules, flags, forms, defaults)
+            if not missing and not sets:
+                return
+            for position, numbers in missing:
+                for number in numbers:
+                    # Výchozí tvar se do banky zařazuje při prvním použití.
+                    world.form_id_of(codes[position], names[number])
+            for inventory in sets:
+                self._register(table, catalog, tuple(inventory))
+        raise RuntimeError("index prostředí se nepodařilo dorovnat")
+
+    def _register(self, table: SegmentTable, catalog: Catalog, inventory: tuple[int, ...]) -> None:
+        combined = catalog.candidates(table, inventory)
+        masks = combined.masks
+        self._handle.register_set(
+            list(inventory), masks.cols.astype(np.int64), np.ascontiguousarray(masks.target),
+            np.ascontiguousarray(masks.left), np.ascontiguousarray(masks.right), np.ascontiguousarray(masks.right2),
+            masks.right2_rows.astype(np.int64), combined.stressed_rows.astype(np.int64),
+            combined.unstressed_rows.astype(np.int64), list(combined.family_ends),
+        )
+
+    def inventory(self, code: Code) -> tuple[int, ...]:
+        return tuple(self._handle.inventory(code.forms.token))
+
+    def totals(self, codes: list[Code], families: int) -> npt.NDArray[np.float64]:
+        flat = self._handle.totals([code.forms.token for code in codes])
+        return np.asarray(flat, dtype=np.float64).reshape(len(codes), families)
+
+    def has_families(self, code: Code) -> bool:
+        return bool(self._handle.has_families(code.forms.token))
+
+    def family(self, code: Code, family: int) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.float64], float]:
+        found = self._handle.family(code.forms.token, family)
+        assert found is not None
+        return found  # type: ignore[no-any-return]
+
+    def supports(self, code: Code) -> npt.NDArray[np.int64]:
+        return self._handle.supports(code.forms.token)  # type: ignore[no-any-return]
+
+    def context_counts(self, code: Code, world: World) -> tuple[npt.NDArray[np.intp], ...]:
+        found = self._handle.context_counts(self._bank(world), code.forms.token)
+        return tuple(np.asarray(column, dtype=np.intp if column.dtype != np.bool_ else bool) for column in found)

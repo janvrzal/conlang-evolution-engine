@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from cee.v2.language.segments import SegmentTable
 
 #: Verze rozhraní, kterou tento Python čeká (viz ``INTERFACE_VERSION`` v Rustu).
-INTERFACE_VERSION = 3
+INTERFACE_VERSION = 5
 
 #: Čísla operací a pravidel přízvuku, jak je zná Rust (``process.rs``).
 OPERATIONS = ("change", "replace", "delete", "insert_before", "insert_after", "merge_next", "tone")
@@ -125,3 +125,16 @@ def glide_mask(table: SegmentTable) -> Any:
     sonorant = vectors[:, index["son"]] == 1
     consonantal = vectors[:, index["cons"]] == 1
     return np.append(~syllabic & sonorant & ~consonantal, False)
+
+
+def new_sound_index(scales: list[float]) -> Any | None:
+    """Index prostředí a opor zvukových změn v Rustu, nebo ``None`` (bez Rustu či bez shody párových součtů).
+
+    Míry rodin se v Rustu sčítají párově jako ``np.sum``; pokud numpy na stroji sčítá jinak
+    (:func:`sums_match`), počítá index Python.
+    """
+    if not enabled() or not sums_match():
+        return None
+    module = _load()
+    assert module is not None
+    return module.SoundIndex(scales)

@@ -28,7 +28,7 @@ from cee.v2 import native
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.processes import Process, StressRule, stressed_nucleus
 from cee.v2.language.segments import TONE_CODES, TONES, Pattern, SegmentTable
-from cee.v2.language.sound_index import SoundIndex
+from cee.v2.language.sound_index import NativeSoundIndex, SoundIndex
 from cee.v2.phonology import register
 from cee.v2.pressures import (
     Actuation,
@@ -350,7 +350,7 @@ class _SoundCatalog:
 class _FamilyView:
     """Místa jedné rodiny u jednoho kódu: názvy proměnných, míry, součet a váhy."""
 
-    def __init__(self, index: SoundIndex, code: Code, table: SegmentTable, family: int, kind: str) -> None:
+    def __init__(self, index: SoundIndex | NativeSoundIndex, code: Code, table: SegmentTable, family: int, kind: str) -> None:
         self.index, self.code, self.table, self.kind = index, code, table, kind
         self.positions, self.rates, self.total = index.family(code, family)
         self.combined = _combined_candidates(table, index.inventory(code))
@@ -384,12 +384,13 @@ class _FamilyView:
         }
 
 
-def sound_index(world: World) -> SoundIndex:
+def sound_index(world: World) -> SoundIndex | NativeSoundIndex:
     """Index prostředí a opor světa; kopie světa (checkpoint) dostane vlastní kopii stavu."""
     index = world.sound
     if index is None:
-        index = world.sound = SoundIndex()
-    return cast(SoundIndex, index)
+        handle = native.new_sound_index(CATALOG.scales) if world.form_bank()._native is not None else None
+        index = world.sound = SoundIndex() if handle is None else NativeSoundIndex(handle, CATALOG.scales)
+    return cast("SoundIndex | NativeSoundIndex", index)
 
 
 CATALOG = _SoundCatalog()
