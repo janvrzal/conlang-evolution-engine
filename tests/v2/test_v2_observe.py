@@ -4,9 +4,9 @@ import json
 
 import numpy as np
 
+from cee.v2 import observe as observation
 from cee.v2.events import Contact
 from cee.v2.export import FORMAT, TIMELINE, export, lineages
-from cee.v2 import observe as observation
 from cee.v2.observe import (
     _candidates,
     _gather,
