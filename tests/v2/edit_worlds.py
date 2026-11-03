@@ -213,6 +213,21 @@ def polity() -> tuple[World, list[WorldEvent], float]:
     return world, events, 700.0
 
 
+def community() -> tuple[World, list[WorldEvent], float]:
+    """Komunity (``contact.community_step``): gravitační migrace, přechody jazyka a lingua franca.
+
+    Svět států s migrací. Lingua franca se po vzniku nových veřejných skupin hned usadí
+    jako jazyk domova přes uzavřenou hranici (nová domácí skupina s vazbami, násobky
+    hranice a prestiží vzoru); regiony, které přejdou na cizí jazyk, zanikají.
+    """
+    world, events, years = polity()
+    world.migration = 0.05
+    events = [event for event in events if not isinstance(event, (Annexation, Collapse))]
+    events += [LinguaFranca(320.0, "plain", ("capital",), "common", nativize=True),
+               BorderPolicy(320.0, "free", "closed")]
+    return world, events, years
+
+
 SCENARIOS: dict[str, Callable[[], tuple[World, list[WorldEvent], float]]] = {
     "trade-elite": trade_elite,
     "church-school": church_school,
@@ -221,4 +236,5 @@ SCENARIOS: dict[str, Callable[[], tuple[World, list[WorldEvent], float]]] = {
     "society": society,
     "refinement": refinement,
     "polity": polity,
+    "community": community,
 }

@@ -57,11 +57,20 @@ jednotlivě, včetně vypočtených hodnot, takže Rust nepotřebuje znát vzore
 Deník změn
 ----------
 Každá provedená operace se zapíše do ``World.edit_log`` jako :class:`Edit`
-(tik, operace, argumenty). Deník patří světu, kopíruje se s ním
+(tik, operace, argumenty a fáze kroku). Deník patří světu, kopíruje se s ním
 (checkpointy, ``copy.deepcopy``, pickle) a jde uložit jako řádky JSON
 (:func:`journal_lines`, :func:`load_journal`). Přehrání do kopie světa
 (:class:`cee.v2.events.ReplayEdits`) provede stejné operace ve stejných
 ticích, a dá tedy stejný stav a stejný deník jako běh s událostmi.
+
+Fáze kroku
+----------
+Operace zapisují dvě fáze kroku: ``event`` (události, státy a pozadí dějin na
+začátku ticku) a ``community`` (demografie kódů, ``contact.community_step``,
+na konci ticku po přenosu). Fáze je v zápisu proto, aby šel deník přehrát ve
+správném místě kroku: operace fáze ``community`` se nevkládají na začátek ticku
+jako události, ale provede je náhrada kroku komunit (:func:`community_replay`).
+Fáze ``event`` je výchozí a do řádku JSON se nezapisuje.
 
 Co z toho převezme Rust
 -----------------------
@@ -93,6 +102,7 @@ from cee.v2.world import (
 )
 
 if TYPE_CHECKING:
+    from cee.v2.history import History
     from cee.v2.polity import Polity
 
 #: Skalární pole skupiny, která operace smějí nastavit, a jejich druh hodnoty.
@@ -118,6 +128,11 @@ GROUP_FIELDS: dict[str, str] = {
     "transmitted": "bool",
 }
 
+#: Fáze kroku, ve kterých operace vznikají (viz oddíl „Fáze kroku“ výše).
+EVENT_PHASE = "event"
+COMMUNITY_PHASE = "community"
+PHASES = (EVENT_PHASE, COMMUNITY_PHASE)
+
 #: Pole kódu, která smí ``set_code`` nastavit.
 CODE_FIELDS = ("acquisition", "l1_source", "l2_share")
 
@@ -127,19 +142,23 @@ STATE_FIELDS = ("regions", "policy", "border")
 
 @dataclass(frozen=True, slots=True)
 class Edit:
-    """Jedna zapsaná operace: tik, jméno operace a její argumenty."""
+    """Jedna zapsaná operace: tik, jméno operace, její argumenty a fáze kroku."""
 
     tick: int
     op: str
     args: dict[str, Any]
+    phase: str = EVENT_PHASE
 
     def line(self) -> str:
-        return json.dumps({"tick": self.tick, "op": self.op, "args": self.args}, ensure_ascii=False)
+        found: dict[str, Any] = {"tick": self.tick, "op": self.op, "args": self.args}
+        if self.phase != EVENT_PHASE:
+            found["phase"] = self.phase
+        return json.dumps(found, ensure_ascii=False)
 
     @classmethod
     def from_line(cls, line: str) -> Edit:
         found = json.loads(line)
-        return cls(int(found["tick"]), str(found["op"]), dict(found["args"]))
+        return cls(int(found["tick"]), str(found["op"]), dict(found["args"]), str(found.get("phase", EVENT_PHASE)))
 
 
 def journal_lines(world: World) -> list[str]:
@@ -149,6 +168,11 @@ def journal_lines(world: World) -> list[str]:
 
 def load_journal(lines: Iterable[str]) -> list[Edit]:
     return [Edit.from_line(line) for line in lines if line.strip()]
+
+
+def of_phase(journal: Iterable[Edit], phase: str) -> list[Edit]:
+    """Operace jedné fáze kroku v pořadí zápisu."""
+    return [edit for edit in journal if edit.phase == phase]
 
 
 def by_tick(journal: Iterable[Edit]) -> Iterator[tuple[int, tuple[Edit, ...]]]:
@@ -388,13 +412,16 @@ OPERATIONS: dict[str, Callable[..., bool | None]] = {
 
 
 class Edits:
-    """Změny světa v jednom ticku: provede operaci a zapíše ji do deníku světa."""
+    """Změny světa v jednom ticku a fázi kroku: provede operaci a zapíše ji do deníku světa."""
 
-    __slots__ = ("world", "tick")
+    __slots__ = ("world", "tick", "phase")
 
-    def __init__(self, world: World, tick: int) -> None:
+    def __init__(self, world: World, tick: int, phase: str = EVENT_PHASE) -> None:
+        if phase not in PHASES:
+            raise ValueError(f"Neznámá fáze kroku '{phase}'.")
         self.world = world
         self.tick = tick
+        self.phase = phase
 
     def do(self, op: str, **args: Any) -> bool:
         """Provede operaci podle jména a zapíše ji; vrací, zda něco změnila."""
@@ -402,13 +429,15 @@ class Edits:
         changed = OPERATIONS[op](self.world, **plain)
         if changed is False:
             return False
-        self.world.edit_log.append(Edit(self.tick, op, plain))
+        self.world.edit_log.append(Edit(self.tick, op, plain, self.phase))
         return True
 
     def replay(self, edit: Edit) -> bool:
-        """Přehraje zapsanou operaci; musí patřit do tohoto ticku."""
+        """Přehraje zapsanou operaci; musí patřit do tohoto ticku a fáze."""
         if edit.tick != self.tick:
             raise ValueError(f"Změna z ticku {edit.tick} se nedá přehrát v ticku {self.tick}.")
+        if edit.phase != self.phase:
+            raise ValueError(f"Změna fáze '{edit.phase}' se nedá přehrát ve fázi '{self.phase}'.")
         return self.do(edit.op, **edit.args)
 
     # --- území a skupiny ---
@@ -499,3 +528,26 @@ class Edits:
 
     def set_standard(self, of: str, written: str | None) -> bool:
         return self.do("set_standard", of=of, written=written)
+
+
+def community_replay(journal: Iterable[Edit]) -> Callable[[World, float, int, float, History], bool]:
+    """Náhrada ``contact.community_step``, která místo výpočtu provede zapsané operace fáze ``community``.
+
+    Má stejné rozhraní jako ``community_step`` a vrací ``True``, když se změnil
+    soubor skupin. Záznamy v historii (přechod, obrození), které ``community_step``
+    zapisuje vedle změn světa, náhrada nezapisuje. Slouží k ověření, že deník
+    fáze ``community`` popisuje všechno, co krok komunit se světem udělal.
+    """
+    ticks = dict(by_tick(of_phase(journal, COMMUNITY_PHASE)))
+
+    def step(world: World, dt: float, tick: int, year: float, history: History) -> bool:
+        found = ticks.get(tick)
+        if not found:
+            return False
+        before = list(world.groups)
+        edit = Edits(world, tick, COMMUNITY_PHASE)
+        for item in found:
+            edit.replay(item)
+        return list(world.groups) != before
+
+    return step

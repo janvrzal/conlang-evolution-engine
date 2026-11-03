@@ -26,6 +26,7 @@ import numpy as np
 import numpy.typing as npt
 
 from cee.v2 import phases_transmission as phases
+from cee.v2.edits import Edits
 from cee.v2.history import History
 from cee.v2.language.segments import Form
 
@@ -331,9 +332,15 @@ def adopt(world: World, group_id: str, morpheme_id: str) -> None:
 
 
 def community_step(world: World, dt: float, tick: int, year: float, history: History) -> bool:
-    """Jeden krok demografie kódů; vrací ``True``, když nějaká skupina zanikla nebo vznikla."""
+    """Jeden krok demografie kódů; vrací ``True``, když nějaká skupina zanikla nebo vznikla.
+
+    Svět mění jen přes :class:`cee.v2.edits.Edits` (A8, fáze ``community``): každá
+    změna skupiny, kódu, vazby či hranice je zapsaná operace, takže ji Rust převezme
+    jako zápis do sloupců a vazeb. Co a kdy změnit, rozhoduje dál tento kód.
+    """
+    edit = Edits(world, tick, phase="community")
     if world.migration > 0:
-        _migrate(world, dt)
+        _migrate(world, dt, edit)
     removed = False
     for group_id in world.group_ids():
         if group_id not in world.groups:
@@ -346,20 +353,20 @@ def community_step(world: World, dt: float, tick: int, year: float, history: His
         source = code.l1_source if code.l1_source in world.groups else None
         if group.domain == "public":
             # Veřejný kód se každá generace učí znovu v dospělosti.
-            code.l2_share = 1.0
+            edit.set_code(group_id, l2_share=1.0)
             if group.home_pull > 0 and source is not None:
-                removed |= _nativize(world, group_id, source, renewal, tick, year, history)
+                removed |= _nativize(world, group_id, source, renewal, tick, year, history, edit)
             continue
         if source is None:
             # Stárnoucí L2 mluvčí nahradí děti, které se kód učí od narození;
             # přistěhovalci podíl drží.
-            code.l2_share += renewal * (group.immigration - code.l2_share)
+            edit.set_code(group_id, l2_share=code.l2_share + renewal * (group.immigration - code.l2_share))
             continue
-        removed |= _shift(world, group_id, source, renewal, tick, year, history)
+        removed |= _shift(world, group_id, source, renewal, tick, year, history, edit)
     return removed
 
 
-def _migrate(world: World, dt: float) -> None:
+def _migrate(world: World, dt: float, edit: Edits) -> None:
     """Gravitační migrace: podíl přistěhovalců každé skupiny za generaci.
 
     Ze skupiny odchází podíl ``world.migration`` lidí za generaci k
@@ -386,7 +393,7 @@ def _migrate(world: World, dt: float) -> None:
     for group_id, arriving in sorted(inflow.items()):
         group = world.groups[group_id]
         if not group.written and group.domain == "home":
-            group.immigration = min(1.0, arriving / group.population)
+            edit.set_group(group_id, "immigration", min(1.0, arriving / group.population))
 
 
 def demographic_share(world: World, source_id: str, target_id: str) -> float:
@@ -423,7 +430,8 @@ def own_schooling(world: World, group_id: str) -> float:
 
 
 def _nativize(
-    world: World, public_id: str, home_id: str, renewal: float, tick: int, year: float, history: History
+    world: World, public_id: str, home_id: str, renewal: float, tick: int, year: float, history: History,
+    edit: Edits,
 ) -> bool:
     """Veřejný kód proniká domů: dvojjazyčné rodiny s ním vychovávají děti.
 
@@ -456,42 +464,42 @@ def _nativize(
     ]
     if existing:
         target = world.groups[existing[0]]
-        target.population = max(1, round(target.population + moving))
-        home.population = max(1, round(home.population - moving))
+        edit.set_group(target.id, "population", max(1, round(target.population + moving)))
+        edit.set_group(home_id, "population", max(1, round(home.population - moving)))
         return False
     if moving < LAST_SPEAKERS:
         return False
-    world.materialize(public_id)
-    code = public.main_code.branch()
-    code.acquisition, code.l1_source, code.l2_share = "L2", home_id, 1.0
-    from cee.v2.world import SpeechGroup
-
-    created = world.add_group(SpeechGroup(
-        id=f"{home_id}>{language}:home", territory=home.territory, population=max(1, round(moving)),
-        codes=[code], generation_years=home.generation_years, prestige=public.prestige,
-        openness=public.openness, community=community, loyalty=home.loyalty, home_pull=public.home_pull,
-        standard=public.standard, literacy=public.literacy, schooling=public.schooling,
-    ))
-    home.population = max(1, round(home.population - moving))
+    created_id = f"{home_id}>{language}:home"
+    # Kód nové skupiny je větev hlavního kódu veřejné skupiny (operace ``add_group`` ji nejdřív zhmotní).
+    edit.add_group(
+        created_id, home.territory, max(1, round(moving)), public_id, generation_years=home.generation_years,
+        prestige=public.prestige, openness=public.openness, community=community, loyalty=home.loyalty,
+        home_pull=public.home_pull, standard=public.standard, literacy=public.literacy,
+        schooling=public.schooling,
+    )
+    edit.set_code(created_id, acquisition="L2", l1_source=home_id, l2_share=1.0)
+    created = world.groups[created_id]
+    edit.set_group(home_id, "population", max(1, round(home.population - moving)))
     for link in world.neighbors(public_id):
         if link.target != home_id:
-            world.connect(created.id, link.target, link.strength, link.kind)
+            edit.connect(created_id, link.target, link.strength, link.kind)
             # Vazba převzala sílu oslabenou hranicí; zapamatuje si i násobek.
             factor = world.border_factors.get((public_id, link.target))
             if factor is not None:
-                world.border_factors[(created.id, link.target)] = factor
-                world.border_factors[(link.target, created.id)] = factor
+                edit.set_border_factor(created_id, link.target, factor)
+                edit.set_border_factor(link.target, created_id, factor)
     if public_id in world.prestige_mirror:
-        world.prestige_mirror[created.id] = world.prestige_mirror[public_id]
-    world.connect(created.id, public_id, 0.8, "strong")
-    world.connect(created.id, home_id, 0.8, "strong")
-    history.record("nativization", tick, year, group=home_id, into=created.id, language=language,
+        edit.set_prestige_mirror(created_id, world.prestige_mirror[public_id])
+    edit.connect(created_id, public_id, 0.8, "strong")
+    edit.connect(created_id, home_id, 0.8, "strong")
+    history.record("nativization", tick, year, group=home_id, into=created_id, language=language,
                    population=created.population)
     return True
 
 
 def _shift(
-    world: World, target_id: str, source_id: str, renewal: float, tick: int, year: float, history: History
+    world: World, target_id: str, source_id: str, renewal: float, tick: int, year: float, history: History,
+    edit: Edits,
 ) -> bool:
     """Mluvčí skupiny ``source`` přecházejí na kód skupiny ``target``.
 
@@ -528,14 +536,14 @@ def _shift(
         if source.population / total < params.child_threshold and resist == 0.0:
             # Děti se starý kód už neučí: rodí se do nového.
             if source.transmitted:
-                source.transmitted = False
+                edit.set_group(source_id, "transmitted", False)
                 history.record("transmission_stopped", tick, year, group=source_id,
                                language=source.main_code.language)
             births = source.population * renewal
         moving = min(moving, source.population - births)
     if resist > 0.0:
         if not source.transmitted:
-            source.transmitted = True
+            edit.set_group(source_id, "transmitted", True)
             history.record("transmission_resumed", tick, year, group=source_id, language=source.main_code.language)
         back = (
             target.population * renewal * params.shift_rate * resist * (1.0 - status)
@@ -547,31 +555,29 @@ def _shift(
     target_population = target.population + moving + births - back
     if target_population < LAST_SPEAKERS:
         # Všichni se vrátili ke starému jazyku.
-        source.population = max(1, round(remaining + target_population))
-        world.materialize(target_id)
-        world.remove_group(target_id)
+        edit.set_group(source_id, "population", max(1, round(remaining + target_population)))
+        edit.remove_group(target_id)
         history.record("revival", tick, year, group=source_id, left=target_id,
                        language=source.main_code.language, from_language=target.main_code.language)
         return True
-    target.main_code.l2_share = min(1.0, learners / target_population)
-    target.population = max(1, round(target_population))
+    edit.set_code(target_id, l2_share=min(1.0, learners / target_population))
+    edit.set_group(target_id, "population", max(1, round(target_population)))
     if remaining < LAST_SPEAKERS:
-        world.materialize(source_id)
-        world.remove_group(source_id)
+        edit.remove_group(source_id)
         # Veřejná dvojjazyčnost zaniká se starým jazykem: jeho mluvčí už
         # cílový kód mají doma.
         for other in world.group_ids():
             peer = world.groups[other]
             if peer.domain == "public" and peer.main_code.l1_source == source_id and peer.home_pull > 0:
-                world.remove_group(other)
-        target.main_code.l1_source = None
+                edit.remove_group(other)
+        edit.set_code(target_id, l1_source=None)
         # Komunita už mluví novým kódem od dětství: je to zase obyčejná
         # skupina se svou dřívější otevřeností.
-        target.openness = source.openness
+        edit.set_group(target_id, "openness", source.openness)
         history.record(
             "language_shift", tick, year, group=source_id, into=target_id,
             language=source.main_code.language, target_language=target.main_code.language,
         )
         return True
-    source.population = max(1, round(remaining))
+    edit.set_group(source_id, "population", max(1, round(remaining)))
     return False

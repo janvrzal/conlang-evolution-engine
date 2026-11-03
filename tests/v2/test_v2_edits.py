@@ -10,8 +10,18 @@ from pathlib import Path
 
 import pytest
 
-from cee.v2 import edits
-from cee.v2.edits import OPERATIONS, Edit, Edits, journal_lines, load_journal
+from cee.v2 import contact, edits
+from cee.v2.edits import (
+    COMMUNITY_PHASE,
+    EVENT_PHASE,
+    OPERATIONS,
+    Edit,
+    Edits,
+    community_replay,
+    journal_lines,
+    load_journal,
+    of_phase,
+)
 from cee.v2.events import ReplayEdits, replay_events
 from cee.v2.history import History
 from cee.v2.scenarios import village_grid
@@ -36,7 +46,15 @@ BEFORE_API = {
                    "bde60ff02cfbdcf2b712d9f672c64c255647ed2e57fec6e5087116f4e357ddfc"),
     "polity": ("ae9810d529f715093f0599e7727d88cfdcc7c7fd3c9b3daf6dc0d391426f9afc",
                "4432100c3324e9a79825edc5aae76ca8c62e0c4643bd9e14a439775d289ad04f"),
+    # Svět s komunitami: otisky z doby, kdy ``contact.community_step`` měnil svět přímo (před převodem na ``Edits``).
+    "community": ("dcae1826af0c19b613246f0ed59f5063c82a853b0f28d187f485388ebac1df33",
+                  "5603a3698803cdafa00442d929fe11d42a3e6e293f1f88757abb2ba8cf8e4c68"),
 }
+
+#: Druhy záznamů v historii, které vedle změn světa zapisuje ``contact.community_step``.
+COMMUNITY_KINDS = frozenset({
+    "nativization", "transmission_stopped", "transmission_resumed", "revival", "language_shift",
+})
 
 #: Druhy záznamů v historii, které zapisují samy události (ne dynamika světa).
 EVENT_KINDS = frozenset({
@@ -48,10 +66,10 @@ EVENT_KINDS = frozenset({
 })
 
 
-def _digest_without_events(history: History) -> str:
+def _digest_without_events(history: History, skipped: frozenset[str] = EVENT_KINDS) -> str:
     sha = hashlib.sha256()
     for event, line in zip(history.events, history.lines()):
-        if event["kind"] not in EVENT_KINDS:
+        if event["kind"] not in skipped:
             sha.update(line.encode("utf-8"))
             sha.update(b"\n")
     return sha.hexdigest()
@@ -66,9 +84,10 @@ def runs():
         simulation = Simulation(world, events=events)
         simulation.run(years)
         fresh, _, _ = build()
-        # Deník prošel řádky JSON, takže přehrání používá jen čísla a řetězce.
+        # Deník prošel řádky JSON, takže přehrání používá jen čísla a řetězce. Události vloží do ticků
+        # operace fáze ``event``; fázi ``community`` si v přehrání spočítá ``community_step`` sám.
         journal = load_journal(journal_lines(world))
-        replayed = Simulation(fresh, events=replay_events(journal, start_year=fresh.start_year,
+        replayed = Simulation(fresh, events=replay_events(of_phase(journal, EVENT_PHASE), start_year=fresh.start_year,
                                                           dt=simulation.config.dt))
         replayed.run(years)
         found[name] = (simulation, replayed, journal)
@@ -90,6 +109,52 @@ def test_prehrani_deniku_da_stejny_svet_a_stejny_denik(runs, name):
     assert _digest_without_events(replayed.history) == _digest_without_events(simulation.history)
     assert fingerprint(replayed.world) == fingerprint(simulation.world)
     assert replayed.world.edit_log == simulation.world.edit_log == journal
+
+
+@pytest.fixture(scope="module")
+def full_replays(runs):
+    """Každý svět přehraný celým deníkem: události i fáze ``community`` jen z operací, bez výpočtu komunit."""
+    found = {}
+    with pytest.MonkeyPatch.context() as patch:
+        for name, build in SCENARIOS.items():
+            simulation, _, journal = runs[name]
+            fresh, _, years = build()
+            patch.setattr(contact, "community_step", community_replay(journal))
+            replayed = Simulation(fresh, events=replay_events(of_phase(journal, EVENT_PHASE),
+                                                              start_year=fresh.start_year,
+                                                              dt=simulation.config.dt))
+            replayed.run(years)
+            found[name] = replayed
+    return found
+
+
+@pytest.mark.parametrize("name", sorted(SCENARIOS))
+def test_prehrani_celeho_deniku_nahradi_krok_komunit(runs, full_replays, name):
+    """Operace fáze ``community`` popisují všechno, co krok komunit se světem udělal."""
+    simulation, _, journal = runs[name]
+    replayed = full_replays[name]
+    skipped = EVENT_KINDS | COMMUNITY_KINDS
+    assert not [event for event in replayed.history.events if event["kind"] in skipped]
+    assert _digest_without_events(replayed.history, skipped) == _digest_without_events(simulation.history, skipped)
+    assert fingerprint(replayed.world) == fingerprint(simulation.world)
+    assert replayed.world.edit_log == simulation.world.edit_log == journal
+
+
+def test_svet_s_komunitami_pouzije_vsechny_operace_kroku_komunit(runs):
+    """Svět ``community``: komunity přecházejí, vznikají a zanikají a deník fáze ``community`` to všechno zná."""
+    simulation, _, journal = runs["community"]
+    community = of_phase(journal, COMMUNITY_PHASE)
+    assert {edit.op for edit in community} == {
+        "set_group", "set_code", "add_group", "remove_group", "connect", "set_border_factor", "set_prestige_mirror",
+    }
+    assert {edit.args["field"] for edit in community if edit.op == "set_group"} >= {
+        "population", "immigration", "transmitted",
+    }
+    kinds = {event["kind"] for event in simulation.history.events}
+    assert {"nativization", "language_shift", "transmission_stopped"} <= kinds
+    # Fáze kroku je v řádku JSON jen u komunit a deník přežije cestu přes text.
+    assert all(('"phase"' in edit.line()) == (edit.phase == COMMUNITY_PHASE) for edit in journal)
+    assert load_journal(edit.line() for edit in journal) == journal
 
 
 def test_deniky_svetu_pokryvaji_vsechny_operace(runs):
@@ -229,6 +294,19 @@ def test_gravitacni_vazby_se_zapisou_po_jedne_a_dajou_totez_co_gravity_links():
     assert list(journalled.links.items()) == list(plain.links.items())
 
 
+def test_prehrani_ve_jine_fazi_se_odmitne():
+    world = _world()
+    Edits(world, 4, COMMUNITY_PHASE).set_group("v00-00", "population", 11)
+    other = _world()
+    with pytest.raises(ValueError, match="fázi"):
+        Edits(other, 4).replay(world.edit_log[0])
+    assert world.edit_log[0].phase == COMMUNITY_PHASE and not other.edit_log
+    with pytest.raises(ValueError, match="Neznámá fáze"):
+        Edits(other, 4, "krok")
+    Edits(other, 4, COMMUNITY_PHASE).replay(world.edit_log[0])
+    assert other.groups["v00-00"].population == 11 and other.edit_log == world.edit_log
+
+
 def test_prehrani_v_jinem_ticku_se_odmitne():
     world = _world()
     Edits(world, 4).set_group("v00-00", "population", 11)
@@ -242,6 +320,8 @@ def test_prehrani_v_jinem_ticku_se_odmitne():
 # --- události mění svět jen přes API -------------------------------------------------
 
 _MODULES = ("events.py", "polity.py", "background.py")
+#: Z ``contact.py`` hlídá rozbor jen krok komunit a jeho pomocníky (zbytek modulu svět nemění).
+_CONTACT_FUNCTIONS = ("community_step", "_migrate", "_nativize", "_shift")
 _MUTATORS = {"add_group", "remove_group", "add_territory", "connect", "materialize", "pop", "setdefault",
              "update", "clear", "append", "extend", "remove", "insert", "popitem", "sort"}
 
@@ -259,9 +339,15 @@ def _rooted_in_world(node: ast.AST) -> bool:
 def test_udalosti_staty_a_pozadi_nesahaji_na_svet_mimo_edits():
     """Žádný zápis do atributů a položek ani volání mutátorů světa mimo ``Edits``."""
     offences = []
+    parts: list[tuple[str, ast.AST]] = []
     for module in _MODULES:
-        path = Path(edits.__file__).parent / module
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        parts.append((module, ast.parse((Path(edits.__file__).parent / module).read_text(encoding="utf-8"))))
+    contact_tree = ast.parse((Path(edits.__file__).parent / "contact.py").read_text(encoding="utf-8"))
+    functions = [node for node in contact_tree.body if isinstance(node, ast.FunctionDef)
+                 and node.name in _CONTACT_FUNCTIONS]
+    assert {node.name for node in functions} == set(_CONTACT_FUNCTIONS)
+    parts += [(f"contact.py:{node.name}", node) for node in functions]
+    for module, tree in parts:
         for node in ast.walk(tree):
             targets = []
             if isinstance(node, ast.Assign):
