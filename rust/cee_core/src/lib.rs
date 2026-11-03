@@ -9,6 +9,7 @@ pub mod bank;
 pub mod clarity;
 pub mod index;
 pub mod morphology_index;
+pub mod observe;
 pub mod phonology;
 pub mod pools;
 pub mod pressures;
@@ -21,6 +22,8 @@ pub mod transmission;
 #[cfg(feature = "python")]
 mod index_python;
 #[cfg(feature = "python")]
+mod observe_python;
+#[cfg(feature = "python")]
 mod pressures_python;
 #[cfg(feature = "python")]
 mod python;
@@ -31,4 +34,4 @@ mod sites_python;
 
 /// Verze rozhraní mezi Pythonem a Rustem. Python rozšíření nepoužije, když se
 /// číslo liší od toho, které čeká (jiný worktree, starší sestavení).
-pub const INTERFACE_VERSION: u32 = 9;
+pub const INTERFACE_VERSION: u32 = 10;
