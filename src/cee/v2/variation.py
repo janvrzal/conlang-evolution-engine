@@ -169,6 +169,7 @@ def seed(world: World) -> None:
     """Dá výchozím vesnicím souběžnou variabilitu slovní zásoby."""
     from cee.v2.changes import LEXICAL_CHANGES
     from cee.v2.changes.base import InnovationContext
+    from cee.v2.changes.lexicon import with_appeal
 
     scale = world.params.standing_variation
     if scale <= 0.0 or world.semantics is None or world.table is None:
@@ -214,6 +215,7 @@ def seed(world: World) -> None:
                     variant = change.propose(context, variable_id, rng, index)
                     if variant is None or variant.id in world.variants:
                         continue
+                    variant = with_appeal(world, variant)
                     world.variants[variant.id] = variant
                     for other, relative in spread[group_id]:
                         found_share = peak if other == group_id else min(1.0, peak * reach * relative)

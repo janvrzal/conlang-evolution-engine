@@ -194,3 +194,46 @@ Engine (`scripts/v2_calibrate_frequency.py`, kalibrační svět retence,
   vypadl asi ve 2 % případů. Jedním parametrem to nenaladit; souvisí to
   i s tím, u kterých pojmů jde nějakou změnu vůbec navrhnout. Otevřené pro
   kalibraci výměny slov (M7).
+
+## Plynulá výměna slov (2026-11-03)
+
+Příčina prahové výměny: nové slovo mělo proti zažitému pevnou výhodu podle
+druhu (`Motivation`: odvozenina a složenina +0,15, posun významu +0,05,
+nový kořen −0,15), zažité slovo ochranu 0,3 × frekvence (`Entrenchment`).
+Odvozenina tak vyhrála vždy u pojmů s frekvencí pod 0,5 a nikdy nad ní.
+
+Nově každá lexikální inovace ve světě s tvary dostane náhodnou přitažlivost
+~ N(0, `Parameters.lexical_appeal_sd`), stálou pro variantu: počítá se
+z vlastního proudu náhody podle ID varianty (`changes.lexicon.with_appeal`),
+takže je stejná ve všech skupinách a losy změn nemění. `Motivation` ji
+přičte k výhodě podle druhu. Přibyly i parametry `entrenchment_base`
+(ochrana nezávislá na frekvenci, výchozí 0) a
+`entrenchment_frequency_exponent` (výchozí 1).
+
+Kalibrace (síla ochrany 0,3; poměr = rychlost výměny horních 30 % pojmů
+podle frekvence proti ostatním, Pagel a kol. 2007: 0,70):
+
+| přitažlivost | poměr | retence jádra po tisíciletích | pojmy beze změny za 2 000 let |
+|---|---|---|---|
+| 0 (dříve) | 0,26 | 0,825 / 0,913 / 0,968 | 77 ze 149 |
+| **0,03 (výchozí)** | **0,44** | **0,793 / 0,865 / 0,888** | **45** |
+| 0,04 | 0,63 | 0,757 / 0,794 | 37 |
+| 0,05 | 0,68 | 0,723 / 0,760 | 31 |
+
+Glotochronologie udává 0,81–0,86 za tisíciletí. Širší přitažlivost se blíží
+poměru z dat, ale slova se mění rychleji: každé nové slovo má šanci na
+dobrý los, takže výměna roste s počtem inovací. Základní ochrana 0,6
+s přitažlivostí 0,2 dala poměr 0,59 a retenci 0,82, ale v menších světech
+se slovník zastavil a nepřekonaly ji výpůjčky. Padalo 9 bran (dělení
+jazyků M6c, vzdálenost a zeměpis a liturgie M6b), proto základní ochrana
+zůstala 0.
+
+Výsledky s výchozí 0,03: celá sada prošla (1 069). Audit bran (seedy
+101–120) proti stavu po nasazení frekvencí je v šumu: substrát M5 S3
+7 → 2 z 20 (p 0,13), liturgie M6b 18 → 14 (p 0,24), migrace 13 → 10.
+Kontakt: retence jádra 0,798 / 0,833 / 0,862, výpůjčky v jádru 5 %, 13 %,
+18 % po 1 000, 2 000 a 3 000 letech.
+
+Zbývá: 45 pojmů se nemění, protože u nich engine nemá z čeho tvořit nové
+slovo. Pomůže větší výřez sémantických vztahů (katalog), pak kalibraci
+zopakovat.

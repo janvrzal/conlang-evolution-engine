@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 from abc import abstractmethod
-from typing import Mapping, Sequence, cast
+from typing import TYPE_CHECKING, Mapping, Sequence, cast
 
 import numpy as np
 
@@ -38,7 +38,10 @@ from cee.v2.pressures.lexical import (
     Taboo,
 )
 from cee.v2.repertoire import Origin, Variant
-from cee.v2.rng import RandomSource, stable_id
+from cee.v2.rng import RandomSource, Stream, stable_id
+
+if TYPE_CHECKING:
+    from cee.v2.world import World
 
 LEXICAL_PRESSURES: Mapping[type[Pressure], float] = {
     LexicalClarity: 1.0,
@@ -107,6 +110,22 @@ class LexicalCoinage(Change):
 
 
 # --- pomocné ------------------------------------------------------------
+
+
+def with_appeal(world: World, variant: Variant) -> Variant:
+    """Lexikální varianta s náhodnou přitažlivostí (``Parameters.lexical_appeal_sd``).
+
+    Přitažlivost je čistá funkce seedu a ID varianty (vlastní proud náhody),
+    takže je stejná ve všech skupinách, které tutéž variantu vymyslí, a losy
+    změn nemění. Varianta, která přitažlivost už má (svět bez tvarů,
+    výpůjčka nesoucí přitažlivost zdroje), zůstane, jak je.
+    """
+    sd = world.params.lexical_appeal_sd
+    if sd <= 0.0 or world.table is None or "appeal" in variant.payload or not variant.variable.startswith("lexical:"):
+        return variant
+    appeal = Stream(world.seed, "lexical-appeal", variant.id).normal(0.0, sd)
+    return Variant(variant.id, variant.variable, {**variant.payload, "appeal": appeal}, variant.origin)
+
 
 
 def concept_of(site: str) -> str:

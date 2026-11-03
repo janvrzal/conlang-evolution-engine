@@ -119,6 +119,16 @@ protojazyka beze změny):
     shift        45300517345cc5ff3e22a1ff39bf1b1e48b0365662a8e33ada1a95088b06872c
     island-city  d8801215f07f7ad45b657d15ca4c1def5d4678706c1af0603e4ca4eb08ffd2a7
     valley-50    a035aa06625e0293f67f487f69ba174367ae6c9e7f478402b2e5e118c01a8f7b
+Reference plynulé výměny slov (2026-11-03; každá lexikální inovace dostane
+náhodnou přitažlivost ``Parameters.lexical_appeal_sd`` = 0,03, viz
+``docs/engine-v2/19-pojmy.md``):
+    phonology    3990a6381c1a91b4c4ffddf42731d42915325960dc128c834b6eec74ba2f97a3
+    morphology   710009d641a04a0b1f007d29fa18a3d273780e322667b826bb3d9a7e7165d43b
+    syntax       a55966f235d171ee1b772c2196b7bb2c2a742172a064d2b293c17a4df7553482
+    grid-5x5     cc4ef6e136b0eaa543c08fc4c7e424ca53d781bcdd0e905858d3cb32de0bcc61
+    shift        f74dad095fcbaa129349dddd4ed74da4c3d1ced888dfe2ed81bc692212612559
+    island-city  a3efb455923bf5a6489b55e68ca877ed4e5ab2b422076a0ed4d7a569d6313e47
+    valley-50    79b033067955967931819647325eb42d83f4aa21e826587be4f2d49f13373e88
 """
 
 from __future__ import annotations

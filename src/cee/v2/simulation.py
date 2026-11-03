@@ -10,6 +10,7 @@ import numpy as np
 
 from cee.v2 import contact, morphology, phonology, prosody, syntax, variation
 from cee.v2.changes import DEFAULT_CHANGES, Change, InnovationContext, pressures_by_kind
+from cee.v2.changes.lexicon import with_appeal
 from cee.v2.events import WorldEvent
 from cee.v2.history import History
 from cee.v2.observe import LineageTracker, Snapshot, observe
@@ -355,6 +356,7 @@ class Simulation:
             variant = change.propose(context, site, rng, index)
             if variant is None:
                 continue
+            variant = with_appeal(self.world, variant)
             if site in live:
                 if not live.holds(context.group.id, site):
                     continue

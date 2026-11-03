@@ -151,12 +151,13 @@ def _clarity_map_reference(batch: PressureBatch, group_id: str) -> Callable[[str
 
 
 class Entrenchment(Pressure):
-    """Zažité slovo pro častý pojem se nahrazuje pomalu (Pagel a kol. 2007).
+    """Zažité slovo se nahrazuje pomalu, slovo pro častý pojem ještě pomaleji (Pagel a kol. 2007).
 
-    Dominantní varianta dostane výhodu úměrnou tomu, jak často se o pojmu
-    mluví (``Parameters.entrenchment_strength`` × frekvence pojmu). Čím
-    častější pojem, tím víc výskytů staré slovo každou generaci upevní a tím
-    těžší je ho vytlačit.
+    Dominantní varianta dostane výhodu ``Parameters.entrenchment_base``
+    (slovo zná celá komunita) plus ``entrenchment_strength`` × frekvence
+    pojmu: čím častější pojem, tím víc výskytů staré slovo každou generaci
+    upevní. Nové slovo ji přebije jen s dost velkou přitažlivostí
+    (``Motivation``), takže výměna je plynulá a s frekvencí klesá mírně.
     """
 
     name = "entrenchment"
@@ -173,12 +174,20 @@ class Entrenchment(Pressure):
         exponent = world.params.entrenchment_frequency_exponent
         if exponent != 1.0:
             frequency = frequency**exponent
-        result: FloatArray = strength * frequency[:, None, None] * dominant * _has_morpheme(batch)
+        protection = strength * frequency
+        base = world.params.entrenchment_base
+        if base != 0.0:
+            protection = base + protection
+        result: FloatArray = protection[:, None, None] * dominant * _has_morpheme(batch)
         return result
 
 
 class Motivation(Pressure):
-    """Průhledné nové slovo (odvozenina, složenina) se ujme snáz než nový kořen."""
+    """Průhledné nové slovo (odvozenina, složenina) se ujme snáz než nový kořen.
+
+    K výhodě podle druhu se přičte náhodná přitažlivost slova
+    (``Parameters.lexical_appeal_sd``, ``changes.lexicon.with_appeal``).
+    """
 
     name = "motivation"
 
@@ -189,8 +198,11 @@ class Motivation(Pressure):
         names = batch.world.columns.variants.payload_origins.names
         weights = np.array([_MOTIVATION.get(name, 0.0) for name in names] + [0.0])
         codes = batch.slot_column("origin", -1.0).astype(np.intp)
+        # Náhodná přitažlivost nového slova (``Parameters.lexical_appeal_sd``);
+        # varianta bez ní (zděděné slovo) má nulu.
+        appeal = np.nan_to_num(batch.slot_column("appeal", 0.0), nan=0.0)
         result: FloatArray = np.broadcast_to(
-            weights[codes].reshape(len(batch.slots), 1, -1), batch.freqs.shape
+            (weights[codes] + appeal).reshape(len(batch.slots), 1, -1), batch.freqs.shape
         ).copy()
         return result
 

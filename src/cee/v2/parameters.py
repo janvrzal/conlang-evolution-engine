@@ -121,19 +121,26 @@ class Parameters:
     clarity_short_factor: float = 1.5
     #: Váha odměny `Dispersion` za zaplnění mezery v soustavě vokálů.
     dispersion_factor: float = 4.0
-    #: Výhoda zažitého slova (``pressures.lexical.Entrenchment``): převládající
-    #: varianta pojmu dostane tuto sílu × frekvenci pojmu (Pagel a kol. 2007).
-    #: Izolovaný jazyk s 0,3 má asi 90 % základní slovní zásoby za tisíciletí,
-    #: pod cílem 95–97 % (islandština; Bergsland & Vogt 1962). Silnější
-    #: zažitost cíl splní (0,9: 96 %), ale potlačí i učené výpůjčky a
-    #: nářeční rozrůznění (brány M6b), viz ``docs/engine-v2/17-pozadi-dejin.md``.
+    #: Výměna slov (``pressures.lexical.Entrenchment`` a ``Motivation``):
+    #: převládající varianta pojmu má výhodu ``entrenchment_base`` +
+    #: ``entrenchment_strength`` × frekvence ** ``entrenchment_frequency_exponent``,
+    #: nové slovo výhodu podle druhu (odvozenina +0,15, nový kořen −0,15…)
+    #: plus náhodnou přitažlivost ~ N(0, ``lexical_appeal_sd``), stálou pro
+    #: variantu (expresivita, módnost, sociální hodnota slova). Bez
+    #: přitažlivosti nové slovo vyhraje buď vždycky, nebo nikdy, a výměna je
+    #: prahová (polovina pojmů se nemění vůbec, častá slova se vyměňují
+    #: rychlostí 0,26 ostatních). Kalibrace 2026-11-02
+    #: (``scripts/v2_calibrate_frequency.py``, ``v2_calibrate_retention.py``):
+    #: přitažlivost 0,03 dává poměr rychlostí horních 30 % pojmů podle
+    #: frekvence 0,44 (Pagel a kol. 2007: 0,70) a retenci jádra 0,785 / 0,827
+    #: po tisíciletích (glotochronologie 0,81–0,86); širší přitažlivost se
+    #: blíží poměru z dat, ale retence klesá (0,05: 0,68 a 0,72), základní
+    #: ochrana (``entrenchment_base``) potlačí dělení jazyků a výpůjčky.
+    #: Viz ``docs/engine-v2/19-pojmy.md``.
     entrenchment_strength: float = 0.3
-    #: Jak moc výhoda zažitého slova závisí na frekvenci pojmu: síla ×
-    #: frekvence ** exponent. 1 = úměrně frekvenci, 0 = stejně pro všechny
-    #: pojmy. Kalibruje se na poměr rychlostí výměny horních 30 % pojmů
-    #: podle frekvence proti ostatním u Pagel a kol. (2007): 0,70
-    #: (``scripts/v2_calibrate_frequency.py``).
     entrenchment_frequency_exponent: float = 1.0
+    entrenchment_base: float = 0.0
+    lexical_appeal_sd: float = 0.03
     #: Souběžná variabilita slovní zásoby protojazyka (``cee.v2.variation``):
     #: násobek naměřené hustoty menšinových variant (0 = protojazyk bez
     #: variability) a nejvyšší součet jejich podílů u pojmu ve vesnici, aby
