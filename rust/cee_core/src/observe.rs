@@ -167,14 +167,14 @@ impl Sparse {
 // --- editační vzdálenost tvarů ---------------------------------------------------
 
 /// Ceny záměny hlásek z vektorů rysů (`observe.segment_cost`): podíl odlišných rysů,
-/// nejvýš 1. Paměť cen je hustá matice hlásek, plněná při prvním použití; cena je
-/// čistá funkce dvou hlásek, takže paměť výsledek nemění.
+/// nejvýš 1. Cena se počítá při každém dotazu bez paměti: porovnání dvou řádků rysů
+/// je levnější než hledání v husté matici všech dvojic, která by u úplné tabulky
+/// (přes 23 000 hlásek) měla přes 4 GB.
 pub struct Costs<'a> {
     vectors: &'a [i8],
     width: usize,
     count: usize,
     scale: f64,
-    cache: Vec<f64>,
 }
 
 impl<'a> Costs<'a> {
@@ -186,7 +186,6 @@ impl<'a> Costs<'a> {
             width,
             count,
             scale,
-            cache: vec![-1.0; count * count],
         }
     }
 
@@ -199,21 +198,13 @@ impl<'a> Costs<'a> {
         if first == second {
             return 0.0;
         }
-        let slot = first as usize * self.count + second as usize;
-        let found = self.cache[slot];
-        if found >= 0.0 {
-            return found;
-        }
         let row = |segment: i32| &self.vectors[segment as usize * self.width..][..self.width];
         let differing = row(first)
             .iter()
             .zip(row(second))
             .filter(|(a, b)| a != b)
             .count();
-        let cost = (differing as f64 / self.scale).min(1.0);
-        self.cache[slot] = cost;
-        self.cache[second as usize * self.count + first as usize] = cost;
-        cost
+        (differing as f64 / self.scale).min(1.0)
     }
 }
 
