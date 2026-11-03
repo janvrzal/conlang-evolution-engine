@@ -499,7 +499,7 @@ def _nativize(
 
 def _shift(
     world: World, target_id: str, source_id: str, renewal: float, tick: int, year: float, history: History,
-    edit: Edits,
+    edit: Edits | None = None,
 ) -> bool:
     """Mluvčí skupiny ``source`` přecházejí na kód skupiny ``target``.
 
@@ -512,7 +512,12 @@ def _shift(
     jazyku podle jeho statusu a demografie, tempem obrozeneckého hnutí
     (``revival``) a školy ve vlastním jazyce. Jazyk s takovou oporou si děti
     předávají dál i pod prahem užívání.
+
+    ``edit`` jsou změny světa fáze komunit, které předá :func:`community_step`;
+    bez nich se vytvoří nové pro ``tick``.
     """
+    if edit is None:
+        edit = Edits(world, tick, phase="community")
     params = world.params
     source, target = world.groups[source_id], world.groups[target_id]
     total = source.population + target.population
