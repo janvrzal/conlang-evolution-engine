@@ -95,13 +95,15 @@ def test_vetev_stavu_sdili_registr_ale_ne_pole():
     state.set_dominant("water", "root-1")
     state.adjust_uses("root-1", 1)
     state.enter_vocabulary("root-1")
-    state.pending["p"] = [(0.5, "root-1")]
+    state.load_processes([{"process": "p", "live": True, "queue": [(0.5, "root-1")], "done": [], "fixed_since": None}])
     child = state.branch()
     assert child.registry is state.registry
     child.set_dominant("fire", "root-2")
     child.adjust_uses("root-1", 1)
     child.vocabulary.add("root-2")
-    child.pending["p"].insert(0.1, "root-2")
+    assert child.pending["p"] == [(0.5, "root-1")] and child.pending["p"] is not state.pending["p"]
+    if child.core is None:  # fronty v Rustu se mění jen jádrem; kopie je nezávislá už tím, že vznikla z exportu
+        child.pending["p"].insert(0.1, "root-2")
     assert "fire" not in state.dominant and state.uses_of("root-1") == 1
     assert "root-2" not in state.vocabulary and len(state.pending["p"]) == 1
     assert child.dominant["water"] == "root-1" and child.uses_of("root-1") == 2
@@ -112,8 +114,9 @@ def test_pripojeni_stavu_ke_svetu_prenese_obsah_podle_jmen():
     state.set_dominant("water", "root-1")
     state.adjust_uses("root-1", 2)
     state.enter_vocabulary("root-1")
-    state.pending["p"] = [(0.5, "root-1"), (0.7, "root-0")]
-    state.queued["p"] = state.morpheme_set(["root-1", "root-0"])
+    state.load_processes([{
+        "process": "p", "live": True, "queue": [(0.5, "root-1"), (0.7, "root-0")], "done": [], "fixed_since": None,
+    }])
     world = village_grid(1, seed=1, phonology=True)
     state.bind(world.registry)
     assert state.registry is world.registry and dict(state.dominant) == {"water": "root-1"}

@@ -221,6 +221,9 @@ class World:
     #: Seedované sklony slov ke změně (``phonology.word_bias``): číslo procesu
     #: → pole podle čísla lexému, NaN = ještě neurčeno. Odvozená keš.
     word_biases: dict[int, array] = field(default_factory=dict)  # type: ignore[type-arg]
+    #: Vstupy četností užití pro stav kódů v Rustu (četnosti pojmů a váhy buněk podle
+    #: čísla; viz :class:`_UsageArrays`). Odvozená keš.
+    usage_arrays: Any = None
     #: Kalibrační konstanty dynamiky tohoto světa (neměnné, sdílí je kopie stavu).
     params: Parameters = field(default_factory=Parameters)
     #: Státy světa (``cee.v2.polity``) podle ID; vznikají událostí ``State``.
@@ -338,6 +341,8 @@ class World:
         paradigmatu má navíc váhu své buňky. Bez dominantních pojmů (svět M1,
         výchozí stav) platí statická frekvence morfému.
         """
+        if code.phonology.core is not None:
+            return self._native_usage(code, [morpheme_id])[0]
         memo = self._usage_memo(code)
         morpheme = self.morphemes[morpheme_id]
         values = memo.by_root.get(morpheme.lexeme or morpheme.id)
@@ -353,6 +358,8 @@ class World:
         Hodnoty a jejich pořadí jsou stejné jako při volání po jednom; hromadné
         volání jen ušetří režii (ověření verze a hledání paměti pro každý tvar).
         """
+        if code.phonology.core is not None:
+            return self._native_usage(code, list(morpheme_ids))
         memo = self._usage_memo(code)
         by_root = memo.by_root
         morphemes = self.morphemes
@@ -368,6 +375,74 @@ class World:
                     continue
             append(self._usage_compute(code, morpheme, memo))
         return result
+
+    def _native_usage(self, code: Code, morpheme_ids: list[str]) -> list[float]:
+        """Četnosti užití tvarů ze stavu kódu v Rustu (stejné hodnoty jako ``_usage_compute``)."""
+        state = code.phonology
+        concept, fixed, weight = self.usage_inputs(state)
+        numbers = self.registry.morphemes.numbers
+        found: list[float] = state.core.frequencies(
+            [numbers[morpheme_id] for morpheme_id in morpheme_ids], concept, fixed, weight,
+            self.columns.morphemes.lexeme,
+        )
+        return found
+
+    def usage_inputs(self, state: PhonologyState) -> tuple[array, array, array]:  # type: ignore[type-arg]
+        """Sloupce četností užití pro jádro v Rustu: četnosti pojmů, statické frekvence a váhy buněk.
+
+        Četnost užití je čistá funkce dominantních kořenů kódu, četností pojmů a sloupců morfémů;
+        stav kódu drží kořeny, svět zbytek. Změní-li se četnosti pojmů (verze ``FrequencyMap``),
+        zneplatní se paměť v kódu, který se jí příště zeptá (``epoch``).
+        """
+        held = self.usage_arrays
+        if held is None:
+            held = self.usage_arrays = _UsageArrays()
+        frequencies = self.concept_frequencies
+        names = self.registry.concepts.names
+        key = (id(frequencies), getattr(frequencies, "version", None))
+        if held.key != key or key[1] is None:
+            held.key = key
+            held.epoch += 1
+            held.concept = array("d", [self.concept_frequency(name) for name in names])
+        elif len(held.concept) < len(names):
+            held.concept.extend(self.concept_frequency(name) for name in names[len(held.concept):])
+        seen = state.cache.get("usage-epoch")
+        if seen is None or seen[1] != held.epoch:
+            state.core.invalidate_usage()
+            state.cache["usage-epoch"] = (0, held.epoch)
+        columns = self.columns.morphemes
+        size = len(self.registry.morphemes)
+        weight = held.weight
+        if held.paradigms != len(self.paradigms):
+            held.paradigms = len(self.paradigms)
+            held.scan, held.unresolved = 0, []
+            weight = held.weight = array("d")
+            held.epoch += 1
+            state.core.invalidate_usage()
+        if len(weight) < size:
+            weight.extend(array("d", [math.nan]) * (size - len(weight)))
+        if held.scan < size or held.unresolved:
+            present = columns.present
+            waiting: list[int] = []
+            for number in [*held.unresolved, *range(held.scan, size)]:
+                if number < len(present) and present[number]:
+                    weight[number] = self._cell_weight(number)
+                else:
+                    waiting.append(number)
+            held.unresolved, held.scan = waiting, size
+        return held.concept, columns.frequency, weight
+
+    def _cell_weight(self, number: int) -> float:
+        """Váha buňky paradigmatu tvaru slova (NaN = morfém váhu nemá), z řádku sloupců morfémů."""
+        columns = self.columns.morphemes
+        cell, word_class = columns.cell[number], columns.word_class[number]
+        if columns.kind[number] != 2 or word_class < 0 or cell < 0:
+            return math.nan
+        paradigm = self.paradigms.get(columns.word_classes.names[word_class])
+        name = columns.cells.names[cell]
+        if paradigm is None or not name:
+            return math.nan
+        return paradigm.weight(name)
 
     def _usage_memo(self, code: Code) -> _UsageMemo:
         # Výsledek závisí jen na pojmech, pro které je kořen dominantní, a na
@@ -627,6 +702,22 @@ class World:
             self.variants[variant.id] = variant
             repertoire.set(variable.id, Distribution.fixed(variant.id))
         return repertoire.freeze()
+
+
+class _UsageArrays:
+    """Vstupy četností užití podle čísla pojmu a morfému (viz :meth:`World.usage_inputs`)."""
+
+    __slots__ = ("key", "epoch", "concept", "weight", "scan", "unresolved", "paradigms")
+
+    def __init__(self) -> None:
+        self.key: tuple[int, int | None] | None = None
+        self.epoch = 0
+        self.concept = array("d")
+        self.weight = array("d")
+        #: Morfémy do čísla ``scan`` mají váhu určenou, kromě ``unresolved`` (ještě nejsou ve sloupcích).
+        self.scan = 0
+        self.unresolved: list[int] = []
+        self.paradigms = 0
 
 
 class _UsageMemo:

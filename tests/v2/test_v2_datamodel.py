@@ -116,19 +116,18 @@ def test_hromadna_fronta_procesu_sedi_s_vkladanim_po_jednom(running):
     assert candidates, "scénář po 600 letech má mít proces, který skupina ještě nezná"
     checked = 0
     for variable_id in candidates[:6]:
-        bulk_code, reference_code = code.branch(), code.branch()
+        bulk_code = code.branch()
         phonology.activate(world, bulk_code, variable_id)
-        # Původní postup: prázdná fronta a ``_queue`` pro každé dotčené slovo.
-        reference = reference_code.phonology
-        reference.pending[variable_id] = []
-        reference.queued[variable_id] = set()
-        reference.order[variable_id] = len(reference.order)
+        # Původní postup: ``_queue`` pro každé dotčené slovo seřadil dvojice (potřebný logit, jméno).
         bank = world.form_bank()
-        table = bank.process_table(world.processes[variable_id], reference_code.stress_rule)
-        for morpheme_id in sorted(reference.vocabulary):
-            if table.result(bank.id_of(world.form_of(reference_code, morpheme_id))) >= 0:
-                phonology._queue(world, reference_code, variable_id, morpheme_id)
-        assert bulk_code.phonology.pending[variable_id] == reference.pending[variable_id]
-        assert bulk_code.phonology.queued[variable_id] == reference.queued[variable_id]
-        checked += len(reference.pending[variable_id])
+        table = bank.process_table(world.processes[variable_id], bulk_code.stress_rule)
+        reference = sorted(
+            (phonology._needed(world, variable_id, morpheme_id, bulk_code), morpheme_id)
+            for morpheme_id in sorted(bulk_code.phonology.vocabulary)
+            if table.result(bank.id_of(world.form_of(bulk_code, morpheme_id))) >= 0
+            and morpheme_id not in bulk_code.phonology.restructured.get(variable_id, ())
+        )
+        assert bulk_code.phonology.pending[variable_id].pairs() == reference
+        assert set(bulk_code.phonology.queued[variable_id]) == {name for _, name in reference}
+        checked += len(reference)
     assert checked > 0

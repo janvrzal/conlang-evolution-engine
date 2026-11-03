@@ -588,10 +588,11 @@ class Simulation:
                     if state.adjust_uses(morpheme, 1) > 1:
                         continue
                     contact.adopt(self.world, group_ids[column], morpheme)
-                for unit in morphology.units_of(self.world, code, morpheme):
-                    if direction == "enter":
-                        phonology.enter_vocabulary(self.world, code, unit)
-                    else:
+                units = morphology.units_of(self.world, code, morpheme)
+                if direction == "enter":
+                    phonology.enter_units(self.world, code, units)
+                else:
+                    for unit in units:
                         phonology.leave_vocabulary(code, unit)
 
     def _activations(self, block: PoolBlock, after: np.ndarray) -> list[tuple[str, str]]:

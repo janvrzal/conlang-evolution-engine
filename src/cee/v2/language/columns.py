@@ -20,7 +20,7 @@ from __future__ import annotations
 import bisect
 import itertools
 from array import array
-from collections.abc import Iterable, Iterator, MutableMapping, MutableSet
+from collections.abc import Iterable, Iterator, Mapping, MutableMapping, MutableSet
 from typing import Any
 
 from cee.v2.registry import Numbering
@@ -371,3 +371,102 @@ class QueueMap(dict):  # type: ignore[type-arg]
         if key not in self:
             self[key] = default
         return dict.__getitem__(self, key)
+
+
+# --- Pohledy na stav fronty v Rustu --------------------------------------------------------
+#
+# S rozšířením ``cee_core`` žijí fronty, příznaky čekajících a přepsaných morfémů
+# a ``fixed_since`` v ``cee_core.NativeCode`` (podle čísla procesu a morfému).
+# Python je čte přes tyto pohledy (stejná textová rozhraní jako ``QueueMap`` a
+# slovníky množin); pohled je snímek, zápis do něj neexistuje.
+
+
+class _NativeView(Mapping):  # type: ignore[type-arg]
+    """Proces (ID proměnné) → snímek jeho stavu v ``NativeCode``; jen ke čtení."""
+
+    __slots__ = ("_code", "_registry")
+
+    def __init__(self, code: Any, registry: Any) -> None:
+        self._code = code
+        self._registry = registry
+
+    def _number(self, variable_id: object) -> int | None:
+        return self._registry.processes.numbers.get(variable_id)  # type: ignore[no-any-return]
+
+    def _numbers(self) -> list[int]:
+        raise NotImplementedError
+
+    def _has(self, number: int) -> bool:
+        raise NotImplementedError
+
+    def _snapshot(self, number: int) -> Any:
+        raise NotImplementedError
+
+    def __getitem__(self, variable_id: str) -> Any:
+        number = self._number(variable_id)
+        if number is None or not self._has(number):
+            raise KeyError(variable_id)
+        return self._snapshot(number)
+
+    def __iter__(self) -> Iterator[str]:
+        names = self._registry.processes.names
+        return iter([names[number] for number in self._numbers()])
+
+    def __len__(self) -> int:
+        return len(self._numbers())
+
+    def __contains__(self, variable_id: object) -> bool:
+        number = self._number(variable_id)
+        return number is not None and self._has(number)
+
+    def __bool__(self) -> bool:
+        return bool(self._numbers())
+
+
+class NativePending(_NativeView):
+    """Proces → fronta fonologizace (``ProcessQueue``, snímek) živých procesů."""
+
+    __slots__ = ()
+
+    def _numbers(self) -> list[int]:
+        return self._code.live()  # type: ignore[no-any-return]
+
+    def _has(self, number: int) -> bool:
+        return bool(self._code.status(number) == 1)
+
+    def _snapshot(self, number: int) -> ProcessQueue:
+        needed, morphemes = self._code.queue(number)
+        queue = ProcessQueue(self._registry.morphemes)
+        queue.needed = array("d", needed)
+        queue.morphemes = array("i", morphemes)
+        return queue
+
+
+class NativeQueued(_NativeView):
+    """Proces → množina morfémů, které ve frontě čekají (snímek), pro živé procesy."""
+
+    __slots__ = ()
+
+    def _numbers(self) -> list[int]:
+        return self._code.live()  # type: ignore[no-any-return]
+
+    def _has(self, number: int) -> bool:
+        return bool(self._code.status(number) == 1)
+
+    def _snapshot(self, number: int) -> MorphemeSet:
+        return MorphemeSet.from_numbers(self._registry.morphemes, self._code.queued(number))
+
+
+class NativeRestructured(_NativeView):
+    """Proces → množina morfémů, které si změnu zapsaly (snímek); jen procesy, kde nějaký je."""
+
+    __slots__ = ()
+
+    def _numbers(self) -> list[int]:
+        return [number for number in self._code.processes() if self._code.done(number)]
+
+    def _has(self, number: int) -> bool:
+        return bool(self._code.done(number))
+
+    def _snapshot(self, number: int) -> MorphemeSet:
+        return MorphemeSet.from_numbers(self._registry.morphemes, self._code.done(number))

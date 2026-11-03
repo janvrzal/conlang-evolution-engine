@@ -48,7 +48,13 @@ pub struct Units<'a> {
     pub default_exponent: &'a [i32],
     /// Číslo lexému každého morfému (u kořene a koncovky on sám).
     pub lexeme: &'a [i32],
+    /// Tvary přepsané v průběhu volání, které Python do `form`, `cut` a `exponent`
+    /// ještě nezapsal (dávka víc procesů a skupin v jednom volání); mají přednost.
+    pub overlay: &'a BTreeMap<usize, Unit>,
 }
+
+/// Prázdné přepsané tvary.
+pub static NO_OVERLAY: BTreeMap<usize, Unit> = BTreeMap::new();
 
 /// Aktuální stav tvaru slova: číslo tvaru v bance, hranice kmen | koncovka
 /// (−1 = žádná) a číslo morfému koncovky (−1 = žádná).
@@ -63,6 +69,9 @@ impl Units<'_> {
     /// Tvar morfému v kódu: uložený, jinak výchozí. `None`, když výchozí tvar
     /// ještě není v bance (Python ho zařadí přes `World.form_id_of`).
     pub fn get(&self, morpheme: usize) -> Option<Unit> {
+        if let Some(&unit) = self.overlay.get(&morpheme) {
+            return Some(unit);
+        }
         if let Some(&form) = self.form.get(morpheme).filter(|&&form| form >= 0) {
             return Some(Unit {
                 form: form as usize,
@@ -507,6 +516,7 @@ mod tests {
             default_cut: none,
             default_exponent: none,
             lexeme,
+            overlay: &NO_OVERLAY,
         }
     }
 

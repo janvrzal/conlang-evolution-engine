@@ -20,9 +20,10 @@
 //! Žádná transcendentní funkce se tu nepočítá: logity a sklony slov dodává Python.
 
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 
 use crate::bank::Bank;
-use crate::phonology::{self, Frequency, Needs, Params, Rewrite, Target, Units, SKIP};
+use crate::phonology::{self, Frequency, Needs, Params, Rewrite, Target, Unit, Units, SKIP};
 
 /// Vstupy četností užití: sloupce světa podle čísla morfému a četnosti pojmů.
 pub struct UsageInputs<'a> {
@@ -318,6 +319,8 @@ pub struct Round<'a> {
     pub ctx: Ctx<'a>,
     /// Sklony slov živých procesů v pořadí `live` na začátku průchodu.
     pub biases: Vec<&'a [f64]>,
+    /// Které z nich jsou redukční (náskok z četnosti užití).
+    pub reductive: Vec<bool>,
     /// Logit sdíleného podílu změny v každém živém procesu (−∞ = podíl nekladný).
     pub levels: Vec<f64>,
     /// Podíl změny dosáhl 100 %.
@@ -356,9 +359,13 @@ impl CodeState {
         bank: &mut Bank,
         ctx: &Ctx,
         biases: &[&[f64]],
+        reductive: &[bool],
         morphemes: &[i32],
     ) -> Result<(usize, CodeNeeds), String> {
         let live = self.live();
+        for (&index, &flag) in live.iter().zip(reductive) {
+            self.procs[index].reductive = flag;
+        }
         for (position, &morpheme) in morphemes.iter().enumerate() {
             let (found, needs) = {
                 let targets: Vec<Target> = live
@@ -457,7 +464,13 @@ impl CodeState {
         out: &mut RoundOut,
     ) -> Result<Option<CodeNeeds>, String> {
         let live0 = self.live();
+        for (&index, &flag) in live0.iter().zip(&round.reductive) {
+            self.procs[index].reductive = flag;
+        }
         let ctx = &round.ctx;
+        // Tvary přepsané v tomto volání: Python je zapíše až po něm, ale další proces
+        // skupiny už musí vidět nový tvar.
+        let mut overlay: BTreeMap<usize, Unit> = BTreeMap::new();
         for (k, &index) in live0.iter().enumerate() {
             let level = round.levels[k];
             let proc = &self.procs[index];
@@ -483,10 +496,14 @@ impl CodeState {
                         .position(|&other| other == k)
                         .ok_or("proces uprostřed kroku není živý")?;
                     let source = LiveUsage::new(&mut self.usage, &ctx.usage);
+                    let units = Units {
+                        overlay: &overlay,
+                        ..ctx.units
+                    };
                     phonology::step(
                         bank,
                         &ctx.params,
-                        &ctx.units,
+                        &units,
                         row,
                         &proc.needed,
                         &proc.morphemes,
@@ -503,6 +520,14 @@ impl CodeState {
                 proc.needed.drain(..step.popped);
                 proc.morphemes.drain(..step.popped);
                 for rewrite in &step.rewrites {
+                    overlay.insert(
+                        rewrite.morpheme,
+                        Unit {
+                            form: rewrite.form,
+                            cut: rewrite.cut,
+                            exponent: rewrite.exponent,
+                        },
+                    );
                     set_flag(&mut proc.done, rewrite.morpheme, 1);
                     words += 1;
                     out.rewrites.push(*rewrite);

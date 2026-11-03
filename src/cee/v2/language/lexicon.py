@@ -19,8 +19,18 @@ from typing import Any, Literal, NamedTuple, Protocol
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2 import native
 from cee.v2.language.bank import FormBank
-from cee.v2.language.columns import DominantMap, MorphemeCounts, MorphemeSet, QueueMap
+from cee.v2.language.columns import (
+    DominantMap,
+    MorphemeCounts,
+    MorphemeSet,
+    NativePending,
+    NativeQueued,
+    NativeRestructured,
+    ProcessQueue,
+    QueueMap,
+)
 from cee.v2.language.segments import Form
 from cee.v2.registry import KINDS, Registry
 
@@ -329,6 +339,11 @@ class PhonologyState:
     #: Pořadí, ve kterém procesy kód zasáhly: chronologie změn tohoto kódu.
     #: Nezávisí na tom, kdy stejnou změnu vymyslel někdo jinde.
     order: dict[str, int] = field(default_factory=dict)
+    #: Stav fronty a dominantních kořenů v Rustu (``cee_core.NativeCode``), nebo
+    #: ``None`` (pak ho drží ``pending``, ``queued``, ``restructured`` a ``fixed_since``
+    #: v Pythonu). S Rustem jsou ``pending``, ``queued`` a ``restructured`` pohledy
+    #: jen ke čtení na tento stav.
+    core: Any = field(default=None, init=False, repr=False)
     #: Roste s každou změnou slovní zásoby nebo podkladových tvarů.
     version: int = 0
     #: Roste jen se změnou slovní zásoby (které slovo je pro který pojem
@@ -351,6 +366,78 @@ class PhonologyState:
         self.dominant = DominantMap(self.registry.concepts, morphemes)
         self.uses = MorphemeCounts(morphemes)
         self.pending = QueueMap(morphemes)
+        self.core = native.new_code()
+        if self.core is not None:
+            self._use_core()
+
+    def _use_core(self) -> None:
+        """Pohledy ``pending``, ``queued`` a ``restructured`` na stav v Rustu."""
+        self.pending = NativePending(self.core, self.registry)  # type: ignore[assignment]
+        self.queued = NativeQueued(self.core, self.registry)  # type: ignore[assignment]
+        self.restructured = NativeRestructured(self.core, self.registry)  # type: ignore[assignment]
+
+    def processes_snapshot(self) -> list[dict[str, Any]]:
+        """Procesy kódu (živé i uzavřené) v pořadí vzniku, podle jmen (neutrální podoba)."""
+        names = self.registry.processes.names
+        if self.core is not None:
+            found = []
+            for number in self.core.processes():
+                needed, morphemes = self.core.queue(number) or ([], [])
+                found.append({
+                    "process": names[number], "live": self.core.status(number) == 1,
+                    "queue": [(logit, self.registry.morphemes.names[item]) for logit, item in zip(needed, morphemes)],
+                    "done": [self.registry.morphemes.names[item] for item in self.core.done(number)],
+                    "fixed_since": self.core.fixed_since(number),
+                })
+            return found
+        return [
+            {
+                "process": variable_id, "live": variable_id in self.pending,
+                "queue": self.pending[variable_id].pairs() if variable_id in self.pending else [],
+                "done": list(self.restructured.get(variable_id, ())),
+                "fixed_since": self.fixed_since.get(variable_id),
+            }
+            for variable_id in self._known_processes()
+        ]
+
+    def _known_processes(self) -> list[str]:
+        """Procesy Pythonového stavu: nejdřív podle pořadí vzniku, pak ostatní podle jména."""
+        known = {*self.pending, *self.closed, *self.restructured}
+        ordered = [variable_id for variable_id in sorted(self.order, key=self.order.__getitem__) if variable_id in known]
+        return ordered + sorted(known.difference(ordered))
+
+    def load_processes(self, procs: list[dict[str, Any]]) -> None:
+        """Naplní fronty z neutrální podoby (``processes_snapshot``) do prázdného stavu."""
+        registry = self.registry
+        if self.core is None:
+            for item in procs:
+                process = item["process"]
+                self.restructured[process] = self.morpheme_set(item["done"]) if item["done"] else self.morpheme_set()
+                if item["fixed_since"] is not None:
+                    self.fixed_since[process] = item["fixed_since"]
+                if item["live"]:
+                    self.pending[process] = ProcessQueue(registry.morphemes, item["queue"])
+                    self.queued[process] = self.morpheme_set(name for _, name in item["queue"])
+            self.restructured = {process: done for process, done in self.restructured.items() if done}
+            return
+        exported = []
+        for item in procs:
+            queued = bytearray()
+            done = bytearray()
+            numbers = [registry.morphemes.intern(name) for _, name in item["queue"]]
+            for number in numbers:
+                queued.extend(bytes(max(0, number + 1 - len(queued))))
+                queued[number] = 1
+            for name in item["done"]:
+                number = registry.morphemes.intern(name)
+                done.extend(bytes(max(0, number + 1 - len(done))))
+                done[number] = 1
+            exported.append((
+                registry.processes.intern(item["process"]), item["live"], False, -1, bytes(queued), bytes(done),
+                [logit for logit, _ in item["queue"]], numbers, item["fixed_since"],
+            ))
+        self.core = native.restore_code((exported, self.core.roots()))
+        self._use_core()
 
     def bind(self, registry: Registry) -> None:
         """Přepne číslování na registr světa; obsah se přenese podle jmen."""
@@ -359,19 +446,42 @@ class PhonologyState:
         vocabulary = list(self.vocabulary)
         dominant = self.dominant.items()
         uses = list(self.uses.items())
-        queues = {process: queue.pairs() for process, queue in self.pending.items()}
-        queued = {process: list(waiting) for process, waiting in self.queued.items()}
-        restructured = {process: list(done) for process, done in self.restructured.items()}
+        procs = self.processes_snapshot()
         self.registry = registry
         self.__post_init__()
         self.vocabulary.update(vocabulary)
         for concept, root in dominant:
             self.dominant[concept] = root
+            if self.core is not None:
+                self.core.set_root(registry.concepts.intern(concept), registry.morphemes.intern(root))
         self.uses.update(uses)
-        for process, pairs in queues.items():
-            self.pending[process] = pairs
-        self.queued = {process: MorphemeSet(registry.morphemes, names) for process, names in queued.items()}
-        self.restructured = {process: MorphemeSet(registry.morphemes, names) for process, names in restructured.items()}
+        self.load_processes(procs)
+
+    def __getstate__(self) -> dict[str, Any]:
+        # Stav v Rustu nelze uložit ani zkopírovat; nese se jako neutrální seznam procesů
+        # a po obnově se postaví v tom režimu, ve kterém se obnovuje.
+        state = self.__dict__.copy()
+        state["_procs"] = self.processes_snapshot()
+        if self.core is not None:
+            for key in ("core", "pending", "queued", "restructured", "fixed_since"):
+                state[key] = None
+        else:
+            for key in ("pending", "queued", "restructured", "fixed_since"):
+                state[key] = None
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        procs = state.pop("_procs")
+        self.__dict__.update(state)
+        morphemes = self.registry.morphemes
+        self.pending = QueueMap(morphemes)
+        self.queued, self.restructured, self.fixed_since = {}, {}, {}
+        self.core = native.new_code()
+        if self.core is not None:
+            for concept, root in self.dominant.items():
+                self.core.set_root(self.registry.concepts.numbers[concept], morphemes.numbers[root])
+            self._use_core()
+        self.load_processes(procs)
 
     def morpheme_set(self, items: Iterable[str] = ()) -> MorphemeSet:
         """Nová množina morfémů nad číslováním tohoto kódu."""
@@ -386,8 +496,21 @@ class PhonologyState:
             self.dominant.pop(concept, None)
         else:
             self.dominant[concept] = root
+        if self.core is not None:
+            self.core.set_root(
+                self.registry.concepts.intern(concept), -1 if root is None else self.registry.morphemes.intern(root)
+            )
         self.dominant_log.append((concept, old, root))
         return True
+
+    def set_fixed_since(self, variable_id: str, tick: int | None) -> None:
+        """Kdy dosáhl změněný tvar procesu 100 % (``None`` = není na 100 %); jen pro testy a obnovu stavu."""
+        if self.core is not None:
+            self.core.set_fixed_since(self.registry.processes.intern(variable_id), tick)
+        elif tick is None:
+            self.fixed_since.pop(variable_id, None)
+        else:
+            self.fixed_since[variable_id] = tick
 
     def uses_of(self, root: str) -> int:
         """Pro kolik pojmů je kořen dominantní (0, když pro žádný)."""

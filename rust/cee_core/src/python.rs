@@ -137,6 +137,7 @@ impl Inputs {
             default_cut: self.defaults[1].view(),
             default_exponent: self.defaults[2].view(),
             lexeme: self.defaults[3].view(),
+            overlay: &crate::phonology::NO_OVERLAY,
         }
     }
 

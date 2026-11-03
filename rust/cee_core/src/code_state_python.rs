@@ -10,7 +10,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
 use crate::code_state::{CodeNeeds, CodeState, Ctx, Event, Proc, Round, RoundOut, UsageInputs};
-use crate::phonology::{Params, Units};
+use crate::phonology::{Params, Units, NO_OVERLAY};
 use crate::python::{failure, Held, NativeBank};
 
 type NeedsOut = (
@@ -39,6 +39,7 @@ type RoundIn<'py> = (
     u8,
     Store<'py>,
     Vec<Bound<'py, PyAny>>,
+    Vec<bool>,
     Vec<f64>,
     Vec<bool>,
     i64,
@@ -109,6 +110,7 @@ impl Inputs {
                 default_cut: self.defaults[1].view(),
                 default_exponent: self.defaults[2].view(),
                 lexeme: self.defaults[3].view(),
+                overlay: &NO_OVERLAY,
             },
             usage: UsageInputs {
                 concept: self.concept.view(),
@@ -187,6 +189,23 @@ impl NativeCode {
         self.flagged(number, false)
     }
 
+    /// Zapsal si morfém změnu procesu?
+    fn is_done(&self, number: usize, morpheme: usize) -> bool {
+        self.inner
+            .find(number)
+            .is_some_and(|index| self.inner.procs[index].done.get(morpheme) == Some(&1))
+    }
+
+    /// Nastaví (nebo zruší) tik, od kterého je změna procesu ve skupině na 100 %.
+    fn set_fixed_since(&mut self, number: usize, tick: Option<i64>) -> PyResult<()> {
+        let index = self
+            .inner
+            .find(number)
+            .ok_or_else(|| failure(format!("proces č. {number} kód nezná")))?;
+        self.inner.procs[index].fixed_since = tick;
+        Ok(())
+    }
+
     fn fixed_since(&self, number: usize) -> Option<i64> {
         self.inner
             .find(number)
@@ -236,7 +255,7 @@ impl NativeCode {
 
     /// `_queue` pro všechny živé procesy a každý z morfémů; vrací
     /// `(hotových, needs, první_nové_číslo, nové_hlásky, nové_délky)`.
-    #[pyo3(signature = (bank, rule, base, lead_scale, store, defaults, usage, biases, morphemes))]
+    #[pyo3(signature = (bank, rule, base, lead_scale, store, defaults, usage, biases, reductive, morphemes))]
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn queue_units<'py>(
         &mut self,
@@ -249,6 +268,7 @@ impl NativeCode {
         defaults: Columns<'py>,
         usage: Usage<'py>,
         biases: Vec<Bound<'py, PyAny>>,
+        reductive: Vec<bool>,
         morphemes: Vec<i32>,
     ) -> PyResult<Bound<'py, PyTuple>> {
         let inputs = Inputs::new(&store, &defaults, &usage)?;
@@ -262,7 +282,13 @@ impl NativeCode {
         let mut guard = bank.borrow_mut();
         let (done, needs) = self
             .inner
-            .queue_units(&mut guard.bank, &inputs.ctx(params), &views, &morphemes)
+            .queue_units(
+                &mut guard.bank,
+                &inputs.ctx(params),
+                &views,
+                &reductive,
+                &morphemes,
+            )
             .map_err(failure)?;
         let (first, flat, lengths) = guard.bank.take_created();
         (done, needs_out(needs), first, flat, lengths).into_pyobject(py)
@@ -426,7 +452,7 @@ pub fn restructure_groups<'py>(
     let mut rewrites = Vec::new();
     let mut events = Vec::new();
     let mut halt: Option<(usize, NeedsOut)> = None;
-    for (group, (code, rule, store, biases, levels, full, tick, threshold)) in
+    for (group, (code, rule, store, biases, reductive, levels, full, tick, threshold)) in
         groups.iter().enumerate()
     {
         let inputs = Inputs::new(store, &defaults, &usage)?;
@@ -438,6 +464,7 @@ pub fn restructure_groups<'py>(
                 lead_scale,
             }),
             biases: held.iter().map(Held::view).collect(),
+            reductive: reductive.clone(),
             levels: levels.clone(),
             full: full.clone(),
             tick: *tick,
