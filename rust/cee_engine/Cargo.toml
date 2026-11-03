@@ -1,0 +1,26 @@
+[package]
+name = "cee_engine"
+version = "0.1.0"
+edition = "2021"
+description = "Engine CEE v2 celý v Rustu: svět, náhoda, fáze kroku, export (základ R0)"
+publish = false
+license = "MIT"
+
+[lib]
+name = "cee_engine"
+
+[[bin]]
+name = "cee"
+path = "src/bin/cee.rs"
+
+[dependencies]
+# Jádra (banka tvarů, procesy, přenos, tlaky, indexy); bez vazby na Python.
+cee_core = { path = "../cee_core", default-features = false }
+# Všechny crates mají licenci MIT nebo Apache-2.0 (viz docs/engine-v2/19-engine-v-rustu.md).
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+blake2 = "0.10"
+sha2 = "0.10"
+rayon = "1"
+unicode-normalization = "0.1"
+postcard = { version = "1", features = ["use-std"] }
