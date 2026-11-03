@@ -20,22 +20,24 @@ from cee.v2.world import gravity_links
 from tests.v2.edit_worlds import SCENARIOS, fingerprint
 
 #: Otisky světů s událostmi z doby před zavedením API (běh s Rustem i s ``CEE_NATIVE=0``):
-#: dokazují, že přesun změn do ``edits`` nezměnil žádné chování.
+#: dokazují, že přesun změn do ``edits`` nezměnil žádné chování. První je otisk historie, druhý
+#: otisk stavu světa (frekvence variant); ten se jednou vědomě změnil v kroku B4, kdy míšení
+#: dostalo pevné pořadí sčítání (poslední bity frekvencí), otisky historie zůstaly.
 BEFORE_API = {
     "trade-elite": ("a49145a8e0c174a2d121d540bde1d22e360e4908a00af1e73150c3c786e32ff7",
-                    "e49850fb80e526341a8c92620188bd005a35669fc5fe07610568afd4e60504a2"),
+                    "b188e495a74a3e04113c2e2dcdb01f39d8034f53a13abe2213752e3ecb33b726"),
     "church-school": ("e220b264c60c509fd0dba2062cde5beb97fe0be2f2a652cead403cd598e0a4f3",
-                      "3ee9c781b9dd703922ae64b310617d14cbb2e4ac50ab05ea536af29f0169a908"),
+                      "83a75d027a59c897ee12c90b0b71ab128e48978abdfded20b2495e6703d2e281"),
     "shift-trade": ("bb660be97a226f69336ae21bb642e5a9f46db92df3eafabbdf568c002fbb669e",
-                    "c43466fac96d7cc118f78672a81261d40c6bfb26351b06b4450d474efcc0135d"),
+                    "5914920322d10ca22818a4715caee21110f8f3856090aec09cf17417149ea93d"),
     "conquest-shift": ("390307a8b8036b28c05698145c86994be873691ce4f68abb5546a253e77f076c",
-                       "f952e54efebfacecf78ba7b976b0035a8dd301d10747f6382071e63a5cf633cd"),
+                       "757bac83f03975d31c2e93125acef04c87dffac9ed7ecce2b4dd5626acca845f"),
     "society": ("3026e8aa4568b59018af04c73a2c48a6c7d584c4aaedfbbdacfdbf4a558d72d3",
-                "70a3672889948d6a795d5cb93251b9a8f51ba80e5df3ed3afc3b299aabb4b47c"),
+                "b8f5fee25fe9e8cce2aa1de09454c5959c20860576f0e8094cf3213fb54f45b7"),
     "refinement": ("4d99d97160bd66cd6bca3e62893c5d637be63ed8bdc0682a4f9e71fbf0e0d317",
-                   "bde60ff02cfbdcf2b712d9f672c64c255647ed2e57fec6e5087116f4e357ddfc"),
+                   "013d546c3b533be93e336ed86a9da3fec92b33c429e97562fc61822efd3565ff"),
     "polity": ("ae9810d529f715093f0599e7727d88cfdcc7c7fd3c9b3daf6dc0d391426f9afc",
-               "4432100c3324e9a79825edc5aae76ca8c62e0c4643bd9e14a439775d289ad04f"),
+               "db7437ef8c87aa2ef5b8a2a9b20bf1a43503c0d15322437eeff3facd90e1b019"),
 }
 
 #: Druhy záznamů v historii, které zapisují samy události (ne dynamika světa).

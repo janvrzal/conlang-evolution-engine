@@ -31,8 +31,14 @@ na varianty (``Pressure.scores``) mezi ``hear`` a ``settle``.
 
 Pořadí sčítání je součástí smlouvy a Rust ho musí zopakovat:
 
-- ``mix`` násobí každou propojenou komponentu zvlášť (BLAS ``@``; pořadí jeho
-  součtů závisí na velikosti matice, proto ne celý svět naráz);
+- ``mix`` sčítá vstup skupiny **postupně přes zdroje**: pro cílovou skupinu
+  se jednotlivé součiny ``váha × podíl`` přičítají striktně zleva doprava
+  podle vzestupného čísla zdroje a vynechají se zdroje s nulovou vahou
+  (nulový součin součet nezmění, takže výsledek nezávisí na tom, kolik nulových
+  sloupců matice obsahuje). Součin se zaokrouhlí zvlášť, pak se přičte; žádné
+  sloučené násobení se sčítáním (FMA). Rust to zopakuje bit po bitu. Dřív to
+  byl BLAS ``@``, jehož pořadí součtů závisí na knihovně, verzi a tvaru matice
+  (vědomá změna otisků, ``scripts/v2_digests.py``);
 - ``normalized`` sčítá seřazené hodnoty slotů striktně zleva doprava;
 - ``mixing_from_links`` sčítá řádky ``numpy.sum`` (párově, viz
   ``cee_core.pairwise_sum``);
@@ -281,6 +287,38 @@ def normalized(array: FloatArray, fallback: FloatArray) -> FloatArray:
     return result
 
 
+def _by_rank(matrix: FloatArray) -> list[tuple[IntArray, IntArray, FloatArray]]:
+    """Nenulové buňky matice po pořadí ve svém řádku: ``(cíle, zdroje, váhy)`` pro k-tou nenulovou buňku řádků.
+
+    Řádek má buňky seřazené podle zdroje vzestupně (tak je vrací ``nonzero``);
+    k-tý prvek seznamu obsahuje k-tou buňku každého řádku, který jich má víc než
+    k. Cíle jsou v prvku navzájem různé, takže se přičítá bez kolizí.
+    """
+    targets, sources = np.nonzero(matrix)
+    if not len(targets):
+        return []
+    counts = np.bincount(targets, minlength=len(matrix))
+    rank = np.arange(len(targets)) - (np.cumsum(counts) - counts)[targets]
+    order = np.argsort(rank, kind="stable")
+    bounds = np.cumsum(np.bincount(rank))
+    found = []
+    first = 0
+    for last in bounds:
+        chosen = order[first:last]
+        found.append((targets[chosen], sources[chosen], matrix[targets[chosen], sources[chosen]]))
+        first = int(last)
+    return found
+
+
+def _sequential(matrix: FloatArray, part: FloatArray) -> FloatArray:
+    """Součin ``matice × part`` (``part`` má skupiny na ose 1) sčítaný postupně přes zdroje, viz :func:`mix`."""
+    result = np.zeros_like(part)
+    shape = (1, -1) + (1,) * (part.ndim - 2)
+    for targets, sources, weights in _by_rank(matrix):
+        result[:, targets] += weights.reshape(shape) * part[:, sources]
+    return result
+
+
 def mix(
     values: FloatArray,
     members: Sequence[IntArray],
@@ -290,10 +328,11 @@ def mix(
 ) -> FloatArray:
     """Vážený vstup od sousedů: ``values`` má skupiny na ose 1.
 
-    Násobí se zvlášť každá propojená komponenta (``blocks[i]`` pro skupiny
-    ``members[i]``). Knihovna BLAS totiž sčítá v pořadí, které závisí na
-    velikosti matice; přidání skupin v nepropojené části světa by jinak
-    změnilo poslední bity výsledku a časem i historii. Osamocené skupiny
+    Každá skupina dostane součet ``váha × podíl`` přes své zdroje, sčítaný
+    postupně podle vzestupného čísla zdroje (viz začátek modulu); nulové váhy se
+    přeskočí. Výsledek tak nezávisí na tvaru matice ani na tom, zda je svět
+    rozdělený na komponenty: ``blocks[i]`` jsou bloky pro skupiny ``members[i]``
+    a přidání nepropojených skupin nemění poslední bity. Osamocené skupiny
     (učí se jen samy od sebe, ``alone`` s váhou ``alone_weight``) se vyřídí
     najednou; vazby mezi jazyky je nemají, proto se tam ``alone`` nedává.
     """
@@ -303,10 +342,7 @@ def mix(
         shape = (1, -1) + (1,) * (values.ndim - 2)
         result[:, alone] = alone_weight.reshape(shape) * values[:, alone]
     for group, matrix in zip(members, blocks):
-        part = values[:, group]
-        flat = np.moveaxis(part, 1, 0).reshape(len(group), -1)
-        mixed = (matrix @ flat).reshape((len(group), part.shape[0], *part.shape[2:]))
-        result[:, group] = np.moveaxis(mixed, 0, 1)
+        result[:, group] = _sequential(matrix, values[:, group])
     return result
 
 

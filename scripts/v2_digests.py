@@ -140,6 +140,18 @@ vyjdou reference plynulé výměny slov výše):
     shift        5d66d45559b5043c19e9259a9b4d7e5d8ce1349d2558f69107db7d6bd1737261
     island-city  a3efb455923bf5a6489b55e68ca877ed4e5ab2b422076a0ed4d7a569d6313e47
     valley-50    79b033067955967931819647325eb42d83f4aa21e826587be4f2d49f13373e88
+Reference pevného pořadí sčítání v míšení (2026-11-03, krok B4 přípravy na Rust;
+``phases_transmission.mix`` sčítá postupně přes zdroje místo BLAS ``@``, aby šlo pořadí
+zopakovat v Rustu. Vědomá změna poslední bity frekvencí; otisky historie všech sedmi
+světů zůstaly stejné jako v předchozím bloku, změnily se jen otisky *stavu* světa
+připnuté v ``tests/v2/test_v2_edits.py``):
+    phonology    3990a6381c1a91b4c4ffddf42731d42915325960dc128c834b6eec74ba2f97a3
+    morphology   710009d641a04a0b1f007d29fa18a3d273780e322667b826bb3d9a7e7165d43b
+    syntax       a55966f235d171ee1b772c2196b7bb2c2a742172a064d2b293c17a4df7553482
+    grid-5x5     cc4ef6e136b0eaa543c08fc4c7e424ca53d781bcdd0e905858d3cb32de0bcc61
+    shift        5d66d45559b5043c19e9259a9b4d7e5d8ce1349d2558f69107db7d6bd1737261
+    island-city  a3efb455923bf5a6489b55e68ca877ed4e5ab2b422076a0ed4d7a569d6313e47
+    valley-50    79b033067955967931819647325eb42d83f4aa21e826587be4f2d49f13373e88
 """
 
 from __future__ import annotations
