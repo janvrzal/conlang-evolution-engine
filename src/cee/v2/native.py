@@ -52,6 +52,36 @@ def enabled() -> bool:
     return os.environ.get("CEE_NATIVE", "") != "0" and available()
 
 
+_SUMS: bool | None = None
+
+
+def sums_match() -> bool:
+    """Sčítá ``numpy`` na tomto stroji párově stejně jako Rust (``pairwise_sum``)?
+
+    Hodnocení v Rustu musí dát bit po bitu totéž co ``np.sum`` po řádcích. Jiná
+    verze ``numpy`` či jiná architektura by mohla sčítat v jiném pořadí; pak se
+    hodnocení nepočítá v Rustu, ale v Pythonu, ať se otisky neliší. Ověří se jednou
+    na polích všech délek, které model používá (a nad ně).
+    """
+    global _SUMS
+    if _SUMS is None:
+        _SUMS = False
+        module = _load()
+        if module is not None:
+            import numpy as np
+
+            rng = np.random.default_rng(20261103)
+            ok = True
+            for width in (*range(1, 40), 64, 119, 120, 127, 128, 129, 200, 513):
+                rows = rng.random((3, width)) * rng.choice([1.0, 100.0, 1e-3], size=(3, width))
+                ok &= all(
+                    module.pairwise_sum(np.ascontiguousarray(row)).hex() == float(total).hex()
+                    for row, total in zip(rows, rows.sum(axis=1))
+                )
+            _SUMS = bool(ok)
+    return _SUMS
+
+
 def status() -> str:
     """Čitelný popis pro výpisy skriptů: ``rust`` či ``python`` a důvod."""
     if os.environ.get("CEE_NATIVE", "") == "0":

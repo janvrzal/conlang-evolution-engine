@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable, cast
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2 import native
 from cee.v2.language.assessment_index import clipped_frequencies, top_words
 from cee.v2.language.processes import Process, StressRule
 from cee.v2.language.segments import Form, SegmentTable
@@ -314,7 +315,7 @@ def _assess_batch_reference(world: World, group_ids: list[str], variable_id: str
 
 def _assess_batch(world: World, group_ids: list[str], variable_id: str) -> list[ProcessAssessment]:
     """Hodnocení procesu ve více skupinách; s Rustem počítá matici jádro, jinak Python."""
-    if world.table is not None and world.form_bank()._native is not None:
+    if world.table is not None and world.form_bank()._native is not None and native.sums_match():
         return _assess_batch_native(world, group_ids, variable_id)
     return _assess_batch_python(world, group_ids, variable_id)
 

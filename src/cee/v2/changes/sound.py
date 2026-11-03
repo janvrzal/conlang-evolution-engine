@@ -16,6 +16,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, Literal, Mapping, Sequence, cast
+from weakref import WeakKeyDictionary
 
 if TYPE_CHECKING:
     from cee.v2.world import Code, World
@@ -206,7 +207,7 @@ class _Candidates:
         self.masks = _Columns(processes, table, inventory)
         self.right2_rows = self.masks.right2_rows
         # Identifikátor proměnné a jen první kandidát se stejnou změnou.
-        self.variable_ids = [Variable("process", process.key).id for process in processes]
+        self.variable_ids = [_variable_id(process) for process in processes]
         seen: set[str] = set()
         self.first = []
         for index, variable_id in enumerate(self.variable_ids):
@@ -260,7 +261,7 @@ class _CombinedSoundCandidates:
             seen: set[str] = set()
             uniq: list[tuple[str, Process]] = []
             for proc in procs:
-                var_id = Variable("process", proc.key).id
+                var_id = _variable_id(proc)
                 if var_id not in seen:
                     seen.add(var_id)
                     uniq.append((var_id, proc))
@@ -673,12 +674,48 @@ def _present(table: SegmentTable, inventory: Sequence[int], pattern: Pattern) ->
     return [segment for segment in inventory if segment in pattern]
 
 
+#: Čisté funkce tabulky hlásek, které sestavování kandidátů volá pro každý inventář znovu
+#: se stejnými argumenty; pamatují se po tabulce (slabě, tabulka s nimi nezmizí z paměti).
+_SINGLES: WeakKeyDictionary[SegmentTable, dict[int, Pattern]] = WeakKeyDictionary()
+_DELTAS: WeakKeyDictionary[SegmentTable, dict[tuple[int, int], tuple[tuple[str, str], ...]]] = WeakKeyDictionary()
+
+
 def _single(table: SegmentTable, segment: int) -> Pattern:
-    return table.segments([table.ipa[segment]])
+    found = _SINGLES.setdefault(table, {})
+    pattern = found.get(segment)
+    if pattern is None:
+        pattern = found[segment] = table.segments([table.ipa[segment]])
+    return pattern
+
+
+#: Hotové procesy podle všech argumentů (včetně typů hodnot). Vzory hlásek jsou v tabulce
+#: pamatované, takže stejný proces z jiného inventáře má stejné argumenty a sdílí instanci:
+#: ``Process`` je neměnný, klíč se počítá jednou. Při zaplnění se paměť vyprázdní.
+_MADE: dict[tuple[object, ...], Process] = {}
+_MADE_LIMIT = 1 << 17
+_PROCESS_IDS: dict[str, str] = {}
 
 
 def _make(family: str, label: str, **fields: object) -> Process:
-    return Process(family=family, label=label, **fields)  # type: ignore[arg-type]
+    key = (family, label, *fields.items(), *map(type, fields.values()))
+    try:
+        found = _MADE.get(key)
+    except TypeError:  # nehašovatelný argument: bez paměti
+        return Process(family=family, label=label, **fields)  # type: ignore[arg-type]
+    if found is None:
+        if len(_MADE) >= _MADE_LIMIT:
+            _MADE.clear()
+        found = _MADE[key] = Process(family=family, label=label, **fields)  # type: ignore[arg-type]
+    return found
+
+
+def _variable_id(process: Process) -> str:
+    """Identifikátor proměnné procesu (``Variable("process", key).id``), pamatovaný po klíči."""
+    key = process.key
+    found = _PROCESS_IDS.get(key)
+    if found is None:
+        found = _PROCESS_IDS[key] = Variable("process", key).id
+    return found
 
 
 class Voicing(SoundChange):
@@ -1119,9 +1156,14 @@ class Prothesis(SoundChange):
 
 
 def _feature_delta(table: SegmentTable, source: int, target: int) -> tuple[tuple[str, str], ...]:
-    symbols = {1: "+", -1: "-", 0: "0"}
-    return tuple(sorted((name, symbols[table.feature(target, name)]) for name in table.names
-                        if table.feature(source, name) != table.feature(target, name)))
+    found = _DELTAS.setdefault(table, {})
+    delta = found.get((source, target))
+    if delta is None:
+        symbols = {1: "+", -1: "-", 0: "0"}
+        delta = found[(source, target)] = tuple(sorted(
+            (name, symbols[table.feature(target, name)]) for name in table.names
+            if table.feature(source, name) != table.feature(target, name)))
+    return delta
 
 
 class SecondaryPalatalization(SoundChange):

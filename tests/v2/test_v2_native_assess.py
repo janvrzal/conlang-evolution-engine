@@ -193,3 +193,54 @@ def test_opory_bez_rustu_pocita_python(golden, monkeypatch):
     for case in golden["supports"][:20]:
         combined = sound._combined_candidates(table, tuple(case["inventory"]))
         assert combined.eval_supports(*_support_inputs(case), table).tolist() == case["result"]
+
+
+def _world_with_processes() -> tuple[Any, list[str], list[str]]:
+    from cee.v2.language.processes import Process
+    from cee.v2.phonology import register
+    from cee.v2.repertoire import Origin
+    from cee.v2.scenarios import village_grid
+
+    world = village_grid(3, seed=5, phonology=True, semantics=True)
+    table = world.table
+    for group in world.groups.values():
+        group.main_code.phonology.vocabulary.update(world.morphemes)
+    schwa = table.id_of("ə")
+    processes = [
+        # Všechny samohlásky splynou: spousta nových homofonů a změna rozptylu vokálů.
+        Process("merge", table.VOWEL, "replace", segment=schwa, left=None, right=None),
+        # Nový vokál jen v přízvuku, mizení souhlásky, vložení hlásky: ostatní operace a délky.
+        Process("stressed", table.segments(["a"]), "replace", segment=table.id_of("o"), stress="stressed"),
+        Process("loss", table.CONSONANT, "delete", right=table.BOUNDARY),
+        Process("insert", table.VOWEL, "insert_after", segment=table.id_of("t")),
+    ]
+    variables = [register(world, process, Origin("test", 0, 0.0, "v"))[0] for process in processes]
+    return world, sorted(world.groups), variables
+
+
+@needs_native
+def test_hodnoceni_dava_na_svete_stejne_vysledky_jako_python_i_reference():
+    world, groups, variables = _world_with_processes()
+    merged = 0
+    for variable in variables:
+        native_result = assessment._assess_batch_native(world, groups, variable)
+        assert native_result == assessment._assess_batch_python(world, groups, variable)
+        assert native_result == assessment._assess_batch_reference(world, groups, variable)
+        merged += sum(item.merge_mass > 0 or item.dispersion_delta != 0 for item in native_result)
+    assert merged >= 3
+
+
+@needs_native
+def test_hodnoceni_se_nepocita_v_rustu_kdyz_numpy_scita_jinak(monkeypatch):
+    world, groups, variables = _world_with_processes()
+    called = []
+    monkeypatch.setattr(assessment, "_assess_batch_native", lambda *args: called.append(args))
+    monkeypatch.setattr(native, "sums_match", lambda: False)
+    assert assessment._assess_batch(world, groups, variables[0]) == assessment._assess_batch_python(
+        world, groups, variables[0])
+    assert not called
+
+
+@needs_native
+def test_overeni_souctu_projde_na_tomto_stroji():
+    assert native.sums_match()
