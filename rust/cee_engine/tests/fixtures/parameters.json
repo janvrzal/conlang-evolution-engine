@@ -1,0 +1,202 @@
+{
+ "activation_share": 0.05,
+ "analogy_l2_boost": 4.0,
+ "analogy_threshold": 0.85,
+ "background_elite_link": 0.1,
+ "background_elite_prestige": 2.0,
+ "background_elite_share": 0.1,
+ "background_levels": {
+  "calm": 0.3,
+  "none": 0.0,
+  "normal": 1.0,
+  "turbulent": 2.5
+ },
+ "background_rates": {
+  "foreign_elite": 0.02,
+  "plague": 0.08,
+  "prestige": 0.08,
+  "resettlement": 0.12,
+  "trade": 0.12
+ },
+ "background_spans": {
+  "elite_steps": {
+   "high": 12.0,
+   "low": 4.0
+  },
+  "plague_mortality": {
+   "high": 0.4,
+   "low": 0.15
+  },
+  "prestige_factor": {
+   "high": 1.4,
+   "low": 0.7
+  },
+  "recovery_steps": {
+   "high": 4.0,
+   "low": 2.0
+  },
+  "resettlement_share": {
+   "high": 0.15,
+   "low": 0.05
+  },
+  "trade_factor": {
+   "high": 3.0,
+   "low": 1.5
+  },
+  "trade_steps": {
+   "high": 12.0,
+   "low": 4.0
+  }
+ },
+ "border_levels": {
+  "closed": 0.1,
+  "normal": 0.5,
+  "open": 1.0
+ },
+ "border_link_scale": 1.0,
+ "borrowability_strength": 3.0,
+ "capital_link_strength": 0.3,
+ "capital_prestige": 2.0,
+ "capital_reach": 150.0,
+ "category_loss_l2_boost": 4.0,
+ "centralization_levels": {
+  "moderate": 1.0,
+  "none": 0.0,
+  "strong": 2.0,
+  "weak": 0.5
+ },
+ "change_rates": {},
+ "channel_domains": {
+  "elite": {
+   "core": 1.0,
+   "culture": 1.0,
+   "learned": 1.0,
+   "power": 3.0,
+   "religion": 1.0
+  },
+  "liturgy": {
+   "core": 1.0,
+   "culture": 1.0,
+   "learned": 1.0,
+   "power": 1.0,
+   "religion": 3.0
+  },
+  "neighbor": {
+   "core": 1.0,
+   "culture": 1.0,
+   "learned": 1.0,
+   "power": 1.0,
+   "religion": 1.0
+  },
+  "reading": {
+   "core": 1.0,
+   "culture": 1.0,
+   "learned": 2.0,
+   "power": 1.0,
+   "religion": 1.0
+  },
+  "school": {
+   "core": 1.0,
+   "culture": 1.0,
+   "learned": 2.0,
+   "power": 1.0,
+   "religion": 1.0
+  },
+  "trade": {
+   "core": 1.0,
+   "culture": 3.0,
+   "learned": 1.0,
+   "power": 1.0,
+   "religion": 1.0
+  }
+ },
+ "child_threshold": 0.2,
+ "clarity_short_factor": 1.5,
+ "closure_generations": 2.0,
+ "coda_tolerance_scale": 0.0,
+ "conserved_frequency": 0.7,
+ "dispersion_factor": 4.0,
+ "economy_word_cost": 0.15,
+ "emergence_need_scale": 0.6,
+ "entrenchment_base": 0.0,
+ "entrenchment_frequency_exponent": 1.0,
+ "entrenchment_strength": 0.3,
+ "frequency_lead": 1.0,
+ "functional_load_scale": 5.0,
+ "fusion_bonus": 0.25,
+ "grammar": {},
+ "grammar_threshold": 0.85,
+ "identity_loyalty": {
+  "distinct": 0.5,
+  "shared": 0.0,
+  "strong": 0.8
+ },
+ "interference_weight": 0.5,
+ "learnability_strength": 1.0,
+ "lexical_appeal_sd": 0.03,
+ "lingua_franca_levels": {
+  "common": 0.3,
+  "rare": 0.1,
+  "universal": 0.6
+ },
+ "lingua_franca_link": 0.3,
+ "lingua_franca_pull": 0.1,
+ "literacy_levels": {
+  "elite": 0.05,
+  "mass": 0.8,
+  "towns": 0.2
+ },
+ "liturgy_weight": 0.1,
+ "order_rigidity": 0.05,
+ "paradigm_merge_weight": 1.0,
+ "policy_levels": {
+  "enforced": {
+   "pull": 1.0,
+   "share": 0.6
+  },
+  "promoted": {
+   "pull": 0.1,
+   "share": 0.3
+  },
+  "tolerant": {
+   "pull": 0.0,
+   "share": 0.1
+  }
+ },
+ "population_per_density": 500.0,
+ "pressure_weights": {},
+ "reading_core_resistance": 1.0,
+ "reading_weight": 0.1,
+ "redundant_merge_weight": 0.3,
+ "restructure_threshold": 0.85,
+ "revival_levels": {
+  "movement": {
+   "pace": 0.3,
+   "seed": 0.02
+  },
+  "national": {
+   "pace": 1.0,
+   "seed": 0.05
+  }
+ },
+ "school_correction": 0.8,
+ "school_weight": 0.3,
+ "schooling_levels": {
+  "mass": 0.8,
+  "towns": 0.3
+ },
+ "shift_exponent": 1.31,
+ "shift_rate": 1.0,
+ "standard_prestige": 1.5,
+ "standing_variation": 1.0,
+ "stress_strength_multiplier": 1.5,
+ "terrain_access": {
+  "hills": 0.6,
+  "island": 0.2,
+  "mountains": 0.3,
+  "plain": 1.0
+ },
+ "variation_cap": 0.4,
+ "village_openness": 0.5,
+ "word_bias_sd": 1.5
+}

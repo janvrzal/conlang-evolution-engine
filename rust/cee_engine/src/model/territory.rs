@@ -1,0 +1,56 @@
+//! Strom území (zrcadlo `world.Territory`).
+
+use serde::{Deserialize, Serialize};
+
+use crate::ids::{LanguageId, TerritoryId};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TerritoryLevel {
+    World,
+    Continent,
+    Region,
+    Area,
+    Settlement,
+}
+
+impl TerritoryLevel {
+    pub fn name(self) -> &'static str {
+        match self {
+            TerritoryLevel::World => "world",
+            TerritoryLevel::Continent => "continent",
+            TerritoryLevel::Region => "region",
+            TerritoryLevel::Area => "area",
+            TerritoryLevel::Settlement => "settlement",
+        }
+    }
+}
+
+/// Uzel stromu území. Bez potomků je území „nerozepsané“.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Territory {
+    pub level: TerritoryLevel,
+    pub parent: TerritoryId,
+    pub children: Vec<TerritoryId>,
+    /// Poloha těžiště v mapových jednotkách (km).
+    pub position: Option<(f64, f64)>,
+    pub refined_from_year: Option<f64>,
+    /// Terén (klíč `Parameters::terrain_access`).
+    pub terrain: String,
+    /// Původní jazyk území (linie), pokud ho scénář zná.
+    pub native_language: LanguageId,
+}
+
+impl Territory {
+    pub fn new(level: TerritoryLevel) -> Territory {
+        Territory {
+            level,
+            parent: TerritoryId::NONE,
+            children: Vec::new(),
+            position: None,
+            refined_from_year: None,
+            terrain: "plain".into(),
+            native_language: LanguageId::NONE,
+        }
+    }
+}

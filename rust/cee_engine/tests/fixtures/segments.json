@@ -1,0 +1,6120 @@
+{
+ "changed": [
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "p",
+   "result": null,
+   "segment": 693
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "p",
+   "result": 699,
+   "segment": 693
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": 21,
+   "segment": 693
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": 27,
+   "segment": 693
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": 2303,
+   "segment": 693
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": 2309,
+   "segment": 693
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": 782,
+   "segment": 693
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": null,
+   "segment": 693
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": 114,
+   "segment": 693
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": 699,
+   "segment": 693
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": null,
+   "segment": 693
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": null,
+   "segment": 693
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": null,
+   "segment": 693
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": null,
+   "segment": 693
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "p",
+   "result": null,
+   "segment": 693
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "p",
+   "result": 699,
+   "segment": 693
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "p",
+   "result": null,
+   "segment": 693
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "p",
+   "result": null,
+   "segment": 693
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": 715,
+   "segment": 693
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "p",
+   "result": 721,
+   "segment": 693
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "t",
+   "result": null,
+   "segment": 922
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "t",
+   "result": 928,
+   "segment": 922
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": 171,
+   "segment": 922
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": 177,
+   "segment": 922
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": 876,
+   "segment": 922
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": 882,
+   "segment": 922
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": 1114,
+   "segment": 922
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": null,
+   "segment": 922
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": 1439,
+   "segment": 922
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": 928,
+   "segment": 922
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": null,
+   "segment": 922
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": null,
+   "segment": 922
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": 3560,
+   "segment": 922
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": null,
+   "segment": 922
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "t",
+   "result": null,
+   "segment": 922
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "t",
+   "result": 928,
+   "segment": 922
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "t",
+   "result": null,
+   "segment": 922
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "t",
+   "result": null,
+   "segment": 922
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": 942,
+   "segment": 922
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "t",
+   "result": 1044,
+   "segment": 922
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "k",
+   "result": null,
+   "segment": 478
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "k",
+   "result": 3010,
+   "segment": 478
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": 1767,
+   "segment": 478
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": 3011,
+   "segment": 478
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": 1177,
+   "segment": 478
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": 423,
+   "segment": 478
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": 533,
+   "segment": 478
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": 7279,
+   "segment": 478
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": null,
+   "segment": 478
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": 3010,
+   "segment": 478
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": 1322,
+   "segment": 478
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": null,
+   "segment": 478
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": 3309,
+   "segment": 478
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": null,
+   "segment": 478
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "k",
+   "result": 114,
+   "segment": 478
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "k",
+   "result": 3078,
+   "segment": 478
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "k",
+   "result": 2803,
+   "segment": 478
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "k",
+   "result": 2804,
+   "segment": 478
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": 515,
+   "segment": 478
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "k",
+   "result": 799,
+   "segment": 478
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "b",
+   "result": 693,
+   "segment": 21
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "b",
+   "result": 699,
+   "segment": 21
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": null,
+   "segment": 21
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": 27,
+   "segment": 21
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": 2942,
+   "segment": 21
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": 2943,
+   "segment": 21
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": 594,
+   "segment": 21
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": 595,
+   "segment": 21
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": 1715,
+   "segment": 21
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": 27,
+   "segment": 21
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": null,
+   "segment": 21
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": null,
+   "segment": 21
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": null,
+   "segment": 21
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": null,
+   "segment": 21
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "b",
+   "result": null,
+   "segment": 21
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "b",
+   "result": 27,
+   "segment": 21
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "b",
+   "result": null,
+   "segment": 21
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "b",
+   "result": null,
+   "segment": 21
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": 64,
+   "segment": 21
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "b",
+   "result": 70,
+   "segment": 21
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "d",
+   "result": 922,
+   "segment": 171
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "d",
+   "result": 928,
+   "segment": 171
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": null,
+   "segment": 171
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": 177,
+   "segment": 171
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": 1215,
+   "segment": 171
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": 1216,
+   "segment": 171
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": 620,
+   "segment": 171
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": 621,
+   "segment": 171
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": 1439,
+   "segment": 171
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": 177,
+   "segment": 171
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": null,
+   "segment": 171
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": null,
+   "segment": 171
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": 3132,
+   "segment": 171
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": null,
+   "segment": 171
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "d",
+   "result": null,
+   "segment": 171
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "d",
+   "result": 177,
+   "segment": 171
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "d",
+   "result": 2376,
+   "segment": 171
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "d",
+   "result": null,
+   "segment": 171
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": 186,
+   "segment": 171
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "d",
+   "result": 302,
+   "segment": 171
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 478,
+   "segment": 1767
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 3010,
+   "segment": 1767
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": null,
+   "segment": 1767
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 3011,
+   "segment": 1767
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 1860,
+   "segment": 1767
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 1921,
+   "segment": 1767
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 533,
+   "segment": 1767
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 3851,
+   "segment": 1767
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": null,
+   "segment": 1767
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 3011,
+   "segment": 1767
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 2811,
+   "segment": 1767
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": null,
+   "segment": 1767
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 4558,
+   "segment": 1767
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": null,
+   "segment": 1767
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 1715,
+   "segment": 1767
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 4470,
+   "segment": 1767
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 453,
+   "segment": 1767
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 2804,
+   "segment": 1767
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 1804,
+   "segment": 1767
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "ɡ",
+   "result": 1841,
+   "segment": 1767
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "s",
+   "result": null,
+   "segment": 876
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "s",
+   "result": 882,
+   "segment": 876
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": 1215,
+   "segment": 876
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": 1216,
+   "segment": 876
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": null,
+   "segment": 876
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": 882,
+   "segment": 876
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": 1114,
+   "segment": 876
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": null,
+   "segment": 876
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": 3533,
+   "segment": 876
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": 882,
+   "segment": 876
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": null,
+   "segment": 876
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": null,
+   "segment": 876
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": 3533,
+   "segment": 876
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": null,
+   "segment": 876
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "s",
+   "result": null,
+   "segment": 876
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "s",
+   "result": 882,
+   "segment": 876
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "s",
+   "result": null,
+   "segment": 876
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "s",
+   "result": null,
+   "segment": 876
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": 1038,
+   "segment": 876
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "s",
+   "result": 1044,
+   "segment": 876
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "z",
+   "result": 876,
+   "segment": 1215
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "z",
+   "result": 882,
+   "segment": 1215
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": null,
+   "segment": 1215
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": 1216,
+   "segment": 1215
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": null,
+   "segment": 1215
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": 1216,
+   "segment": 1215
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": null,
+   "segment": 1215
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": null,
+   "segment": 1215
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": 3730,
+   "segment": 1215
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": 1216,
+   "segment": 1215
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": null,
+   "segment": 1215
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": null,
+   "segment": 1215
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": 3730,
+   "segment": 1215
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": null,
+   "segment": 1215
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "z",
+   "result": null,
+   "segment": 1215
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "z",
+   "result": 1216,
+   "segment": 1215
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "z",
+   "result": 2376,
+   "segment": 1215
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "z",
+   "result": null,
+   "segment": 1215
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": 296,
+   "segment": 1215
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "z",
+   "result": 302,
+   "segment": 1215
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "m",
+   "result": 782,
+   "segment": 594
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": 595,
+   "segment": 594
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": 2942,
+   "segment": 594
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": 595,
+   "segment": 594
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": 9679,
+   "segment": 594
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": 595,
+   "segment": 594
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "m",
+   "result": 595,
+   "segment": 594
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "m",
+   "result": null,
+   "segment": 594
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "n",
+   "result": 1114,
+   "segment": 620
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": 621,
+   "segment": 620
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": 534,
+   "segment": 620
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": 621,
+   "segment": 620
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": 3390,
+   "segment": 620
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": 621,
+   "segment": 620
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": 3390,
+   "segment": 620
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "n",
+   "result": 621,
+   "segment": 620
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "n",
+   "result": null,
+   "segment": 620
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "l",
+   "result": null,
+   "segment": 534
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "l",
+   "result": null,
+   "segment": 534
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": null,
+   "segment": 534
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": 535,
+   "segment": 534
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": null,
+   "segment": 534
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": 535,
+   "segment": 534
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": 620,
+   "segment": 534
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": null,
+   "segment": 534
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": 3335,
+   "segment": 534
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": 535,
+   "segment": 534
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": null,
+   "segment": 534
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": null,
+   "segment": 534
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": 3335,
+   "segment": 534
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": null,
+   "segment": 534
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "l",
+   "result": null,
+   "segment": 534
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "l",
+   "result": 535,
+   "segment": 534
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "l",
+   "result": 2376,
+   "segment": 534
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "l",
+   "result": null,
+   "segment": 534
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": 186,
+   "segment": 534
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "l",
+   "result": null,
+   "segment": 534
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": 817,
+   "segment": 816
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": 817,
+   "segment": 816
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": 3504,
+   "segment": 816
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": 817,
+   "segment": 816
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": 3504,
+   "segment": 816
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "r",
+   "result": 817,
+   "segment": 816
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "r",
+   "result": null,
+   "segment": 816
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "a",
+   "result": null,
+   "segment": 0
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "a",
+   "result": null,
+   "segment": 0
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": null,
+   "segment": 0
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": 3023,
+   "segment": 0
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": null,
+   "segment": 0
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": 3023,
+   "segment": 0
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": null,
+   "segment": 0
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": null,
+   "segment": 0
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": 1964,
+   "segment": 0
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": 4739,
+   "segment": 0
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": null,
+   "segment": 0
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": 3023,
+   "segment": 0
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": 1481,
+   "segment": 0
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": 4084,
+   "segment": 0
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "a",
+   "result": 1263,
+   "segment": 0
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "a",
+   "result": 3734,
+   "segment": 0
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "a",
+   "result": null,
+   "segment": 0
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "a",
+   "result": 3023,
+   "segment": 0
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": null,
+   "segment": 0
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "a",
+   "result": null,
+   "segment": 0
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "e",
+   "result": null,
+   "segment": 385
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "e",
+   "result": null,
+   "segment": 385
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": null,
+   "segment": 385
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": 3136,
+   "segment": 385
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": null,
+   "segment": 385
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": 3136,
+   "segment": 385
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": null,
+   "segment": 385
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": null,
+   "segment": 385
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": 434,
+   "segment": 385
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": 3225,
+   "segment": 385
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": 1263,
+   "segment": 385
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": 3734,
+   "segment": 385
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": 1304,
+   "segment": 385
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": 3790,
+   "segment": 385
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "e",
+   "result": null,
+   "segment": 385
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "e",
+   "result": 3136,
+   "segment": 385
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "e",
+   "result": null,
+   "segment": 385
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "e",
+   "result": 3136,
+   "segment": 385
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": null,
+   "segment": 385
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "e",
+   "result": null,
+   "segment": 385
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "i",
+   "result": null,
+   "segment": 434
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "i",
+   "result": null,
+   "segment": 434
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": null,
+   "segment": 434
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": 3225,
+   "segment": 434
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": null,
+   "segment": 434
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": 3225,
+   "segment": 434
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": null,
+   "segment": 434
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": null,
+   "segment": 434
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": null,
+   "segment": 434
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": 3225,
+   "segment": 434
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": 1263,
+   "segment": 434
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": 3734,
+   "segment": 434
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": 1193,
+   "segment": 434
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": 3679,
+   "segment": 434
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "i",
+   "result": null,
+   "segment": 434
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "i",
+   "result": 3225,
+   "segment": 434
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "i",
+   "result": null,
+   "segment": 434
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "i",
+   "result": 3225,
+   "segment": 434
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": null,
+   "segment": 434
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "i",
+   "result": null,
+   "segment": 434
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "o",
+   "result": null,
+   "segment": 674
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "o",
+   "result": null,
+   "segment": 674
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": null,
+   "segment": 674
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": 3394,
+   "segment": 674
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": null,
+   "segment": 674
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": 3394,
+   "segment": 674
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": null,
+   "segment": 674
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": null,
+   "segment": 674
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": 1115,
+   "segment": 674
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": 3563,
+   "segment": 674
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": 1481,
+   "segment": 674
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": 4084,
+   "segment": 674
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": null,
+   "segment": 674
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": 3394,
+   "segment": 674
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "o",
+   "result": 1304,
+   "segment": 674
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "o",
+   "result": 3790,
+   "segment": 674
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "o",
+   "result": null,
+   "segment": 674
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "o",
+   "result": 3394,
+   "segment": 674
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": null,
+   "segment": 674
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "o",
+   "result": null,
+   "segment": 674
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": 3563,
+   "segment": 1115
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": 3563,
+   "segment": 1115
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": 3563,
+   "segment": 1115
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": 1481,
+   "segment": 1115
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": 3563,
+   "segment": 1115
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "u",
+   "result": 1193,
+   "segment": 1115
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "u",
+   "result": 3679,
+   "segment": 1115
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "u",
+   "result": 3563,
+   "segment": 1115
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "u",
+   "result": null,
+   "segment": 1115
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "ə",
+   "result": null,
+   "segment": 1656
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "ə",
+   "result": null,
+   "segment": 1656
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": null,
+   "segment": 1656
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": 4278,
+   "segment": 1656
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": null,
+   "segment": 1656
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": 4278,
+   "segment": 1656
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": null,
+   "segment": 1656
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": null,
+   "segment": 1656
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": 2127,
+   "segment": 1656
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": 4909,
+   "segment": 1656
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": 0,
+   "segment": 1656
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": 3023,
+   "segment": 1656
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": 1518,
+   "segment": 1656
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": 4140,
+   "segment": 1656
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "ə",
+   "result": 1673,
+   "segment": 1656
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "ə",
+   "result": 4343,
+   "segment": 1656
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "ə",
+   "result": null,
+   "segment": 1656
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "ə",
+   "result": 4278,
+   "segment": 1656
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": null,
+   "segment": 1656
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "ə",
+   "result": null,
+   "segment": 1656
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": null,
+   "segment": 3010
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": null,
+   "segment": 3010
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 3011,
+   "segment": 3010
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 3011,
+   "segment": 3010
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 423,
+   "segment": 3010
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 423,
+   "segment": 3010
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 7279,
+   "segment": 3010
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 7279,
+   "segment": 3010
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": null,
+   "segment": 3010
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": null,
+   "segment": 3010
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": null,
+   "segment": 3010
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": null,
+   "segment": 3010
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": null,
+   "segment": 3010
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": null,
+   "segment": 3010
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 3078,
+   "segment": 3010
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 3078,
+   "segment": 3010
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 2804,
+   "segment": 3010
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 2804,
+   "segment": 3010
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 799,
+   "segment": 3010
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "kʲ",
+   "result": 799,
+   "segment": 3010
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": null,
+   "segment": 923
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": 924,
+   "segment": 923
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": 172,
+   "segment": 923
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": 173,
+   "segment": 923
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": 877,
+   "segment": 923
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": 878,
+   "segment": 923
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": null,
+   "segment": 923
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": null,
+   "segment": 923
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": 1440,
+   "segment": 923
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": 924,
+   "segment": 923
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": null,
+   "segment": 923
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": null,
+   "segment": 923
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": null,
+   "segment": 923
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": null,
+   "segment": 923
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": null,
+   "segment": 923
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": 924,
+   "segment": 923
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": null,
+   "segment": 923
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": null,
+   "segment": 923
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": 1039,
+   "segment": 923
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "tʰ",
+   "result": 1040,
+   "segment": 923
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": null,
+   "segment": 1673
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": null,
+   "segment": 1673
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": null,
+   "segment": 1673
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": 4343,
+   "segment": 1673
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": null,
+   "segment": 1673
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": 4343,
+   "segment": 1673
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": null,
+   "segment": 1673
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": null,
+   "segment": 1673
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": 1978,
+   "segment": 1673
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": 4769,
+   "segment": 1673
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": 1263,
+   "segment": 1673
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": 3734,
+   "segment": 1673
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": 1355,
+   "segment": 1673
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": 3881,
+   "segment": 1673
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": null,
+   "segment": 1673
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": 4343,
+   "segment": 1673
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": null,
+   "segment": 1673
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": 4343,
+   "segment": 1673
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": null,
+   "segment": 1673
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "ɛ",
+   "result": null,
+   "segment": 1673
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": null,
+   "segment": 1518
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "-"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": null,
+   "segment": 1518
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": null,
+   "segment": 1518
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "voi",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": 4140,
+   "segment": 1518
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": null,
+   "segment": 1518
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "cont",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": 4140,
+   "segment": 1518
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": null,
+   "segment": 1518
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "nas",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": null,
+   "segment": 1518
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": 2622,
+   "segment": 1518
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "hi",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": 5517,
+   "segment": 1518
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": 1481,
+   "segment": 1518
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "lo",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": 4084,
+   "segment": 1518
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": null,
+   "segment": 1518
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "round",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": 4140,
+   "segment": 1518
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": 1355,
+   "segment": 1518
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "back",
+     "-"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": 3881,
+   "segment": 1518
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": null,
+   "segment": 1518
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "son",
+     "+"
+    ],
+    [
+     "cons",
+     "-"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": 4140,
+   "segment": 1518
+  },
+  {
+   "allow": [],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": null,
+   "segment": 1518
+  },
+  {
+   "allow": [
+    "ʲ"
+   ],
+   "changes": [
+    [
+     "delrel",
+     "+"
+    ]
+   ],
+   "ipa": "ɔ",
+   "result": null,
+   "segment": 1518
+  }
+ ],
+ "count": 23352,
+ "features": [
+  "syl",
+  "son",
+  "cons",
+  "cont",
+  "delrel"
+ ],
+ "parse": [
+  {
+   "form": [
+    693,
+    0,
+    922,
+    0
+   ],
+   "ipa": "pata",
+   "render": "pata"
+  },
+  {
+   "form": [
+    478,
+    385,
+    620,
+    0
+   ],
+   "ipa": "kena",
+   "render": "kena"
+  },
+  {
+   "form": [
+    1767,
+    1115,
+    534,
+    434
+   ],
+   "ipa": "ɡuli",
+   "render": "ɡuli"
+  },
+  {
+   "form": [
+    876,
+    1518
+   ],
+   "ipa": "sɔ",
+   "render": "sɔ"
+  },
+  {
+   "form": [
+    922,
+    876,
+    0
+   ],
+   "ipa": "tsa",
+   "render": "tsa"
+  },
+  {
+   "form": [
+    483,
+    0
+   ],
+   "ipa": "kʷa",
+   "render": "kʷa"
+  },
+  {
+   "form": [
+    2515,
+    434,
+    783,
+    0
+   ],
+   "ipa": "ʃiqa",
+   "render": "ʃiqa"
+  },
+  {
+   "form": [
+    22268,
+    922,
+    0
+   ],
+   "ipa": "a˥ta",
+   "render": "a˥ta"
+  },
+  {
+   "form": [
+    478,
+    22280
+   ],
+   "ipa": "ka˧˥",
+   "render": "ka˧˥"
+  },
+  {
+   "form": [
+    478,
+    22267
+   ],
+   "ipa": "ká",
+   "render": "ka˦"
+  },
+  {
+   "form": [
+    478,
+    22272
+   ],
+   "ipa": "kǎ",
+   "render": "ka˩˥"
+  },
+  {
+   "form": [
+    923,
+    0
+   ],
+   "ipa": "tʰa",
+   "render": "tʰa"
+  },
+  {
+   "form": [
+    620,
+    453,
+    0
+   ],
+   "ipa": "nja",
+   "render": "nja"
+  },
+  {
+   "form": [
+    0,
+    9679
+   ],
+   "ipa": "aŋ͡m",
+   "render": "aŋ͡m"
+  },
+  {
+   "form": [
+    3010,
+    0
+   ],
+   "ipa": "kʲa",
+   "render": "kʲa"
+  },
+  {
+   "form": [
+    6,
+    922,
+    0
+   ],
+   "ipa": "ãta",
+   "render": "ãta"
+  },
+  {
+   "form": [
+    922,
+    436,
+    816,
+    0
+   ],
+   "ipa": "tiːra",
+   "render": "tiːra"
+  },
+  {
+   "form": [
+    3012,
+    922,
+    0
+   ],
+   "ipa": "ɐta",
+   "render": "ɐta"
+  },
+  {
+   "form": [
+    3016,
+    0
+   ],
+   "ipa": "ɾa",
+   "render": "ɾa"
+  },
+  {
+   "form": [
+    2803,
+    0
+   ],
+   "ipa": "ʔa",
+   "render": "ʔa"
+  },
+  {
+   "form": [
+    1279,
+    0,
+    2965
+   ],
+   "ipa": "ðaθ",
+   "render": "ðaθ"
+  },
+  {
+   "form": [
+    1177,
+    0,
+    816
+   ],
+   "ipa": "xar",
+   "render": "xar"
+  },
+  {
+   "form": [
+    597,
+    0
+   ],
+   "ipa": "mʷa",
+   "render": "mʷa"
+  },
+  {
+   "form": [
+    2,
+    693,
+    1115
+   ],
+   "ipa": "aːpu",
+   "render": "aːpu"
+  }
+ ]
+}
