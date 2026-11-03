@@ -439,6 +439,26 @@ def _queue_all(world: World, code: Code, morpheme_id: str) -> None:
         state.queued[variable_id].add_number(found)
 
 
+def _by_name(morphemes: list[int], logits: list[float], names: list[str]) -> list[int]:
+    """Morfémy seřazené podle (logit, číslo) srovná v každém úseku shodných logitů podle jména.
+
+    Fronta řadí dvojice (logit, jméno morfému); Rust jména nezná, řadí shodné
+    logity (buňky téhož lexému) podle čísla, a pořadí čísel není pořadí jmen.
+    """
+    ordered = list(morphemes)
+    values = np.array(logits, dtype=np.float64)
+    tied = np.flatnonzero(values[1:] == values[:-1]).tolist()
+    position = 0
+    while position < len(tied):
+        last = position
+        while last + 1 < len(tied) and tied[last + 1] == tied[last] + 1:
+            last += 1
+        low, high = tied[position], tied[last] + 2
+        ordered[low:high] = sorted(ordered[low:high], key=names.__getitem__)
+        position = last + 1
+    return ordered
+
+
 def _activate_native(world: World, code: Code, variable_id: str) -> bool:
     """:func:`activate` v Rustu; ``False``, když Rust není k dispozici (pak aktivuje Python)."""
     handle = _kernel(world, code)
@@ -463,19 +483,7 @@ def _activate_native(world: World, code: Code, variable_id: str) -> bool:
         lambda: handle.activate(code_rule, base, lead, store, columns, targets, known, row, state.vocabulary.flags),
     )
     _, morphemes, logits = answer[:3]
-    names = state.registry.morphemes.names
-    # Rust řadí shodné logity podle čísla morfému, fronta podle jména: každý úsek shodných logitů se srovná.
-    ordered = list(morphemes)
-    values = np.array(logits, dtype=np.float64)
-    tied = np.flatnonzero(values[1:] == values[:-1]).tolist()
-    position = 0
-    while position < len(tied):
-        last = position
-        while last + 1 < len(tied) and tied[last + 1] == tied[last] + 1:
-            last += 1
-        low, high = tied[position], tied[last] + 2
-        ordered[low:high] = sorted(ordered[low:high], key=names.__getitem__)
-        position = last + 1
+    ordered = _by_name(morphemes, logits, state.registry.morphemes.names)
     queue = ProcessQueue(state.registry.morphemes)
     queue.needed = array("d", logits)
     queue.morphemes = array("i", ordered)
