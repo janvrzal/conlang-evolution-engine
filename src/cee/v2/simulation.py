@@ -21,6 +21,7 @@ from cee.v2.transmission import TransmissionParams, prepare, transmit
 from cee.v2.world import World
 
 _MILESTONES = (0.1, 0.5, 0.9)
+_LEVELS = np.array(_MILESTONES)
 _EMPTY = Distribution((), np.zeros(0))
 _INNOVATION_CHANGE_DOMAIN = "innovation-change"
 
@@ -463,24 +464,20 @@ class Simulation:
         numbers = self.world.registry.variants.numbers
         slot_numbers = np.array(
             [[-1 if slot is None else numbers[slot] for slot in row] for row in block.slots], dtype=np.intp
-        ).reshape(len(block), 1, block.capacity)
-        change = self.world.columns.variants.arrays()["change"]
-        innovation = (slot_numbers >= 0) & (change[slot_numbers] >= 0) if len(change) else slot_numbers < -1
+        ).reshape(len(block), block.capacity)
+        innovation = phases.innovation_mask(slot_numbers, self.world.columns.variants.arrays()["change"])
         records: list[tuple[str, dict[str, Any]]] = []
 
         def describe(row: int, slot: int, **extra: Any) -> dict[str, Any]:
             return {"variable": block.variable_ids[row], "variant": block.slots[row][slot], **extra}
 
-        levels = np.array(_MILESTONES)
-        reached_before = np.searchsorted(levels, before, side="right")
-        reached_after = np.searchsorted(levels, after, side="right")
-        for row, column, slot in zip(*np.nonzero((reached_after > reached_before) & innovation)):
-            for level in _MILESTONES[reached_before[row, column, slot] : reached_after[row, column, slot]]:
+        milestones, established, extinct = phases.change_events(before, after, innovation, _LEVELS)
+        for row, column, slot, first, last in zip(*milestones):
+            for level in _MILESTONES[first:last]:
                 records.append(("milestone", describe(row, slot, group=group_ids[column], level=level)))
-        for row, column, slot in zip(*np.nonzero((after == 1.0) & (before < 1.0) & innovation)):
+        for row, column, slot in zip(*established):
             records.append(("established", describe(row, slot, group=group_ids[column])))
-        gone = (before > 0).any(axis=1) & ~(after > 0).any(axis=1) & innovation[:, 0, :]
-        for row, slot in zip(*np.nonzero(gone)):
+        for row, slot in zip(*extinct):
             records.append(("extinct", describe(row, slot)))
         return records
 
@@ -511,14 +508,12 @@ class Simulation:
         lexical = np.array(
             [self.world.variables[variable_id].kind == "lexical" for variable_id in block.variable_ids],
             dtype=bool,
-        )[:, None, None]
+        )
         # Nejdřív odchody, potom příchody: kořen, který jeden pojem opouští a
         # druhý (posunem) přebírá, tak ze slovní zásoby na okamžik nevypadne.
-        for direction, mask in (
-            ("leave", (before >= 0.5) & (after < 0.5) & lexical),
-            ("enter", (before < 0.5) & (after >= 0.5) & lexical),
-        ):
-            cells = list(zip(*np.nonzero(mask)))
+        leave, enter = phases.threshold_crossings(before, after, lexical, 0.5)
+        for direction, found in (("leave", leave), ("enter", enter)):
+            cells = list(zip(*found))
             for row, column, slot in (sorted(cells, key=lambda cell: (-cell[1], cell[0], cell[2]))
                                       if self.reverse_groups else cells):
                 variant = block.slots[row][slot]
@@ -549,22 +544,20 @@ class Simulation:
     def _activations(self, block: PoolBlock, after: np.ndarray) -> list[tuple[str, str]]:
         """Procesy a analogie, které ve skupině překročily malý podíl a začnou působit."""
         group_ids = self.world.live.group_ids
-        found = []
+        slots = np.full(len(block), -1, dtype=np.intp)
         for row, variable_id in enumerate(block.variable_ids):
             if variable_id not in self.world.processes and variable_id not in self.world.form_changes:
                 continue
             changed = phonology.changed_id(variable_id)
-            if changed not in block.slots[row]:
-                continue
-            slot = block.slots[row].index(changed)
-            for column in np.flatnonzero(after[row, :, slot] >= self.world.params.activation_share):
-                found.append((group_ids[column], variable_id))
-        return found
+            if changed in block.slots[row]:
+                slots[row] = block.slots[row].index(changed)
+        rows, columns = phases.activation_cells(after, slots, self.world.params.activation_share)
+        return [(group_ids[column], block.variable_ids[row]) for row, column in zip(rows, columns)]
 
     def _trace(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
         variants = self.world.variants
         group_ids = self.world.live.group_ids
-        for row, column, slot in zip(*np.nonzero((before > 0) | (after > 0))):
+        for row, column, slot in zip(*phases.trace_cells(before, after)):
             variant = block.slots[row][slot]
             if variant is None or variants[variant].origin.change is None:
                 continue
