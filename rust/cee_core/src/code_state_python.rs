@@ -44,6 +44,7 @@ type RoundIn<'py> = (
     Vec<bool>,
     i64,
     f64,
+    i64,
 );
 
 /// Neutrální podoba procesu: (číslo, živý, redukční, řádek nebo −1, čekající,
@@ -452,7 +453,7 @@ pub fn restructure_groups<'py>(
     let mut rewrites = Vec::new();
     let mut events = Vec::new();
     let mut halt: Option<(usize, NeedsOut)> = None;
-    for (group, (code, rule, store, biases, reductive, levels, full, tick, threshold)) in
+    for (group, (code, rule, store, biases, reductive, levels, full, tick, threshold, resume)) in
         groups.iter().enumerate()
     {
         let inputs = Inputs::new(store, &defaults, &usage)?;
@@ -470,6 +471,7 @@ pub fn restructure_groups<'py>(
             tick: *tick,
             dt,
             threshold: *threshold,
+            resume: usize::try_from(*resume).ok(),
         };
         let mut out = RoundOut::default();
         let mut state = code.borrow_mut();

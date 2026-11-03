@@ -440,6 +440,20 @@ def _pop_python(
     return rewritten
 
 
+class DeferredHistory:
+    """Záznamy fonologizace po skupinách; zapíšou se do historie, až na skupinu dojde řada.
+
+    Fonologizace všech skupin běží jedním voláním, ale historie má mít záznamy skupin
+    v pořadí, v jakém krok skupiny prochází (fonologie, morfologie, syntax, prozodie).
+    """
+
+    def __init__(self) -> None:
+        self.records: dict[str, list[tuple[str, float, dict[str, Any]]]] = {}
+
+    def record(self, kind: str, tick: int, year: float, **payload: Any) -> None:
+        self.records.setdefault(payload["group"], []).append((kind, year, payload))
+
+
 def restructure(world: World, group_id: str, tick: int, dt: float, history: History, year: float) -> None:
     """Fonologizace a uzavírání procesů v jedné skupině (krok 6 ticku)."""
     restructure_groups(world, [group_id], tick, dt, history, year)
@@ -473,11 +487,12 @@ def _restructure_core(
     pending = list(group_ids)
     words: dict[tuple[str, int], int] = {}
     previous = None
+    resume = -1  # proces zastavené skupiny, od kterého se pokračuje (−1 = od začátku)
     names = world.registry.processes.names
     while pending:
         arguments: list[Any] = []
         sent: list[str] = []
-        for group_id in pending:
+        for position, group_id in enumerate(pending):
             group = world.groups[group_id]
             code = group.main_code
             state = code.phonology
@@ -493,6 +508,7 @@ def _restructure_core(
             arguments.append((
                 state.core, native.RULES.index(code.stress_rule), code.forms.raw(), biases, reductive, levels, full,
                 tick, world.params.closure_generations * group.generation_years,
+                resume if position == 0 else -1,
             ))
             sent.append(group_id)
         if not arguments:
@@ -529,6 +545,7 @@ def _restructure_core(
         if stopped is None:
             return
         index, needs = stopped
+        resume = next(process for at, process, kind, _, _ in reversed(events) if at == index and kind == 2)
         halted = world.groups[sent[index]].main_code
         if needs == previous:
             raise RuntimeError(f"Rust opakovaně vyžaduje totéž, bez pokroku: {needs!r}")

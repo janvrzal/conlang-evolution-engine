@@ -31,6 +31,18 @@ Crossings = tuple[tuple[np.ndarray, ...], tuple[np.ndarray, ...]]
 
 
 @dataclass
+class _BlockRows:
+    """Druh řádků bloku živých proměnných (viz :meth:`Simulation._rows`)."""
+
+    ids: list[str]
+    #: Řádky lexikálních proměnných.
+    lexical: np.ndarray
+    #: Řádky procesů a analogií a čísla jejich změněných variant.
+    tracked: np.ndarray
+    changed: np.ndarray
+
+
+@dataclass
 class _BlockPlan:
     """Co přenos jednoho bloku způsobí (spočteno z polí před zápisem do světa)."""
 
@@ -119,6 +131,7 @@ class Simulation:
         self._configure(changes, events)
         self.history = History()
         self.tick = 0
+        self._rows_cache: dict[int, _BlockRows] = {}
         self.tracker = LineageTracker()
         world.live.sync_groups(world)
         self._grammar = any(variable.kind == "construction" for variable in world.variables.values())
@@ -209,6 +222,7 @@ class Simulation:
         simulation._configure(changes, events)
         simulation._pending = [item for item in simulation._pending if item[1].year > checkpoint.year]
         simulation.history, simulation.tracker, simulation.tick = history, tracker, checkpoint.tick
+        simulation._rows_cache = {}
         simulation._grammar = any(variable.kind == "construction" for variable in world.variables.values())
         return simulation
 
@@ -466,12 +480,17 @@ class Simulation:
             )
             constructions = syntax.ready_constructions(self.world, groups) if self._grammar else {}
             stress = prosody.plan(self.world, groups)
+            # Fonologizace všech skupin je jedno volání; její záznamy se do historie zapíšou
+            # až v pořadí skupin, aby se mezi ně vešly záznamy morfologie, syntaxe a prozodie.
+            deferred = phonology.DeferredHistory()
+            phonology.restructure_groups(
+                self.world, [group_id for group_id in groups if self.world.groups[group_id].main_code.phonology.pending],
+                self.tick, self.config.dt, deferred, year,
+            )
             for group_id in groups:
                 state = self.world.groups[group_id].main_code.phonology
-                if state.pending:
-                    phonology.restructure(
-                        self.world, group_id, self.tick, self.config.dt, self.history, year
-                    )
+                for kind, when, payload in deferred.records.get(group_id, ()):
+                    self.history.record(kind, self.tick, when, **payload)
                 if state.morph_active:
                     morphology.restructure(self.world, group_id, self.tick, self.history, year, analogies.get(group_id))
                 if self._grammar:
@@ -550,13 +569,32 @@ class Simulation:
                 code.phonology.version += 1
                 code.phonology.lexicon_version += 1
 
+    def _rows(self, block: PoolBlock) -> _BlockRows:
+        """Druh řádků bloku (lexikální, sledované procesy a analogie); platí, dokud se řádky nezmění.
+
+        Druh proměnné a číslo její změněné varianty se po vzniku nemění, takže se po řádcích
+        nepočítají v každém kroku: stačí porovnat seznam ID řádků (porovnání řetězců po ukazatelích).
+        """
+        found = self._rows_cache.get(id(block))
+        if found is not None and found.ids == block.variable_ids:
+            return found
+        variables, numbers = self.world.variables, self.world.registry.variants.numbers
+        lexical = np.array([variables[variable_id].kind == "lexical" for variable_id in block.variable_ids], dtype=bool)
+        tracked, changed = [], []
+        for row, variable_id in enumerate(block.variable_ids):
+            if variable_id in self.world.processes or variable_id in self.world.form_changes:
+                number = numbers.get(phonology.changed_id(variable_id))
+                if number is not None:
+                    tracked.append(row)
+                    changed.append(number)
+        found = self._rows_cache[id(block)] = _BlockRows(
+            list(block.variable_ids), lexical, np.array(tracked, dtype=np.intp), np.array(changed, dtype=np.int64)
+        )
+        return found
+
     def _crossings(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> Crossings:
         """Buňky, ve kterých slovo překročilo polovinu (odchody a příchody), z pole před a po."""
-        lexical = np.array(
-            [self.world.variables[variable_id].kind == "lexical" for variable_id in block.variable_ids],
-            dtype=bool,
-        )
-        return phases.threshold_crossings(before, after, lexical, 0.5)
+        return phases.threshold_crossings(before, after, self._rows(block).lexical, 0.5)
 
     def _follow_vocabulary(self, block: PoolBlock, crossings: Crossings) -> None:
         """Slovo, které se stane dominantním, vstoupí do fonologie kódu."""
@@ -599,17 +637,13 @@ class Simulation:
         """Procesy a analogie, které ve skupině překročily malý podíl a začnou působit."""
         group_ids = self.world.live.group_ids
         slots = np.full(len(block), -1, dtype=np.intp)
-        numbers = self.world.registry.variants.numbers
-        slot_numbers = block.numbers_in(self.world.registry.variants)
-        for row, variable_id in enumerate(block.variable_ids):
-            if variable_id not in self.world.processes and variable_id not in self.world.form_changes:
-                continue
-            changed = numbers.get(phonology.changed_id(variable_id))
-            found = () if changed is None else np.flatnonzero(slot_numbers[row] == changed)
-            if len(found):
-                slots[row] = found[0]
-        rows, columns = phases.activation_cells(after, slots, self.world.params.activation_share)
-        return [(group_ids[column], block.variable_ids[row]) for row, column in zip(rows, columns)]
+        rows = self._rows(block)
+        if len(rows.tracked):
+            match = block.numbers_in(self.world.registry.variants)[rows.tracked] == rows.changed[:, None]
+            has = match.any(axis=1)
+            slots[rows.tracked[has]] = match[has].argmax(axis=1)
+        found_rows, columns = phases.activation_cells(after, slots, self.world.params.activation_share)
+        return [(group_ids[column], block.variable_ids[row]) for row, column in zip(found_rows, columns)]
 
     def _trace_cells(
         self, block: PoolBlock, before: np.ndarray, after: np.ndarray

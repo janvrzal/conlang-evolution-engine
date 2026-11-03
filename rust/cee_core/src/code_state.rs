@@ -329,6 +329,10 @@ pub struct Round<'a> {
     pub dt: f64,
     /// `closure_generations × generation_years`.
     pub threshold: f64,
+    /// Proces, na kterém se předchozí volání zastavilo kvůli chybějícímu údaji; procesy
+    /// před ním (v pořadí vzniku) jsou hotové a znovu se neprocházejí, jinak by slova
+    /// zařazená do jejich front později v témže kroku přepsaly dvakrát.
+    pub resume: Option<usize>,
 }
 
 /// Výstup `restructure`: přepsané tvary a události procesů.
@@ -471,7 +475,15 @@ impl CodeState {
         // Tvary přepsané v tomto volání: Python je zapíše až po něm, ale další proces
         // skupiny už musí vidět nový tvar.
         let mut overlay: BTreeMap<usize, Unit> = BTreeMap::new();
-        for (k, &index) in live0.iter().enumerate() {
+        let start = round
+            .resume
+            .and_then(|number| {
+                live0
+                    .iter()
+                    .position(|&index| self.procs[index].number == number)
+            })
+            .unwrap_or(0);
+        for (k, &index) in live0.iter().enumerate().skip(start) {
             let level = round.levels[k];
             let proc = &self.procs[index];
             let mut words = 0;
