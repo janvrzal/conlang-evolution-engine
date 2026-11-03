@@ -297,8 +297,8 @@ impl Bank {
 mod tests {
     use super::*;
 
-    /// Referenční párový součet z `numpy` pro několik pevných polí
-    /// (hodnoty spočítal `np.sum`, viz tests/v2/test_v2_native_assess.py).
+    /// Pro méně než osm prvků se sčítá postupně. Shodu s `np.sum` pro všechny
+    /// délky ověřuje `tests/v2/test_v2_native_assess.py`.
     #[test]
     fn parovy_soucet_sedi_s_postupnym_pro_male_pole() {
         let values = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7];
