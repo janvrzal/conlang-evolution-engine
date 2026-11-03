@@ -6,7 +6,9 @@ from typing import ClassVar, Mapping, Sequence, cast
 
 from cee.v2 import morphology, phases
 from cee.v2.changes.base import Change, InnovationContext
+from cee.v2.changes.sites import column_totals, native_column
 from cee.v2.language.morphology import FormChange
+from cee.v2.language.site_index import COL_EXTENSION, COL_LEVELING, site_index
 from cee.v2.pressures import Actuation, Conformity, Pressure
 from cee.v2.pressures.morphological import Conservation, Distinctiveness, Teachability, Uniformity
 from cee.v2.repertoire import Origin, Variable, Variant
@@ -41,54 +43,79 @@ class AnalogicalChange(Change):
             return 1.0
         return 1.0 + context.world.params.analogy_l2_boost * context.code.l2_share
 
+    def _form_changes(self, context: InnovationContext) -> list[FormChange]:
+        """Místa vyrovnání či rozšíření z indexu míst světa v pořadí řetězcových ID míst."""
+        world, code = context.world, context.code
+        index = site_index(world)
+        index.refresh(world, [context])
+        extension = self.kind == "extension"
+        return [
+            FormChange("extend", unit, exponent) if extension else FormChange("level", unit)
+            for unit, exponent in index.candidates(world, code, extension)
+        ]
+
     def _sites(self, context: InnovationContext) -> dict[str, FormChange]:
+        if native_column(self) is not None:
+            return {
+                Variable("form", change.key).id: change
+                for change in (self._form_changes(context) if self._active(context) else ())
+            }
         state = context.code.phonology
         key = ("form-sites", self.kind)
         cached = state.cache.get(key)
         if cached is not None and cached[0] == state.version:
             return cast(dict[str, FormChange], cached[1])
-        if self.kind in ("leveling", "extension"):
-            from cee.v2.language.morphology_index import MorphologyCandidateIndex
-
-            entry = state.cache.get("morphology-candidate-index")
-            index = cast(MorphologyCandidateIndex, entry[1]) if entry else MorphologyCandidateIndex()
-            found = index.sync(context, self.kind)
-            state.cache["morphology-candidate-index"] = (state.version, index)
-        else:
-            found = self.candidates(context)
+        found = self.candidates(context)
         state.cache[key] = (state.version, found)
         return found
 
+    def _active(self, context: InnovationContext) -> bool:
+        return context.world.table is not None and bool(context.world.paradigms)
+
     def total_rate(self, context: InnovationContext) -> float:
-        if context.world.table is None or not context.world.paradigms:
+        if native_column(self) is not None:
+            return column_totals(self, [context])[0]
+        if not self._active(context):
             return 0.0
         count = len(self._sites(context))
         if count == 0:
             return 0.0
         return float(phases.uniform_rate(self.base_rate, count, self.rate_scale(context)))
 
-    def sites(self, context: InnovationContext) -> Sequence[str]:
-        if context.world.table is None or not context.world.paradigms:
-            return ()
-        state = context.code.phonology
-        if self.kind in ("leveling", "extension"):
-            from cee.v2.language.morphology_index import MorphologyCandidateIndex
+    def total_rates(self, contexts: Sequence[InnovationContext]) -> list[float]:
+        if native_column(self) is None:
+            return super().total_rates(contexts)
+        return column_totals(self, contexts)
 
-            entry = state.cache.get("morphology-candidate-index")
-            index = cast(MorphologyCandidateIndex, entry[1]) if entry else MorphologyCandidateIndex()
-            index.sync(context, self.kind)
-            state.cache["morphology-candidate-index"] = (state.version, index)
-            return index.sites_sorted(self.kind)
+    def sites(self, context: InnovationContext) -> Sequence[str]:
+        if not self._active(context):
+            return ()
+        if native_column(self) is not None:
+            return [Variable("form", change.key).id for change in self._form_changes(context)]
+        state = context.code.phonology
         key = ("form-sites-sorted", self.kind)
         cached = state.cache.get(key)
         if cached is None or cached[0] != state.version:
             cached = state.cache[key] = (state.version, sorted(self._sites(context)))
         return cast(list[str], cached[1])
 
+    def _site_change(self, context: InnovationContext, site: str) -> FormChange:
+        """Změna místa: u vyrovnání a rozšíření ze jména místa (``form:level|tvar|``), jinak z kandidátů."""
+        if native_column(self) is None:
+            return self._sites(context)[site]
+        prefix = f"form:{'extend' if self.kind == 'extension' else 'level'}|"
+        if not site.startswith(prefix):
+            raise KeyError(site)
+        rest = site[len(prefix):]
+        if self.kind == "extension":
+            unit, _, exponent = rest.rpartition("|")
+            return FormChange("extend", unit, exponent)
+        return FormChange("level", rest[:-1])
+
     def propose(
         self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
-        change = self._sites(context)[site]
+        change = self._site_change(context, site)
         _, variant = morphology.register(
             context.world, change, Origin(self.kind, context.tick, context.year, context.group.id)
         )
@@ -107,6 +134,7 @@ class Leveling(AnalogicalChange):
     """Vyrovnání: kmen buňky se srovná s citačním tvarem (alternace zmizí)."""
 
     kind = "leveling"
+    site_column = COL_LEVELING
     base_rate = 0.004
 
     def _candidate(self, context: InnovationContext, unit: str) -> FormChange | None:
@@ -133,6 +161,7 @@ class Extension(AnalogicalChange):
     """
 
     kind = "extension"
+    site_column = COL_EXTENSION
     base_rate = 0.004
 
     def _candidate(

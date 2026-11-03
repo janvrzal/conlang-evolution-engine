@@ -12,13 +12,15 @@ bez určitého členu, bez času nebo bez pádu je proto jen jiný řádek profi
 
 from __future__ import annotations
 
-from typing import ClassVar, Mapping, Sequence
+from typing import ClassVar, Mapping, Sequence, cast
 
 import numpy as np
 
 from cee.v2 import phases, syntax
 from cee.v2.changes.base import Change, InnovationContext
+from cee.v2.changes.sites import column_totals, native_column
 from cee.v2.language.constructions import Construction, catalog_for
+from cee.v2.language.site_index import COL_SYNTAX, site_index
 from cee.v2.pressures import Actuation, Conformity, Pressure
 from cee.v2.pressures.syntactic import Ambiguity, Economy, Expressivity, Fusion, Learnability
 from cee.v2.repertoire import Origin, Variant
@@ -51,13 +53,39 @@ class SyntacticChange(Change):
     def applies(self, context: InnovationContext, current: Construction) -> bool:
         raise NotImplementedError
 
-    def sites(self, context: InnovationContext) -> Sequence[str]:
+    def _found(self, context: InnovationContext) -> tuple[list[str], list[float]]:
+        """Místa změny (``construction:funkce`` v pořadí jmen) a míry zániku kategorie z indexu míst světa."""
+        world = context.world
+        index = site_index(world)
+        column = cast(int, self.site_column)
+        index.batch(world, [context], {column: self.base_rate}, 1.0)
+        functions, rates = index.syntax_sites(context.code, column - COL_SYNTAX)
+        names = index.functions
+        return [syntax.variable_id(names[number]) for number in functions], rates.tolist()
+
+    def _sites_reference(self, context: InnovationContext) -> list[str]:
+        """Původní sestavení míst z dominantních konstrukcí, nezávislé na indexu míst."""
         found = []
         for entry in syntax.functions(context.world, self.template):
             current = syntax.dominant(context.world, context.group.id, entry.id)
             if current is not None and self.applies(context, current):
                 found.append(syntax.variable_id(entry.id))
         return found
+
+    def sites(self, context: InnovationContext) -> Sequence[str]:
+        if native_column(self) is None:
+            return self._sites_reference(context)
+        return self._found(context)[0]
+
+    def total_rate(self, context: InnovationContext) -> float:
+        if native_column(self) is None:
+            return super().total_rate(context)
+        return column_totals(self, [context])[0]
+
+    def total_rates(self, contexts: Sequence[InnovationContext]) -> list[float]:
+        if native_column(self) is None:
+            return super().total_rates(contexts)
+        return column_totals(self, contexts)
 
     def propose(
         self, context: InnovationContext, site: str, rng: RandomSource, index: int
@@ -92,6 +120,7 @@ class Periphrasis(SyntacticChange):
     změna ani nenavrhuje.
     """
 
+    site_column = COL_SYNTAX + 0
     kind, template, base_rate = "periphrasis", "inflection", 0.05
 
     def applies(self, context, current):
@@ -110,6 +139,7 @@ class Periphrasis(SyntacticChange):
 class Cliticization(SyntacticChange):
     """Pomocné slovo ztratí samostatnost a přiklonní se ke slovu."""
 
+    site_column = COL_SYNTAX + 1
     kind, template, base_rate = "cliticization", "inflection", 0.04
 
     def applies(self, context, current):
@@ -122,6 +152,7 @@ class Cliticization(SyntacticChange):
 class Affixation(SyntacticChange):
     """Přiklonka sroste se slovem v novou koncovku (*cantare habeo → chanterai*)."""
 
+    site_column = COL_SYNTAX + 2
     kind, template, base_rate = "affixation", "inflection", 0.03
 
     def applies(self, context, current):
@@ -143,6 +174,7 @@ class Exaptation(SyntacticChange):
     Které funkce si mohou koncovku vzít, říká katalog (``donors``).
     """
 
+    site_column = COL_SYNTAX + 3
     kind, template, base_rate = "exaptation", "inflection", 0.02
 
     def _donors(self, context: InnovationContext, function: str) -> list[tuple[str, str]]:
@@ -172,6 +204,7 @@ class Exaptation(SyntacticChange):
 class NegationReinforcement(SyntacticChange):
     """Zeslabený zápor se posílí dalším slovem (*ne → ne … pas*), Jespersen."""
 
+    site_column = COL_SYNTAX + 5
     kind, template, base_rate = "negation_reinforcement", "negation", 0.03
 
     def applies(self, context, current):
@@ -187,6 +220,7 @@ class NegationReinforcement(SyntacticChange):
 class NegationReduction(SyntacticChange):
     """Původní záporka odpadne a zápor nese zesilovač (*ne … pas → pas*)."""
 
+    site_column = COL_SYNTAX + 6
     kind, template, base_rate = "negation_reduction", "negation", 0.03
 
     def applies(self, context, current):
@@ -199,6 +233,7 @@ class NegationReduction(SyntacticChange):
 class NegationRenewal(SyntacticChange):
     """Zesilovač se stane obyčejnou záporkou před slovesem: cyklus začíná znovu."""
 
+    site_column = COL_SYNTAX + 7
     kind, template, base_rate = "negation_renewal", "negation", 0.01
 
     def applies(self, context, current):
@@ -211,6 +246,7 @@ class NegationRenewal(SyntacticChange):
 class OrderFixation(SyntacticChange):
     """Volný slovosled se ustálí; SOV a SVO jsou v jazycích světa zhruba stejně časté."""
 
+    site_column = COL_SYNTAX + 8
     kind, template, base_rate = "order_fixation", "order", 0.03
 
     def applies(self, context, current):
@@ -224,6 +260,7 @@ class OrderFixation(SyntacticChange):
 class OrderRelaxation(SyntacticChange):
     """Pevný slovosled se uvolní (vzácné; jen když pád role spolehlivě nese)."""
 
+    site_column = COL_SYNTAX + 9
     kind, template, base_rate = "order_relaxation", "order", 0.01
 
     def applies(self, context, current):
@@ -254,6 +291,7 @@ class CategoryLoss(SyntacticChange):
     potřebou nebo silným kontextem selekce nedrží.
     """
 
+    site_column = COL_SYNTAX + 4
     kind, template, base_rate = "category_loss", "inflection", 0.02
 
     def _pressure(self, context: InnovationContext, current: Construction) -> float:
@@ -274,6 +312,14 @@ class CategoryLoss(SyntacticChange):
         return self.rates(context, [site])[0]
 
     def rates(self, context: InnovationContext, sites: Sequence[str]) -> list[float]:
+        """Míry míst: z indexu míst světa pro místa změny, jinak z konstrukcí (:meth:`_rates_reference`)."""
+        if native_column(self) is not None:
+            found, rates = self._found(context)
+            if sites is found or list(sites) == found:
+                return rates
+        return self._rates_reference(context, sites)
+
+    def _rates_reference(self, context: InnovationContext, sites: Sequence[str]) -> list[float]:
         """Míry míst naráz: z konstrukcí složí pole a spočte je ``phases.category_loss_rates``."""
         currents = [syntax.dominant(context.world, context.group.id, site.split(":", 1)[1]) for site in sites]
         present = np.array([current is not None for current in currents], dtype=bool)

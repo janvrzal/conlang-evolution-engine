@@ -211,6 +211,8 @@ class World:
     bank: FormBank | None = None
     #: Číselný index prostředí a opor zvukových změn (``changes.sound.sound_index``); odvozený stav, vzniká při prvním použití.
     sound: Any = None
+    #: Číselný index míst morfologických, sémantických a syntaktických změn (``language.site_index``); odvozený stav.
+    sites: Any = None
     #: Výchozí tvar každého morfému (neměnný), aby se netvořil při každém čtení.
     default_units: dict[str, UnitForm] = field(default_factory=dict)
     #: Seedované sklony slov ke změně (``phonology.word_bias``): číslo procesu

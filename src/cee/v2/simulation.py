@@ -11,6 +11,7 @@ import numpy as np
 from cee.v2 import contact, morphology, phases, phonology, prosody, syntax, variation
 from cee.v2.changes import DEFAULT_CHANGES, Change, InnovationContext, pressures_by_kind
 from cee.v2.changes.lexicon import with_appeal
+from cee.v2.changes.sites import rate_sums as rate_sums_of
 from cee.v2.events import WorldEvent
 from cee.v2.history import History
 from cee.v2.observe import LineageTracker, Snapshot, observe
@@ -290,10 +291,10 @@ class Simulation:
                  if self.shards is None or self.shards.owns(ctx.group.id)]
         rate_sums = np.zeros((len(entries), len(self.changes)), dtype=np.float64)
         owned_contexts = [entries[group_idx][0] for group_idx in owned]
-        for change_idx, change in enumerate(self.changes):
-            for group_idx, rate_sum in zip(owned, change.total_rates(owned_contexts)):
-                if rate_sum > 0.0:
-                    rate_sums[group_idx, change_idx] = float(rate_sum)
+        if owned_contexts:
+            # Jedna dávka pro všechny skupiny a druhy změn (zvukové změny jedním dotazem na index
+            # prostředí, ostatní z indexu míst světa); viz ``cee.v2.changes.sites``.
+            rate_sums[owned] = rate_sums_of(self.changes, owned_contexts)
         expected = phases.expected_counts(
             rate_sums, renewals, frequencies, self.config.dt,
             np.array([change.rate_basis == "generation" for change in self.changes], dtype=bool),
