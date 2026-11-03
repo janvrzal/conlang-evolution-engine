@@ -93,3 +93,16 @@ class FrequencyMap(dict[str, float]):
         copied.version = self.version
         copied.log = self.log.copy()
         return copied
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        # Pickle by obsah obnovil přes ``__setitem__`` dřív, než existuje
+        # ``version``; obnova proto jde přes :func:`_restore_frequencies`.
+        return (_restore_frequencies, (dict(self), self.version, list(self.log)))
+
+
+def _restore_frequencies(items: dict[str, float], version: int, log: list[str]) -> FrequencyMap:
+    """Obnoví mapu frekvencí z pickle bez záznamu falešných změn."""
+    restored = FrequencyMap(items)
+    restored.version = version
+    restored.log = log
+    return restored

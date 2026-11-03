@@ -63,3 +63,17 @@ def test_iterace_vraci_kazdy_krok_a_snimek_pro_ui():
     assert years == [25.0 * index for index in range(1, 9)]
     last = frame(simulation)
     assert len(last["groups"]) == 4 and last["languages"]
+
+
+def test_pickle_simulace_pokracuje_bitove_stejne():
+    import pickle
+
+    simulation = Simulation(village_grid(3, seed=2, semantics=True))
+    simulation.run(200)
+    restored = pickle.loads(pickle.dumps(simulation))
+    frequencies = restored.world.concept_frequencies
+    assert dict(frequencies) == dict(simulation.world.concept_frequencies)
+    assert frequencies.version == simulation.world.concept_frequencies.version
+    simulation.run(400)
+    restored.run(400)
+    assert restored.history.digest() == simulation.history.digest()
