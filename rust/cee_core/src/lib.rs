@@ -5,6 +5,7 @@
 
 pub mod assess;
 pub mod bank;
+pub mod clarity;
 pub mod index;
 pub mod phonology;
 pub mod process;

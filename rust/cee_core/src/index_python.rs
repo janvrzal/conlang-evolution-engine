@@ -6,6 +6,7 @@
 use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::prelude::*;
 
+use crate::clarity::{self, GroupColumns};
 use crate::index::{self, GroupInput};
 use crate::python::{failure, slice, Held, NativeBank};
 
@@ -184,5 +185,57 @@ impl SoundIndex {
                 slice(&rules)?.to_vec(),
             )
             .map_err(failure)
+    }
+}
+
+/// Skóre lexikální jasnosti dávky dvojic (skupina, morfém, pojem).
+///
+/// Vrací pole skóre, nebo seznam čísel morfémů, jejichž výchozí tvar musí Python
+/// nejdřív zařadit do banky (pak se volá znovu).
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+pub fn clarity_scores<'py>(
+    py: Python<'py>,
+    bank: PyRef<'_, NativeBank>,
+    roots: Vec<Bound<'py, PyAny>>,
+    forms: Vec<Bound<'py, PyAny>>,
+    defaults: Bound<'py, PyAny>,
+    related: PyReadonlyArray1<'py, i64>,
+    groups: PyReadonlyArray1<'py, i64>,
+    morphemes: PyReadonlyArray1<'py, i64>,
+    concepts: PyReadonlyArray1<'py, i64>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if roots.len() != forms.len() {
+        return Err(failure("seznamy skupin mají různou délku".into()));
+    }
+    let roots = Held::<i32>::all(&roots)?;
+    let forms = Held::<i32>::all(&forms)?;
+    let defaults = Held::<i32>::new(&defaults)?;
+    let columns: Vec<GroupColumns<'_>> = roots
+        .iter()
+        .zip(&forms)
+        .map(|(roots, forms)| GroupColumns {
+            roots: roots.view(),
+            forms: forms.view(),
+        })
+        .collect();
+    let (groups, morphemes, concepts) = (slice(&groups)?, slice(&morphemes)?, slice(&concepts)?);
+    if morphemes.len() != groups.len() || concepts.len() != groups.len() {
+        return Err(failure("dotazy mají různou délku".into()));
+    }
+    let queries: Vec<(usize, i64, i64)> = (0..groups.len())
+        .map(|at| (groups[at] as usize, morphemes[at], concepts[at]))
+        .collect();
+    let outcome = clarity::scores(
+        &bank.bank,
+        &columns,
+        defaults.view(),
+        slice(&related)?,
+        &queries,
+    )
+    .map_err(failure)?;
+    match outcome {
+        clarity::Outcome::Scores(found) => Ok(PyArray1::from_vec(py, found).into_any()),
+        clarity::Outcome::Needs(numbers) => Ok(numbers.into_pyobject(py)?.into_any()),
     }
 }

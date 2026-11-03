@@ -37,9 +37,9 @@ def test_ulozeni_tvaru_vede_denik_a_vetev_ma_novou_identitu():
     assert branch.get("a") == UnitForm((1, 2), None, None)
 
 
-def _context_multiset(index, code):
+def _context_multiset(index, world, code):
     """Počty prostředí kódu jako seřazená pole n-tic (nezávisí na číslování prostředí)."""
-    columns = index.context_counts(code)
+    columns = index.context_counts(code, world)
     return sorted(zip(*(column.tolist() for column in columns)))
 
 
@@ -63,10 +63,10 @@ def test_prubezne_indexy_se_shoduji_s_vypoctem_od_nuly():
             fresh_exponents, fresh = ExponentIndex(), SoundIndex()
             fresh_exponents.sync(world, code)
             fresh.sync(world, [code], CATALOG, force=True)
-            assert _context_multiset(index, code) == _context_multiset(fresh, code)
+            assert _context_multiset(index, world, code) == _context_multiset(fresh, world, code)
             assert index.inventory(code) == fresh.inventory(code)
             assert index.supports(code).tolist() == fresh.supports(code).tolist()
             assert exponents.exponents == fresh_exponents.exponents
             assert exponents.shapes == fresh_exponents.shapes
     assert any(len(world.groups[group].main_code.forms.log) for group in world.group_ids())
-    assert all(len(_context_multiset(index, world.groups[group].main_code)) > 0 for group in world.group_ids())
+    assert all(len(_context_multiset(index, world, world.groups[group].main_code)) > 0 for group in world.group_ids())

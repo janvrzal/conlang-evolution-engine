@@ -761,6 +761,8 @@ mod cee_core {
     #[pymodule_export]
     use super::NativeBank;
     #[pymodule_export]
+    use crate::index_python::clarity_scores;
+    #[pymodule_export]
     use crate::index_python::SoundIndex;
 
     #[pymodule_init]

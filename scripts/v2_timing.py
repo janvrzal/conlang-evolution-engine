@@ -107,7 +107,7 @@ def instrument(
             patch(assessment_module, "_assess_batch", "assessment._assess_batch")
             patch(linguistic_pressure_module, "_process_scores", "pressure.linguistic._process_scores")
             patch(morphological_pressure_module, "_form_scores", "pressure.morphological._form_scores")
-            patch(lexical_pressure_module, "_clarity_map", "pressure.lexical._clarity_map")
+            patch(lexical_pressure_module, "_clarity_scores", "pressure.lexical._clarity_scores")
             for change_type in {type(change) for change in simulation.changes}:
                 if hasattr(change_type, "total_rate"):
                     patch(change_type, "total_rate", f"change.total_rate.{change_type.kind}")

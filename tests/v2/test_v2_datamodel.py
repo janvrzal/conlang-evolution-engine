@@ -9,7 +9,7 @@ import pytest
 
 from cee.v2 import phonology
 from cee.v2.language.bank import UNCHANGED
-from cee.v2.language.lexical_index import LexicalClarityIndex
+from cee.v2.language.lexical_index import _clarity_reference, clarity_scores, related_keys
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
 
@@ -86,20 +86,23 @@ def test_vyber_vzorku_a_oriznute_frekvence_jsou_uplne_razeni(running):
     assert all(value == max(0.01, world.usage_frequency(code, unit)) for unit, value in clipped.items())
 
 
-def test_hromadne_skore_lexikalni_jasnosti_sedi_s_cerstvym_indexem(running):
+def test_hromadne_skore_lexikalni_jasnosti_sedi_s_pythonovou_referenci(running):
     world = running
-    for group in world.groups.values():
-        code = group.main_code
-        index = LexicalClarityIndex()
-        index.sync(world, code)
+    codes = [group.main_code for group in world.groups.values()]
+    groups, morphemes, concepts = [], [], []
+    for position, code in enumerate(codes):
         pairs = [(root, concept) for concept, root in sorted(code.phonology.dominant.items())]
-        pairs += pairs[:5]  # duplicity se vrací ve stejném pořadí
-        bulk = index.scores_many(world, code, pairs)
-        fresh = LexicalClarityIndex()
-        fresh.sync(world, code)
-        assert bulk == [fresh.score(world, code, root, concept) for root, concept in pairs]
-        # Podruhé už jen z paměti.
-        assert index.scores_many(world, code, pairs) == bulk
+        pairs += pairs[:5]  # duplicity se vracejí ve stejném pořadí
+        for root, concept in pairs:
+            groups.append(position)
+            morphemes.append(world.registry.morphemes.numbers[root])
+            concepts.append(world.registry.concepts.intern(concept))
+    arguments = [np.array(values, dtype=np.int64) for values in (groups, morphemes, concepts)]
+    bulk = clarity_scores(world, codes, *arguments)
+    reference = _clarity_reference(world, codes, *arguments, related_keys(world))
+    assert bulk.tolist() == reference.tolist() and len(bulk) == len(groups)
+    # Podruhé totéž (výpočet nezávisí na paměti).
+    assert clarity_scores(world, codes, *arguments).tolist() == bulk.tolist()
 
 
 def test_hromadna_fronta_procesu_sedi_s_vkladanim_po_jednom(running):

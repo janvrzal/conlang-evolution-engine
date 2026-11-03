@@ -169,7 +169,7 @@ def test_optional_helper_instrumentation_restores_all_functions_on_error(
         (assessment_module, "_assess_batch", "assessment._assess_batch"),
         (linguistic_pressure_module, "_process_scores", "pressure.linguistic._process_scores"),
         (morphological_pressure_module, "_form_scores", "pressure.morphological._form_scores"),
-        (lexical_pressure_module, "_clarity_map", "pressure.lexical._clarity_map"),
+        (lexical_pressure_module, "_clarity_scores", "pressure.lexical._clarity_scores"),
     )
     originals = []
 
