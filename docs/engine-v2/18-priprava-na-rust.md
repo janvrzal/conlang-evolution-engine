@@ -281,8 +281,8 @@ tvarů (`FormStore.token`).
   přičítají přímo, `segment_occurrences[hláska]` (počet výskytů) určuje inventář.
 - **Opory kandidátů** (`Vec<i64>` podle řádku kandidáta v sjednocení rodin pro
   inventář). Sada kandidátů (masky cíl, vlevo, vpravo, druhý vpravo, přízvuk,
-  hranice rodin) zůstává v Pythonu, protože ji vyrábí `candidates()` rodin;
-  Rustu se předá jednou pro inventář (`register_candidates`) a on ji přepíše na
+  hranice rodin) se v B5 vyráběla v Pythonu (`candidates()` rodin) a předávala Rustu
+  jednou pro inventář; **od B6d ji staví Rust sám** (oddíl „B6d“ níže). Rust ji drží jako
   **transponované bitové sady** (pro každý sloupec hlásky bity kandidátů).
   Shoda jednoho výskytu s kandidáty je AND čtyř řádků po 64 kandidátech;
   přírůstek opory je celočíselný, takže výsledek nezávisí na pořadí sčítání.
@@ -319,8 +319,8 @@ dávkové `Change.total_rates` volané z `Simulation._innovate`, a lexikální j
 (`lexical_index.clarity_scores`, `rust/cee_core/src/clarity.rs`).
 Odchylky od návrhu výše: (1) jazykový stav indexu je na **světě** (`World.sound`), ne na
 bance tvarů, protože banka se mezi kopiemi světa (checkpoint) sdílí a stav kódů ne;
-(2) sada kandidátů zůstala v Pythonu (vyrábí ji `candidates()` rodin), Rust ji dostane
-jednou pro inventář; (3) vlákna nejsou zavedena. Zachovaná zvláštnost: změna pravidla
+(2) sada kandidátů zůstala v B5 v Pythonu (vyrábí ji `candidates()` rodin), Rust ji dostal
+jednou pro inventář (od B6d ji staví Rust); (3) vlákna nejsou zavedena. Zachovaná zvláštnost: změna pravidla
 přízvuku nepřepočítá prostředí slov, dokud se slovo nezmění (`counted_rule`).
 
 `AssessmentVocabularyIndex` a `FormAssessmentIndex` jsou hotové v B3b (oddíl „B3b“ níže),
@@ -371,13 +371,14 @@ varianty (`propose`).
 
 **Hranice volání.** `Simulation._innovate` volá `changes.sites.rate_sums`: zvukové změny jeden
 dotaz na index prostředí pro všechny rodiny (`batch_total_rates`, dřív jeden dotaz na rodinu), ostatní
-jednu dávku `SiteIndex.batch` (matice skupina × 21 sloupců: expresivní tvoření, 7 sémantických změn,
-vyrovnání, rozšíření, 10 syntaktických změn, výpůjčky; součty a počty míst). Místa a míry se čtou zvlášť
+jednu dávku `SiteIndex.batch` (matice skupina × 21 sloupců, od B6d 24: expresivní tvoření, 7 sémantických změn,
+vyrovnání, rozšíření, 10 syntaktických změn, výpůjčky, od B6d reanalýza hranice a dvě prozodické změny;
+součty a počty míst). Místa a míry se čtou zvlášť
 jen pro (skupinu, změnu) s inovací (`weighted_sites`); `propose` zůstal v Pythonu. Stav se dorovnává jen
 u kódů, jejichž klíč (verze stavu, délka deníku tvarů a slovní zásoby, verze slovníku) se změnil.
-Hledání celkových měr tak stojí dvě dávková volání za tik (zvukový index a index míst, každé s případným
-doplněním výchozích tvarů či sady kandidátů) místo jednoho volání na skupinu a druh změny; jedno volání pro
-oba indexy najednou by vyžadovalo, aby si je Rust předával mezi sebou (zůstalo na B6).
+Hledání celkových měr tak v B5b stálo dvě dávková volání za tik (zvukový index a index míst, každé s případným
+doplněním výchozích tvarů či sady kandidátů) místo jednoho volání na skupinu a druh změny. **Od B6d je to jedno
+volání** (`cee_core.innovation_totals`): oba indexy si data předávají v Rustu (oddíl „B6d“).
 
 **Pořadí a bity.** Míry a součty jsou stejné jako dřív (`base × počet × násobek`, součty
 `np.sum`), ověřeno zlatými daty míst z A7 přes Rust, porovnáním dávky se `total_rate` po jedné změně
@@ -393,12 +394,111 @@ postaví znovu.
 (shift, tik 4, rozdíl 4e-19) přes pořadí ceny homofonů; otisky historie a připnuté otisky stavu jsou
 stejné. Sloučí se po opravě pořadí od agenta na tlaky.
 
-**Zůstalo v Pythonu.** Reanalýza hranice (`Rebracketing`, kandidáti podle verze stavu), prozodické
-změny (jedno místo), návrh variant (`propose`), čtení dominantních konstrukcí z živých fondů
-(`world.dominant`, jednou na skupinu a funkci za tik), dárci a podíly vstupu u výpůjček (`contact`),
-sestavení grafu a katalogu (jednou za změnu) a registrace konstrukcí. Vlákna nejsou zavedena (stav
-kódů je nezávislý, takže paralelizace po kódech by výsledek nezměnila; sdílená je jen tabulka
-podob koncovek).
+**Zůstalo v Pythonu (po B5b; stav po B6d je v oddílu níže).** Reanalýza hranice (`Rebracketing`) a prozodické
+změny **přešly do Rustu v B6d**. V Pythonu zůstává návrh variant (`propose`: sestavení objektů `Variant` a zápis do
+registru), čtení dominantních konstrukcí z živých fondů (`world.dominant`, jednou na skupinu a funkci za tik),
+dárci a podíly vstupu u výpůjček (`contact`), sestavení grafu a katalogu (jednou za změnu) a registrace konstrukcí.
+Vlákna nejsou zavedena (stav kódů je nezávislý, takže paralelizace po kódech by výsledek nezměnila; sdílená je jen
+tabulka podob koncovek).
+
+## B6d: inovace v Rustu (kandidáti, jedna dávka míst, návrh variant)
+
+Zadání `zadani-rust-b6d.md`, verze rozhraní **13**. Cíl: sady kandidátů zvukových změn nestaví Python, hledání měr
+inovací je jedno volání za tik pro všechny druhy změn a reanalýza hranice s prozodií nejedou výchozím `total_rates`
+v Pythonu.
+
+### 1. Sady kandidátů zvukových změn v Rustu (`candidates.rs`)
+
+Python pošle Rustu jednou za index světa (`SoundIndex.set_table`) **snímek tabulky hlásek**: jména 44 rysů,
+matici rysů `int8` (hlásky × rysy, souvislá, kopíruje se jednou), zápis IPA, masku samohlásek, kód tónu každé hlásky,
+tónové značky a dvě pomocná pole, bez kterých by sada nebyla stejná jako v Pythonu:
+
+- **čísla symbolů** v pořadí pevného seznamu `candidate_symbols()` (zápisy, které rodiny hledají přes `id_of`:
+  `h`, `d͡ʒ`, `ə`, `kʷ` …; Python je přeloží, −1 = tabulka symbol nezná);
+- **`canon`**: pro každou hlásku `id_of(ipa[hláska])`. Výčtovou třídu jedné hlásky (`_single`) staví Python
+  ze zápisu hlásky, takže u 148 hlásek, jejichž zápis se čte jako jiná hláska (`cᶣ` jako `cʷ`), je cílem procesu
+  *jiná* hláska než ta, která v inventáři je. Rust to musí zopakovat (bez toho se sady rozcházely u vzácných hlásek).
+
+Pro inventář pak Rust postaví kandidáty všech 33 rodin (`build`): rodiny v pořadí `SOUND_CHANGES`
+(`candidate_families()` se testuje proti `FAMILY_KINDS`), v rodině odstranění duplicit podle ID proměnné (první
+vyhrává) a řazení podle ID jako `sort(key=…)` v Pythonu (bajty UTF-8 se řadí jako body Unicode). **Vzor** (`Pat`) je
+předpis (rysy a hodnoty, výčet hlásek, `V`, `C`, `#`, `C|#`), ne maska přes 23 tisíc hlásek: vyhodnocuje se jen pro
+sloupce inventáře a hranici slova. **Klíč procesu** (`Candidate::key`) se skládá z týchž částí jako `Process.key`
+(včetně `allow`, `right2`, `tone`), takže ID proměnných i pořadí sedí s Pythonem. Z kandidátů vzniknou masky
+(`masks`: `target`, `left`, `right`, `right2` jen pro řádky s druhou následující hláskou, řádky přízvuku, konce rodin),
+které `index.rs` přepíše na transponované bitové sady jako dřív. Funkce `register_set` (masky z Pythonu) zůstala jen pro
+index bez tabulky (testy Rustu).
+
+Python už sadu nestaví: pro **místo, které se skutečně použije** (návrh varianty, tj. jen u nenulového počtu inovací)
+si vyžádá popis kandidáta (`family_spec`, pole `Process`) a `changes.sound.process_from_spec` z něj postaví `Process`
+přes tabulku hlásek (`pattern`, `segments`), takže vzory jsou tytéž pamatované objekty. `_CombinedSoundCandidates`
+zůstala jako reference a fallback (`CEE_NATIVE=0`). Výjimky ve shodě: posun samohlásek má v Pythonu `ease=0`
+(celé číslo; Rust to hlásí příznakem `ease_int`) a vzor `C|#` Python staví pokaždé nový objekt (porovnává se klíčem).
+
+### 2. Jedno dávkové volání za tik
+
+`cee_core.innovation_totals` dostane oba indexy (`SoundIndex`, `SiteIndex`) a najednou:
+(1) dorovná zvukový index kódů s hláskami, (2) dorovná morfologii a sémantiku indexu míst jen pro kódy, jejichž klíč se
+změnil, (3) spočítá matici **skupina × 24 sloupců** (expresivní tvoření, 7 sémantických, vyrovnání, rozšíření,
+10 syntaktických, výpůjčky, reanalýza hranice, 2 prozodické) včetně počtů míst a (4) součty 33 rodin zvukových změn
+(kód × rodina) a příznak, zda kód rodiny má. Co Rust nemá, vrátí jako `needs` a nic nepočítá: výchozí tvary morfémů
+(zvukový index, index míst) a vlastnosti kořenů; Python je doplní (`supply`, `_supply_defaults`, `_supply_roots`)
+a zavolá znovu (dorovnání je opakovatelné). V ustáleném tiku je to **jediný přechod** do Rustu; vstupem jsou
+pohledy na pole bez kopie (tvary kódu, příznaky slovní zásoby, sloupce světa, `variants` = číslo dominantní konstrukce
+podle funkce). Obě `sync` se v Rustu volají přes tytéž funkce jako samostatné metody (`sync_morphology`,
+`sync_semantic`, `run_totals`, `sound_sync`), takže samostatná volání pro per-change API (`total_rate`,
+`weighted_sites` pro goldeny a testy) zůstala a dávají totéž.
+
+`changes.sites.rate_sums` je rozvětvení: s indexy v Rustu jedno volání (`SiteIndex.batch_with_sound`), jinak
+(`CEE_NATIVE=0`) tytéž sloupce z `PythonSites` a rodiny z `batch_total_rates`. Místa a míry se čtou jen u dvojic
+(skupina, změna) s nenulovým počtem inovací (`Simulation._innovate`), jako dřív: názvy míst zvukové rodiny
+(`family_names`), míry (`family`), opory (`family_supports`), pojmy sémantických změn, funkce syntaktických změn.
+
+### 3. Místa a míry reanalýzy hranice a prozodie v Rustu
+
+Sloupce `COL_REBRACKETING`, `COL_STRESS_SHIFT`, `COL_STRESS_STRENGTH` indexu míst (`sites.rs`).
+**Reanalýza hranice** (zrcadlo `Rebracketing.candidates`): první záporková funkce katalogu, jejíž dominantní konstrukce
+je `pre` (druh konstrukce a pojem zdroje se posílají s konstrukcemi, `set_constructions`), dá přiklonku
+(dominantní kořen pojmu zdroje; jeho tvar je přepsaný z banky, nebo výchozí z arény); místem je každý **slovesný**
+kořen (vlastnost kořene `verb` doplňuje Python s ostatními vlastnostmi, `set_roots`) ve slovní zásobě kódu: `prepend`,
+když přiklonka končí souhláskou a tvar kořene začíná samohláskou, `drop_initial`, když přiklonka končí samohláskou,
+tvar začíná souhláskou a má aspoň tři hlásky. Míra je jednotná, `base × počet × 1.0`. Rust vrací trojice
+(kořen, operace, hláska); Python z nich postaví `FormChange` a názvy míst teprve u inovace (`index.rebracketing_sites`).
+**Prozodie**: místem je jediná proměnná přízvuku, pokud ji svět sleduje; míra `base × 1 × 1.0`. Python reference
+(`PythonSites`) má totéž; původní `Rebracketing.candidates` zůstalo jako reference testu
+(`test_reanalyza_hranice_a_prozodie_jako_puvodni_vypocet`).
+
+### 4. Návrh variant (`propose`)
+
+- **Zvukové změny**: číselná část návrhu (který proces odpovídá místu) je v Rustu: popis kandidáta z indexu. Zbývá
+  `phonology.register`, tj. zápis proměnné, dvou variant a procesu do registrů světa.
+- **Morfologické změny** (vyrovnání, rozšíření, reanalýza hranice): jméno místa už jednoznačně určuje změnu
+  (`FormChange`), nic se nepočítá; zbývá `morphology.register` (zápis do registrů).
+- **Sémantické změny**: návrh vybírá možnost váženým losem z `RandomSource` (proud Pythonu, sdílený s tvorbou
+  nového kořene a tvaru) a skládá `Variant` s `stable_id` (blake2b) a nový kořen do registru morfémů.
+- **Proč to dál nejde do Rustu bitově shodně**: návrh vyrábí a zapisuje **objekty registrů světa** (`Variant`,
+  `Variable`, `Morpheme`), které žijí v Pythonu a které čtou další fáze (přenos, pozorování, export), a čerpá
+  z proudu náhody `Stream`, jehož stav sdílí s výběrem místa a tvorbou kořene (`rng.choice`, `normal`). Přesun by
+  vyžadoval přesunout registry světa a generátor kořenů do Rustu, tedy práci kolem B6e, nikoli jen návrh. Volá se
+  navíc jen pro nenulový počet inovací v dvojici (skupina, změna).
+
+### Testy a ověření
+
+- Nový `tests/v2/test_v2_native_candidates.py`: sady kandidátů v Rustu proti `_CombinedSoundCandidates` na více než sto
+  inventářích (náhodné části tabulky včetně tónů a jedné hlásky z celé tabulky): ID, konce rodin, masky, řádky přízvuku,
+  pole procesů a klíče.
+- Nový `test_reanalyza_hranice_a_prozodie_jako_puvodni_vypocet` v `test_v2_site_index.py`; jednotkový test
+  reanalýzy v `sites.rs`; testy sestavení kandidátů v `candidates.rs`.
+- Dávka je stejná jako celkové míry po jedné změně (`test_davka_je_stejna_jako_celkove_miry_po_jedne_zmene`, i bez Rustu).
+- Zlatá data míst a fází (`golden_sites`, `golden_phases`) procházejí přes Rust i přes `CEE_NATIVE=0`.
+- Vlákna nejsou zavedena (stav kódů je nezávislý, takže by šla po kódech bez změny výsledku).
+
+### Pro B6e (hlavní smyčka)
+
+Python zůstává v tiku: čtení dominantních konstrukcí z živých fondů pro `variants`, výběr místa (`draw_site`), návrh
+varianty a zápis inovace (`_apply_innovations`), dárci a podíly vstupu u výpůjček, sestavení grafu a katalogu.
+Hlavní smyčka bude potřebovat, aby registry (`Variant`, `Variable`) měl Rust, nebo aby se návrh vracel jako popis
+(spec) pro dávkový zápis.
 
 ## B3b: tlaky a hodnocení v Rustu, napojené do přenosu
 

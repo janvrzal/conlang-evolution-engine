@@ -28,6 +28,7 @@ use std::hash::{BuildHasherDefault, Hasher};
 
 use crate::assess::pairwise_sum;
 use crate::bank::Bank;
+use crate::candidates::{self, Built, Candidate, SegTable};
 use crate::morphology_index::Defaults;
 use crate::process::{nuclei, stressed_nucleus, RULE_COUNT};
 
@@ -216,6 +217,8 @@ struct CandidateSet {
     unstressed_rows: Vec<u64>,
     /// Konec každé rodiny v řádcích kandidátů.
     family_ends: Vec<usize>,
+    /// Popisy kandidátů a ID proměnných, když sadu sestavil Rust (`candidates`).
+    built: Option<Built>,
     refs: usize,
 }
 
@@ -347,6 +350,8 @@ pub struct SoundIndex {
     by_token: FxMap<i64, usize>,
     sets: Vec<Option<CandidateSet>>,
     set_ids: FxMap<Vec<u32>, usize>,
+    /// Snímek tabulky hlásek: s ním si Rust sady kandidátů staví sám (bez něj je žádá od Pythonu).
+    table: Option<SegTable>,
     delta: Vec<(u32, i64)>,
     nets: Vec<(u32, i64)>,
     pooled: Vec<u32>,
@@ -362,6 +367,7 @@ impl SoundIndex {
             by_token: FxMap::default(),
             sets: Vec::new(),
             set_ids: FxMap::default(),
+            table: None,
             delta: Vec::new(),
             nets: Vec::new(),
             pooled: Vec::new(),
@@ -402,82 +408,35 @@ impl SoundIndex {
         unstressed_rows: &[i64],
         family_ends: Vec<usize>,
     ) -> Result<(), String> {
-        let width = columns.len();
-        if width == 0 || masks.iter().any(|mask| mask.len() % width != 0) {
-            return Err("masky kandidátů nemají šířku sloupců".into());
-        }
-        let count = masks[0].len() / width;
-        if masks.iter().any(|mask| mask.len() != count * width)
-            || right2.len() != right2_rows.len() * width
-        {
-            return Err("masky kandidátů mají různý tvar".into());
-        }
-        if family_ends.len() != self.scales.len()
-            || family_ends.last().is_some_and(|&end| end != count)
-        {
-            return Err("konce rodin nesedí s počtem kandidátů nebo rodin".into());
-        }
-        let words = count.div_ceil(64).max(1);
-        let transpose = |rows: &dyn Fn(usize, usize) -> bool| -> Vec<u64> {
-            let mut out = vec![0_u64; width * words];
-            for row in 0..count {
-                for column in 0..width {
-                    if rows(row, column) {
-                        out[column * words + row / 64] |= 1 << (row % 64);
-                    }
-                }
-            }
-            out
-        };
-        let target = transpose(&|row, column| masks[0][row * width + column]);
-        let left = transpose(&|row, column| masks[1][row * width + column]);
-        let right = transpose(&|row, column| masks[2][row * width + column]);
-        // Kandidáti bez druhé následující hlásky ji nepodmiňují: samé jedničky.
-        let mut second = vec![u64::MAX; width * words];
-        for (at, &row) in right2_rows.iter().enumerate() {
-            let row = row as usize;
-            for column in 0..width {
-                let bit = 1_u64 << (row % 64);
-                if right2[at * width + column] {
-                    second[column * words + row / 64] |= bit;
-                } else {
-                    second[column * words + row / 64] &= !bit;
-                }
-            }
-        }
-        let rows_to_bits = |rows: &[i64]| -> Vec<u64> {
-            let mut out = vec![0_u64; words];
-            for &row in rows {
-                out[row as usize / 64] |= 1 << (row as usize % 64);
-            }
-            out
-        };
-        let set = CandidateSet {
-            inventory: inventory.clone(),
-            columns,
-            count,
-            words,
-            target,
-            left,
-            right,
-            right2: second,
-            stressed_rows: rows_to_bits(stressed_rows),
-            unstressed_rows: rows_to_bits(unstressed_rows),
-            family_ends,
-            refs: 0,
-        };
-        let slot = match self.sets.iter().position(Option::is_none) {
-            Some(free) => {
-                self.sets[free] = Some(set);
-                free
-            }
-            None => {
-                self.sets.push(Some(set));
-                self.sets.len() - 1
-            }
-        };
-        self.set_ids.insert(inventory, slot);
-        Ok(())
+        register(
+            &mut self.sets,
+            &mut self.set_ids,
+            self.scales.len(),
+            Registration {
+                inventory,
+                columns,
+                masks,
+                right2,
+                right2_rows,
+                stressed_rows,
+                unstressed_rows,
+                family_ends,
+                built: None,
+            },
+        )
+    }
+
+    /// Nastaví snímek tabulky hlásek; od té chvíle si Rust sady kandidátů staví sám.
+    pub fn set_table(&mut self, table: SegTable) {
+        self.table = Some(table);
+    }
+
+    pub fn table(&self) -> Option<&SegTable> {
+        self.table.as_ref()
+    }
+
+    pub fn has_table(&self) -> bool {
+        self.table.is_some()
     }
 
     fn release_set(&mut self, slot: usize) {
@@ -536,6 +495,10 @@ impl SoundIndex {
             delta,
             nets,
             pooled,
+            sets,
+            set_ids,
+            table,
+            scales,
             ..
         } = self;
         let group = &mut groups[at];
@@ -591,13 +554,20 @@ impl SoundIndex {
         if !full && nets.is_empty() {
             return Ok(());
         }
-        let Some(&slot) = self.set_ids.get(&group.inventory) else {
-            // Sada pro nový inventář chybí; podpory se po jejím doplnění přepočítají celé.
-            group.valid_for = None;
-            if !needs.sets.contains(&group.inventory) {
-                needs.sets.push(group.inventory.clone());
+        if !set_ids.contains_key(&group.inventory) {
+            if let Some(table) = table.as_ref() {
+                build_set(sets, set_ids, scales.len(), table, &group.inventory)?;
+            } else {
+                // Sada pro nový inventář chybí; podpory se po jejím doplnění přepočítají celé.
+                group.valid_for = None;
+                if !needs.sets.contains(&group.inventory) {
+                    needs.sets.push(group.inventory.clone());
+                }
+                return Ok(());
             }
-            return Ok(());
+        }
+        let Some(&slot) = set_ids.get(&group.inventory) else {
+            return Err("sada kandidátů zmizela".into());
         };
         let vowel = &bank.vowel;
         let families = self.scales.len();
@@ -755,6 +725,59 @@ impl SoundIndex {
         out
     }
 
+    /// Sada kandidátů skupiny (když ji sestavil Rust) a začátek rodiny v řádcích kandidátů.
+    fn built_of(&self, token: i64, family: usize) -> Option<(&Built, usize)> {
+        let group = self.find(token)?;
+        let set = self.sets.get(group.set?)?.as_ref()?;
+        let built = set.built.as_ref()?;
+        let begin = if family == 0 {
+            0
+        } else {
+            *set.family_ends.get(family - 1)?
+        };
+        Some((built, begin))
+    }
+
+    /// ID proměnných (`process:` + klíč procesu) míst jedné rodiny v pořadí míst.
+    pub fn site_ids(&self, token: i64, family: usize) -> Option<Vec<&str>> {
+        let (built, begin) = self.built_of(token, family)?;
+        let state = self.family(token, family)?;
+        Some(
+            state
+                .sites
+                .iter()
+                .map(|&site| built.ids[begin + site as usize].as_str())
+                .collect(),
+        )
+    }
+
+    /// Opory míst jedné rodiny v pořadí míst.
+    pub fn site_supports(&self, token: i64, family: usize) -> Option<Vec<i64>> {
+        let (_, begin) = self.built_of(token, family)?;
+        let state = self.family(token, family)?;
+        let group = self.find(token)?;
+        Some(
+            state
+                .sites
+                .iter()
+                .map(|&site| group.supports[begin + site as usize])
+                .collect(),
+        )
+    }
+
+    /// Popis kandidáta jednoho místa rodiny a snímek tabulky, ze kterého se sestavil.
+    pub fn site_candidate(
+        &self,
+        token: i64,
+        family: usize,
+        position: usize,
+    ) -> Option<(&Candidate, &SegTable)> {
+        let (built, begin) = self.built_of(token, family)?;
+        let state = self.family(token, family)?;
+        let site = *state.sites.get(position)? as usize;
+        Some((built.candidates.get(begin + site)?, self.table.as_ref()?))
+    }
+
     pub fn supports(&self, token: i64) -> Vec<i64> {
         self.find(token)
             .map(|g| g.supports.clone())
@@ -859,6 +882,143 @@ impl SoundIndex {
         self.groups[at] = group;
         Ok(())
     }
+}
+
+/// Co `register` potřebuje: masky kandidátů a případně jejich popisy.
+struct Registration<'a> {
+    inventory: Vec<u32>,
+    columns: Vec<u32>,
+    masks: [&'a [bool]; 3],
+    right2: &'a [bool],
+    right2_rows: &'a [i64],
+    stressed_rows: &'a [i64],
+    unstressed_rows: &'a [i64],
+    family_ends: Vec<usize>,
+    built: Option<Built>,
+}
+
+/// Sestaví sadu kandidátů všech rodin pro inventář z tabulky hlásek a zaregistruje ji.
+fn build_set(
+    sets: &mut Vec<Option<CandidateSet>>,
+    set_ids: &mut FxMap<Vec<u32>, usize>,
+    families: usize,
+    table: &SegTable,
+    inventory: &[u32],
+) -> Result<(), String> {
+    let built = candidates::build(table, inventory)?;
+    let masks = candidates::masks(table, inventory, &built);
+    let ends = built.family_ends.clone();
+    register(
+        sets,
+        set_ids,
+        families,
+        Registration {
+            inventory: inventory.to_vec(),
+            columns: masks.columns,
+            masks: [&masks.target, &masks.left, &masks.right],
+            right2: &masks.right2,
+            right2_rows: &masks.right2_rows,
+            stressed_rows: &masks.stressed_rows,
+            unstressed_rows: &masks.unstressed_rows,
+            family_ends: ends,
+            built: Some(built),
+        },
+    )
+}
+
+/// Zapíše sadu kandidátů z masek (transponované bitové sady) do tabulky sad.
+fn register(
+    sets: &mut Vec<Option<CandidateSet>>,
+    set_ids: &mut FxMap<Vec<u32>, usize>,
+    families: usize,
+    given: Registration<'_>,
+) -> Result<(), String> {
+    let Registration {
+        inventory,
+        columns,
+        masks,
+        right2,
+        right2_rows,
+        stressed_rows,
+        unstressed_rows,
+        family_ends,
+        built,
+    } = given;
+    let width = columns.len();
+    if width == 0 || masks.iter().any(|mask| mask.len() % width != 0) {
+        return Err("masky kandidátů nemají šířku sloupců".into());
+    }
+    let count = masks[0].len() / width;
+    if masks.iter().any(|mask| mask.len() != count * width)
+        || right2.len() != right2_rows.len() * width
+    {
+        return Err("masky kandidátů mají různý tvar".into());
+    }
+    if family_ends.len() != families || family_ends.last().is_some_and(|&end| end != count) {
+        return Err("konce rodin nesedí s počtem kandidátů nebo rodin".into());
+    }
+    let words = count.div_ceil(64).max(1);
+    let transpose = |rows: &dyn Fn(usize, usize) -> bool| -> Vec<u64> {
+        let mut out = vec![0_u64; width * words];
+        for row in 0..count {
+            for column in 0..width {
+                if rows(row, column) {
+                    out[column * words + row / 64] |= 1 << (row % 64);
+                }
+            }
+        }
+        out
+    };
+    let target = transpose(&|row, column| masks[0][row * width + column]);
+    let left = transpose(&|row, column| masks[1][row * width + column]);
+    let right = transpose(&|row, column| masks[2][row * width + column]);
+    // Kandidáti bez druhé následující hlásky ji nepodmiňují: samé jedničky.
+    let mut second = vec![u64::MAX; width * words];
+    for (at, &row) in right2_rows.iter().enumerate() {
+        let row = row as usize;
+        for column in 0..width {
+            let bit = 1_u64 << (row % 64);
+            if right2[at * width + column] {
+                second[column * words + row / 64] |= bit;
+            } else {
+                second[column * words + row / 64] &= !bit;
+            }
+        }
+    }
+    let rows_to_bits = |rows: &[i64]| -> Vec<u64> {
+        let mut out = vec![0_u64; words];
+        for &row in rows {
+            out[row as usize / 64] |= 1 << (row as usize % 64);
+        }
+        out
+    };
+    let set = CandidateSet {
+        inventory: inventory.clone(),
+        columns,
+        count,
+        words,
+        target,
+        left,
+        right,
+        right2: second,
+        stressed_rows: rows_to_bits(stressed_rows),
+        unstressed_rows: rows_to_bits(unstressed_rows),
+        family_ends,
+        built,
+        refs: 0,
+    };
+    let slot = match sets.iter().position(Option::is_none) {
+        Some(free) => {
+            sets[free] = Some(set);
+            free
+        }
+        None => {
+            sets.push(Some(set));
+            sets.len() - 1
+        }
+    };
+    set_ids.insert(inventory, slot);
+    Ok(())
 }
 
 /// Seřadí změny prostředí a sečte je po číslech; nulové součty vynechá.

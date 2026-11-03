@@ -8,7 +8,7 @@ from cee.v2 import morphology, phases
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.changes.sites import column_totals, native_column
 from cee.v2.language.morphology import FormChange
-from cee.v2.language.site_index import COL_EXTENSION, COL_LEVELING, site_index
+from cee.v2.language.site_index import COL_EXTENSION, COL_LEVELING, COL_REBRACKETING, site_index
 from cee.v2.pressures import Actuation, Conformity, Pressure
 from cee.v2.pressures.morphological import Conservation, Distinctiveness, Teachability, Uniformity
 from cee.v2.repertoire import Origin, Variable, Variant
@@ -199,9 +199,32 @@ class Rebracketing(AnalogicalChange):
     """
 
     kind = "rebracketing"
+    site_column = COL_REBRACKETING
     # Sporadický jev: jednotky případů na jazyk za tisíciletí.
     base_rate = 0.0002
     regularizing = False  # reanalýza hranice není regularizace
+
+    def _form_changes(self, context: InnovationContext) -> list[FormChange]:
+        """Místa z indexu míst světa (Rust, nebo reference v Pythonu) seřazená podle řetězcových ID míst."""
+        world = context.world
+        index = site_index(world)
+        index.batch(world, [context], {COL_REBRACKETING: self.base_rate}, 1.0)
+        found = [
+            FormChange("prepend" if operation == 0 else "drop_initial", root, segment=segment)
+            for root, operation, segment in index.rebracketing_sites(world, context.code)
+        ]
+        return sorted(found, key=lambda change: Variable("form", change.key).id)
+
+    def _site_change(self, context: InnovationContext, site: str) -> FormChange:
+        """Změna místa ze jména místa (``form:prepend|kořen||hláska``)."""
+        prefix = "form:"
+        if not site.startswith(prefix):
+            raise KeyError(site)
+        operation, _, rest = site[len(prefix):].partition("|")
+        unit, _, segment = rest.rpartition("||")
+        if operation not in ("prepend", "drop_initial") or not unit or not segment.lstrip("-").isdigit():
+            raise KeyError(site)
+        return FormChange(operation, unit, segment=int(segment))  # type: ignore[arg-type]
 
     def candidates(self, context: InnovationContext) -> dict[str, FormChange]:
         from cee.v2 import syntax

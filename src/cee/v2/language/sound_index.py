@@ -34,9 +34,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Protocol
+from weakref import WeakKeyDictionary
 
 import numpy as np
 import numpy.typing as npt
+
+from cee.v2 import native
 
 if TYPE_CHECKING:
     from cee.v2.language.segments import SegmentTable
@@ -343,13 +346,49 @@ class SoundIndex:
         )
 
 
+_TONE_CODES: WeakKeyDictionary[SegmentTable, npt.NDArray[np.int32]] = WeakKeyDictionary()
+
+
+def _tone_codes(table: SegmentTable) -> npt.NDArray[np.int32]:
+    """Kód tónu každé hlásky (0 = bez tónu); čistá funkce tabulky, proto zapamatovaná."""
+    found = _TONE_CODES.get(table)
+    if found is None:
+        found = np.zeros(len(table.ipa), dtype=np.int32)
+        for segment in table._tone_base:  # type: ignore[attr-defined]
+            found[segment] = table.tone_of(segment)
+        _TONE_CODES[table] = found
+    return found
+
+
+_CANONICAL: WeakKeyDictionary[SegmentTable, npt.NDArray[np.int32]] = WeakKeyDictionary()
+
+
+def _canonical_ids(table: SegmentTable) -> npt.NDArray[np.int32]:
+    """Hláska, kterou dá ``id_of(ipa[hláska])`` (−1 = zápis tabulka nerozebere); pamatované po tabulce.
+
+    Výčtová třída jedné hlásky (``changes.sound._single``) se staví ze zápisu hlásky, takže u necelistvých
+    zápisů (``cᶣ`` se čte jako ``cʷ``) je to jiná hláska; Rust tu shodu potřebuje znát.
+    """
+    found = _CANONICAL.get(table)
+    if found is None:
+        out = []
+        for symbol in table.ipa:
+            try:
+                out.append(table.id_of(symbol))
+            except ValueError:
+                out.append(-1)
+        found = _CANONICAL[table] = np.array(out, dtype=np.int32)
+    return found
+
+
 class NativeSoundIndex:
     """Tentýž index v Rustu (``cee_core.SoundIndex``); rozhraní jako :class:`SoundIndex`.
 
     Stav je v Rustu. Python posílá jednou za tik pro všechny kódy dva pohledy na
     pole (tvary kódu, příznaky slovní zásoby) a doplní, co si Rust vyžádá: obsah
-    výchozích tvarů (index je drží mimo banku tvarů světa) a sadu kandidátů
-    pro nový inventář (sestavuje ji Python, ``changes.sound``). Rust nelze zkopírovat
+    výchozích tvarů (index je drží mimo banku tvarů světa). Sady kandidátů pro nový
+    inventář si Rust staví sám z rysů tabulky hlásek (``rust/cee_core/src/candidates.rs``);
+    Python mu tabulku pošle jednou (:meth:`_send_table`). Rust nelze zkopírovat
     ani uložit, proto se při kopii a uložení exportují jen započítané tvary a
     pravidla (``counted_form``, ``counted_rule``) a podle nich se stav obnoví.
     """
@@ -360,6 +399,8 @@ class NativeSoundIndex:
         self._handle = handle
         self._scales = list(scales)
         self._tokens: set[int] = set()
+        #: Tabulka hlásek, jejíž snímek Rust dostal (nový Rust index ji dostane při prvním dorovnání).
+        self._table_sent: SegmentTable | None = None
         #: Uložený stav, který se do Rustu vrátí při příštím dorovnání (banku mít po ruce).
         self._restore: dict[int, tuple[npt.NDArray[np.int32], npt.NDArray[np.int8]]] = {}
 
@@ -369,12 +410,11 @@ class NativeSoundIndex:
         return {"scales": self._scales, "saved": {t: (f.copy(), r.copy()) for t, (f, r) in saved.items()}}
 
     def __setstate__(self, state: dict[str, Any]) -> None:
-        from cee.v2 import native
-
         module = native._load()
         assert module is not None, "uložený svět čeká rozšíření cee_core"
         self._scales = state["scales"]
         self._handle = module.SoundIndex(self._scales)
+        self._table_sent = None
         self._restore = state["saved"]
         self._tokens = set(self._restore)
 
@@ -384,45 +424,73 @@ class NativeSoundIndex:
         assert bank is not None
         return bank
 
-    def sync(self, world: World, codes: list[Code], catalog: Catalog, force: bool = False) -> None:
+    @property
+    def handle(self) -> Any:
+        """Index v Rustu (jeho dorovnání spolu s indexem míst dělá ``cee_core.innovation_totals``)."""
+        return self._handle
+
+    @property
+    def family_count(self) -> int:
+        return len(self._scales)
+
+    def prepare(self, world: World, codes: list[Code]) -> tuple[list[int], list[int], list[Any], list[Any]]:
+        """Vstupy dorovnání kódů (tokeny, pravidla přízvuku, příznaky slovní zásoby a tvary kódů bez kopie).
+
+        Zároveň pošle Rustu tabulku hlásek, nebyla-li poslána, a vrátí do něj uložený stav (po obnově světa).
+        """
         table = world.table
         assert table is not None
         bank = self._bank(world)
+        self._send_table(table)
         for token, (forms, rules) in list(self._restore.items()):
             # Uložené číslo tvaru mimo banku se odvolává na výchozí tvar morfému: obsah doplní svět.
-            self._supply(world, (np.unique(forms[forms >= PRIVATE_BASE]) - PRIVATE_BASE).tolist())
+            self.supply(world, (np.unique(forms[forms >= PRIVATE_BASE]) - PRIVATE_BASE).tolist())
             self._handle.import_group(bank, token, forms, rules)
         self._restore.clear()
         tokens = [code.forms.token for code in codes]
         self._tokens.update(tokens)
-        rules = [RULES.index(code.stress_rule) for code in codes]
-        flags = [code.phonology.vocabulary.flags for code in codes]
-        forms = [code.forms.raw()[0] for code in codes]
+        return (
+            tokens, [RULES.index(code.stress_rule) for code in codes],
+            [code.phonology.vocabulary.flags for code in codes], [code.forms.raw()[0] for code in codes],
+        )
+
+    def sync(self, world: World, codes: list[Code], catalog: Catalog, force: bool = False) -> None:
+        bank = self._bank(world)
+        tokens, rules, flags, forms = self.prepare(world, codes)
         for _ in range(64):
             missing, sets = self._handle.sync(bank, tokens, rules, flags, forms)
-            if not missing and not sets:
+            assert not sets, "Rust si sady kandidátů staví sám"
+            if not missing:
                 return
             for _, numbers in missing:
-                self._supply(world, numbers)
-            for inventory in sets:
-                self._register(table, catalog, tuple(inventory))
+                self.supply(world, numbers)
         raise RuntimeError("index prostředí se nepodařilo dorovnat")
 
-    def _supply(self, world: World, numbers: list[int]) -> None:
+    def _send_table(self, table: SegmentTable) -> None:
+        """Pošle Rustu snímek tabulky hlásek (rysy, zápis, samohlásky, tóny a čísla hledaných symbolů)."""
+        if self._table_sent is table:
+            return
+        from cee.v2.language.segments import TONES
+
+        module = native._load()
+        assert module is not None
+        symbols = []
+        for symbol in module.candidate_symbols():
+            try:
+                symbols.append(table.id_of(symbol))
+            except ValueError:
+                symbols.append(-1)
+        self._handle.set_table(
+            [*table.names, *table.detail_names], np.ascontiguousarray(table.vectors), list(table.ipa),
+            np.ascontiguousarray(table.vowel_mask), _tone_codes(table), _canonical_ids(table), symbols, list(TONES),
+        )
+        self._table_sent = table
+
+    def supply(self, world: World, numbers: list[int]) -> None:
         """Výchozí tvary morfémů (obsah hlásek) do arény indexu; do banky tvarů světa se nezařazují."""
         if numbers:
             names = world.registry.morphemes.names
             self._handle.set_defaults(numbers, [list(world.morphemes[names[number]].form) for number in numbers])
-
-    def _register(self, table: SegmentTable, catalog: Catalog, inventory: tuple[int, ...]) -> None:
-        combined = catalog.candidates(table, inventory)
-        masks = combined.masks
-        self._handle.register_set(
-            list(inventory), masks.cols.astype(np.int64), np.ascontiguousarray(masks.target),
-            np.ascontiguousarray(masks.left), np.ascontiguousarray(masks.right), np.ascontiguousarray(masks.right2),
-            masks.right2_rows.astype(np.int64), combined.stressed_rows.astype(np.int64),
-            combined.unstressed_rows.astype(np.int64), list(combined.family_ends),
-        )
 
     def inventory(self, code: Code) -> tuple[int, ...]:
         return tuple(self._handle.inventory(code.forms.token))
@@ -441,6 +509,24 @@ class NativeSoundIndex:
 
     def supports(self, code: Code) -> npt.NDArray[np.int64]:
         return self._handle.supports(code.forms.token)  # type: ignore[no-any-return]
+
+    def family_names(self, code: Code, family: int) -> list[str]:
+        """ID proměnných míst rodiny v pořadí míst (sadu kandidátů drží Rust)."""
+        found = self._handle.family_names(code.forms.token, family)
+        assert found is not None
+        return found  # type: ignore[no-any-return]
+
+    def family_spec(self, code: Code, family: int, position: int) -> Any:
+        """Popis kandidáta místa rodiny (pole procesu), z něhož Python postaví ``Process``."""
+        found = self._handle.family_spec(code.forms.token, family, position)
+        assert found is not None
+        return found
+
+    def family_supports(self, code: Code, family: int) -> list[int]:
+        """Opory míst rodiny v pořadí míst."""
+        found = self._handle.family_supports(code.forms.token, family)
+        assert found is not None
+        return found  # type: ignore[no-any-return]
 
     def context_counts(self, code: Code, world: World) -> tuple[npt.NDArray[np.intp], ...]:
         found = self._handle.context_counts(self._bank(world), code.forms.token)

@@ -108,6 +108,8 @@ class SemanticDependencies:
         #: Kořen → pojem, ze kterého je odvozen (−1 = není odvozenina z jediného pojmu), a základ.
         self.root_source: dict[int, int] = {}
         self.root_base: dict[int, int] = {}
+        #: Kořeny, které jsou slovesa (``Morpheme.word_class == "verb"``).
+        self.root_verb: set[int] = set()
         self.slots: dict[int, _Slot] = {}
 
     def set_names(self, concepts: list[str]) -> None:
@@ -117,9 +119,13 @@ class SemanticDependencies:
         self.graph = graph
         self.graph_version += 1
 
-    def set_roots(self, numbers: list[int], sources: list[int], bases: list[int]) -> None:
-        for number, source, base in zip(numbers, sources, bases):
+    def set_roots(self, numbers: list[int], sources: list[int], bases: list[int], verbs: list[bool]) -> None:
+        for number, source, base, verb in zip(numbers, sources, bases, verbs):
             self.root_source[number], self.root_base[number] = int(source), int(base)
+            if verb:
+                self.root_verb.add(number)
+            else:
+                self.root_verb.discard(number)
 
     def _known(self, root: int) -> bool:
         return root < 0 or root in self.root_source

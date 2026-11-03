@@ -6,6 +6,8 @@
 use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::prelude::*;
 
+use crate::bank::Bank;
+use crate::candidates::{self, Candidate, Pat, SegTable};
 use crate::clarity::{self, GroupColumns};
 use crate::index::{self, GroupInput};
 use crate::python::{failure, slice, Held, NativeBank};
@@ -18,7 +20,7 @@ type NeedsOut = (Vec<(usize, Vec<u32>)>, Vec<Vec<u32>>);
 /// zrcadlo `cee.v2.language.sound_index.SoundIndex`.
 #[pyclass(module = "cee_core")]
 pub struct SoundIndex {
-    inner: index::SoundIndex,
+    pub(crate) inner: index::SoundIndex,
 }
 
 #[pymethods]
@@ -42,24 +44,7 @@ impl SoundIndex {
         flags: Vec<Bound<'_, PyAny>>,
         forms: Vec<Bound<'_, PyAny>>,
     ) -> PyResult<NeedsOut> {
-        let count = tokens.len();
-        if [rules.len(), flags.len(), forms.len()]
-            .iter()
-            .any(|&size| size != count)
-        {
-            return Err(failure("seznamy kódů mají různou délku".into()));
-        }
-        let flags = Held::<u8>::all(&flags)?;
-        let forms = Held::<i32>::all(&forms)?;
-        let inputs: Vec<GroupInput<'_>> = (0..count)
-            .map(|at| GroupInput {
-                token: tokens[at],
-                rule: rules[at],
-                flags: flags[at].view(),
-                forms: forms[at].view(),
-            })
-            .collect();
-        let needs = self.inner.sync(&bank.bank, &inputs).map_err(failure)?;
+        let needs = sound_sync(&mut self.inner, &bank.bank, &tokens, &rules, &flags, &forms)?;
         Ok((needs.defaults, needs.sets))
     }
 
@@ -70,6 +55,101 @@ impl SoundIndex {
         }
         self.inner.set_defaults(&numbers, &forms);
         Ok(())
+    }
+
+    /// Snímek tabulky hlásek (jména rysů, matice rysů, zápis IPA, samohlásky, kódy tónů, čísla
+    /// symbolů v pořadí `candidate_symbols`, tónové značky): od té chvíle si Rust sady kandidátů
+    /// zvukových změn staví sám.
+    #[allow(clippy::too_many_arguments)]
+    fn set_table(
+        &mut self,
+        names: Vec<String>,
+        vectors: PyReadonlyArray2<'_, i8>,
+        ipa: Vec<String>,
+        vowel: PyReadonlyArray1<'_, bool>,
+        tone: PyReadonlyArray1<'_, i32>,
+        canon: PyReadonlyArray1<'_, i32>,
+        symbols: Vec<i64>,
+        tones: Vec<String>,
+    ) -> PyResult<()> {
+        let table = SegTable::new(
+            names,
+            slice(&vectors)?.to_vec(),
+            ipa,
+            slice(&vowel)?.to_vec(),
+            slice(&tone)?.to_vec(),
+            slice(&canon)?.to_vec(),
+            &symbols,
+            tones,
+        )
+        .map_err(failure)?;
+        self.inner.set_table(table);
+        Ok(())
+    }
+
+    fn has_table(&self) -> bool {
+        self.inner.has_table()
+    }
+
+    /// Sada kandidátů pro inventář, jak ji Rust sestavuje (pro test proti Pythonu): ID proměnných,
+    /// konce rodin, popisy kandidátů, sloupce hlásek a masky (cíl, vlevo, vpravo po řádcích kandidátů,
+    /// druhý vpravo jen pro `right2_rows`) a řádky podmínky přízvuku.
+    #[allow(clippy::type_complexity)]
+    fn describe_set<'py>(
+        &self,
+        py: Python<'py>,
+        inventory: Vec<u32>,
+    ) -> PyResult<(
+        Vec<String>,
+        Vec<usize>,
+        Vec<Spec>,
+        Bound<'py, PyArray1<i64>>,
+        [Bound<'py, PyArray1<bool>>; 4],
+        [Vec<i64>; 3],
+    )> {
+        let table = self
+            .inner
+            .table()
+            .ok_or_else(|| failure("chybí snímek tabulky hlásek".into()))?;
+        let built = candidates::build(table, &inventory).map_err(failure)?;
+        let masks = candidates::masks(table, &inventory, &built);
+        let specs = built.candidates.iter().map(spec_out).collect();
+        Ok((
+            built.ids,
+            built.family_ends,
+            specs,
+            PyArray1::from_vec(py, masks.columns.iter().map(|&c| i64::from(c)).collect()),
+            [
+                PyArray1::from_vec(py, masks.target),
+                PyArray1::from_vec(py, masks.left),
+                PyArray1::from_vec(py, masks.right),
+                PyArray1::from_vec(py, masks.right2),
+            ],
+            [
+                masks.right2_rows,
+                masks.stressed_rows,
+                masks.unstressed_rows,
+            ],
+        ))
+    }
+
+    /// ID proměnných míst jedné rodiny (v pořadí míst), když sadu sestavil Rust.
+    fn family_names(&self, token: i64, family: usize) -> Option<Vec<String>> {
+        self.inner
+            .site_ids(token, family)
+            .map(|ids| ids.into_iter().map(str::to_string).collect())
+    }
+
+    /// Opory míst jedné rodiny v pořadí míst.
+    fn family_supports(&self, token: i64, family: usize) -> Option<Vec<i64>> {
+        self.inner.site_supports(token, family)
+    }
+
+    /// Popis kandidáta místa rodiny (pole `Process`), ze kterého Python postaví proces.
+    fn family_spec(&self, token: i64, family: usize, position: usize) -> Option<Spec> {
+        self.inner
+            .site_candidate(token, family, position)
+            .map(|(candidate, _)| spec_out(candidate))
     }
 
     /// Zaregistruje sadu kandidátů pro inventář (viz `_CombinedSoundCandidates`).
@@ -192,6 +272,100 @@ impl SoundIndex {
             )
             .map_err(failure)
     }
+}
+
+/// Dorovná kódy indexu prostředí (viz `SoundIndex::sync`).
+pub(crate) fn sound_sync(
+    inner: &mut index::SoundIndex,
+    bank: &Bank,
+    tokens: &[i64],
+    rules: &[u8],
+    flags: &[Bound<'_, PyAny>],
+    forms: &[Bound<'_, PyAny>],
+) -> PyResult<index::Needs> {
+    let count = tokens.len();
+    if [rules.len(), flags.len(), forms.len()]
+        .iter()
+        .any(|&size| size != count)
+    {
+        return Err(failure("seznamy kódů mají různou délku".into()));
+    }
+    let flags = Held::<u8>::all(flags)?;
+    let forms = Held::<i32>::all(forms)?;
+    let inputs: Vec<GroupInput<'_>> = (0..count)
+        .map(|at| GroupInput {
+            token: tokens[at],
+            rule: rules[at],
+            flags: flags[at].view(),
+            forms: forms[at].view(),
+        })
+        .collect();
+    inner.sync(bank, &inputs).map_err(failure)
+}
+
+/// Předpis vzoru: druh, dvojice (rys, hodnota) a zápis IPA hlásek výčtu.
+type Recipe = (&'static str, Vec<(String, String)>, Vec<String>);
+
+/// Popis kandidáta: (rodina, popis, operace, změny, výstupní hláska, přízvuk, jádro),
+/// (úleva, úleva je celé číslo, zřetelnost, redukční, povolené značky, tón)
+/// a vzory (cíl, vlevo, vpravo, druhý vpravo).
+#[allow(clippy::type_complexity)]
+type Spec = (
+    (
+        usize,
+        String,
+        &'static str,
+        Vec<(String, String)>,
+        Option<u32>,
+        Option<&'static str>,
+        bool,
+    ),
+    (f64, bool, f64, bool, Vec<String>, Option<i32>),
+    (Recipe, Option<Recipe>, Option<Recipe>, Option<Recipe>),
+);
+
+fn recipe_out(pattern: &Pat) -> Recipe {
+    pattern.recipe()
+}
+
+fn spec_out(candidate: &Candidate) -> Spec {
+    (
+        (
+            candidate.family,
+            candidate.label.clone(),
+            candidate.operation.name(),
+            candidate.changes.clone(),
+            candidate.segment,
+            candidate.stress.name(),
+            candidate.medial,
+        ),
+        (
+            candidate.ease,
+            candidate.ease_int,
+            candidate.clarity,
+            candidate.reductive,
+            candidate.allow.clone(),
+            candidate.tone,
+        ),
+        (
+            recipe_out(&candidate.target),
+            candidate.left.as_ref().map(|p| recipe_out(p)),
+            candidate.right.as_ref().map(|p| recipe_out(p)),
+            candidate.right2.as_ref().map(|p| recipe_out(p)),
+        ),
+    )
+}
+
+/// Symboly, jejichž číslo v tabulce hlásek Rust potřebuje k sestavení kandidátů (pro `set_table`).
+#[pyfunction]
+pub fn candidate_symbols() -> Vec<String> {
+    candidates::symbol_list()
+}
+
+/// Druhy rodin zvukových změn v pořadí `SOUND_CHANGES`.
+#[pyfunction]
+pub fn candidate_families() -> Vec<&'static str> {
+    candidates::FAMILIES.to_vec()
 }
 
 /// Skóre lexikální jasnosti dávky dvojic (skupina, morfém, pojem).

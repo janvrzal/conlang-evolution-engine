@@ -6,6 +6,7 @@
 pub mod assess;
 pub mod assess_index;
 pub mod bank;
+pub mod candidates;
 pub mod clarity;
 pub mod code_state;
 pub mod form_assess;
@@ -25,6 +26,8 @@ pub mod transmission;
 mod code_state_python;
 #[cfg(feature = "python")]
 mod index_python;
+#[cfg(feature = "python")]
+mod innovation_python;
 #[cfg(feature = "python")]
 mod pressures_python;
 #[cfg(feature = "python")]
