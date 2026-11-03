@@ -400,4 +400,8 @@ impl SiteIndex {
     pub(crate) fn morph(&self) -> &crate::morphology_index::MorphIndex {
         &self.inner.morph
     }
+
+    pub(crate) fn morph_mut(&mut self) -> &mut crate::morphology_index::MorphIndex {
+        &mut self.inner.morph
+    }
 }

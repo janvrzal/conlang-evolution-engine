@@ -15,11 +15,11 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
-from cee.v2 import phases
+from cee.v2 import native, phases
 from cee.v2.history import History
 from cee.v2.language.index import ExponentIndex
 from cee.v2.language.lexicon import Morpheme, UnitForm
@@ -208,13 +208,68 @@ def analogy_plan(world: World, group_ids: Sequence[str]) -> dict[str, AnalogyPla
     return plan
 
 
+#: Zápis tvaru slova, který vrací Rust: (číslo morfému, číslo tvaru v bance, hranice, koncovka; −1 = žádná).
+_Write = tuple[int, int, int, int]
+
+
+def _native_writes(world: World, code: Code, plan: AnalogyPlan) -> list[_Write | None] | None:
+    """Zápisy analogií, které v plánu převážily, spočítané v Rustu jedním voláním pro celý kód.
+
+    Pro každou analogii s rozhodnutím ``ANALOGY_APPLY`` (v pořadí plánu) vrací zápis nového stavu tvaru slova,
+    nebo ``None``, když změna nic nezmění. Rust zapisuje do vlastní kopie úložiště tvarů a po každém zápisu
+    dorovná morfologický index kódu, takže další analogie vidí totéž co po skutečném zápisu; nové tvary zařadí
+    do banky (číslo převezme :func:`cee.v2.pressures_native.adopt_created`). ``None`` místo seznamu, když to
+    nejde (bez Rustu, svět bez tabulky hlásek, reanalýza hranice, která tvoří nové tvary slov v Pythonu):
+    volající pak počítá v Pythonu.
+    """
+    variables = [variable_id for variable_id, _, decision in plan if decision == phases.ANALOGY_APPLY]
+    if not variables or not native.assess_enabled() or world.table is None or world.form_bank()._native is None:
+        return None
+    if any(world.form_changes[variable_id].lexeme_wide for variable_id in variables):
+        return None
+    from cee.v2.language.assessment_index import NativeAssessmentIndex, index_of
+    from cee.v2.language.site_index import site_index
+    from cee.v2.pressures_native import adopt_created
+
+    index = index_of(world)
+    if not isinstance(index, NativeAssessmentIndex):
+        return None
+    sites = site_index(world)
+    if not sites.native:
+        world.sites = None
+        sites = site_index(world)
+        if not sites.native:
+            return None
+    for variable_id in variables:
+        index.ensure_form(world, variable_id)
+    sites.prepare(world, [code])
+    numbers = [world.registry.variables.intern(variable_id) for variable_id in variables]
+    table: Any = world.columns.morphemes
+    columns = [table.kind, table.word_class, table.cell, table.lexeme, table.exponent, table.boundary]
+    bank = world.form_bank()._native
+    for _ in range(64):
+        needs, writes = index.handle.apply_forms(
+            bank, sites.handle, code.forms.token, code.phonology.vocabulary.flags, code.forms.raw(), columns,
+            numbers,
+        )
+        if not len(needs):
+            break
+        sites._supply_defaults(world, list(needs))
+    else:
+        raise RuntimeError("přestavbu tvarů se nepodařilo dopočítat")
+    adopt_created(world)
+    return list(writes)
+
+
 def restructure(
     world: World, group_id: str, tick: int, history: History, year: float, plan: AnalogyPlan | None = None
 ) -> None:
     """Analogie, která ve skupině převážila, se zapíše do tvaru slova.
 
     ``plan`` (:func:`analogy_plan`) smí volající spočítat předem pro všechny
-    skupiny; bez něj se spočte jen pro tuto skupinu.
+    skupiny; bez něj se spočte jen pro tuto skupinu. Nové stavy tvarů (vyrovnání
+    a rozšíření) počítá s Rustem jedno volání pro celý kód (:func:`_native_writes`),
+    zápisy, fronty fonologizace, verze a historie provádí Python ve stejném pořadí jako dřív.
     """
     from cee.v2.phonology import requeue_all
 
@@ -222,6 +277,8 @@ def restructure(
     state = code.phonology
     if plan is None:
         plan = analogy_plan(world, [group_id]).get(group_id, [])
+    batch = _native_writes(world, code, plan)
+    writes = iter(batch) if batch is not None else None
     for variable_id, unit, decision in plan:
         if decision == phases.ANALOGY_REMOVE:
             del state.morph_active[variable_id]
@@ -233,21 +290,28 @@ def restructure(
         del state.morph_active[variable_id]
         state.morph_closed.add(variable_id)
         state.record_lifecycle("form", "close", variable_id)
-        targets = units_of(world, code, unit) if change.lexeme_wide else [unit]
-        rewritten = False
-        for target in targets:
-            new = (
-                rebracket(world.unit_of(code, target), change.operation, change.segment)
-                if change.lexeme_wide and change.segment is not None
-                else apply_form_change(world, code, change)
-            )
-            if new is None:
+        if writes is not None:
+            write = next(writes)
+            if write is None:
                 continue
-            code.forms.set(target, new)
-            rewritten = True
-            requeue_all(world, code, target)
-        if not rewritten:
-            continue
+            code.forms.put(*write)
+            requeue_all(world, code, unit)
+        else:
+            targets = units_of(world, code, unit) if change.lexeme_wide else [unit]
+            rewritten = False
+            for target in targets:
+                new = (
+                    rebracket(world.unit_of(code, target), change.operation, change.segment)
+                    if change.lexeme_wide and change.segment is not None
+                    else apply_form_change(world, code, change)
+                )
+                if new is None:
+                    continue
+                code.forms.set(target, new)
+                rewritten = True
+                requeue_all(world, code, target)
+            if not rewritten:
+                continue
         state.version += 1
         morpheme = world.morphemes[unit]
         history.record(

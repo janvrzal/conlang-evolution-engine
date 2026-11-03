@@ -74,7 +74,7 @@ impl FormRegistry {
             .is_some_and(|&found| found != NONE)
     }
 
-    fn get(&self, variable: u32) -> Option<(usize, FormChange)> {
+    pub fn get(&self, variable: u32) -> Option<(usize, FormChange)> {
         match self.ordinal.get(variable as usize) {
             Some(&found) if found != NONE => Some((found as usize, self.changes[found as usize])),
             _ => None,
@@ -143,10 +143,25 @@ fn item<T: Copy>(values: &[T], number: usize, missing: T) -> T {
     values.get(number).copied().unwrap_or(missing)
 }
 
-impl FormCtx<'_> {
-    /// Tvar morfému v kódu `g` (z úložiště, jinak výchozí z arény); `Err(číslo)`, chybí-li výchozí tvar.
-    fn form_of(&self, g: usize, number: u32) -> Result<&[i32], u32> {
-        let raw = item(self.inp.forms[g], number as usize, -1);
+/// Odkud se čtou tvary jednoho kódu: úložiště tvarů kódu (číslo tvaru v bance, hranice, koncovka),
+/// výchozí tvary morfémů v aréně morfologického indexu a sloupce tabulky morfémů.
+#[derive(Clone, Copy)]
+pub struct UnitSource<'a> {
+    pub bank: &'a Bank,
+    pub morph: &'a MorphIndex,
+    pub token: i64,
+    pub forms: &'a [i32],
+    pub boundary: &'a [i32],
+    pub exponent: &'a [i32],
+    pub unit_boundary: &'a [i32],
+    pub unit_exponent: &'a [i32],
+    pub lexeme: &'a [i32],
+}
+
+impl<'a> UnitSource<'a> {
+    /// Tvar morfému v kódu (z úložiště, jinak výchozí z arény); `Err(číslo)`, chybí-li výchozí tvar.
+    pub fn form_of(&self, number: u32) -> Result<&'a [i32], u32> {
+        let raw = item(self.forms, number as usize, -1);
         if raw >= 0 {
             Ok(self.bank.form_of(raw as usize))
         } else {
@@ -155,22 +170,137 @@ impl FormCtx<'_> {
     }
 
     /// Stav tvaru slova (`World.unit_of`): tvar, hranice koncovky (−1 = žádná) a koncovka (−1 = žádná).
-    fn unit_of(&self, g: usize, number: u32) -> Result<(&[i32], i32, i32), u32> {
+    pub fn unit_of(&self, number: u32) -> Result<(&'a [i32], i32, i32), u32> {
         let at = number as usize;
-        if item(self.inp.forms[g], at, -1) >= 0 {
-            let form = self.form_of(g, number)?;
-            Ok((
+        let form = self.form_of(number)?;
+        Ok(if item(self.forms, at, -1) >= 0 {
+            (
                 form,
-                item(self.fi.boundary[g], at, -1),
-                item(self.fi.exponent[g], at, -1),
-            ))
+                item(self.boundary, at, -1),
+                item(self.exponent, at, -1),
+            )
         } else {
-            let form = self.form_of(g, number)?;
-            Ok((
+            (
                 form,
-                item(self.fi.unit_boundary, at, -1),
-                item(self.fi.unit_exponent, at, -1),
-            ))
+                item(self.unit_boundary, at, -1),
+                item(self.unit_exponent, at, -1),
+            )
+        })
+    }
+}
+
+/// Nový tvar slova po analogické změně (`apply_form_change`) jako sled úseků: případná hláska na
+/// začátku, pak `first` a `second`. Nic se nekopíruje, dokud ho nepotřebuje banka.
+pub struct Rewrite<'a> {
+    pub head: Option<i32>,
+    pub first: &'a [i32],
+    pub second: &'a [i32],
+    /// Hranice koncovky nového stavu a jeho koncovka (−1 = žádná).
+    pub boundary: i32,
+    pub exponent: i32,
+    /// Dosavadní tvar slova, jeho koncovka a citační tvar lexému.
+    pub current: &'a [i32],
+    pub current_exponent: i32,
+    pub citation: &'a [i32],
+}
+
+impl Rewrite<'_> {
+    /// Rovná se nový tvar `other`?
+    pub fn equals(&self, other: &[i32]) -> bool {
+        let skip = usize::from(self.head.is_some());
+        self.head.is_none_or(|head| other.first() == Some(&head))
+            && other.len() == skip + self.first.len() + self.second.len()
+            && other[skip..skip + self.first.len()] == *self.first
+            && other[skip + self.first.len()..] == *self.second
+    }
+
+    pub fn to_vec(&self) -> Vec<i32> {
+        let mut form = Vec::with_capacity(self.first.len() + self.second.len() + 1);
+        form.extend(self.head);
+        form.extend_from_slice(self.first);
+        form.extend_from_slice(self.second);
+        form
+    }
+}
+
+/// Přepis tvaru slova podle analogické změny; `None`, když změna nic nezmění (`apply_form_change`).
+/// `Err(číslo morfému)`, chybí-li výchozí tvar v aréně.
+pub fn rewrite<'a>(src: &UnitSource<'a>, change: FormChange) -> Result<Option<Rewrite<'a>>, u32> {
+    let (form, boundary, exponent) = src.unit_of(change.unit)?;
+    let root = item(src.lexeme, change.unit as usize, change.unit as i32) as u32;
+    let citation = src.form_of(root)?;
+    let cut = if boundary < 0 {
+        form.len()
+    } else {
+        (boundary as usize).min(form.len())
+    };
+    let (stem, ending) = (&form[..cut], &form[cut..]);
+    let made = |head, first, second, new_boundary, new_exponent| Rewrite {
+        head,
+        first,
+        second,
+        boundary: new_boundary,
+        exponent: new_exponent,
+        current: form,
+        current_exponent: exponent,
+        citation,
+    };
+    Ok(match change.operation {
+        LEVEL => {
+            if stem == citation {
+                None
+            } else {
+                Some(made(
+                    None,
+                    citation,
+                    ending,
+                    citation.len() as i32,
+                    exponent,
+                ))
+            }
+        }
+        EXTEND => match src.morph.dominant_ending(src.token, change.exponent) {
+            Some(shape) if !(exponent == change.exponent && ending == shape) => {
+                Some(made(None, stem, shape, stem.len() as i32, change.exponent))
+            }
+            _ => None,
+        },
+        PREPEND => Some(made(
+            Some(change.segment),
+            form,
+            &[],
+            if boundary < 0 { -1 } else { boundary + 1 },
+            exponent,
+        )),
+        _ => {
+            if form.first() != Some(&change.segment) || form.len() < 3 {
+                None
+            } else {
+                Some(made(
+                    None,
+                    &form[1..],
+                    &[],
+                    if boundary < 0 { -1 } else { boundary - 1 },
+                    exponent,
+                ))
+            }
+        }
+    })
+}
+
+impl FormCtx<'_> {
+    /// Zdroj tvarů kódu skupiny `g`.
+    fn source(&self, g: usize) -> UnitSource<'_> {
+        UnitSource {
+            bank: self.bank,
+            morph: self.morph,
+            token: self.inp.tokens[g],
+            forms: self.inp.forms[g],
+            boundary: self.fi.boundary[g],
+            exponent: self.fi.exponent[g],
+            unit_boundary: self.fi.unit_boundary,
+            unit_exponent: self.fi.unit_exponent,
+            lexeme: self.inp.lexeme,
         }
     }
 
@@ -236,13 +366,6 @@ impl FormCtx<'_> {
     }
 }
 
-/// Je `first ++ second` totéž co `whole`?
-fn concat_equals(first: &[i32], second: &[i32], whole: &[i32]) -> bool {
-    first.len() + second.len() == whole.len()
-        && whole[..first.len()] == *first
-        && whole[first.len()..] == *second
-}
-
 /// Hodnocení změny kódu `g`; `Err(číslo morfému)`, chybí-li jeho výchozí tvar v aréně.
 fn evaluate(
     ctx: &FormCtx<'_>,
@@ -251,51 +374,10 @@ fn evaluate(
     change: FormChange,
 ) -> Result<Option<FormEntry>, u32> {
     let token = ctx.inp.tokens[g];
-    let (form, boundary, exponent) = ctx.unit_of(g, change.unit)?;
-    let root = item(ctx.inp.lexeme, change.unit as usize, change.unit as i32) as u32;
-    let citation = ctx.form_of(g, root)?;
-    let cut = if boundary < 0 {
-        form.len()
-    } else {
-        (boundary as usize).min(form.len())
-    };
-    let (stem, ending) = if boundary < 0 {
-        (form, &form[form.len()..])
-    } else {
-        (&form[..cut], &form[cut..])
-    };
-    // Zní nový tvar jako citační tvar? `None`, když změna nic nezmění.
-    let after = match change.operation {
-        LEVEL => {
-            if stem == citation {
-                None
-            } else {
-                // citační tvar + koncovka se rovná citačnímu tvaru jen bez koncovky.
-                Some(ending.is_empty())
-            }
-        }
-        EXTEND => match ctx.morph.dominant_ending(token, change.exponent) {
-            Some(shape) if !(exponent == change.exponent && ending == shape) => {
-                Some(concat_equals(stem, shape, citation))
-            }
-            _ => None,
-        },
-        PREPEND => Some(
-            citation.len() == form.len() + 1
-                && citation[0] == change.segment
-                && citation[1..] == *form,
-        ),
-        _ => {
-            if form.first() != Some(&change.segment) || form.len() < 3 {
-                None
-            } else {
-                Some(form[1..] == *citation)
-            }
-        }
-    };
-    let Some(after) = after else {
+    let Some(new) = rewrite(&ctx.source(g), change)? else {
         return Ok(None);
     };
+    let root = item(ctx.inp.lexeme, change.unit as usize, change.unit as i32) as u32;
     let gain = match change.operation {
         LEVEL => 1.0,
         EXTEND => {
@@ -303,7 +385,8 @@ fn evaluate(
                 item(ctx.fi.class, change.unit as usize, -1),
                 item(ctx.inp.cell, change.unit as usize, -1),
             );
-            ctx.share(token, class, cell, change.exponent) - ctx.share(token, class, cell, exponent)
+            ctx.share(token, class, cell, change.exponent)
+                - ctx.share(token, class, cell, new.current_exponent)
         }
         _ => 0.0,
     };
@@ -311,8 +394,8 @@ fn evaluate(
         present: true,
         gain,
         frequency: ctx.usage(usage, g, root),
-        before: form == citation,
-        after,
+        before: new.current == new.citation,
+        after: new.equals(new.citation),
     }))
 }
 

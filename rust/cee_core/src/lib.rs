@@ -8,6 +8,7 @@ pub mod assess_index;
 pub mod bank;
 pub mod clarity;
 pub mod form_assess;
+pub mod form_restructure;
 pub mod index;
 pub mod morphology_index;
 pub mod phonology;

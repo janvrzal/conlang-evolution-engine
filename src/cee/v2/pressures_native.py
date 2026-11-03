@@ -340,7 +340,7 @@ def _step(
     columns = world.columns.variants.arrays()
     names = world.columns.variants.payload_origins.names
     weights = np.array([_MOTIVATION.get(name, 0.0) for name in names] + [0.0], dtype=np.float64)
-    morphemes = world.columns.morphemes
+    morphemes: Any = world.columns.morphemes
     related = related_keys(world)
     supplier = Supplier(world, codes, group_ids, index)
     stamps = np.array([(code.phonology.lexicon_version << 32) | len(code.phonology.dominant_log) for code in codes],

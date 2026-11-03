@@ -613,6 +613,13 @@ impl Bank {
         self.form(form_id)
     }
 
+    /// Číslo tvaru v bance; nový tvar vzniklý tady dostane další číslo a převezme ho Python
+    /// (`take_created`), jako tvary vzniklé aplikací procesu.
+    pub fn intern_form(&mut self, form: &[i32]) -> Result<u32, String> {
+        self.check_segments(form)?;
+        Ok(self.intern(form))
+    }
+
     /// Uložené výsledky tabulky (pro testy a ladění); chybějící jsou `UNKNOWN`.
     pub fn stored_results(&self, row: usize, rule: u8) -> Vec<i64> {
         let slot = row * RULE_COUNT + rule as usize;

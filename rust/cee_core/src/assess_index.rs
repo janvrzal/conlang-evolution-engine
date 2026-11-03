@@ -495,6 +495,11 @@ impl AssessIndex {
         self.forms.has(variable)
     }
 
+    /// Zaregistrované analogické změny tvarů (čte je přestavba kódu).
+    pub fn forms(&self) -> &FormRegistry {
+        &self.forms
+    }
+
     /// Hodnocení tvaru `variable` v kódu skupiny `g`; `None`, když výpočet čeká na výchozí tvar
     /// morfému (zapsáno do `needs`). Hodnoty se drží po verzi kódu a dopočítávají se podle potřeby.
     pub fn form_lookup(

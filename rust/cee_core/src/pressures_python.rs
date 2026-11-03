@@ -12,6 +12,8 @@ use pyo3::types::PyTuple;
 
 use crate::assess_index::{self, Inputs, Needs, ProcessInfo};
 use crate::form_assess::{FormChange, FormInputs};
+use crate::form_restructure::{self, Applied};
+use crate::morphology_index::{Columns, Store};
 use crate::pressures::{
     self, Chunk, Gathered, Overlay, Params, Plan, Rows, Scorer, StepConst, StepState,
 };
@@ -196,6 +198,81 @@ impl AssessIndex {
 
     fn has_form(&self, variable: u32) -> bool {
         self.inner.has_form(variable)
+    }
+
+    /// Zapíše analogie `variables` (čísla proměnných tvarů; jen vyrovnání a rozšíření) do kódu `token`
+    /// v daném pořadí: nové tvary zařadí do banky a dorovná morfologický index kódu, aby další analogie
+    /// viděla stav po předchozím zápisu. Vrací `(chybějící výchozí tvary, zápisy)`; zápis je
+    /// `(morfém, číslo tvaru, hranice, koncovka)` nebo `None`, když změna nic nezmění. Python zápisy provede
+    /// (`FormStore.put`, fronty, verze, historie) ve stejném pořadí. `flags` jsou příznaky slovní zásoby
+    /// kódu, `store` pole `FormStore.raw()`, `columns` sloupce morfémů (druh, třída, buňka, lexém,
+    /// koncovka, hranice).
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    fn apply_forms(
+        &self,
+        bank: &Bound<'_, NativeBank>,
+        sites: &Bound<'_, SiteIndex>,
+        token: i64,
+        flags: Bound<'_, PyAny>,
+        store: (Bound<'_, PyAny>, Bound<'_, PyAny>, Bound<'_, PyAny>),
+        columns: Vec<Bound<'_, PyAny>>,
+        variables: Vec<u32>,
+    ) -> PyResult<(Vec<u32>, Vec<Option<(u32, u32, i32, i32)>>)> {
+        if columns.len() != 6 {
+            return Err(fail("sloupce morfémů mají špatný počet"));
+        }
+        let kind = Held::<i8>::new(&columns[0])?;
+        let class = Held::<i32>::new(&columns[1])?;
+        let cell = Held::<i32>::new(&columns[2])?;
+        let lexeme = Held::<i32>::new(&columns[3])?;
+        let exponent = Held::<i32>::new(&columns[4])?;
+        let boundary = Held::<i32>::new(&columns[5])?;
+        let cols = Columns {
+            kind: kind.view(),
+            class: class.view(),
+            cell: cell.view(),
+            lexeme: lexeme.view(),
+            exponent: exponent.view(),
+            boundary: boundary.view(),
+        };
+        let flags = Held::<u8>::new(&flags)?;
+        let (form, bounds, exps) = (
+            Held::<i32>::new(&store.0)?,
+            Held::<i32>::new(&store.1)?,
+            Held::<i32>::new(&store.2)?,
+        );
+        let code = form_restructure::Code {
+            token,
+            flags: flags.view(),
+            store: Store {
+                form: form.view(),
+                boundary: bounds.view(),
+                exponent: exps.view(),
+            },
+        };
+        let mut bank = bank.borrow_mut();
+        let mut sites = sites.borrow_mut();
+        let found = form_restructure::apply_changes(
+            self.inner.forms(),
+            sites.morph_mut(),
+            &mut bank.bank,
+            &cols,
+            &code,
+            &variables,
+        )
+        .map_err(failure)?;
+        Ok(match found {
+            Applied::Needs(numbers) => (numbers, Vec::new()),
+            Applied::Done(items) => (
+                Vec::new(),
+                items
+                    .into_iter()
+                    .map(|item| {
+                        item.map(|write| (write.unit, write.form, write.boundary, write.exponent))
+                    })
+                    .collect(),
+            ),
+        })
     }
 
     /// Hodnocení procesu `variable` pro skupiny `groups` (pozice v polích kroku). Vrací
