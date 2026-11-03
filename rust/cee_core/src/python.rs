@@ -768,6 +768,8 @@ mod cee_core {
     use crate::python_pools::{
         hear, libm_probe, normalized, settle, NativeCells, NativeStep, Slab,
     };
+    #[pymodule_export]
+    use crate::sites_python::SiteIndex;
 
     #[pymodule_init]
     fn init(m: &Bound<'_, PyModule>) -> PyResult<()> {
