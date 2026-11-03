@@ -111,7 +111,8 @@ pub struct RowAssessment {
     pub short: f64,
     pub marked: f64,
     /// Dvojice pozic ve vzorku (první < druhá), jejichž tvary po změně splynou
-    /// a předtím různé byly; v pořadí hodnot, pak pozic.
+    /// a předtím různé byly; vzestupně podle (první, druhá), tedy nezávisle na
+    /// číslech tvarů v bance (součet cen dvojic pak na nich nezávisí).
     pub pairs: Vec<(u32, u32)>,
     /// Samohlásky s kladným počtem před změnou a po ní, vzestupně.
     pub before: Vec<i32>,
@@ -267,6 +268,7 @@ impl Bank {
                     }
                     begin = end;
                 }
+                result.pairs.sort_unstable();
                 if want_vowels {
                     let mut counts = BTreeMap::new();
                     vowel_counts(

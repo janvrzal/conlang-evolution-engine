@@ -26,6 +26,7 @@ from test_v2_native_bank import _process
 from cee.v2 import assessment, native
 from cee.v2.changes import sound
 from cee.v2.language.bank import FormBank
+from cee.v2.language.processes import Process
 from cee.v2.language.segments import default_table
 
 GOLDEN = Path(__file__).parent / "data" / "golden_assessment.json.gz"
@@ -62,7 +63,7 @@ def test_hodnoceni_dava_na_zlatych_datech_stejne_soucty_dvojice_i_vysledek(golde
     rows = merging = shaping = neutral = 0
     for case in golden["assess"]:
         process, rule = processes[case["process"]], RULES[case["rule"]]
-        # Rust řadí nové homofony podle čísel tvarů, proto se banka plní v pořadí čísel ze záznamu.
+        # Pořadí dvojic na číslech tvarů nezávisí; banka se přesto plní v pořadí čísel ze záznamu (stejné tvary).
         bank = _bank(monkeypatch)
         assert [bank.id_of(forms[form]) for form in case["order"]] == list(range(len(case["order"])))
         sizes = [len(row["ids"]) for row in case["rows"]]
@@ -228,6 +229,37 @@ def test_hodnoceni_dava_na_svete_stejne_vysledky_jako_python_i_reference():
         assert native_result == assessment._assess_batch_reference(world, groups, variable)
         merged += sum(item.merge_mass > 0 or item.dispersion_delta != 0 for item in native_result)
     assert merged >= 3
+
+
+def test_poradi_novych_homofonu_nezavisi_na_cislech_tvaru():
+    """Dvojice nových homofonů jdou podle pozic ve vzorku; čísla tvarů v bance je neovlivní."""
+    ids = np.array([5, 9, 2, 7, 3, 8], dtype=np.int64)
+    final = np.array([4, 1, 4, 1, 3, 1], dtype=np.int64)
+    expected = [(0, 2), (1, 3), (1, 5), (3, 5)]
+    assert assessment._new_pairs(final, ids) == expected
+    # Přečíslování tvarů (jiné pořadí v bance) pořadí dvojic nezmění.
+    relabel = {1: 90, 3: 10, 4: 50}
+    assert assessment._new_pairs(np.array([relabel[item] for item in final.tolist()]), ids) == expected
+    assert assessment._new_pairs(final, 100 - ids) == expected
+
+
+@needs_native
+def test_rust_radi_nove_homofony_podle_pozic_ne_podle_cisel_tvaru(monkeypatch):
+    """Banka plněná v jiném pořadí (jiná čísla tvarů) dá stejné dvojice jako Python."""
+    table = default_table()
+    merge = Process("merge", table.VOWEL, "replace", segment=table.id_of("ə"), left=None, right=None)
+    letters = [["t", "a"], ["t", "o"], ["k", "a"], ["k", "o"], ["p", "i"], ["p", "u"]]
+    forms = [tuple(table.id_of(letter) for letter in form) for form in letters]
+    found = []
+    for order in (list(range(6)), [5, 3, 1, 4, 2, 0]):
+        bank = _bank(monkeypatch)
+        numbers = {position: bank.id_of(forms[position]) for position in order}
+        ids = np.array([numbers[position] for position in range(6)], dtype=np.int64)
+        offsets = np.array([0, 6], dtype=np.int64)
+        raw = bank.assess_rows(merge, "initial", ids, np.ones(6), offsets, 6, False)
+        count = int(raw[3][0])
+        found.append(list(zip(raw[4].tolist()[:count], raw[5].tolist()[:count])))
+    assert found[0] == found[1] and found[0] == sorted(found[0]) and len(found[0]) > 0
 
 
 @needs_native

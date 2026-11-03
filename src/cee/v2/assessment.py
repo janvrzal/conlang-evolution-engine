@@ -124,6 +124,26 @@ def _dispersion_gain(
     return _nearest(output, after, table) - max(_nearest(source, before, table) for source in sources)
 
 
+def _new_pairs(final: npt.NDArray[np.int64], ids: npt.NDArray[np.int64]) -> list[tuple[int, int]]:
+    """Dvojice pozic vzorku (první < druhá), které po změně znějí stejně a předtím neznělo.
+
+    ``final`` jsou tvary po změně, ``ids`` před ní (stejná pozice = stejný morfém). Pořadí je
+    vzestupné podle (první, druhá), tedy podle pořadí slov ve vzorku (řazeném podle jména morfému),
+    a na číslech tvarů v bance nezávisí. Součet cen dvojic (``merge_mass``) tak nezmění ani to,
+    že banka drží víc tvarů nebo v jiném pořadí.
+    """
+    values, counts = np.unique(final, return_counts=True)
+    pairs: list[tuple[int, int]] = []
+    for value in values[counts > 1].tolist():
+        members = np.flatnonzero(final == value).tolist()
+        for index, first in enumerate(members):
+            for second in members[index + 1 :]:
+                if ids[first] != ids[second]:
+                    pairs.append((first, second))
+    pairs.sort()
+    return pairs
+
+
 @dataclass(frozen=True)
 class _Vocabulary:
     forms: dict[str, Form]
@@ -280,16 +300,11 @@ def _assess_batch_reference(world: World, group_ids: list[str], variable_id: str
             group_id = group_ids[position]
             merge = 0.0
             if collides[row]:
-                values, counts = np.unique(final[row], return_counts=True)
-                for value in values[counts > 1].tolist():
-                    members = np.flatnonzero(final[row] == value).tolist()
-                    for index, first in enumerate(members):
-                        for second in members[index + 1 :]:
-                            if ids[row, first] != ids[row, second]:
-                                merge += _pair(
-                                    world, vocabulary.frequency, vocabulary.morphemes[first],
-                                    vocabulary.morphemes[second], group_id,
-                                )
+                for first, second in _new_pairs(final[row], ids[row]):
+                    merge += _pair(
+                        world, vocabulary.frequency, vocabulary.morphemes[first],
+                        vocabulary.morphemes[second], group_id,
+                    )
             before = {vowel for vowel, count in vocabulary.vowels.items() if count > 0}
             after = before
             if vowels:
@@ -460,16 +475,11 @@ def _assess_batch_python(world: World, group_ids: list[str], variable_id: str) -
             group_id = group_ids[position]
             merge = 0.0
             if collides[row]:
-                values, counts = np.unique(final[row], return_counts=True)
-                for value in values[counts > 1].tolist():
-                    members = np.flatnonzero(final[row] == value).tolist()
-                    for index, first in enumerate(members):
-                        for second in members[index + 1 :]:
-                            if ids[row, first] != ids[row, second]:
-                                merge += _pair(
-                                    world, vocabulary.frequency, vocabulary.morphemes[first],
-                                    vocabulary.morphemes[second], group_id,
-                                )
+                for first, second in _new_pairs(final[row], ids[row]):
+                    merge += _pair(
+                        world, vocabulary.frequency, vocabulary.morphemes[first],
+                        vocabulary.morphemes[second], group_id,
+                    )
             before = {vowel for vowel, count in vocabulary.vowels.items() if count > 0}
             after = before
             if vowels:
@@ -541,16 +551,11 @@ def _assess(world: World, group_id: str, variable_id: str) -> ProcessAssessment:
     final = ids.copy()
     final[hit] = new
     merge = 0.0
-    values, counts = np.unique(final, return_counts=True)
-    for value in values[counts > 1].tolist():
-        members = np.flatnonzero(final == value).tolist()
-        for index, first in enumerate(members):
-            for second in members[index + 1 :]:
-                if ids[first] != ids[second]:
-                    merge += _pair(
-                        world, vocabulary.frequency, vocabulary.morphemes[first],
-                        vocabulary.morphemes[second], group_id,
-                    )
+    for first, second in _new_pairs(final, ids):
+        merge += _pair(
+            world, vocabulary.frequency, vocabulary.morphemes[first],
+            vocabulary.morphemes[second], group_id,
+        )
 
     new_lengths, old_lengths = bank.lengths(new), bank.lengths(old)
     short = float(weights[(new_lengths <= 2) & (new_lengths < old_lengths)].sum())

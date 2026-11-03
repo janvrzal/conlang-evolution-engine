@@ -129,7 +129,7 @@ def record(recorder: Recorder, years: dict[str, int]) -> None:
                 result = results[position]
                 changed = table.results(vocabulary.ids)
                 rows.append({
-                    # Čísla tvarů v bance: na jejich pořadí závisí pořadí dvojic (a tím součet cen).
+                    # Čísla tvarů v bance při záznamu.
                     "ids": vocabulary.ids.tolist(), "changed": [int(item) for item in changed],
                     "banked": {int(i): list(world.form_bank().forms[int(i)])
                                for i in [*vocabulary.ids.tolist(), *(int(item) for item in changed if item >= 0)]},
@@ -198,8 +198,8 @@ def build(recorder: Recorder) -> dict[str, object]:
             break
     assess = []
     for case in kept:
-        # Tvary dávky podle čísla v bance při záznamu: Rust řadí nové homofony podle čísel tvarů,
-        # takže test musí banku naplnit ve stejném pořadí (viz ``test_v2_native_assess``).
+        # Tvary dávky podle čísla v bance při záznamu (test banku plní ve stejném pořadí;
+        # pořadí dvojic nových homofonů na číslech tvarů nezávisí, viz ``assessment._new_pairs``).
         banked: dict[int, list[int]] = {}
         for row in case["rows"]:
             banked.update(row["banked"])
@@ -245,6 +245,11 @@ def main() -> None:
     record(recorder, SCENARIOS)
     data = build(recorder)
     output = Path(args.output)
+    if not data["supports"] and output.exists():
+        # Opory zvukových změn se od B5 počítá ``SoundIndex``, takže je ``eval_supports`` za běhu
+        # nezavolá; zlatá data opor (jádro ``sound_supports``) se proto ponechají z dosavadního souboru.
+        with gzip.open(output) as handle:
+            data["supports"] = json.loads(handle.read())["supports"]
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("wb") as raw, gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as handle:
         handle.write(json.dumps(data, separators=(",", ":"), sort_keys=True).encode())
