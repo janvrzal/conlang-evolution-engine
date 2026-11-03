@@ -760,6 +760,10 @@ mod cee_core {
     use super::sound_supports;
     #[pymodule_export]
     use super::NativeBank;
+    #[pymodule_export]
+    use crate::python_pools::{
+        hear, libm_probe, normalized, settle, NativeCells, NativeStep, Slab,
+    };
 
     #[pymodule_init]
     fn init(m: &Bound<'_, PyModule>) -> PyResult<()> {

@@ -4,7 +4,10 @@ Funkce tady dostanou pole a čísla, vrátí pole a nesahají na svět, skupiny 
 kódy. Třídy ``cee.v2.transmission`` (``prepare``, ``transmit``, ``StepInputs``,
 ``CrossFlow``), ``cee.v2.contact`` a ``cee.v2.institutions`` z objektů
 poskládají vstupní pole, zavolají funkci odtud a výsledek jen předají dál.
-Výsledky jsou bitově stejné jako dřív; Rust později přepíše právě tyto funkce.
+Rust (``cee_core``) počítá ``hear``, ``settle`` a ``normalized`` bit po bitu stejně; Python
+zůstává referenční implementací (``hear_python``, ``settle_python``, ``normalized_python``)
+a běží bez rozšíření nebo s ``CEE_NATIVE=0``. ``settle`` v Rustu vyžaduje, aby ``exp``,
+``log`` a ``cos`` knihovny systému daly totéž co ``numpy`` (``native.libm_matches``).
 
 Co je čistá funkce polí:
 
@@ -52,6 +55,7 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2 import native
 from cee.v2.rng import hash_normal
 
 FloatArray = npt.NDArray[np.float64]
@@ -267,6 +271,16 @@ def liturgy_factors(kinds: IntArray, frequency: FloatArray, weight: FloatArray) 
 
 
 def normalized(array: FloatArray, fallback: FloatArray) -> FloatArray:
+    """Podíly slotů (osa −1) dělené součtem; řádek s nulovým součtem dá ``fallback`` (Rust, jinak Python)."""
+    kernel = native.kernel("normalized") if array.ndim == 3 and array.shape[-1] > 0 else None
+    if kernel is None:
+        return normalized_python(array, fallback)
+    result: FloatArray = kernel(np.ascontiguousarray(array, dtype=np.float64),
+                                np.ascontiguousarray(fallback, dtype=np.float64))
+    return result
+
+
+def normalized_python(array: FloatArray, fallback: FloatArray) -> FloatArray:
     """Podíly slotů (osa −1) dělené součtem; řádek s nulovým součtem dá ``fallback``.
 
     Součet seřazených hodnot nezávisí na tom, ve kterých slotech varianty
@@ -356,6 +370,36 @@ def hear(
     flows: Sequence[tuple[FloatArray, Sequence[FloatArray]]],
     channels: Sequence[tuple[FloatArray, IntArray, IntArray, FloatArray]],
 ) -> FloatArray:
+    """Co skupiny slyší (viz :func:`hear_python`); v Rustu, když je k dispozici."""
+    kernel = native.kernel("hear")
+    if kernel is None:
+        return hear_python(current, present, members, blocks, alone, alone_weight, flows, channels)
+    floats, ints = np.float64, np.int64
+    result: FloatArray = kernel(
+        np.ascontiguousarray(current, dtype=floats), np.ascontiguousarray(present, dtype=np.bool_),
+        [np.ascontiguousarray(group, dtype=ints) for group in members],
+        [np.ascontiguousarray(block, dtype=floats) for block in blocks],
+        np.ascontiguousarray(alone, dtype=ints), np.ascontiguousarray(alone_weight, dtype=floats),
+        [(np.ascontiguousarray(factor, dtype=floats), [np.ascontiguousarray(cross, dtype=floats) for cross in crossing])
+         for factor, crossing in flows],
+        [(np.ascontiguousarray(factor, dtype=floats), np.ascontiguousarray(learners, dtype=ints),
+          np.ascontiguousarray(sources, dtype=ints), np.ascontiguousarray(weights, dtype=floats))
+         for factor, learners, sources, weights in channels],
+        native.threads(),
+    )
+    return result
+
+
+def hear_python(
+    current: FloatArray,
+    present: BoolArray,
+    members: Sequence[IntArray],
+    blocks: Sequence[FloatArray],
+    alone: IntArray,
+    alone_weight: FloatArray,
+    flows: Sequence[tuple[FloatArray, Sequence[FloatArray]]],
+    channels: Sequence[tuple[FloatArray, IntArray, IntArray, FloatArray]],
+) -> FloatArray:
     """Co skupiny slyší: podíly variant od sousedů, jiných jazyků a z kanálů.
 
     ``current`` (proměnné × skupiny × sloty) a ``present`` (proměnné × skupiny)
@@ -398,6 +442,39 @@ def settle(
     adult_rate: float,
     establish_threshold: float,
 ) -> tuple[FloatArray, FloatArray]:
+    """Nové frekvence a trendová základna bloku (viz :func:`settle_python`); v Rustu, když knihovna sedí."""
+    kernel = native.kernel("settle") if native.libm_matches() else None
+    if kernel is None:
+        return settle_python(current, previous, present, heard, fitness, slot_keys, row_keys, drift_scale,
+                             renewal, loss_floor, selection, kappa, adult_rate, establish_threshold)
+    floats = np.float64
+    result: tuple[FloatArray, FloatArray] = kernel(
+        *(np.ascontiguousarray(array, dtype=floats) for array in (current, previous)),
+        np.ascontiguousarray(present, dtype=np.bool_),
+        *(np.ascontiguousarray(array, dtype=floats) for array in (heard, fitness)),
+        np.ascontiguousarray(slot_keys, dtype=np.uint64), np.ascontiguousarray(row_keys, dtype=np.uint64),
+        *(np.ascontiguousarray(array, dtype=floats) for array in (drift_scale, renewal, loss_floor)),
+        selection, kappa, adult_rate, establish_threshold, native.threads(),
+    )
+    return result
+
+
+def settle_python(
+    current: FloatArray,
+    previous: FloatArray,
+    present: BoolArray,
+    heard: FloatArray,
+    fitness: FloatArray,
+    slot_keys: KeyArray,
+    row_keys: KeyArray,
+    drift_scale: FloatArray,
+    renewal: FloatArray,
+    loss_floor: FloatArray,
+    selection: float,
+    kappa: float,
+    adult_rate: float,
+    establish_threshold: float,
+) -> tuple[FloatArray, FloatArray]:
     """Nové frekvence a trendová základna bloku ze slyšeného a tlaků.
 
     Výběr váží slyšené podíly ``exp(selection × fitness)``; trend je
@@ -408,7 +485,7 @@ def settle(
     zaniká a varianta nad ``establish_threshold`` se ustálí (sama zbude).
     Vrací ``(updated, baseline)``: nové frekvence a základnu trendu příštího kroku.
     """
-    selected = normalized(heard * np.exp(selection * fitness), heard)
+    selected = normalized_python(heard * np.exp(selection * fitness), heard)
     trend = kappa * (current - previous)
     # Wright–Fisherův drift: rozptyl p(1 − p) / N učící se kohorty. Varianta,
     # kterou kohorta vůbec neslyší, nemůže driftem vzniknout. Šum se počítá
@@ -419,13 +496,13 @@ def settle(
     if len(rows):
         noise = hash_normal(row_keys[columns], slot_keys[rows, cells], pairwise=True)
         drift[rows, columns, cells] = noise * drift_scale[columns] * np.sqrt(spread[rows, columns, cells])
-    children = normalized(np.clip(selected + trend + drift, 0.0, None), selected)
+    children = normalized_python(np.clip(selected + trend + drift, 0.0, None), selected)
     adults = current + adult_rate * (heard - current)
     renewed = renewal[None, :, None]
     updated = (1.0 - renewed) * adults + renewed * children
 
     updated[updated < loss_floor[None, :, None]] = 0.0
-    updated = normalized(updated, current)
+    updated = normalized_python(updated, current)
     leaders = updated.argmax(axis=2)
     top = np.take_along_axis(updated, leaders[:, :, None], axis=2)[:, :, 0]
     established = (top >= establish_threshold) & (top < 1.0)
