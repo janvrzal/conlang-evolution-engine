@@ -85,7 +85,10 @@ def segments() -> dict[str, object]:
 
 
 def grammar() -> dict[str, object]:
-    return yaml.safe_load(CATALOG.read_text(encoding="utf-8"))
+    data = yaml.safe_load(CATALOG.read_text(encoding="utf-8"))
+    # JSON se řadí podle klíčů, pořadí funkcí v katalogu (řídí buňky paradigmat) se proto nese zvlášť.
+    data["order"] = list(data["functions"])
+    return data
 
 
 def defaults() -> dict[str, object]:

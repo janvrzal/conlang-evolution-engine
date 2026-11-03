@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = ["cee_core", "cee_engine"]
+# Výchozí je čistý Rust (bez PyO3); rozšíření pro Python se staví z `rust/cee_core` přes maturin.
+default-members = ["cee_engine"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
