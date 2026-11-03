@@ -652,15 +652,18 @@ fn pairwise_sum(values: PyReadonlyArray1<'_, f64>) -> PyResult<f64> {
 
 /// Opora procesů zvukových změn (`support::supports`) nad počty prostředí.
 ///
-/// `target`, `left`, `right` jsou masky „proces × sloupec hlásky“, `right2`
-/// masky druhé následující hlásky jen procesů v `right2_rows` (pořadí řádků
-/// ve `right2`); `stressed_rows` a `unstressed_rows` jsou procesy s podmínkou
-/// přízvuku. Prostředí mají čísla sloupců hlásek (všechna platná) a počty.
-/// Vrací pole opor po procesech.
+/// `target`, `left`, `right` jsou masky „proces × sloupec hlásky“ (sloupce jsou
+/// hlásky `columns`, seřazené), `right2` masky druhé následující hlásky jen
+/// procesů v `right2_rows` (v pořadí řádků ve `right2`); `stressed_rows`
+/// a `unstressed_rows` jsou procesy s podmínkou přízvuku. Prostředí mají čísla
+/// hlásek, příznak přízvuku a počty; `vowel` je maska samohlásek podle čísla
+/// hlásky. Vrací pole opor po procesech, nebo `None`, když některé prostředí
+/// obsahuje hlásku mimo `columns`.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
 fn sound_supports<'py>(
     py: Python<'py>,
+    columns: PyReadonlyArray1<'py, i64>,
     target: PyReadonlyArray2<'py, bool>,
     left: PyReadonlyArray2<'py, bool>,
     right: PyReadonlyArray2<'py, bool>,
@@ -675,16 +678,16 @@ fn sound_supports<'py>(
     stressed: PyReadonlyArray1<'py, bool>,
     vowel: PyReadonlyArray1<'py, bool>,
     count: PyReadonlyArray1<'py, i64>,
-) -> PyResult<Bound<'py, PyArray1<i64>>> {
-    let matrix = |array: &PyReadonlyArray2<'py, bool>| -> PyResult<(usize, usize)> {
-        let shape = array.shape();
-        Ok((shape[0], shape[1]))
-    };
-    let (processes, width) = matrix(&target)?;
-    if matrix(&left)? != (processes, width) || matrix(&right)? != (processes, width) {
+) -> PyResult<Option<Bound<'py, PyArray1<i64>>>> {
+    let shape = |array: &PyReadonlyArray2<'py, bool>| (array.shape()[0], array.shape()[1]);
+    let (processes, width) = shape(&target);
+    if shape(&left) != (processes, width)
+        || shape(&right) != (processes, width)
+        || slice(&columns)?.len() != width
+    {
         return Err(failure("masky procesů mají různý tvar".into()));
     }
-    let (second_rows, second_width) = matrix(&right2)?;
+    let (second_rows, second_width) = shape(&right2);
     if second_rows != slice(&right2_rows)?.len() || (second_rows > 0 && second_width != width) {
         return Err(failure(
             "masky druhé následující hlásky mají špatný tvar".into(),
@@ -708,24 +711,22 @@ fn sound_supports<'py>(
         }
     }
     let size = slice(&count)?.len();
-    let columns = [
+    let positions = [
         slice(&segment)?,
         slice(&previous)?,
         slice(&following)?,
         slice(&following2)?,
     ];
-    if columns.iter().any(|column| column.len() != size)
-        || slice(&stressed)?.len() != size
-        || slice(&vowel)?.len() != size
-    {
+    if positions.iter().any(|column| column.len() != size) || slice(&stressed)?.len() != size {
         return Err(failure("sloupce prostředí mají různou délku".into()));
     }
-    if columns
+    // Maska samohlásek se čte podle čísla hlásky: musí pokrýt všechna čísla.
+    let vowels = slice(&vowel)?;
+    if positions[0]
         .iter()
-        .flat_map(|column| column.iter())
-        .any(|&column| column < 0 || column as usize >= width)
+        .any(|&number| number < 0 || number as usize >= vowels.len())
     {
-        return Err(failure("sloupec hlásky mimo masky".into()));
+        return Err(failure("hláska mimo masku samohlásek".into()));
     }
     let masks = Masks {
         width,
@@ -737,15 +738,16 @@ fn sound_supports<'py>(
         stress: &stress,
     };
     let contexts = Contexts {
-        segment: columns[0],
-        previous: columns[1],
-        following: columns[2],
-        following2: columns[3],
+        columns: slice(&columns)?,
+        segment: positions[0],
+        previous: positions[1],
+        following: positions[2],
+        following2: positions[3],
         stressed: slice(&stressed)?,
-        vowel: slice(&vowel)?,
+        vowel: vowels,
         count: slice(&count)?,
     };
-    Ok(PyArray1::from_vec(py, support::supports(&masks, &contexts)))
+    Ok(support::supports(&masks, &contexts).map(|found| PyArray1::from_vec(py, found)))
 }
 
 #[pymodule]

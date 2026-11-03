@@ -173,14 +173,6 @@ class _Columns:
         self.right2_rows = np.array([i for i, p in enumerate(processes) if p.right2 is not None], dtype=np.intp)
         self.right2 = stack([cast(Pattern, processes[i].right2).mask[cols] for i in self.right2_rows])
 
-    def columns_of(self, ids: npt.NDArray[np.intp]) -> npt.NDArray[np.int64] | None:
-        """Sloupce hlásek ``ids`` v maskách, nebo ``None``, když některá hláska v inventáři není."""
-        cols = self.cols
-        position = np.minimum(np.searchsorted(cols, ids), len(cols) - 1)
-        if (cols[position] != ids).any():
-            return None
-        return position.astype(np.int64)
-
     def gather(self, name: str, ids: npt.NDArray[np.intp]) -> npt.NDArray[np.bool_]:
         """Sloupce masky ``name`` pro hlásky ``ids`` (řádky procesů)."""
         matrix = getattr(self, name)
@@ -278,6 +270,8 @@ class _CombinedSoundCandidates:
                                       dtype=np.intp)
         self.unstressed_rows = np.array([i for i, p in enumerate(all_processes) if p.stress == "unstressed"],
                                         dtype=np.intp)
+        #: Pole předaná jádru v Rustu (sestaví se při prvním použití).
+        self._kernel_arguments: tuple[npt.NDArray[np.int64], ...] | None = None
 
     def eval_supports(
         self,
@@ -294,18 +288,23 @@ class _CombinedSoundCandidates:
             return np.zeros(len(self.all_processes), dtype=np.int64)
         kernel = native.kernel("sound_supports")
         if kernel is not None:
-            columns = [self.masks.columns_of(ids) for ids in (seg, prev, foll, foll2)]
-            # Hláska mimo inventář (prostředí slova, které zmizelo) nemá sloupec v maskách;
-            # tu dopočítá Python z úplných masek procesů.
-            if all(column is not None for column in columns):
-                masks = self.masks
-                result: npt.NDArray[np.int64] = kernel(
-                    masks.target, masks.left, masks.right, masks.right2,
+            masks = self.masks
+            arguments = self._kernel_arguments
+            if arguments is None:
+                arguments = self._kernel_arguments = (
+                    masks.cols.astype(np.int64), masks.target, masks.left, masks.right, masks.right2,
                     masks.right2_rows.astype(np.int64), self.stressed_rows.astype(np.int64),
-                    self.unstressed_rows.astype(np.int64), *columns,
-                    np.ascontiguousarray(str_arr, dtype=bool), np.ascontiguousarray(table.vowel_mask[seg]),
-                    np.ascontiguousarray(counts_int64, dtype=np.int64),
+                    self.unstressed_rows.astype(np.int64),
                 )
+            # Hláska mimo inventář (prostředí slova, které zmizelo) nemá sloupec v maskách:
+            # Rust pak vrátí ``None`` a tu dopočítá Python z úplných masek procesů.
+            found = kernel(
+                *arguments, np.ascontiguousarray(seg, dtype=np.int64), np.ascontiguousarray(prev, dtype=np.int64),
+                np.ascontiguousarray(foll, dtype=np.int64), np.ascontiguousarray(foll2, dtype=np.int64),
+                np.ascontiguousarray(str_arr, dtype=bool), table.vowel_mask, np.ascontiguousarray(counts_int64, dtype=np.int64),
+            )
+            if found is not None:
+                result: npt.NDArray[np.int64] = found
                 return result
         return self.eval_supports_python(prev, seg, foll, str_arr, foll2, counts_int64, table)
 

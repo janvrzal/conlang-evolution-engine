@@ -178,13 +178,13 @@ def test_opory_s_hlaskou_mimo_inventar_pocita_python(golden, monkeypatch):
     outside = next(segment for segment in range(table.boundary) if segment not in case["inventory"])
     previous, segment, following, stressed, following2, count = _support_inputs(case)
     segment[0] = outside
-    assert combined.masks.columns_of(segment) is None
-    calls = []
+    answers = []
     kernel = native.kernel("sound_supports")
-    monkeypatch.setattr(native, "kernel", lambda name: lambda *args: calls.append(args) or kernel(*args))
+    monkeypatch.setattr(native, "kernel", lambda name: lambda *args: answers.append(kernel(*args)) or answers[-1])
     found = combined.eval_supports(previous, segment, following, stressed, following2, count, table)
-    assert not calls
-    assert found.tolist() == combined.eval_supports_python(previous, segment, following, stressed, following2, count, table).tolist()
+    assert answers == [None]  # Rust hlásku bez sloupce pozná a neodpoví
+    assert found.tolist() == combined.eval_supports_python(
+        previous, segment, following, stressed, following2, count, table).tolist()
 
 
 def test_opory_bez_rustu_pocita_python(golden, monkeypatch):
