@@ -22,7 +22,10 @@ class PressureBatch:
     """Výřez živých proměnných jednoho typu, které se hodnotí najednou.
 
     ``freqs`` má tvar (proměnné, skupiny, sloty). ``slots[b][k]`` je ID
-    varianty v daném slotu, nebo ``None`` pro prázdný slot.
+    varianty v daném slotu, nebo ``None`` pro prázdný slot. ``numbers`` jsou
+    tytéž sloty jako čísla variant z registru světa (−1 = prázdný slot), když
+    je zná fond (:attr:`cee.v2.pools.PoolBlock.slot_variants`); jinak se
+    dopočtou z ``slots``.
     """
 
     world: World
@@ -35,6 +38,7 @@ class PressureBatch:
     heard: FloatArray
     #: Mezivýsledky sdílené tlaky v rámci jednoho kroku.
     memo: dict[Any, Any] = field(default_factory=dict)
+    numbers: npt.NDArray[np.intp] | None = None
 
     def slot_values(self, value: Callable[[Variant], float], empty: float = 0.0) -> FloatArray:
         """Vlastnost varianty v každém slotu, tvar (proměnné, 1, sloty)."""
@@ -48,6 +52,8 @@ class PressureBatch:
 
     def slot_numbers(self) -> npt.NDArray[np.intp]:
         """Čísla variant ze registru ve slotech, tvar (proměnné, sloty); −1 = prázdný slot."""
+        if self.numbers is not None:
+            return self.numbers
         found = self.memo.get("slot-numbers")
         if found is None:
             numbers = self.world.registry.variants.numbers

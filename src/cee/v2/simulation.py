@@ -25,6 +25,21 @@ _LEVELS = np.array(_MILESTONES)
 _EMPTY = Distribution((), np.zeros(0))
 _INNOVATION_CHANGE_DOMAIN = "innovation-change"
 
+#: Odchody a příchody slov přes práh (``phases.threshold_crossings``): buňky (řádek, sloupec, slot).
+Crossings = tuple[tuple[np.ndarray, ...], tuple[np.ndarray, ...]]
+
+
+@dataclass
+class _BlockPlan:
+    """Co přenos jednoho bloku způsobí (spočteno z polí před zápisem do světa)."""
+
+    block: PoolBlock
+    records: list[tuple[str, dict[str, Any]]]
+    trace: list[tuple[str, str, float]]
+    grammar: list[tuple[str, str]]
+    crossings: Crossings | None
+    activations: list[tuple[str, str]]
+
 
 @dataclass(frozen=True)
 class SimulationConfig:
@@ -225,6 +240,8 @@ class Simulation:
             self.world.live.sync_groups(self.world)
         if self.tick % self.config.observe_every == 0:
             self._observe(year)
+        # Husté pohledy fondů jsou jen na dobu kroku; mezi kroky zůstává řídké uložení.
+        self.world.live.compact()
         every = self.config.checkpoint_every
         if every is not None and (year - self.world.start_year) % every < 1e-9:
             self.checkpoints[self.tick] = self.checkpoint()
@@ -399,31 +416,27 @@ class Simulation:
             return
         inputs = prepare(self.world, live.group_ids, self.params, self.tick)
         hooks = {} if self.shards is None else {"fitness_hook": self.shards.fitness}
-        results = [
-            (block, *transmit(self.world, block, inputs, self.pressures, self.params, **hooks))
-            for block in live.iter_blocks()
-        ]
+        # Všechny bloky se počítají ze starého stavu. Z husté výsledku se hned vezmou jen
+        # události a nový stav se uloží řídce (ke zápisu čeká); husté pole se zahodí.
+        plans = []
+        for block in live.iter_blocks():
+            updated, baseline = transmit(self.world, block, inputs, self.pressures, self.params, **hooks)
+            plans.append(self._plan(block, updated, baseline))
         records: list[tuple[Any, ...]] = []
         activations: list[tuple[str, str]] = []
-        for block, updated, baseline in results:
-            records.extend(self._changes(block, block.freqs, updated))
+        for plan in plans:
+            block = plan.block
+            records.extend(plan.records)
             if self.config.record_trajectories:
-                self._trace(block, block.freqs, updated)
+                self._trace(plan.trace)
             # Konstrukční rozdělení je vstupem syntaxového konzumenta.
             # Zapisujeme jen proměnné, jejichž řádek se v konkrétní skupině změnil.
-            for row, variable_id in enumerate(block.variable_ids):
-                if self.world.variables[variable_id].kind != "construction":
-                    continue
-                changed_columns = np.flatnonzero(
-                    np.any(block.freqs[row] != updated[row], axis=1)
-                )
-                for column in changed_columns:
-                    group_id = self.world.live.group_ids[int(column)]
-                    self.world.groups[group_id].main_code.phonology.record_grammar(variable_id)
+            for variable_id, group_id in plan.grammar:
+                self.world.groups[group_id].main_code.phonology.record_grammar(variable_id)
             if self.world.table is not None:
-                self._follow_vocabulary(block, block.freqs, updated)
-                activations.extend(self._activations(block, updated))
-            block.freqs, block.previous = updated, baseline
+                self._follow_vocabulary(block, plan.crossings)
+                activations.extend(plan.activations)
+            block.commit_state()
         # Kanonické pořadí: pořadí aktivací určuje chronologii změn kódu a
         # nesmí záviset na tom, ve kterém řádku skladu proměnná leží (to
         # ovlivňují i inovace v nepropojených oblastech).
@@ -465,16 +478,41 @@ class Simulation:
                 if group_id in stress:
                     prosody.restructure(self.world, group_id, self.tick, self.history, year, stress[group_id])
 
+    def _plan(self, block: PoolBlock, updated: np.ndarray, baseline: np.ndarray) -> _BlockPlan:
+        """Události bloku z jeho starého a nového stavu; nový stav se uloží řídce a čeká na zápis.
+
+        Všechno tu jsou čisté funkce polí (``cee.v2.phases``) nad starým a novým
+        hustým stavem; svět se nemění. Zápis (deníky, kódy, slovní zásoba) udělá
+        :meth:`_transmit` potom, ve stejném pořadí jako dřív.
+        """
+        before = block.freqs
+        group_ids = self.world.live.group_ids
+        grammar: list[tuple[str, str]] = []
+        for row, variable_id in enumerate(block.variable_ids):
+            if self.world.variables[variable_id].kind != "construction":
+                continue
+            changed_columns = np.flatnonzero(np.any(before[row] != updated[row], axis=1))
+            grammar.extend((variable_id, group_ids[int(column)]) for column in changed_columns)
+        plan = _BlockPlan(
+            block=block,
+            records=self._changes(block, before, updated),
+            trace=self._trace_cells(block, before, updated) if self.config.record_trajectories else [],
+            grammar=grammar,
+            crossings=self._crossings(block, before, updated) if self.world.table is not None else None,
+            activations=self._activations(block, updated) if self.world.table is not None else [],
+        )
+        block.stage_state(updated, baseline, keep_dense=not block.large)
+        if block.large:
+            block.drop_dense()
+        return plan
+
     def _changes(
         self, block: PoolBlock, before: np.ndarray, after: np.ndarray
     ) -> list[tuple[str, dict[str, Any]]]:
         """Milníky, ustálení a zánik inovací v jednom bloku; vše vektorově."""
         group_ids = self.world.live.group_ids
         # Inovace = varianta, kterou vytvořila změna (sloupec ``change`` tabulky variant).
-        numbers = self.world.registry.variants.numbers
-        slot_numbers = np.array(
-            [[-1 if slot is None else numbers[slot] for slot in row] for row in block.slots], dtype=np.intp
-        ).reshape(len(block), block.capacity)
+        slot_numbers = block.numbers_in(self.world.registry.variants)
         innovation = phases.innovation_mask(slot_numbers, self.world.columns.variants.arrays()["change"])
         records: list[tuple[str, dict[str, Any]]] = []
 
@@ -511,17 +549,21 @@ class Simulation:
                 code.phonology.version += 1
                 code.phonology.lexicon_version += 1
 
-    def _follow_vocabulary(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
-        """Slovo, které se stane dominantním, vstoupí do fonologie kódu."""
-        variants = self.world.variants
-        group_ids = self.world.live.group_ids
+    def _crossings(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> Crossings:
+        """Buňky, ve kterých slovo překročilo polovinu (odchody a příchody), z pole před a po."""
         lexical = np.array(
             [self.world.variables[variable_id].kind == "lexical" for variable_id in block.variable_ids],
             dtype=bool,
         )
+        return phases.threshold_crossings(before, after, lexical, 0.5)
+
+    def _follow_vocabulary(self, block: PoolBlock, crossings: Crossings) -> None:
+        """Slovo, které se stane dominantním, vstoupí do fonologie kódu."""
+        variants = self.world.variants
+        group_ids = self.world.live.group_ids
         # Nejdřív odchody, potom příchody: kořen, který jeden pojem opouští a
         # druhý (posunem) přebírá, tak ze slovní zásoby na okamžik nevypadne.
-        leave, enter = phases.threshold_crossings(before, after, lexical, 0.5)
+        leave, enter = crossings
         for direction, found in (("leave", leave), ("enter", enter)):
             cells = list(zip(*found))
             for row, column, slot in (sorted(cells, key=lambda cell: (-cell[1], cell[0], cell[2]))
@@ -555,25 +597,35 @@ class Simulation:
         """Procesy a analogie, které ve skupině překročily malý podíl a začnou působit."""
         group_ids = self.world.live.group_ids
         slots = np.full(len(block), -1, dtype=np.intp)
+        numbers = self.world.registry.variants.numbers
+        slot_numbers = block.numbers_in(self.world.registry.variants)
         for row, variable_id in enumerate(block.variable_ids):
             if variable_id not in self.world.processes and variable_id not in self.world.form_changes:
                 continue
-            changed = phonology.changed_id(variable_id)
-            if changed in block.slots[row]:
-                slots[row] = block.slots[row].index(changed)
+            changed = numbers.get(phonology.changed_id(variable_id))
+            found = () if changed is None else np.flatnonzero(slot_numbers[row] == changed)
+            if len(found):
+                slots[row] = found[0]
         rows, columns = phases.activation_cells(after, slots, self.world.params.activation_share)
         return [(group_ids[column], block.variable_ids[row]) for row, column in zip(rows, columns)]
 
-    def _trace(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
+    def _trace_cells(
+        self, block: PoolBlock, before: np.ndarray, after: np.ndarray
+    ) -> list[tuple[str, str, float]]:
+        """Dráhy inovací: (varianta, skupina, podíl) všude, kde se podíl inovace změnil."""
         variants = self.world.variants
         group_ids = self.world.live.group_ids
+        found = []
         for row, column, slot in zip(*phases.trace_cells(before, after)):
             variant = block.slots[row][slot]
             if variant is None or variants[variant].origin.change is None:
                 continue
-            self.history.trajectories.setdefault((variant, group_ids[column]), []).append(
-                (self.tick, float(after[row, column, slot]))
-            )
+            found.append((variant, group_ids[column], float(after[row, column, slot])))
+        return found
+
+    def _trace(self, cells: list[tuple[str, str, float]]) -> None:
+        for variant, group_id, share in cells:
+            self.history.trajectories.setdefault((variant, group_id), []).append((self.tick, share))
 
     def _observe(self, year: float) -> None:
         snapshot, events = observe(

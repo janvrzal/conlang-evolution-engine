@@ -1,9 +1,31 @@
-"""Živé proměnné uložené po sloupcích pro vektorový přenos.
+"""Živé proměnné: řídké uložení po variantách a husté bloky pro vektorový přenos.
 
 Repertoáry skupin jsou výhodné pro ukládání (copy-on-write), ale přenos
 potřebuje opak: jednu proměnnou přes všechny skupiny naráz. Proměnné, ve
-kterých se skupiny liší, proto leží v polích ``freqs`` o tvaru
-(proměnné, skupiny, sloty). Slot je místo pro jednu variantu dané proměnné.
+kterých se skupiny liší, proto tvoří bloky o tvaru (proměnné, skupiny, sloty).
+Slot je místo pro jednu variantu dané proměnné.
+
+**Uložení je řídké a po variantách.** Hustá pole ``freqs`` a ``previous`` jsou
+jen pohled, který se podle potřeby sestaví z řídkého uložení (a zahodí v
+:meth:`LivePools.compact`). Skutečně se drží jen výskyty: pro každý řádek
+(proměnnou) a slot (variantu) seřazený seznam skupin, které variantu mají, s
+podílem a trendovou základnou (:class:`RowCells`). Seznam jedné varianty je
+tedy její mapa rozšíření přímo v datech (:meth:`LivePools.range_of`), a co je u
+skupiny, dá hledání skupiny v seznamech slotů řádku (:meth:`PoolBlock.cell`),
+nebo hustý pohled, je-li právě sestavený. Paměť roste s počtem výskytů, ne se
+součinem skupin a slotů. Skupiny, které proměnnou vůbec nemají, drží hustá
+bool pole ``present`` (jeden bajt na skupinu a proměnnou).
+
+Přenos (:mod:`cee.v2.transmission`) počítá dál nad hustými bloky sestavenými z
+řídkého uložení, protože knihovna BLAS sčítá v pořadí, které závisí na tvaru
+matice, a řídké sčítání by změnilo poslední bity; bitová shoda je povinná.
+Hustý blok vzniká na dobu jednoho kroku a po zápisu výsledku se zahodí.
+
+Slot drží **číslo varianty z registru** světa (:mod:`cee.v2.registry`, −1 =
+prázdný slot), ne řetězec: ``PoolBlock.slot_variants``. Řetězcová ID variant
+v ``PoolBlock.slots`` jsou odvozený pohled pro tlaky, testy a deníky; pole a
+převody pracují s čísly. Číslo neurčuje pořadí (to dál rozhoduje řetězec ID,
+viz :meth:`LivePools.get`).
 
 Proměnné se dělí do bloků podle počtu potřebných slotů (2, 4, 8, …). Jediná
 proměnná s mnoha soutěžícími variantami tak nezvětší pole všem ostatním.
@@ -14,11 +36,12 @@ repertoárů a ze skladu zmizí. Jediné čtení stavu je
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator, Sequence
+from typing import TYPE_CHECKING, Any, Iterator, Sequence
 
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2.registry import Numbering
 from cee.v2.repertoire import Distribution
 from cee.v2.rng import stable_int
 
@@ -28,48 +51,177 @@ if TYPE_CHECKING:
 FloatArray = npt.NDArray[np.float64]
 BoolArray = npt.NDArray[np.bool_]
 KeyArray = npt.NDArray[np.uint64]
+IntArray = npt.NDArray[np.intp]
 Row = tuple[str, FloatArray, FloatArray, BoolArray, list[str | None], KeyArray]
 
 _MIN_CAPACITY = 2
+#: Blok s víc buňkami (proměnné × skupiny × sloty) si po kroku hustý pohled nenechává.
+DENSE_KEEP_CELLS = 1 << 18
+
+
+class RowCells:
+    """Výskyty variant jedné proměnné: buňky (slot, skupina) seřazené podle slotu a skupiny.
+
+    ``slot[k]`` je slot, ``group[k]`` sloupec skupiny, ``freq[k]`` její podíl
+    varianty a ``prev[k]`` trendová základna. Buňka tu je, má-li kladný podíl
+    nebo nenulovou základnu; chybějící buňka je nula. Úsek jednoho slotu je
+    souvislý (``starts[slot]:starts[slot + 1]``) a v něm skupiny rostou, takže
+    skupina ve variantě se hledá půlením.
+    """
+
+    __slots__ = ("slot", "group", "freq", "prev", "starts")
+
+    def __init__(self, slot: Any, group: Any, freq: FloatArray, prev: FloatArray, starts: Any):
+        self.slot, self.group, self.freq, self.prev, self.starts = slot, group, freq, prev, starts
+
+    @classmethod
+    def build(cls, slot: Any, group: Any, freq: FloatArray, prev: FloatArray, capacity: int) -> RowCells:
+        """Buňky seřazené podle slotu a skupiny; začátky úseků slotů se dopočtou."""
+        return cls(slot, group, freq, prev, np.searchsorted(slot, np.arange(capacity + 1)))
+
+    @classmethod
+    def from_dense(cls, freqs: FloatArray, previous: FloatArray, capacity: int) -> RowCells:
+        """Buňky z husté matice (skupiny, sloty ≤ ``capacity``) jedné proměnné."""
+        slots, groups = np.nonzero(((freqs > 0) | (previous != 0)).T)
+        return cls.build(slots.astype(np.int16), groups.astype(np.int32), freqs[groups, slots],
+                         previous[groups, slots], capacity)
+
+    def __len__(self) -> int:
+        return len(self.slot)
+
+    def span(self, slot: int) -> tuple[int, int]:
+        """Úsek buněk jednoho slotu: ``[od, do)``."""
+        starts = self.starts
+        if slot + 1 >= len(starts):
+            return len(self.slot), len(self.slot)
+        return int(starts[slot]), int(starts[slot + 1])
+
+    def to_dense(self, groups: int, capacity: int) -> tuple[FloatArray, FloatArray]:
+        freqs, previous = np.zeros((groups, capacity)), np.zeros((groups, capacity))
+        freqs[self.group, self.slot] = self.freq
+        previous[self.group, self.slot] = self.prev
+        return freqs, previous
+
+
+class _Base:
+    """Buňky všech řádků bloku v jednom poli po řádcích (výsledek posledního zápisu celého bloku)."""
+
+    __slots__ = ("pointer", "bounds", "slot", "group", "freq", "prev")
+
+    def __init__(self, pointer: Any, bounds: Any, slot: Any, group: Any, freq: FloatArray, prev: FloatArray):
+        #: ``pointer[r]:pointer[r + 1]`` jsou buňky řádku r; ``bounds[r, s]`` začátek slotu s v řádku (relativně).
+        self.pointer, self.bounds = pointer, bounds
+        self.slot, self.group, self.freq, self.prev = slot, group, freq, prev
+
+    @property
+    def rows(self) -> int:
+        return len(self.pointer) - 1
+
+    def row(self, index: int) -> RowCells:
+        low, high = int(self.pointer[index]), int(self.pointer[index + 1])
+        return RowCells(self.slot[low:high], self.group[low:high], self.freq[low:high], self.prev[low:high],
+                        self.bounds[index])
 
 
 class PoolBlock:
     """Proměnné se stejnou kapacitou slotů.
 
-    Řádky leží v předalokovaném zásobníku, takže přidání i odebrání proměnné
-    je amortizovaně konstantní. Odebraný řádek nahradí poslední; pořadí řádků
-    tím nemá vliv na výsledek, protože každý řádek se počítá samostatně a log
-    se řadí kanonicky.
+    Řádky leží v předalokovaných zásobnících, takže přidání i odebrání
+    proměnné je amortizovaně konstantní. Odebraný řádek nahradí poslední;
+    pořadí řádků tím nemá vliv na výsledek, protože každý řádek se počítá
+    samostatně a log se řadí kanonicky.
+
+    Buňky (výskyty variant) drží ``_base`` (celý blok najednou po posledním
+    zápisu) a ``_edited`` (řádky změněné nebo přidané od té doby). Hustý pohled
+    ``freqs`` a ``previous`` se sestaví při prvním čtení a drží, dokud se blok
+    nezmění nebo ho :meth:`drop_dense` nezahodí.
     """
 
-    def __init__(self, groups: int, capacity: int):
+    def __init__(self, groups: int, capacity: int, numbering: Numbering | None = None):
         self.capacity = capacity
+        self.groups = groups
+        #: Číslování variant, podle kterého jsou ``slot_variants`` (registr světa).
+        self.numbering = Numbering("variant") if numbering is None else numbering
         self.variable_ids: list[str] = []
+        #: Řetězcová ID variant ve slotech (odvozený pohled na ``slot_variants``).
         self.slots: list[list[str | None]] = []
         self._rows: dict[str, int] = {}
-        self._freqs = np.zeros((4, groups, capacity))
-        self._previous = np.zeros_like(self._freqs)
+        self._variants = np.full((4, capacity), -1, dtype=np.int32)
         self._present = np.zeros((4, groups), dtype=bool)
         self._keys = np.zeros((4, capacity), dtype=np.uint64)
+        self._base: _Base | None = None
+        self._edited: dict[int, RowCells] = {}
+        self._dense: tuple[FloatArray, FloatArray] | None = None
+        self._staged: tuple[_Base, tuple[FloatArray, FloatArray] | None] | None = None
 
     def __len__(self) -> int:
         return len(self.variable_ids)
 
+    def __getstate__(self) -> dict[str, Any]:
+        # Hustý pohled se do kopií a checkpointů nebere; sestaví se znovu.
+        state = dict(self.__dict__)
+        state["_dense"] = None
+        state["_staged"] = None
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+
+    # --- hustý pohled -------------------------------------------------
+
+    def _dense_arrays(self) -> tuple[FloatArray, FloatArray]:
+        found = self._dense
+        if found is None:
+            size = len(self)
+            freqs = np.zeros((size, self.groups, self.capacity))
+            previous = np.zeros_like(freqs)
+            base = self._base
+            if base is not None and len(base.slot):
+                owner = np.repeat(np.arange(base.rows), np.diff(base.pointer))
+                stale = np.zeros(base.rows, dtype=bool)
+                stale[size:] = True
+                stale[np.array([row for row in self._edited if row < base.rows], dtype=np.intp)] = True
+                keep = ~stale[owner]
+                freqs[owner[keep], base.group[keep], base.slot[keep]] = base.freq[keep]
+                previous[owner[keep], base.group[keep], base.slot[keep]] = base.prev[keep]
+            for row, cells in self._edited.items():
+                freqs[row, cells.group, cells.slot] = cells.freq
+                previous[row, cells.group, cells.slot] = cells.prev
+            freqs.setflags(write=False)
+            previous.setflags(write=False)
+            found = self._dense = (freqs, previous)
+        return found
+
+    def drop_dense(self) -> None:
+        """Zahodí hustý pohled (zůstane jen řídké uložení)."""
+        self._dense = None
+
+    @property
+    def large(self) -> bool:
+        """Je hustý pohled bloku velký (nad ``DENSE_KEEP_CELLS`` buněk)?"""
+        return len(self) * self.groups * self.capacity > DENSE_KEEP_CELLS
+
+    @property
+    def has_dense(self) -> bool:
+        return self._dense is not None
+
     @property
     def freqs(self) -> FloatArray:
-        return self._freqs[: len(self)]
+        """Podíly variant, tvar (proměnné, skupiny, sloty); hustý pohled jen pro čtení."""
+        return self._dense_arrays()[0]
 
     @freqs.setter
     def freqs(self, value: FloatArray) -> None:
-        self._freqs[: len(self)] = value
+        self.set_state(value, self.previous)
 
     @property
     def previous(self) -> FloatArray:
-        return self._previous[: len(self)]
+        """Trendová základna, tvar jako ``freqs``; hustý pohled jen pro čtení."""
+        return self._dense_arrays()[1]
 
     @previous.setter
     def previous(self, value: FloatArray) -> None:
-        self._previous[: len(self)] = value
+        self.set_state(self.freqs, value)
 
     @property
     def present(self) -> BoolArray:
@@ -79,61 +231,278 @@ class PoolBlock:
     def slot_keys(self) -> KeyArray:
         return self._keys[: len(self)]
 
+    @property
+    def slot_variants(self) -> npt.NDArray[np.int32]:
+        """Čísla variant ze registru ve slotech, tvar (proměnné, sloty); −1 = prázdný slot."""
+        return self._variants[: len(self)]
+
+    def numbers_in(self, numbering: Numbering, rows: Sequence[int] | slice = slice(None)) -> npt.NDArray[np.intp]:
+        """Čísla variant ve slotech podle ``numbering`` (registr světa), tvar (proměnné, sloty).
+
+        Má-li fond číslování světa, je to jen pole; jinak (samostatný sklad v
+        testech) se čísla dopočtou z řetězcových ID.
+        """
+        if self.numbering is numbering:
+            return self.slot_variants[rows].astype(np.intp)
+        chosen = self.slots[rows] if isinstance(rows, slice) else [self.slots[row] for row in rows]
+        return np.array(
+            [[-1 if variant is None else numbering.numbers[variant] for variant in row] for row in chosen],
+            dtype=np.intp,
+        ).reshape(len(chosen), self.capacity)
+
+    def set_slot(self, row: int, slot: int, variant_id: str | None) -> None:
+        """Zapíše variantu do slotu (číslo i řetězec); ``None`` slot uvolní."""
+        self.slots[row][slot] = variant_id
+        self._variants[row, slot] = -1 if variant_id is None else self.numbering.intern(variant_id)
+
     def row_of(self, variable_id: str) -> int:
         return self._rows[variable_id]
+
+    # --- buňky: čtení -------------------------------------------------
+
+    def cells(self, row: int) -> RowCells:
+        """Výskyty variant proměnné v řádku (pohled do uložení, neměnit)."""
+        edited = self._edited.get(row)
+        if edited is not None:
+            return edited
+        assert self._base is not None
+        return self._base.row(row)
+
+    def cell(self, row: int, column: int) -> tuple[IntArray, FloatArray, FloatArray]:
+        """Sloty s kladným podílem u jedné skupiny: (sloty vzestupně, podíly, základny)."""
+        if self._dense is not None:
+            freqs, previous = self._dense
+            found = np.flatnonzero(freqs[row, column] > 0)
+            return found, freqs[row, column, found], previous[row, column, found]
+        cells = self.cells(row)
+        found = np.flatnonzero((cells.group == column) & (cells.freq > 0))
+        return cells.slot[found].astype(np.intp), cells.freq[found], cells.prev[found]
+
+    def value(self, row: int, column: int, slot: int) -> float:
+        """Podíl varianty ve slotu u jedné skupiny (0, když tam není)."""
+        if self._dense is not None:
+            return float(self._dense[0][row, column, slot])
+        edited = self._edited.get(row)
+        if edited is None:
+            base = self._base
+            assert base is not None
+            first = int(base.pointer[row])
+            start, stop = first + int(base.bounds[row, slot]), first + int(base.bounds[row, slot + 1])
+            groups, freqs = base.group, base.freq
+        else:
+            start, stop = edited.span(slot)
+            groups, freqs = edited.group, edited.freq
+        index = start + int(groups[start:stop].searchsorted(column))
+        if index < stop and groups[index] == column:
+            return float(freqs[index])
+        return 0.0
+
+    def range_of(self, row: int, slot: int) -> tuple[IntArray, FloatArray]:
+        """Mapa rozšíření varianty: sloupce skupin, které ji mají, a její podíly u nich."""
+        cells = self.cells(row)
+        low, high = cells.span(slot)
+        shares = cells.freq[low:high]
+        kept = shares > 0
+        return cells.group[low:high][kept].astype(np.intp), shares[kept]
+
+    def entries(self) -> int:
+        """Počet uložených buněk (výskytů variant) celého bloku."""
+        size = len(self)
+        base = self._base
+        total = 0
+        if base is not None:
+            limit = min(size, base.rows)
+            total = int(base.pointer[limit]) - sum(
+                int(base.pointer[row + 1] - base.pointer[row]) for row in self._edited if row < limit
+            )
+        return total + sum(len(cells) for row, cells in self._edited.items() if row < size)
+
+    def nbytes(self) -> int:
+        """Paměť řídkého uložení a malých polí bloku (bez hustého pohledu), v bajtech."""
+        total = self._variants.nbytes + self._present.nbytes + self._keys.nbytes
+        if self._base is not None:
+            base = self._base
+            total += (base.pointer.nbytes + base.bounds.nbytes + base.slot.nbytes + base.group.nbytes
+                      + base.freq.nbytes + base.prev.nbytes)
+        for cells in self._edited.values():
+            total += (cells.slot.nbytes + cells.group.nbytes + cells.freq.nbytes + cells.prev.nbytes
+                      + cells.starts.nbytes)
+        return total
+
+    # --- zápis --------------------------------------------------------
+
+    def set_state(self, freqs: FloatArray, previous: FloatArray) -> None:
+        """Nahradí podíly a základny celého bloku (husté pole tvaru proměnné × skupiny × sloty).
+
+        Uloží se jen buňky s kladným podílem nebo nenulovou základnou. Předaná
+        pole blok převezme jako hustý pohled (jen pro čtení): volající je po
+        zápisu nemá měnit.
+        """
+        self.stage_state(freqs, previous)
+        self.commit_state()
+
+    def stage_state(self, freqs: FloatArray, previous: FloatArray, keep_dense: bool = True) -> None:
+        """Připraví nový stav celého bloku, ale nezapíše ho (:meth:`commit_state`); čtení vidí dál starý.
+
+        Přenos tak spočítá všechny bloky ze starého stavu a husté výsledky
+        hned zahodí: ``keep_dense`` říká, zda je blok po zápisu ponechá jako
+        hustý pohled (malé bloky ano, velké ne).
+        """
+        size = len(self)
+        if freqs.shape != (size, self.groups, self.capacity) or previous.shape != freqs.shape:
+            raise ValueError("Pole musí mít tvar (proměnné, skupiny, sloty) bloku.")
+        rows, slots, groups = np.nonzero(((freqs > 0) | (previous != 0)).transpose(0, 2, 1))
+        pointer = np.zeros(size + 1, dtype=np.int64)
+        np.cumsum(np.bincount(rows, minlength=size), out=pointer[1:])
+        bounds = np.zeros((size, self.capacity + 1), dtype=np.int64)
+        np.cumsum(np.bincount(rows * self.capacity + slots, minlength=size * self.capacity)
+                  .reshape(size, self.capacity), axis=1, out=bounds[:, 1:])
+        base = _Base(pointer, bounds, slots.astype(np.int16), groups.astype(np.int32),
+                     freqs[rows, groups, slots], previous[rows, groups, slots])
+        self._staged = (base, (freqs, previous) if keep_dense else None)
+
+    def commit_state(self) -> None:
+        """Zapíše stav připravený :meth:`stage_state` (řádky bloku se mezitím nesměly změnit)."""
+        assert self._staged is not None
+        base, dense = self._staged
+        self._staged = None
+        if base.rows != len(self):
+            raise ValueError("Řádky bloku se mezi přípravou a zápisem stavu změnily.")
+        self._base, self._edited = base, {}
+        if dense is not None:
+            dense[0].setflags(write=False)
+            dense[1].setflags(write=False)
+        self._dense = dense
 
     def append(self, row: Row) -> None:
         """Přidá řádek; jeho pole mají tvar (skupiny, sloty ≤ kapacita)."""
         variable_id, freqs, previous, present, slots, keys = row
         index = len(self)
-        if index == len(self._freqs):
-            grow = len(self._freqs)
-            self._freqs = np.concatenate([self._freqs, np.zeros_like(self._freqs[:grow])])
-            self._previous = np.concatenate([self._previous, np.zeros_like(self._previous[:grow])])
+        if index == len(self._variants):
+            grow = len(self._variants)
             self._present = np.concatenate([self._present, np.zeros_like(self._present[:grow])])
             self._keys = np.concatenate([self._keys, np.zeros_like(self._keys[:grow])])
+            self._variants = np.concatenate([self._variants, np.full_like(self._variants[:grow], -1)])
         width = freqs.shape[1]
-        self._freqs[index] = 0.0
-        self._previous[index] = 0.0
         self._keys[index] = 0
-        self._freqs[index, :, :width] = freqs
-        self._previous[index, :, :width] = previous
+        self._variants[index] = -1
         self._present[index] = present
         self._keys[index, :width] = keys
         self.variable_ids.append(variable_id)
         self.slots.append([*slots, *([None] * (self.capacity - width))])
+        self._variants[index, :width] = [-1 if slot is None else self.numbering.intern(slot) for slot in slots]
         self._rows[variable_id] = index
+        self._edited[index] = RowCells.from_dense(freqs, previous, self.capacity)
+        self._dense = None
 
     def extract(self, rows: Sequence[int]) -> list[Row]:
         """Vyjme řádky z bloku a vrátí jejich obsah (kopie)."""
-        taken: list[Row] = [
-            (self.variable_ids[row], self._freqs[row].copy(), self._previous[row].copy(),
-             self._present[row].copy(), list(self.slots[row]), self._keys[row].copy())
-            for row in rows
-        ]
+        taken: list[Row] = []
+        for row in rows:
+            freqs, previous = self.cells(row).to_dense(self.groups, self.capacity)
+            taken.append((self.variable_ids[row], freqs, previous, self._present[row].copy(),
+                          list(self.slots[row]), self._keys[row].copy()))
         for row in sorted(rows, reverse=True):
             last = len(self) - 1
             del self._rows[self.variable_ids[row]]
             if row != last:
-                self._freqs[row] = self._freqs[last]
-                self._previous[row] = self._previous[last]
+                self._edited[row] = self.cells(last)
                 self._present[row] = self._present[last]
                 self._keys[row] = self._keys[last]
+                self._variants[row] = self._variants[last]
                 self.variable_ids[row] = self.variable_ids[last]
                 self.slots[row] = self.slots[last]
                 self._rows[self.variable_ids[row]] = row
+            self._edited.pop(last, None)
             self.variable_ids.pop()
             self.slots.pop()
+        self._dense = None
         return taken
+
+    def add_share(self, row: int, column: int, slot: int, share: float) -> None:
+        """Nová varianta ve slotu u jedné skupiny: ostatní podíly skupiny se zmenší, základna se vyrovná.
+
+        Totéž co ``freqs[row, column] *= 1 − share; freqs[row, column, slot] += share;
+        previous[row, column] = freqs[row, column]`` nad hustým polem.
+        """
+        cells = self.cells(row)
+        mine = np.flatnonzero(cells.group == column)
+        scaled = cells.freq[mine] * (1.0 - share)
+        here = np.flatnonzero(cells.slot[mine] == slot)
+        if len(here):
+            scaled[here[0]] = scaled[here[0]] + share
+        if len(scaled) and not (scaled > 0).all():
+            self._add_share_general(row, column, slot, share)
+            return
+        freq, prev = cells.freq.copy(), cells.prev.copy()
+        freq[mine] = prev[mine] = scaled
+        if len(here):
+            self._edited[row] = RowCells(cells.slot, cells.group, freq, prev, cells.starts)
+        else:
+            # Skupina varianty ještě nemá: nová buňka se vloží na své místo v úseku slotu.
+            start, stop = cells.span(slot)
+            at = start + int(cells.group[start:stop].searchsorted(column))
+            starts = cells.starts.copy()
+            starts[slot + 1:] += 1
+            self._edited[row] = RowCells(
+                _inserted(cells.slot, at, slot), _inserted(cells.group, at, column),
+                _inserted(freq, at, 0.0 + share), _inserted(prev, at, 0.0 + share), starts,
+            )
+        self._dense = None
+
+    def _add_share_general(self, row: int, column: int, slot: int, share: float) -> None:
+        """Totéž pro skupinu, jejíž buňka by zanikla (podíl 0 se základnou ≠ 0); buňky se přeskládají."""
+        cells = self.cells(row)
+        mine = cells.group == column
+        slots, shares = cells.slot[mine], cells.freq[mine] * (1.0 - share)
+        found = np.flatnonzero(slots == slot)
+        if len(found):
+            shares[found[0]] = shares[found[0]] + share
+        else:
+            slots, shares = np.append(slots, np.int16(slot)), np.append(shares, 0.0 + share)
+        positive = shares > 0
+        slots, shares = slots[positive], shares[positive]
+        merged_slot = np.concatenate([cells.slot[~mine], slots])
+        merged_group = np.concatenate([cells.group[~mine], np.full(len(slots), column, dtype=np.int32)])
+        merged_freq = np.concatenate([cells.freq[~mine], shares])
+        merged_prev = np.concatenate([cells.prev[~mine], shares])
+        order = np.lexsort((merged_group, merged_slot))
+        self._edited[row] = RowCells.build(
+            merged_slot[order], merged_group[order], merged_freq[order], merged_prev[order], self.capacity
+        )
+        self._dense = None
+
+    def free_slots(self, freed: Sequence[tuple[int, int]]) -> None:
+        """Uvolní sloty bez výskytu (řádek, slot): číslo varianty, klíč i zbylé základny."""
+        by_row: dict[int, list[int]] = {}
+        for row, slot in freed:
+            by_row.setdefault(row, []).append(slot)
+            self.set_slot(row, slot, None)
+            self._keys[row, slot] = 0
+        for row, slots in by_row.items():
+            cells = self.cells(row)
+            kept = ~np.isin(cells.slot, slots)
+            self._edited[row] = RowCells.build(
+                cells.slot[kept], cells.group[kept], cells.freq[kept], cells.prev[kept], self.capacity
+            )
+        self._dense = None
 
 
 class LivePools:
-    def __init__(self, group_ids: Sequence[str] = ()):
+    def __init__(self, group_ids: Sequence[str] = (), variants: Numbering | None = None):
         self.group_ids: list[str] = list(group_ids)
+        #: Číslování variant ve slotech; ve světě je to registr světa (:meth:`bind`).
+        self.variants: Numbering = Numbering("variant") if variants is None else variants
         self.group_index = {group_id: index for index, group_id in enumerate(self.group_ids)}
         self.blocks: dict[int, PoolBlock] = {}
         self._block_of: dict[str, int] = {}
         self._keys: dict[str, int] = {}
+
+    def bind(self, variants: Numbering) -> None:
+        """Přepne na číslování variant světa (volá ``World``; sklad musí být prázdný)."""
+        if self.blocks:
+            raise ValueError("Číslování variant lze přepnout jen v prázdném skladu.")
+        self.variants = variants
 
     # --- čtení --------------------------------------------------------
 
@@ -152,22 +521,43 @@ class LivePools:
             if len(self.blocks[capacity]):
                 yield self.blocks[capacity]
 
+    def compact(self) -> None:
+        """Zahodí husté pohledy všech bloků; zůstane jen řídké uložení."""
+        for block in self.blocks.values():
+            block.drop_dense()
+
+    def stats(self) -> dict[str, int]:
+        """Rozsah skladu: proměnné, skupiny, buňky husté a řídké, paměť řídkého uložení a hustého ekvivalentu."""
+        blocks = list(self.iter_blocks())
+        dense_cells = sum(len(block) * len(self.group_ids) * block.capacity for block in blocks)
+        return {
+            "variables": sum(len(block) for block in blocks),
+            "groups": len(self.group_ids),
+            "dense_cells": dense_cells,
+            "entries": sum(block.entries() for block in blocks),
+            "sparse_bytes": sum(block.nbytes() for block in blocks),
+            # Hustý ekvivalent: podíly a základny po 8 bajtech a stejná malá pole.
+            "dense_bytes": 16 * dense_cells + sum(
+                block._variants.nbytes + block._present.nbytes + block._keys.nbytes for block in blocks
+            ),
+        }
+
     def holds(self, group_id: str, variable_id: str) -> bool:
         """Má skupina tuto živou proměnnou? Levnější než :meth:`get`."""
         block = self.blocks[self._block_of[variable_id]]
-        return bool(block.present[block.row_of(variable_id), self.group_index[group_id]])
+        return bool(block._present[block.row_of(variable_id), self.group_index[group_id]])
 
     def frequency(self, group_id: str, variable_id: str, variant_id: str) -> float | None:
         """Podíl varianty, jako ``get(...).frequency(variant_id)``; ``None`` = skupina proměnnou nemá."""
         block = self.blocks[self._block_of[variable_id]]
         row = block.row_of(variable_id)
         column = self.group_index[group_id]
-        if not block.present[row, column]:
+        if not block._present[row, column]:
             return None
         slots = block.slots[row]
         if variant_id not in slots:
             return 0.0
-        freq = float(block.freqs[row, column, slots.index(variant_id)])
+        freq = block.value(row, column, slots.index(variant_id))
         return freq if freq > 0 else 0.0
 
     def dominant(self, group_id: str, variable_id: str) -> tuple[str, float] | None:
@@ -179,15 +569,14 @@ class LivePools:
         block = self.blocks[self._block_of[variable_id]]
         row = block.row_of(variable_id)
         column = self.group_index[group_id]
-        if not block.present[row, column]:
+        if not block._present[row, column]:
             return None
-        freqs = block.freqs[row, column]
+        names = block.slots[row]
         best: tuple[str, float] | None = None
-        for slot, variant in enumerate(block.slots[row]):
+        slots, freqs, _ = block.cell(row, column)
+        for slot, freq in zip(slots.tolist(), freqs.tolist()):
+            variant = names[slot]
             if variant is None:
-                continue
-            freq = float(freqs[slot])
-            if freq <= 0:
                 continue
             if best is None or freq > best[1] or (freq == best[1] and variant < best[0]):
                 best = (variant, freq)
@@ -197,18 +586,35 @@ class LivePools:
         block = self.blocks[self._block_of[variable_id]]
         row = block.row_of(variable_id)
         column = self.group_index[group_id]
-        if not block.present[row, column]:
+        if not block._present[row, column]:
             return None
-        used = sorted(
-            (variant, slot) for slot, variant in enumerate(block.slots[row])
-            if variant is not None and block.freqs[row, column, slot] > 0
-        )
-        slots = [slot for _, slot in used]
+        names = block.slots[row]
+        slots, freqs, previous = block.cell(row, column)
+        used = sorted((names[slot], position) for position, slot in enumerate(slots.tolist())
+                      if names[slot] is not None)
+        positions = [position for _, position in used]
         return Distribution(
             tuple(variant for variant, _ in used),
-            block.freqs[row, column, slots].copy(),
-            block.previous[row, column, slots].copy(),
+            freqs[positions].copy(),
+            previous[positions].copy(),
         )
+
+    def range_of(self, variable_id: str, variant_id: str) -> tuple[list[str], FloatArray]:
+        """Mapa rozšíření varianty: skupiny, které ji mají (seřazené podle sloupce), a její podíly u nich.
+
+        Čte přímo seznam výskytů varianty z řídkého uložení, bez hustého pole.
+        Varianta, kterou proměnná nemá, nebo neživá proměnná dá prázdný výsledek.
+        """
+        capacity = self._block_of.get(variable_id)
+        if capacity is None:
+            return [], np.zeros(0)
+        block = self.blocks[capacity]
+        row = block.row_of(variable_id)
+        if variant_id not in block.slots[row]:
+            return [], np.zeros(0)
+        columns, shares = block.range_of(row, block.slots[row].index(variant_id))
+        keep = block.present[row, columns]
+        return [self.group_ids[column] for column in columns[keep]], shares[keep]
 
     # --- zápis --------------------------------------------------------
 
@@ -248,12 +654,9 @@ class LivePools:
             slot = block.slots[row].index(variant_id)
         else:
             slot = block.slots[row].index(None)
-            block.slots[row][slot] = variant_id
+            block.set_slot(row, slot, variant_id)
             block.slot_keys[row, slot] = self._key(variant_id)
-        column = self.group_index[group_id]
-        block.freqs[row, column] *= 1.0 - share
-        block.freqs[row, column, slot] += share
-        block.previous[row, column] = block.freqs[row, column]
+        block.add_share(row, self.group_index[group_id], slot, share)
 
     def release(self) -> list[tuple[str, list[Distribution | None]]]:
         """Vyjme proměnné, které jsou všude stejné a ustálené.
@@ -263,13 +666,13 @@ class LivePools:
         """
         released: list[tuple[str, list[Distribution | None]]] = []
         for block in list(self.iter_blocks()):
-            alive = (block.freqs > 0).any(axis=1)
-            for row, slot in zip(*np.nonzero(~alive)):
-                if block.slots[row][slot] is not None:
-                    block.slots[row][slot] = None
-                    block.slot_keys[row, slot] = 0
-                    block.previous[row, :, slot] = 0.0
-            held = np.where(block.present[:, :, None], block.freqs, 0.0)
+            freqs = block.freqs
+            alive = (freqs > 0).any(axis=1)
+            dead = [(int(row), int(slot)) for row, slot in zip(*np.nonzero(~alive))
+                    if block.slots[row][slot] is not None]
+            if dead:
+                block.free_slots(dead)
+            held = np.where(block.present[:, :, None], freqs, 0.0)
             single = ((held > 0).sum(axis=2) <= 1) | ~block.present
             leader = np.where(block.present, held.argmax(axis=2), -1)
             first = leader.max(axis=1, keepdims=True)
@@ -283,10 +686,11 @@ class LivePools:
             for variable_id, *_ in block.extract(uniform):
                 del self._block_of[variable_id]
             if block.capacity > _MIN_CAPACITY and len(block):
-                used = np.array([[slot is not None for slot in row] for row in block.slots])
-                sparse = np.flatnonzero(used.sum(axis=1) <= block.capacity // 4)
+                sparse = np.flatnonzero((block.slot_variants >= 0).sum(axis=1) <= block.capacity // 4)
                 for variable_id in [block.variable_ids[row] for row in sparse]:
                     self._move(variable_id, block.capacity // 2)
+            if block.large:
+                block.drop_dense()
         return sorted(released, key=lambda item: item[0])
 
     def sync_groups(self, world: World) -> None:
@@ -338,7 +742,7 @@ class LivePools:
         capacity = max(capacity, _capacity_for(len(used)))
         block = self.blocks.get(capacity)
         if block is None:
-            block = self.blocks[capacity] = PoolBlock(len(self.group_ids), capacity)
+            block = self.blocks[capacity] = PoolBlock(len(self.group_ids), capacity, self.variants)
         block.append((variable_id, freqs[:, used], previous[:, used], present,
                       [slots[index] for index in used], keys[used]))
         self._block_of[variable_id] = capacity
@@ -354,6 +758,15 @@ class LivePools:
         if key is None:
             key = self._keys[variant_id] = stable_int("variant-key", variant_id)
         return key
+
+
+def _inserted(array: Any, at: int, value: float) -> Any:
+    """Kopie pole s hodnotou vloženou na pozici ``at`` (rychlejší než ``numpy.insert``)."""
+    out = np.empty(len(array) + 1, dtype=array.dtype)
+    out[:at] = array[:at]
+    out[at] = value
+    out[at + 1:] = array[at:]
+    return out
 
 
 def _capacity_for(slots: int) -> int:

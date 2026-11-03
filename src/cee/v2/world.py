@@ -254,6 +254,9 @@ class World:
         self.morphemes = RegisteredDict(self.registry, "morpheme", self.morphemes, self.columns.morphemes)
         self.links = LinkDict(self.registry, self.links)
         self.processes = RegisteredDict(self.registry, "process", self.processes)
+        # Sloty živých fondů jsou čísla variant z registru světa.
+        if not self.live.blocks:
+            self.live.bind(self.registry.variants)
         if not isinstance(self.concept_frequencies, FrequencyMap):
             self.concept_frequencies = FrequencyMap(self.concept_frequencies)
 

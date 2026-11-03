@@ -4,6 +4,12 @@ Jeden mechanismus pro všechny změny (iterace 1). S-křivky, vlny a izoglosy
 nejsou naprogramované: vyplývají z opakovaného přenosu s výhodou po síti.
 Vzorec je ve specifikaci, oddíl Přenos — vzorec. Celý krok se počítá
 vektorově nad :class:`cee.v2.pools.LivePools`.
+
+Čísla počítají čisté funkce polí v :mod:`cee.v2.phases_transmission`
+(matice vazeb, komponenty, kanály, míšení, výběr, drift). Tento modul je
+tenká fasáda: z objektů světa (skupiny, vazby, proměnné, tlaky) složí vstupní
+pole, zavolá je a výsledek předá dál. Na objektech zůstává sbírání vlastností
+skupin a proměnných, tlaky na varianty a klíče driftu.
 """
 
 from __future__ import annotations
@@ -15,10 +21,12 @@ import numpy as np
 import numpy.typing as npt
 
 from cee.v2 import contact, institutions
+from cee.v2 import phases_transmission as phases
 from cee.v2.pools import PoolBlock
 from cee.v2.pressures.base import Pressure, PressureBatch
-from cee.v2.rng import hash_normal, stable_int
-from cee.v2.world import World
+from cee.v2.registry import Numbering
+from cee.v2.rng import stable_int
+from cee.v2.world import SpeechGroup, World
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -48,69 +56,47 @@ def mixing_matrix(world: World, group_ids: Sequence[str], alpha: float) -> Float
     # v Pythonu (stejné ``**`` jako dřív), v poli už jen násobíme.
     table = world.link_table()
     numbers = world.registry.groups.numbers
-    size = len(group_ids)
     place = np.full(table.groups, -1, dtype=np.intp)
-    place[np.array([numbers[group_id] for group_id in group_ids], dtype=np.intp)] = np.arange(size)
+    place[np.array([numbers[group_id] for group_id in group_ids], dtype=np.intp)] = np.arange(len(group_ids))
     power = np.array([world.groups[group_id].prestige**alpha for group_id in group_ids])
-    rows, columns = place[table.source], place[table.indices]
-    kept = (rows >= 0) & (columns >= 0)
-    weights = np.zeros((size, size))
-    weights[rows[kept], columns[kept]] = table.strength[kept] * power[columns[kept]]
-    totals = weights.sum(axis=1)
     openness = np.array([world.groups[group_id].openness for group_id in group_ids])
-    openness = np.where(totals > 0, openness, 0.0)
-    safe = np.where(totals > 0, totals, 1.0)
-    mixing: FloatArray = (1.0 - openness)[:, None] * np.eye(len(group_ids)) + openness[
-        :, None
-    ] * (weights / safe[:, None])
-    return mixing
+    return phases.mixing_from_links(
+        table.source.astype(np.intp), table.indices.astype(np.intp), table.strength, place, power, openness
+    )
 
 
 def _normalized(array: FloatArray, fallback: FloatArray) -> FloatArray:
-    # Součet seřazených hodnot nezávisí na tom, ve kterých slotech varianty
-    # leží. Pořadí slotů ovlivňují i inovace v nepropojených skupinách, a bez
-    # toho by tak přes poslední bity zaokrouhlení měnily výsledek jinde.
-    # Součet dvou čísel je komutativní i v plovoucí čárce, řadit stačí od tří.
-    # Sčítání provádíme striktně sekvenčně zleva doprava po seřazených slotech:
-    # vestavěný np.sum() používá pro různé délky (např. 4 vs. 8) odlišné
-    # párové/SIMD redukce. V IEEE-754 platí +0.0 + x == x pro x >= 0, takže
-    # sekvenční součet zleva doprava zajistí bitovou shodu bez ohledu na to,
-    # kolika úvodními nulami je řádek doplněn v blocích různé kapacity.
-    ordered = array if array.shape[-1] <= 2 else np.sort(array, axis=-1)
-    totals = ordered[..., :1] + 0.0
-    for slot in range(1, ordered.shape[-1]):
-        totals = totals + ordered[..., slot : slot + 1]
-    result: FloatArray = np.where(totals > 0, array / np.where(totals > 0, totals, 1.0), fallback)
-    return result
+    """Podíly slotů dělené součtem, viz :func:`cee.v2.phases_transmission.normalized`."""
+    return phases.normalized(array, fallback)
 
 
 @dataclass(frozen=True, slots=True)
 class Channel:
     """Vstup, který skupina dostává mimo vazby sítě.
 
-    Skupina ``learners[i]`` přebírá podíl ``weights[i] × factor(proměnná)``
+    Skupina ``learners[i]`` přebírá podíl ``weights[i] × faktor(proměnná)``
     svého vstupu od ``sources[i]``: interference prvního jazyka, čtení a
-    škola z psaného kódu.
+    škola z psaného kódu. ``factors(world, sloupce proměnných)`` dá filtr
+    kanálu pro všechny proměnné bloku naráz.
     """
 
     learners: npt.NDArray[np.intp]
     sources: npt.NDArray[np.intp]
     weights: FloatArray
-    factor: Callable[[World, str], float]
+    factors: Callable[[World, contact.VariableColumns], FloatArray]
 
 
-def _channel(items: Sequence[tuple[int, int, float]], factor: Callable[[World, str], float]) -> Channel:
-    return Channel(
-        learners=np.array([item[0] for item in items], dtype=np.intp),
-        sources=np.array([item[1] for item in items], dtype=np.intp),
-        weights=np.array([item[2] for item in items], dtype=np.float64),
-        factor=factor,
-    )
+def _channel(
+    mask: npt.NDArray[np.bool_], sources: npt.NDArray[np.intp], weights: FloatArray,
+    factors: Callable[[World, contact.VariableColumns], FloatArray],
+) -> Channel:
+    learners = np.flatnonzero(mask).astype(np.intp)
+    return Channel(learners=learners, sources=sources[learners], weights=weights[learners], factors=factors)
 
 
 @dataclass(frozen=True, slots=True)
 class CrossFlow:
-    """Vazby mezi jazyky jednoho kanálu (po komponentách sítě, viz :func:`_mix`).
+    """Vazby mezi jazyky jednoho kanálu (po komponentách sítě, viz :func:`cee.v2.phases_transmission.mix`).
 
     Kanály ``elite`` a ``trade`` se oddělují od obecného kontaktu sousedů jen
     tehdy, mají-li v ``Parameters.channel_domains`` jiné váhy domén
@@ -126,9 +112,10 @@ class StepInputs:
     """Vstupy jednoho kroku sdílené všemi bloky živých proměnných."""
 
     group_ids: Sequence[str]
-    #: Míšení po komponentách sítě, viz :func:`_mix`. ``blocks`` jsou vazby
-    #: uvnitř jazyka (a vlastní skupina), ``cross`` vazby mezi jazyky podle
-    #: kanálů; ty procházejí filtrem přenositelnosti (prázdné, když žádné nejsou).
+    #: Míšení po komponentách sítě, viz :func:`cee.v2.phases_transmission.mix`.
+    #: ``blocks`` jsou vazby uvnitř jazyka (a vlastní skupina), ``cross`` vazby
+    #: mezi jazyky podle kanálů; ty procházejí filtrem přenositelnosti (prázdné,
+    #: když žádné nejsou).
     members: Sequence[npt.NDArray[np.intp]]
     blocks: Sequence[FloatArray]
     cross: Sequence[CrossFlow]
@@ -144,117 +131,51 @@ class StepInputs:
 
 
 def _components(mixing: FloatArray) -> list[npt.NDArray[np.intp]]:
-    """Propojené komponenty sítě (kdo se od koho, i nepřímo, učí)."""
-    parent = list(range(len(mixing)))
-
-    def root(index: int) -> int:
-        while parent[index] != index:
-            parent[index] = parent[parent[index]]
-            index = parent[index]
-        return index
-
-    for first, second in zip(*np.nonzero(mixing)):
-        a, b = root(int(first)), root(int(second))
-        if a != b:
-            parent[max(a, b)] = min(a, b)
-    members: dict[int, list[int]] = {}
-    for index in range(len(mixing)):
-        members.setdefault(root(index), []).append(index)
-    return [np.array(items, dtype=np.intp) for _, items in sorted(members.items())]
+    """Propojené komponenty sítě, viz :func:`cee.v2.phases_transmission.components`."""
+    return phases.components(mixing)
 
 
 def _mix(inputs: StepInputs, values: FloatArray, cross: Sequence[FloatArray] | None = None) -> FloatArray:
-    """Vážený vstup od sousedů: ``values`` má skupiny na ose 1.
-
-    Násobí se zvlášť každá propojená komponenta. Knihovna BLAS totiž sčítá v
-    pořadí, které závisí na velikosti matice; přidání skupin v nepropojené
-    části světa by jinak změnilo poslední bity výsledku a časem i historii.
-    Osamocené skupiny (učí se jen samy od sebe) se vyřídí najednou.
-    """
-    result = np.zeros_like(values)
-    if len(inputs.alone) and cross is None:
-        shape = (1, -1) + (1,) * (values.ndim - 2)
-        result[:, inputs.alone] = inputs.alone_weight.reshape(shape) * values[:, inputs.alone]
-    for members, matrix in zip(inputs.members, inputs.blocks if cross is None else cross):
-        part = values[:, members]
-        flat = np.moveaxis(part, 1, 0).reshape(len(members), -1)
-        mixed = (matrix @ flat).reshape((len(members), part.shape[0], *part.shape[2:]))
-        result[:, members] = np.moveaxis(mixed, 0, 1)
-    return result
+    """Vážený vstup od sousedů, viz :func:`cee.v2.phases_transmission.mix`."""
+    if cross is None:
+        return phases.mix(values, inputs.members, inputs.blocks, inputs.alone, inputs.alone_weight)
+    return phases.mix(values, inputs.members, cross)
 
 
 def prepare(world: World, group_ids: Sequence[str], params: TransmissionParams, tick: int) -> StepInputs:
     groups = [world.groups[group_id] for group_id in group_ids]
     renewal = np.array([world.renewal(group_id, params.dt) for group_id in group_ids])
-    cohort = np.maximum(1.0, renewal * np.array([group.population for group in groups]))
+    drift_scale, loss_floor = phases.cohort_scales(
+        renewal, np.array([group.population for group in groups]), params.sigma, params.loss_threshold
+    )
     mixing = mixing_matrix(world, group_ids, params.alpha)
-    components = _components(mixing)
+    components = phases.components(mixing)
     linked = [members for members in components if len(members) > 1]
     alone = np.array([members[0] for members in components if len(members) == 1], dtype=np.intp)
-    languages = np.array([group.main_code.language for group in groups])
-    foreign = languages[:, None] != languages[None, :]
+    # Jazyky jako kódy, aby se vazby mezi jazyky počítaly z čísel, ne z řetězců.
+    languages = np.unique(np.array([group.main_code.language for group in groups]), return_inverse=True)[1]
+    foreign = phases.foreign_mask(languages.astype(np.intp))
     cross: list[CrossFlow] = []
     if foreign.any():
         distinct = contact.distinct_channels(world.params)
         shares = contact.channel_shares(world, group_ids, distinct) if distinct else {}
         # Obecný kontakt je to, co nepatří elitě ani obchodu; bez odlišných kanálů celá vazba.
-        neighbor = 1.0 - sum(shares.values()) if shares else None
+        neighbor = phases.neighbor_fraction(list(shares.values())) if shares else None
         for channel, fraction in (("neighbor", neighbor), *shares.items()):
-            blocks = [
-                np.where(foreign[np.ix_(members, members)],
-                         mixing[np.ix_(members, members)] if fraction is None
-                         else mixing[np.ix_(members, members)] * fraction[np.ix_(members, members)], 0.0)
-                for members in linked
-            ]
+            blocks = phases.cross_blocks(mixing, linked, foreign, fraction)
             if any(block.any() for block in blocks):
                 cross.append(CrossFlow(channel, blocks))
-    index = {group_id: position for position, group_id in enumerate(group_ids)}
-    learners = [
-        (index[group.id], index[group.main_code.l1_source],
-         world.params.interference_weight * group.main_code.l2_share
-         * (1.0 - world.params.school_correction * group.schooling))
-        for group in groups
-        if group.main_code.l1_source in index and group.main_code.l2_share > 0
-    ]
-    readers = [
-        (index[group.id], index[group.standard], world.params.reading_weight * group.literacy)
-        for group in groups if group.standard in index and group.literacy > 0
-    ]
-    pupils = [
-        (index[group.id], index[group.standard], world.params.school_weight * group.schooling)
-        for group in groups if group.standard in index and group.schooling > 0
-    ]
-    worshippers = [
-        (index[group.id], index[group.liturgy], world.params.liturgy_weight * group.devotion)
-        for group in groups if group.liturgy in index and group.devotion > 0
-    ]
-    channels = [
-        _channel(items, factor)
-        for items, factor in (
-            (learners, contact.interference_factor),
-            (readers, institutions.reading_factor),
-            (pupils, institutions.school_factor),
-            (worshippers, institutions.liturgy_factor),
-        )
-        if items
-    ]
+    channels = _channels(world, groups, group_ids)
     return StepInputs(
         group_ids=group_ids,
         members=linked,
-        blocks=[
-            np.where(foreign[np.ix_(members, members)], 0.0, mixing[np.ix_(members, members)])
-            if cross else mixing[np.ix_(members, members)]
-            for members in linked
-        ],
+        blocks=phases.internal_blocks(mixing, linked, foreign if cross else None),
         cross=cross,
         alone=alone,
         alone_weight=mixing[alone, alone],
         renewal=renewal,
-        drift_scale=params.sigma / np.sqrt(cohort),
-        # Varianta, na kterou v učící se kohortě nepřipadá ani půl mluvčího,
-        # zaniká. Pevná spodní mez drží výpočet u velkých souhrnných skupin
-        # rozumně malý.
-        loss_floor=np.maximum(params.loss_threshold, 0.5 / cohort),
+        drift_scale=drift_scale,
+        loss_floor=loss_floor,
         row_keys=np.array(
             [stable_int(world.seed, "drift", tick, group_id) for group_id in group_ids],
             dtype=np.uint64,
@@ -264,9 +185,40 @@ def prepare(world: World, group_ids: Sequence[str], params: TransmissionParams, 
     )
 
 
+def _channels(world: World, groups: Sequence[SpeechGroup], group_ids: Sequence[str]) -> list[Channel]:
+    """Vstupy mimo vazby sítě: interference, čtení, škola a liturgie (jen neprázdné)."""
+    params = world.params
+    index = {group_id: position for position, group_id in enumerate(group_ids)}
+
+    def column(attribute: Callable[[SpeechGroup], float]) -> FloatArray:
+        return np.array([attribute(group) for group in groups], dtype=np.float64)
+
+    def source(attribute: Callable[[SpeechGroup], str | None]) -> npt.NDArray[np.intp]:
+        return np.array([index.get(attribute(group), -1) for group in groups], dtype=np.intp)  # type: ignore[arg-type]
+
+    l1_sources = source(lambda group: group.main_code.l1_source)
+    l2_share = column(lambda group: group.main_code.l2_share)
+    standards = source(lambda group: group.standard)
+    liturgies = source(lambda group: group.liturgy)
+    literacy, schooling, devotion = (column(lambda group, name=name: getattr(group, name))
+                                     for name in ("literacy", "schooling", "devotion"))
+    specs = (
+        ((l1_sources >= 0) & (l2_share > 0), l1_sources,
+         phases.channel_weights(params.interference_weight, l2_share, params.school_correction * schooling),
+         contact.interference_factors),
+        ((standards >= 0) & (literacy > 0), standards,
+         phases.channel_weights(params.reading_weight, literacy), institutions.reading_factors),
+        ((standards >= 0) & (schooling > 0), standards,
+         phases.channel_weights(params.school_weight, schooling), institutions.school_factors),
+        ((liturgies >= 0) & (devotion > 0), liturgies,
+         phases.channel_weights(params.liturgy_weight, devotion), institutions.liturgy_factors),
+    )
+    return [_channel(mask, sources, weights, factors) for mask, sources, weights, factors in specs if mask.any()]
+
+
 def fitness_of(
     world: World,
-    block: PoolBlock,
+    block: PoolBlock | RowSlice,
     inputs: StepInputs,
     pressures: Mapping[str, Sequence[tuple[Pressure, float]]],
     heard: FloatArray,
@@ -299,10 +251,55 @@ def fitness_of(
             slots=[block.slots[row] for row in rows],
             tick=inputs.tick,
             heard=heard[rows],
+            numbers=block.numbers_in(world.registry.variants, rows),
         )
         for pressure, strength in weighted:
             fitness[rows] += strength * pressure.scores(batch)
     return fitness
+
+
+#: Nejvíc buněk (proměnné × skupiny × sloty) jednoho kusu bloku při přenosu. Větší blok se
+#: počítá po kusech řádků, aby přechodná pole (slyšené, tlaky, výběr, drift) nerostla s celým
+#: blokem. Řádky jsou na sobě nezávislé, takže kusy dají tytéž bity.
+CHUNK_CELLS = 1 << 20
+
+
+class RowSlice:
+    """Řádky ``[start, stop)`` bloku jako blok (pro přenos po kusech); jen čtení."""
+
+    def __init__(self, block: PoolBlock, start: int, stop: int):
+        self.block, self.start, self.stop = block, start, stop
+        self.capacity = block.capacity
+        self.numbering = block.numbering
+        self.variable_ids = block.variable_ids[start:stop]
+        self.slots = block.slots[start:stop]
+
+    def __len__(self) -> int:
+        return self.stop - self.start
+
+    @property
+    def freqs(self) -> FloatArray:
+        return self.block.freqs[self.start : self.stop]
+
+    @property
+    def previous(self) -> FloatArray:
+        return self.block.previous[self.start : self.stop]
+
+    @property
+    def present(self) -> npt.NDArray[np.bool_]:
+        return self.block.present[self.start : self.stop]
+
+    @property
+    def slot_keys(self) -> npt.NDArray[np.uint64]:
+        return self.block.slot_keys[self.start : self.stop]
+
+    @property
+    def slot_variants(self) -> npt.NDArray[np.int32]:
+        return self.block.slot_variants[self.start : self.stop]
+
+    def numbers_in(self, numbering: Numbering, rows: Sequence[int] | slice = slice(None)) -> npt.NDArray[np.intp]:
+        chosen = range(self.start, self.stop)[rows] if isinstance(rows, slice) else [self.start + row for row in rows]
+        return self.block.numbers_in(numbering, list(chosen))
 
 
 def transmit(
@@ -319,65 +316,45 @@ def transmit(
     výsledek neovlivní. Šum závisí jen na (tick, skupina, varianta), proto
     skupina bez vazeb na zbytek světa dostane stejný výsledek, ať jinde
     existuje cokoli.
-    """
-    current, previous, present = block.freqs, block.previous, block.present
-    heard = _mix(inputs, current)
-    weight = _mix(inputs, present.astype(np.float64))
-    for flow in inputs.cross:
-        # Vazby mezi jazyky: jen tolik, kolik filtr přenositelnosti propustí
-        # (podle pojmu a kanálu: obecný kontakt, elita, obchod).
-        factor = np.array([contact.borrowing_factor(world, variable_id, flow.channel)
-                           for variable_id in block.variable_ids])
-        heard = heard + factor[:, None, None] * _mix(inputs, current, cross=flow.blocks)
-        weight = weight + factor[:, None] * _mix(inputs, present.astype(np.float64), cross=flow.blocks)
-    # Skupiny bez této proměnné se z míšení vyřadí a zbytek vstupu se převáží.
-    heard = np.where(weight[:, :, None] > 0, heard / np.where(weight > 0, weight, 1.0)[:, :, None], 0)
-    for channel in inputs.channels:
-        # Interference (L2 mluvčí nesou svůj první jazyk), čtení a škola.
-        factor = np.array([channel.factor(world, variable_id) for variable_id in block.variable_ids])
-        # Váha domény nad 1 smí podíl zvýšit nejvýš na celý vstup.
-        share = np.minimum(factor[:, None] * channel.weights[None, :], 1.0)
-        share = np.where(present[:, channel.sources], share, 0.0)[:, :, None]
-        heard[:, channel.learners] = (
-            (1.0 - share) * heard[:, channel.learners] + share * current[:, channel.sources]
-        )
 
+    Jen složí vstupy z objektů: faktory kanálů po proměnných bloku (jedním
+    polem na kanál), potom :func:`cee.v2.phases_transmission.hear`, tlaky
+    na varianty (:func:`fitness_of`) a :func:`cee.v2.phases_transmission.settle`.
+    Velký blok (víc než ``CHUNK_CELLS`` buněk) se počítá po kusech řádků.
+    """
+    size, width = len(block), max(1, len(inputs.group_ids) * block.capacity)
+    step = max(1, CHUNK_CELLS // width)
+    if size <= step:
+        return _transmit_rows(world, block, inputs, pressures, params, fitness_hook)
+    updated, baseline = np.empty_like(block.freqs), np.empty_like(block.freqs)
+    for start in range(0, size, step):
+        stop = min(size, start + step)
+        part = RowSlice(block, start, stop)
+        updated[start:stop], baseline[start:stop] = _transmit_rows(
+            world, part, inputs, pressures, params, fitness_hook
+        )
+    return updated, baseline
+
+
+def _transmit_rows(
+    world: World,
+    block: PoolBlock | RowSlice,
+    inputs: StepInputs,
+    pressures: Mapping[str, Sequence[tuple[Pressure, float]]],
+    params: TransmissionParams,
+    fitness_hook: Callable[..., FloatArray] | None,
+) -> tuple[FloatArray, FloatArray]:
+    current, previous, present = block.freqs, block.previous, block.present
+    columns = contact.variable_columns(world, block.variable_ids) if inputs.cross or inputs.channels else None
+    flows = [(contact.borrowing_factors(world, columns, flow.channel), flow.blocks) for flow in inputs.cross]
+    channels = [(channel.factors(world, columns), channel.learners, channel.sources, channel.weights)
+                for channel in inputs.channels]
+    heard = phases.hear(current, present, inputs.members, inputs.blocks, inputs.alone, inputs.alone_weight,
+                        flows, channels)
     fitness = (fitness_of(world, block, inputs, pressures, heard) if fitness_hook is None
                else fitness_hook(world, block, inputs, pressures, heard))
-
-    selected = _normalized(heard * np.exp(params.selection * fitness), heard)
-    trend = params.kappa * (current - previous)
-    # Wright–Fisherův drift: rozptyl p(1 − p) / N učící se kohorty. Varianta,
-    # kterou kohorta vůbec neslyší, nemůže driftem vzniknout. Šum se počítá
-    # jen tam, kde opravdu soutěží varianty; jinde je nulový.
-    spread = selected * (1.0 - selected)
-    drift = np.zeros_like(selected)
-    rows_i, columns, cells = np.nonzero(spread > 0)
-    if len(rows_i):
-        noise = hash_normal(inputs.row_keys[columns], block.slot_keys[rows_i, cells], pairwise=True)
-        drift[rows_i, columns, cells] = (
-            noise * inputs.drift_scale[columns] * np.sqrt(spread[rows_i, columns, cells])
-        )
-    children = _normalized(np.clip(selected + trend + drift, 0.0, None), selected)
-    adults = current + params.adult_rate * (heard - current)
-    renewal = inputs.renewal[None, :, None]
-    updated = (1.0 - renewal) * adults + renewal * children
-
-    updated[updated < inputs.loss_floor[None, :, None]] = 0.0
-    updated = _normalized(updated, current)
-    leaders = updated.argmax(axis=2)
-    top = np.take_along_axis(updated, leaders[:, :, None], axis=2)[:, :, 0]
-    established = (top >= params.establish_threshold) & (top < 1.0)
-    if established.any():
-        one_hot = np.zeros_like(updated)
-        np.put_along_axis(one_hot, leaders[:, :, None], 1.0, axis=2)
-        updated = np.where(established[:, :, None], one_hot, updated)
-    if not present.all():
-        updated = np.where(present[:, :, None], updated, 0.0)
-    baseline = np.where(updated > 0, previous + renewal * (current - previous), 0.0)
-    # Skupina s jedinou variantou nemá trend. Bez toho by základna závisela
-    # na tom, zda proměnná mezitím ležela v repertoáru, nebo ve skladu, a to
-    # mohou ovlivnit i inovace v nepropojené části světa.
-    alone = (updated > 0).sum(axis=2, keepdims=True) == 1
-    baseline = np.where(alone, updated, baseline)
-    return updated, baseline
+    return phases.settle(
+        current, previous, present, heard, fitness, block.slot_keys, inputs.row_keys, inputs.drift_scale,
+        inputs.renewal, inputs.loss_floor, params.selection, params.kappa, params.adult_rate,
+        params.establish_threshold,
+    )
