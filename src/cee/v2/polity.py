@@ -41,10 +41,11 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
+from cee.v2.edits import Edits
 from cee.v2.events import Codification, LanguageShift, Printing, Schooling, WorldEvent
 from cee.v2.history import History
 from cee.v2.parameters import level
-from cee.v2.world import Link, SpeechGroup, World
+from cee.v2.world import World
 
 
 @dataclass(slots=True)
@@ -138,35 +139,36 @@ def public_bilingualism(
     s ``domain="public"``), spojí ji se zdrojem a nastaví, jak silně se kód
     tlačí domů (``pull``). Vrací ID veřejné skupiny, nebo ``None``.
     """
+    edit = Edits(world, tick)
     group, source = world.groups[group_id], world.groups[source_id]
     public_id = f"{group_id}>{source.main_code.language}"
     existing = world.groups.get(public_id)
     if existing is not None:
         if existing.domain != "public":
             return None
-        existing.population = max(existing.population, round(share * group.population))
-        existing.home_pull = pull if replace_pull else max(existing.home_pull, pull)
+        edit.set_group(public_id, "population", max(existing.population, round(share * group.population)))
+        edit.set_group(public_id, "home_pull", pull if replace_pull else max(existing.home_pull, pull))
         nativized = world.groups.get(f"{group_id}>{source.main_code.language}:home")
         if nativized is not None and nativized.home_pull > 0:
-            nativized.home_pull = max(existing.home_pull, 1e-6)
+            edit.set_group(nativized.id, "home_pull", max(existing.home_pull, 1e-6))
     else:
         if share * group.population < 1.0:
             return None
         LanguageShift(year, group_id, source_id, initial_share=share, domain="public").apply(world, history, tick)
         existing = world.groups[public_id]
-        existing.home_pull = pull
+        edit.set_group(public_id, "home_pull", pull)
         # Úřední jazyk se mimo domov užívá i psaný: veřejná skupina čte normu zdroje.
         if source.standard is not None:
-            existing.standard = source.standard
-            existing.literacy = max(group.literacy, source.literacy)
+            edit.set_group(public_id, "standard", source.standard)
+            edit.set_group(public_id, "literacy", max(group.literacy, source.literacy))
     if link > 0:
         current = world.links.get((public_id, source_id))
         if current is None or current.strength < link:
-            world.connect(public_id, source_id, link, "weak")
-    world.prestige_mirror[public_id] = source_id
-    nativized = f"{group_id}>{source.main_code.language}:home"
-    if nativized in world.groups:
-        world.prestige_mirror[nativized] = source_id
+            edit.connect(public_id, source_id, link, "weak")
+    edit.set_prestige_mirror(public_id, source_id)
+    nativized_id = f"{group_id}>{source.main_code.language}:home"
+    if nativized_id in world.groups:
+        edit.set_prestige_mirror(nativized_id, source_id)
     return public_id
 
 
@@ -187,7 +189,8 @@ def _policy(world: World, history: History, tick: int, year: float, polity: Poli
     return touched
 
 
-def _centralize(world: World, polity: Polity, regions: tuple[str, ...]) -> int:
+def _centralize(world: World, tick: int, polity: Polity, regions: tuple[str, ...]) -> int:
+    edit = Edits(world, tick)
     strength = world.params.capital_link_strength * float(
         level(world.params.centralization_levels, polity.centralization, "úroveň centralizace")
     )
@@ -200,30 +203,31 @@ def _centralize(world: World, polity: Polity, regions: tuple[str, ...]) -> int:
         value = strength * reach(world, group_id, polity.seat)
         current = world.links.get((group_id, polity.seat))
         if current is None or current.strength < value:
-            world.connect(group_id, polity.seat, value, "weak")
-            polity.links[group_id] = value
+            edit.connect(group_id, polity.seat, value, "weak")
+            edit.set_state_link(polity.id, group_id, value)
             linked += 1
     return linked
 
 
-def _release(world: World, polity: Polity, regions: tuple[str, ...]) -> None:
+def _release(world: World, tick: int, polity: Polity, regions: tuple[str, ...]) -> None:
     """Stát opustí regiony: zmizí jeho vazby k sídlu a jeho politika tam."""
+    edit = Edits(world, tick)
     wanted = set(regions)
     for group_id in sorted(polity.links):
         if group_id in world.groups and region_of(world, group_id) in wanted:
-            for key in ((group_id, polity.seat), (polity.seat, group_id)):
-                world.links.pop(key, None)
-                world.border_factors.pop(key, None)
-            del polity.links[group_id]
+            for source, target in ((group_id, polity.seat), (polity.seat, group_id)):
+                edit.drop_link(source, target)
+                edit.set_border_factor(source, target, None)
+            edit.set_state_link(polity.id, group_id, None)
     for group_id, mirrored in sorted(world.prestige_mirror.items()):
         group = world.groups.get(group_id)
         if group is None or mirrored != polity.seat or region_of(world, group_id) not in wanted:
             continue
         # Lidé jazyk umějí dál, ale stát už ho domů netlačí.
         if group.domain == "public":
-            group.home_pull = 0.0
+            edit.set_group(group_id, "home_pull", 0.0)
         elif group.home_pull > 0:
-            group.home_pull = 1e-6
+            edit.set_group(group_id, "home_pull", 1e-6)
 
 
 @dataclass(frozen=True)
@@ -265,14 +269,15 @@ class State(WorldEvent):
         level(world.params.policy_levels, self.policy, "jazyková politika")
         level(world.params.border_levels, self.border, "propustnost hranice")
         seat = seat_of(world, self.capital)
-        polity = Polity(self.id, tuple(self.regions), self.capital, seat,
-                        world.groups[seat].main_code.language, self.centralization, self.policy, self.border,
-                        name=self.name)
-        world.states[self.id] = polity
-        refresh(world)
-        linked = _centralize(world, polity, polity.regions)
+        Edits(world, tick).add_state(
+            self.id, self.regions, self.capital, seat, world.groups[seat].main_code.language,
+            self.centralization, self.policy, self.border, self.name,
+        )
+        polity = world.states[self.id]
+        refresh(world, tick)
+        linked = _centralize(world, tick, polity, polity.regions)
         bilingual = _policy(world, history, tick, self.year, polity)
-        refresh(world)
+        refresh(world, tick)
         history.record("state", tick, self.year, state=self.id, name=self.name, regions=sorted(self.regions),
                        capital=self.capital, seat=seat, language=polity.language,
                        centralization=self.centralization, policy=self.policy, border=self.border,
@@ -290,7 +295,7 @@ class LanguagePolicy(WorldEvent):
     def apply(self, world: World, history: History, tick: int) -> None:
         polity = _polity(world, self.state)
         level(world.params.policy_levels, self.policy, "jazyková politika")
-        polity.policy = self.policy
+        Edits(world, tick).set_state(polity.id, "policy", self.policy)
         bilingual = _policy(world, history, tick, self.year, polity)
         history.record("language_policy", tick, self.year, state=self.state, policy=self.policy,
                        bilingual=bilingual)
@@ -310,13 +315,13 @@ class Annexation(WorldEvent):
     def apply(self, world: World, history: History, tick: int) -> None:
         polity = _polity(world, self.state)
         _check_regions(world, self.regions)
-        fallen = _take(world, self.regions, keep=polity.id)
+        fallen = _take(world, tick, self.regions, keep=polity.id)
         added = tuple(region for region in self.regions if region not in polity.regions)
-        polity.regions = (*polity.regions, *added)
-        refresh(world)
-        linked = _centralize(world, polity, added)
+        Edits(world, tick).set_state(polity.id, "regions", [*polity.regions, *added])
+        refresh(world, tick)
+        linked = _centralize(world, tick, polity, added)
         bilingual = _policy(world, history, tick, self.year, polity)
-        refresh(world)
+        refresh(world, tick)
         history.record("annexation", tick, self.year, state=self.state, regions=sorted(added),
                        linked=linked, bilingual=bilingual, fallen=fallen)
 
@@ -360,12 +365,13 @@ class LinguaFranca(WorldEvent):
                        bilingual=bilingual)
 
 
-def _take(world: World, regions: tuple[str, ...], *, keep: str | None = None) -> list[str]:
+def _take(world: World, tick: int, regions: tuple[str, ...], *, keep: str | None = None) -> list[str]:
     """Regiony odejdou ze všech států kromě ``keep``; vrací zaniklé státy.
 
     Při odtržení (``keep is None``) hlavní město odejít nesmí. Při připojení
     (``keep`` = dobyvatel) stát, který přijde o hlavní město, zanikne.
     """
+    edit = Edits(world, tick)
     fallen = []
     for other in sorted(world.states.values(), key=lambda found: found.id):
         if other.id == keep:
@@ -376,12 +382,12 @@ def _take(world: World, regions: tuple[str, ...], *, keep: str | None = None) ->
         if other.capital in leaving:
             if keep is None:
                 raise ValueError(f"Hlavní město státu '{other.id}' se nemůže odtrhnout; použij Collapse.")
-            _release(world, other, other.regions)
-            del world.states[other.id]
+            _release(world, tick, other, other.regions)
+            edit.remove_state(other.id)
             fallen.append(other.id)
             continue
-        _release(world, other, leaving)
-        other.regions = tuple(region for region in other.regions if region not in regions)
+        _release(world, tick, other, leaving)
+        edit.set_state(other.id, "regions", [region for region in other.regions if region not in regions])
     return fallen
 
 
@@ -400,7 +406,7 @@ class Secession(WorldEvent):
 
     def apply(self, world: World, history: History, tick: int) -> None:
         _check_regions(world, self.regions)
-        _take(world, self.regions)
+        _take(world, tick, self.regions)
         history.record("secession", tick, self.year, state=self.id, regions=sorted(self.regions))
         State(self.year, self.id, self.regions, self.capital, self.centralization, self.policy,
               self.border, self.name).apply(world, history, tick)
@@ -419,9 +425,9 @@ class Collapse(WorldEvent):
 
     def apply(self, world: World, history: History, tick: int) -> None:
         polity = _polity(world, self.state)
-        _release(world, polity, polity.regions)
-        del world.states[self.state]
-        refresh(world)
+        _release(world, tick, polity, polity.regions)
+        Edits(world, tick).remove_state(self.state)
+        refresh(world, tick)
         history.record("collapse", tick, self.year, state=self.state, regions=sorted(polity.regions))
 
 
@@ -436,8 +442,8 @@ class BorderPolicy(WorldEvent):
     def apply(self, world: World, history: History, tick: int) -> None:
         polity = _polity(world, self.state)
         level(world.params.border_levels, self.border, "propustnost hranice")
-        polity.border = self.border
-        refresh(world)
+        Edits(world, tick).set_state(polity.id, "border", self.border)
+        refresh(world, tick)
         history.record("border_policy", tick, self.year, state=self.state, border=self.border)
 
 
@@ -457,12 +463,13 @@ class Preserve(WorldEvent):
 
     def apply(self, world: World, history: History, tick: int) -> None:
         _check_regions(world, self.regions)
+        edit = Edits(world, tick)
         groups = []
         for region in self.regions:
             language = self.language or _language_of(world, seat_of(world, region))
             for group_id in groups_in(world, [region]):
                 if world.groups[group_id].main_code.language == language:
-                    world.groups[group_id].preserved = self.preserved
+                    edit.set_group(group_id, "preserved", self.preserved)
                     groups.append(group_id)
         history.record("preserve", tick, self.year, regions=sorted(self.regions), language=self.language,
                        preserved=self.preserved, groups=groups)
@@ -485,8 +492,9 @@ class Identity(WorldEvent):
         _check_regions(world, self.regions)
         loyalty = level(world.params.identity_loyalty, self.identity, "úroveň identity")
         groups = groups_in(world, self.regions)
+        edit = Edits(world, tick)
         for group_id in groups:
-            world.groups[group_id].loyalty = loyalty
+            edit.set_group(group_id, "loyalty", loyalty)
         history.record("identity", tick, self.year, regions=sorted(self.regions), identity=self.identity,
                        groups=groups)
 
@@ -510,8 +518,9 @@ class Immigration(WorldEvent):
         if not 0.0 <= self.immigration <= 1.0:
             raise ValueError(f"Podíl přistěhovalců musí být mezi 0 a 1, ne {self.immigration}.")
         groups = groups_in(world, self.regions)
+        edit = Edits(world, tick)
         for group_id in groups:
-            world.groups[group_id].immigration = self.immigration
+            edit.set_group(group_id, "immigration", self.immigration)
         history.record("immigration", tick, self.year, regions=sorted(self.regions),
                        immigration=self.immigration, groups=groups)
 
@@ -540,6 +549,7 @@ class Revival(WorldEvent):
         _check_regions(world, self.regions)
         table = level(world.params.revival_levels, self.strength, "síla obrození")
         pace, seed = float(table["pace"]), float(table["seed"])
+        edit = Edits(world, tick)
         speakers, revived = [], []
         for region in self.regions:
             language = self.language or world.territories[region].native_language
@@ -548,7 +558,7 @@ class Revival(WorldEvent):
             home = groups_in(world, [region])
             for group_id in home:
                 if world.groups[group_id].main_code.language == language:
-                    world.groups[group_id].revival = max(world.groups[group_id].revival, pace)
+                    edit.set_group(group_id, "revival", max(world.groups[group_id].revival, pace))
                     speakers.append(group_id)
             for group_id in home:
                 group = world.groups[group_id]
@@ -560,10 +570,10 @@ class Revival(WorldEvent):
                     for other in world.group_ids()
                 ):
                     continue
-                created = _revive(world, group_id, language, region, pace, seed)
+                created = _revive(world, tick, group_id, language, region, pace, seed)
                 if created is not None:
                     revived.append(created)
-        refresh(world)
+        refresh(world, tick)
         history.record("revival_movement", tick, self.year, regions=sorted(self.regions),
                        language=self.language, strength=self.strength, speakers=speakers, revived=revived)
 
@@ -583,27 +593,27 @@ def _donor(world: World, group_id: str, language: str, region: str) -> str | Non
     return None
 
 
-def _revive(world: World, group_id: str, language: str, region: str, pace: float, seed: float) -> str | None:
+def _revive(
+    world: World, tick: int, group_id: str, language: str, region: str, pace: float, seed: float,
+) -> str | None:
+    edit = Edits(world, tick)
     donor = _donor(world, group_id, language, region)
     group = world.groups[group_id]
     new_id = f"{group_id}>{language}:revived"
     if donor is None or new_id in world.groups:
         return None
-    world.materialize(donor)
-    code = world.groups[donor].main_code.branch()
-    code.acquisition, code.l1_source, code.l2_share = "L2", group_id, 1.0
     community = group.community or group_id
-    group.community = community
+    edit.set_group(group_id, "community", community)
     written = donor if world.groups[donor].written else world.groups[donor].standard
-    created = world.add_group(SpeechGroup(
-        id=new_id, territory=group.territory, population=max(1, round(group.population * seed)),
-        codes=[code], generation_years=group.generation_years,
-        prestige=world.base_prestige.get(group_id, group.prestige), openness=group.openness,
-        community=community, home_pull=pace, loyalty=group.loyalty, revival=pace,
+    edit.add_group(
+        new_id, group.territory, max(1, round(group.population * seed)), donor,
+        generation_years=group.generation_years, prestige=world.base_prestige.get(group_id, group.prestige),
+        openness=group.openness, community=community, home_pull=pace, loyalty=group.loyalty, revival=pace,
         standard=written, literacy=max(group.literacy, 0.5 if written else 0.0),
-    ))
-    world.base_prestige[new_id] = created.prestige
-    world.connect(new_id, group_id, 0.8, "strong")
+    )
+    edit.set_code(new_id, acquisition="L2", l1_source=group_id, l2_share=1.0)
+    edit.set_base_prestige(new_id, world.groups[new_id].prestige)
+    edit.connect(new_id, group_id, 0.8, "strong")
     for link in world.neighbors(group_id):
         neighbour = world.groups[link.target]
         neighbourhood = neighbour.community or link.target
@@ -612,11 +622,11 @@ def _revive(world: World, group_id: str, language: str, region: str, pace: float
             if other == new_id or peer.written or peer.main_code.language != language:
                 continue
             if other == link.target or (peer.community or other) == neighbourhood:
-                world.connect(new_id, other, link.strength, link.kind)
+                edit.connect(new_id, other, link.strength, link.kind)
     return new_id
 
 
-def refresh(world: World) -> None:
+def refresh(world: World, tick: int) -> None:
     """Hranice a prestiž ze stavu světa (po každé události státu).
 
     Vazba mezi regiony různých států (nebo státu a regionu mimo státy) má
@@ -626,6 +636,7 @@ def refresh(world: World) -> None:
     existujícího státu) × ``standard_prestige`` (čte normu svého jazyka);
     skupiny v ``world.prestige_mirror`` přebírají prestiž své předlohy.
     """
+    edit = Edits(world, tick)
     params = world.params
     owner = {region: polity.id for polity in sorted(world.states.values(), key=lambda p: p.id)
              for region in polity.regions}
@@ -643,32 +654,31 @@ def refresh(world: World) -> None:
         if factor == old:
             continue
         link = world.links[key]
-        world.links[key] = Link(first, second, min(1.0, link.strength / old) * factor, link.kind)
-        if factor == 1.0:
-            del world.border_factors[key]
-        else:
-            world.border_factors[key] = factor
-    for key in [key for key in world.border_factors if key not in world.links]:
-        del world.border_factors[key]
+        edit.set_link(first, second, min(1.0, link.strength / old) * factor, link.kind)
+        edit.set_border_factor(first, second, None if factor == 1.0 else factor)
+    for source, target in [key for key in world.border_factors if key not in world.links]:
+        edit.set_border_factor(source, target, None)
 
     capitals = {polity.capital for polity in world.states.values()}
     for group_id in world.group_ids():
         group = world.groups[group_id]
         if group.written or group.domain != "home" or group_id in world.prestige_mirror:
             continue
-        base = world.base_prestige.setdefault(group_id, group.prestige)
+        if group_id not in world.base_prestige:
+            edit.set_base_prestige(group_id, group.prestige)
+        base = world.base_prestige[group_id]
         factor = params.capital_prestige if regions[group_id] in capitals else 1.0
         standard = world.groups.get(group.standard) if group.standard is not None else None
         if standard is not None and standard.main_code.language == group.main_code.language:
             factor *= params.standard_prestige
-        group.prestige = base * factor
+        edit.set_group(group_id, "prestige", base * factor)
     for group_id, model in sorted(world.prestige_mirror.items()):
         if group_id in world.groups and model in world.groups:
-            world.groups[group_id].prestige = world.groups[model].prestige
+            edit.set_group(group_id, "prestige", world.groups[model].prestige)
     for stale in [group_id for group_id in world.base_prestige if group_id not in world.groups]:
-        del world.base_prestige[stale]
+        edit.set_base_prestige(stale, None)
     for stale in [group_id for group_id in world.prestige_mirror if group_id not in world.groups]:
-        del world.prestige_mirror[stale]
+        edit.set_prestige_mirror(stale, None)
 
 
 def borders(world: World) -> list[dict[str, Any]]:
@@ -750,7 +760,8 @@ class Standard(WorldEvent):
             raise ValueError(f"'{self.of}' už spisovný jazyk má; školu přidá událost Schools.")
         Codification(self.year, seat, (), 0.0).apply(world, history, tick)
         written = f"written:{seat}"
-        world.standards[self.of] = written
+        edit = Edits(world, tick)
+        edit.set_standard(self.of, written)
         language = _language_of(world, written)
         readers = []
         for group_id in _readers(world, regions):
@@ -759,10 +770,10 @@ class Standard(WorldEvent):
             current = group.standard if group.standard in world.groups else None
             if current is not None and (not own or _language_of(world, current) == group.main_code.language):
                 continue
-            group.standard = written
-            group.literacy = max(group.literacy, share * reach(world, group_id, seat, distance=is_state))
+            edit.set_group(group_id, "standard", written)
+            edit.set_group(group_id, "literacy", max(group.literacy, share * reach(world, group_id, seat, distance=is_state)))
             readers.append(group_id)
-        refresh(world)
+        refresh(world, tick)
         history.record("standard", tick, self.year, of=self.of, written=written, language=language,
                        literacy=self.literacy, readers=readers)
 
@@ -795,20 +806,21 @@ class Schools(WorldEvent):
         seat = source if source in world.groups else seat  # dosah se měří od sídla normy
         share = float(level(world.params.schooling_levels, self.coverage, "úroveň školství"))
         language = _language_of(world, written)
+        edit = Edits(world, tick)
         pupils = []
         for group_id in _readers(world, regions):
             group = world.groups[group_id]
             if group.standard != written and group.standard in world.groups:
                 continue  # chodí do školy vlastní normy
-            group.standard = written
+            edit.set_group(group_id, "standard", written)
             value = share * reach(world, group_id, seat, distance=is_state)
-            group.literacy = max(group.literacy, value)
+            edit.set_group(group_id, "literacy", max(group.literacy, value))
             if group.main_code.language != language:
                 continue
             if self.diglossic and group.domain == "home":
                 Schooling(self.year, (group_id,), value, value, diglossic=True).apply(world, history, tick)
             else:
-                group.schooling = max(group.schooling, value)
+                edit.set_group(group_id, "schooling", max(group.schooling, value))
             pupils.append(group_id)
         if self.printing and not self.diglossic:
             Printing(self.year, written).apply(world, history, tick)
