@@ -737,7 +737,8 @@ class SiteIndex:
         forms = [code.forms.raw()[0] for code in codes]
         flags = (prosody.stress_rule_variable_id() in world.variables,
                  prosody.stress_strength_variable_id() in world.variables)
-        bank = self._bank(world)
+        # Svět bez hláskových tvarů (M1) banku nemá; reanalýza hranice se v něm nepočítá.
+        bank = self._bank(world) if table_on else None
         sound_result = None
         if sound is None:
             self._sync_apart(world, morphology, semantics)
@@ -759,8 +760,8 @@ class SiteIndex:
 
     def _sync_apart(self, world: World, morphology: Any, semantics: Any) -> None:
         """Dorovná morfologii a sémantiku indexu míst (dvě volání; bez zvukového indexu v jednom volání)."""
-        bank = self._bank(world)
         if morphology is not None:
+            bank = self._bank(world)
             changed, args = morphology
             for _ in range(64):
                 needs = self._handle.sync_morphology(bank, *args)
