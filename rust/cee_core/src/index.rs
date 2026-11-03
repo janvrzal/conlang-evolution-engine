@@ -28,6 +28,7 @@ use std::hash::{BuildHasherDefault, Hasher};
 
 use crate::assess::pairwise_sum;
 use crate::bank::Bank;
+use crate::morphology_index::Defaults;
 use crate::process::{nuclei, stressed_nucleus, RULE_COUNT};
 
 /// V poli `counted_form`: morfém není započítán.
@@ -37,6 +38,10 @@ const MIN_SUPPORT: i64 = 2;
 const FULL_SUPPORT: i64 = 8;
 /// Tvar, jehož prostředí se zatím nepočítala.
 const UNKNOWN: u32 = u32::MAX;
+/// Číslo tvaru od tohoto čísla výš je výchozí tvar morfému mimo banku: `PRIVATE` plus číslo morfému.
+/// Výchozí tvary, které kód nepřepsal, drží index ve vlastní aréně (`SoundIndex::private`), aby se
+/// do banky tvarů světa nezařazoval tvar, který model nepoužívá.
+pub const PRIVATE: i32 = 1 << 30;
 
 /// Deterministický hašovač (bez náhodné soli), jako `rustc-hash`.
 #[derive(Default)]
@@ -82,6 +87,8 @@ struct Contexts {
     ids: FxMap<(u64, u64), u32>,
     /// Pro každé pravidlo a číslo tvaru: začátek a délka seznamu v `pool`.
     forms: [Vec<(u32, u32)>; RULE_COUNT],
+    /// Totéž pro výchozí tvary mimo banku, podle čísla morfému.
+    private_forms: [Vec<(u32, u32)>; RULE_COUNT],
     pool: Vec<u32>,
     nuclei: Vec<usize>,
     fresh: Vec<u32>,
@@ -115,17 +122,42 @@ impl Contexts {
 
     /// Prostředí všech hlásek tvaru (čistá funkce tvaru a pravidla, proto zapamatovaná):
     /// začátek a délka seznamu v `pool`.
-    fn of_form(&mut self, bank: &Bank, form: usize, rule: u8) -> (usize, usize) {
-        let table = &mut self.forms[rule as usize];
-        if table.len() <= form {
-            table.resize(bank.len().max(form + 1), (UNKNOWN, 0));
+    fn of_form(
+        &mut self,
+        bank: &Bank,
+        private: &Defaults,
+        form: usize,
+        rule: u8,
+    ) -> (usize, usize) {
+        let outside = form >= PRIVATE as usize;
+        let key = if outside {
+            form - PRIVATE as usize
+        } else {
+            form
+        };
+        let table = if outside {
+            &mut self.private_forms[rule as usize]
+        } else {
+            &mut self.forms[rule as usize]
+        };
+        if table.len() <= key {
+            let size = if outside {
+                key + 1
+            } else {
+                bank.len().max(key + 1)
+            };
+            table.resize(size, (UNKNOWN, 0));
         }
-        let (start, length) = table[form];
+        let (start, length) = table[key];
         if start != UNKNOWN {
             return (start as usize, length as usize);
         }
         let boundary = bank.boundary() as u32;
-        let segments = bank.form_of(form);
+        let segments = if outside {
+            private.get(key).expect("výchozí tvar je v aréně")
+        } else {
+            bank.form_of(form)
+        };
         nuclei(segments, &bank.vowel, &mut self.nuclei);
         let stress = stressed_nucleus(&self.nuclei, rule);
         let mut fresh = std::mem::take(&mut self.fresh);
@@ -158,7 +190,12 @@ impl Contexts {
         let start = self.pool.len();
         self.pool.extend_from_slice(&fresh);
         self.fresh = fresh;
-        self.forms[rule as usize][form] = (start as u32, last as u32);
+        let table = if outside {
+            &mut self.private_forms[rule as usize]
+        } else {
+            &mut self.forms[rule as usize]
+        };
+        table[key] = (start as u32, last as u32);
         (start, last)
     }
 }
@@ -284,7 +321,6 @@ pub struct GroupInput<'a> {
     pub rule: u8,
     pub flags: &'a [u8],
     pub forms: &'a [i32],
-    pub defaults: &'a [i32],
 }
 
 /// Co Rust vyžaduje od Pythonu, než dokončí dorovnání.
@@ -305,6 +341,8 @@ impl Needs {
 pub struct SoundIndex {
     scales: Vec<f64>,
     contexts: Contexts,
+    /// Výchozí tvary morfémů mimo banku (doplňuje je Python na požádání, viz `Needs::defaults`).
+    private: Defaults,
     groups: Vec<Group>,
     by_token: FxMap<i64, usize>,
     sets: Vec<Option<CandidateSet>>,
@@ -319,6 +357,7 @@ impl SoundIndex {
         SoundIndex {
             scales,
             contexts: Contexts::default(),
+            private: Defaults::default(),
             groups: Vec::new(),
             by_token: FxMap::default(),
             sets: Vec::new(),
@@ -326,6 +365,13 @@ impl SoundIndex {
             delta: Vec::new(),
             nets: Vec::new(),
             pooled: Vec::new(),
+        }
+    }
+
+    /// Doplní výchozí tvary morfémů (obsah hlásek), které si index vyžádal.
+    pub fn set_defaults(&mut self, numbers: &[u32], forms: &[Vec<i32>]) {
+        for (number, form) in numbers.iter().zip(forms) {
+            self.private.set(*number as usize, form);
         }
     }
 
@@ -471,10 +517,11 @@ impl SoundIndex {
             }
             match input.forms.get(number) {
                 Some(&form) if form >= 0 => form,
-                _ => input.defaults.get(number).copied().unwrap_or(-1),
+                _ if self.private.get(number).is_some() => PRIVATE + number as i32,
+                _ => -1,
             }
         };
-        // Výchozí tvar, který ještě není v bance, doplní Python (pak se zavolá znovu).
+        // Výchozí tvar, který index ještě nezná, doplní Python (pak se zavolá znovu).
         let missing: Vec<u32> = (0..size)
             .filter(|&n| effective(n) == -1)
             .map(|n| n as u32)
@@ -504,8 +551,12 @@ impl SoundIndex {
                 continue;
             }
             if old >= 0 {
-                let (start, length) =
-                    contexts.of_form(bank, old as usize, group.counted_rule[number]);
+                let (start, length) = contexts.of_form(
+                    bank,
+                    &self.private,
+                    old as usize,
+                    group.counted_rule[number],
+                );
                 delta.extend(
                     contexts.pool[start..start + length]
                         .iter()
@@ -513,7 +564,8 @@ impl SoundIndex {
                 );
             }
             if new >= 0 {
-                let (start, length) = contexts.of_form(bank, new as usize, input.rule);
+                let (start, length) =
+                    contexts.of_form(bank, &self.private, new as usize, input.rule);
                 delta.extend(contexts.pool[start..start + length].iter().map(|&c| (c, 1)));
                 group.counted_rule[number] = input.rule;
             }
@@ -555,8 +607,12 @@ impl SoundIndex {
             for number in 0..group.counted_form.len() {
                 let form = group.counted_form[number];
                 if form >= 0 {
-                    let (start, length) =
-                        contexts.of_form(bank, form as usize, group.counted_rule[number]);
+                    let (start, length) = contexts.of_form(
+                        bank,
+                        &self.private,
+                        form as usize,
+                        group.counted_rule[number],
+                    );
                     pooled.extend_from_slice(&contexts.pool[start..start + length]);
                 }
             }
@@ -729,8 +785,12 @@ impl SoundIndex {
         for number in 0..group.counted_form.len() {
             let form = group.counted_form[number];
             if form >= 0 {
-                let (start, length) =
-                    contexts.of_form(bank, form as usize, group.counted_rule[number]);
+                let (start, length) = contexts.of_form(
+                    bank,
+                    &self.private,
+                    form as usize,
+                    group.counted_rule[number],
+                );
                 pooled.extend_from_slice(&contexts.pool[start..start + length]);
             }
         }
@@ -778,10 +838,16 @@ impl SoundIndex {
         for number in 0..counted_form.len() {
             let form = counted_form[number];
             if form >= 0 {
-                if form as usize >= bank.len() {
-                    return Err("uložený tvar není v bance".into());
+                let known = if form >= PRIVATE {
+                    self.private.get((form - PRIVATE) as usize).is_some()
+                } else {
+                    (form as usize) < bank.len()
+                };
+                if !known {
+                    return Err("uložený tvar není v bance ani v aréně výchozích tvarů".into());
                 }
-                let (start, length) = contexts.of_form(bank, form as usize, counted_rule[number]);
+                let (start, length) =
+                    contexts.of_form(bank, &self.private, form as usize, counted_rule[number]);
                 for &context in &contexts.pool[start..start + length] {
                     group.bump(contexts.segment[context as usize], 1);
                 }
@@ -833,14 +899,15 @@ mod tests {
         let bank = bank();
         let mut contexts = Contexts::default();
         // pata s předposledním přízvukem: přízvučné je první „a“ (index 1).
-        let (start, length) = contexts.of_form(&bank, 0, 3);
+        let private = Defaults::default();
+        let (start, length) = contexts.of_form(&bank, &private, 0, 3);
         assert_eq!(length, 4);
         let stressed: Vec<bool> = (0..length)
             .map(|k| contexts.stressed[contexts.pool[start + k] as usize])
             .collect();
         assert_eq!(stressed, vec![false, true, false, false]);
         // Tentýž tvar podruhé: ze zapamatovaného seznamu, beze změny.
-        assert_eq!(contexts.of_form(&bank, 0, 3), (start, length));
+        assert_eq!(contexts.of_form(&bank, &private, 0, 3), (start, length));
     }
 
     #[test]
@@ -848,7 +915,8 @@ mod tests {
         let bank = bank();
         let mut index = SoundIndex::new(vec![0.5]);
         let flags = [1_u8, 1];
-        let defaults = [0_i32, 1];
+        // Výchozí tvary „pata“ a „ti“ drží index mimo banku.
+        index.set_defaults(&[0, 1], &[vec![0, 1, 2, 1], vec![2, 3]]);
         let mut forms = vec![-1_i32, -1];
         let inputs = |forms: &'_ [i32]| {
             vec![GroupInput {
@@ -856,7 +924,6 @@ mod tests {
                 rule: 3,
                 flags: &flags,
                 forms: forms.to_vec().leak(),
-                defaults: &defaults,
             }]
         };
         // Bez sady kandidátů jen počítá výskyty a žádá sadu pro inventář.
@@ -877,6 +944,7 @@ mod tests {
         // Export a obnova vrátí totéž.
         let (cf, cr) = index.export(7);
         let mut other = SoundIndex::new(vec![0.5]);
+        other.set_defaults(&[0, 1], &[vec![0, 1, 2, 1], vec![2, 3]]);
         other.import(&bank, 7, cf, cr).unwrap();
         assert_eq!(other.inventory(7), index.inventory(7));
     }
@@ -891,7 +959,6 @@ mod tests {
             rule: 0,
             flags: &flags,
             forms: &[],
-            defaults: &[-1],
         }];
         let needs = index.sync(&bank, &inputs).unwrap();
         assert_eq!(needs.defaults, vec![(0, vec![0])]);
