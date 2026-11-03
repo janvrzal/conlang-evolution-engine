@@ -31,7 +31,7 @@ from cee.v2.changes.sound import (
 from cee.v2.language.index import ContextIndex
 from cee.v2.language.morphology_index import MorphologyCandidateIndex
 from cee.v2.language.semantic_index import SemanticSitesIndex
-from cee.v2.language.sound_index import SoundIndex
+from cee.v2.language.sound_index import NativeSoundIndex, SoundIndex
 from cee.v2.phonology import enter_vocabulary, leave_vocabulary
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
@@ -252,8 +252,11 @@ def test_sound_support_index_inventory_transition_and_mutations() -> None:
     inv_before = ci.inventory()
     assert inv_before == index.inventory(code)
     # Najdeme hlásku s nejmenším počtem výskytů
-    occurrences = index.slots[code.forms.token].occurrences
-    target_seg = min((s for s, count in occurrences.items() if count > 0), key=lambda s: (occurrences[s], s))
+    _, segments, _, _, _, counts = index.context_counts(code, world)
+    occurrences: dict[int, int] = {}
+    for segment, count in zip(segments.tolist(), counts.tolist()):
+        occurrences[segment] = occurrences.get(segment, 0) + count
+    target_seg = min(occurrences, key=lambda s: (occurrences[s], s))
     for unit in list(state.vocabulary):
         form = world.form_of(code, unit)
         if target_seg in form:
@@ -307,21 +310,27 @@ def test_checkpoint_isolation_and_resume_digest() -> None:
             assert live_m.contributions is not cp_m.contributions
             assert live_m.sorted_sites is not cp_m.sorted_sites
 
-        # Číselný index prostředí a opor patří bance tvarů světa; kopie s ním nesdílí žádné pole
+        # Číselný index prostředí a opor patří světu; kopie s ním nesdílí žádné pole
     live_sound, cp_sound = sim.world.sound, cp_world.sound
-    assert isinstance(live_sound, SoundIndex) and isinstance(cp_sound, SoundIndex)
+    assert isinstance(live_sound, (SoundIndex, NativeSoundIndex))
+    assert type(live_sound) is type(cp_sound)
     assert live_sound is not cp_sound
-    assert live_sound.slots is not cp_sound.slots and live_sound.contexts is not cp_sound.contexts
-    for gid in sim.world.group_ids():
-        token = sim.world.groups[gid].main_code.forms.token
-        live_slot, cp_slot = live_sound.slots[token], cp_sound.slots[token]
-        assert live_slot is not cp_slot
-        assert live_slot.counted_form is not cp_slot.counted_form
-        assert live_slot.counts is not cp_slot.counts
-        assert live_slot.supports is not cp_slot.supports
-        assert live_slot.families is not cp_slot.families
-        assert np.array_equal(live_slot.supports, cp_slot.supports)
-        assert live_slot.inventory == cp_slot.inventory
+    codes = [sim.world.groups[gid].main_code for gid in sim.world.group_ids()]
+    cp_codes = [cp_world.groups[gid].main_code for gid in sim.world.group_ids()]
+    live_sound.sync(sim.world, codes, CATALOG)
+    cp_sound.sync(cp_world, cp_codes, CATALOG)
+    if isinstance(live_sound, SoundIndex):
+        assert live_sound.slots is not cp_sound.slots and live_sound.contexts is not cp_sound.contexts
+    for code, cp_code in zip(codes, cp_codes):
+        assert live_sound.inventory(code) == cp_sound.inventory(cp_code)
+        if isinstance(live_sound, SoundIndex):
+            live_slot, cp_slot = live_sound.slots[code.forms.token], cp_sound.slots[cp_code.forms.token]
+            assert live_slot is not cp_slot
+            assert live_slot.counted_form is not cp_slot.counted_form
+            assert live_slot.counts is not cp_slot.counts
+            assert live_slot.supports is not cp_slot.supports
+            assert live_slot.families is not cp_slot.families
+        assert np.array_equal(live_sound.supports(code), cp_sound.supports(cp_code))
 
     # Nepřerušený běh
     sim.run(200)

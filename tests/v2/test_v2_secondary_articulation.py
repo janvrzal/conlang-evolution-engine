@@ -25,7 +25,7 @@ from cee.v2.history import History
 from cee.v2.language.lexicon import UnitForm
 from cee.v2.language.processes import Process
 from cee.v2.language.segments import default_table
-from cee.v2.language.sound_index import SoundIndex
+from cee.v2.language.sound_index import NativeSoundIndex, SoundIndex
 from cee.v2.repertoire import Distribution, Origin
 from cee.v2.world import Code, SpeechGroup, Territory, World
 
@@ -221,7 +221,7 @@ def test_right2_stats_candidates_and_incremental_sound_index_stay_equal(table):
 
     state = code.phonology
     index = sound_index(world)
-    assert isinstance(index, SoundIndex)
+    assert isinstance(index, (SoundIndex, NativeSoundIndex))
     changed_unit = next(
         morpheme.id for morpheme in world.morphemes.values()
         if morpheme.meaning == "nasal_before_vowel" and morpheme.kind == "root"
