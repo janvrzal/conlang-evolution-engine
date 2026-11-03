@@ -249,9 +249,32 @@ def dispersion_matches() -> bool:
     return _DISPERSION
 
 
+_PLAIN_SUM: bool | None = None
+
+
+def plain_sum_matches() -> bool:
+    """Sčítá vestavěné ``sum`` čísla typu ``float`` prostě zleva doprava (Python do 3.11)?
+
+    Frekvence užití lexému (``World.usage_frequency``) je ``sum`` frekvencí pojmů v pořadí vložení; Rust
+    (``form_assess.rs``) je sčítá zleva doprava. Python od 3.12 sčítá kompenzovaně a poslední bit by se
+    mohl lišit; pak se hodnocení tvarů v Rustu nepoužije.
+    """
+    global _PLAIN_SUM
+    if _PLAIN_SUM is None:
+        samples = ([0.1] * 10, [0.7, 0.2, 0.1], [1e16, 1.0, -1e16, 0.3], [0.1, 0.2, 0.3, 0.4, 0.45, 0.01])
+        ok = True
+        for values in samples:
+            plain = 0.0
+            for value in values:
+                plain += value
+            ok &= sum(values).hex() == plain.hex()
+        _PLAIN_SUM = bool(ok)
+    return _PLAIN_SUM
+
+
 def assess_enabled() -> bool:
-    """Počítá se hodnocení procesů v Rustu (sčítá-li numpy párově stejně a platí-li zkouška rozptylu)?"""
-    return enabled() and sums_match() and dispersion_matches()
+    """Počítá se hodnocení v Rustu (sčítá-li numpy párově stejně, platí zkouška rozptylu a ``sum`` je prosté)?"""
+    return enabled() and sums_match() and dispersion_matches() and plain_sum_matches()
 
 
 def new_assess_index() -> Any | None:
