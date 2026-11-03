@@ -129,6 +129,17 @@ náhodnou přitažlivost ``Parameters.lexical_appeal_sd`` = 0,03, viz
     shift        f74dad095fcbaa129349dddd4ed74da4c3d1ced888dfe2ed81bc692212612559
     island-city  a3efb455923bf5a6489b55e68ca877ed4e5ab2b422076a0ed4d7a569d6313e47
     valley-50    79b033067955967931819647325eb42d83f4aa21e826587be4f2d49f13373e88
+Reference domén slov v kanálech kontaktu (2026-11-03; ``Parameters.channel_domains``
+a ``borrowability_strength`` 3, viz ``docs/engine-v2/19-pojmy.md``; mění se jen
+svět s kontaktem jazyků, ``shift``. S neutrálními vahami domén a půjčitelností 0
+vyjdou reference plynulé výměny slov výše):
+    phonology    3990a6381c1a91b4c4ffddf42731d42915325960dc128c834b6eec74ba2f97a3
+    morphology   710009d641a04a0b1f007d29fa18a3d273780e322667b826bb3d9a7e7165d43b
+    syntax       a55966f235d171ee1b772c2196b7bb2c2a742172a064d2b293c17a4df7553482
+    grid-5x5     cc4ef6e136b0eaa543c08fc4c7e424ca53d781bcdd0e905858d3cb32de0bcc61
+    shift        5d66d45559b5043c19e9259a9b4d7e5d8ce1349d2558f69107db7d6bd1737261
+    island-city  a3efb455923bf5a6489b55e68ca877ed4e5ab2b422076a0ed4d7a569d6313e47
+    valley-50    79b033067955967931819647325eb42d83f4aa21e826587be4f2d49f13373e88
 """
 
 from __future__ import annotations

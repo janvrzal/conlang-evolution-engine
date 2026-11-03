@@ -72,13 +72,11 @@ půjčitelnost katalogu, dokud je autor nezadá.
 
 ## Další kroky
 
-3. **Domény v mechanismech**: cizí elita (`Conquest`, `ForeignElite`)
-   přenáší hlavně slova `power`, liturgie hlavně `religion` (dnes váží
-   jen vzácností), obchod (`TradeShift`) hlavně `culture`, čtení a škola
-   hlavně `learned`, a všude podle půjčitelnosti. Váhy domén pro každý
-   kanál budou parametry světa. Kalibrovat proti WOLD: podíl přejatých
-   slov podle oblasti a kontaktní situace (WOLD má u slov i typ kontaktu
-   a účinek: koexistence, náhrada, vložení).
+3. **Domény v mechanismech** (hotovo 2026-11-03, hrubá kalibrace, viz „Domény
+   v mechanismech kontaktu“ níže): cizí elita přenáší hlavně slova `power`,
+   liturgie `religion`, obchod `culture`, čtení a škola `learned`, vazby
+   mezi jazyky podle půjčitelnosti. Váhy domén každého kanálu jsou parametry
+   světa. Zbývá jemná kalibrace.
 4. **Nástroje pro autora**:
    - vlastní pojmy ve specifikaci světa (vymyšlené i reálné: název,
      doména, frekvence, volitelně příbuzné pojmy a půjčitelnost);
@@ -454,9 +452,260 @@ nejsou průkazné; ostatní velikosti jsou jedno měření.
 - Příbuzné pojmy a vazby jdou jen na pojmy ve slovníku. Vlastní pojem se
   nedá navázat na významy mimo katalog WOLD (Concepticon, který WOLD nemá,
   je chyba).
-- Domény a půjčitelnost vlastních pojmů zatím nic neovládají: mechanismy
-  (cizí elita, liturgie, obchod, škola) je použijí až v kroku 3. Engine je
-  uchová (`World.vocabulary`) a UI je může zobrazit.
+- Domény a půjčitelnost vlastních pojmů ovládají kanály kontaktu od kroku 3
+  (viz „Domény v mechanismech kontaktu“): doména určuje váhu pojmu v kanálu
+  (elita, obchod, liturgie, čtení, škola), půjčitelnost váhu při přenosu
+  vazbami mezi jazyky. Engine je dál uchová (`World.vocabulary`) pro UI.
 - Pojmy katalogu nemají recepty složenin a jejich slovní druh je hrubý
   (jen tři třídy); ručně zatříděné jsou jen výchozí pojmy.
 
+
+## Domény v mechanismech kontaktu (krok 3, 2026-11-03)
+
+**Kalibrace je hrubá.** Ukazuje směr (správné pořadí oblastí, nadreprezentace
+domény kanálu), ne optimum. Jemná kalibrace přijde po přepisu přenosu do
+Rustu, až bude stát řádově méně času; viz „Co zkoumat v jemné kalibraci“.
+
+Kód: `cee.v2.contact` (`transfer`, `domain_weight`, `borrowing_factor`,
+`channel_shares`), `cee.v2.institutions`, `cee.v2.transmission`
+(`CrossFlow`), `changes.lexicon.LexicalBorrowing`, `World.trade`,
+`SpeechGroup.elite`. Skript: `scripts/v2_calibrate_domains.py`.
+
+### Jak se kanál pozná
+
+Dosud šla každá vazba mezi jazyky stejným filtrem. Vazba nenese druh, proto
+se kanál určuje podle toho, co víme o zdroji a o vazbě:
+
+| kanál | jak se pozná | doména |
+|---|---|---|
+| `neighbor` | zbytek vazeb mezi jazyky (obecný kontakt) | váhy 1 |
+| `elite` | zdroj je cizí elita: `SpeechGroup.elite`, nastaví `Conquest` (tedy i `ForeignElite`) | `power` |
+| `trade` | podíl síly vazby, který přinesla obchodní cesta (`World.trade`, viz níže) | `culture` |
+| `liturgy` | kanál `Channel` liturgie (`ReligiousChange`) | `religion` |
+| `reading`, `school` | kanály čtení a školy | `learned` |
+
+Proč příznak skupiny a ne ID `kraj+dobyvatel`: ID je konvence, příznak přežije
+přejmenování a nezaměří se na skupinu, která po přechodu jazyka ID dědí.
+
+**Obchod.** `TradeShift` jen násobí sílu vazby, takže po něm nezbývá stopa.
+Teď si svět pamatuje, kolik síly vazby přidala obchodní cesta
+(`World.trade[(a, b)]`, abecedně seřazená dvojice): `TradeShift` přidá
+`síla · (faktor − 1)`, úpadek (`faktor` < 1) ubere, a když cesta upadne na
+původní sílu, podíl zmizí. Podíl kanálu `trade` je `trade / síla vazby`;
+zbytek je `neighbor`. `Contact(trade=True)` je celá vazba obchodní;
+`Contact` bez příznaku zůstává obecným kontaktem sousedů (rozdíl proti
+zadání, které řadilo `Contact` k obchodu: autor to rozliší sám).
+
+**V přenosu.** Vazby mezi jazyky se rozdělí na `CrossFlow` podle kanálu.
+Kanály `elite` a `trade` se oddělí od `neighbor` jen tehdy, mají-li jiné váhy
+domén (`contact.distinct_channels`); jinak vazba zůstane celá jedna a výpočet
+je bitově stejný jako dřív. Faktor pojmu se počítá zvlášť pro každý proud
+(`borrowing_factor(world, proměnná, kanál)`). `LexicalBorrowing` dělí
+vstup od dárců na kanály stejně (míra výpůjčky i výběr dárce). Podíl vstupu
+čtení, školy a liturgie se ořízne na 1 (váha domény nad 1 jinak podíl zvýší).
+Interference (druhý jazyk) domény nemá: slova nese jen málo (0,05).
+
+### Parametry (`Parameters`, přepis ve specifikaci v `parameters`)
+
+| název | význam | výchozí |
+|---|---|---|
+| `channel_domains` | váha domény v kanálu: `{kanál: {doména: váha}}`; stačí zadat změněné položky, zbytek zůstane výchozí | `elite.power` 3, `trade.culture` 3, `liturgy.religion` 3, `reading.learned` 2, `school.learned` 2, vše ostatní 1 |
+| `borrowability_strength` | síla půjčitelnosti z WOLD ve vazbách mezi jazyky (kontakt, elita, obchod, výpůjčky); 0 = jen frekvence jako dřív | 3 |
+
+`NEUTRAL_CHANNEL_DOMAINS` (všechny váhy 1) spolu s `borrowability_strength` 0
+vrátí model před doménami **bitově** (`tests/v2/test_v2_domains.py`: svět
+s elitou a obchodem, svět s liturgií, čtením a školou, scénář `shift` a svět
+ze specifikace).
+
+**Převod půjčitelnosti na váhu** (`contact.transfer`): s `s` =
+`borrowability_strength` je váha pojmu
+`(1 − frekvence)^max(0, 1−s) · (půjčitelnost / průměr)^s`, přepočtená tak,
+aby měla přes výchozích 149 pojmů stejný průměr jako dřívější `1 − frekvence`
+(průměrná míra výpůjček se nemění, jen které pojmy se půjčují). Průměr je
+0,160 (výchozí pojmy, WOLD), půjčitelnost pod 0,01 se bere jako 0,01.
+Konečný faktor kanálu je `0,5 · váha · váha domény`. Liturgie půjčitelnost
+nepoužívá (`1 − frekvence` × váha domény): podíl vstupu je omezený na 1 a ostrý
+poměr půjčitelností ho nasytil (v prvním pokusu vznikla 15× víc výpůjček).
+
+**Frekvence jako doplněk?** Data ji nepodporují. Přes celý katalog je Spearman
+půjčitelnosti a frekvence −0,05 (jádro −0,14, kultura 0,03, moc 0,44,
+náboženství 0,17), u 149 pojmů enginu −0,02. Frekvence navíc působí
+v enginu už přes `Entrenchment` (zažité slovo): v kontaktním světě bez
+elity je pořadová korelace podílu přejatých slov s frekvencí pojmu −0,45, tedy
+výpůjčky jsou ze vzácných pojmů i bez filtru. S `s` ≥ 1 proto frekvence z váhy
+vypadne, aby se neodečítala podruhé; pod 1 jde plynule (`s` 0 = dřívější model).
+
+### Kalibrace proti WOLD
+
+Svět: `region_world` 3 × 2 kraje po třech vesnicích (jako retence), dolní
+řada jiný jazyk, pozadí dějin `normal`, 8 seedů, 3 000 let,
+`scripts/v2_calibrate_domains.py fields`. Podíl přejatých slov po oblastech
+WOLD (oblasti aspoň se 3 pojmy) proti průměrné půjčitelnosti oblasti (WOLD,
+významy aspoň v 10 jazycích; tabulka výše). Slovník 500 pojmů (výchozí 149 má
+v oblasti 1–29 pojmů, 500 jich má 3–54):
+
+| Spearman, 3 000 let | před | po |
+|---|---:|---:|
+| oblasti, slovník 149, pozadí `normal` (n = 15) | 0,143 | **0,400** |
+| oblasti, slovník 149, bez pozadí (n = 15) | 0,111 | 0,079 |
+| oblasti, slovník 500, `normal` (n = 24) | −0,256 | **0,537** |
+| pojmy, slovník 149, `normal` | 0,021 | 0,437 |
+| pojmy, slovník 500, `normal` | −0,087 | 0,597 |
+| pojmy, slovník 149, bez pozadí | −0,014 | 0,285 |
+
+Bez pozadí (jen obecný kontakt sousedů, 15 oblastí po 3–29 pojmech) zůstává
+korelace oblastí v šumu (0,08; odhad při n = 15 má chybu asi ±0,27), na
+pojmech je jasně kladná (0,29). Silnější vliv půjčitelnosti dalo `s` 3 oproti
+1 a 2 (slovník 500, bez pozadí, 8 seedů, před posledním přepočtem průměru:
+oblasti −0,15 / −0,08 / 0,26, pojmy 0,08 / 0,25 / 0,44).
+Příčina, proč je potřeba `s` 3: v enginu rozhoduje o ujmutí výpůjčky hlavně
+zažitost slova (frekvence), váha vazby je jen vstup do soutěže variant.
+Podíly po oblastech (slovník 500, `normal`, 3 000 let):
+
+| oblast | pojmů | WOLD | před | po |
+|---|---:|---:|---:|---:|
+| Modern world | 20 | 0,634 | 0,041 | 0,359 |
+| Religion and belief | 5 | 0,424 | 0,093 | 0,161 |
+| Clothing and grooming | 3 | 0,381 | 0,160 | 0,007 |
+| The house | 7 | 0,366 | 0,146 | 0,202 |
+| Law | 5 | 0,344 | 0,035 | 0,185 |
+| Social and political relations | 14 | 0,318 | 0,240 | 0,365 |
+| Food and drink | 12 | 0,308 | 0,327 | 0,248 |
+| Agriculture and vegetation | 12 | 0,306 | 0,388 | 0,336 |
+| Warfare and hunting | 9 | 0,286 | 0,148 | 0,296 |
+| Animals | 9 | 0,279 | 0,367 | 0,301 |
+| Possession | 22 | 0,267 | 0,180 | 0,188 |
+| Basic actions and technology | 15 | 0,255 | 0,244 | 0,149 |
+| Cognition | 36 | 0,246 | 0,149 | 0,166 |
+| Speech and language | 14 | 0,240 | 0,206 | 0,176 |
+| Time | 44 | 0,238 | 0,252 | 0,197 |
+| Quantity | 29 | 0,218 | 0,080 | 0,089 |
+| The physical world | 34 | 0,215 | 0,313 | 0,245 |
+| Emotions and values | 14 | 0,211 | 0,232 | 0,170 |
+| Motion | 31 | 0,192 | 0,198 | 0,093 |
+| Kinship | 27 | 0,152 | 0,199 | 0,153 |
+| The body | 46 | 0,149 | 0,260 | 0,153 |
+| Spatial relations | 54 | 0,143 | 0,199 | 0,106 |
+| Sense perception | 25 | 0,116 | 0,274 | 0,123 |
+| Miscellaneous function words | 13 | 0,079 | 0,067 | 0,010 |
+
+Pořadí je dobré nahoře a dole (moderní svět, právo, společnost, tělo,
+funkční slova), nesedí *Clothing and grooming* (3 pojmy, 0,007 proti 0,381) a
+*Food and drink*, *Animals*, *Agriculture* jsou nad WOLD (pozůstatek
+frekvenčního efektu v těch pojmech). Podíl po doménách (slovník 500,
+`normal`): core 0,229 → 0,140, culture 0,174 → 0,205, learned 0,209 → 0,180,
+power 0,174 → 0,311, religion 0,093 → 0,161. WOLD: core 0,18, culture 0,34,
+learned 0,23, power 0,31, religion 0,42.
+
+**Elita** (`v2_calibrate_domains.py elite`, slovník 500 s 28 pojmy `power`:
+horní kraje dostanou v roce 100 elitu z dolních, v roce 400 splyne; 8 seedů;
+podíl pojmů `power` mezi výpůjčkami z jazyka elity v jazyce `a`; šance =
+poměr šancí, že je pojem `power` přejatý, proti ostatním pojmům):
+
+| svět | rok | podíl `power` před | šance před | podíl `power` po | šance po | výpůjček po |
+|---|---:|---:|---:|---:|---:|---:|
+| bez elity | 600 | 0,000 | – | 0,070 | 1,29 | 128 |
+| bez elity | 1 000 | 0,078 | 1,45 | 0,067 | 1,23 | 734 |
+| bez elity | 2 000 | 0,056 | 1,01 | 0,083 | 1,61 | 2 720 |
+| s elitou | 600 | 0,052 | 0,93 | **0,371** | **22,9** | 3 179 |
+| s elitou | 1 000 | 0,060 | 1,10 | **0,295** | **16,5** | 4 126 |
+| s elitou | 2 000 | 0,050 | 0,88 | **0,202** | **9,2** | 5 924 |
+
+Očekávaný podíl při náhodě je 28/506 = 0,055. Před změnou elita `power`
+nezvýhodnila (šance kolem 1), teď ho zvýhodní 9–23×. Nadreprezentace
+slábne v čase, protože výpůjčky z jiných domén se po splynutí elity dál
+hromadí obecným kontaktem.
+
+**Liturgie** (`liturgy`, slovník 1 000, 19 pojmů `religion`, tři kraje
+vesnic `a` v řadě a vzdálený kraj `c` s psaným kódem, v roce 200
+`ReligiousChange` s oddaností 0,3, 8 seedů; kontrola bez liturgie nemá
+žádné výpůjčky z `c`):
+
+| rok | podíl `religion` před | šance před | výpůjček před | podíl `religion` po | šance po | výpůjček po |
+|---:|---:|---:|---:|---:|---:|---:|
+| 600 | 0,000 | – | 26 | 0,976 | 10 200 | 1 105 |
+| 1 000 | 0,054 | 3,0 | 222 | 0,847 | 1 658 | 1 337 |
+| 2 000 | 0,014 | 0,7 | 1 511 | 0,445 | 273 | 2 617 |
+
+Očekávaný podíl při náhodě je 19/1 006 = 0,019. Před změnou liturgie
+`religion` nezvýhodnila. Dnešní nastavení je **příliš silné**: skoro všechna
+slova z liturgie jsou zpočátku víra a zcela vyplní všech 19 pojmů v každé
+vesnici (šance v tisících jsou důsledek skoro nulového jmenovatele). Směr je
+správný, velikost se doladí (váha `liturgy.religion`, oddanost).
+Podíl `religion` 0,000 ve výchozím slovníku 149 (bez elity a liturgie) je
+důsledek malého počtu pojmů: výchozí slovník má jen 2 pojmy `religion` (*god*,
+*ritual*), které jsou k tomu časté a zažité. Ve světě s liturgií (slovník
+1 000) i s pozadím `normal` (slovník 500: 0,161) výpůjčky z `religion` vznikají.
+
+### Brány a retence
+
+*Audit bran* (`scripts/v2_gate_rates.py`, seedy 101–120, před a po; výsledek
+beze změny nad šum). Z 52 bran se změnilo pět, žádná významně (Fisher p ≥ 0,24):
+
+| brána | před | po |
+|---|---:|---:|
+| výpůjčky jsou vzácné pojmy (M5) | 20/20 | 19/20 |
+| superstrát je hlavně slovní (M6b) | 18/20 | 19/20 |
+| jazyk trhu, stabilní dvojjazyčnost (M6b) | 18/20 | 20/20 |
+| náboženství přinese učená slova (M6b) | 14/20 | 18/20 |
+| S3 po přechodu zůstane málo slov | 2/20 | 3/20 |
+
+Brána výpůjček M5 měří průměrné frekvenční pořadí přejatých pojmů pod 0,5;
+seed 102 vyšel 0,511. S půjčitelností (nekorelovanou s frekvencí) je tento
+výrok slabší než dřív, ale zažitost slov mu stále drží velkou většinu seedů.
+Brána se neměnila. Brána liturgie a diglosie neklesly.
+
+*Retence* (`v2_calibrate_retention.py --seeds 1-8`, jádro, po 1 000 / 2 000 /
+3 000 letech; v závorce na tisíciletí):
+
+| svět | pozadí | před | po |
+|---|---|---|---|
+| izolovaný | none | 0,793 / 0,686 / 0,609 | beze změny |
+| izolovaný | normal | 0,790 / 0,682 / 0,602 | beze změny |
+| kontakt | none | 0,798 / 0,665 / 0,573 | 0,822 / 0,707 / 0,622 |
+| kontakt | normal | 0,770 / 0,630 / 0,522 | 0,810 / 0,687 / 0,602 |
+
+Výpůjčky v jádru / ve zbytku po 3 000 letech: kontakt `none` 0,181 / 0,122 →
+0,097 / 0,100; `normal` 0,218 / 0,145 → 0,122 / 0,154. Swadeshovo jádro se
+půjčuje méně (jádrové pojmy mají nižší půjčitelnost než průměr 149 pojmů) a
+zbytek víc, což směřuje k WOLD. Retence kontaktu se přiblížila cíli 85–88 %
+za tisíciletí (`normal`: 0,81 / 0,83 / 0,84 za tisíciletí), izolovaná
+je beze změny, pod cílem 95–97 % (známé z `19-pojmy.md`).
+
+### Co zkoumat v jemné kalibraci
+
+Až bude přenos v Rustu a kalibrace půjde pouštět na víc seedech a variantách
+najednou, zkoumat:
+
+1. **`borrowability_strength`** (cíl: pořadová korelace oblastí WOLD ve světě
+   `normal` nad 0,6 při slovníku 149 i 500, celková míra výpůjček v jádru
+   stále blízko pracovnímu cíli 10 %). Dnešní 3 je výsledek tří bodů
+   (1, 2, 3); ověřit 3–5, jestli se korelace nasytí. Souvisí to s tím, že
+   zažitost slova (`Entrenchment`, mimo rozsah kroku) určuje ujmutí výpůjčky
+   víc než váha vazby: pokud se zažitost později změní, `s` se musí znovu
+   naladit. Půjčitelnost je podíl jazyků s výpůjčkou, takže věcně odpovídá
+   míře výpůjčky lineárně (`s` 1); `s` 3 je náhrada za slabý vliv váhy vazby
+   na ujmutí slova.
+2. **`channel_domains.elite.power`** (cíl: normanský podíl slov moci mezi
+   výpůjčkami z elity; dnes 9–23× nadreprezentace při váze 3, hodně z toho dělá
+   půjčitelnost) a váhy ostatních domén v kanálu `elite` (zeslabit `core`,
+   jádro elity se nepůjčuje: *earl* přežil, *duke* ne).
+3. **`liturgy.religion`** a `liturgy_weight`, oddanost (cíl: latinismy a
+   arabismy jako malá část slovní zásoby, 1–3 % pojmů, ne všech 19 `religion`
+   pojmů v každé vesnici) a zda liturgie má mít i `learned`.
+4. **`trade.culture`** a obchod: nic neměřeno zvlášť (obchod je v pozadí
+   dějin v `fields`); změřit svět s `Contact(trade=True)` proti světu bez
+   něj, cíl nadreprezentace `culture` (WOLD: jídlo, oděv, dům, moderní svět
+   0,3–0,6).
+5. **`reading.learned`, `school.learned`** (cíl: učená slova z psaného
+   kódu, diglosie M6b se nesmí rozbít; dnes 2, neměřeno kalibrací, jen
+   branami).
+6. **Domény v mapě oblastí → doména enginu** (`DOMAINS` v build skriptu) je
+   náš úsudek: ověřit proti kontaktním situacím z WOLD (`forms.csv`:
+   `contact_situation`, `effect`: koexistence, náhrada, vložení), které
+   jsme zatím nepoužili.
+7. **Kombinace s kalibrací výměny slov** (`entrenchment_strength`,
+   `lexical_appeal_sd`): jedna veličina (zažitost) dnes řídí jak domácí
+   obměnu, tak výpůjčky; oddělit.
+8. Víc seedů (16–32) a oblasti s aspoň 5 pojmy; odhad Spearmanu oblastí při
+   n = 15 má chybu ±0,27.

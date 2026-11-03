@@ -18,18 +18,24 @@ vymře a v novém jazyce po něm zůstane substrát.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from functools import lru_cache
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
+import numpy.typing as npt
 
 from cee.v2.history import History
 from cee.v2.language.segments import Form
 
 if TYPE_CHECKING:
+    from cee.v2.parameters import Parameters
     from cee.v2.world import Code, World
 
-#: Filtr výpůjček podle typu proměnné. U slov se násobí ``1 − frekvence
-#: pojmu``: základní slovní zásoba se půjčuje nejméně.
+FloatArray = npt.NDArray[np.float64]
+
+#: Filtr výpůjček podle typu proměnné. U slov se násobí váhou pojmu
+#: (:func:`transfer`, dřív ``1 − frekvence``: základní slovní zásoba se půjčuje
+#: nejméně) a váhou domény pojmu v kanálu (:func:`domain_weight`).
 BORROWING = {"lexical": 0.5, "process": 0.1, "construction": 0.1, "form": 0.0}
 #: Filtr interference při osvojování druhého jazyka.
 INTERFERENCE = {"lexical": 0.05, "process": 1.0, "construction": 1.0, "form": 0.0}
@@ -40,12 +46,130 @@ INTERFERENCE = {"lexical": 0.05, "process": 1.0, "construction": 1.0, "form": 0.
 LAST_SPEAKERS = 1.0
 
 
-def borrowing_factor(world: World, variable_id: str) -> float:
+#: Půjčitelnost pod touto hodnotou se bere jako tato hodnota: slovo, které WOLD nikde
+#: nenašla přejaté (*this*, *we*), se v modelu nepůjčuje skoro, ale ne nikdy.
+BORROWED_FLOOR = 0.01
+
+
+@lru_cache(maxsize=1)
+def reference() -> float:
+    """Průměrná půjčitelnost výchozích 149 pojmů z dat (kotva ``Parameters.borrowability_strength``)."""
+    from cee.v2 import concept_data
+
+    scores = [float(entry["borrowed"]) for entry in concept_data.data()["concepts"].values()
+              if entry["borrowed"] is not None]
+    return sum(scores) / len(scores)
+
+
+@lru_cache(maxsize=32)
+def _normalizer(strength: float) -> float:
+    """Průměr váhy pojmu (bez normalizace) přes výchozích 149 pojmů vůči průměru ``1 − frekvence``.
+
+    Díky tomu ``s`` nezmění průměrnou míru výpůjček výchozího slovníku.
+    """
+    from cee.v2 import concept_data
+
+    mean = reference()
+    rarity = [1.0 - float(concept_data.frequency(concept) or 0.0) for concept in concept_data.data()["concepts"]]
+    values = [
+        (1.0 - float(concept_data.frequency(concept) or 0.0)) ** max(0.0, 1.0 - strength)
+        * (max(float(entry["borrowed"]), BORROWED_FLOOR) / mean) ** strength
+        for concept, entry in concept_data.data()["concepts"].items() if entry["borrowed"] is not None
+    ]
+    return (sum(values) / len(values)) / (sum(rarity) / len(rarity))
+
+
+def transfer(world: World, concept: str) -> float:
+    """Váha pojmu při přenosu slova z cizího kódu (vazby mezi jazyky), bez kanálu a domény.
+
+    Dřív ``1 − frekvence``: základní slovní zásoba se půjčuje nejméně. S
+    ``Parameters.borrowability_strength`` *s* je to
+    ``(1 − frekvence) ** max(0, 1 − s) · (půjčitelnost / průměr) ** s``, přepočtené
+    tak, aby měly přes výchozích 149 pojmů stejný průměr jako ``1 − frekvence``
+    (průměrná míra výpůjček se nemění). Půjčitelnost je ze WOLD (``concept_data.borrowed``) a frekvenci
+    částečně obsahuje: v datech s ní nekoreluje (Spearman −0,05 přes katalog)
+    a engine ji uplatní zažitostí slova (``Entrenchment``), proto s ``s`` ≥ 1
+    z váhy vypadne. ``s`` nad 1 zvýrazní rozdíly mezi pojmy.
+    """
+    rarity = 1.0 - world.concept_frequency(concept)
+    strength = world.params.borrowability_strength
+    if strength == 0.0:
+        return rarity
+    borrowed = max(world.concept_traits(concept)[1], BORROWED_FLOOR)
+    weight = (borrowed / reference()) ** strength
+    if strength < 1.0:
+        weight *= rarity ** (1.0 - strength)
+    return weight / _normalizer(strength)
+
+
+def domain_weight(world: World, channel: str, concept: str) -> float:
+    """Váha domény pojmu v kanálu (``Parameters.channel_domains``)."""
+    return float(world.params.channel_domains[channel][world.concept_traits(concept)[0]])
+
+
+def borrowing_factor(world: World, variable_id: str, channel: str = "neighbor") -> float:
     variable = world.variables[variable_id]
     factor = BORROWING.get(variable.kind, 0.0)
     if variable.kind == "lexical":
-        factor *= 1.0 - world.concept_frequency(variable.key)
+        factor *= transfer(world, variable.key)
+        weight = domain_weight(world, channel, variable.key)
+        if weight != 1.0:
+            factor *= weight
     return factor
+
+
+# --- kanály vazeb mezi jazyky ---------------------------------------------------
+
+#: Kanály, které se v přenosu odlišují od obecného kontaktu sousedů (pořadí je pevné).
+FLOW_CHANNELS = ("elite", "trade")
+
+
+def distinct_channels(params: Parameters) -> tuple[str, ...]:
+    """Kanály vazeb mezi jazyky s jinými vahami domén než obecný kontakt sousedů.
+
+    Jen ty se v přenosu počítají zvlášť; kanál s týmiž vahami splyne se sousedy
+    (výsledek je pak bitově stejný jako bez kanálů).
+    """
+    table = params.channel_domains
+    base = dict(table["neighbor"])
+    return tuple(channel for channel in FLOW_CHANNELS if dict(table[channel]) != base)
+
+
+def channel_shares(
+    world: World, group_ids: Sequence[str], distinct: Sequence[str]
+) -> dict[str, FloatArray]:
+    """Podíl vazby (učící se skupina × zdroj), který patří kanálu ``elite`` a ``trade``.
+
+    Zdroj-elita (``SpeechGroup.elite``) je celý kanál ``elite``. Z ostatních vazeb
+    patří kanálu ``trade`` podíl síly, který přinesla obchodní cesta
+    (:meth:`cee.v2.world.World.trade_share`). Zbytek je kanál ``neighbor``.
+    """
+    size = len(group_ids)
+    shares: dict[str, FloatArray] = {}
+    elite = np.zeros((size, size))
+    if "elite" in distinct:
+        sources = np.array([world.groups[group_id].elite for group_id in group_ids])
+        elite = np.broadcast_to(np.where(sources, 1.0, 0.0), (size, size)).copy()
+        shares["elite"] = elite
+    if "trade" in distinct and world.trade:
+        place = {group_id: position for position, group_id in enumerate(group_ids)}
+        trade = np.zeros((size, size))
+        for first, second in sorted(world.trade):
+            if first in place and second in place:
+                trade[place[first], place[second]] = world.trade_share(first, second)
+                trade[place[second], place[first]] = world.trade_share(second, first)
+        shares["trade"] = trade * (1.0 - elite)
+    return shares
+
+
+def donor_channels(world: World, group_id: str, donor_id: str, distinct: Sequence[str]) -> list[tuple[str, float]]:
+    """Kanály, kterými slova od dárce přicházejí, a jejich podíl (součet 1)."""
+    if "elite" in distinct and world.groups[donor_id].elite:
+        return [("elite", 1.0)]
+    share = world.trade_share(group_id, donor_id) if "trade" in distinct else 0.0
+    if share > 0.0:
+        return [("neighbor", 1.0 - share), ("trade", share)] if share < 1.0 else [("trade", 1.0)]
+    return [("neighbor", 1.0)]
 
 
 def interference_factor(world: World, variable_id: str) -> float:

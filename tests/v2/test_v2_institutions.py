@@ -8,6 +8,7 @@ from cee.v2 import institutions, syntax
 from cee.v2.events import Codification, Schooling
 from cee.v2.history import History
 from cee.v2.language.constructions import Construction
+from cee.v2.parameters import NEUTRAL_CHANNEL_DOMAINS
 from cee.v2.pressures.base import PressureBatch
 from cee.v2.pressures.social import Norm
 from cee.v2.repertoire import Origin
@@ -36,6 +37,8 @@ def test_kodifikace_zmrazi_prevladajici_variantu_a_skupiny_ji_znaji():
 
 def test_cteni_prenasi_jen_slova_skola_hlavne_stavbu():
     world = _world()
+    # Bez vah domén (s nimi čtení zvýhodní ``learned``, viz ``test_v2_domains``).
+    world.params = dataclasses.replace(world.params, channel_domains=NEUTRAL_CHANNEL_DOMAINS)
     # Čtení šetří častá slova (``reading_core_resistance``), vzácná přináší skoro plně.
     lexical = [v for v, variable in world.variables.items() if variable.kind == "lexical"]
     assert institutions.reading_factor(world, "lexical:water") == 1.0 - world.concept_frequency("water")

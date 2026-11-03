@@ -25,6 +25,8 @@ TerritoryLevel = Literal["world", "continent", "region", "area", "settlement"]
 TERRITORY_LEVELS: tuple[TerritoryLevel, ...] = ("world", "continent", "region", "area", "settlement")
 
 LinkKind = Literal["strong", "weak"]
+#: Podíl vazby z obchodu pod touto mezí se nepočítá (zbytek zaokrouhlení ``TradeShift``).
+TRADE_MINIMUM = 1e-3
 
 
 @dataclass(slots=True)
@@ -132,6 +134,9 @@ class SpeechGroup:
     #: Síla obrozeneckého hnutí (0 až 1, ``polity.Revival``): tempo, kterým se
     #: rodiny, jež přešly na jiný jazyk, vracejí k jazyku této skupiny.
     revival: float = 0.0
+    #: Cizí elita (``events.Conquest``): její řeč přináší slova moci a správy
+    #: (kanál ``elite`` v ``Parameters.channel_domains``).
+    elite: bool = False
 
     def __post_init__(self) -> None:
         if self.population <= 0:
@@ -225,6 +230,13 @@ class World:
     prestige_mirror: dict[str, str] = field(default_factory=dict)
     #: Protojazyky už dostaly souběžnou variabilitu (``cee.v2.variation``).
     varied: bool = False
+    #: Síla vazby, kterou přinesla obchodní cesta: dvojice skupin (abecedně
+    #: seřazená) → část ``Link.strength`` z obchodu (``TradeShift``,
+    #: ``Contact(trade=True)``). Zbytek vazby je obecný kontakt sousedů; viz
+    #: :meth:`trade_share` a ``Parameters.channel_domains``.
+    trade: dict[tuple[str, str], float] = field(default_factory=dict)
+    #: Pojem → (doména, půjčitelnost): odvozená keš z ``vocabulary`` a dat WOLD.
+    traits: dict[str, tuple[str, float]] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         # Slovníky entit zapisují nové klíče do registru (číslo = pořadí vzniku)
@@ -273,6 +285,34 @@ class World:
 
     def concept_frequency(self, concept: str) -> float:
         return self.concept_frequencies.get(concept, 0.3)
+
+    def concept_traits(self, concept: str) -> tuple[str, float]:
+        """Doména enginu a půjčitelnost pojmu: ze slovníku světa (vlastní pojmy autora), jinak z dat WOLD.
+
+        Pojem mimo slovník i data (zdroje gramatikalizace) je ``core`` s průměrnou
+        půjčitelností katalogu (:func:`cee.v2.concept_data.borrowed`).
+        """
+        found = self.traits.get(concept)
+        if found is None:
+            from cee.v2 import concept_data
+
+            vocabulary = self.vocabulary
+            if vocabulary is not None and vocabulary.knows(concept):
+                item = vocabulary.concept(concept)
+                found = (item.domain, item.borrowed)
+            else:
+                found = (concept_data.domain(concept), concept_data.borrowed(concept))
+            self.traits[concept] = found
+        return found
+
+    def trade_share(self, first: str, second: str) -> float:
+        """Podíl síly vazby mezi skupinami, který přinesla obchodní cesta (0 až 1)."""
+        carried = self.trade.get((first, second) if first < second else (second, first), 0.0)
+        link = self.links.get((first, second))
+        if carried <= 0.0 or link is None or link.strength <= 0.0:
+            return 0.0
+        share = carried / link.strength
+        return 0.0 if share < TRADE_MINIMUM else min(1.0, share)
 
     def usage_frequency(self, code: Code, morpheme_id: str) -> float:
         """Jak často kód tvar užívá: součet frekvencí pojmů, které vyjadřuje.
@@ -432,6 +472,8 @@ class World:
         group = self.groups.pop(group_id)
         for key in [key for key in self.links if group_id in key]:
             del self.links[key]
+        for key in [key for key in self.trade if group_id in key]:
+            del self.trade[key]
         return group
 
     def connect(self, first: str, second: str, strength: float, kind: LinkKind = "weak") -> None:

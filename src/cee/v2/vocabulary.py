@@ -300,6 +300,9 @@ class Vocabulary:
     def concept(self, concept_id: str) -> Concept:
         return self._index[concept_id]
 
+    def knows(self, concept_id: str) -> bool:
+        return concept_id in self._index
+
     def domain(self, concept_id: str) -> str:
         return self._index[concept_id].domain
 

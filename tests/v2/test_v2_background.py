@@ -11,6 +11,7 @@ from cee.v2.background import (
     generate,
 )
 from cee.v2.history import History
+from cee.v2.parameters import Parameters
 from cee.v2.polity import groups_in, region_of
 from cee.v2.simulation import Simulation
 from cee.v2.spec import build, check
@@ -117,7 +118,9 @@ def test_vypujcka_je_inovace_se_slovem_souseda_jineho_jazyka():
 
     regions = (Region("p", (0.0, 0.0), language="a", villages=1, neighbours=("q",)),
                Region("q", (30.0, 0.0), language="b", villages=1, neighbours=("p",)))
-    w = region_world(regions, languages=(ProtoLanguage("a"), ProtoLanguage("b")), semantics=True)
+    # Pořadí podle frekvence platí bez půjčitelnosti z WOLD (``borrowability_strength`` 0).
+    w = region_world(regions, languages=(ProtoLanguage("a"), ProtoLanguage("b")), semantics=True,
+                     params=Parameters(borrowability_strength=0.0))
     change = LexicalBorrowing()
     home, donor = w.groups["p-v0"], "q-v0"
     context = InnovationContext(w, home, home.main_code, 1, 25.0)

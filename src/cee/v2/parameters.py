@@ -7,6 +7,16 @@ from typing import Any, Iterator, Mapping
 
 #: Pole katalogu gramatických funkcí, která lze přepsat v ``Parameters.grammar``.
 GRAMMAR_FIELDS = frozenset({"need", "context", "coverage"})
+#: Domény slov (``concept_data.DOMAINS``) a kanály, kterými slova přicházejí z jiného
+#: kódu (``Parameters.channel_domains``): obecný kontakt sousedů, cizí elita, obchod,
+#: liturgie, čtení a škola.
+DOMAINS = ("core", "learned", "culture", "religion", "power")
+CHANNELS = ("neighbor", "elite", "trade", "liturgy", "reading", "school")
+#: Neutrální váhy domén: všechny kanály propouštějí všechny domény stejně, jako
+#: před zavedením domén (spolu s ``borrowability_strength`` 0 dá dřívější výsledky).
+NEUTRAL_CHANNEL_DOMAINS: Mapping[str, Mapping[str, float]] = {
+    channel: {domain: 1.0 for domain in DOMAINS} for channel in CHANNELS
+}
 
 
 class FrozenMapping(Mapping[str, Any]):
@@ -48,6 +58,39 @@ class FrozenMapping(Mapping[str, Any]):
 
     def __reduce__(self) -> tuple[object, ...]:
         return (FrozenMapping, (dict(self._items),))
+
+
+#: Výchozí váhy domén v kanálech (kalibrace proti WOLD v ``19-pojmy.md``): každý kanál
+#: zvýhodní doménu, kterou ve skutečnosti přináší; ostatní domény prochází beze změny.
+DEFAULT_CHANNEL_DOMAINS: Mapping[str, Mapping[str, float]] = {
+    "neighbor": {domain: 1.0 for domain in DOMAINS},
+    "elite": {**{domain: 1.0 for domain in DOMAINS}, "power": 3.0},
+    "trade": {**{domain: 1.0 for domain in DOMAINS}, "culture": 3.0},
+    "liturgy": {**{domain: 1.0 for domain in DOMAINS}, "religion": 3.0},
+    "reading": {**{domain: 1.0 for domain in DOMAINS}, "learned": 2.0},
+    "school": {**{domain: 1.0 for domain in DOMAINS}, "learned": 2.0},
+}
+
+
+def _channel_domains(weights: Mapping[str, Mapping[str, float]] | None) -> FrozenMapping:
+    """Tabulka kanál → doména → váha: chybějící položky z výchozích, neznámé názvy chyba."""
+    given = {} if weights is None else dict(weights)
+    unknown = sorted(set(given) - set(CHANNELS))
+    if unknown:
+        raise ValueError(f"Neznámý kanál {unknown}; možnosti: {', '.join(CHANNELS)}.")
+    merged: dict[str, dict[str, float]] = {}
+    for channel in CHANNELS:
+        row = dict(DEFAULT_CHANNEL_DOMAINS[channel])
+        extra = dict(given.get(channel, {}))
+        bad = sorted(set(extra) - set(DOMAINS))
+        if bad:
+            raise ValueError(f"Neznámá doména {bad} v kanálu '{channel}'; možnosti: {', '.join(DOMAINS)}.")
+        row.update({domain: float(value) for domain, value in extra.items()})
+        negative = sorted(domain for domain, value in row.items() if value < 0.0)
+        if negative:
+            raise ValueError(f"Váha domény {negative} v kanálu '{channel}' nesmí být záporná.")
+        merged[channel] = row
+    return FrozenMapping(merged)
 
 
 @dataclass(frozen=True)
@@ -174,6 +217,30 @@ class Parameters:
     school_weight: float = 0.3
     #: Jak velkou část vstupu věřícího tvoří liturgický kód (jen slova).
     liturgy_weight: float = 0.1
+    #: Domény slov v kanálech (``cee.v2.contact``, ``cee.v2.institutions``). Slovo
+    #: přes hranici jazyka projde s váhou kanálu (kontakt sousedů, liturgie,
+    #: čtení, škola) × váha jeho domény v tomto kanálu. Doména pojmu je z WOLD
+    #: (``core``, ``learned``, ``culture``, ``religion``, ``power``; vlastní pojem
+    #: autora má zadanou nebo ``core``). Kanály: ``neighbor`` (obecný kontakt,
+    #: vazby mezi jazyky), ``elite`` (zdroj je cizí elita, ``Conquest``,
+    #: ``ForeignElite``), ``trade`` (podíl vazby, který přinesla obchodní cesta:
+    #: ``TradeShift``, ``Contact(trade=True)``), ``liturgy`` (``ReligiousChange``),
+    #: ``reading`` a ``school`` (psaný kód). Váha 1 = beze změny proti kanálu
+    #: bez domén, váha nad 1 slova domény zvýhodní (kanál není dál filtr nejvýš
+    #: 1, ale podíl vstupu se u čtení, školy a liturgie ořízne na 1). Zadat
+    #: stačí změněné položky, ostatní zůstanou výchozí (``NEUTRAL_CHANNEL_DOMAINS``
+    #: vrátí model beze domén). Kalibrace a data: ``docs/engine-v2/19-pojmy.md``.
+    channel_domains: Mapping[str, Mapping[str, float]] = field(
+        default_factory=lambda: _channel_domains(None)
+    )
+    #: Jak silně půjčitelnost pojmu z WOLD (``concept_data.borrowed``, u vlastního
+    #: pojmu hodnota autora nebo výchozí) řídí přenos slov vazbami mezi jazyky
+    #: (kontakt sousedů, elita, obchod, výpůjčky); liturgie ani čtení ji nepoužívají.
+    #: Váha slova je ``(1 − frekvence) ** max(0, 1 − s) · (půjčitelnost / průměr) ** s``,
+    #: přepočtená tak, aby měla přes výchozích 149 pojmů stejný průměr jako
+    #: ``1 − frekvence``, takže ``s`` nemění průměrnou míru výpůjček, jen které pojmy se půjčují. 0 = jen frekvence jako
+    #: dřív, 1 = jen půjčitelnost, nad 1 jsou rozdíly mezi pojmy zvýrazněné.
+    borrowability_strength: float = 3.0
     #: Nad tímto podílem se nová koncovka zapíše do tvarů slov.
     grammar_threshold: float = 0.85
     #: Lexémy aspoň tak časté si při nástupu nové koncovky drží starý tvar.
@@ -322,6 +389,7 @@ class Parameters:
                     f"ne {sorted(unknown)}."
                 )
         object.__setattr__(self, "grammar", grammar)
+        object.__setattr__(self, "channel_domains", _channel_domains(self.channel_domains))
         object.__setattr__(self, "pressure_weights", FrozenMapping(self.pressure_weights))
         object.__setattr__(self, "change_rates", FrozenMapping(self.change_rates))
         object.__setattr__(self, "background_rates", FrozenMapping(self.background_rates))
