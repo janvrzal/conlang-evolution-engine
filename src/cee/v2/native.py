@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from cee.v2.language.segments import SegmentTable
 
 #: Verze rozhraní, kterou tento Python čeká (viz ``INTERFACE_VERSION`` v Rustu).
-INTERFACE_VERSION = 6
+INTERFACE_VERSION = 7
 
 #: Čísla operací a pravidel přízvuku, jak je zná Rust (``process.rs``).
 OPERATIONS = ("change", "replace", "delete", "insert_before", "insert_after", "merge_next", "tone")
@@ -214,3 +214,37 @@ def new_sound_index(scales: list[float]) -> Any | None:
     module = _load()
     assert module is not None
     return module.SoundIndex(scales)
+
+
+_DISPERSION: bool | None = None
+
+
+def dispersion_matches() -> bool:
+    """Dávají souřadnice samohlásek v Rustu (součin místo ``** 2``) bit po bitu totéž co Python?
+
+    Zisk rozptylu vokálů (``assessment._nearest``) počítá ``(a - b) ** 2``; Rust počítá ``d * d``.
+    Rozdíly souřadnic jsou z malé množiny hodnot (viz ``SegmentTable.vowel_coordinates``), ověří se
+    všechny rozdíly vzájemně (a znaménka); jinak se hodnocení v Rustu nepoužije.
+    """
+    global _DISPERSION
+    if _DISPERSION is None:
+        _DISPERSION = False
+        if _load() is not None:
+            values = [0.0, 0.5, 0.6, 1.0, 2.0]
+            differences = {a - b for a in values for b in values}
+            _DISPERSION = all((d ** 2).hex() == (d * d).hex() for d in differences)
+    return _DISPERSION
+
+
+def assess_enabled() -> bool:
+    """Počítá se hodnocení procesů v Rustu (sčítá-li numpy párově stejně a platí-li zkouška rozptylu)?"""
+    return enabled() and sums_match() and dispersion_matches()
+
+
+def new_assess_index() -> Any | None:
+    """Index hodnocení v Rustu (``cee_core.AssessIndex``), nebo ``None``."""
+    if not assess_enabled():
+        return None
+    module = _load()
+    assert module is not None
+    return module.AssessIndex()

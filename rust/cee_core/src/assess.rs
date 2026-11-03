@@ -172,6 +172,79 @@ impl Bank {
         Ok(self.marked_of(id))
     }
 
+    /// Hodnocení jednoho řádku: `ids` jsou tvary slov, `changed` jejich tvary po změně
+    /// (−1 = beze změny), `weights` váhy; `width` je šířka matice, ve které se řádek
+    /// sčítá (součty jsou párové po celé šířce včetně nul, jako `np.sum` nad doplněnou maticí).
+    pub fn assess_row(
+        &mut self,
+        ids: &[i64],
+        changed: &[i64],
+        weights: &[f64],
+        width: usize,
+        want_vowels: bool,
+    ) -> RowAssessment {
+        let length = ids.len();
+        let mut mass_terms = vec![0.0_f64; width.max(length)];
+        let mut short_terms = vec![0.0_f64; width.max(length)];
+        let mut marked_terms = vec![0.0_f64; width.max(length)];
+        let mut any = false;
+        for k in 0..length {
+            let after = changed[k];
+            if after < 0 {
+                continue;
+            }
+            any = true;
+            let (old, new) = (ids[k] as usize, after as usize);
+            let weight = weights[k];
+            mass_terms[k] = weight;
+            let (old_length, new_length) = (self.form(old).len(), self.form(new).len());
+            if new_length <= 2 && new_length < old_length {
+                short_terms[k] = weight;
+            }
+            marked_terms[k] = weight * (self.marked_of(new) - self.marked_of(old));
+        }
+        let mut result = RowAssessment::default();
+        if any {
+            result.mass = pairwise_sum(&mass_terms[..width.max(length)]);
+            result.short = pairwise_sum(&short_terms[..width.max(length)]);
+            result.marked = pairwise_sum(&marked_terms[..width.max(length)]);
+        }
+        if result.mass > 0.0 {
+            // Nový homofon: dvojice, která po změně zní stejně a předtím nezněla.
+            let mut final_ids: Vec<(i64, u32)> = (0..length)
+                .map(|k| (if changed[k] >= 0 { changed[k] } else { ids[k] }, k as u32))
+                .collect();
+            final_ids.sort_unstable();
+            let mut begin = 0;
+            while begin < final_ids.len() {
+                let mut end = begin + 1;
+                while end < final_ids.len() && final_ids[end].0 == final_ids[begin].0 {
+                    end += 1;
+                }
+                for first in begin..end {
+                    for second in first + 1..end {
+                        let (a, b) = (final_ids[first].1, final_ids[second].1);
+                        if ids[a as usize] != ids[b as usize] {
+                            result.pairs.push((a, b));
+                        }
+                    }
+                }
+                begin = end;
+            }
+            result.pairs.sort_unstable();
+            if want_vowels {
+                let mut counts = BTreeMap::new();
+                vowel_counts(self, ids.iter().map(|&id| id as usize), &mut counts, 1);
+                result.before = positive(&counts);
+                let hit = (0..length).filter(|&k| changed[k] >= 0);
+                vowel_counts(self, hit.clone().map(|k| ids[k] as usize), &mut counts, -1);
+                vowel_counts(self, hit.map(|k| changed[k] as usize), &mut counts, 1);
+                result.after = positive(&counts);
+            }
+        }
+        result
+    }
+
     /// Hodnocení změny `row` s pravidlem přízvuku `rule` nad maticí slovních
     /// zásob. Chybí-li mapa hlásek, vrátí `Needs` a nic neudělá.
     pub fn assess_rows(
@@ -200,96 +273,16 @@ impl Bank {
             Outcome::Needs(needs) => return Ok(Assessed::Needs(needs)),
             Outcome::Done(found) => found,
         };
-        let width = matrix.width;
-        let mut mass_terms = vec![0.0_f64; width];
-        let mut short_terms = vec![0.0_f64; width];
-        let mut marked_terms = vec![0.0_f64; width];
         let mut out = Vec::with_capacity(rows);
         for position in 0..rows {
             let range = valid(position)?;
-            let length = range.len();
-            mass_terms.iter_mut().for_each(|term| *term = 0.0);
-            short_terms.iter_mut().for_each(|term| *term = 0.0);
-            marked_terms.iter_mut().for_each(|term| *term = 0.0);
-            let mut any = false;
-            for k in 0..length {
-                let at = range.start + k;
-                let after = changed[at];
-                if after < 0 {
-                    continue;
-                }
-                any = true;
-                let (old, new) = (matrix.ids[at] as usize, after as usize);
-                let weight = matrix.weights[at];
-                mass_terms[k] = weight;
-                let (old_length, new_length) = (self.form(old).len(), self.form(new).len());
-                if new_length <= 2 && new_length < old_length {
-                    short_terms[k] = weight;
-                }
-                marked_terms[k] = weight * (self.marked_of(new) - self.marked_of(old));
-            }
-            let mut result = RowAssessment::default();
-            if any {
-                result.mass = pairwise_sum(&mass_terms);
-                result.short = pairwise_sum(&short_terms);
-                result.marked = pairwise_sum(&marked_terms);
-            }
-            if result.mass > 0.0 {
-                // Nový homofon: dvojice, která po změně zní stejně a předtím nezněla.
-                let mut final_ids: Vec<(i64, u32)> = (0..length)
-                    .map(|k| {
-                        let at = range.start + k;
-                        (
-                            if changed[at] >= 0 {
-                                changed[at]
-                            } else {
-                                matrix.ids[at]
-                            },
-                            k as u32,
-                        )
-                    })
-                    .collect();
-                final_ids.sort_unstable();
-                let mut begin = 0;
-                while begin < final_ids.len() {
-                    let mut end = begin + 1;
-                    while end < final_ids.len() && final_ids[end].0 == final_ids[begin].0 {
-                        end += 1;
-                    }
-                    for first in begin..end {
-                        for second in first + 1..end {
-                            let (a, b) = (final_ids[first].1, final_ids[second].1);
-                            if matrix.ids[range.start + a as usize]
-                                != matrix.ids[range.start + b as usize]
-                            {
-                                result.pairs.push((a, b));
-                            }
-                        }
-                    }
-                    begin = end;
-                }
-                result.pairs.sort_unstable();
-                if want_vowels {
-                    let mut counts = BTreeMap::new();
-                    vowel_counts(
-                        self,
-                        (range.clone()).map(|at| matrix.ids[at] as usize),
-                        &mut counts,
-                        1,
-                    );
-                    result.before = positive(&counts);
-                    let hit = range.clone().filter(|&at| changed[at] >= 0);
-                    vowel_counts(
-                        self,
-                        hit.clone().map(|at| matrix.ids[at] as usize),
-                        &mut counts,
-                        -1,
-                    );
-                    vowel_counts(self, hit.map(|at| changed[at] as usize), &mut counts, 1);
-                    result.after = positive(&counts);
-                }
-            }
-            out.push(result);
+            out.push(self.assess_row(
+                &matrix.ids[range.clone()],
+                &changed[range.clone()],
+                &matrix.weights[range],
+                matrix.width,
+                want_vowels,
+            ));
         }
         Ok(Assessed::Done(out))
     }

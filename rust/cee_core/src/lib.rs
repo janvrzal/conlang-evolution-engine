@@ -4,11 +4,13 @@
 //! v ``python.rs`` a sestavuje se jen s vlastností ``python``.
 
 pub mod assess;
+pub mod assess_index;
 pub mod bank;
 pub mod clarity;
 pub mod index;
 pub mod phonology;
 pub mod pools;
+pub mod pressures;
 pub mod process;
 pub mod support;
 pub mod transmission;
@@ -16,10 +18,12 @@ pub mod transmission;
 #[cfg(feature = "python")]
 mod index_python;
 #[cfg(feature = "python")]
+mod pressures_python;
+#[cfg(feature = "python")]
 mod python;
 #[cfg(feature = "python")]
 mod python_pools;
 
 /// Verze rozhraní mezi Pythonem a Rustem. Python rozšíření nepoužije, když se
 /// číslo liší od toho, které čeká (jiný worktree, starší sestavení).
-pub const INTERFACE_VERSION: u32 = 6;
+pub const INTERFACE_VERSION: u32 = 7;
