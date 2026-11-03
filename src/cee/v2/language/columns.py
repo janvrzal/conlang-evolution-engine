@@ -54,6 +54,18 @@ class MorphemeSet(MutableSet):  # type: ignore[type-arg]
     def _from_iterable(cls, iterable: Iterable[str]) -> set[str]:  # type: ignore[override]
         return set(iterable)
 
+    @classmethod
+    def from_numbers(cls, numbering: Numbering, numbers: Iterable[int]) -> MorphemeSet:
+        """Množina z čísel morfémů (bez opakování), jedním zápisem příznaků."""
+        found = sorted(set(numbers))
+        made = cls(numbering)
+        if found:
+            made.flags = bytearray(found[-1] + 1)
+            for number in found:
+                made.flags[number] = 1
+            made._count = len(found)
+        return made
+
     def __contains__(self, name: object) -> bool:
         number = self._numbering.numbers.get(name)  # type: ignore[arg-type]
         return number is not None and number < len(self.flags) and self.flags[number] == 1

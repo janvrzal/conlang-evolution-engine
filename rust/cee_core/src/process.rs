@@ -233,13 +233,35 @@ pub fn apply(
     rule: u8,
     scratch: &mut Scratch,
 ) -> Option<Vec<i32>> {
+    apply_cut(proc, form, vowel, boundary, rule, NO_CUT, scratch).map(|(form, _)| form)
+}
+
+/// Bez hranice kmen | koncovka (`None` v Pythonu).
+pub const NO_CUT: i32 = -1;
+
+/// `Process._apply` i s hranicí kmen | koncovka: nový tvar a kolik jeho hlásek
+/// vzniklo z kmene (`NO_CUT`, když tvar koncovku nemá). Vložená hláska na
+/// hranici patří ke koncovce, splynutí přes hranici ke kmeni.
+pub fn apply_cut(
+    proc: &Proc,
+    form: &[i32],
+    vowel: &[bool],
+    boundary: i32,
+    rule: u8,
+    cut: i32,
+    scratch: &mut Scratch,
+) -> Option<(Vec<i32>, i32)> {
     if !find_sites(proc, form, vowel, boundary, rule, scratch) {
         return None;
     }
     let mut result = std::mem::take(&mut scratch.result);
     result.clear();
     let mut skip: Option<usize> = None;
+    let mut new_cut = cut;
     for (index, &segment) in form.iter().enumerate() {
+        if cut != NO_CUT && index as i32 == cut {
+            new_cut = result.len() as i32;
+        }
         if skip == Some(index) {
             continue;
         }
@@ -267,9 +289,12 @@ pub fn apply(
             }
         }
     }
+    if cut != NO_CUT && cut as usize >= form.len() {
+        new_cut = result.len() as i32;
+    }
     let alive = result.len() >= 2 && result.iter().any(|&segment| vowel[segment as usize]);
     let output = if alive && result.as_slice() != form {
-        Some(result.clone())
+        Some((result.clone(), new_cut))
     } else {
         None
     };

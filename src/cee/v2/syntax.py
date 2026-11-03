@@ -273,7 +273,7 @@ def _ensure_cell(world: World, entry: GrammaticalFunction) -> None:
 def restructure(world: World, group_id: str, tick: int, history: History, year: float) -> None:
     """Nová syntetická konstrukce, která převážila, se zapíše do tvarů slov."""
     from cee.v2.morphology import citation_form
-    from cee.v2.phonology import active_processes, enter_vocabulary, requeue
+    from cee.v2.phonology import enter_vocabulary, requeue_all
 
     code = world.groups[group_id].main_code
     state = code.phonology
@@ -330,8 +330,7 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
             code.forms.set(unit, new)
             rewritten += 1
             if exists:
-                for process in active_processes(state, world):
-                    requeue(world, code, process, unit)
+                requeue_all(world, code, unit)
             else:
                 enter_vocabulary(world, code, unit)
         state.version += 1

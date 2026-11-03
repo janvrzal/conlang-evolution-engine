@@ -143,14 +143,17 @@ class FormBank:
                 self._native.push(form)
         return found
 
-    def _adopt(self, first: int, flat: IntArray, lengths: IntArray) -> None:
-        """Převezme tvary, které vznikly v Rustu (výsledky procesů), pod stejnými čísly."""
+    def _adopt(self, first: int, flat: IntArray | list[int], lengths: IntArray | list[int]) -> None:
+        """Převezme tvary, které vznikly v Rustu (výsledky procesů), pod stejnými čísly.
+
+        Pole hlásek a délek přijde buď jako pole numpy, nebo jako seznamy (krok fonologizace).
+        """
         if not len(lengths):
             return
         assert first == len(self.forms), "banka v Rustu se rozešla s Pythonem"
-        values = flat.tolist()
+        values = flat if isinstance(flat, list) else flat.tolist()
         begin = 0
-        for length in lengths.tolist():
+        for length in (lengths if isinstance(lengths, list) else lengths.tolist()):
             self._add(tuple(values[begin : begin + length]))
             begin += length
 

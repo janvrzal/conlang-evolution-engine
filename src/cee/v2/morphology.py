@@ -179,7 +179,7 @@ def activate(world: World, code: Code, variable_id: str) -> None:
 
 def restructure(world: World, group_id: str, tick: int, history: History, year: float) -> None:
     """Analogie, která ve skupině převážila, se zapíše do tvaru slova."""
-    from cee.v2.phonology import active_processes, changed_share, requeue
+    from cee.v2.phonology import changed_share, requeue_all
 
     code = world.groups[group_id].main_code
     state = code.phonology
@@ -207,8 +207,7 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
                 continue
             code.forms.set(target, new)
             rewritten = True
-            for process in active_processes(state, world):
-                requeue(world, code, process, target)
+            requeue_all(world, code, target)
         if not rewritten:
             continue
         state.version += 1
