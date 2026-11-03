@@ -13,9 +13,13 @@ koncovek i synkretismus vznikají samy. Tady jsou jen dvě věci navíc:
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
+import numpy as np
+
+from cee.v2 import phases
 from cee.v2.history import History
 from cee.v2.language.index import ExponentIndex
 from cee.v2.language.lexicon import Morpheme, UnitForm
@@ -177,19 +181,53 @@ def activate(world: World, code: Code, variable_id: str) -> None:
             state.record_lifecycle("form", "activate", variable_id)
 
 
-def restructure(world: World, group_id: str, tick: int, history: History, year: float) -> None:
-    """Analogie, která ve skupině převážila, se zapíše do tvaru slova."""
-    from cee.v2.phonology import changed_share, requeue_all
+#: Živá analogie skupiny: (proměnná, tvar slova, rozhodnutí ``phases.ANALOGY_*``).
+AnalogyPlan = list[tuple[str, str, int]]
+
+
+def analogy_plan(world: World, group_ids: Sequence[str]) -> dict[str, AnalogyPlan]:
+    """Rozhodnutí o živých analogiích všech daných skupin naráz (jen skupiny, které nějakou mají).
+
+    Podíl změněného tvaru čte jen z rozdělení proměnných, které zápis tvarů
+    nemění, takže plán platí pro celý krok bez ohledu na pořadí skupin.
+    """
+    from cee.v2.phonology import changed_share
+
+    items = [
+        (group_id, variable_id, unit)
+        for group_id in group_ids
+        for variable_id, unit in sorted(world.groups[group_id].main_code.phonology.morph_active.items())
+    ]
+    if not items:
+        return {}
+    shares = np.array([changed_share(world, group, variable) for group, variable, _ in items], dtype=np.float64)
+    decisions = phases.analogy_decisions(shares, world.params.analogy_threshold)
+    plan: dict[str, AnalogyPlan] = {}
+    for (group_id, variable_id, unit), decision in zip(items, decisions.tolist()):
+        plan.setdefault(group_id, []).append((variable_id, unit, decision))
+    return plan
+
+
+def restructure(
+    world: World, group_id: str, tick: int, history: History, year: float, plan: AnalogyPlan | None = None
+) -> None:
+    """Analogie, která ve skupině převážila, se zapíše do tvaru slova.
+
+    ``plan`` (:func:`analogy_plan`) smí volající spočítat předem pro všechny
+    skupiny; bez něj se spočte jen pro tuto skupinu.
+    """
+    from cee.v2.phonology import requeue_all
 
     code = world.groups[group_id].main_code
     state = code.phonology
-    for variable_id, unit in sorted(state.morph_active.items()):
-        share = changed_share(world, group_id, variable_id)
-        if share <= 0:
+    if plan is None:
+        plan = analogy_plan(world, [group_id]).get(group_id, [])
+    for variable_id, unit, decision in plan:
+        if decision == phases.ANALOGY_REMOVE:
             del state.morph_active[variable_id]
             state.record_lifecycle("form", "remove", variable_id)
             continue
-        if share < world.params.analogy_threshold:
+        if decision == phases.ANALOGY_WAIT:
             continue
         change = world.form_changes[variable_id]
         del state.morph_active[variable_id]

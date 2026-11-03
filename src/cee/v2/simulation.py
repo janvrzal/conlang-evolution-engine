@@ -441,19 +441,29 @@ class Simulation:
                 if distribution is not None:
                     self.world.groups[group_id].main_code.repertoire.set(variable_id, distribution)
         if self.world.table is not None:
-            for group_id in (list(reversed(live.group_ids)) if self.reverse_groups else live.group_ids):
-                if self.world.groups[group_id].written:
-                    continue
+            groups = [
+                group_id for group_id in (list(reversed(live.group_ids)) if self.reverse_groups else live.group_ids)
+                if not self.world.groups[group_id].written
+            ]
+            # Rozhodnutí o analogiích, nových koncovkách a přízvuku čtou jen rozdělení
+            # proměnných a stav vlastní skupiny, takže jdou spočítat pro všechny skupiny naráz.
+            analogies = morphology.analogy_plan(
+                self.world, [group_id for group_id in groups if self.world.groups[group_id].main_code.phonology.morph_active]
+            )
+            constructions = syntax.ready_constructions(self.world, groups) if self._grammar else {}
+            stress = prosody.plan(self.world, groups)
+            for group_id in groups:
                 state = self.world.groups[group_id].main_code.phonology
                 if state.pending:
                     phonology.restructure(
                         self.world, group_id, self.tick, self.config.dt, self.history, year
                     )
                 if state.morph_active:
-                    morphology.restructure(self.world, group_id, self.tick, self.history, year)
+                    morphology.restructure(self.world, group_id, self.tick, self.history, year, analogies.get(group_id))
                 if self._grammar:
-                    syntax.restructure(self.world, group_id, self.tick, self.history, year)
-                prosody.restructure(self.world, group_id, self.tick, self.history, year)
+                    syntax.restructure(self.world, group_id, self.tick, self.history, year, constructions[group_id])
+                if group_id in stress:
+                    prosody.restructure(self.world, group_id, self.tick, self.history, year, stress[group_id])
 
     def _changes(
         self, block: PoolBlock, before: np.ndarray, after: np.ndarray
