@@ -249,6 +249,67 @@ def dispersion_matches() -> bool:
     return _DISPERSION
 
 
+_OBSERVE: bool | None = None
+
+
+def observe_matches() -> bool:
+    """Dává Rust v pozorování bit po bitu totéž co ``numpy``?
+
+    Pozorování stojí na čtyřech věcech mimo čisté součty a součiny: skalární součin řádků
+    ``float32`` (``a @ b`` volá BLAS, jehož pořadí sčítání neznáme; Rust volá na macOS tutéž
+    funkci Accelerate), ``hypot`` (vzdálenost sousedů na mapě), celočíselné dělení ``//``
+    s opravou zaokrouhlení a součet ``float32`` přes osy ``(0, 3)`` matice vzdáleností. Ověří se
+    všechny jednou na náhodných vstupech; kdo neprojde (jiný stroj, jiný BLAS), počítá
+    pozorování Python a otisky se nerozejdou.
+    """
+    global _OBSERVE
+    if _OBSERVE is None:
+        _OBSERVE = False
+        module = _load()
+        if module is not None and sums_match():
+            import numpy as np
+
+            from cee.v2.observe import _distance_totals
+
+            rng = np.random.default_rng(20261103)
+            ok = True
+            # Řádky jedné matice, jako v shlukování: šířky jsou násobky 13 (vložení má 13 rozměrů).
+            for columns in (1, 2, 3, 7, 40, 101, 400, 2000):
+                width = 13 * columns
+                matrix = (rng.random((9, width)) * (rng.random((9, width)) < 0.4) * 3.7).astype(np.float32)
+                first = rng.integers(0, 9, 40)
+                second = rng.integers(0, 9, 40)
+                expected = np.array([np.float32(matrix[a] @ matrix[b]) for a, b in zip(first, second)])
+                found = module.observe_dot_probe(matrix, first, second)
+                ok &= bool(np.array_equal(found.view(np.uint32), expected.view(np.uint32)))
+            xs = rng.uniform(-300.0, 300.0, 4000)
+            ys = rng.uniform(-300.0, 300.0, 4000)
+            ok &= bool(np.array_equal(module.observe_hypot_probe(xs, ys), np.hypot(xs, ys)))
+            for size in (0.37, 5.0, 12.5, 1e-3):
+                points = np.concatenate([xs, np.round(xs / size) * size, [0.0, -0.0, size, -size, 3 * size]])
+                expected = np.array([float(np.float64(x) // np.float64(size)) for x in points])
+                found = module.observe_floor_divide_probe(points, size)
+                ok &= bool(np.array_equal(found, expected) and np.array_equal(np.signbit(found), np.signbit(expected)))
+            # Součet přes osy (0, 3): různé kapacity slotů, počty řádků a skupin, bloky po jednom řádku i celé.
+            for capacity, rows, groups, chunk in ((1, 2, 3, 4_000_000), (3, 4, 6, 4_000_000), (8, 3, 5, 4_000_000),
+                                                  (9, 2, 7, 50), (17, 5, 4, 4_000_000), (5, 6, 9, 100),
+                                                  (4, 7, 5, 1)):
+                freqs = rng.random((rows + 1, groups, capacity)) * (rng.random((rows + 1, groups, capacity)) < 0.7)
+                present = rng.random((rows + 1, groups)) < 0.85
+                chosen = np.arange(0, rows + 1, 2, dtype=np.int64)
+                zeros = np.zeros(len(chosen), dtype=np.int64)
+                expected = _distance_totals([(freqs, present, chosen, zeros)], groups, chunk)
+                found = module.observe_distance_totals([(freqs, present, chosen, zeros)], groups, chunk, 1)
+                ok &= bool(np.array_equal(found, expected)) and found.tobytes() == expected.tobytes()
+            _OBSERVE = bool(ok)
+    return _OBSERVE
+
+
+def observe_enabled() -> bool:
+    """Počítá se pozorování v Rustu (a shodují se párové součty a knihovny, viz :func:`observe_matches`)?"""
+    return enabled() and sums_match() and observe_matches()
+
+
 def assess_enabled() -> bool:
     """Počítá se hodnocení procesů v Rustu (sčítá-li numpy párově stejně a platí-li zkouška rozptylu)?"""
     return enabled() and sums_match() and dispersion_matches()
