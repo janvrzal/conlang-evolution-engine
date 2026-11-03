@@ -15,7 +15,9 @@ from cee.v2.spec import ConceptSpec, WorldSpec, build, check, errors, vocabulary
 
 #: Otisk historie světa `small` s výchozím slovníkem, změřený před zavedením slovníku
 #: (tóny, vlastní slovo, plná gramatika, 500 let).
-DEFAULT_DIGEST = "af9bf815cc7db8a009b97719ddfce0a3c7141344a538e50f25fd440b41c5de56"
+# Otisk výchozího světa ze specifikace; mění se jen se změnou modelu
+# (naposledy plynulá výměna slov, ``Parameters.lexical_appeal_sd``), ne se slovníkem.
+DEFAULT_DIGEST = "5de1a5d5e5849a0eb006b3afcabbceded87c2c07ab78aed8b9ae9c71a39b763e"
 
 
 def small(**extra):
