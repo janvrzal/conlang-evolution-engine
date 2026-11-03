@@ -172,9 +172,9 @@ bere pole zpět. Inventura je bez nového profilu (podíly z A7 a B3 výše).
 
 | Index | Stav dnes | Aktualizace | Čtenáři | Návrh |
 |---|---|---|---|---|
-| `ContextIndex` | `Counter` pětic (předchozí, hláska, další, přízvuk, druhá další), `Counter` hlásek, `_counted: dict[str, tuple]`, `deltas` | deník `FrequencyStore.log` (řetězce), `vocabulary_log`, token úložiště; po slovech | `SoundSupportIndex`, `context_stats` (legacy), `contact.inventory` | viz „Zvukové změny“ |
-| `SoundSupportIndex` | opory kandidátů (`int64`), efektivní opory, po rodinách seznam míst (řetězce ID proměnných), míry, součet, `supported_map` | rozdíly počtů prostředí → `eval_supports` (Rust z B3) | `SoundChange.sites/rates/total_rate/weighted_sites/propose` | viz níže |
-| `LexicalClarityIndex` | `dominant`, `root_concepts`, `root_forms`, `owners` (tvar → množina dvojic), `scores`, `by_form`, `by_root` | `forms.log`, `dominant_log`, verze, podpis grafu | `Clarity` (`pressures/lexical.py`), `lexicon.py` | druhý krok: sloupce podle čísla pojmu a kořene, tvar → CSR vlastníků, skóre jako pole podle (kořen, pojem) |
+| `ContextIndex` | `Counter` pětic (předchozí, hláska, další, přízvuk, druhá další), `Counter` hlásek, `_counted: dict[str, tuple]`, `deltas` | deník `FormStore.log` (řetězce), `vocabulary_log`, token úložiště; po slovech | `SoundSupportIndex`, `context_stats` (legacy), `contact.inventory` | **hotovo**, viz „Zvukové změny“ |
+| `SoundSupportIndex` | opory kandidátů (`int64`), efektivní opory, po rodinách seznam míst (řetězce ID proměnných), míry, součet, `supported_map` | rozdíly počtů prostředí → `eval_supports` (Rust z B3) | `SoundChange.sites/rates/total_rate/weighted_sites/propose` | **hotovo**, viz níže |
+| `LexicalClarityIndex` | `dominant`, `root_concepts`, `root_forms`, `owners` (tvar → množina dvojic), `scores`, `by_form`, `by_root` | `forms.log`, `dominant_log`, verze, podpis grafu | `Clarity` (`pressures/lexical.py`), `lexicon.py` | druhý krok, **hotovo**: bez stavu; skóre je funkce polí (dominantní kořeny podle čísla pojmu, tvary kódu, výchozí tvary, banka, seřazené příbuzné dvojice), tabulka vlastníků tvaru se staví z dominantních kořenů při každé dávce (stovka položek na skupinu je levnější než dorovnávání), jedno volání `cee_core.clarity_scores` na dávku tlaků pro všechny skupiny |
 | `AssessmentVocabularyIndex` | vzorek nejčastějších tvarů (jména, tvary n-ticemi, `owners`, `vowels`), pozice změněných | `forms.log`, frekvence pojmů (`FrequencyMap.log`) | `assessment._vocabulary`, `NativeBank.assess_rows` | třetí krok: vzorek jako pole čísel morfémů a tvarů, vlastníci tvaru CSR |
 | `FormAssessmentIndex` | `values: dict[proměnná, FormAssessment]`, závislosti `unit_vars/root_vars/exponent_vars/cell_vars` | deníky tvarů, užití, dominantních kořenů, frekvencí | `Articulation`/morfologické tlaky | třetí krok: špinavé příznaky podle čísla proměnné, závislosti CSR |
 | `MorphologyCandidateIndex`, `WordMembershipIndex`, `ExponentIndex` | množiny a slovníky podle řetězců (jednotka, kořen, buňka, třída) | `vocabulary_log`, `forms.log` | `changes/morphology.py`, analogie | čtvrtý krok: stejné sloupce jako `MorphemeTable` (kořen, třída, buňka) + CSR podle buňky |
@@ -238,9 +238,25 @@ tvarů (`FormStore.token`).
   exportuje a obnovuje (`counted_form`, `counted_rule`, token) a podle něj se
   opory přepočítají, takže zůstane i zachovaná zvláštnost s pravidlem přízvuku.
 
-### Stav práce
+### Stav práce (B5)
 
-Průběžně doplňuje poslední oddíl „B5: stav“ (níže, pokud existuje).
+Hotovo (verze rozhraní 5): `ContextIndex` a `SoundSupportIndex` v číselné podobě
+(`cee.v2.language.sound_index`, Python reference `SoundIndex`, Rust `cee_core.SoundIndex`,
+`rust/cee_core/src/index.rs`; `ContextIndex` zůstal jako průčelí pro `contact.inventory`),
+dávkové `Change.total_rates` volané z `Simulation._innovate`, a lexikální jasnost
+(`lexical_index.clarity_scores`, `rust/cee_core/src/clarity.rs`).
+Odchylky od návrhu výše: (1) jazykový stav indexu je na **světě** (`World.sound`), ne na
+bance tvarů, protože banka se mezi kopiemi světa (checkpoint) sdílí a stav kódů ne;
+(2) sada kandidátů zůstala v Pythonu (vyrábí ji `candidates()` rodin), Rust ji dostane
+jednou pro inventář; (3) vlákna nejsou zavedena. Zachovaná zvláštnost: změna pravidla
+přízvuku nepřepočítá prostředí slov, dokud se slovo nezmění (`counted_rule`).
+
+Zbývá, v tomto pořadí: `AssessmentVocabularyIndex` (vzorek jako pole čísel morfémů a
+tvarů, vlastníci tvaru v CSR) a `FormAssessmentIndex` (špinavé příznaky podle čísla
+proměnné, závislosti v CSR); pak `WordMembershipIndex`, `MorphologyCandidateIndex`,
+`ExponentIndex`, `SemanticDependencies` a místa inovací `changes/lexicon.py`,
+`morphology.py`, `syntax.py` (dnes dávkové jen u zvukových změn, ostatní změny jedou
+výchozím `total_rates` po skupinách); nakonec zlatá data míst a skóre tlaků z A7.
 
 ## Bitová shoda při přechodu do Rustu
 
