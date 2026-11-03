@@ -1,5 +1,7 @@
 """Přírůstkové hodnocení se musí shodovat s výpočtem od začátku."""
 
+import numpy as np
+
 from cee.v2.assessment import _assess_batch, _assess_batch_reference
 from cee.v2.language.lexicon import UnitForm
 from cee.v2.language.processes import Process
@@ -37,7 +39,7 @@ def test_zmenene_pozice_a_frekvence_nemeni_vyber_vzorku():
     code = next(iter(world.groups.values())).main_code
     code.phonology.vocabulary.update(world.morphemes)
     initial = _vocabulary(world, next(iter(world.groups)))
-    words = initial.morphemes.copy()
+    words = initial.names(world)
     index = code.phonology.cache["assessment-vocabulary-index"][1]
     assert isinstance(index, AssessmentVocabularyIndex)
     word = words[0]
@@ -45,12 +47,12 @@ def test_zmenene_pozice_a_frekvence_nemeni_vyber_vzorku():
     code.forms.set(word, UnitForm(original.form[::-1], original.boundary, original.exponent))
     code.phonology.version += 1
     updated = _vocabulary(world, next(iter(world.groups)))
-    assert updated.morphemes == words
+    assert updated.names(world) == words
     assert len(index.changes) <= 1
     concept = next(iter(world.concept_frequencies), None)
     if concept is not None:
         world.concept_frequencies[concept] = 0.99
-        assert _vocabulary(world, next(iter(world.groups))).morphemes == words
+        assert _vocabulary(world, next(iter(world.groups))).names(world) == words
 
 
 def test_ruzne_sirky_lexikon_a_frekvence():
@@ -84,15 +86,17 @@ def test_ruzne_sirky_lexikon_a_frekvence():
         ]
         for group_id in groups:
             current, reference = _vocabulary(world, group_id), _vocabulary_reference(world, group_id)
-            assert current.morphemes == reference.morphemes
-            assert current.frequency == reference.frequency
-            assert current.forms == reference.forms
+            assert np.array_equal(current.morphemes, reference.morphemes)
+            assert np.array_equal(current.weights, reference.weights) and current.total == reference.total
+            assert np.array_equal(current.ids, reference.ids)
+            assert np.array_equal(current.vowels, reference.vowels)
     concept = next(iter(world.concept_frequencies), None)
     if concept is not None:
         world.concept_frequencies[concept] = 0.83
         group_id = groups[0]
         world.groups[group_id].main_code.phonology.version += 1
-        assert _vocabulary(world, group_id).frequency == _vocabulary_reference(world, group_id).frequency
+        assert np.array_equal(_vocabulary(world, group_id).weights, _vocabulary_reference(world, group_id).weights)
+        assert _vocabulary(world, group_id).total == _vocabulary_reference(world, group_id).total
 
 
 def test_stale_ticks_zachovava_okamzik_prepocitani(monkeypatch):
@@ -160,8 +164,8 @@ def test_puvodni_vzorek_po_zmene_frekvence_a_vetveni():
         world.concept_frequencies[concept] = 1.0 - world.concept_frequencies[concept]
     code.forms = code.forms.branch()
     code.phonology.version += 1
-    assert _vocabulary(world, group).morphemes == chosen
-    assert _vocabulary_reference(world, group).morphemes == chosen
+    assert np.array_equal(_vocabulary(world, group).morphemes, chosen)
+    assert np.array_equal(_vocabulary_reference(world, group).morphemes, chosen)
 
 
 def test_skutecna_syntakticka_kompenzace_homofonu():
@@ -216,7 +220,7 @@ def test_frekvence_se_projevi_az_pri_zmene_verze_i_u_noveho_procesu():
     code.phonology.version += 1
     updated = _vocabulary(world, group)
     reference = _vocabulary_reference(world, group)
-    assert updated.frequency == reference.frequency
+    assert updated.total == reference.total
     assert (updated.weights == reference.weights).all()
     assert (updated.weights != old_weights).any()
     assert _assess_batch(world, [group], variable) == _assess_batch_reference(world, [group], variable)
@@ -232,19 +236,19 @@ def test_zmena_tvaru_cte_jen_dotcene_slovo(monkeypatch):
     code.phonology.vocabulary.update(world.morphemes)
     code.phonology.lexicon_version += 1
     sample = _vocabulary(world, group)
-    word = sample.morphemes[0]
+    word = world.registry.morphemes.names[int(sample.morphemes[0])]
     old = world.unit_of(code, word)
     replacement = old.form + (old.form[0],)
     code.forms.set(word, UnitForm(replacement, old.boundary, old.exponent))
     code.phonology.version += 1
     calls = []
-    original = World.form_of
+    original = World.form_id_of
 
     def recorded(self, code_arg, morpheme_id):
         calls.append(morpheme_id)
         return original(self, code_arg, morpheme_id)
 
-    monkeypatch.setattr(World, "form_of", recorded)
+    monkeypatch.setattr(World, "form_id_of", recorded)
     updated = _vocabulary(world, group)
     assert calls == [word]
-    assert updated.forms[word] == replacement
+    assert world.form_bank().forms[int(updated.ids[0])] == replacement

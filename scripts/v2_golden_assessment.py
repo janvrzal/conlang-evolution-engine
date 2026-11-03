@@ -96,10 +96,10 @@ def record(recorder: Recorder, years: dict[str, int]) -> None:
         return result
 
     def batch(world: Any, group_ids: list[str], variable_id: str) -> Any:
-        pairs: list[tuple[str, str, str, float]] = []
+        pairs: list[tuple[str, int, int, float]] = []
 
-        def pair(world_: Any, frequency: Any, first: str, second: str, group_id: str) -> float:
-            value = original_pair(world_, frequency, first, second, group_id)
+        def pair(world_: Any, vocabulary: Any, first: int, second: int, group_id: str) -> float:
+            value = original_pair(world_, vocabulary, first, second, group_id)
             pairs.append((group_id, first, second, value))
             return value
 
@@ -123,9 +123,7 @@ def record(recorder: Recorder, years: dict[str, int]) -> None:
             table = world.form_bank().process_table(process, rule)
             for position, vocabulary in zip(positions, vocabularies):
                 group_id = group_ids[position]
-                numbers = {name: number for number, name in enumerate(vocabulary.morphemes)}
-                found = [(numbers[first], numbers[second], value)
-                         for group, first, second, value in pairs if group == group_id]
+                found = [(first, second, value) for group, first, second, value in pairs if group == group_id]
                 result = results[position]
                 changed = table.results(vocabulary.ids)
                 rows.append({
