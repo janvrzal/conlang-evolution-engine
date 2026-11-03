@@ -413,6 +413,16 @@ banka držela jiné tvary (stalo se v B5). Dvojice se teď sčítají vzestupně
 i otisky stavu světů v `test_v2_edits.py` zůstaly stejné; přegenerovala se zlatá data hodnocení
 a tlaků (`golden_assessment.json.gz`, `golden_pressures.json.gz`).
 
+### Výsledek
+
+Otisky všech sedmi světů beze změny (s Rustem, s `CEE_THREADS=3` i s `CEE_NATIVE=0 --quick`), obě
+celé sady prošly (s Rustem 1 355, bez něj 1 252 a 103 přeskočeno). Jediné měření na konci (sdílený
+stroj, tři střídavé běhy po sobě): valley-50 z 30,6 až 31,7 s (stav před B3b) na 26,7 až 27,4 s.
+Zbytek je převážně mimo tlaky v Rustu: z přenosu (profil valley-50 s `cProfile`, zhruba
+polovina běhu) zabírá asi polovinu Python hodnocení tvarů při dodávce (`FormAssessmentIndex`,
+`_assess_reference`, `class_stats`, závisí na `ExponentIndex` z B5b), další čas jsou hledání míst
+inovací, sledování slovní zásoby a pozorování.
+
 ### Zlatá data
 
 Zlatá data tlaků (`test_v2_golden_pressures.py`, reference v Pythonu s `CEE_NATIVE=0`) procházejí
