@@ -199,11 +199,13 @@ class DominantMap(MutableMapping):  # type: ignore[type-arg]
     jen hodnoty.
     """
 
-    __slots__ = ("_concepts", "_morphemes", "roots", "order")
+    __slots__ = ("_concepts", "_morphemes", "roots", "order", "listener")
 
     def __init__(self, concepts: Numbering, morphemes: Numbering) -> None:
         self._concepts = concepts
         self._morphemes = morphemes
+        #: Volá se ``listener(číslo pojmu, číslo kořene nebo −1)`` po každé změně (zrcadlo v Rustu).
+        self.listener: Any = None
         #: Číslo pojmu → číslo kořene, −1 = pojem nemá dominantní kořen.
         self.roots = array("i")
         #: Čísla pojmů, které kořen mají, v pořadí vložení (hodnoty se nepoužívají).
@@ -243,6 +245,8 @@ class DominantMap(MutableMapping):  # type: ignore[type-arg]
         if self.roots[number] < 0:
             self.order[number] = None
         self.roots[number] = self._morphemes.intern(root)
+        if self.listener is not None:
+            self.listener(number, self.roots[number])
 
     def __delitem__(self, concept: str) -> None:
         number = self._number(concept)
@@ -250,6 +254,8 @@ class DominantMap(MutableMapping):  # type: ignore[type-arg]
             raise KeyError(concept)
         self.roots[number] = NONE
         del self.order[number]
+        if self.listener is not None:
+            self.listener(number, NONE)
 
     def __len__(self) -> int:
         return len(self.order)
@@ -267,8 +273,19 @@ class DominantMap(MutableMapping):  # type: ignore[type-arg]
         return [morphemes[roots[number]] for number in self.order]
 
     def clear(self) -> None:
+        if self.listener is not None:
+            for number in self.order:
+                self.listener(number, NONE)
         self.roots = array("i")
         self.order = {}
+
+    def __getstate__(self) -> tuple[Any, ...]:
+        # Zrcadlo v Rustu se neukládá ani nekopíruje; stav kódu ho připojí znovu.
+        return (self._concepts, self._morphemes, self.roots, self.order)
+
+    def __setstate__(self, state: tuple[Any, ...]) -> None:
+        self._concepts, self._morphemes, self.roots, self.order = state
+        self.listener = None
 
     def copy(self) -> dict[str, str]:
         """Obyčejný slovník se stejným obsahem a pořadím."""

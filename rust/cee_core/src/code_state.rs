@@ -186,6 +186,8 @@ pub struct Proc {
     /// Řádek tabulky procesu v bance pro pravidlo přízvuku kódu; `None` = tabulka
     /// s tímto pravidlem v bance ještě není.
     pub row: Option<usize>,
+    /// Řádek procesu v bance bez ohledu na pravidlo přízvuku (podle něj se proces přepisuje).
+    pub own_row: Option<usize>,
     pub queued: Vec<u8>,
     pub done: Vec<u8>,
     pub needed: Vec<f64>,
@@ -447,6 +449,7 @@ impl CodeState {
             live: true,
             reductive,
             row: Some(row),
+            own_row: Some(row),
             needed: out.needed,
             morphemes: out.morphemes.iter().map(|&item| item as i32).collect(),
             ..Proc::default()
@@ -491,7 +494,7 @@ impl CodeState {
             if !(proc.needed.is_empty() || proc.needed[0] >= level) {
                 stepped = true;
                 let row = proc
-                    .row
+                    .own_row
                     .ok_or_else(|| format!("proces č. {} nemá tabulku v bance", proc.number))?;
                 let alive: Vec<usize> = (0..live0.len())
                     .filter(|&other| self.procs[live0[other]].live)

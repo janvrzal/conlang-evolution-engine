@@ -54,6 +54,7 @@ type ProcExport = (
     bool,
     bool,
     i64,
+    i64,
     Vec<u8>,
     Vec<u8>,
     Vec<f64>,
@@ -215,13 +216,14 @@ impl NativeCode {
 
     /// Řádky tabulek procesů v bance pro pravidlo přízvuku kódu, v pořadí živých
     /// procesů (−1 = tabulka s tímto pravidlem v bance není).
-    fn set_rows(&mut self, rows: Vec<i64>) -> PyResult<()> {
+    fn set_rows(&mut self, rows: Vec<i64>, own: Vec<i64>) -> PyResult<()> {
         let live = self.inner.live();
-        if rows.len() != live.len() {
+        if rows.len() != live.len() || own.len() != live.len() {
             return Err(failure("řádků je jiný počet než živých procesů".into()));
         }
-        for (index, row) in live.into_iter().zip(rows) {
+        for ((index, row), own) in live.into_iter().zip(rows).zip(own) {
             self.inner.procs[index].row = usize::try_from(row).ok();
+            self.inner.procs[index].own_row = usize::try_from(own).ok();
         }
         Ok(())
     }
@@ -238,6 +240,7 @@ impl NativeCode {
                     proc.live,
                     proc.reductive,
                     proc.row.map_or(-1, |row| row as i64),
+                    proc.own_row.map_or(-1, |row| row as i64),
                     proc.queued.clone(),
                     proc.done.clone(),
                     proc.needed.clone(),
@@ -388,12 +391,14 @@ impl NativeCode {
 #[pyfunction]
 pub fn restore_code(state: (Vec<ProcExport>, Vec<(usize, i32)>)) -> NativeCode {
     let mut code = NativeCode::default();
-    for (number, live, reductive, row, queued, done, needed, morphemes, fixed_since) in state.0 {
+    for (number, live, reductive, row, own, queued, done, needed, morphemes, fixed_since) in state.0
+    {
         code.inner.procs.push(Proc {
             number,
             live,
             reductive,
             row: usize::try_from(row).ok(),
+            own_row: usize::try_from(own).ok(),
             queued,
             done,
             needed,

@@ -375,6 +375,7 @@ class PhonologyState:
         self.pending = NativePending(self.core, self.registry)  # type: ignore[assignment]
         self.queued = NativeQueued(self.core, self.registry)  # type: ignore[assignment]
         self.restructured = NativeRestructured(self.core, self.registry)  # type: ignore[assignment]
+        self.dominant.listener = self.core.set_root
 
     def processes_snapshot(self) -> list[dict[str, Any]]:
         """Procesy kódu (živé i uzavřené) v pořadí vzniku, podle jmen (neutrální podoba)."""
@@ -433,7 +434,7 @@ class PhonologyState:
                 done.extend(bytes(max(0, number + 1 - len(done))))
                 done[number] = 1
             exported.append((
-                registry.processes.intern(item["process"]), item["live"], False, -1, bytes(queued), bytes(done),
+                registry.processes.intern(item["process"]), item["live"], False, -1, -1, bytes(queued), bytes(done),
                 [logit for logit, _ in item["queue"]], numbers, item["fixed_since"],
             ))
         self.core = native.restore_code((exported, self.core.roots()))
@@ -452,8 +453,6 @@ class PhonologyState:
         self.vocabulary.update(vocabulary)
         for concept, root in dominant:
             self.dominant[concept] = root
-            if self.core is not None:
-                self.core.set_root(registry.concepts.intern(concept), registry.morphemes.intern(root))
         self.uses.update(uses)
         self.load_processes(procs)
 
@@ -496,10 +495,6 @@ class PhonologyState:
             self.dominant.pop(concept, None)
         else:
             self.dominant[concept] = root
-        if self.core is not None:
-            self.core.set_root(
-                self.registry.concepts.intern(concept), -1 if root is None else self.registry.morphemes.intern(root)
-            )
         self.dominant_log.append((concept, old, root))
         return True
 

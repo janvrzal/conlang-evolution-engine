@@ -332,7 +332,11 @@ def _live_inputs(world: World, code: Code) -> tuple[list[str], list[array], list
     held = state.cache.get("native-rows")
     if held is None or held[1] != key:
         known = bank._rule_rows.get(rule)
-        core.set_rows([-1 if known is None else known.get(processes[v].key, -1) for v in ids])
+        own = bank._proc_index
+        core.set_rows(
+            [-1 if known is None else known.get(processes[v].key, -1) for v in ids],
+            [own.get(processes[v].key, -1) for v in ids],
+        )
         state.cache["native-rows"] = (0, key)
     biases = world.word_biases
     return ids, [biases.get(number, _EMPTY_BIAS) for number in live], [processes[v].reductive for v in ids]
