@@ -73,7 +73,31 @@ s testem shody proti zlatým datům:
      přenosu a hodnocení (krok 3 a 4 až po A5);
    - zbývá: sestavování seznamů front (`_targets`, asi 2 s) a četnosti
      užití (asi 1 s) v Pythonu;
-3. hodnocení (artikulace, funkční zátěž, lexikální jasnost) a tlaky;
+3. hodnocení (artikulace, funkční zátěž, lexikální jasnost) a tlaky.
+   **Část hotova 2026-11-03** (`zadani-rust-b3.md`):
+   - v Rustu je maticová část hodnocení zvukového procesu
+     (`NativeBank.assess_rows`, zasažená hmota, zkrácení, příznakovost,
+     noví homofoni, samohlásky) a opora zvukových změn
+     (`cee_core.sound_supports`). Verze rozhraní je 3;
+   - součty plovoucích čísel jsou párové jako `np.sum`
+     (`cee_core.pairwise_sum`). `native.sums_match()` jednou ověří, že
+     numpy na stroji sčítá stejně, jinak se počítá v Pythonu. Bezstavová
+     jádra se volají přes `native.kernel(...)`;
+   - otisky jsou stejné s Rustem i bez něj, prošly obě celé sady (1 124
+     s Rustem; 1 102 bez něj a 22 přeskočeno). Zlatá data jsou
+     v `tests/v2/data/golden_assessment.json.gz`;
+   - zisk je malý: valley-50 asi −10 % (v šumu −4 až −18 % na vytíženém
+     stroji), grid-5x5 asi −9 %. Čísla v hodnocení jsou levná, čas jde do
+     indexů nad řetězcovými slovníky (`ContextIndex`,
+     `LexicalClarityIndex`, `AssessmentVocabularyIndex`,
+     `FormAssessmentIndex`) a do Python obalů. Lexikální jasnost,
+     synchronizace indexů a tlaky jako pole zůstaly v Pythonu. Tlaky stojí
+     každý pod 0,3 % času, takže jejich přepis nic nepřinese, a testy
+     (`test_v2_lexical_matrix`, `test_v2_process_scores`,
+     `test_v2_form_scores`) fixují jejich objektové rozhraní;
+   - plyne z toho, že další zisk nepřinesou další jádra, ale převedení
+     stavu indexů na čísla z registru. Indexy pak přejdou do Rustu celé
+     i s testy (tyto testy se pak vědomě přepíšou na nové rozhraní);
 4. přenos (míšení, výběr, drift) a živé fondy;
 5. hledání míst inovací a změny;
 6. hlavní smyčka `Simulation`; Python zůstane pro popis světa, export,
