@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2 import native
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.index import ContextIndex
 from cee.v2.language.processes import Process, StressRule, stressed_nucleus
@@ -171,6 +172,14 @@ class _Columns:
         self.right2_rows = np.array([i for i, p in enumerate(processes) if p.right2 is not None], dtype=np.intp)
         self.right2 = stack([cast(Pattern, processes[i].right2).mask[cols] for i in self.right2_rows])
 
+    def columns_of(self, ids: npt.NDArray[np.intp]) -> npt.NDArray[np.int64] | None:
+        """Sloupce hlásek ``ids`` v maskách, nebo ``None``, když některá hláska v inventáři není."""
+        cols = self.cols
+        position = np.minimum(np.searchsorted(cols, ids), len(cols) - 1)
+        if (cols[position] != ids).any():
+            return None
+        return position.astype(np.int64)
+
     def gather(self, name: str, ids: npt.NDArray[np.intp]) -> npt.NDArray[np.bool_]:
         """Sloupce masky ``name`` pro hlásky ``ids`` (řádky procesů)."""
         matrix = getattr(self, name)
@@ -279,8 +288,36 @@ class _CombinedSoundCandidates:
         counts_int64: npt.NDArray[np.int64],
         table: SegmentTable,
     ) -> npt.NDArray[np.int64]:
+        """Opory všech kandidátů nad počty (rozdíly počtů) prostředí; Rust, nebo Python."""
         if not self.all_processes or len(counts_int64) == 0:
             return np.zeros(len(self.all_processes), dtype=np.int64)
+        kernel = native.kernel("sound_supports")
+        if kernel is not None:
+            columns = [self.masks.columns_of(ids) for ids in (seg, prev, foll, foll2)]
+            # Hláska mimo inventář (prostředí slova, které zmizelo) nemá sloupec v maskách;
+            # tu dopočítá Python z úplných masek procesů.
+            if all(column is not None for column in columns):
+                masks = self.masks
+                result: npt.NDArray[np.int64] = kernel(
+                    masks.target, masks.left, masks.right, masks.right2,
+                    masks.right2_rows.astype(np.int64), self.stressed_rows.astype(np.int64),
+                    self.unstressed_rows.astype(np.int64), *columns,
+                    np.ascontiguousarray(str_arr, dtype=bool), np.ascontiguousarray(table.vowel_mask[seg]),
+                    np.ascontiguousarray(counts_int64, dtype=np.int64),
+                )
+                return result
+        return self.eval_supports_python(prev, seg, foll, str_arr, foll2, counts_int64, table)
+
+    def eval_supports_python(
+        self,
+        prev: npt.NDArray[np.intp],
+        seg: npt.NDArray[np.intp],
+        foll: npt.NDArray[np.intp],
+        str_arr: npt.NDArray[np.bool_],
+        foll2: npt.NDArray[np.intp],
+        counts_int64: npt.NDArray[np.int64],
+        table: SegmentTable,
+    ) -> npt.NDArray[np.int64]:
         masks = self.masks
         mask = masks.gather("target", seg) & masks.gather("left", prev) & masks.gather("right", foll)
         if len(self.right2_rows):

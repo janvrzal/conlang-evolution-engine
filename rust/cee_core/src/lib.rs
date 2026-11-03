@@ -7,6 +7,7 @@ pub mod assess;
 pub mod bank;
 pub mod phonology;
 pub mod process;
+pub mod support;
 
 #[cfg(feature = "python")]
 mod python;

@@ -61,6 +61,19 @@ def status() -> str:
     return "python (rozšíření cee_core není k dispozici)"
 
 
+def kernel(name: str) -> Any | None:
+    """Funkce jádra v Rustu (bez banky tvarů), nebo ``None`` bez Rustu.
+
+    Jádra, která nepotřebují stav (opora zvukových změn), jsou funkce modulu
+    ``cee_core``; volající při ``None`` počítá v Pythonu totéž.
+    """
+    if not enabled():
+        return None
+    module = _load()
+    assert module is not None
+    return getattr(module, name)
+
+
 def new_bank(table: SegmentTable) -> Any | None:
     """Prázdná banka v Rustu nad tabulkou hlásek, nebo ``None`` bez Rustu."""
     if not enabled():

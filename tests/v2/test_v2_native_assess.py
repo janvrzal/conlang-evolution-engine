@@ -1,11 +1,12 @@
-"""Hodnocení zvukových procesů v Rustu proti Pythonu: zlatá data a shoda součtů.
+"""Hodnocení zvukových procesů a opory změn v Rustu proti Pythonu: zlatá data a shoda součtů.
 
 Zlatá data (``tests/v2/data/golden_assessment.json.gz``) zaznamenal
 ``scripts/v2_golden_assessment.py`` ze skutečných běhů v Pythonu: dávky
 hodnocení procesu (tvary a váhy slov vzorku po skupinách, pořadí a cena
-dvojic nových homofonů, výsledné ``ProcessAssessment``). Rust musí dát přesně
-stejné součty (porovnává se bit po bitu; sčítá se párově jako ``numpy``)
-i stejné dvojice ve stejném pořadí. Bez sestaveného rozšíření se testy s Rustem
+dvojic nových homofonů, výsledné ``ProcessAssessment``) a opory kandidátů
+zvukových změn nad počty prostředí. Rust musí dát přesně stejné součty
+(porovnává se bit po bitu; sčítá se párově jako ``numpy``), stejné dvojice ve
+stejném pořadí a stejné opory. Bez sestaveného rozšíření se testy s Rustem
 přeskočí a celá sada běží nad Pythonem.
 """
 
@@ -23,6 +24,7 @@ import pytest
 from test_v2_native_bank import _process
 
 from cee.v2 import assessment, native
+from cee.v2.changes import sound
 from cee.v2.language.bank import FormBank
 from cee.v2.language.segments import default_table
 
@@ -144,3 +146,50 @@ def _process_stub() -> Any:
 
     table = default_table()
     return Process(family="stub", target=table.VOWEL, operation="delete")
+
+
+def _support_inputs(case: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        np.array(case["previous"], dtype=np.intp), np.array(case["segment"], dtype=np.intp),
+        np.array(case["following"], dtype=np.intp), np.array(case["stressed"], dtype=bool),
+        np.array(case["following2"], dtype=np.intp), np.array(case["count"], dtype=np.int64),
+    )
+
+
+@needs_native
+def test_opory_zmen_v_rustu_sedi_s_pythonem_na_zlatych_datech(golden):
+    table = default_table()
+    negative = 0
+    assert len(golden["supports"]) > 100
+    for case in golden["supports"]:
+        combined = sound._combined_candidates(table, tuple(case["inventory"]))
+        found = combined.eval_supports(*_support_inputs(case), table)
+        assert found.tolist() == case["result"]
+        assert found.tolist() == combined.eval_supports_python(*_support_inputs(case), table).tolist()
+        negative += any(count < 0 for count in case["count"])
+    assert negative > 20
+
+
+@needs_native
+def test_opory_s_hlaskou_mimo_inventar_pocita_python(golden, monkeypatch):
+    table = default_table()
+    case = next(item for item in golden["supports"] if len(item["count"]) > 5)
+    combined = sound._combined_candidates(table, tuple(case["inventory"]))
+    outside = next(segment for segment in range(table.boundary) if segment not in case["inventory"])
+    previous, segment, following, stressed, following2, count = _support_inputs(case)
+    segment[0] = outside
+    assert combined.masks.columns_of(segment) is None
+    calls = []
+    kernel = native.kernel("sound_supports")
+    monkeypatch.setattr(native, "kernel", lambda name: lambda *args: calls.append(args) or kernel(*args))
+    found = combined.eval_supports(previous, segment, following, stressed, following2, count, table)
+    assert not calls
+    assert found.tolist() == combined.eval_supports_python(previous, segment, following, stressed, following2, count, table).tolist()
+
+
+def test_opory_bez_rustu_pocita_python(golden, monkeypatch):
+    table = default_table()
+    monkeypatch.setattr(native, "kernel", lambda name: None)
+    for case in golden["supports"][:20]:
+        combined = sound._combined_candidates(table, tuple(case["inventory"]))
+        assert combined.eval_supports(*_support_inputs(case), table).tolist() == case["result"]

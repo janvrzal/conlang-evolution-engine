@@ -8,7 +8,10 @@ tedy referenční implementace) zaznamená případy, na kterých
   změna, pravidlo přízvuku, pro každou skupinu tvary slov vzorku a jejich váhy,
   pořadí a cena dvojic nových homofonů (``assessment._pair``) a výsledné
   ``ProcessAssessment``. Rust počítá matici a dvojice, ostatní skládá Python
-  stejným kódem jako ve hře.
+  stejným kódem jako ve hře;
+- ``supports``: opory kandidátů zvukových změn nad počty prostředí
+  (``_CombinedSoundCandidates.eval_supports``): inventář (z něj se kandidáti
+  sestaví znovu), prostředí, počty (celé rozdíly i s zápornými hodnotami) a opory.
 
 Záznam je výřez: případů se vzorkuje pevnou funkcí (bez náhody), ať je soubor
 pod 1 MB a vznikl pokaždé stejný.
@@ -31,7 +34,10 @@ from typing import Any
 os.environ["CEE_NATIVE"] = "0"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import numpy as np  # noqa: E402
+
 from cee.v2 import assessment  # noqa: E402
+from cee.v2.changes import sound  # noqa: E402
 from cee.v2.language.processes import Process  # noqa: E402
 from cee.v2.simulation import Simulation  # noqa: E402
 
@@ -43,6 +49,10 @@ SCENARIOS = {"grid-5x5": 1000, "shift": 900, "valley-50": 500}
 RULES = golden_bank.RULES
 #: Nejvýš tolik řádků (skupin) hodnocení po vzorkování a aspoň tolik na změnu.
 ASSESS_ROWS = 260
+#: Opory: nejvýš tolik případů, z nich aspoň tolik s rozdílovými (zápornými) počty a s hláskou mimo inventář.
+SUPPORT_CASES = 160
+SUPPORT_DELTAS = 50
+SUPPORT_MISSING = 20
 MINIMUM = 2
 
 
@@ -56,6 +66,7 @@ class Recorder:
     def __init__(self) -> None:
         self.processes: dict[str, tuple[Process, int]] = {}
         self.assess: list[dict[str, Any]] = []
+        self.supports: list[dict[str, Any]] = []
 
     def index(self, process: Process) -> int:
         found = self.processes.get(process.key)
@@ -67,6 +78,22 @@ class Recorder:
 def record(recorder: Recorder, years: dict[str, int]) -> None:
     original_batch = assessment._assess_batch_python
     original_pair = assessment._pair
+    original_supports = sound._CombinedSoundCandidates.eval_supports
+
+    def supports(self: Any, prev: Any, seg: Any, foll: Any, stressed: Any, foll2: Any, counts: Any, table: Any) -> Any:
+        result = original_supports(self, prev, seg, foll, stressed, foll2, counts, table)
+        if len(counts):
+            cols = self.masks.cols
+            missing = any(
+                bool((cols[np.minimum(np.searchsorted(cols, ids), len(cols) - 1)] != ids).any())
+                for ids in (prev, seg, foll, foll2)
+            )
+            recorder.supports.append({
+                "inventory": list(self.inventory), "previous": prev.tolist(), "segment": seg.tolist(),
+                "following": foll.tolist(), "stressed": stressed.tolist(), "following2": foll2.tolist(),
+                "count": counts.tolist(), "result": result.tolist(), "missing": missing,
+            })
+        return result
 
     def batch(world: Any, group_ids: list[str], variable_id: str) -> Any:
         pairs: list[tuple[str, str, str, float]] = []
@@ -118,6 +145,7 @@ def record(recorder: Recorder, years: dict[str, int]) -> None:
         return results
 
     assessment._assess_batch_python = batch
+    sound._CombinedSoundCandidates.eval_supports = supports  # type: ignore[method-assign]
     try:
         for name, build, default_years in digest_worlds(False):
             if name not in years:
@@ -127,6 +155,7 @@ def record(recorder: Recorder, years: dict[str, int]) -> None:
             print(f"{name}: {len(recorder.assess)} dávek hodnocení", flush=True)
     finally:
         assessment._assess_batch_python = original_batch
+        sound._CombinedSoundCandidates.eval_supports = original_supports  # type: ignore[method-assign]
 
 
 def interesting(case: dict[str, Any]) -> bool:
@@ -187,7 +216,20 @@ def build(recorder: Recorder) -> dict[str, object]:
                 for row in case["rows"]
             ],
         })
+    # Opory: případy s rozdílovými počty a s hláskou mimo inventář mají přednost, zbytek pevným výběrem.
+    deltas = [case for case in recorder.supports if any(count < 0 for count in case["count"])]
+    missing = [case for case in recorder.supports if case["missing"]]
+    rest = [case for case in recorder.supports if case not in deltas and case not in missing]
+    share = max(1, -(-len(rest) // max(1, SUPPORT_CASES - SUPPORT_DELTAS - SUPPORT_MISSING)))
+    chosen = deltas[::max(1, len(deltas) // SUPPORT_DELTAS)][:SUPPORT_DELTAS]
+    chosen += missing[::max(1, len(missing) // SUPPORT_MISSING)][:SUPPORT_MISSING]
+    chosen += [case for number, case in enumerate(rest) if keep(number, share)]
+    supports = [
+        {key: value for key, value in case.items() if key != "missing"} | {"missing": case["missing"]}
+        for case in chosen[:SUPPORT_CASES + SUPPORT_DELTAS + SUPPORT_MISSING]
+    ]
     return {
+        "supports": supports,
         "table": golden_bank.table_fingerprint(),
         "processes": [golden_bank.describe(process) for process, _ in sorted(
             recorder.processes.values(), key=lambda pair: pair[1])],
@@ -207,7 +249,8 @@ def main() -> None:
     with output.open("wb") as raw, gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as handle:
         handle.write(json.dumps(data, separators=(",", ":"), sort_keys=True).encode())
     rows = sum(len(case["rows"]) for case in data["assess"])  # type: ignore[attr-defined]
-    print(f"{output}: {len(data['assess'])} dávek, {rows} řádků, {output.stat().st_size / 1024:.0f} kB")  # type: ignore[arg-type]
+    print(f"{output}: {len(data['assess'])} dávek, {rows} řádků, {len(data['supports'])} opor, "  # type: ignore[arg-type]
+          f"{output.stat().st_size / 1024:.0f} kB")
 
 
 if __name__ == "__main__":

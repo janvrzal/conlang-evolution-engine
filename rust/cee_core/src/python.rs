@@ -6,7 +6,8 @@
 
 use std::collections::BTreeMap;
 
-use numpy::{PyArray1, PyReadonlyArray1};
+use numpy::ndarray::Dimension;
+use numpy::{PyArray1, PyReadonlyArray, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods};
 use pyo3::buffer::{Element, PyBuffer, PyUntypedBuffer};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -16,12 +17,15 @@ use crate::assess::{Assessed, Matrix};
 use crate::bank::{Bank, Outcome};
 use crate::phonology::{self, Needs, Params, Target, Units};
 use crate::process::Proc;
+use crate::support::{self, Contexts, Masks};
 
 fn failure(message: String) -> PyErr {
     PyValueError::new_err(message)
 }
 
-fn slice<'a, T: numpy::Element>(array: &'a PyReadonlyArray1<'_, T>) -> PyResult<&'a [T]> {
+fn slice<'a, T: numpy::Element, D: Dimension>(
+    array: &'a PyReadonlyArray<'_, T, D>,
+) -> PyResult<&'a [T]> {
     array
         .as_slice()
         .map_err(|_| failure("pole musí být souvislé".into()))
@@ -646,12 +650,112 @@ fn pairwise_sum(values: PyReadonlyArray1<'_, f64>) -> PyResult<f64> {
     Ok(crate::assess::pairwise_sum(slice(&values)?))
 }
 
+/// Opora procesů zvukových změn (`support::supports`) nad počty prostředí.
+///
+/// `target`, `left`, `right` jsou masky „proces × sloupec hlásky“, `right2`
+/// masky druhé následující hlásky jen procesů v `right2_rows` (pořadí řádků
+/// ve `right2`); `stressed_rows` a `unstressed_rows` jsou procesy s podmínkou
+/// přízvuku. Prostředí mají čísla sloupců hlásek (všechna platná) a počty.
+/// Vrací pole opor po procesech.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn sound_supports<'py>(
+    py: Python<'py>,
+    target: PyReadonlyArray2<'py, bool>,
+    left: PyReadonlyArray2<'py, bool>,
+    right: PyReadonlyArray2<'py, bool>,
+    right2: PyReadonlyArray2<'py, bool>,
+    right2_rows: PyReadonlyArray1<'py, i64>,
+    stressed_rows: PyReadonlyArray1<'py, i64>,
+    unstressed_rows: PyReadonlyArray1<'py, i64>,
+    segment: PyReadonlyArray1<'py, i64>,
+    previous: PyReadonlyArray1<'py, i64>,
+    following: PyReadonlyArray1<'py, i64>,
+    following2: PyReadonlyArray1<'py, i64>,
+    stressed: PyReadonlyArray1<'py, bool>,
+    vowel: PyReadonlyArray1<'py, bool>,
+    count: PyReadonlyArray1<'py, i64>,
+) -> PyResult<Bound<'py, PyArray1<i64>>> {
+    let matrix = |array: &PyReadonlyArray2<'py, bool>| -> PyResult<(usize, usize)> {
+        let shape = array.shape();
+        Ok((shape[0], shape[1]))
+    };
+    let (processes, width) = matrix(&target)?;
+    if matrix(&left)? != (processes, width) || matrix(&right)? != (processes, width) {
+        return Err(failure("masky procesů mají různý tvar".into()));
+    }
+    let (second_rows, second_width) = matrix(&right2)?;
+    if second_rows != slice(&right2_rows)?.len() || (second_rows > 0 && second_width != width) {
+        return Err(failure(
+            "masky druhé následující hlásky mají špatný tvar".into(),
+        ));
+    }
+    let mut second_row = vec![-1_i64; processes];
+    let mut stress = vec![support::STRESS_ANY; processes];
+    for (position, &row) in slice(&right2_rows)?.iter().enumerate() {
+        *second_row
+            .get_mut(row as usize)
+            .ok_or_else(|| failure("proces mimo masky".into()))? = position as i64;
+    }
+    for (rows, kind) in [
+        (&stressed_rows, support::STRESS_STRESSED),
+        (&unstressed_rows, support::STRESS_UNSTRESSED),
+    ] {
+        for &row in slice(rows)? {
+            *stress
+                .get_mut(row as usize)
+                .ok_or_else(|| failure("proces mimo masky".into()))? = kind;
+        }
+    }
+    let size = slice(&count)?.len();
+    let columns = [
+        slice(&segment)?,
+        slice(&previous)?,
+        slice(&following)?,
+        slice(&following2)?,
+    ];
+    if columns.iter().any(|column| column.len() != size)
+        || slice(&stressed)?.len() != size
+        || slice(&vowel)?.len() != size
+    {
+        return Err(failure("sloupce prostředí mají různou délku".into()));
+    }
+    if columns
+        .iter()
+        .flat_map(|column| column.iter())
+        .any(|&column| column < 0 || column as usize >= width)
+    {
+        return Err(failure("sloupec hlásky mimo masky".into()));
+    }
+    let masks = Masks {
+        width,
+        target: slice(&target)?,
+        left: slice(&left)?,
+        right: slice(&right)?,
+        right2: slice(&right2)?,
+        right2_row: &second_row,
+        stress: &stress,
+    };
+    let contexts = Contexts {
+        segment: columns[0],
+        previous: columns[1],
+        following: columns[2],
+        following2: columns[3],
+        stressed: slice(&stressed)?,
+        vowel: slice(&vowel)?,
+        count: slice(&count)?,
+    };
+    Ok(PyArray1::from_vec(py, support::supports(&masks, &contexts)))
+}
+
 #[pymodule]
 mod cee_core {
     use pyo3::prelude::*;
 
     #[pymodule_export]
     use super::pairwise_sum;
+    #[pymodule_export]
+    use super::sound_supports;
     #[pymodule_export]
     use super::NativeBank;
 
