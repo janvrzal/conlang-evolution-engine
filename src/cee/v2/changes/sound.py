@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, Literal, Mapping, Sequence, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Mapping, Sequence, cast
 from weakref import WeakKeyDictionary
 
 if TYPE_CHECKING:
@@ -348,15 +348,24 @@ class _SoundCatalog:
 
 
 class _FamilyView:
-    """Místa jedné rodiny u jednoho kódu: názvy proměnných, míry, součet a váhy."""
+    """Místa jedné rodiny u jednoho kódu: názvy proměnných, míry, součet a váhy.
+
+    S indexem v Rustu drží sadu kandidátů Rust (názvy míst a popisy procesů čte z něj; ``Process``
+    se postaví jen pro místo, které se skutečně použije); bez něj ji sestaví Python (``_combined_candidates``).
+    """
 
     def __init__(self, index: SoundIndex | NativeSoundIndex, code: Code, table: SegmentTable, family: int, kind: str) -> None:
         self.index, self.code, self.table, self.kind = index, code, table, kind
         self.positions, self.rates, self.total = index.family(code, family)
-        self.combined = _combined_candidates(table, index.inventory(code))
         self._family = family
-        candidates = self.combined.family_candidates[kind]
-        self.names: list[str] = [candidates[position][0] for position in self.positions.tolist()]
+        self.combined: _CombinedSoundCandidates | None
+        if isinstance(index, NativeSoundIndex):
+            self.combined = None
+            self.names: list[str] = index.family_names(code, family)
+        else:
+            self.combined = _combined_candidates(table, index.inventory(code))
+            candidates = self.combined.family_candidates[kind]
+            self.names = [candidates[position][0] for position in self.positions.tolist()]
 
     @property
     def weights(self) -> npt.NDArray[np.float64] | None:
@@ -372,9 +381,19 @@ class _FamilyView:
         found = self.position_of(site)
         if found is None:
             raise KeyError(site)
+        return self._process_at(found)
+
+    def _process_at(self, found: int) -> Process:
+        if self.combined is None:
+            index = cast(NativeSoundIndex, self.index)
+            return process_from_spec(self.table, index.family_spec(self.code, self._family, found))
         return self.combined.family_candidates[self.kind][int(self.positions[found])][1]
 
     def supported(self) -> dict[str, tuple[Process, float]]:
+        if self.combined is None:
+            index = cast(NativeSoundIndex, self.index)
+            supports = index.family_supports(self.code, self._family)
+            return {name: (self._process_at(at), float(supports[at])) for at, name in enumerate(self.names)}
         candidates = self.combined.family_candidates[self.kind]
         supports = self.index.supports(self.code)
         start = self.combined.family_slices[self.kind].start
@@ -382,6 +401,62 @@ class _FamilyView:
             candidates[position][0]: (candidates[position][1], float(supports[start + position]))
             for position in self.positions.tolist()
         }
+
+
+def process_from_spec(table: SegmentTable, spec: Any) -> Process:
+    """``Process`` z popisu kandidáta, který postavil Rust (:func:`cee.v2.language.sound_index`).
+
+    Vzory se berou z tabulky hlásek (``pattern``, ``segments``), takže jsou tytéž (pamatované) objekty
+    jako ve vzorech, které stavěl Python; pole ve výchozí hodnotě se nepředávají, jako v ``_make``.
+    """
+    (family, label, operation, changes, segment, stress, medial), (ease, ease_is_int, clarity, reductive, allow, tone), \
+        (target, left, right, right2) = spec
+    fields: dict[str, object] = {"target": _pattern_of(table, target), "operation": operation}
+    if changes:
+        fields["changes"] = tuple((name, value) for name, value in changes)
+    if segment is not None:
+        fields["segment"] = segment
+    if left is not None:
+        fields["left"] = _pattern_of(table, left)
+    if right is not None:
+        fields["right"] = _pattern_of(table, right)
+    if stress is not None:
+        fields["stress"] = stress
+    if medial:
+        fields["medial"] = True
+    fields["ease"] = 0 if ease_is_int else ease
+    fields["clarity"] = clarity
+    if reductive:
+        fields["reductive"] = True
+    if allow:
+        fields["allow"] = tuple(allow)
+    if right2 is not None:
+        fields["right2"] = _pattern_of(table, right2)
+    if tone is not None:
+        fields["tone"] = tone
+    return _make(FAMILY_KINDS[family], label, **fields)
+
+
+_CONSONANT_OR_BOUNDARY: WeakKeyDictionary[SegmentTable, Pattern] = WeakKeyDictionary()
+
+
+def _pattern_of(table: SegmentTable, recipe: Any) -> Pattern:
+    """Vzor podle předpisu z Rustu (druh, dvojice rys-hodnota, zápis hlásek výčtu)."""
+    kind, items, symbols = recipe
+    if kind == "features":
+        return table.pattern(dict(items))
+    if kind == "segments":
+        return table.segments(symbols)
+    if kind == "vowel":
+        return table.VOWEL
+    if kind == "consonant":
+        return table.CONSONANT
+    if kind == "boundary":
+        return table.BOUNDARY
+    found = _CONSONANT_OR_BOUNDARY.get(table)
+    if found is None:
+        found = _CONSONANT_OR_BOUNDARY[table] = Pattern("C|#", table.CONSONANT.mask | table.BOUNDARY.mask)
+    return found
 
 
 def sound_index(world: World) -> SoundIndex | NativeSoundIndex:
@@ -1350,6 +1425,8 @@ def batch_total_rates(
             totals[position] = value if indexed else Change.total_rate(change, contexts[position])
     return found
 
+#: Druh změny podle čísla rodiny (pořadí ``SOUND_CHANGES``, shodné s ``cee_core.candidate_families``).
+FAMILY_KINDS: tuple[str, ...] = tuple(change.kind for change in SOUND_CHANGES)
 #: Číslo rodiny podle druhu změny (pořadí ``SOUND_CHANGES``).
 FAMILY_INDEX: dict[str, int] = {change.kind: number for number, change in enumerate(SOUND_CHANGES)}
 CATALOG.scales = [SOUND_INNOVATIONS_PER_GENERATION * (change.prior / _TOTAL_PRIOR) for change in SOUND_CHANGES]
