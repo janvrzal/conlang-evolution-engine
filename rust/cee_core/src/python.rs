@@ -765,6 +765,8 @@ mod cee_core {
     #[pymodule_export]
     use crate::index_python::{candidate_families, candidate_symbols, clarity_scores};
     #[pymodule_export]
+    use crate::innovation_python::innovation_totals;
+    #[pymodule_export]
     use crate::pressures_python::{pressure_scores, take_created, AssessIndex, PressureStep};
     #[pymodule_export]
     use crate::python_pools::{

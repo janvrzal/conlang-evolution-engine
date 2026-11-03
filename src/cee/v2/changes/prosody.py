@@ -11,7 +11,9 @@ import numpy as np
 
 from cee.v2 import prosody
 from cee.v2.changes.base import Change, InnovationContext
+from cee.v2.changes.sites import column_totals
 from cee.v2.language.processes import StressRule
+from cee.v2.language.site_index import COL_STRESS_SHIFT, COL_STRESS_STRENGTH
 from cee.v2.pressures import Actuation, Conformity, Pressure
 from cee.v2.repertoire import Origin, Variant
 from cee.v2.rng import RandomSource
@@ -40,10 +42,17 @@ class StressShift(Change):
     """
 
     kind = "stress_shift"
+    site_column = COL_STRESS_SHIFT
     target = "prosody"
     rate_basis = "generation"
     base_rate = 0.02
     pressures = PROSODY_PRESSURES
+
+    def total_rate(self, context: InnovationContext) -> float:
+        return column_totals(self, [context])[0]
+
+    def total_rates(self, contexts: Sequence[InnovationContext]) -> list[float]:
+        return column_totals(self, contexts)
 
     def sites(self, context: InnovationContext) -> Sequence[str]:
         var_id = prosody.stress_rule_variable_id()
@@ -74,10 +83,17 @@ class StressStrengthChange(Change):
     """
 
     kind = "stress_strength"
+    site_column = COL_STRESS_STRENGTH
     target = "prosody"
     rate_basis = "generation"
     base_rate = 0.02
     pressures = PROSODY_PRESSURES
+
+    def total_rate(self, context: InnovationContext) -> float:
+        return column_totals(self, [context])[0]
+
+    def total_rates(self, contexts: Sequence[InnovationContext]) -> list[float]:
+        return column_totals(self, contexts)
 
     def sites(self, context: InnovationContext) -> Sequence[str]:
         var_id = prosody.stress_strength_variable_id()

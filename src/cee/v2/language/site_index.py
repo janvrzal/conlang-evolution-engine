@@ -35,7 +35,8 @@ if TYPE_CHECKING:
     from cee.v2.world import Code, World
 
 #: Sloupce výstupu dávky: expresivní tvoření, sedm sémantických změn, vyrovnání, rozšíření,
-#: deset syntaktických změn a výpůjčky slov (stejné pořadí jako ``sites::COLUMNS`` v Rustu).
+#: deset syntaktických změn, výpůjčky slov, reanalýza hranice a dvě prozodické změny
+#: (stejné pořadí jako ``sites::COLUMNS`` v Rustu).
 SYNTAX_KINDS = (
     "periphrasis", "cliticization", "affixation", "exaptation", "category_loss",
     "negation_reinforcement", "negation_reduction", "negation_renewal", "order_fixation", "order_relaxation",
@@ -46,7 +47,10 @@ COL_LEVELING = COL_SEMANTIC + len(semantic.KINDS)
 COL_EXTENSION = COL_LEVELING + 1
 COL_SYNTAX = COL_EXTENSION + 1
 COL_BORROWING = COL_SYNTAX + len(SYNTAX_KINDS)
-COLUMNS = COL_BORROWING + 1
+COL_REBRACKETING = COL_BORROWING + 1
+COL_STRESS_SHIFT = COL_REBRACKETING + 1
+COL_STRESS_STRENGTH = COL_STRESS_SHIFT + 1
+COLUMNS = COL_STRESS_STRENGTH + 1
 
 #: Šablony funkcí, druhy konstrukcí a stupně opisu jako čísla (viz ``sites.rs``).
 TEMPLATES = {"inflection": 0, "negation": 1, "order": 2}
@@ -73,7 +77,10 @@ class PythonSites:
         self.sem_sites = SemanticSitesIndex(self.semantic)
         self.catalog: dict[str, Any] = {}
         self.constructions: dict[int, _ConstructionKey] = {}
+        #: Pojem zdroje konstrukce podle čísla varianty (−1 = žádný).
+        self.construction_sources: dict[int, int] = {}
         self._results: dict[int, tuple[list[list[int]], list[float]]] = {}
+        self._rebracketing: dict[int, list[tuple[int, int, int]]] = {}
 
     # --- tabulky ----------------------------------------------------------------
 
@@ -86,8 +93,8 @@ class PythonSites:
     def set_defaults(self, numbers: list[int], forms: list[Any]) -> None:
         self.morph.set_defaults(numbers, forms)
 
-    def set_roots(self, numbers: list[int], sources: list[int], bases: list[int]) -> None:
-        self.semantic.set_roots(numbers, sources, bases)
+    def set_roots(self, numbers: list[int], sources: list[int], bases: list[int], verbs: list[bool]) -> None:
+        self.semantic.set_roots(numbers, sources, bases, verbs)
 
     def set_graph(self, concepts: int, *arrays: Any) -> None:
         self.semantic.set_graph(semantic.Graph(concepts, *arrays))
@@ -104,9 +111,12 @@ class PythonSites:
             "count": len(template),
         }
 
-    def set_constructions(self, variants: list[int], kinds: list[int], stages: list[int]) -> None:
-        for variant, kind, stage in zip(variants, kinds, stages):
+    def set_constructions(
+        self, variants: list[int], kinds: list[int], stages: list[int], sources: list[int]
+    ) -> None:
+        for variant, kind, stage, source in zip(variants, kinds, stages, sources):
             self.constructions[int(variant)] = (int(kind), int(stage))
+            self.construction_sources[int(variant)] = int(source)
 
     # --- dorovnání --------------------------------------------------------------
 
@@ -123,14 +133,17 @@ class PythonSites:
     # --- dávka ------------------------------------------------------------------
 
     def totals(
-        self, tokens: list[int], variants: npt.NDArray[np.int32], l2_share: npt.NDArray[np.float64],
+        self, bank: Any, tokens: list[int], variants: npt.NDArray[np.int32], l2_share: npt.NDArray[np.float64],
         lexical: npt.NDArray[np.int64], morph_on: list[bool], semantic_on: list[bool],
         bases: npt.NDArray[np.float64], scales: tuple[float, float, float], borrowing: Any = None,
-    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.int64]]:
+        forms: Any = (), prosody: tuple[bool, bool] = (False, False),
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.int64], list[int]]:
+        """Součty a počty míst (skupina × sloupec) a čísla morfémů, jejichž výchozí tvar chybí (pak znovu)."""
         coinage_scale, analogy_boost, loss_boost = scales
         groups, functions = len(tokens), self.catalog.get("count", 0)
         totals = np.zeros((groups, COLUMNS), dtype=np.float64)
         counts = np.zeros((groups, COLUMNS), dtype=np.int64)
+        needs: set[int] = set()
 
         def uniform(base: float, count: int, scale: float) -> float:
             return float(base * count * scale) if count > 0 else 0.0
@@ -163,7 +176,61 @@ class PythonSites:
                         totals[group, COL_SYNTAX + kind] = phases.rate_total(rates) if found else 0.0
                     else:
                         totals[group, COL_SYNTAX + kind] = uniform(float(bases[COL_SYNTAX + kind]), found, 1.0)
-        return totals, counts
+            if morph_on[group]:
+                row = variants[group * functions:(group + 1) * functions] if functions else ()
+                found = len(self._rebracketing_sites(
+                    bank, token, row, forms[group] if len(forms) else (), needs))
+                counts[group, COL_REBRACKETING] = found
+                totals[group, COL_REBRACKETING] = uniform(float(bases[COL_REBRACKETING]), found, 1.0)
+            for at, column in enumerate((COL_STRESS_SHIFT, COL_STRESS_STRENGTH)):
+                if prosody[at]:
+                    counts[group, column] = 1
+                    totals[group, column] = uniform(float(bases[column]), 1, 1.0)
+        return totals, counts, sorted(needs)
+
+    def _rebracketing_sites(
+        self, bank: Any, token: int, variants: Any, raw_forms: Any, needs: set[int],
+    ) -> list[tuple[int, int, int]]:
+        """Místa reanalýzy hranice (kořen, operace 0 ``prepend`` / 1 ``drop_initial``, hláska); zrcadlo ``sites.rs``."""
+        catalog = self.catalog
+        source = -1
+        for function in range(catalog.get("count", 0)):
+            if catalog["template"][function] != NEGATION:
+                continue
+            found = self.constructions.get(int(variants[function])) if variants[function] >= 0 else None
+            if found is not None and found[0] == PRE:
+                source = self.construction_sources.get(int(variants[function]), -1)
+                break
+        dominant = self.sem_sites.dominant(token)
+        vowel = bank.table.vowel_mask
+
+        def form_of(root: int) -> Any:
+            raw = int(raw_forms[root]) if root < len(raw_forms) else -1
+            if raw >= 0:
+                return bank.forms[raw]
+            default = self.morph.defaults.get(root)
+            if default is None:
+                needs.add(root)
+            return default
+
+        found: list[tuple[int, int, int]] = []
+        particle_root = dominant[source] if 0 <= source < len(dominant) else -1
+        particle = form_of(particle_root) if particle_root >= 0 else None
+        if particle:
+            last = particle[-1]
+            for root in sorted({root for root in dominant if root >= 0 and root in self.semantic.root_verb}):
+                form = form_of(root)
+                if not form:
+                    continue
+                if not vowel[last] and vowel[form[0]]:
+                    found.append((root, 0, last))
+                elif vowel[last] and not vowel[form[0]] and len(form) >= 3:
+                    found.append((root, 1, form[0]))
+        self._rebracketing[token] = found
+        return found
+
+    def rebracketing_sites(self, token: int) -> list[tuple[int, int, int]]:
+        return list(self._rebracketing.get(token, []))
 
     def _borrowing(self, token: int, group: int, borrowing: Any, base: float) -> tuple[int, float]:
         """Počet míst výpůjček a součet jejich měr (viz ``sites::SiteIndex::borrowing``)."""
@@ -446,17 +513,19 @@ class SiteIndex:
     def _supply_roots(self, world: World, numbers: list[int]) -> None:
         names = world.registry.morphemes.names
         morphemes, concepts = world.registry.morphemes, world.registry.concepts
-        sources, bases = [], []
+        sources, bases, verbs = [], [], []
         for number in numbers:
             morpheme = world.morphemes.get(names[number])
             if morpheme is None:  # číslo kořene, který svět nezná: bez odvození
                 sources.append(-1)
                 bases.append(-1)
+                verbs.append(False)
                 continue
             derived = morpheme.etymology == "derivation" and len(morpheme.sources) == 1
             sources.append(concepts.get(morpheme.sources[0]) if derived else -1)
             bases.append(-1 if morpheme.base is None else morphemes.get(morpheme.base, -3))
-        self._handle.set_roots(numbers, sources, bases)
+            verbs.append(morpheme.word_class == "verb")
+        self._handle.set_roots(numbers, sources, bases, verbs)
 
     # --- dorovnání ------------------------------------------------------------
 
@@ -467,10 +536,10 @@ class SiteIndex:
             return bank._native
         return bank
 
-    def sync_morphology(self, world: World, codes: list[Code]) -> None:
-        """Dorovná morfologii kódů, jejichž stav se od minula změnil."""
+    def _morphology_plan(self, world: World, codes: list[Code]) -> tuple[list[Any], tuple[Any, ...]] | None:
+        """Kódy, jejichž morfologie se od minula změnila, a vstupy dorovnání (``None``, když není co)."""
         if world.table is None:
-            return
+            return None
         changed = []
         for code in codes:
             state = code.phonology
@@ -478,27 +547,40 @@ class SiteIndex:
             if self._morph_keys.get(code.forms.token) != key:
                 changed.append((code, key))
         if not changed:
-            return
+            return None
         table: Any = world.columns.morphemes
         columns = [table.kind, table.word_class, table.cell, table.lexeme, table.exponent, table.boundary]
         tokens = [code.forms.token for code, _ in changed]
         flags = [code.phonology.vocabulary.flags for code, _ in changed]
         store = [code.forms.raw() for code, _ in changed]
+        return changed, (tokens, flags, store, columns)
+
+    def sync_morphology(self, world: World, codes: list[Code]) -> None:
+        """Dorovná morfologii kódů, jejichž stav se od minula změnil."""
+        plan = self._morphology_plan(world, codes)
+        if plan is None:
+            return
+        changed, args = plan
         bank = self._bank(world)
         for _ in range(64):
-            needs = self._handle.sync_morphology(bank, tokens, flags, store, columns)
+            needs = self._handle.sync_morphology(bank, *args)
             if not len(needs):
                 break
             self._supply_defaults(world, list(needs))
         else:
             raise RuntimeError("morfologický index se nepodařilo dorovnat")
+        self._morphology_done(changed)
+
+    def _morphology_done(self, changed: list[Any]) -> None:
         for code, key in changed:
             self._morph_keys[code.forms.token] = key
 
-    def sync_semantics(self, world: World, contexts: list[InnovationContext]) -> None:
-        """Dorovná sémantiku kódů, jejichž slovník (dominantní kořeny) se od minula změnil."""
+    def _semantic_plan(
+        self, world: World, contexts: list[InnovationContext]
+    ) -> tuple[list[InnovationContext], tuple[Any, ...]] | None:
+        """Kódy, jejichž slovník (dominantní kořeny) se od minula změnil, a vstupy dorovnání."""
         if world.table is None:
-            return
+            return None
         for _ in range(2):
             changed = [
                 ctx for ctx in contexts
@@ -506,7 +588,7 @@ class SiteIndex:
                 != (ctx.code.phonology.lexicon_version, self._graph_generation)
             ]
             if not changed:
-                return
+                return None
             if self._graph(world):
                 continue  # graf se změnil: všechny kódy se dorovnají znovu
             break
@@ -519,13 +601,24 @@ class SiteIndex:
             sites.append(self._lexical_numbers(world, ctx))
             taboo.append(self._taboo_numbers(world, ctx, concepts))
         suffix = [bool(world.derivational_suffix)] * len(changed)
+        return changed, (tokens, dominant, sites, taboo, suffix)
+
+    def sync_semantics(self, world: World, contexts: list[InnovationContext]) -> None:
+        """Dorovná sémantiku kódů, jejichž slovník (dominantní kořeny) se od minula změnil."""
+        plan = self._semantic_plan(world, contexts)
+        if plan is None:
+            return
+        changed, args = plan
         for _ in range(64):
-            needs = self._handle.sync_semantic(tokens, dominant, sites, taboo, suffix)
+            needs = self._handle.sync_semantic(*args)
             if not len(needs):
                 break
             self._supply_roots(world, list(needs))
         else:
             raise RuntimeError("sémantický index se nepodařilo dorovnat")
+        self._semantic_done(changed)
+
+    def _semantic_done(self, changed: list[InnovationContext]) -> None:
         for ctx in changed:
             self._semantic_keys[ctx.code.forms.token] = (ctx.code.phonology.lexicon_version, self._graph_generation)
 
@@ -557,12 +650,14 @@ class SiteIndex:
         if not fresh:
             return
         names = world.registry.variants.names
-        kinds, stages = [], []
+        concepts = world.registry.concepts
+        kinds, stages, sources = [], [], []
         for number in fresh:
             construction = world.variants[names[number]].payload["construction"]
             kinds.append(CONSTRUCTION_KINDS[construction.kind])
             stages.append(STAGES[construction.stage])
-        self._handle.set_constructions(fresh, kinds, stages)
+            sources.append(-1 if construction.source is None else concepts.get(construction.source))
+        self._handle.set_constructions(fresh, kinds, stages, sources)
         self._known_variants.update(fresh)
 
     # --- dávka ----------------------------------------------------------------
@@ -585,10 +680,28 @@ class SiteIndex:
         borrowing: tuple[int, bool, npt.NDArray[np.float64], list[bool], npt.NDArray[np.float64]] | None = None,
     ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.int64]]:
         """Celkové míry a počty míst (skupina × sloupec) všech druhů změn v ``bases`` (sloupec → základní míra)."""
-        self.refresh(world, contexts)
+        found, _ = self.batch_with_sound(world, contexts, bases, coinage_scale, borrowing, None)
+        return found
+
+    def batch_with_sound(
+        self, world: World, contexts: list[InnovationContext], bases: dict[int, float], coinage_scale: float,
+        borrowing: tuple[int, bool, npt.NDArray[np.float64], list[bool], npt.NDArray[np.float64]] | None,
+        sound: tuple[Any, list[Code]] | None,
+    ) -> tuple[tuple[npt.NDArray[np.float64], npt.NDArray[np.int64]], tuple[npt.NDArray[np.float64], list[bool]] | None]:
+        """Totéž co :meth:`batch`; s ``sound`` (index prostředí zvukových změn v Rustu a jeho kódy) jedním voláním
+        Rustu, které dorovná i ten index a vrátí jeho součty rodin (kód × rodina) a zda kód má rodiny.
+
+        Index prostředí a index míst si v Rustu předávají data: v tiku je to jediný přechod do Rustu
+        (kromě doplnění, o které si Rust řekne: výchozí tvary, vlastnosti kořenů).
+        """
+        self._names(world)
+        self._catalog(world)
+        codes = [ctx.code for ctx in contexts]
+        morphology = self._morphology_plan(world, codes)
+        semantics = self._semantic_plan(world, contexts)
         groups = len(contexts)
         if not groups:
-            return np.zeros((0, COLUMNS)), np.zeros((0, COLUMNS), dtype=np.int64)
+            return (np.zeros((0, COLUMNS)), np.zeros((0, COLUMNS), dtype=np.int64)), None
         functions = self._functions
         variants = np.full(groups * len(functions), -1, dtype=np.int32)
         if functions:
@@ -608,18 +721,95 @@ class SiteIndex:
         base = np.zeros(COLUMNS, dtype=np.float64)
         for column, value in bases.items():
             base[column] = value
+        from cee.v2 import prosody
+
         params = world.params
         table_on = world.table is not None
         morph_on = [table_on and bool(world.paradigms)] * groups
         semantic_on = [table_on and world.semantics is not None] * groups
-        totals, counts = self._handle.totals(
-            [ctx.code.forms.token for ctx in contexts], variants,
-            np.array([ctx.code.l2_share for ctx in contexts], dtype=np.float64),
-            np.array([len(ctx.code.repertoire.variable_ids_of("lexical")) for ctx in contexts], dtype=np.int64),
-            morph_on, semantic_on, base, (coinage_scale, params.analogy_l2_boost, params.category_loss_l2_boost),
-            borrowing,
-        )
-        return np.asarray(totals).reshape(groups, COLUMNS), np.asarray(counts).reshape(groups, COLUMNS)
+        tokens = [ctx.code.forms.token for ctx in contexts]
+        l2_share = np.array([ctx.code.l2_share for ctx in contexts], dtype=np.float64)
+        lexical = np.array([len(ctx.code.repertoire.variable_ids_of("lexical")) for ctx in contexts], dtype=np.int64)
+        scales = (coinage_scale, params.analogy_l2_boost, params.category_loss_l2_boost)
+        forms = [code.forms.raw()[0] for code in codes]
+        flags = (prosody.stress_rule_variable_id() in world.variables,
+                 prosody.stress_strength_variable_id() in world.variables)
+        bank = self._bank(world)
+        sound_result = None
+        if sound is None:
+            self._sync_apart(world, morphology, semantics)
+            for _ in range(64):
+                totals, counts, needs = self._handle.totals(
+                    bank, tokens, variants, l2_share, lexical, morph_on, semantic_on, base, scales, borrowing, forms, flags,
+                )
+                if not len(needs):
+                    break
+                self._supply_defaults(world, list(needs))
+            else:
+                raise RuntimeError("míry míst se nepodařilo spočítat")
+        else:
+            totals, counts, sound_result = self._together(
+                world, sound, morphology, semantics,
+                (tokens, variants, l2_share, lexical, morph_on, semantic_on, base, scales, borrowing, forms, flags),
+            )
+        return (np.asarray(totals).reshape(groups, COLUMNS), np.asarray(counts).reshape(groups, COLUMNS)), sound_result
+
+    def _sync_apart(self, world: World, morphology: Any, semantics: Any) -> None:
+        """Dorovná morfologii a sémantiku indexu míst (dvě volání; bez zvukového indexu v jednom volání)."""
+        bank = self._bank(world)
+        if morphology is not None:
+            changed, args = morphology
+            for _ in range(64):
+                needs = self._handle.sync_morphology(bank, *args)
+                if not len(needs):
+                    break
+                self._supply_defaults(world, list(needs))
+            else:
+                raise RuntimeError("morfologický index se nepodařilo dorovnat")
+            self._morphology_done(changed)
+        if semantics is not None:
+            changed_contexts, args = semantics
+            for _ in range(64):
+                needs = self._handle.sync_semantic(*args)
+                if not len(needs):
+                    break
+                self._supply_roots(world, list(needs))
+            else:
+                raise RuntimeError("sémantický index se nepodařilo dorovnat")
+            self._semantic_done(changed_contexts)
+
+    def _together(
+        self, world: World, sound: tuple[Any, list[Code]], morphology: Any, semantics: Any, totals_args: tuple[Any, ...],
+    ) -> tuple[Any, Any, tuple[npt.NDArray[np.float64], list[bool]]]:
+        """Jedno volání Rustu: dorovná zvukový index i index míst a spočítá všechny míry (``innovation_totals``)."""
+        index, sound_codes = sound
+        module = native._load()
+        assert module is not None
+        bank = self._bank(world)
+        sound_args = index.prepare(world, sound_codes)
+        morph_args = None if morphology is None else morphology[1]
+        semantic_args = None if semantics is None else semantics[1]
+        for _ in range(64):
+            (sound_needs, defaults, roots), result = module.innovation_totals(
+                bank, index.handle, self._handle, sound_args, morph_args, semantic_args, totals_args,
+            )
+            if result is not None:
+                break
+            for _, numbers in sound_needs:
+                index.supply(world, numbers)
+            if len(defaults):
+                self._supply_defaults(world, list(defaults))
+            if len(roots):
+                self._supply_roots(world, list(roots))
+        else:
+            raise RuntimeError("míry míst se nepodařilo spočítat")
+        if morphology is not None:
+            self._morphology_done(morphology[0])
+        if semantics is not None:
+            self._semantic_done(semantics[0])
+        totals, counts, families, has = result
+        matrix = np.asarray(families, dtype=np.float64).reshape(len(sound_codes), index.family_count)
+        return totals, counts, (matrix, list(has))
 
     def borrowing_factors(self, world: World, channels: tuple[str, ...]) -> npt.NDArray[np.float64]:
         """Filtr výpůjček slov podle kanálu a čísla pojmu (kanál × pojem, po řádcích); drží se, dokud se svět nezmění."""
@@ -670,6 +860,12 @@ class SiteIndex:
         """Funkce (čísla v katalogu) a míry zániku kategorie, které jsou místy změny; po :meth:`batch`."""
         found, rates = self._handle.syntax_sites(code.forms.token, kind)
         return np.asarray(found).tolist(), np.asarray(rates, dtype=np.float64)
+
+    def rebracketing_sites(self, world: World, code: Code) -> list[tuple[str, int, int]]:
+        """Místa reanalýzy hranice (jméno kořene, operace 0 ``prepend`` / 1 ``drop_initial``, hláska); po :meth:`batch`."""
+        names = world.registry.morphemes.names
+        return [(names[root], operation, segment)
+                for root, operation, segment in self._handle.rebracketing_sites(code.forms.token)]
 
     @property
     def functions(self) -> list[str]:

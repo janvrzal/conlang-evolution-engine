@@ -6,6 +6,7 @@
 use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::prelude::*;
 
+use crate::bank::Bank;
 use crate::candidates::{self, Candidate, Pat, SegTable};
 use crate::clarity::{self, GroupColumns};
 use crate::index::{self, GroupInput};
@@ -19,7 +20,7 @@ type NeedsOut = (Vec<(usize, Vec<u32>)>, Vec<Vec<u32>>);
 /// zrcadlo `cee.v2.language.sound_index.SoundIndex`.
 #[pyclass(module = "cee_core")]
 pub struct SoundIndex {
-    inner: index::SoundIndex,
+    pub(crate) inner: index::SoundIndex,
 }
 
 #[pymethods]
@@ -43,24 +44,7 @@ impl SoundIndex {
         flags: Vec<Bound<'_, PyAny>>,
         forms: Vec<Bound<'_, PyAny>>,
     ) -> PyResult<NeedsOut> {
-        let count = tokens.len();
-        if [rules.len(), flags.len(), forms.len()]
-            .iter()
-            .any(|&size| size != count)
-        {
-            return Err(failure("seznamy kódů mají různou délku".into()));
-        }
-        let flags = Held::<u8>::all(&flags)?;
-        let forms = Held::<i32>::all(&forms)?;
-        let inputs: Vec<GroupInput<'_>> = (0..count)
-            .map(|at| GroupInput {
-                token: tokens[at],
-                rule: rules[at],
-                flags: flags[at].view(),
-                forms: forms[at].view(),
-            })
-            .collect();
-        let needs = self.inner.sync(&bank.bank, &inputs).map_err(failure)?;
+        let needs = sound_sync(&mut self.inner, &bank.bank, &tokens, &rules, &flags, &forms)?;
         Ok((needs.defaults, needs.sets))
     }
 
@@ -288,6 +272,35 @@ impl SoundIndex {
             )
             .map_err(failure)
     }
+}
+
+/// Dorovná kódy indexu prostředí (viz `SoundIndex::sync`).
+pub(crate) fn sound_sync(
+    inner: &mut index::SoundIndex,
+    bank: &Bank,
+    tokens: &[i64],
+    rules: &[u8],
+    flags: &[Bound<'_, PyAny>],
+    forms: &[Bound<'_, PyAny>],
+) -> PyResult<index::Needs> {
+    let count = tokens.len();
+    if [rules.len(), flags.len(), forms.len()]
+        .iter()
+        .any(|&size| size != count)
+    {
+        return Err(failure("seznamy kódů mají různou délku".into()));
+    }
+    let flags = Held::<u8>::all(flags)?;
+    let forms = Held::<i32>::all(forms)?;
+    let inputs: Vec<GroupInput<'_>> = (0..count)
+        .map(|at| GroupInput {
+            token: tokens[at],
+            rule: rules[at],
+            flags: flags[at].view(),
+            forms: forms[at].view(),
+        })
+        .collect();
+    inner.sync(bank, &inputs).map_err(failure)
 }
 
 /// Předpis vzoru: druh, dvojice (rys, hodnota) a zápis IPA hlásek výčtu.

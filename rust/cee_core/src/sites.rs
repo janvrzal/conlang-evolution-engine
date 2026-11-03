@@ -1,14 +1,21 @@
-//! Hledání míst inovací všech druhů změn jako jedna dávka nad čísly (krok B5b).
+//! Hledání míst inovací všech druhů změn jako jedna dávka nad čísly (krok B5b a B6d).
 //!
 //! `SiteIndex` drží stav tří indexů (morfologie `MorphIndex`, sémantika `SemanticIndex`
 //! a syntaktická místa z konstrukcí) a jednou dávkou (`totals`) vrátí pro každou
 //! skupinu a druh změny celkovou míru a počet míst. Zvukové změny mají vlastní
-//! index (`index::SoundIndex`); ostatní druhy (výpůjčky, přízvuk, reanalýza hranice)
-//! počítá Python výchozím postupem.
+//! index (`index::SoundIndex`), se kterým si tento předává data v jednom volání
+//! (`innovation_python.rs`).
 //!
 //! **Sloupce výstupu** (pořadí je dohodnuté s Pythonem, `cee.v2.language.site_index`):
 //! expresivní tvoření, sedm sémantických změn, vyrovnání, rozšíření, deset
-//! syntaktických změn a výpůjčky slov.
+//! syntaktických změn, výpůjčky slov, reanalýza hranice a dvě prozodické změny.
+//!
+//! **Reanalýza hranice** (`rebracketing`): přiklonka záporky před slovesem (dominantní
+//! konstrukce `pre` první záporkové funkce) a slovesné kořeny ve slovní zásobě; místem je
+//! kořen, jehož počáteční hláska se dá přesunout k záporce (`prepend`), nebo záporka končící
+//! samohláskou předá slovesu souhlásku (`drop_initial`). Tvary kořenů se čtou z úložiště kódu a
+//! z výchozích tvarů v aréně; chybí-li výchozí tvar, vrátí dávka jeho číslo (`needs`).
+//! **Prozodie**: místem je jediná proměnná přízvuku, pokud ji svět sleduje; míra je jednotná.
 //!
 //! **Syntaktická místa** jsou funkce katalogu (pořadí podle jména): konstrukce, která
 //! ve skupině převažuje, je číslo varianty a její druh a stupeň jsou sloupce
@@ -21,17 +28,21 @@ use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 
 use crate::assess::pairwise_sum;
+use crate::bank::Bank;
 use crate::index::Fx;
 use crate::morphology_index::MorphIndex;
 use crate::semantic_index::{SemanticIndex, KINDS as SEMANTIC};
 
-pub const COLUMNS: usize = 1 + SEMANTIC + 2 + SYNTAX + 1;
+pub const COLUMNS: usize = 1 + SEMANTIC + 2 + SYNTAX + 1 + 3;
 pub const COL_COINAGE: usize = 0;
 pub const COL_SEMANTIC: usize = 1;
 pub const COL_LEVELING: usize = COL_SEMANTIC + SEMANTIC;
 pub const COL_EXTENSION: usize = COL_LEVELING + 1;
 pub const COL_SYNTAX: usize = COL_EXTENSION + 1;
 pub const COL_BORROWING: usize = COL_SYNTAX + SYNTAX;
+pub const COL_REBRACKETING: usize = COL_BORROWING + 1;
+pub const COL_STRESS_SHIFT: usize = COL_REBRACKETING + 1;
+pub const COL_STRESS_STRENGTH: usize = COL_STRESS_SHIFT + 1;
 /// Počet syntaktických změn: opis, přiklonka, srůst, exaptace, zánik kategorie,
 /// posílení, zeslabení a obnova záporu, ustálení a uvolnění slovosledu.
 pub const SYNTAX: usize = 10;
@@ -164,21 +175,33 @@ impl Catalog {
     }
 }
 
-/// Druh a stupeň konstrukcí podle čísla varianty.
+/// Druh, stupeň a pojem zdroje konstrukcí podle čísla varianty.
 #[derive(Default)]
 pub struct Constructions {
     kind: Vec<i8>,
     stage: Vec<i8>,
+    source: Vec<i32>,
 }
 
 impl Constructions {
-    pub fn set(&mut self, variant: usize, kind: i8, stage: i8) {
+    pub fn set(&mut self, variant: usize, kind: i8, stage: i8, source: i32) {
         if self.kind.len() <= variant {
             self.kind.resize(variant + 1, -1);
             self.stage.resize(variant + 1, -1);
+            self.source.resize(variant + 1, -1);
         }
         self.kind[variant] = kind;
         self.stage[variant] = stage;
+        self.source[variant] = source;
+    }
+
+    /// Pojem zdroje konstrukce (−1 = žádný).
+    fn source_of(&self, variant: i32) -> i32 {
+        usize::try_from(variant)
+            .ok()
+            .and_then(|variant| self.source.get(variant))
+            .copied()
+            .unwrap_or(-1)
     }
 
     fn get(&self, variant: i32) -> Option<(i8, i8)> {
@@ -212,6 +235,10 @@ pub struct Borrowing<'a> {
 /// Vstup dávky: skupiny (kódy) a jejich dnešní stav, který nenese žádný index.
 pub struct Request<'a> {
     pub tokens: &'a [i64],
+    /// Číslo tvaru v bance, který kód přepsal, podle čísla morfému (−1 = výchozí tvar), pro každou skupinu.
+    pub forms: &'a [&'a [i32]],
+    /// Sleduje svět proměnnou pravidla a proměnnou síly přízvuku (místa prozodických změn)?
+    pub prosody: [bool; 2],
     /// Dominantní varianta konstrukce skupiny podle funkce katalogu (−1 = žádná).
     pub variants: &'a [i32],
     pub l2_share: &'a [f64],
@@ -234,6 +261,8 @@ pub struct SiteIndex {
     pub catalog: Catalog,
     pub constructions: Constructions,
     results: FxMap<i64, Found>,
+    /// Místa reanalýzy hranice skupiny z posledního vyhodnocení: kořen, operace (0 `prepend`, 1 `drop_initial`), hláska.
+    rebracketing: FxMap<i64, Vec<(u32, u8, i32)>>,
     current: Vec<Option<(i8, i8)>>,
     rates: Vec<f64>,
 }
@@ -243,8 +272,10 @@ impl SiteIndex {
         SiteIndex::default()
     }
 
-    /// Celkové míry a počty míst: pole „skupina × sloupec“ po řádcích za sebou.
-    pub fn totals(&mut self, request: &Request<'_>) -> Totals {
+    /// Celkové míry a počty míst: pole „skupina × sloupec“ po řádcích za sebou, a čísla morfémů,
+    /// jejichž výchozí tvar musí volající doplnit (`morph.defaults`); pak je výstup neúplný a volá se znovu.
+    pub fn totals(&mut self, bank: &Bank, request: &Request<'_>) -> (Totals, Vec<u32>) {
+        let mut needs: Vec<u32> = Vec::new();
         let groups = request.tokens.len();
         let functions = self.catalog.count;
         let mut totals = vec![0.0; groups * COLUMNS];
@@ -309,8 +340,105 @@ impl SiteIndex {
                 }
                 self.results.insert(token, result);
             }
+            if request.morph_on[group] {
+                let functions_forms = request.forms.get(group).copied().unwrap_or(&[]);
+                let variants = if functions > 0 {
+                    &request.variants[group * functions..(group + 1) * functions]
+                } else {
+                    &[]
+                };
+                let found = self.rebracketing(bank, token, variants, functions_forms, &mut needs);
+                counts[row + COL_REBRACKETING] = found as i64;
+                totals[row + COL_REBRACKETING] =
+                    uniform(request.bases[COL_REBRACKETING], found as i64, 1.0);
+            }
+            for (at, column) in [COL_STRESS_SHIFT, COL_STRESS_STRENGTH]
+                .into_iter()
+                .enumerate()
+            {
+                if request.prosody[at] {
+                    counts[row + column] = 1;
+                    totals[row + column] = uniform(request.bases[column], 1, 1.0);
+                }
+            }
         }
-        (totals, counts)
+        needs.sort_unstable();
+        needs.dedup();
+        ((totals, counts), needs)
+    }
+
+    /// Místa reanalýzy hranice skupiny (kořen, operace, hláska) z posledního vyhodnocení.
+    pub fn rebracketing_sites(&self, token: i64) -> &[(u32, u8, i32)] {
+        self.rebracketing.get(&token).map_or(&[], Vec::as_slice)
+    }
+
+    /// Počet míst reanalýzy hranice: sloveso, jehož kořen začíná samohláskou, když přiklonka záporky
+    /// končí souhláskou (`prepend`), nebo souhláskou při přiklonce na samohlásku (`drop_initial`, tvar
+    /// aspoň o třech hláskách). Zrcadlo `Rebracketing.candidates` z `changes/morphology.py`.
+    fn rebracketing(
+        &mut self,
+        bank: &Bank,
+        token: i64,
+        variants: &[i32],
+        forms: &[i32],
+        needs: &mut Vec<u32>,
+    ) -> usize {
+        let mut found = self.rebracketing.remove(&token).unwrap_or_default();
+        found.clear();
+        let source = (0..self.catalog.count)
+            .filter(|&function| self.catalog.template[function] == NEGATION)
+            .filter_map(|function| variants.get(function).copied())
+            .find(|&variant| {
+                self.constructions
+                    .get(variant)
+                    .is_some_and(|(kind, _)| kind == PRE)
+            })
+            .map_or(-1, |variant| self.constructions.source_of(variant));
+        let dominant = self.semantic.dominant(token);
+        let root_of = |concept: i32| -> Option<usize> {
+            let root = *dominant.get(usize::try_from(concept).ok()?)?;
+            usize::try_from(root).ok()
+        };
+        let form_of = |root: usize, needs: &mut Vec<u32>| -> Option<&[i32]> {
+            match forms.get(root).copied() {
+                Some(raw) if raw >= 0 => Some(bank.form_of(raw as usize)),
+                _ => {
+                    let default = self.morph.defaults.get(root);
+                    if default.is_none() {
+                        needs.push(root as u32);
+                    }
+                    default
+                }
+            }
+        };
+        let particle = root_of(source).and_then(|root| form_of(root, needs));
+        if let Some(&last) = particle.and_then(|form| form.last()) {
+            let particle_vowel = bank.vowel[last as usize];
+            let mut roots: Vec<usize> = dominant
+                .iter()
+                .filter(|&&root| self.semantic.is_verb(root))
+                .map(|&root| root as usize)
+                .collect();
+            roots.sort_unstable();
+            roots.dedup();
+            for root in roots {
+                let Some(form) = form_of(root, needs) else {
+                    continue;
+                };
+                let Some(&first) = form.first() else {
+                    continue;
+                };
+                let first_vowel = bank.vowel[first as usize];
+                if !particle_vowel && first_vowel {
+                    found.push((root as u32, 0, last));
+                } else if particle_vowel && !first_vowel && form.len() >= 3 {
+                    found.push((root as u32, 1, first));
+                }
+            }
+        }
+        let count = found.len();
+        self.rebracketing.insert(token, found);
+        count
     }
 
     /// Počet míst výpůjček (lexikální proměnné kódu) a součet jejich měr: `base × podíl × filtr`
@@ -526,9 +654,9 @@ mod tests {
     fn opis_a_zanik_kategorie_podle_konstrukci() {
         let mut index = SiteIndex::new();
         index.catalog = catalog();
-        index.constructions.set(0, ZERO, -1);
-        index.constructions.set(1, PERIPHRASTIC, STAGE_FREE);
-        index.constructions.set(2, PRE, -1);
+        index.constructions.set(0, ZERO, -1, -1);
+        index.constructions.set(1, PERIPHRASTIC, STAGE_FREE, -1);
+        index.constructions.set(2, PRE, -1, -1);
         // Kód s dominantním kořenem pro pojem 5 (zdroj gramatikalizace).
         index
             .semantic
@@ -542,7 +670,7 @@ mod tests {
             taboo: &[],
             suffix: false,
         };
-        index.semantic.set_roots(&[3], &[-1], &[-1]);
+        index.semantic.set_roots(&[3], &[-1], &[-1], &[false]);
         index.semantic.sync(&input).expect("sync");
         let mut bases = [0.0; COLUMNS];
         bases[COL_SYNTAX + PERIPHRASIS] = 0.05;
@@ -551,6 +679,8 @@ mod tests {
         let variants = [0, 2];
         let request = Request {
             tokens: &[9],
+            forms: &[&[]],
+            prosody: [true, false],
             variants: &variants,
             l2_share: &[0.0],
             lexical: &[0],
@@ -562,7 +692,12 @@ mod tests {
             loss_boost: 1.0,
             borrowing: None,
         };
-        let (totals, counts) = index.totals(&request);
+        let bank = Bank::new(1, vec![false, true]).unwrap();
+        let ((totals, counts), needs) = index.totals(&bank, &request);
+        assert!(needs.is_empty());
+        // Prozodie: jediné místo s jednotnou mírou.
+        assert_eq!(counts[COL_STRESS_SHIFT], 1);
+        assert_eq!(counts[COL_STRESS_STRENGTH], 0);
         // Funkce 0 bez koncovky a se zdrojem: opis; záporka před slovesem: posílení.
         assert_eq!(counts[COL_SYNTAX + PERIPHRASIS], 1);
         assert_eq!(totals[COL_SYNTAX + PERIPHRASIS], 0.05);
@@ -574,7 +709,7 @@ mod tests {
             variants: &variants,
             ..request
         };
-        let (totals, counts) = index.totals(&request);
+        let ((totals, counts), _) = index.totals(&bank, &request);
         assert_eq!(counts[COL_SYNTAX + CLITICIZATION], 1);
         assert_eq!(counts[COL_SYNTAX + CATEGORY_LOSS], 1);
         assert_eq!(totals[COL_SYNTAX + CATEGORY_LOSS], 0.02);

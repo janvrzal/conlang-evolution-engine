@@ -22,6 +22,8 @@ pub mod transmission;
 #[cfg(feature = "python")]
 mod index_python;
 #[cfg(feature = "python")]
+mod innovation_python;
+#[cfg(feature = "python")]
 mod pressures_python;
 #[cfg(feature = "python")]
 mod python;

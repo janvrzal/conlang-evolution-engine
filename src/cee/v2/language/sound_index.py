@@ -423,28 +423,46 @@ class NativeSoundIndex:
         assert bank is not None
         return bank
 
-    def sync(self, world: World, codes: list[Code], catalog: Catalog, force: bool = False) -> None:
+    @property
+    def handle(self) -> Any:
+        """Index v Rustu (jeho dorovnání spolu s indexem míst dělá ``cee_core.innovation_totals``)."""
+        return self._handle
+
+    @property
+    def family_count(self) -> int:
+        return len(self._scales)
+
+    def prepare(self, world: World, codes: list[Code]) -> tuple[list[int], list[int], list[Any], list[Any]]:
+        """Vstupy dorovnání kódů (tokeny, pravidla přízvuku, příznaky slovní zásoby a tvary kódů bez kopie).
+
+        Zároveň pošle Rustu tabulku hlásek, nebyla-li poslána, a vrátí do něj uložený stav (po obnově světa).
+        """
         table = world.table
         assert table is not None
         bank = self._bank(world)
         self._send_table(table)
         for token, (forms, rules) in list(self._restore.items()):
             # Uložené číslo tvaru mimo banku se odvolává na výchozí tvar morfému: obsah doplní svět.
-            self._supply(world, (np.unique(forms[forms >= PRIVATE_BASE]) - PRIVATE_BASE).tolist())
+            self.supply(world, (np.unique(forms[forms >= PRIVATE_BASE]) - PRIVATE_BASE).tolist())
             self._handle.import_group(bank, token, forms, rules)
         self._restore.clear()
         tokens = [code.forms.token for code in codes]
         self._tokens.update(tokens)
-        rules = [RULES.index(code.stress_rule) for code in codes]
-        flags = [code.phonology.vocabulary.flags for code in codes]
-        forms = [code.forms.raw()[0] for code in codes]
+        return (
+            tokens, [RULES.index(code.stress_rule) for code in codes],
+            [code.phonology.vocabulary.flags for code in codes], [code.forms.raw()[0] for code in codes],
+        )
+
+    def sync(self, world: World, codes: list[Code], catalog: Catalog, force: bool = False) -> None:
+        bank = self._bank(world)
+        tokens, rules, flags, forms = self.prepare(world, codes)
         for _ in range(64):
             missing, sets = self._handle.sync(bank, tokens, rules, flags, forms)
             assert not sets, "Rust si sady kandidátů staví sám"
             if not missing:
                 return
             for _, numbers in missing:
-                self._supply(world, numbers)
+                self.supply(world, numbers)
         raise RuntimeError("index prostředí se nepodařilo dorovnat")
 
     def _send_table(self, table: SegmentTable) -> None:
@@ -467,7 +485,7 @@ class NativeSoundIndex:
         )
         self._table_sent = table
 
-    def _supply(self, world: World, numbers: list[int]) -> None:
+    def supply(self, world: World, numbers: list[int]) -> None:
         """Výchozí tvary morfémů (obsah hlásek) do arény indexu; do banky tvarů světa se nezařazují."""
         if numbers:
             names = world.registry.morphemes.names

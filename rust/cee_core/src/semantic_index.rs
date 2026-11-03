@@ -203,6 +203,8 @@ pub struct SemanticIndex {
     /// (−1 = není odvozenina z jediného pojmu), a číslo základu (−1 = žádný).
     root_source: Vec<i32>,
     root_base: Vec<i32>,
+    /// Je kořen sloveso (`Morpheme.word_class == "verb"`)? Podle čísla morfému.
+    root_verb: Vec<bool>,
     slots: Vec<Slot>,
     by_token: FxMap<i64, usize>,
     scratch: Vec<u32>,
@@ -219,17 +221,28 @@ impl SemanticIndex {
         self.graph_version += 1;
     }
 
-    /// Doplní vlastnosti kořenů (číslo morfému, pojem zdroje odvozeniny, základ).
-    pub fn set_roots(&mut self, numbers: &[u32], sources: &[i32], bases: &[i32]) {
+    /// Doplní vlastnosti kořenů (číslo morfému, pojem zdroje odvozeniny, základ, zda je sloveso).
+    pub fn set_roots(&mut self, numbers: &[u32], sources: &[i32], bases: &[i32], verbs: &[bool]) {
         for (at, &number) in numbers.iter().enumerate() {
             let number = number as usize;
             if self.root_source.len() <= number {
                 self.root_source.resize(number + 1, UNKNOWN);
                 self.root_base.resize(number + 1, UNKNOWN);
+                self.root_verb.resize(number + 1, false);
             }
             self.root_source[number] = sources[at];
             self.root_base[number] = bases[at];
+            self.root_verb[number] = verbs[at];
         }
+    }
+
+    /// Je kořen sloveso? (Neznámý kořen není.)
+    pub fn is_verb(&self, root: i32) -> bool {
+        usize::try_from(root)
+            .ok()
+            .and_then(|root| self.root_verb.get(root))
+            .copied()
+            .unwrap_or(false)
     }
 
     fn slot_of(&mut self, token: i64) -> usize {
@@ -649,7 +662,7 @@ mod tests {
             suffix: false,
         };
         assert!(!index.sync(&input).expect("sync").is_empty());
-        index.set_roots(&[10, 11], &[-1, -1], &[-1, -1]);
+        index.set_roots(&[10, 11], &[-1, -1], &[-1, -1], &[false, false]);
         assert!(index.sync(&input).expect("sync").is_empty());
         // Posun na „oheň“: zdroj „voda“ má kořen jiný než oheň.
         assert_eq!(index.sites(1, SHIFT), vec![0]);

@@ -1391,6 +1391,39 @@ def _total_prior() -> float:
     return _TOTAL_PRIOR
 
 
+def standard_sound_changes(changes: Sequence[Change]) -> list[tuple[int, SoundChange]]:
+    """Zvukové změny (pozice v ``changes``), které mají standardní váhy priorů a počítá je index světa."""
+    return [
+        (at, change) for at, change in enumerate(changes)
+        if isinstance(change, SoundChange) and _STANDARD_SOUND_PRIORS.get(type(change)) == change.prior
+    ]
+
+
+def live_positions(contexts: Sequence[InnovationContext]) -> list[int]:
+    """Pozice skupin, které mají hláskové tvary a neprázdnou slovní zásobu (ostatní zvukové změny nemají)."""
+    return [
+        position for position, context in enumerate(contexts)
+        if context.world.table is not None and context.code.phonology.vocabulary
+    ]
+
+
+def family_totals(
+    standard: Sequence[tuple[int, SoundChange]], contexts: Sequence[InnovationContext], live: Sequence[int],
+    matrix: npt.NDArray[np.float64], has: Sequence[bool],
+) -> dict[int, list[float]]:
+    """Součty měr zvukových změn všech skupin z matice (kód × rodina) indexu; klíč je pozice změny.
+
+    Kód bez rodin (index pro něj nic nespočítal) vyřídí výchozí ``Change.total_rate``.
+    """
+    found: dict[int, list[float]] = {at: [0.0] * len(contexts) for at, _ in standard}
+    for at, change in standard:
+        column = matrix[:, FAMILY_INDEX[change.kind]].tolist()
+        totals = found[at]
+        for position, indexed, value in zip(live, has, column):
+            totals[position] = value if indexed else Change.total_rate(change, contexts[position])
+    return found
+
+
 def batch_total_rates(
     changes: Sequence[Change], contexts: Sequence[InnovationContext]
 ) -> dict[int, list[float]]:
@@ -1399,31 +1432,18 @@ def batch_total_rates(
     Klíč je pozice změny v ``changes``; změny s vlastními váhami priorů (jiná podtřída či ``prior``)
     se tu nepočítají a volající je vyřídí po jedné (``total_rates``).
     """
-    standard = [
-        (at, change) for at, change in enumerate(changes)
-        if isinstance(change, SoundChange) and _STANDARD_SOUND_PRIORS.get(type(change)) == change.prior
-    ]
+    standard = standard_sound_changes(changes)
     if not standard or not contexts:
         return {}
     world = contexts[0].world
-    live = [
-        position for position, context in enumerate(contexts)
-        if context.world.table is not None and context.code.phonology.vocabulary
-    ]
-    found: dict[int, list[float]] = {at: [0.0] * len(contexts) for at, _ in standard}
+    live = live_positions(contexts)
     if not live:
-        return found
+        return {at: [0.0] * len(contexts) for at, _ in standard}
     index = sound_index(world)
     codes = [contexts[position].code for position in live]
     index.sync(world, codes, CATALOG)
     matrix = index.totals(codes, len(SOUND_CHANGES))
-    has = [index.has_families(code) for code in codes]
-    for at, change in standard:
-        column = matrix[:, FAMILY_INDEX[change.kind]].tolist()
-        totals = found[at]
-        for position, indexed, value in zip(live, has, column):
-            totals[position] = value if indexed else Change.total_rate(change, contexts[position])
-    return found
+    return family_totals(standard, contexts, live, matrix, [index.has_families(code) for code in codes])
 
 #: Druh změny podle čísla rodiny (pořadí ``SOUND_CHANGES``, shodné s ``cee_core.candidate_families``).
 FAMILY_KINDS: tuple[str, ...] = tuple(change.kind for change in SOUND_CHANGES)
