@@ -376,7 +376,10 @@ přechodu do Pythonu; Python se ptá jen na to, co v Rustu ještě není (viz �
   v dosažených buňkách, podíl koncových souhlásek, tabulky vlastníků tvarů) a **skóre** (jen čtení,
   řádky jsou nezávislé a dělí se na vlákna `CEE_THREADS`). Součet vážených tlaků má stejné pořadí
   jako `fitness_of` (`fitness += síla * skóre` po tlacích druhu proměnných); nulové členy se
-  nepřičítají (`x + 0 = x`, fitness nikdy není −0).
+  nepřičítají (`x + 0 = x`, fitness nikdy není −0). Výběr čte tlak slotu jen tam, kde kohorta slot
+  slyší (`slyšený × exp(…)` je jinak nula), proto přenos ocenění změn (`Actuation`, jediný tlak
+  počítaný ve všech buňkách) v neslyšených slotech vynechává; zlatá data a zkoušky
+  (`scores_of_batch`) počítají celé pole (`exhaustive`).
 - `transmit` vrací pohledy na výsledky jako dřív; zpětné volání `fitness` zůstává pro tlaky, které
   Rust nezná (vlastní třídy), pro paralelní běh (`fitness_hook`), svět bez tabulky hlásek a režim
   bez Rustu.
