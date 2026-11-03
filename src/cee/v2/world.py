@@ -189,6 +189,9 @@ class World:
     semantics: ConceptGraph | None = None
     #: Pojem → třída slova (``None`` = neohebné).
     concept_classes: dict[str, str | None] = field(default_factory=dict)
+    #: Slovník světa (``cee.v2.vocabulary``): doména, půjčitelnost a původ každého pojmu;
+    #: ``None`` u světů, které nevznikly z popisu světa. Dynamiku neovlivní.
+    vocabulary: Any = None
     #: Pojem → jak často se o něm mluví (0 až 1); vlastnost významu, ne slova.
     concept_frequencies: dict[str, float] = field(default_factory=FrequencyMap)
     #: Odvozovací přípona protojazyka (M3b).

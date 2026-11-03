@@ -6,19 +6,28 @@ poloviny běhu spisovný jazyk se školou. Měří se čas běhu přes
 ``runner`` (jako v UI), počet skupin na konci a velikost exportu.
 
 Použití:  python scripts/v2_spec_timing.py --rows 4 --columns 6 --villages 5 --years 3000
+
+S ``--vocabulary N`` běží svět se slovníkem o ``N`` pojmech (``WorldSpec.vocabulary``)
+a skript vypíše i špičkovou paměť procesu. Pro srovnání velikostí slovníku pouštěj
+každou zvlášť (jeden proces na měření), například
+``--rows 2 --columns 3 --years 1000 --vocabulary 500``.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import resource
+import sys
 import time
 from typing import Any
 
 from cee.v2 import runner
 
 
-def grid_spec(rows: int, columns: int, villages: int, years: float, semantics: bool) -> dict[str, Any]:
+def grid_spec(
+    rows: int, columns: int, villages: int, years: float, semantics: bool, vocabulary: int = 149
+) -> dict[str, Any]:
     ids = [[f"r{row}c{column}" for column in range(columns)] for row in range(rows)]
     regions = []
     for row in range(rows):
@@ -33,7 +42,7 @@ def grid_spec(rows: int, columns: int, villages: int, years: float, semantics: b
             })
     everything = [region["id"] for region in regions]
     return {
-        "end_year": years, "semantics": semantics,
+        "end_year": years, "semantics": semantics, "vocabulary": vocabulary,
         "languages": [{"id": "a"}, {"id": "b", "grammar": "substrate"}, {"id": "c", "grammar": "full"}],
         "regions": regions,
         "events": [
@@ -51,8 +60,9 @@ def main() -> None:
     parser.add_argument("--villages", type=int, default=4)
     parser.add_argument("--years", type=float, default=2000.0)
     parser.add_argument("--no-semantics", action="store_true")
+    parser.add_argument("--vocabulary", type=int, default=149, help="velikost slovníku (pojmů)")
     args = parser.parse_args()
-    spec = grid_spec(args.rows, args.columns, args.villages, args.years, not args.no_semantics)
+    spec = grid_spec(args.rows, args.columns, args.villages, args.years, not args.no_semantics, args.vocabulary)
     started = time.perf_counter()
     run, simulation = runner.prepare("timing", spec)
     built = time.perf_counter() - started
@@ -60,7 +70,8 @@ def main() -> None:
     total = time.perf_counter() - started
     assert run.status == "done", run.error
     size = len(json.dumps(run.result)) / 1024
-    print(f"regionů {args.rows * args.columns}, vesnic {args.rows * args.columns * args.villages}, "
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024) / 2**20
+    print(f"slovník {args.vocabulary}, špičková paměť {peak:.0f} MB; regionů {args.rows * args.columns}, vesnic {args.rows * args.columns * args.villages}, "
           f"{args.years:.0f} let, sémantika {'ne' if args.no_semantics else 'ano'}: stavba {built:.1f} s, "
           f"celkem {total:.1f} s, skupin na konci {len(simulation.world.groups)}, snímků {len(run.frames)}, "
           f"export {size:.0f} kB")

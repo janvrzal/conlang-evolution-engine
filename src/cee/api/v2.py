@@ -13,7 +13,16 @@ from fastapi import APIRouter, HTTPException
 
 from cee.v2 import runner
 from cee.v2.parameters import Parameters
-from cee.v2.spec import EVENT_KINDS, FORMAT, SpecError, WorldSpec, check, levels
+from cee.v2.spec import (
+    EVENT_KINDS,
+    FORMAT,
+    SpecError,
+    WorldSpec,
+    check,
+    errors,
+    levels,
+    vocabulary_options,
+)
 
 router = APIRouter(prefix="/api/v2", tags=["engine-v2"])
 
@@ -24,7 +33,7 @@ _lock = threading.Lock()
 
 
 def _issues(issues: list[Any]) -> list[dict[str, str]]:
-    return [{"path": issue.path, "message": issue.message} for issue in issues]
+    return [{"path": issue.path, "message": issue.message, "severity": issue.severity} for issue in issues]
 
 
 @router.get("/schema")
@@ -36,14 +45,20 @@ def schema():
         "json_schema": WorldSpec.model_json_schema(),
         "levels": levels(defaults),
         "event_kinds": list(EVENT_KINDS),
+        "vocabulary": vocabulary_options(),
     }
 
 
 @router.post("/validate")
 def validate(spec: dict[str, Any]):
-    """Chyby popisu světa s cestou k poli (prázdné ``issues`` = v pořádku)."""
-    issues = check(spec)
-    return {"ok": not issues, "issues": _issues(issues)}
+    """Chyby a varování popisu světa s cestou k poli.
+
+    Každá položka má ``severity``: ``error`` (svět nejde postavit) nebo ``warning``
+    (běh nezastaví, jen upozorní; například že jiný slovník dá jiné výsledky než
+    výchozí). ``ok`` je pravda, když nejsou chyby. Chyby jdou před varováními.
+    """
+    found = check(spec)
+    return {"ok": not errors(found), "issues": _issues(found)}
 
 
 def _forget_old() -> None:

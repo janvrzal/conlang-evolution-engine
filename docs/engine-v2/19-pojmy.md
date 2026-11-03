@@ -88,12 +88,15 @@ půjčitelnost katalogu, dokud je autor nezadá.
      soutěží;
    - parametry rovnováhy v UI.
 
-   Pro velký slovník chybí:
+   Pro velký slovník chybělo (hotovo, viz „Nástroje pro autora: slovník
+   a vlastní pojmy“ níže):
    - **sémantické vztahy**: posuny významu z DatSemShift a kolexifikace
-     z CLICS, CC BY 4.0. Výřez `build_v2_core_semantics.py` je jen pro
-     149 pojmů a pro katalog se přegeneruje;
-   - **frekvence pojmů**: data jsou hotová (viz níže); zbývá je použít
-     v enginu místo generovaných.
+     z CLICS, CC BY 4.0. Výřez `build_v2_core_semantics.py` byl jen pro
+     149 pojmů; pro katalog je samostatný soubor;
+   - **frekvence pojmů**: data jsou hotová (viz níže) a engine je používá
+     i pro pojmy katalogu.
+
+   Zbývají parametry rovnováhy v UI a domény v mechanismech (krok 3).
 
 ## Frekvence pojmů (data hotová 2026-11-02)
 
@@ -237,3 +240,223 @@ Kontakt: retence jádra 0,798 / 0,833 / 0,862, výpůjčky v jádru 5 %, 13 %,
 Zbývá: 45 pojmů se nemění, protože u nich engine nemá z čeho tvořit nové
 slovo. Pomůže větší výřez sémantických vztahů (katalog), pak kalibraci
 zopakovat.
+
+## Nástroje pro autora: slovník a vlastní pojmy (nasazeno 2026-11-02)
+
+Krok 4 plánu. Specifikace světa (`WorldSpec`, viz
+[`16-rozhrani-ui.md`](16-rozhrani-ui.md)) má dvě nová pole: `vocabulary`
+(kolik pojmů) a `concepts` (vlastní pojmy). Kód je v `cee.v2.vocabulary`,
+data o katalogu v `cee.v2.concept_data`. **Výchozí svět je bitově beze
+změny**: bez těchto polí vychází stejný slovník (149 pojmů a šest zdrojů
+gramatikalizace), stejný graf `core_graph()` a stejné otisky
+`scripts/v2_digests.py` i světů ze specifikace.
+
+### Velikost slovníku
+
+`vocabulary` je celé číslo od 149 (výchozí) do 1 453 (149 pojmů enginu +
+všech 1 304 pojmů katalogu mimo ně). UI nabízí předvolby 149, 200, 500
+a 1 000. Menší slovník než 149 se nepřipouští: gramatikalizace potřebuje
+zdroje a výchozí pojmy jsou jádro, na kterém stojí kalibrace.
+
+**Pořadí pojmů** (jedno pro každou velikost; slovník o *n* pojmech je
+začátkem slovníku o *n* + 1):
+
+1. 149 pojmů `DEFAULT_CONCEPTS` v dnešním pořadí;
+2. šest zdrojů gramatikalizace (*have, finish, go, want, thing, step*),
+   které engine přidává vždy; stojí hned za výchozími pojmy, takže jejich
+   tvary jsou stejné ve slovníku 149 i 1 453;
+3. pojmy katalogu WOLD v pořadí `concept_data.catalog_order()`:
+   - nejdřív 87 pojmů Swadeshova seznamu (to jsou pojmy s frekvencí z Calude
+     & Pagel 2011: základní slovní zásoba, kterou má každý jazyk),
+   - pak ostatní, v obou skupinách sestupně podle frekvence z dat, při shodě
+     podle ID WOLD;
+4. vlastní pojmy podle ID (pořadí ve specifikaci nerozhoduje).
+
+Proč frekvence: nejčastější pojmy jsou ty, které slovník skutečného
+jazyka obsahuje jako první a které nejvíc ovlivňují dynamiku (ochrana
+zažitých slov, souběžná variabilita). Pořadí podle ID WOLD by dalo celé
+tematické bloky po sobě (nejdřív celý svět přírody a pak zvířata) a skládání
+slovníku by záviselo na tom, jak WOLD číslovala oblasti. Pole `core_list`
+WOLD pořadí nerozliší: je pravdivé u všech 1 458 významů katalogu.
+Nevýhoda: frekvence pojmů mimo Swadeshův seznam jsou z korpusů zpráv
+a Wikipedie (viz výše), takže řada časově vázaných pojmů vychází výš, než
+by v mluvené řeči.
+
+Složení (domény včetně zdrojů gramatikalizace, který je `core`):
+
+| slovník | pojmů | core | culture | learned | power | religion | ohebných | neohebných |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 149 | 155 | 102 | 23 | 20 | 8 | 2 | 122 | 33 |
+| 200 | 206 | 128 | 36 | 31 | 9 | 2 | 144 | 62 |
+| 500 | 506 | 245 | 120 | 108 | 28 | 5 | 360 | 146 |
+| 1 000 | 1 006 | 436 | 302 | 171 | 78 | 19 | 801 | 205 |
+
+**ID pojmů katalogu** (`concept_data.catalog_ids`) jsou odvozená z názvu
+významu WOLD: bez členu *the* a *to*, malými písmeny, nealfanumerické znaky
+na `-` (`the stone or rock` → `stone-or-rock`), číslo homonyma `(2)` jako
+`-2`. Shoduje-li se ID s pojmem enginu nebo s dřívějším významem, přidá se
+ID WOLD: hmyz *the fly* je `fly-3-83`, sloveso `fly` je pojem enginu.
+Významy *to go, to have, to want, to finish, the thing* tu chybí: engine je
+má jako zdroje gramatikalizace bez dat o frekvenci (výchozí svět se nesmí
+změnit) a druhý pojem se stejným významem by jen zdvojil slova.
+
+**Slovní druh** pojmu katalogu je podle kategorie WOLD: *Noun* → podstatné
+jméno, *Verb* → sloveso, *Adjective, Function word, Adverb* → neohebné
+(jako u výchozích pojmů, kde jsou přídavná jména v `UNINFLECTED`). Výchozí
+pojmy si zatřídění ponechají z ručních množin `VERBS` a `UNINFLECTED`.
+
+**Frekvence** pojmů katalogu se bere z dat jako u výchozích pojmů
+(`concept_data.frequency`, převod na stupnici enginu beze změny).
+
+**Varování**: jiný slovník než výchozí dá jiné výsledky. Slova nových
+pojmů soutěží se stávajícími a kalibrace bran (frekvence, retence,
+variabilita) platí jen pro výchozí slovník. `spec.check` proto vrátí
+varování na cestě `vocabulary` (a `concepts` pro vlastní pojmy), které
+svět nezastaví.
+
+Co se při větším slovníku **nemění**: pořadí a tvary slov výchozích pojmů
+a zdrojů gramatikalizace (losy tvarů jdou po pojmech v tomto pořadí),
+frekvence výchozích pojmů, vztahy mezi nimi. Co se mění: generované
+frekvence zdrojů gramatikalizace (losuje se po tvarech všech pojmů,
+takže se posunou) a vše, co závisí na počtu slov (variabilita, výsledek
+dynamiky).
+
+### Vlastní pojmy
+
+`concepts` je seznam objektů (`ConceptSpec`):
+
+| pole | povinné | význam |
+|---|---|---|
+| `id` | ano | písmena, číslice, `_ . -`, začíná písmenem nebo číslicí |
+| `gloss` | ne | anglický glos; shoduje-li se s glosem Concepticonu nebo názvem významu WOLD, převezmou se data jako při vazbě, jinak je to popisek |
+| `wold` | ne | vazba na význam WOLD (`"4-35"`) |
+| `concepticon` | ne | vazba na ID Concepticonu; jen jedna z vazeb `wold`, `concepticon` |
+| `domain` | ne | `core, learned, culture, religion, power` |
+| `frequency` | ne | 0,05 až 0,9 (stupnice enginu) |
+| `word_class` | ne | `noun`, `verb`, `uninflected` |
+| `borrowed` | ne | půjčitelnost 0 až 1 |
+| `related` | ne | příbuzné pojmy pro posuny významu |
+
+Pořadí hodnot: co autor zadal, má přednost; jinak se vezme z vazby
+(WOLD, Concepticon, glos, nebo ID, které je ID pojmu katalogu); jinak engine
+doplní výchozí hodnotu a zapíše, které pole doplnil (`Concept.defaulted`,
+`Vocabulary.describe()` pro UI):
+
+| pole | výchozí hodnota bez vazby |
+|---|---|
+| `domain` | `core` |
+| `borrowed` | průměr půjčitelnosti katalogu: celého (0,254), je-li doména zadaná, domény pojmu (core 0,181, learned 0,234, culture 0,341, religion 0,424, power 0,312) |
+| `frequency` | průměr frekvencí katalogu na stupnici enginu: celého (0,176), je-li doména zadaná, domény pojmu (core 0,173, learned 0,256, culture 0,152, religion 0,134, power 0,166) |
+| `word_class` | podstatné jméno |
+
+S vazbou se doména, půjčitelnost a frekvence vezmou z významu WOLD
+a slovní druh z jeho kategorie. Vlastní pojem se stejným významem WOLD,
+jaký už slovník má, dostane varování (slova obou pojmů budou soutěžit); není
+to chyba.
+
+`related`: příbuzné pojmy, každý s druhem vztahu, směrem a váhou:
+
+- `concept`: ID pojmu světa (výchozího, z katalogu v rámci zvolené velikosti
+  slovníku, nebo jiného vlastního); pojem katalogu mimo slovník je chyba
+  s nápovědou, že je ve větším slovníku;
+- `kind`: `polysemy` (posun významu: slovo jednoho pojmu se začne užívat
+  i pro druhý), `derivation` (odvození: slovo jednoho pojmu je základ pro
+  slovo druhého), `colexification` (kolexifikace, vždy oboustranná);
+- `direction`: `to` (od vlastního pojmu k druhému), `from` (opačně), `both`.
+  Bez zadání `both` u posunu významu, `from` u odvození (druhý pojem je
+  základ vlastního);
+- `weight`: síla dokladu v jednotkách dat (počet rodin, resp. jazyků).
+  Bez zadání 2 u posunu a odvození (medián dat je 1, průměr 1,8 a 1,5)
+  a 9 u kolexifikace (medián dat 9).
+
+Váha je doklad, ne příkaz: `shift_weight = ln(1 + polysemy) + ln(1 +
+colexification) / 3`, `derivation_weight = ln(1 + derivation)` jako u dat,
+takže vlastní vztah soutěží s datovými stejnými vahami. Zadaný vztah
+nahradí u dvojice a druhu vztahu hodnotu z dat.
+
+Ověření (`spec.check`) zamítá: neznámou doménu, frekvenci mimo 0,05–0,9,
+půjčitelnost mimo 0–1, neznámý slovní druh, duplicitní ID, ID, které už
+má výchozí pojem, zdroj gramatikalizace nebo vybraný pojem katalogu, neznámou
+vazbu (WOLD, Concepticon), obě vazby najednou, příbuzný pojem, který ve
+světě není, vztah pojmu k sobě, zdvojený vztah a váhu pod 1. Slova
+(`languages[].words`, `endonym`) smějí používat i vlastní a rozšiřující
+pojmy.
+
+### Sémantické vztahy pro katalog
+
+Graf pojmů pro slovník větší než výchozí se skládá ze tří zdrojů:
+
+1. `v2_core_semantics.json` (výchozí výřez, beze změny): vztahy mezi
+   výchozími pojmy zůstávají přesně takové, jaké jsou, aby se pojmy
+   výchozího slovníku nechovaly jinak jen proto, že přibyly další;
+2. `v2_catalog_semantics.json` (nový, jen pro dvojice, kde je aspoň jeden
+   pojem z katalogu nebo vlastní s vazbou): vztahy všech významů katalogu
+   s glosem Concepticonu;
+3. vlastní vztahy autora.
+
+Nový výřez staví `scripts/build_v2_catalog_semantics.py` ze stejných dat
+jako výchozí (DatSemShift, Zalizniak a kol. 2024, a CLICS⁴, Tjuka a kol.
+2024; obojí CC BY 4.0; slabší kolexifikace než 5 jazyků se nebere):
+
+- **6 772 vztahů** mezi 1 270 významy (1 145 s posunem významu, 496
+  s odvozením, 5 351 s kolexifikací; jeden vztah může mít víc druhů);
+- **194 kB**, jeden vztah na řádek: `[zdroj, cíl, polysemy, derivation,
+  colexification]`; bez komprese;
+- významy jsou spojené přes **ID Concepticonu** (DatSemShift ze sloupce
+  `Concepticon_ID`, uzly CLICS podle glosu), takže soubor nezávisí na ID
+  pojmů enginu; dvanáct výchozích pojmů, jejichž glos výřezu se liší od
+  glosu významu WOLD (*mountain*: MOUNTAIN proti MOUNTAIN OR HILL), má
+  v `aliases` druhé ID, aby nepřišly o doklady, které už mají;
+- soubor nese citace, licence a SHA-256 vstupů (`parameters.csv`
+  DatSemShift, `graph.graphml` a `clics4-graph.gml` CLICS, katalog WOLD
+  a výchozí výřez);
+- všech 425 dvojic výchozího výřezu je v novém také (u deseti je hodnota
+  o něco jiná; ve slovníku se stejně berou z výchozího výřezu);
+  1 457 z 1 458 významů katalogu má glos Concepticonu (chybí *to turn*),
+  dva sdílejí glos *DINNER (SUPPER)*, takže jich je 1 456 různých.
+
+Pokrytí ve slovníku (pojmy, které jsou cílem aspoň jednoho vztahu, tedy mají
+z čeho posun, odvození nebo kolexifikaci vzít):
+
+| slovník | pojmů | s příchozím vztahem | vztahů v grafu | cílů posunu | cílů odvození |
+|---:|---:|---:|---:|---:|---:|
+| 149 | 155 | 130 | 425 | 129 | 26 |
+| 200 | 206 | 186 | 755 | 185 | 40 |
+| 500 | 506 | 458 | 2 492 | 455 | 113 |
+| 1 000 | 1 006 | 877 | 4 895 | 866 | 216 |
+| 1 453 | 1 459 | 1 245 | 6 609 | 1 226 | 288 |
+
+Recepty složenin (`compounds`) zůstávají jen pro výchozí pojmy (kurátorované
+z legacy, `docs/SWADESH_COMPOUNDS.md`); pro pojmy katalogu se složeniny
+netvoří.
+
+### Výkon
+
+`scripts/v2_spec_timing.py --rows 2 --columns 3 --years 1000 --vocabulary N`
+(6 regionů po 4 vesnicích = 24 vesnic, tři protojazyky, stát s politikou
+`promoted`, od poloviny norma a škola, 1 000 let, sémantika zapnutá;
+výsledek v 33 skupinách; jeden proces, MacBook, jedno měření na velikost):
+
+| slovník | pojmů ve světě | stavba | celkem | špičková paměť | export |
+|---:|---:|---:|---:|---:|---:|
+| 149 | 155 | 3,2 s | 23–25 s | 340–380 MB | 0,87 MB |
+| 500 | 506 | 4,0 s | 41 s | 710 MB | 2,7 MB |
+| 1 000 | 1 006 | 3,5 s | 77 s | 1 180 MB | 5,3 MB |
+
+Čas je zhruba pevný základ 16 s plus 0,05–0,07 s na pojem, paměť asi
+200 MB plus 1 MB na pojem: 6,5× víc pojmů dá 3,2× delší běh a 3,3× víc
+paměti. Výsledky jsou pro 33 skupin; s počtem skupin paměť i čas rostou
+dál. 149 pojmů se měřilo dvakrát (23 a 25 s), takže rozdíly pod 10 %
+nejsou průkazné; ostatní velikosti jsou jedno měření.
+
+### Co to neumí
+
+- Příbuzné pojmy a vazby jdou jen na pojmy ve slovníku. Vlastní pojem se
+  nedá navázat na významy mimo katalog WOLD (Concepticon, který WOLD nemá,
+  je chyba).
+- Domény a půjčitelnost vlastních pojmů zatím nic neovládají: mechanismy
+  (cizí elita, liturgie, obchod, škola) je použijí až v kroku 3. Engine je
+  uchová (`World.vocabulary`) a UI je může zobrazit.
+- Pojmy katalogu nemají recepty složenin a jejich slovní druh je hrubý
+  (jen tři třídy); ručně zatříděné jsou jen výchozí pojmy.
+

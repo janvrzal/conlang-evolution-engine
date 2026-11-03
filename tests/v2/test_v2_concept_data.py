@@ -53,3 +53,56 @@ def test_frekvence_z_dat_pokryji_pojmy_enginu_a_davaji_smysl():
     assert concept_data.frequency("not") > concept_data.frequency("heart") > concept_data.frequency("louse")
     assert concept_data.frequency("say") > concept_data.frequency("bite")
     assert concept_data.frequency("vymysleny-pojem") is None
+
+
+def test_katalog_ma_jedinecna_id_mimo_pojmy_enginu():
+    from cee.v2.language.constructions import GRAMMATICAL_SOURCES
+
+    ids = concept_data.catalog_ids()
+    assert len(ids) == 1304 == len(concept_data.catalog_order())
+    assert set(ids).isdisjoint(DEFAULT_CONCEPTS) and set(ids).isdisjoint(GRAMMATICAL_SOURCES)
+    assert set(concept_data.catalog_order()) == set(ids)
+    # Hmyz a sloveso „fly“ se nesmí splést; číslo homonyma se zachová.
+    assert ids["fly-3-83"]["name"] == "the fly" and ids["rough-2"]["wold_id"]
+    assert "mountain-or-hill" not in ids  # pojem enginu `mountain`
+
+
+def test_pojmy_katalogu_maji_data_jako_pojmy_enginu():
+    assert concept_data.info("snake") is not None and concept_data.domain("snake") in concept_data.DOMAINS
+    entry = concept_data.info("sky")
+    assert entry is not None and entry["domain"] in concept_data.DOMAINS
+    assert concept_data.borrowed("sky") == entry["borrowed"]
+    low, high = concept_data.FREQUENCY_RANGE
+    assert all(low <= concept_data.frequency(concept) <= high for concept in concept_data.catalog_ids())
+    # Zdroje gramatikalizace jsou v enginu bez dat, aby se výchozí svět nezměnil.
+    assert concept_data.frequency("go") is None and concept_data.info("have") is None
+    # Frekvence významu enginu je totéž z pojmu i z katalogu.
+    for concept in DEFAULT_CONCEPTS:
+        item = concept_data.info(concept)
+        assert abs(concept_data.item_frequency(item) - concept_data.frequency(concept)) < 1e-9
+
+
+def test_poradi_rozsireni_slovniku_je_pevne():
+    order = concept_data.catalog_order()
+    assert order[:5] == ("and", "in", "at", "he", "with")
+    table = concept_data.frequencies()["catalog"]
+    swadesh = [concept for concept in order if table[concept_data.catalog_ids()[concept]["wold_id"]][1] == "calude2011"]
+    # Swadeshův seznam jde první a uvnitř skupin sestupně podle frekvence.
+    assert order[:len(swadesh)] == tuple(swadesh)
+    for group in (swadesh, [concept for concept in order if concept not in swadesh]):
+        values = [concept_data.log_frequency(concept) for concept in group]
+        assert values == sorted(values, reverse=True)
+
+
+def test_vazba_na_data_podle_wold_concepticonu_a_glosu():
+    item = concept_data.find(wold="4-35")
+    assert item is not None and item["name"] == "the leg"
+    assert concept_data.find(concepticon=item["concepticon_id"]) is item
+    assert concept_data.find(gloss="leg") is item and concept_data.find(gloss="LEG") is item
+    assert concept_data.find(wold="9-9999") is None and concept_data.find(gloss="nic takového") is None
+
+
+def test_prumery_katalogu_podle_domeny():
+    assert 0.05 < concept_data.mean_frequency() < 0.5
+    assert concept_data.mean_borrowed("religion") > concept_data.mean_borrowed("core")
+    assert concept_data.mean_borrowed() == concept_data.mean_borrowed(None)

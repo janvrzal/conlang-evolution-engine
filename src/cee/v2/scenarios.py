@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Literal, Mapping, Sequence
+from typing import TYPE_CHECKING, Literal, Mapping, Sequence
 
 from cee.data.core_vocabulary import CORE_EXTENSION, SWADESH_CORE
 from cee.v2.events import (
@@ -29,6 +29,9 @@ from cee.v2.rng import stable_int
 from cee.v2.semantics import core_graph
 from cee.v2.syntax import register as register_construction
 from cee.v2.world import Code, SpeechGroup, Territory, World, gravity_links
+
+if TYPE_CHECKING:
+    from cee.v2.vocabulary import Vocabulary
 
 DEFAULT_CONCEPTS: tuple[str, ...] = tuple(dict.fromkeys((*SWADESH_CORE, *CORE_EXTENSION)))
 
@@ -142,6 +145,14 @@ def word_class(concept: str) -> str | None:
     return "verb" if concept in VERBS else "noun"
 
 
+def _word_classes(concepts: Sequence[str], vocabulary: Vocabulary | None) -> dict[str, str]:
+    """Třída slova každého ohebného pojmu; slovník má vlastní zdroj (pojmy katalogu a vlastní)."""
+    if vocabulary is not None:
+        found = vocabulary.word_classes()
+        return {concept: kind for concept in concepts if (kind := found.get(concept)) is not None}
+    return {concept: kind for concept in concepts if (kind := word_class(concept)) is not None}
+
+
 def synthetic_concepts(count: int) -> tuple[str, ...]:
     return tuple(f"concept-{index:04d}" for index in range(count))
 
@@ -159,8 +170,13 @@ def _seed_language(
     prosody: bool,
     stress_rule: StressRule,
     stress_strength: Literal["weak", "strong"],
+    vocabulary: Vocabulary | None = None,
 ) -> Repertoire:
-    """Protojazyk světa (slovník, tvary, gramatika, přízvuk) jako výchozí repertoár."""
+    """Protojazyk světa (slovník, tvary, gramatika, přízvuk) jako výchozí repertoár.
+
+    S ``vocabulary`` (``cee.v2.vocabulary``) se slovní druhy, frekvence vlastních
+    pojmů a graf pojmů berou z něj; bez něj platí dosavadní pojmy a graf.
+    """
     if grammar is not None:
         syntax = True
     grammar = SYNTAX_GRAMMAR if grammar is None else grammar
@@ -171,14 +187,12 @@ def _seed_language(
     elif morphology:
         world.paradigms.update(PROTO_PARADIGMS)
     if semantics:
-        world.semantics = core_graph()
+        world.semantics = core_graph() if vocabulary is None else vocabulary.graph()
     if not (phonology or morphology or semantics):
         return world.seed_lexicon(concepts)
-    forms, frequencies = protolanguage(concepts, seed=seed)
-    classes = (
-        {concept: found for concept in concepts if (found := word_class(concept)) is not None}
-        if morphology else None
-    )
+    forms, frequencies = protolanguage(
+        concepts, seed=seed, known_frequencies=None if vocabulary is None else vocabulary.known_frequencies())
+    classes = _word_classes(concepts, vocabulary) if morphology else None
     endings = {**PROTO_ENDINGS, **SYNTAX_ENDINGS} if syntax else PROTO_ENDINGS if morphology else None
     base = world.seed_lexicon(concepts, forms, frequencies, classes, endings)
     if syntax:
@@ -328,6 +342,7 @@ def region_world(
     stress_strength: Literal["weak", "strong"] = "weak",
     params: Parameters | None = None,
     languages: Sequence[ProtoLanguage] = (),
+    vocabulary: Vocabulary | None = None,
 ) -> World:
     """Regiony jako sítě vesnic; sousední regiony spojují jen pohraniční vesnice.
 
@@ -346,8 +361,14 @@ def region_world(
     morfologie, syntax). Terén regionu oslabí jeho vazby přes hranici
     (``Parameters.terrain_access``, součin obou stran) a odlišnost regionu
     nastaví loajalitu jeho vesnic (``Parameters.identity_loyalty``).
+
+    ``vocabulary`` (``cee.v2.vocabulary``) určuje pojmy světa (větší slovník, vlastní
+    pojmy) a má přednost před ``concepts``; výchozí slovník dá svět beze změny.
     """
     world = World(seed=seed, params=Parameters() if params is None else params)
+    world.vocabulary = vocabulary
+    if vocabulary is not None:
+        concepts = vocabulary.ids
     ids = [region.id for region in regions]
     if len(set(ids)) != len(ids):
         raise ValueError("Regiony musí mít jedinečná ID.")
@@ -370,7 +391,8 @@ def region_world(
         for region in regions:
             if region.language is not None and region.language not in lineages:
                 raise ValueError(f"Region '{region.id}' má neznámý protojazyk '{region.language}'.")
-        bases = _seed_lineages(world, languages, seed=seed, concepts=concepts, semantics=semantics)
+        bases = _seed_lineages(world, languages, seed=seed, concepts=concepts, semantics=semantics,
+                               vocabulary=vocabulary)
         world.endonyms = {language.id: tuple(getattr(language, "endonym", ())) for language in languages
                           if getattr(language, "endonym", ())}
         if semantics and world.table is not None:
@@ -382,7 +404,7 @@ def region_world(
         bases = {"proto": _seed_language(
             world, seed=seed, concepts=concepts, phonology=phonology, morphology=morphology,
             semantics=semantics, syntax=syntax, grammar=grammar, prosody=prosody,
-            stress_rule=stress_rule, stress_strength=stress_strength,
+            stress_rule=stress_rule, stress_strength=stress_strength, vocabulary=vocabulary,
         )}
     villages_of: dict[str, list[str]] = {}
     for region in regions:
@@ -512,7 +534,7 @@ def contact_world(
 
 def _seed_lineages(
     world: World, languages: Sequence[Language | ProtoLanguage], *, seed: int, concepts: Sequence[str],
-    semantics: bool,
+    semantics: bool, vocabulary: Vocabulary | None = None,
 ) -> dict[str, Repertoire]:
     """Protojazyky několika nepříbuzných linií (každý vlastní tvary a gramatiku).
 
@@ -537,14 +559,15 @@ def _seed_lineages(
             kind, (citation, *ordered), (1.0, *(weights[cell] for cell in ordered))
         )
     if semantics:
-        world.semantics = core_graph()
-    classes = {concept: cls for concept in concepts if (cls := word_class(concept)) is not None}
+        world.semantics = core_graph() if vocabulary is None else vocabulary.graph()
+    classes = _word_classes(concepts, vocabulary)
+    known = None if vocabulary is None else vocabulary.known_frequencies()
     bases = {}
     for language in languages:
         forms, frequencies = protolanguage(
             concepts, seed=stable_int(seed, "language", language.id) % (1 << 31),
             consonants=language.consonants, vowels=language.vowels, fixed=getattr(language, "words", None),
-            tones=tuple(getattr(language, "tones", ())),
+            tones=tuple(getattr(language, "tones", ())), known_frequencies=known,
         )
         base = world.seed_lexicon(
             concepts, forms, frequencies, classes, {**PROTO_ENDINGS, **SYNTAX_ENDINGS},
