@@ -326,7 +326,8 @@ def observe(
     group_ids = [world.live.group_ids[index] for index in spoken]
     member_of = {group: lineage for lineage, members in tracker.lineages.items() for group in members}
     codes = {lineage: number for number, lineage in enumerate(sorted(tracker.lineages))}
-    labels = np.array([codes.get(member_of.get(group_id), -1) for group_id in group_ids], dtype=np.int64)
+    labels = np.array([codes[member_of[group_id]] if group_id in member_of else -1 for group_id in group_ids],
+                      dtype=np.int64)
     margin = HYSTERESIS * language_threshold
     inp = _gather(world, np.array(spoken, dtype=np.int64))
     distances = None
@@ -406,7 +407,7 @@ def _forms_input(world: World) -> _Forms | None:
         return None
     bank = world.form_bank()
     names = world.registry.morphemes.names
-    defaults = _view(world.columns.morphemes.form, np.int32)
+    defaults = _view(world.columns.morphemes.form, np.int32)  # type: ignore[attr-defined]
     bank_size = len(bank.forms)
     local: dict[tuple[int, ...], int] = {}
 
@@ -601,9 +602,9 @@ def _categories(
     ptr = source.ptr
     for index, group in enumerate(columns.tolist()):
         begin, end = int(ptr[group]), int(ptr[group + 1])
-        keys = zip(source.concept[begin:end].tolist(), source.root[begin:end].tolist(),
-                   source.form[begin:end].tolist())
-        for key in keys:
+        entries = zip(source.concept[begin:end].tolist(), source.root[begin:end].tolist(),
+                      source.form[begin:end].tolist())
+        for key in entries:
             if key not in categories:
                 categories[key] = len(categories)
                 members.setdefault((key[0], key[1]), []).append(key[2])
@@ -685,7 +686,7 @@ def _candidates(
 
 def constrained_average_linkage(
     features: _Features, pairs: Sequence[tuple[int, int]], threshold: float, *,
-    labels: Sequence[int] | None = None, margin: float = 0.0,
+    labels: Sequence[int] | IntArray | None = None, margin: float = 0.0,
 ) -> list[list[int]]:
     """Průměrná vazba mezi sousedícími shluky až do prahu (lineární v počtu skupin).
 
