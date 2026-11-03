@@ -19,9 +19,12 @@ testu Rust proti Pythonu.
 - ``supports`` a ``effective``: opory kandidátů sady pro daný inventář;
 - ``families``: pro každou rodinu místa (pořadí v rodině), míry a jejich součet.
 
-**Bez deníků.** Změny se hledají hustým porovnáním třech polí podle čísla
-morfému (tvary kódu, výchozí tvary světa, příznaky slovní zásoby) s tím, co je
-započítáno. Index tak nezávisí na deníku, který by kopie světa mohla rozejít.
+**Bez deníků.** Změny se hledají hustým porovnáním dvou polí podle čísla
+morfému (tvary kódu, příznaky slovní zásoby) s tím, co je započítáno. Index tak
+nezávisí na deníku, který by kopie světa mohla rozejít. Výchozí tvar morfému, který
+kód nepřepsal, se do banky tvarů světa nezařazuje (číslo ``PRIVATE_BASE`` + číslo
+morfému, obsah čte index z morfému světa): banka tak nenese tvary, které model
+nepoužívá, a čísla tvarů v ní zůstávají v pořadí skutečného užití.
 Po změně pravidla přízvuku se prostředí nepřepočítají, dokud se tvar slova
 nezmění (tak se to chovalo vždy); ``counted_rule`` drží, jak je které slovo
 započítáno, ať se dá správně odečíst.
@@ -29,6 +32,7 @@ započítáno, ať se dá správně odečíst.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
@@ -40,6 +44,10 @@ if TYPE_CHECKING:
 
 #: V poli ``counted_form``: morfém není započítán.
 UNCOUNTED = -2
+#: Číslo tvaru od tohoto čísla výš je výchozí tvar morfému mimo banku: ``PRIVATE_BASE`` plus číslo morfému.
+#: Výchozí tvary, které kód nepřepsal, drží index ve vlastní aréně (obsah čte z morfému světa), aby se
+#: do banky tvarů světa nezařazoval tvar, který model nepoužívá.
+PRIVATE_BASE = 1 << 30
 #: Opora, od které se kandidát nabízí, a opora plné šance (viz ``changes.sound``).
 MIN_SUPPORT = 2
 FULL_SUPPORT = 8
@@ -93,14 +101,16 @@ class ContextTable:
             self.size += 1
         return found
 
-    def of_form(self, form_id: int, rule: int, forms: list[tuple[int, ...]], table: SegmentTable) -> npt.NDArray[np.int32]:
+    def of_form(
+        self, form_id: int, rule: int, forms: list[tuple[int, ...]], table: SegmentTable,
+        private: Callable[[int], tuple[int, ...]] | None = None,
+    ) -> npt.NDArray[np.int32]:
         found = self._forms.get((form_id, rule))
         if found is None:
             from cee.v2.changes.sound import form_contexts
 
-            found = np.array(
-                [self._intern(key) for key in form_contexts(forms[form_id], table, RULES[rule])], dtype=np.int32
-            )
+            form = forms[form_id] if form_id < PRIVATE_BASE else private(form_id - PRIVATE_BASE)  # type: ignore[misc]
+            found = np.array([self._intern(key) for key in form_contexts(form, table, RULES[rule])], dtype=np.int32)
             self._forms[(form_id, rule)] = found
         return found
 
@@ -159,13 +169,9 @@ class SoundIndex:
         padded = np.zeros(size, dtype=bool)
         padded[: len(in_vocabulary)] = in_vocabulary
         forms = _borrow(store.raw()[0], np.int32, size, -1)
-        defaults = _borrow(world.columns.morphemes.form, np.int32, size, -1)
-        effective = np.where(forms >= 0, forms, defaults).astype(np.int32)
+        # Výchozí tvar (kód morfém nepřepsal) drží index mimo banku: číslo je ``PRIVATE_BASE`` + číslo morfému.
+        effective = np.where(forms >= 0, forms, PRIVATE_BASE + np.arange(size, dtype=np.int32)).astype(np.int32)
         effective[~padded] = UNCOUNTED
-        names = world.registry.morphemes.names
-        for number in np.nonzero(padded & (effective < 0))[0].tolist():
-            # Výchozí tvar se do banky zařazuje při prvním použití.
-            effective[number] = world.form_id_of(code, names[number])
         return effective
 
     def sync(self, world: World, codes: list[Code], catalog: Catalog, force: bool = False) -> None:
@@ -196,15 +202,20 @@ class SoundIndex:
         rule = RULES.index(code.stress_rule)
         changed = np.nonzero(effective != slot.counted_form)[0]
         contexts = self.contexts
+        names = world.registry.morphemes.names
+
+        def private(number: int) -> tuple[int, ...]:
+            return world.morphemes[names[number]].form
+
         taken: list[npt.NDArray[np.int32]] = []
         given: list[npt.NDArray[np.int32]] = []
         for number in changed.tolist():
             old = int(slot.counted_form[number])
             if old >= 0:
-                taken.append(contexts.of_form(old, int(slot.counted_rule[number]), bank.forms, table))
+                taken.append(contexts.of_form(old, int(slot.counted_rule[number]), bank.forms, table, private))
             new = int(effective[number])
             if new >= 0:
-                given.append(contexts.of_form(new, rule, bank.forms, table))
+                given.append(contexts.of_form(new, rule, bank.forms, table, private))
                 slot.counted_rule[number] = rule
             slot.counted_form[number] = new
         net = np.zeros(0, dtype=np.int32)
@@ -335,9 +346,9 @@ class SoundIndex:
 class NativeSoundIndex:
     """Tentýž index v Rustu (``cee_core.SoundIndex``); rozhraní jako :class:`SoundIndex`.
 
-    Stav je v Rustu. Python posílá jednou za tik pro všechny kódy tři pohledy na
-    pole (tvary kódu, výchozí tvary světa, příznaky slovní zásoby) a doplní, co
-    si Rust vyžádá: výchozí tvary, které ještě nejsou v bance, a sadu kandidátů
+    Stav je v Rustu. Python posílá jednou za tik pro všechny kódy dva pohledy na
+    pole (tvary kódu, příznaky slovní zásoby) a doplní, co si Rust vyžádá: obsah
+    výchozích tvarů (index je drží mimo banku tvarů světa) a sadu kandidátů
     pro nový inventář (sestavuje ji Python, ``changes.sound``). Rust nelze zkopírovat
     ani uložit, proto se při kopii a uložení exportují jen započítané tvary a
     pravidla (``counted_form``, ``counted_rule``) a podle nich se stav obnoví.
@@ -378,6 +389,8 @@ class NativeSoundIndex:
         assert table is not None
         bank = self._bank(world)
         for token, (forms, rules) in list(self._restore.items()):
+            # Uložené číslo tvaru mimo banku se odvolává na výchozí tvar morfému: obsah doplní svět.
+            self._supply(world, (np.unique(forms[forms >= PRIVATE_BASE]) - PRIVATE_BASE).tolist())
             self._handle.import_group(bank, token, forms, rules)
         self._restore.clear()
         tokens = [code.forms.token for code in codes]
@@ -385,19 +398,21 @@ class NativeSoundIndex:
         rules = [RULES.index(code.stress_rule) for code in codes]
         flags = [code.phonology.vocabulary.flags for code in codes]
         forms = [code.forms.raw()[0] for code in codes]
-        defaults = [world.columns.morphemes.form] * len(codes)
-        names = world.registry.morphemes.names
         for _ in range(64):
-            missing, sets = self._handle.sync(bank, tokens, rules, flags, forms, defaults)
+            missing, sets = self._handle.sync(bank, tokens, rules, flags, forms)
             if not missing and not sets:
                 return
-            for position, numbers in missing:
-                for number in numbers:
-                    # Výchozí tvar se do banky zařazuje při prvním použití.
-                    world.form_id_of(codes[position], names[number])
+            for _, numbers in missing:
+                self._supply(world, numbers)
             for inventory in sets:
                 self._register(table, catalog, tuple(inventory))
         raise RuntimeError("index prostředí se nepodařilo dorovnat")
+
+    def _supply(self, world: World, numbers: list[int]) -> None:
+        """Výchozí tvary morfémů (obsah hlásek) do arény indexu; do banky tvarů světa se nezařazují."""
+        if numbers:
+            names = world.registry.morphemes.names
+            self._handle.set_defaults(numbers, [list(world.morphemes[names[number]].form) for number in numbers])
 
     def _register(self, table: SegmentTable, catalog: Catalog, inventory: tuple[int, ...]) -> None:
         combined = catalog.candidates(table, inventory)

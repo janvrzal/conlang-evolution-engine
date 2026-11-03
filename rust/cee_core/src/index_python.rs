@@ -32,7 +32,7 @@ impl SoundIndex {
     }
 
     /// Dorovná kódy (`tokens`) na aktuální stav. Pole podle čísla morfému:
-    /// příznaky slovní zásoby, tvary kódu a výchozí tvary světa. Vrací, co chybí.
+    /// příznaky slovní zásoby a tvary kódu. Vrací, co chybí.
     #[allow(clippy::too_many_arguments)]
     fn sync(
         &mut self,
@@ -41,10 +41,9 @@ impl SoundIndex {
         rules: Vec<u8>,
         flags: Vec<Bound<'_, PyAny>>,
         forms: Vec<Bound<'_, PyAny>>,
-        defaults: Vec<Bound<'_, PyAny>>,
     ) -> PyResult<NeedsOut> {
         let count = tokens.len();
-        if [rules.len(), flags.len(), forms.len(), defaults.len()]
+        if [rules.len(), flags.len(), forms.len()]
             .iter()
             .any(|&size| size != count)
         {
@@ -52,18 +51,25 @@ impl SoundIndex {
         }
         let flags = Held::<u8>::all(&flags)?;
         let forms = Held::<i32>::all(&forms)?;
-        let defaults = Held::<i32>::all(&defaults)?;
         let inputs: Vec<GroupInput<'_>> = (0..count)
             .map(|at| GroupInput {
                 token: tokens[at],
                 rule: rules[at],
                 flags: flags[at].view(),
                 forms: forms[at].view(),
-                defaults: defaults[at].view(),
             })
             .collect();
         let needs = self.inner.sync(&bank.bank, &inputs).map_err(failure)?;
         Ok((needs.defaults, needs.sets))
+    }
+
+    /// Výchozí tvary morfémů (obsah hlásek), které index vyžádal; drží je mimo banku tvarů.
+    fn set_defaults(&mut self, numbers: Vec<u32>, forms: Vec<Vec<i32>>) -> PyResult<()> {
+        if numbers.len() != forms.len() {
+            return Err(failure("čísla a tvary mají různou délku".into()));
+        }
+        self.inner.set_defaults(&numbers, &forms);
+        Ok(())
     }
 
     /// Zaregistruje sadu kandidátů pro inventář (viz `_CombinedSoundCandidates`).
