@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use crate::concepts::{ConceptColumns, ConceptData, ConceptGraph};
 use crate::grammar::{Construction, GrammaticalFunction};
 use crate::ids::{
-    CellId, ConceptId, GroupId, Form, LanguageId, MorphemeId, ProcessId, Registry, TerritoryId, VariableId,
-    VariantId, WordClassId,
+    CellId, ConceptId, Form, GroupId, LanguageId, MorphemeId, ProcessId, Registry, TerritoryId,
+    VariableId, VariantId, WordClassId,
 };
 use crate::model::forms::{FormBank, UnitForm};
 use crate::model::group::{GroupInit, Groups};
@@ -48,11 +48,16 @@ mod table_serde {
 
     use crate::segments::SegmentTable;
 
-    pub fn serialize<S: Serializer>(table: &Option<Arc<SegmentTable>>, serializer: S) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer>(
+        table: &Option<Arc<SegmentTable>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         table.is_some().serialize(serializer)
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Arc<SegmentTable>>, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Arc<SegmentTable>>, D::Error> {
         Ok(bool::deserialize(deserializer)?.then(SegmentTable::default_table))
     }
 }
@@ -147,7 +152,12 @@ impl World {
 
     // --- území, skupiny, vazby ------------------------------------------------------
 
-    pub fn add_territory(&mut self, name: &str, parent: Option<&str>, mut territory: Territory) -> Result<TerritoryId, String> {
+    pub fn add_territory(
+        &mut self,
+        name: &str,
+        parent: Option<&str>,
+        mut territory: Territory,
+    ) -> Result<TerritoryId, String> {
         if self.registry.territories.contains(name) {
             return Err(format!("Území '{name}' už existuje."));
         }
@@ -161,7 +171,8 @@ impl World {
                 let up = &self.territories[id as usize];
                 if territory.level <= up.level {
                     return Err(format!(
-                        "Území '{name}' musí ležet níž než '{parent_name}' ({}).", up.level.name()
+                        "Území '{name}' musí ležet níž než '{parent_name}' ({}).",
+                        up.level.name()
                     ));
                 }
                 TerritoryId(id)
@@ -199,18 +210,41 @@ impl World {
     }
 
     /// Oboustranná vazba. Sousedé se učí jeden od druhého stejně často.
-    pub fn connect(&mut self, first: GroupId, second: GroupId, strength: f64, kind: LinkKind) -> Result<(), String> {
+    pub fn connect(
+        &mut self,
+        first: GroupId,
+        second: GroupId,
+        strength: f64,
+        kind: LinkKind,
+    ) -> Result<(), String> {
         for id in [first, second] {
             if !self.groups.contains(id) {
-                return Err(format!("Skupina '{}' neexistuje.", self.registry.groups.name(id.0)));
+                return Err(format!(
+                    "Skupina '{}' neexistuje.",
+                    self.registry.groups.name(id.0)
+                ));
             }
         }
         if first == second {
             return Err("Skupina nemůže mít vazbu sama na sebe.".into());
         }
         let value = strength.clamp(0.0, 1.0);
-        self.links.set(first, second, Link { strength: value, kind });
-        self.links.set(second, first, Link { strength: value, kind });
+        self.links.set(
+            first,
+            second,
+            Link {
+                strength: value,
+                kind,
+            },
+        );
+        self.links.set(
+            second,
+            first,
+            Link {
+                strength: value,
+                kind,
+            },
+        );
         Ok(())
     }
 
@@ -264,7 +298,10 @@ impl World {
         }
         for variable in self.live.variable_ids() {
             if let Some(item) = self.live.get(group, variable, &self.registry.variants) {
-                self.groups.main_code_mut(group).repertoire.set(variable, item);
+                self.groups
+                    .main_code_mut(group)
+                    .repertoire
+                    .set(variable, item);
             }
         }
     }
@@ -284,7 +321,8 @@ impl World {
         let variables = live.variable_ids();
         live.set_axis(ids.clone());
         for variable in variables {
-            let dists: Vec<Option<Distribution>> = ids.iter().map(|&g| self.stored(g, variable)).collect();
+            let dists: Vec<Option<Distribution>> =
+                ids.iter().map(|&g| self.stored(g, variable)).collect();
             live.load(variable, &dists, &self.registry.variants)?;
         }
         self.live = live;
@@ -302,14 +340,22 @@ impl World {
             if live.contains(variable) {
                 continue;
             }
-            let dists: Vec<Option<Distribution>> = live.group_ids.iter().map(|&g| self.stored(g, variable)).collect();
+            let dists: Vec<Option<Distribution>> = live
+                .group_ids
+                .iter()
+                .map(|&g| self.stored(g, variable))
+                .collect();
             let mut held: Vec<&Vec<VariantId>> = Vec::new();
             for item in dists.iter().flatten() {
                 if !held.contains(&&item.variants) {
                     held.push(&item.variants);
                 }
             }
-            if held.len() <= 1 && dists.iter().all(|d| d.as_ref().map_or(true, Distribution::is_fixed)) {
+            if held.len() <= 1
+                && dists
+                    .iter()
+                    .all(|d| d.as_ref().is_none_or(Distribution::is_fixed))
+            {
                 continue;
             }
             live.load(variable, &dists, &self.registry.variants)?;
@@ -353,43 +399,84 @@ impl World {
     }
 
     /// Uloží proměnnou (registr, sloupce); lexikální zapíše do registru i svůj pojem.
-    pub fn store_variable(&mut self, kind: VariableKind, key: &str, default: VariantId) -> VariableId {
+    pub fn store_variable(
+        &mut self,
+        kind: VariableKind,
+        key: &str,
+        default: VariantId,
+    ) -> VariableId {
         let id = self.registry.variable(&variable_name(kind, key));
-        let concept = if kind == VariableKind::Lexical { self.registry.concept(key) } else { ConceptId::NONE };
+        let concept = if kind == VariableKind::Lexical {
+            self.registry.concept(key)
+        } else {
+            ConceptId::NONE
+        };
         self.variables.store(id, kind, key, default, concept);
         self.grow_concepts();
         id
     }
 
-    pub fn store_variant(&mut self, name: &str, variable: VariableId, payload: Payload, origin: Origin) -> VariantId {
+    pub fn store_variant(
+        &mut self,
+        name: &str,
+        variable: VariableId,
+        payload: Payload,
+        origin: Origin,
+    ) -> VariantId {
         let id = self.registry.variant(name);
         self.variants.store(id, variable, payload, origin);
         id
     }
 
     /// Konstrukční proměnná a varianta; stejná konstrukce = stejná varianta (`syntax.register`).
-    pub fn register_construction(&mut self, construction: &Construction, origin: &Origin) -> (VariableId, VariantId) {
+    pub fn register_construction(
+        &mut self,
+        construction: &Construction,
+        origin: &Origin,
+    ) -> (VariableId, VariantId) {
         let name = variable_name(VariableKind::Construction, &construction.function);
         let variable = match self.registry.variables.get(&name) {
-            Some(found) if found.min(u32::MAX - 1) < self.variables.len() as u32 => VariableId(found),
-            _ => self.store_variable(VariableKind::Construction, &construction.function, VariantId::NONE),
+            Some(found) if found.min(u32::MAX - 1) < self.variables.len() as u32 => {
+                VariableId(found)
+            }
+            _ => self.store_variable(
+                VariableKind::Construction,
+                &construction.function,
+                VariantId::NONE,
+            ),
         };
-        let variant_name = stable_id("variant", &[Part::Str("construction"), Part::Str(&construction.key())]);
+        let variant_name = stable_id(
+            "variant",
+            &[Part::Str("construction"), Part::Str(&construction.key())],
+        );
         let variant = match self.registry.variants.get(&variant_name) {
             Some(found) => VariantId(found),
-            None => self.store_variant(&variant_name, variable, Payload::Construction(construction.clone()), origin.clone()),
+            None => self.store_variant(
+                &variant_name,
+                variable,
+                Payload::Construction(construction.clone()),
+                origin.clone(),
+            ),
         };
         (variable, variant)
     }
 
     /// Prozodická proměnná a varianta (`prosody.register_stress_rule` / `register_stress_strength`).
-    pub fn register_prosody(&mut self, key: &str, value: &str, origin: &Origin) -> (VariableId, VariantId) {
+    pub fn register_prosody(
+        &mut self,
+        key: &str,
+        value: &str,
+        origin: &Origin,
+    ) -> (VariableId, VariantId) {
         let name = variable_name(VariableKind::Prosody, key);
         let variable = match self.registry.variables.get(&name) {
             Some(found) if found < self.variables.len() as u32 => VariableId(found),
             _ => self.store_variable(VariableKind::Prosody, key, VariantId::NONE),
         };
-        let variant_name = stable_id("variant", &[Part::Str("prosody"), Part::Str(&format!("{key}:{value}"))]);
+        let variant_name = stable_id(
+            "variant",
+            &[Part::Str("prosody"), Part::Str(&format!("{key}:{value}"))],
+        );
         let variant = match self.registry.variants.get(&variant_name) {
             Some(found) => VariantId(found),
             None => {
@@ -415,7 +502,9 @@ impl World {
         let root_name = self.registry.morphemes.name(root.0).to_owned();
         let word_class = self.morphemes.word_class[root.index()];
         let class_name = self.registry.word_classes.name(word_class.0).to_owned();
-        let paradigm = self.paradigms[word_class.index()].clone().ok_or("chybí paradigma")?;
+        let paradigm = self.paradigms[word_class.index()]
+            .clone()
+            .ok_or("chybí paradigma")?;
         let language = self.morphemes.language[root.index()];
         let language_name = self.registry.languages.name(language.0).to_owned();
         let root_form = self.bank.form(self.morphemes.form[root.index()]).to_vec();
@@ -434,11 +523,23 @@ impl World {
                 .ok_or_else(|| format!("Chybí koncovky pro {class_name}/{cell_name}."))?;
             let ending = choose(options, &format!("{root_name}{cell_name}"));
             let affix_name = if language_name == "proto" {
-                stable_id("affix", &[Part::Str(&class_name), Part::Str(&cell_name), Part::Str(&ending)])
+                stable_id(
+                    "affix",
+                    &[
+                        Part::Str(&class_name),
+                        Part::Str(&cell_name),
+                        Part::Str(&ending),
+                    ],
+                )
             } else {
                 stable_id(
                     "affix",
-                    &[Part::Str(&language_name), Part::Str(&class_name), Part::Str(&cell_name), Part::Str(&ending)],
+                    &[
+                        Part::Str(&language_name),
+                        Part::Str(&class_name),
+                        Part::Str(&cell_name),
+                        Part::Str(&ending),
+                    ],
                 )
             };
             let affix = match self.registry.morphemes.get(&affix_name) {
@@ -535,16 +636,27 @@ impl World {
                             word_class = None;
                         }
                     }
-                    let class_id = word_class.as_deref().map_or(WordClassId::NONE, |n| self.registry.word_class(n));
+                    let class_id = word_class
+                        .as_deref()
+                        .map_or(WordClassId::NONE, |n| self.registry.word_class(n));
                     if !self.concepts.word_class_set[concept_id.index()] {
                         self.concepts.word_class_set[concept_id.index()] = true;
                         self.concepts.word_class[concept_id.index()] = class_id;
                     }
-                    let given = frequencies.and_then(|f| f.get(concept)).copied().unwrap_or(0.5);
+                    let given = frequencies
+                        .and_then(|f| f.get(concept))
+                        .copied()
+                        .unwrap_or(0.5);
                     let frequency = self.concepts.default_frequency(concept_id, given);
-                    let form = parse_with(&self.table, forms.get(concept).ok_or_else(|| format!("chybí tvar pojmu {concept}"))?)?;
+                    let form = parse_with(
+                        &self.table,
+                        forms
+                            .get(concept)
+                            .ok_or_else(|| format!("chybí tvar pojmu {concept}"))?,
+                    )?;
                     let form_id = self.bank.id_of(&form);
-                    let morpheme_name = stable_id("morpheme", &[Part::Str(language), Part::Str(concept)]);
+                    let morpheme_name =
+                        stable_id("morpheme", &[Part::Str(language), Part::Str(concept)]);
                     let morpheme = self.make_morpheme(
                         &morpheme_name,
                         MorphemeInit {
@@ -565,7 +677,9 @@ impl World {
                     );
                     if !class_id.is_none() {
                         let allowed = cells.map(|c| {
-                            c.get(word_class.as_deref().unwrap_or("")).cloned().unwrap_or_default()
+                            c.get(word_class.as_deref().unwrap_or(""))
+                                .cloned()
+                                .unwrap_or_default()
                         });
                         self.seed_paradigm(morpheme, endings, allowed.as_deref())?;
                     }
@@ -574,14 +688,20 @@ impl World {
                 None => (MorphemeId::NONE, ""),
             };
             let variable = self.store_variable(VariableKind::Lexical, concept, VariantId::NONE);
-            let variant_name = stable_id("variant", &[Part::Str(language), Part::Str(&variable_key)]);
+            let variant_name =
+                stable_id("variant", &[Part::Str(language), Part::Str(&variable_key)]);
             let payload = Payload::Lexical {
                 lexeme,
                 morpheme,
                 origin: origin.to_owned(),
                 appeal: 0.0,
             };
-            let variant = self.store_variant(&variant_name, variable, payload, Origin::inherited(self.start_year));
+            let variant = self.store_variant(
+                &variant_name,
+                variable,
+                payload,
+                Origin::inherited(self.start_year),
+            );
             repertoire.set(variable, Distribution::fixed(variant));
         }
         Ok(repertoire.freeze())
@@ -594,8 +714,11 @@ impl World {
         if self.paradigms.len() <= id.index() {
             self.paradigms.resize(id.index() + 1, None);
         }
-        self.paradigms[id.index()] =
-            Some(Paradigm { word_class: id, cells: cell_ids, weights: cells.iter().map(|(_, w)| *w).collect() });
+        self.paradigms[id.index()] = Some(Paradigm {
+            word_class: id,
+            cells: cell_ids,
+            weights: cells.iter().map(|(_, w)| *w).collect(),
+        });
     }
 
     /// Proces podle čísla (jen ke čtení).
@@ -605,19 +728,39 @@ impl World {
 
     /// Katalogová funkce s přepisy parametrů světa.
     pub fn grammar_catalog(&self) -> Result<Vec<GrammaticalFunction>, String> {
-        Ok(crate::grammar::Catalog::shared().with_overrides(&self.params)?.functions)
+        Ok(crate::grammar::Catalog::shared()
+            .with_overrides(&self.params)?
+            .functions)
     }
 
     /// Podíl síly vazby mezi skupinami, který přinesla obchodní cesta (0 až 1).
     pub fn trade_share(&self, first: GroupId, second: GroupId) -> f64 {
-        let key = if first < second { (first, second) } else { (second, first) };
+        let key = if first < second {
+            (first, second)
+        } else {
+            (second, first)
+        };
         let carried = self.society.trade.get(&key).copied().unwrap_or(0.0);
-        let Some(link) = self.links.get(first, second) else { return 0.0 };
+        let Some(link) = self.links.get(first, second) else {
+            return 0.0;
+        };
         if carried <= 0.0 || link.strength <= 0.0 {
             return 0.0;
         }
         let share = carried / link.strength;
-        if share < TRADE_MINIMUM { 0.0 } else { share.min(1.0) }
+        if share < TRADE_MINIMUM {
+            0.0
+        } else {
+            share.min(1.0)
+        }
+    }
+
+    /// Odvozovací přípona protojazyka z tabulky hlásek (jen když ji svět má).
+    pub fn seed_derivational_suffix(&mut self, suffix: &str) -> Result<(), String> {
+        if let Some(table) = &self.table {
+            self.derivational_suffix = table.parse(suffix)?;
+        }
+        Ok(())
     }
 
     /// Jazyk (linie) podle jména; nová linie dostane další číslo.
@@ -629,7 +772,9 @@ impl World {
 /// Deterministická volba podle vah (bez stavu generátoru): `world._choose`.
 fn choose(options: &[(String, f64)], key: &str) -> String {
     let total: f64 = options.iter().map(|(_, w)| *w).sum();
-    let mut point = (stable_int(&[Part::Str("ending"), Part::Str(key)]) % 1_000_000) as f64 / 1_000_000.0 * total;
+    let mut point = (stable_int(&[Part::Str("ending"), Part::Str(key)]) % 1_000_000) as f64
+        / 1_000_000.0
+        * total;
     for (value, weight) in options {
         point -= weight;
         if point < 0.0 {
@@ -656,19 +801,23 @@ pub fn gravity_pairs(
             sorted
         }
     };
-    let placed: Vec<(GroupId, (f64, f64))> =
-        ids.iter().filter_map(|&g| world.position_of(g).map(|p| (g, p))).collect();
+    let placed: Vec<(GroupId, (f64, f64))> = ids
+        .iter()
+        .filter_map(|&g| world.position_of(g).map(|p| (g, p)))
+        .collect();
     let mut pairs = Vec::new();
     for (index, &(first, first_position)) in placed.iter().enumerate() {
         for &(second, second_position) in &placed[index + 1..] {
-            let distance = (first_position.0 - second_position.0).hypot(first_position.1 - second_position.1);
+            let distance =
+                (first_position.0 - second_position.0).hypot(first_position.1 - second_position.1);
             if distance == 0.0 || max_distance.is_some_and(|m| distance > m) {
                 continue;
             }
             let mass = (f64::from(world.groups.population[first.index()])
                 * f64::from(world.groups.population[second.index()]))
             .sqrt();
-            let pull = scale * (mass / reference_population) / (distance / reference_distance).powi(2);
+            let pull =
+                scale * (mass / reference_population) / (distance / reference_distance).powi(2);
             pairs.push((first, second, pull / (1.0 + pull)));
         }
     }
@@ -676,7 +825,11 @@ pub fn gravity_pairs(
 }
 
 /// Doplní vazby podle gravitačního modelu (Trudgill 1974); vrací počet oboustranných vazeb.
-pub fn gravity_links(world: &mut World, max_distance: Option<f64>, groups: Option<&[GroupId]>) -> Result<usize, String> {
+pub fn gravity_links(
+    world: &mut World,
+    max_distance: Option<f64>,
+    groups: Option<&[GroupId]>,
+) -> Result<usize, String> {
     let pairs = gravity_pairs(world, 1.0, 1_000.0, 10.0, max_distance, groups);
     for &(first, second, strength) in &pairs {
         world.connect(first, second, strength, LinkKind::Weak)?;

@@ -12,9 +12,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::grammar::Construction;
-use crate::ids::{
-    ConceptId, GroupId, MorphemeId, Numbering, ProcessId, VariableId, VariantId,
-};
+use crate::ids::{ConceptId, GroupId, MorphemeId, Numbering, ProcessId, VariableId, VariantId};
 
 /// Druh proměnné (předpona jejího ID).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -78,7 +76,14 @@ impl Variables {
     }
 
     /// Uloží proměnnou pod číslem (nové číslo musí být právě další, nebo existující se přepíše).
-    pub fn store(&mut self, id: VariableId, kind: VariableKind, key: &str, default: VariantId, concept: ConceptId) {
+    pub fn store(
+        &mut self,
+        id: VariableId,
+        kind: VariableKind,
+        key: &str,
+        default: VariantId,
+        concept: ConceptId,
+    ) {
         let at = id.index();
         while self.kind.len() <= at {
             self.kind.push(VariableKind::Lexical);
@@ -106,7 +111,13 @@ pub struct Origin {
 
 impl Origin {
     pub fn inherited(year: f64) -> Origin {
-        Origin { change: None, tick: 0, year, group: GroupId::NONE, parent: VariantId::NONE }
+        Origin {
+            change: None,
+            tick: 0,
+            year,
+            group: GroupId::NONE,
+            parent: VariantId::NONE,
+        }
     }
 }
 
@@ -114,7 +125,12 @@ impl Origin {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Payload {
     /// Slovo pro pojem: lexém, morfém, původ (`inherited`, `coinage`, …) a přitažlivost.
-    Lexical { lexeme: String, morpheme: MorphemeId, origin: String, appeal: f64 },
+    Lexical {
+        lexeme: String,
+        morpheme: MorphemeId,
+        origin: String,
+        appeal: f64,
+    },
     /// Změněná podoba procesu (hodnota procesní proměnné).
     Process { process: ProcessId, changed: bool },
     /// Konstrukce gramatické funkce.
@@ -124,7 +140,7 @@ pub enum Payload {
     /// Síla přízvuku (`weak`, `strong`).
     StressStrength(String),
     /// Ostatní obsah (formové změny, odvozeniny…), který si fáze popíše sama.
-    Other(serde_json::Value),
+    Other(#[serde(with = "crate::json_string")] serde_json::Value),
 }
 
 /// Sloupce variant.
@@ -174,14 +190,22 @@ pub struct Distribution {
 
 impl Distribution {
     pub fn fixed(variant: VariantId) -> Distribution {
-        Distribution { variants: vec![variant], freqs: vec![1.0], previous: vec![1.0] }
+        Distribution {
+            variants: vec![variant],
+            freqs: vec![1.0],
+            previous: vec![1.0],
+        }
     }
 
     /// Rozdělení z (varianta, frekvence); varianty se seřadí podle jmen v `names`.
     pub fn from_pairs(mut pairs: Vec<(VariantId, f64)>, names: &Numbering) -> Distribution {
         pairs.sort_by(|a, b| names.name(a.0 .0).cmp(names.name(b.0 .0)));
         let freqs: Vec<f64> = pairs.iter().map(|p| p.1).collect();
-        Distribution { variants: pairs.iter().map(|p| p.0).collect(), previous: freqs.clone(), freqs }
+        Distribution {
+            variants: pairs.iter().map(|p| p.0).collect(),
+            previous: freqs.clone(),
+            freqs,
+        }
     }
 
     pub fn is_fixed(&self) -> bool {
@@ -189,7 +213,10 @@ impl Distribution {
     }
 
     pub fn frequency(&self, variant: VariantId) -> f64 {
-        self.variants.iter().position(|&v| v == variant).map_or(0.0, |i| self.freqs[i])
+        self.variants
+            .iter()
+            .position(|&v| v == variant)
+            .map_or(0.0, |i| self.freqs[i])
     }
 
     /// Nejčastější varianta; shodu rozhodne pořadí jmen (první maximum), ne náhoda.
@@ -204,10 +231,22 @@ impl Distribution {
     }
 
     /// Nová varianta vstoupí s podílem `share`; ostatní se úměrně zmenší, bez trendu.
-    pub fn with_innovation(&self, variant: VariantId, share: f64, names: &Numbering) -> Distribution {
-        assert!(!self.variants.contains(&variant), "varianta už v rozdělení je");
-        let mut pairs: Vec<(VariantId, f64)> =
-            self.variants.iter().zip(&self.freqs).map(|(&v, &f)| (v, f * (1.0 - share))).collect();
+    pub fn with_innovation(
+        &self,
+        variant: VariantId,
+        share: f64,
+        names: &Numbering,
+    ) -> Distribution {
+        assert!(
+            !self.variants.contains(&variant),
+            "varianta už v rozdělení je"
+        );
+        let mut pairs: Vec<(VariantId, f64)> = self
+            .variants
+            .iter()
+            .zip(&self.freqs)
+            .map(|(&v, &f)| (v, f * (1.0 - share)))
+            .collect();
         pairs.push((variant, share));
         Distribution::from_pairs(pairs, names)
     }
@@ -231,7 +270,10 @@ impl Repertoire {
 
     /// Repertoár nad zmrazeným základem.
     pub fn over(base: Arc<Repertoire>) -> Repertoire {
-        Repertoire { base: Some(base), own: BTreeMap::new() }
+        Repertoire {
+            base: Some(base),
+            own: BTreeMap::new(),
+        }
     }
 
     pub fn get(&self, variable: VariableId) -> Option<&Distribution> {
@@ -273,7 +315,10 @@ impl Repertoire {
 
     /// Nezávislý potomek: dnešní obsah se přesune do sdílené vrstvy a potomek nad ní pokračuje.
     pub fn branch(&mut self) -> Repertoire {
-        let snapshot = Repertoire { base: self.base.take(), own: std::mem::take(&mut self.own) };
+        let snapshot = Repertoire {
+            base: self.base.take(),
+            own: std::mem::take(&mut self.own),
+        };
         let shared = Arc::new(snapshot);
         self.base = Some(shared.clone());
         Repertoire::over(shared)

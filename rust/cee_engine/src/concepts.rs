@@ -45,20 +45,33 @@ fn scaled(value: f64) -> f64 {
 
 impl ConceptData {
     pub fn from_json(concepts: &str, frequencies: &str) -> Result<ConceptData, String> {
-        let root: Value = serde_json::from_str(concepts).map_err(|e| format!("v2_concepts.json: {e}"))?;
-        let frequencies: Value = serde_json::from_str(frequencies).map_err(|e| format!("v2_concept_frequencies.json: {e}"))?;
+        let root: Value =
+            serde_json::from_str(concepts).map_err(|e| format!("v2_concepts.json: {e}"))?;
+        let frequencies: Value = serde_json::from_str(frequencies)
+            .map_err(|e| format!("v2_concept_frequencies.json: {e}"))?;
         let catalog = root["catalog"].as_array().cloned().unwrap_or_default();
-        let scores: Vec<f64> = catalog.iter().filter_map(|item| item["borrowed"].as_f64()).collect();
+        let scores: Vec<f64> = catalog
+            .iter()
+            .filter_map(|item| item["borrowed"].as_f64())
+            .collect();
         let mean_borrowed = scores.iter().sum::<f64>() / scores.len().max(1) as f64;
-        Ok(ConceptData { concepts: root["concepts"].clone(), catalog, frequencies, mean_borrowed })
+        Ok(ConceptData {
+            concepts: root["concepts"].clone(),
+            catalog,
+            frequencies,
+            mean_borrowed,
+        })
     }
 
     /// Sdílená data vložená do binárky.
     pub fn shared() -> &'static ConceptData {
         static DATA: OnceLock<ConceptData> = OnceLock::new();
         DATA.get_or_init(|| {
-            ConceptData::from_json(crate::data::CONCEPTS_JSON, crate::data::CONCEPT_FREQUENCIES_JSON)
-                .expect("vložená data o pojmech")
+            ConceptData::from_json(
+                crate::data::CONCEPTS_JSON,
+                crate::data::CONCEPT_FREQUENCIES_JSON,
+            )
+            .expect("vložená data o pojmech")
         })
     }
 
@@ -69,7 +82,9 @@ impl ConceptData {
 
     /// Půjčitelnost pojmu (průměr WOLD u pojmu mimo data nebo bez skóre).
     pub fn borrowed(&self, concept: &str) -> f64 {
-        self.concepts[concept]["borrowed"].as_f64().unwrap_or(self.mean_borrowed)
+        self.concepts[concept]["borrowed"]
+            .as_f64()
+            .unwrap_or(self.mean_borrowed)
     }
 
     /// Průměrná půjčitelnost významů katalogu WOLD.
@@ -79,7 +94,9 @@ impl ConceptData {
 
     /// Frekvence pojmu na stupnici enginu, nebo `None` u pojmu mimo data.
     pub fn frequency(&self, concept: &str) -> Option<f64> {
-        self.frequencies["concepts"][concept]["log_frequency"].as_f64().map(scaled)
+        self.frequencies["concepts"][concept]["log_frequency"]
+            .as_f64()
+            .map(scaled)
     }
 
     /// Počet významů katalogu mimo pojmy enginu (kolik pojmů lze přidat k výchozímu slovníku).
@@ -103,7 +120,9 @@ pub struct Defaults {
 impl Defaults {
     pub fn shared() -> &'static Defaults {
         static DEFAULTS: OnceLock<Defaults> = OnceLock::new();
-        DEFAULTS.get_or_init(|| serde_json::from_str(crate::data::DEFAULTS_JSON).expect("vložené výchozí pojmy"))
+        DEFAULTS.get_or_init(|| {
+            serde_json::from_str(crate::data::DEFAULTS_JSON).expect("vložené výchozí pojmy")
+        })
     }
 
     /// Třída slova pojmu výchozího slovníku (`scenarios.word_class`): `None` = neohebné.
@@ -111,7 +130,11 @@ impl Defaults {
         if concept.starts_with("concept-") || self.uninflected.iter().any(|c| c == concept) {
             return None;
         }
-        Some(if self.verbs.iter().any(|c| c == concept) { "verb" } else { "noun" })
+        Some(if self.verbs.iter().any(|c| c == concept) {
+            "verb"
+        } else {
+            "noun"
+        })
     }
 }
 
@@ -150,8 +173,13 @@ pub struct ConceptGraph {
 
 impl ConceptGraph {
     /// Graf z `v2_core_semantics.json` a receptů složenin; pojmy se zapíšou do registru.
-    pub fn core(registry: &mut Registry, core_semantics: &str, defaults: &Defaults) -> Result<ConceptGraph, String> {
-        let root: Value = serde_json::from_str(core_semantics).map_err(|e| format!("v2_core_semantics.json: {e}"))?;
+    pub fn core(
+        registry: &mut Registry,
+        core_semantics: &str,
+        defaults: &Defaults,
+    ) -> Result<ConceptGraph, String> {
+        let root: Value = serde_json::from_str(core_semantics)
+            .map_err(|e| format!("v2_core_semantics.json: {e}"))?;
         let mut relations = Vec::new();
         for item in root["relations"].as_array().ok_or("chybí relations")? {
             let count = |key: &str| item[key].as_u64().unwrap_or(0) as u32;
@@ -176,7 +204,11 @@ impl ConceptGraph {
         Ok(ConceptGraph::build(registry, relations, recipes))
     }
 
-    fn build(registry: &Registry, relations: Vec<Relation>, recipes: Vec<(ConceptId, Vec<(ConceptId, ConceptId)>)>) -> ConceptGraph {
+    fn build(
+        registry: &Registry,
+        relations: Vec<Relation>,
+        recipes: Vec<(ConceptId, Vec<(ConceptId, ConceptId)>)>,
+    ) -> ConceptGraph {
         let size = registry.concepts.len();
         let mut incoming: Vec<Vec<u32>> = vec![Vec::new(); size];
         for (index, relation) in relations.iter().enumerate() {
@@ -185,7 +217,10 @@ impl ConceptGraph {
         for list in incoming.iter_mut() {
             list.sort_by(|&a, &b| {
                 let (a, b) = (&relations[a as usize], &relations[b as usize]);
-                registry.concepts.name(a.source.0).cmp(registry.concepts.name(b.source.0))
+                registry
+                    .concepts
+                    .name(a.source.0)
+                    .cmp(registry.concepts.name(b.source.0))
             });
         }
         let mut incoming_start = vec![0_u32];
@@ -204,7 +239,13 @@ impl ConceptGraph {
             compounds.extend_from_slice(list);
             compound_start.push(compounds.len() as u32);
         }
-        ConceptGraph { relations, incoming_start, incoming: flat, compound_start, compounds }
+        ConceptGraph {
+            relations,
+            incoming_start,
+            incoming: flat,
+            compound_start,
+            compounds,
+        }
     }
 
     /// Vztahy, které vedou do pojmu `target`, seřazené podle jména zdroje.
@@ -213,12 +254,17 @@ impl ConceptGraph {
             Some(range) => (range[0] as usize, range[1] as usize),
             None => (0, 0),
         };
-        self.incoming[low..high].iter().map(|&i| &self.relations[i as usize])
+        self.incoming[low..high]
+            .iter()
+            .map(|&i| &self.relations[i as usize])
     }
 
     /// Recepty složenin pojmu: (hlava, určení).
     pub fn compounds_of(&self, concept: ConceptId) -> &[(ConceptId, ConceptId)] {
-        match self.compound_start.get(concept.index()..=concept.index() + 1) {
+        match self
+            .compound_start
+            .get(concept.index()..=concept.index() + 1)
+        {
             Some(range) => &self.compounds[range[0] as usize..range[1] as usize],
             None => &[],
         }
@@ -253,7 +299,10 @@ impl ConceptColumns {
         let size = registry.concepts.len();
         while self.frequency.len() < size {
             let name = registry.concepts.name(self.frequency.len() as u32);
-            let domain = DOMAINS.iter().position(|d| *d == data.domain(name)).unwrap_or(0) as u8;
+            let domain = DOMAINS
+                .iter()
+                .position(|d| *d == data.domain(name))
+                .unwrap_or(0) as u8;
             self.frequency.push(f64::NAN);
             self.word_class.push(crate::ids::WordClassId::NONE);
             self.word_class_set.push(false);

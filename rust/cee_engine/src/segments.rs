@@ -83,13 +83,19 @@ fn value_of(text: &str) -> Result<i8, String> {
         "+" => Ok(1),
         "-" => Ok(-1),
         "0" => Ok(0),
-        other => other.parse::<i8>().map_err(|_| format!("Neznámá hodnota rysu '{other}'.")),
+        other => other
+            .parse::<i8>()
+            .map_err(|_| format!("Neznámá hodnota rysu '{other}'.")),
     }
 }
 
 /// Jednotný zápis: rozložené znaky, IPA ɡ, oblouček nad písmeny, ̥ místo ̊.
 pub fn normalized(ipa: &str) -> String {
-    ipa.nfd().collect::<String>().replace('g', "ɡ").replace('\u{035c}', "\u{0361}").replace('\u{030a}', "\u{0325}")
+    ipa.nfd()
+        .collect::<String>()
+        .replace('g', "ɡ")
+        .replace('\u{035c}', "\u{0361}")
+        .replace('\u{030a}', "\u{0325}")
 }
 
 impl SegmentTable {
@@ -105,23 +111,48 @@ impl SegmentTable {
                 return Err("řádek rysů má špatnou délku".into());
             }
         }
-        let feature_index: HashMap<String, usize> =
-            raw.features.iter().enumerate().map(|(i, n)| (n.clone(), i)).collect();
+        let feature_index: HashMap<String, usize> = raw
+            .features
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.clone(), i))
+            .collect();
         let index_syl = *feature_index.get("syl").ok_or("chybí rys syl")?;
-        let mut vowel: Vec<bool> = (0..count).map(|r| vectors[r * width + index_syl] == 1).collect();
+        let mut vowel: Vec<bool> = (0..count)
+            .map(|r| vectors[r * width + index_syl] == 1)
+            .collect();
         vowel.push(false);
         let chars = |sets: &Vec<Vec<String>>| -> Vec<BTreeSet<char>> {
-            sets.iter().map(|set| set.iter().filter_map(|s| s.chars().next()).collect()).collect()
+            sets.iter()
+                .map(|set| set.iter().filter_map(|s| s.chars().next()).collect())
+                .collect()
         };
-        let tone_base: HashMap<u32, (u32, u32)> = raw.tone_base.iter().map(|[s, b, c]| (*s, (*b, *c))).collect();
-        let toned = tone_base.iter().map(|(&segment, &(base, code))| ((base, code), segment)).collect();
-        let tone_codes = raw.tones.iter().enumerate().map(|(i, t)| (t.clone(), i as u32 + 1)).collect();
+        let tone_base: HashMap<u32, (u32, u32)> = raw
+            .tone_base
+            .iter()
+            .map(|[s, b, c]| (*s, (*b, *c)))
+            .collect();
+        let toned = tone_base
+            .iter()
+            .map(|(&segment, &(base, code))| ((base, code), segment))
+            .collect();
+        let tone_codes = raw
+            .tones
+            .iter()
+            .enumerate()
+            .map(|(i, t)| (t.clone(), i as u32 + 1))
+            .collect();
         let tone_marks = raw
             .tone_marks
             .iter()
             .filter_map(|(k, v)| k.chars().next().map(|c| (c, v.clone())))
             .collect();
-        let longest_symbol = raw.symbols.keys().map(|k| k.chars().count()).max().unwrap_or(1);
+        let longest_symbol = raw
+            .symbols
+            .keys()
+            .map(|k| k.chars().count())
+            .max()
+            .unwrap_or(1);
         Ok(SegmentTable {
             features: raw.features,
             feature_index,
@@ -149,7 +180,10 @@ impl SegmentTable {
         static TABLE: OnceLock<Arc<SegmentTable>> = OnceLock::new();
         TABLE
             .get_or_init(|| {
-                Arc::new(SegmentTable::from_json(crate::data::SEGMENTS_JSON).expect("vložená tabulka hlásek"))
+                Arc::new(
+                    SegmentTable::from_json(crate::data::SEGMENTS_JSON)
+                        .expect("vložená tabulka hlásek"),
+                )
             })
             .clone()
     }
@@ -172,7 +206,10 @@ impl SegmentTable {
     }
 
     pub fn feature_index(&self, name: &str) -> Result<usize, String> {
-        self.feature_index.get(name).copied().ok_or_else(|| format!("Neznámý rys '{name}'."))
+        self.feature_index
+            .get(name)
+            .copied()
+            .ok_or_else(|| format!("Neznámý rys '{name}'."))
     }
 
     pub fn feature(&self, segment: i32, name: &str) -> i8 {
@@ -184,17 +221,24 @@ impl SegmentTable {
     }
 
     pub fn render(&self, form: &[i32]) -> String {
-        form.iter().map(|&s| self.ipa[s as usize].as_str()).collect()
+        form.iter()
+            .map(|&s| self.ipa[s as usize].as_str())
+            .collect()
     }
 
     /// Kód tónu samohlásky (0 = bez tónu).
     pub fn tone_of(&self, segment: i32) -> u32 {
-        self.tone_base.get(&(segment as u32)).map_or(0, |&(_, code)| code)
+        self.tone_base
+            .get(&(segment as u32))
+            .map_or(0, |&(_, code)| code)
     }
 
     /// Táž samohláska s tónem `code` (0 = bez tónu); `None`, když ji tabulka nemá.
     pub fn with_tone(&self, segment: i32, code: u32) -> Option<i32> {
-        let base = self.tone_base.get(&(segment as u32)).map_or(segment as u32, |&(b, _)| b);
+        let base = self
+            .tone_base
+            .get(&(segment as u32))
+            .map_or(segment as u32, |&(b, _)| b);
         if code == 0 {
             return Some(base as i32);
         }
@@ -212,22 +256,40 @@ impl SegmentTable {
         if self.feature(segment, "cons") != 1 {
             return 3;
         }
-        if self.feature(segment, "nas") == 1 { 1 } else { 2 }
+        if self.feature(segment, "nas") == 1 {
+            1
+        } else {
+            2
+        }
     }
 
     /// (výška, zadnost, zaokrouhlení) v hrubé mřížce pro posuny a disperzi.
     pub fn vowel_coordinates(&self, segment: i32) -> (f64, f64, f64) {
         let (hi, lo) = (self.feature(segment, "hi"), self.feature(segment, "lo"));
-        let mut height = if hi == 1 { 2.0 } else if lo == 1 { 0.0 } else { 1.0 };
+        let mut height = if hi == 1 {
+            2.0
+        } else if lo == 1 {
+            0.0
+        } else {
+            1.0
+        };
         if height == 1.0 && self.feature(segment, "tense") == -1 {
             height = 0.6;
         }
-        let mut back = if self.feature(segment, "back") == 1 { 1.0 } else { 0.0 };
+        let mut back = if self.feature(segment, "back") == 1 {
+            1.0
+        } else {
+            0.0
+        };
         let symbol = self.ipa[segment as usize].as_str();
         if symbol == "ə" || symbol == "ɨ" {
             back = 0.5;
         }
-        let rounded = if self.feature(segment, "round") == 1 { 1.0 } else { 0.0 };
+        let rounded = if self.feature(segment, "round") == 1 {
+            1.0
+        } else {
+            0.0
+        };
         (height, back, rounded)
     }
 
@@ -302,7 +364,10 @@ impl SegmentTable {
             }
         }
         for letter in letters.chars() {
-            let segment = self.symbols.get(&letter.to_string()).ok_or_else(|| format!("neznámý tón '{letter}'"))?;
+            let segment = self
+                .symbols
+                .get(&letter.to_string())
+                .ok_or_else(|| format!("neznámý tón '{letter}'"))?;
             out.push(*segment as i32);
         }
         Ok(())
@@ -335,20 +400,33 @@ impl SegmentTable {
         let key = if items.is_empty() {
             "*".to_owned()
         } else {
-            items.iter().map(|(name, value)| format!("{value}{name}")).collect::<Vec<_>>().join(",")
+            items
+                .iter()
+                .map(|(name, value)| format!("{value}{name}"))
+                .collect::<Vec<_>>()
+                .join(",")
         };
         Ok(Pattern { key, mask })
     }
 
     /// Výčtová třída konkrétních hlásek.
     pub fn segments(&self, ipa: &[&str]) -> Result<Pattern, String> {
-        let mut ids: Vec<i32> = ipa.iter().map(|s| self.id_of(s)).collect::<Result<_, _>>()?;
+        let mut ids: Vec<i32> = ipa
+            .iter()
+            .map(|s| self.id_of(s))
+            .collect::<Result<_, _>>()?;
         ids.sort_unstable();
         let mut mask = vec![false; self.len() + 1];
         for &id in &ids {
             mask[id as usize] = true;
         }
-        let key = format!("{{{}}}", ids.iter().map(|&i| self.ipa[i as usize].as_str()).collect::<Vec<_>>().join(","));
+        let key = format!(
+            "{{{}}}",
+            ids.iter()
+                .map(|&i| self.ipa[i as usize].as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
         Ok(Pattern { key, mask })
     }
 
@@ -356,30 +434,50 @@ impl SegmentTable {
     pub fn boundary_pattern(&self) -> Pattern {
         let mut mask = vec![false; self.len() + 1];
         mask[self.len()] = true;
-        Pattern { key: "#".into(), mask }
+        Pattern {
+            key: "#".into(),
+            mask,
+        }
     }
 
     /// Hláska po změně rysů: nejbližší skutečná hláska s požadovanými rysy, nebo `None`.
     ///
     /// Sekundární artikulace vstupu se zachová (změna rysu ji nesmí potichu odstranit);
     /// `allow` jsou značky, které smí mít výstup navíc.
-    pub fn changed(&self, segment: i32, changes: &[(&str, &str)], allow: &[char]) -> Result<Option<i32>, String> {
+    pub fn changed(
+        &self,
+        segment: i32,
+        changes: &[(&str, &str)],
+        allow: &[char],
+    ) -> Result<Option<i32>, String> {
         let mut allowed: BTreeSet<char> = self.secondary[segment as usize].clone();
         allowed.extend(allow.iter().copied());
         let mut wanted: Vec<(usize, i8)> = Vec::with_capacity(changes.len());
         for &(name, value) in changes {
             wanted.push((self.feature_index(name)?, value_of(value)?));
         }
-        let key: ClosestKey = (segment as u32, wanted.clone(), allowed.iter().copied().collect());
+        let key: ClosestKey = (
+            segment as u32,
+            wanted.clone(),
+            allowed.iter().copied().collect(),
+        );
         if let Some(found) = self.closest_cache.lock().expect("zámek").get(&key) {
             return Ok(found.map(|s| s as i32));
         }
         let found = self.closest(segment as usize, &wanted, &allowed);
-        self.closest_cache.lock().expect("zámek").insert(key, found.map(|s| s as u32));
+        self.closest_cache
+            .lock()
+            .expect("zámek")
+            .insert(key, found.map(|s| s as u32));
         Ok(found)
     }
 
-    fn closest(&self, segment: usize, wanted: &[(usize, i8)], allowed: &BTreeSet<char>) -> Option<i32> {
+    fn closest(
+        &self,
+        segment: usize,
+        wanted: &[(usize, i8)],
+        allowed: &BTreeSet<char>,
+    ) -> Option<i32> {
         let source = self.row(segment);
         let mut best: Option<(usize, usize)> = None; // (vzdálenost, řádek)
         for row in 0..self.len() {
@@ -392,16 +490,22 @@ impl SegmentTable {
                 continue;
             }
             let vector = self.row(row);
-            if wanted.iter().any(|&(column, value)| vector[column] != value) {
+            if wanted
+                .iter()
+                .any(|&(column, value)| vector[column] != value)
+            {
                 continue;
             }
             let distance = vector.iter().zip(source).filter(|(a, b)| a != b).count();
-            if best.map_or(true, |(d, _)| distance < d) {
+            if best.is_none_or(|(d, _)| distance < d) {
                 best = Some((distance, row));
             }
         }
         let (distance, row) = best?;
-        let required = wanted.iter().filter(|&&(column, value)| source[column] != value).count();
+        let required = wanted
+            .iter()
+            .filter(|&&(column, value)| source[column] != value)
+            .count();
         if row == segment || distance > required + 2 {
             return None;
         }
@@ -444,6 +548,11 @@ impl SegmentTable {
 
 impl std::fmt::Debug for SegmentTable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SegmentTable({} hlásek, {} rysů)", self.ipa.len(), self.width)
+        write!(
+            f,
+            "SegmentTable({} hlásek, {} rysů)",
+            self.ipa.len(),
+            self.width
+        )
     }
 }

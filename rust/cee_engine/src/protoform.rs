@@ -31,13 +31,20 @@ pub struct ProtoSpec<'a> {
     pub known_frequencies: Option<&'a HashMap<String, f64>>,
 }
 
+/// Tvary (pojem → IPA) a frekvence (pojem → hodnota) protojazyka.
+pub type ProtoWords = (HashMap<String, String>, HashMap<String, f64>);
+
 /// Tvary (IPA) a frekvence pojmů; stejné semínko dá stejný protojazyk.
-pub fn protolanguage(spec: &ProtoSpec<'_>, data: &ConceptData) -> Result<(HashMap<String, String>, HashMap<String, f64>), String> {
+pub fn protolanguage(spec: &ProtoSpec<'_>, data: &ConceptData) -> Result<ProtoWords, String> {
     let (min_syllables, max_syllables, coda_share) = (1_i64, 3_i64, 0.25);
     let mut rng = Pcg64::for_parts(spec.seed, &[Part::Str("protolanguage")]);
     let consonant_weights = zipf(spec.consonants.len());
     let vowel_weights = zipf(spec.vowels.len());
-    let tone_weights = if spec.tones.is_empty() { Vec::new() } else { zipf(spec.tones.len()) };
+    let tone_weights = if spec.tones.is_empty() {
+        Vec::new()
+    } else {
+        zipf(spec.tones.len())
+    };
     let mut used: HashSet<String> = spec.fixed.values().cloned().collect();
     let mut forms = HashMap::new();
     let mut order: Vec<&String> = Vec::new();
@@ -69,7 +76,11 @@ pub fn protolanguage(spec: &ProtoSpec<'_>, data: &ConceptData) -> Result<(HashMa
                 break;
             }
         }
-        let word = spec.fixed.get(concept).cloned().unwrap_or_else(|| word.clone());
+        let word = spec
+            .fixed
+            .get(concept)
+            .cloned()
+            .unwrap_or_else(|| word.clone());
         used.insert(word.clone());
         forms.insert(concept.clone(), word);
     }
@@ -77,7 +88,11 @@ pub fn protolanguage(spec: &ProtoSpec<'_>, data: &ConceptData) -> Result<(HashMa
     let (low, high) = (0.05_f64.ln(), 0.8_f64.ln());
     let mut frequencies = HashMap::new();
     for (index, concept) in order.iter().enumerate() {
-        let generated = if index < 20 { 0.9 } else { rng.uniform(low, high).exp() };
+        let generated = if index < 20 {
+            0.9
+        } else {
+            rng.uniform(low, high).exp()
+        };
         let known = spec
             .known_frequencies
             .and_then(|given| given.get(*concept).copied())

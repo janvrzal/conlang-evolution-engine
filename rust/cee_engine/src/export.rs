@@ -21,7 +21,49 @@ pub const FORMAT: &str = "cee-v2/1";
 
 /// Události pro časovou osu UI; ostatní (inovace, milníky šíření…) jsou šum.
 pub const TIMELINE: [&str; 43] = [
-    "border", "contact", "migration", "conquest", "war", "epidemic", "state_collapse", "religious_change", "codification", "printing", "schooling", "bilingualism", "transmission_stopped", "language_shift", "language_emerged", "language_split", "language_ended", "grammaticalized", "exapted", "refinement", "state", "language_policy", "annexation", "secession", "collapse", "border_policy", "lingua_franca", "standard", "schools", "nativization", "revival_movement", "revival", "transmission_resumed", "preserve", "identity", "immigration", "plague", "recovery", "resettlement", "trade", "prestige", "foreign_elite", "elite_assimilation",
+    "border",
+    "contact",
+    "migration",
+    "conquest",
+    "war",
+    "epidemic",
+    "state_collapse",
+    "religious_change",
+    "codification",
+    "printing",
+    "schooling",
+    "bilingualism",
+    "transmission_stopped",
+    "language_shift",
+    "language_emerged",
+    "language_split",
+    "language_ended",
+    "grammaticalized",
+    "exapted",
+    "refinement",
+    "state",
+    "language_policy",
+    "annexation",
+    "secession",
+    "collapse",
+    "border_policy",
+    "lingua_franca",
+    "standard",
+    "schools",
+    "nativization",
+    "revival_movement",
+    "revival",
+    "transmission_resumed",
+    "preserve",
+    "identity",
+    "immigration",
+    "plague",
+    "recovery",
+    "resettlement",
+    "trade",
+    "prestige",
+    "foreign_elite",
+    "elite_assimilation",
 ];
 
 fn position(value: Option<(f64, f64)>) -> Value {
@@ -44,8 +86,18 @@ fn group_view(world: &World, group: GroupId, lineage: Option<&String>) -> Value 
     let at = group.index();
     let g = &world.groups;
     let code = g.main_code(group);
-    let name = |id: GroupId| -> Value { if id.is_none() { Value::Null } else { world.group_name(id).into() } };
-    let community = if g.community[at].is_none() { world.group_name(group).into() } else { name(g.community[at]) };
+    let name = |id: GroupId| -> Value {
+        if id.is_none() {
+            Value::Null
+        } else {
+            world.group_name(id).into()
+        }
+    };
+    let community = if g.community[at].is_none() {
+        world.group_name(group).into()
+    } else {
+        name(g.community[at])
+    };
     json!({
         "id": world.group_name(group), "territory": world.registry.territories.name(g.territory[at].0),
         "position": position(world.position_of(group)),
@@ -63,7 +115,9 @@ fn group_view(world: &World, group: GroupId, lineage: Option<&String>) -> Value 
 /// Dnešní slova skupiny: tvar (IPA), lexém a jeho původ.
 pub fn lexicon(world: &World, group: GroupId) -> Map<String, Value> {
     let mut result = Map::new();
-    let Some(table) = world.segments() else { return result };
+    let Some(table) = world.segments() else {
+        return result;
+    };
     let code = world.groups.main_code(group);
     let mut concepts: Vec<(String, usize)> = code
         .phonology
@@ -71,7 +125,12 @@ pub fn lexicon(world: &World, group: GroupId) -> Map<String, Value> {
         .iter()
         .enumerate()
         .filter(|(_, root)| !root.is_none())
-        .map(|(concept, _)| (world.registry.concepts.name(concept as u32).to_owned(), concept))
+        .map(|(concept, _)| {
+            (
+                world.registry.concepts.name(concept as u32).to_owned(),
+                concept,
+            )
+        })
         .collect();
     concepts.sort();
     for (concept, number) in concepts {
@@ -82,7 +141,11 @@ pub fn lexicon(world: &World, group: GroupId) -> Map<String, Value> {
         let loan = language != code.language;
         let origin_group = world.morphemes.origin_group[at];
         let origin = meta.etymology.clone().unwrap_or_else(|| {
-            if origin_group.is_none() { "inherited".into() } else { "coinage".into() }
+            if origin_group.is_none() {
+                "inherited".into()
+            } else {
+                "coinage".into()
+            }
         });
         result.insert(
             concept,
@@ -104,18 +167,27 @@ pub fn lexicon(world: &World, group: GroupId) -> Map<String, Value> {
 /// Převládající konstrukce každé gramatické funkce skupiny.
 pub fn grammar(world: &World, group: GroupId) -> Map<String, Value> {
     let mut result = Map::new();
-    let Ok(catalog) = Catalog::shared().with_overrides(&world.params) else { return result };
-    let mut functions: Vec<&crate::grammar::GrammaticalFunction> = catalog.functions.iter().collect();
+    let Ok(catalog) = Catalog::shared().with_overrides(&world.params) else {
+        return result;
+    };
+    let mut functions: Vec<&crate::grammar::GrammaticalFunction> =
+        catalog.functions.iter().collect();
     functions.sort_by(|a, b| a.id.cmp(&b.id));
     for entry in functions {
         let name = format!("construction:{}", entry.id);
-        let Some(variable) = world.registry.variables.get(&name) else { continue };
+        let Some(variable) = world.registry.variables.get(&name) else {
+            continue;
+        };
         let variable = crate::ids::VariableId(variable);
         if variable.index() >= world.variables.len() {
             continue;
         }
-        let Some((variant, _)) = world.dominant(group, variable) else { continue };
-        let Payload::Construction(construction) = &world.variants.payload[variant.index()] else { continue };
+        let Some((variant, _)) = world.dominant(group, variable) else {
+            continue;
+        };
+        let Payload::Construction(construction) = &world.variants.payload[variant.index()] else {
+            continue;
+        };
         let exponent = match (&construction.exponent, world.segments()) {
             (Some(id), Some(table)) => world
                 .registry
@@ -136,11 +208,18 @@ pub fn grammar(world: &World, group: GroupId) -> Map<String, Value> {
     result
 }
 
+/// Region → (obyvatelé podle jazyka doma, obyvatelé podle jazyka mimo domov).
+type Tally = std::collections::BTreeMap<
+    String,
+    (
+        std::collections::BTreeMap<String, f64>,
+        std::collections::BTreeMap<String, f64>,
+    ),
+>;
+
 fn census(world: &World) -> Value {
-    let mut by_region: std::collections::BTreeMap<String, (Map<String, Value>, Map<String, Value>, f64)> = Default::default();
     let mut people: std::collections::BTreeMap<String, f64> = Default::default();
-    let mut tally: std::collections::BTreeMap<String, (std::collections::BTreeMap<String, f64>, std::collections::BTreeMap<String, f64>)> =
-        Default::default();
+    let mut tally: Tally = Default::default();
     for group in world.group_ids() {
         let at = group.index();
         if world.groups.written[at] {
@@ -159,7 +238,11 @@ fn census(world: &World) -> Value {
             territory = node.parent;
         };
         let Some(region) = region else { continue };
-        let language = world.registry.languages.name(world.groups.main_code(group).language.0).to_owned();
+        let language = world
+            .registry
+            .languages
+            .name(world.groups.main_code(group).language.0)
+            .to_owned();
         let population = f64::from(world.groups.population[at]);
         let entry = tally.entry(region.clone()).or_default();
         if world.groups.domain[at] == crate::model::group::Domain::Home {
@@ -169,14 +252,25 @@ fn census(world: &World) -> Value {
             *entry.1.entry(language).or_insert(0.0) += population;
         }
     }
-    let _ = &mut by_region;
     let mut out = Map::new();
     for (region, (home, public)) in tally {
-        let total = people.get(&region).copied().filter(|&p| p != 0.0).unwrap_or(1.0);
+        let total = people
+            .get(&region)
+            .copied()
+            .filter(|&p| p != 0.0)
+            .unwrap_or(1.0);
         let share = |counts: std::collections::BTreeMap<String, f64>| -> Value {
-            Value::Object(counts.into_iter().map(|(l, c)| (l, json!(c / total))).collect())
+            Value::Object(
+                counts
+                    .into_iter()
+                    .map(|(l, c)| (l, json!(c / total)))
+                    .collect(),
+            )
         };
-        out.insert(region, json!({"home": share(home), "public": share(public), "state": Value::Null}));
+        out.insert(
+            region,
+            json!({"home": share(home), "public": share(public), "state": Value::Null}),
+        );
     }
     Value::Object(out)
 }
@@ -186,8 +280,9 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
     let world = &simulation.world;
     let history = &simulation.history;
     let observed = observed_languages(simulation);
-    let mut territories: Vec<(&str, usize)> =
-        (0..world.territories.len()).map(|i| (world.registry.territories.name(i as u32), i)).collect();
+    let mut territories: Vec<(&str, usize)> = (0..world.territories.len())
+        .map(|i| (world.registry.territories.name(i as u32), i))
+        .collect();
     territories.sort();
     let territories: Vec<Value> = territories
         .into_iter()
@@ -219,7 +314,12 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
     let events: Vec<Value> = history
         .events
         .iter()
-        .filter(|e| !only_timeline || e.get("kind").and_then(Value::as_str).is_some_and(|k| timeline.contains(&k)))
+        .filter(|e| {
+            !only_timeline
+                || e.get("kind")
+                    .and_then(Value::as_str)
+                    .is_some_and(|k| timeline.contains(&k))
+        })
         .map(|e| Value::Object(e.clone()))
         .collect();
     json!({

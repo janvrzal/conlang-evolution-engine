@@ -55,17 +55,35 @@ mod cells_serde {
     use cee_core::pools::Cells;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    type Flat = (usize, usize, Vec<i64>, Vec<i16>, Vec<i32>, Vec<f64>, Vec<f64>);
+    type Flat = (
+        usize,
+        usize,
+        Vec<i64>,
+        Vec<i16>,
+        Vec<i32>,
+        Vec<f64>,
+        Vec<f64>,
+    );
 
     pub fn serialize<S: Serializer>(cells: &Cells, serializer: S) -> Result<S::Ok, S::Error> {
         let (pointer, slot, group, freq, prev) = cells.to_flat();
-        let flat: Flat = (cells.groups, cells.capacity, pointer, slot, group, freq, prev);
+        let flat: Flat = (
+            cells.groups,
+            cells.capacity,
+            pointer,
+            slot,
+            group,
+            freq,
+            prev,
+        );
         flat.serialize(serializer)
     }
 
     pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Cells, D::Error> {
         let (groups, capacity, pointer, slot, group, freq, prev) = Flat::deserialize(deserializer)?;
-        Ok(Cells::from_flat(groups, capacity, &pointer, &slot, &group, &freq, &prev))
+        Ok(Cells::from_flat(
+            groups, capacity, &pointer, &slot, &group, &freq, &prev,
+        ))
     }
 }
 
@@ -123,7 +141,10 @@ impl PoolBlock {
     pub fn extract(&mut self, rows: &[usize]) -> Vec<Row> {
         let mut taken = Vec::new();
         for &row in rows {
-            let (mut f, mut p) = (vec![0.0; self.groups * self.capacity], vec![0.0; self.groups * self.capacity]);
+            let (mut f, mut p) = (
+                vec![0.0; self.groups * self.capacity],
+                vec![0.0; self.groups * self.capacity],
+            );
             self.cells.row_dense(row, &mut f, &mut p);
             taken.push(Row {
                 variable: self.variables[row],
@@ -248,15 +269,23 @@ impl LivePools {
     }
 
     pub fn holds(&self, group: GroupId, variable: VariableId) -> bool {
-        let (Some(&capacity), Some(column)) = (self.block_of.get(&variable), self.column(group)) else {
+        let (Some(&capacity), Some(column)) = (self.block_of.get(&variable), self.column(group))
+        else {
             return false;
         };
         let block = &self.blocks[&capacity];
-        block.row_of(variable).is_some_and(|row| block.present[row][column])
+        block
+            .row_of(variable)
+            .is_some_and(|row| block.present[row][column])
     }
 
     /// Podíl varianty; `None` = skupina proměnnou nemá.
-    pub fn frequency(&self, group: GroupId, variable: VariableId, variant: VariantId) -> Option<f64> {
+    pub fn frequency(
+        &self,
+        group: GroupId,
+        variable: VariableId,
+        variant: VariantId,
+    ) -> Option<f64> {
         let block = &self.blocks[self.block_of.get(&variable)?];
         let row = block.row_of(variable)?;
         let column = self.column(group)?;
@@ -270,7 +299,12 @@ impl LivePools {
     }
 
     /// Nejčastější varianta a její podíl; shodu rozhodne menší jméno varianty.
-    pub fn dominant(&self, group: GroupId, variable: VariableId, names: &Numbering) -> Option<(VariantId, f64)> {
+    pub fn dominant(
+        &self,
+        group: GroupId,
+        variable: VariableId,
+        names: &Numbering,
+    ) -> Option<(VariantId, f64)> {
         let block = &self.blocks[self.block_of.get(&variable)?];
         let row = block.row_of(variable)?;
         let column = self.column(group)?;
@@ -295,7 +329,12 @@ impl LivePools {
     }
 
     /// Rozdělení skupiny jako `Distribution` (varianty seřazené podle jmen).
-    pub fn get(&self, group: GroupId, variable: VariableId, names: &Numbering) -> Option<Distribution> {
+    pub fn get(
+        &self,
+        group: GroupId,
+        variable: VariableId,
+        names: &Numbering,
+    ) -> Option<Distribution> {
         let block = &self.blocks[self.block_of.get(&variable)?];
         let row = block.row_of(variable)?;
         let column = self.column(group)?;
@@ -318,10 +357,16 @@ impl LivePools {
 
     /// Mapa rozšíření varianty: skupiny, které ji mají (seřazené podle sloupce), a podíly.
     pub fn range_of(&self, variable: VariableId, variant: VariantId) -> (Vec<GroupId>, Vec<f64>) {
-        let Some(&capacity) = self.block_of.get(&variable) else { return (vec![], vec![]) };
+        let Some(&capacity) = self.block_of.get(&variable) else {
+            return (vec![], vec![]);
+        };
         let block = &self.blocks[&capacity];
-        let Some(row) = block.row_of(variable) else { return (vec![], vec![]) };
-        let Some(slot) = block.slots[row].iter().position(|&v| v == variant) else { return (vec![], vec![]) };
+        let Some(row) = block.row_of(variable) else {
+            return (vec![], vec![]);
+        };
+        let Some(slot) = block.slots[row].iter().position(|&v| v == variant) else {
+            return (vec![], vec![]);
+        };
         let (columns, shares) = block.range_of(row, slot);
         columns
             .into_iter()
@@ -332,12 +377,20 @@ impl LivePools {
     }
 
     /// Převezme proměnnou z repertoárů všech skupin (v pořadí osy); `None` = skupina ji nemá.
-    pub fn load(&mut self, variable: VariableId, distributions: &[Option<Distribution>], names: &Numbering) -> Result<(), String> {
+    pub fn load(
+        &mut self,
+        variable: VariableId,
+        distributions: &[Option<Distribution>],
+        names: &Numbering,
+    ) -> Result<(), String> {
         if self.block_of.contains_key(&variable) {
             return Err(format!("Proměnná {} už je živá.", names.name(variable.0)));
         }
-        let mut variants: Vec<VariantId> =
-            distributions.iter().flatten().flat_map(|d| d.variants.iter().copied()).collect();
+        let mut variants: Vec<VariantId> = distributions
+            .iter()
+            .flatten()
+            .flat_map(|d| d.variants.iter().copied())
+            .collect();
         variants.sort_by(|a, b| names.name(a.0).cmp(names.name(b.0)));
         variants.dedup();
         let groups = self.group_ids.len();
@@ -347,8 +400,13 @@ impl LivePools {
         for (column, item) in distributions.iter().enumerate() {
             let Some(item) = item else { continue };
             present[column] = true;
-            for ((&variant, &freq), &before) in item.variants.iter().zip(&item.freqs).zip(&item.previous) {
-                let slot = variants.iter().position(|&v| v == variant).expect("varianta");
+            for ((&variant, &freq), &before) in
+                item.variants.iter().zip(&item.freqs).zip(&item.previous)
+            {
+                let slot = variants
+                    .iter()
+                    .position(|&v| v == variant)
+                    .expect("varianta");
                 freqs[column * width + slot] = freq;
                 previous[column * width + slot] = before;
             }
@@ -356,14 +414,28 @@ impl LivePools {
         let keys: Vec<u64> = variants.iter().map(|&v| self.key(v, names)).collect();
         // Rezerva jednoho slotu: proměnná se načítá kvůli nové inovaci.
         let capacity = capacity_for(width + 1);
-        self.place(capacity, Row { variable, freqs, previous, present, slots: variants, keys });
+        self.place(
+            capacity,
+            Row {
+                variable,
+                freqs,
+                previous,
+                present,
+                slots: variants,
+                keys,
+            },
+        );
         Ok(())
     }
 
     fn place(&mut self, capacity: usize, row: Row) {
-        let capacity = capacity.max(capacity_for(row.slots.iter().filter(|v| !v.is_none()).count()));
+        let capacity = capacity.max(capacity_for(
+            row.slots.iter().filter(|v| !v.is_none()).count(),
+        ));
         // Sloty bez varianty se vynechají (řádek se zhustí).
-        let used: Vec<usize> = (0..row.slots.len()).filter(|&i| !row.slots[i].is_none()).collect();
+        let used: Vec<usize> = (0..row.slots.len())
+            .filter(|&i| !row.slots[i].is_none())
+            .collect();
         let (groups, old) = (self.group_ids.len(), row.slots.len());
         let mut freqs = Vec::with_capacity(groups * used.len());
         let mut previous = Vec::with_capacity(groups * used.len());
@@ -374,7 +446,10 @@ impl LivePools {
             }
         }
         let variable = row.variable;
-        let block = self.blocks.entry(capacity).or_insert_with(|| PoolBlock::new(groups, capacity));
+        let block = self
+            .blocks
+            .entry(capacity)
+            .or_insert_with(|| PoolBlock::new(groups, capacity));
         block.append(Row {
             variable,
             freqs,
@@ -397,7 +472,14 @@ impl LivePools {
     }
 
     /// Nová varianta v jedné skupině s podílem `share`, bez trendu.
-    pub fn innovate(&mut self, variable: VariableId, group: GroupId, variant: VariantId, share: f64, names: &Numbering) {
+    pub fn innovate(
+        &mut self,
+        variable: VariableId,
+        group: GroupId,
+        variant: VariantId,
+        share: f64,
+        names: &Numbering,
+    ) {
         let column = self.column(group).expect("skupina v ose");
         let held = self.block_of[&variable];
         {
@@ -415,7 +497,10 @@ impl LivePools {
         let slot = match block.slots[row].iter().position(|&v| v == variant) {
             Some(slot) => slot,
             None => {
-                let slot = block.slots[row].iter().position(|v| v.is_none()).expect("volný slot");
+                let slot = block.slots[row]
+                    .iter()
+                    .position(|v| v.is_none())
+                    .expect("volný slot");
                 block.slots[row][slot] = variant;
                 block.keys[row][slot] = key;
                 block.layout += 1;
@@ -445,8 +530,9 @@ impl LivePools {
                             alive[block.cells.rows[row].slot[cell] as usize] = true;
                         }
                     }
-                    let dead: Vec<usize> =
-                        (0..block.capacity).filter(|&s| !alive[s] && !block.slots[row][s].is_none()).collect();
+                    let dead: Vec<usize> = (0..block.capacity)
+                        .filter(|&s| !alive[s] && !block.slots[row][s].is_none())
+                        .collect();
                     if !dead.is_empty() {
                         block.free_slots(row, &dead);
                     }
@@ -465,7 +551,7 @@ impl LivePools {
                                 counts[r.group[cell] as usize] += 1;
                             }
                         }
-                        for g in 0..block.groups {
+                        for (g, chosen) in leader.iter_mut().enumerate() {
                             if !block.present[row][g] {
                                 continue;
                             }
@@ -477,10 +563,11 @@ impl LivePools {
                                     best = slot as i64;
                                 }
                             }
-                            leader[g] = best;
+                            *chosen = best;
                         }
                         let first = *leader.iter().max().unwrap_or(&-1);
-                        let single = (0..block.groups).all(|g| counts[g] <= 1 || !block.present[row][g]);
+                        let single =
+                            (0..block.groups).all(|g| counts[g] <= 1 || !block.present[row][g]);
                         let same = leader.iter().all(|&l| l == first || l == -1);
                         single && same
                     })
@@ -488,10 +575,18 @@ impl LivePools {
             };
             for &row in &uniform {
                 let variable = self.blocks[&capacity].variables[row];
-                let dists = self.group_ids.iter().map(|&g| self.get(g, variable, names)).collect();
+                let dists = self
+                    .group_ids
+                    .iter()
+                    .map(|&g| self.get(g, variable, names))
+                    .collect();
                 released.push((variable, dists));
             }
-            let taken = self.blocks.get_mut(&capacity).expect("blok").extract(&uniform);
+            let taken = self
+                .blocks
+                .get_mut(&capacity)
+                .expect("blok")
+                .extract(&uniform);
             for row in taken {
                 self.block_of.remove(&row.variable);
             }
@@ -500,7 +595,9 @@ impl LivePools {
                 let sparse: Vec<VariableId> = {
                     let block = &self.blocks[&capacity];
                     (0..block.len())
-                        .filter(|&row| block.slots[row].iter().filter(|v| !v.is_none()).count() <= capacity / 4)
+                        .filter(|&row| {
+                            block.slots[row].iter().filter(|v| !v.is_none()).count() <= capacity / 4
+                        })
                         .map(|row| block.variables[row])
                         .collect()
                 };

@@ -28,7 +28,11 @@ pub fn release(ctx: &mut StepContext<'_>) {
     for (variable, distributions) in released {
         for (group, distribution) in axis.iter().zip(distributions) {
             if let Some(distribution) = distribution {
-                world.groups.main_code_mut(*group).repertoire.set(variable, distribution);
+                world
+                    .groups
+                    .main_code_mut(*group)
+                    .repertoire
+                    .set(variable, distribution);
             }
         }
     }

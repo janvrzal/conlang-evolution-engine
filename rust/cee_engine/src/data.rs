@@ -15,7 +15,10 @@ pub const SEGMENTS_JSON: &str = include_str!("../../../src/cee/data/v2_segments.
 pub const GRAMMAR_JSON: &str = include_str!("../../../src/cee/data/v2_grammar.json");
 pub const DEFAULTS_JSON: &str = include_str!("../../../src/cee/data/v2_defaults.json");
 pub const CONCEPTS_JSON: &str = include_str!("../../../src/cee/data/v2_concepts.json");
-pub const CONCEPT_FREQUENCIES_JSON: &str = include_str!("../../../src/cee/data/v2_concept_frequencies.json");
+pub const CONCEPT_FREQUENCIES_JSON: &str =
+    include_str!("../../../src/cee/data/v2_concept_frequencies.json");
 pub const CORE_SEMANTICS_JSON: &str = include_str!("../../../src/cee/data/v2_core_semantics.json");
-pub const CATALOG_SEMANTICS_JSON: &str = include_str!("../../../src/cee/data/v2_catalog_semantics.json");
-pub const STANDING_VARIATION_JSON: &str = include_str!("../../../src/cee/data/v2_standing_variation.json");
+pub const CATALOG_SEMANTICS_JSON: &str =
+    include_str!("../../../src/cee/data/v2_catalog_semantics.json");
+pub const STANDING_VARIATION_JSON: &str =
+    include_str!("../../../src/cee/data/v2_standing_variation.json");

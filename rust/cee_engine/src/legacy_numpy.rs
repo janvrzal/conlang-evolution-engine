@@ -27,7 +27,9 @@ fn hashmix(value: u32, hash_const: &mut u32) -> u32 {
 }
 
 fn mix(x: u32, y: u32) -> u32 {
-    let result = MIX_MULT_L.wrapping_mul(x).wrapping_sub(MIX_MULT_R.wrapping_mul(y));
+    let result = MIX_MULT_L
+        .wrapping_mul(x)
+        .wrapping_sub(MIX_MULT_R.wrapping_mul(y));
     result ^ (result >> XSHIFT)
 }
 
@@ -96,7 +98,12 @@ impl Pcg64 {
         let val = seed_sequence_state(entropy);
         let initstate = (u128::from(val[0]) << 64) | u128::from(val[1]);
         let initseq = (u128::from(val[2]) << 64) | u128::from(val[3]);
-        let mut rng = Pcg64 { state: 0, inc: (initseq << 1) | 1, has_uint32: false, uinteger: 0 };
+        let mut rng = Pcg64 {
+            state: 0,
+            inc: (initseq << 1) | 1,
+            has_uint32: false,
+            uinteger: 0,
+        };
         rng.step();
         rng.state = rng.state.wrapping_add(initstate);
         rng.step();
@@ -136,14 +143,21 @@ impl Pcg64 {
     }
 
     /// `rng.uniform(low, high)`.
+    ///
+    /// numpy počítá `low + rozsah * u` a překladač na arm64 (macOS) výraz slévá do jedné
+    /// operace `fma`; zrcadlíme to, takže poslední bit sedí s numpy z tohoto stroje (jinde
+    /// se může poslední bit lišit; uniform tu slouží jen pro generované frekvence pojmů).
     pub fn uniform(&mut self, low: f64, high: f64) -> f64 {
-        low + (high - low) * self.random()
+        (high - low).mul_add(self.random(), low)
     }
 
     /// `rng.integers(low, high)` (horní mez mimo) pro rozsah do 2^32.
     pub fn integers(&mut self, low: i64, high: i64) -> i64 {
         let range = (high - 1 - low) as u64;
-        assert!(range <= 0xFFFF_FFFF, "integers: rozsah nad 2^32 se nepoužívá");
+        assert!(
+            range <= 0xFFFF_FFFF,
+            "integers: rozsah nad 2^32 se nepoužívá"
+        );
         if range == 0 {
             return low;
         }

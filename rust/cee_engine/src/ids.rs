@@ -103,7 +103,11 @@ pub struct Numbering {
 
 impl From<Vec<String>> for Numbering {
     fn from(names: Vec<String>) -> Self {
-        let numbers = names.iter().enumerate().map(|(i, n)| (n.clone(), i as u32)).collect();
+        let numbers = names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.clone(), i as u32))
+            .collect();
         Numbering { names, numbers }
     }
 }

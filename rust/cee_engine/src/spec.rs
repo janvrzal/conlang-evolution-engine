@@ -27,8 +27,19 @@ pub const FORMAT: &str = "cee-v2-world/1";
 
 /// Druhy událostí popisu světa.
 pub const EVENT_KINDS: [&str; 13] = [
-    "state", "language_policy", "annexation", "secession", "collapse", "border_policy", "lingua_franca",
-    "standard", "schools", "revival", "preserve", "identity", "immigration",
+    "state",
+    "language_policy",
+    "annexation",
+    "secession",
+    "collapse",
+    "border_policy",
+    "lingua_franca",
+    "standard",
+    "schools",
+    "revival",
+    "preserve",
+    "identity",
+    "immigration",
 ];
 
 fn default_format() -> String {
@@ -174,7 +185,8 @@ pub struct WorldSpec {
 
 impl WorldSpec {
     pub fn from_json(text: &str) -> Result<WorldSpec, String> {
-        let spec: WorldSpec = serde_json::from_str(text).map_err(|e| format!("popis světa: {e}"))?;
+        let spec: WorldSpec =
+            serde_json::from_str(text).map_err(|e| format!("popis světa: {e}"))?;
         if spec.format != FORMAT {
             return Err(format!("popis světa: neznámý formát '{}'", spec.format));
         }
@@ -187,19 +199,26 @@ impl WorldSpec {
 
 fn proto_language(spec: &LanguageSpec, table: &SegmentTable) -> Result<ProtoLanguage, String> {
     let mut language = ProtoLanguage::new(&spec.id);
-    language.grammar = profile::by_name(&spec.grammar)
-        .ok_or_else(|| format!("languages.{}: neznámá gramatika '{}'", spec.id, spec.grammar))?;
+    language.grammar = profile::by_name(&spec.grammar).ok_or_else(|| {
+        format!(
+            "languages.{}: neznámá gramatika '{}'",
+            spec.id, spec.grammar
+        )
+    })?;
     if let Some(consonants) = &spec.consonants {
         language.consonants = consonants.clone();
     }
     if let Some(vowels) = &spec.vowels {
         language.vowels = vowels.clone();
     }
-    language.stress_rule = StressRule::parse(&spec.stress).ok_or_else(|| format!("neznámý přízvuk '{}'", spec.stress))?;
-    language.stress_strength =
-        StressStrength::parse(&spec.stress_strength).ok_or_else(|| format!("neznámá síla přízvuku '{}'", spec.stress_strength))?;
+    language.stress_rule = StressRule::parse(&spec.stress)
+        .ok_or_else(|| format!("neznámý přízvuk '{}'", spec.stress))?;
+    language.stress_strength = StressStrength::parse(&spec.stress_strength)
+        .ok_or_else(|| format!("neznámá síla přízvuku '{}'", spec.stress_strength))?;
     for (concept, form) in &spec.words {
-        table.parse(form).map_err(|e| format!("languages.{}.words.{concept}: {e}", spec.id))?;
+        table
+            .parse(form)
+            .map_err(|e| format!("languages.{}.words.{concept}: {e}", spec.id))?;
     }
     language.words = spec.words.clone();
     language.endonym = spec.endonym.clone();
@@ -224,7 +243,11 @@ pub fn build(spec: &WorldSpec) -> Result<(World, Vec<Box<dyn WorldEvent>>), Stri
         return Err("Pozadí dějin (background) zatím nemá provedení v Rustu (patří R1d).".into());
     }
     let table = SegmentTable::default_table();
-    let languages = spec.languages.iter().map(|l| proto_language(l, &table)).collect::<Result<Vec<_>, _>>()?;
+    let languages = spec
+        .languages
+        .iter()
+        .map(|l| proto_language(l, &table))
+        .collect::<Result<Vec<_>, _>>()?;
     let regions: Vec<Region> = spec
         .regions
         .iter()
@@ -243,22 +266,43 @@ pub fn build(spec: &WorldSpec) -> Result<(World, Vec<Box<dyn WorldEvent>>), Stri
             preserve: r.preserve,
         })
         .collect();
-    let options = SeedOptions { semantics: spec.semantics, ..SeedOptions::default() };
+    let options = SeedOptions {
+        semantics: spec.semantics,
+        ..SeedOptions::default()
+    };
     let mut world = region_world(
-        &regions, spec.seed, &options, spec.village_spacing, spec.generation_years, 2.0, params, &languages,
+        &regions,
+        spec.seed,
+        &options,
+        spec.village_spacing,
+        spec.generation_years,
+        2.0,
+        params,
+        &languages,
     )?;
     world.start_year = spec.start_year;
     let mut order: Vec<usize> = (0..spec.events.len()).collect();
     order.sort_by(|&a, &b| {
-        spec.events[a].year.partial_cmp(&spec.events[b].year).unwrap_or(std::cmp::Ordering::Equal).then(a.cmp(&b))
+        spec.events[a]
+            .year
+            .partial_cmp(&spec.events[b].year)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.cmp(&b))
     });
     let mut events: Vec<Box<dyn WorldEvent>> = Vec::new();
     for index in order {
         let item = &spec.events[index];
         if !EVENT_KINDS.contains(&item.kind.as_str()) {
-            return Err(format!("events.{index}: neznámý druh události '{}'", item.kind));
+            return Err(format!(
+                "events.{index}: neznámý druh události '{}'",
+                item.kind
+            ));
         }
-        events.push(crate::events::from_pending(PendingEvent::new(item.year, &item.kind, Value::Object(item.params.clone()))));
+        events.push(crate::events::from_pending(PendingEvent::new(
+            item.year,
+            &item.kind,
+            Value::Object(item.params.clone()),
+        )));
     }
     Ok((world, events))
 }

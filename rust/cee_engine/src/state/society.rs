@@ -15,12 +15,14 @@ use crate::ids::{ConceptId, GroupId, LanguageId};
 pub struct Edit {
     pub tick: u32,
     pub operation: String,
+    #[serde(with = "crate::json_string")]
     pub arguments: serde_json::Value,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SocietyState {
     /// Státy světa podle ID (obsah popíše R1d; zatím volný JSON se schématem exportu).
+    #[serde(with = "crate::json_string")]
     pub states: BTreeMap<String, serde_json::Value>,
     /// Spisovné jazyky států a regionů: ID státu či regionu → psaný kód (skupina).
     pub standards: BTreeMap<String, GroupId>,

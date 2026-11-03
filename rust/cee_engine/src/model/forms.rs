@@ -46,7 +46,11 @@ impl From<FormBankRepr> for FormBank {
 
 impl From<FormBank> for FormBankRepr {
     fn from(bank: FormBank) -> Self {
-        FormBankRepr { forms: (0..bank.len()).map(|id| bank.form(id as FormId).to_vec()).collect() }
+        FormBankRepr {
+            forms: (0..bank.len())
+                .map(|id| bank.form(id as FormId).to_vec())
+                .collect(),
+        }
     }
 }
 
@@ -86,7 +90,9 @@ impl FormBank {
 
     /// Číslo tvaru v bance; nový tvar dostane další číslo.
     pub fn id_of(&mut self, form: &[i32]) -> FormId {
-        self.bank.intern_form(form).expect("hlásky tvaru jsou v tabulce")
+        self.bank
+            .intern_form(form)
+            .expect("hlásky tvaru jsou v tabulce")
     }
 
     pub fn form(&self, id: FormId) -> &[i32] {
@@ -130,7 +136,11 @@ impl FormStore {
         Some(UnitForm {
             form: form as FormId,
             boundary: self.boundary[at],
-            exponent: if exponent == UNSET { MorphemeId::NONE } else { MorphemeId(exponent as u32) },
+            exponent: if exponent == UNSET {
+                MorphemeId::NONE
+            } else {
+                MorphemeId(exponent as u32)
+            },
         })
     }
 
@@ -148,7 +158,11 @@ impl FormStore {
         }
         self.form[at] = unit.form as i32;
         self.boundary[at] = unit.boundary;
-        self.exponent[at] = if unit.exponent.is_none() { UNSET } else { unit.exponent.0 as i32 };
+        self.exponent[at] = if unit.exponent.is_none() {
+            UNSET
+        } else {
+            unit.exponent.0 as i32
+        };
         self.version += 1;
         self.log.push(morpheme);
     }

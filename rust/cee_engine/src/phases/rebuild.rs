@@ -38,8 +38,12 @@ pub fn prosody(_ctx: &mut StepContext<'_>, _group: GroupId) -> Result<(), String
 
 /// Spustí všechny podfáze přestaveb v pořadí kroku.
 pub fn run(ctx: &mut StepContext<'_>) -> Result<(), String> {
-    let groups: Vec<GroupId> =
-        ctx.world.group_ids().into_iter().filter(|g| !ctx.world.groups.written[g.index()]).collect();
+    let groups: Vec<GroupId> = ctx
+        .world
+        .group_ids()
+        .into_iter()
+        .filter(|g| !ctx.world.groups.written[g.index()])
+        .collect();
     phonology(ctx, &groups)?;
     for group in groups {
         morphology(ctx, group)?;

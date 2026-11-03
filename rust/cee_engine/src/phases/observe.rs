@@ -21,10 +21,22 @@ pub fn run(ctx: &mut StepContext<'_>) -> Result<(), String> {
         if world.groups.written[group.index()] {
             continue;
         }
-        let language = world.registry.languages.name(world.groups.main_code(group).language.0).to_owned();
-        languages.entry(language).or_default().push(world.group_name(group).to_owned());
+        let language = world
+            .registry
+            .languages
+            .name(world.groups.main_code(group).language.0)
+            .to_owned();
+        languages
+            .entry(language)
+            .or_default()
+            .push(world.group_name(group).to_owned());
     }
     let dialects = languages.values().cloned().collect();
-    ctx.history.snapshots.push(Snapshot { tick: ctx.tick, year: ctx.year, dialects, languages });
+    ctx.history.snapshots.push(Snapshot {
+        tick: ctx.tick,
+        year: ctx.year,
+        dialects,
+        languages,
+    });
     Ok(())
 }

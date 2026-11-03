@@ -121,7 +121,11 @@ impl Morphemes {
     /// Lexém, ke kterému tvar patří; citační tvar je lexémem sám.
     pub fn lexeme_id(&self, id: MorphemeId) -> MorphemeId {
         let lexeme = self.lexeme[id.index()];
-        if lexeme.is_none() { id } else { lexeme }
+        if lexeme.is_none() {
+            id
+        } else {
+            lexeme
+        }
     }
 }
 
@@ -140,13 +144,20 @@ impl Paradigm {
     }
 
     pub fn weight(&self, cell: CellId) -> Option<f64> {
-        self.cells.iter().position(|&c| c == cell).map(|i| self.weights[i])
+        self.cells
+            .iter()
+            .position(|&c| c == cell)
+            .map(|i| self.weights[i])
     }
 }
 
 /// ID tvaru slova: citační tvar sdílí ID s lexémem, ostatní `lexém#buňka`.
 pub fn unit_name(lexeme: &str, cell: &str, citation: &str) -> String {
-    if cell == citation { lexeme.to_owned() } else { format!("{lexeme}#{cell}") }
+    if cell == citation {
+        lexeme.to_owned()
+    } else {
+        format!("{lexeme}#{cell}")
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -185,8 +196,17 @@ pub struct FormChange {
 impl FormChange {
     /// Kanonický klíč `operace|tvar|koncovka[|hláska]`.
     pub fn key(&self, names: &Numbering) -> String {
-        let exponent = if self.exponent.is_none() { "" } else { names.name(self.exponent.0) };
-        let key = format!("{}|{}|{}", self.operation.name(), names.name(self.unit.0), exponent);
+        let exponent = if self.exponent.is_none() {
+            ""
+        } else {
+            names.name(self.exponent.0)
+        };
+        let key = format!(
+            "{}|{}|{}",
+            self.operation.name(),
+            names.name(self.unit.0),
+            exponent
+        );
         match self.segment {
             None => key,
             Some(segment) => format!("{key}|{segment}"),

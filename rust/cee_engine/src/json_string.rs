@@ -11,7 +11,9 @@ pub fn serialize<T: Serialize, S: Serializer>(value: &T, serializer: S) -> Resul
     serializer.serialize_str(&serde_json::to_string(value).map_err(serde::ser::Error::custom)?)
 }
 
-pub fn deserialize<'de, T: DeserializeOwned, D: Deserializer<'de>>(deserializer: D) -> Result<T, D::Error> {
+pub fn deserialize<'de, T: DeserializeOwned, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<T, D::Error> {
     let text = String::deserialize(deserializer)?;
     serde_json::from_str(&text).map_err(serde::de::Error::custom)
 }

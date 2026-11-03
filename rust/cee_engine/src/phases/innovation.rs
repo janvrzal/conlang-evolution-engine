@@ -33,9 +33,20 @@ pub fn innovation_scale(ctx: &StepContext<'_>, group: GroupId) -> (f64, f64) {
 }
 
 /// Očekávaný počet inovací (`phases.expected_counts` pro jednu dvojici skupina × změna).
-pub fn expected_count(rate_sum: f64, renewal: f64, frequency: f64, dt: f64, generation: bool, scale: f64) -> f64 {
+pub fn expected_count(
+    rate_sum: f64,
+    renewal: f64,
+    frequency: f64,
+    dt: f64,
+    generation: bool,
+    scale: f64,
+) -> f64 {
     let tempo = if generation { renewal } else { dt } * frequency;
-    if rate_sum > 0.0 { rate_sum * tempo * scale } else { 0.0 }
+    if rate_sum > 0.0 {
+        rate_sum * tempo * scale
+    } else {
+        0.0
+    }
 }
 
 /// Výběr místa z proudu náhody ve stavu `state`: (index, nový stav).
@@ -51,8 +62,12 @@ pub fn draw_site(state: u64, count: usize, cumulated: Option<&[f64]>) -> (usize,
 /// Provede fázi inovací.
 pub fn run(ctx: &mut StepContext<'_>, changes: &[Box<dyn Change>]) -> Result<(), String> {
     let dt = ctx.config.dt;
-    let entries: Vec<GroupId> =
-        ctx.world.group_ids().into_iter().filter(|g| !ctx.world.groups.written[g.index()]).collect();
+    let entries: Vec<GroupId> = ctx
+        .world
+        .group_ids()
+        .into_iter()
+        .filter(|g| !ctx.world.groups.written[g.index()])
+        .collect();
     if entries.is_empty() || changes.is_empty() {
         return Ok(());
     }
@@ -68,13 +83,20 @@ pub fn run(ctx: &mut StepContext<'_>, changes: &[Box<dyn Change>]) -> Result<(),
     let seed = ctx.world.seed;
     let (tick, year) = (ctx.tick, ctx.year);
     let world = &*ctx.world;
-    let contexts: Vec<InnovationContext> =
-        entries.iter().map(|&group| InnovationContext { group, tick, year }).collect();
+    let contexts: Vec<InnovationContext> = entries
+        .iter()
+        .map(|&group| InnovationContext { group, tick, year })
+        .collect();
 
     // Tempo se počítá ze stavu na začátku kroku pro všechny skupiny, než se uplatní první inovace.
     let rate_sums: Vec<Vec<f64>> = contexts
         .par_iter()
-        .map(|context| changes.iter().map(|change| change.rate_sum(world, context)).collect())
+        .map(|context| {
+            changes
+                .iter()
+                .map(|change| change.rate_sum(world, context))
+                .collect()
+        })
         .collect();
     let mut expected = vec![vec![0.0; changes.len()]; entries.len()];
     let mut shares = Vec::with_capacity(entries.len());
@@ -84,7 +106,14 @@ pub fn run(ctx: &mut StepContext<'_>, changes: &[Box<dyn Change>]) -> Result<(),
         shares.push(share);
         for (c, change) in changes.iter().enumerate() {
             let scale = rates.get(change.kind()).copied().unwrap_or(1.0);
-            expected[g][c] = expected_count(rate_sums[g][c], renewal, frequency, dt, change.rate_basis_generation(), scale);
+            expected[g][c] = expected_count(
+                rate_sums[g][c],
+                renewal,
+                frequency,
+                dt,
+                change.rate_basis_generation(),
+                scale,
+            );
         }
     }
     if !expected.iter().flatten().any(|&e| e > 0.0) {
@@ -139,14 +168,22 @@ fn apply_innovations(
     let code_name = ctx.world.groups.main_code(group).id.clone();
     let mut rng = Stream::new(
         ctx.world.seed as u64,
-        &[Part::Str("innovation"), Part::Uint(u64::from(ctx.tick)), Part::Str(&group_name), Part::Str(&code_name), Part::Str(change.kind())],
+        &[
+            Part::Str("innovation"),
+            Part::Uint(u64::from(ctx.tick)),
+            Part::Str(&group_name),
+            Part::Str(&code_name),
+            Part::Str(change.kind()),
+        ],
     );
     let cumulated = found.weights.as_deref().map(cumulative).transpose()?;
     for index in 0..count as usize {
         let (picked, state) = draw_site(rng.state, found.sites.len(), cumulated.as_deref());
         rng.state = state;
         let site: VariableId = found.sites[picked];
-        let Some(variant) = change.propose(ctx.world, context, site, &mut rng, index) else { continue };
+        let Some(variant) = change.propose(ctx.world, context, site, &mut rng, index) else {
+            continue;
+        };
         let world = &mut *ctx.world;
         if world.live.contains(site) {
             if !world.live.holds(group, site) {
@@ -155,23 +192,36 @@ fn apply_innovations(
         } else if world.stored(group, site).is_none() {
             continue;
         } else {
-            let dists: Vec<_> = world.live.group_ids.iter().map(|&g| world.stored(g, site)).collect();
+            let dists: Vec<_> = world
+                .live
+                .group_ids
+                .iter()
+                .map(|&g| world.stored(g, site))
+                .collect();
             let mut live = std::mem::take(&mut world.live);
             let loaded = live.load(site, &dists, &world.registry.variants);
             world.live = live;
             loaded?;
         }
-        let id = world.store_variant(&variant.name, variant.variable, variant.payload.clone(), variant.origin.clone());
+        let id = world.store_variant(
+            &variant.name,
+            variant.variable,
+            variant.payload.clone(),
+            variant.origin.clone(),
+        );
         let held = world.distribution(group, site);
         if held.as_ref().is_some_and(|d| d.variants.contains(&id)) {
             continue; // tutéž změnu už skupina má
         }
-        world.live.innovate(site, group, id, share, &world.registry.variants);
+        world
+            .live
+            .innovate(site, group, id, share, &world.registry.variants);
         let payload = json!({
             "group": group_name, "code": code_name, "change": change.kind(),
             "variable": world.registry.variables.name(site.0), "variant": world.registry.variants.name(id.0),
         });
-        ctx.history.record("innovation", ctx.tick, context.year, payload);
+        ctx.history
+            .record("innovation", ctx.tick, context.year, payload);
     }
     Ok(())
 }

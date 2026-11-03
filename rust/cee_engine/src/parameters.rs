@@ -25,7 +25,10 @@ fn table(items: &[(&str, f64)]) -> Table {
 }
 
 fn table2(items: &[(&str, &[(&str, f64)])]) -> Table2 {
-    items.iter().map(|&(k, v)| (k.to_owned(), table(v))).collect()
+    items
+        .iter()
+        .map(|&(k, v)| (k.to_owned(), table(v)))
+        .collect()
 }
 
 /// Výchozí váhy domén v kanálech (`DEFAULT_CHANNEL_DOMAINS`).
@@ -168,7 +171,12 @@ impl Default for Parameters {
             capital_prestige: 2.0,
             capital_link_strength: 0.3,
             capital_reach: 150.0,
-            centralization_levels: table(&[("none", 0.0), ("weak", 0.5), ("moderate", 1.0), ("strong", 2.0)]),
+            centralization_levels: table(&[
+                ("none", 0.0),
+                ("weak", 0.5),
+                ("moderate", 1.0),
+                ("strong", 2.0),
+            ]),
             policy_levels: table2(&[
                 ("tolerant", &[("share", 0.1), ("pull", 0.0)]),
                 ("promoted", &[("share", 0.3), ("pull", 0.1)]),
@@ -182,7 +190,12 @@ impl Default for Parameters {
                 ("national", &[("pace", 1.0), ("seed", 0.05)]),
             ]),
             border_levels: table(&[("open", 1.0), ("normal", 0.5), ("closed", 0.1)]),
-            background_levels: table(&[("none", 0.0), ("calm", 0.3), ("normal", 1.0), ("turbulent", 2.5)]),
+            background_levels: table(&[
+                ("none", 0.0),
+                ("calm", 0.3),
+                ("normal", 1.0),
+                ("turbulent", 2.5),
+            ]),
             background_spans: table2(&[
                 ("plague_mortality", &[("low", 0.15), ("high", 0.4)]),
                 ("recovery_steps", &[("low", 2.0), ("high", 4.0)]),
@@ -196,13 +209,21 @@ impl Default for Parameters {
             background_elite_link: 0.1,
             background_elite_share: 0.1,
             background_rates: table(&[
-                ("plague", 0.08), ("resettlement", 0.12), ("trade", 0.12), ("prestige", 0.08),
+                ("plague", 0.08),
+                ("resettlement", 0.12),
+                ("trade", 0.12),
+                ("prestige", 0.08),
                 ("foreign_elite", 0.02),
             ]),
             literacy_levels: table(&[("elite", 0.05), ("towns", 0.2), ("mass", 0.8)]),
             schooling_levels: table(&[("towns", 0.3), ("mass", 0.8)]),
             standard_prestige: 1.5,
-            terrain_access: table(&[("plain", 1.0), ("hills", 0.6), ("mountains", 0.3), ("island", 0.2)]),
+            terrain_access: table(&[
+                ("plain", 1.0),
+                ("hills", 0.6),
+                ("mountains", 0.3),
+                ("island", 0.2),
+            ]),
             identity_loyalty: table(&[("shared", 0.0), ("distinct", 0.5), ("strong", 0.8)]),
             pressure_weights: Table::new(),
             change_rates: Table::new(),
@@ -213,14 +234,24 @@ impl Default for Parameters {
 
 /// Tabulky slovních úrovní, které autor světa zadává jménem.
 pub const LEVEL_TABLES: [&str; 10] = [
-    "centralization_levels", "policy_levels", "lingua_franca_levels", "terrain_access", "identity_loyalty",
-    "literacy_levels", "schooling_levels", "border_levels", "revival_levels", "background_levels",
+    "centralization_levels",
+    "policy_levels",
+    "lingua_franca_levels",
+    "terrain_access",
+    "identity_loyalty",
+    "literacy_levels",
+    "schooling_levels",
+    "border_levels",
+    "revival_levels",
+    "background_levels",
 ];
 
 impl Parameters {
     /// Parametry z přepisů polí (`WorldSpec.parameters`): neznámé pole je chyba,
     /// `channel_domains` se doplní výchozími váhami (jako `_channel_domains`).
-    pub fn from_overrides(overrides: &serde_json::Map<String, serde_json::Value>) -> Result<Parameters, String> {
+    pub fn from_overrides(
+        overrides: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<Parameters, String> {
         let mut base = serde_json::to_value(Parameters::default()).map_err(|e| e.to_string())?;
         let known = base.as_object_mut().expect("objekt");
         for (key, value) in overrides {
@@ -237,7 +268,10 @@ impl Parameters {
     /// Doplní `channel_domains` výchozími váhami a ověří přepisy gramatiky a kanálů.
     pub fn normalize(&mut self) -> Result<(), String> {
         for (function, fields) in &self.grammar {
-            let unknown: Vec<&String> = fields.keys().filter(|k| !GRAMMAR_FIELDS.contains(&k.as_str())).collect();
+            let unknown: Vec<&String> = fields
+                .keys()
+                .filter(|k| !GRAMMAR_FIELDS.contains(&k.as_str()))
+                .collect();
             if !unknown.is_empty() {
                 return Err(format!(
                     "Funkci '{function}' lze přepsat jen v polích {GRAMMAR_FIELDS:?}, ne {unknown:?}."
@@ -246,7 +280,10 @@ impl Parameters {
         }
         let given = std::mem::take(&mut self.channel_domains);
         if let Some(channel) = given.keys().find(|c| !CHANNELS.contains(&c.as_str())) {
-            return Err(format!("Neznámý kanál [{channel}]; možnosti: {}.", CHANNELS.join(", ")));
+            return Err(format!(
+                "Neznámý kanál [{channel}]; možnosti: {}.",
+                CHANNELS.join(", ")
+            ));
         }
         let mut merged = default_channel_domains();
         for (channel, extra) in given {
@@ -254,11 +291,14 @@ impl Parameters {
             for (domain, value) in extra {
                 if !DOMAINS.contains(&domain.as_str()) {
                     return Err(format!(
-                        "Neznámá doména [{domain}] v kanálu '{channel}'; možnosti: {}.", DOMAINS.join(", ")
+                        "Neznámá doména [{domain}] v kanálu '{channel}'; možnosti: {}.",
+                        DOMAINS.join(", ")
                     ));
                 }
                 if value < 0.0 {
-                    return Err(format!("Váha domény [{domain}] v kanálu '{channel}' nesmí být záporná."));
+                    return Err(format!(
+                        "Váha domény [{domain}] v kanálu '{channel}' nesmí být záporná."
+                    ));
                 }
                 row.insert(domain, value);
             }
@@ -278,16 +318,46 @@ impl Parameters {
     /// Možnosti slovních úrovní pro UI (`spec.levels`): tabulka → seřazená jména.
     pub fn levels(&self) -> BTreeMap<&'static str, Vec<String>> {
         let tables: [(&'static str, Vec<String>); 10] = [
-            ("centralization_levels", self.centralization_levels.keys().cloned().collect()),
-            ("policy_levels", self.policy_levels.keys().cloned().collect()),
-            ("lingua_franca_levels", self.lingua_franca_levels.keys().cloned().collect()),
-            ("terrain_access", self.terrain_access.keys().cloned().collect()),
-            ("identity_loyalty", self.identity_loyalty.keys().cloned().collect()),
-            ("literacy_levels", self.literacy_levels.keys().cloned().collect()),
-            ("schooling_levels", self.schooling_levels.keys().cloned().collect()),
-            ("border_levels", self.border_levels.keys().cloned().collect()),
-            ("revival_levels", self.revival_levels.keys().cloned().collect()),
-            ("background_levels", self.background_levels.keys().cloned().collect()),
+            (
+                "centralization_levels",
+                self.centralization_levels.keys().cloned().collect(),
+            ),
+            (
+                "policy_levels",
+                self.policy_levels.keys().cloned().collect(),
+            ),
+            (
+                "lingua_franca_levels",
+                self.lingua_franca_levels.keys().cloned().collect(),
+            ),
+            (
+                "terrain_access",
+                self.terrain_access.keys().cloned().collect(),
+            ),
+            (
+                "identity_loyalty",
+                self.identity_loyalty.keys().cloned().collect(),
+            ),
+            (
+                "literacy_levels",
+                self.literacy_levels.keys().cloned().collect(),
+            ),
+            (
+                "schooling_levels",
+                self.schooling_levels.keys().cloned().collect(),
+            ),
+            (
+                "border_levels",
+                self.border_levels.keys().cloned().collect(),
+            ),
+            (
+                "revival_levels",
+                self.revival_levels.keys().cloned().collect(),
+            ),
+            (
+                "background_levels",
+                self.background_levels.keys().cloned().collect(),
+            ),
         ];
         tables.into_iter().collect()
     }

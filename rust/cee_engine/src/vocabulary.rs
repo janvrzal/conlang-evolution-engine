@@ -14,8 +14,14 @@ use crate::world::World;
 /// kódu (`morphology.units_of`); to přináší R1c.
 pub fn units_of(world: &World, root: MorphemeId) -> Vec<MorphemeId> {
     let class = world.morphemes.word_class[root.index()];
-    let paradigm = if class.is_none() { None } else { world.paradigms.get(class.index()).and_then(Option::as_ref) };
-    let Some(paradigm) = paradigm else { return vec![root] };
+    let paradigm = if class.is_none() {
+        None
+    } else {
+        world.paradigms.get(class.index()).and_then(Option::as_ref)
+    };
+    let Some(paradigm) = paradigm else {
+        return vec![root];
+    };
     let root_name = world.registry.morphemes.name(root.0);
     let citation = world.registry.cells.name(paradigm.citation().0);
     let mut units = vec![root];
@@ -32,16 +38,26 @@ pub fn units_of(world: &World, root: MorphemeId) -> Vec<MorphemeId> {
 
 /// Doplní slovní zásobu jedné skupiny, pokud ji nemá.
 pub fn seed_vocabulary(world: &mut World, group: GroupId) -> Result<(), String> {
-    if !world.groups.main_code(group).phonology.vocabulary.is_empty() {
+    if !world
+        .groups
+        .main_code(group)
+        .phonology
+        .vocabulary
+        .is_empty()
+    {
         return Ok(());
     }
     let mut found = Vec::new();
     for number in world.registry.variables.sorted() {
         let variable = crate::ids::VariableId(number);
-        if variable.index() >= world.variables.len() || world.variables.kind[variable.index()] != VariableKind::Lexical {
+        if variable.index() >= world.variables.len()
+            || world.variables.kind[variable.index()] != VariableKind::Lexical
+        {
             continue;
         }
-        let Some((dominant, _)) = world.dominant(group, variable) else { continue };
+        let Some((dominant, _)) = world.dominant(group, variable) else {
+            continue;
+        };
         if let Payload::Lexical { morpheme, .. } = &world.variants.payload[dominant.index()] {
             if !morpheme.is_none() {
                 found.push((world.variables.concept[variable.index()], *morpheme));

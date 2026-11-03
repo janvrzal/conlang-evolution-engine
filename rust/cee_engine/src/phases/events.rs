@@ -12,7 +12,10 @@ use crate::phases::StepContext;
 use crate::vocabulary::seed_vocabulary_all;
 
 /// Provede všechny události, jejichž rok už nastal; vrací, zda se něco provedlo.
-pub fn run(ctx: &mut StepContext<'_>, pending: &mut VecDeque<Box<dyn WorldEvent>>) -> Result<bool, String> {
+pub fn run(
+    ctx: &mut StepContext<'_>,
+    pending: &mut VecDeque<Box<dyn WorldEvent>>,
+) -> Result<bool, String> {
     let mut applied = false;
     while pending.front().is_some_and(|e| e.year() <= ctx.year) {
         let event = pending.pop_front().expect("událost");

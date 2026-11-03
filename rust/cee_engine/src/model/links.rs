@@ -87,13 +87,22 @@ impl Links {
 
     /// Vazby zdroje podle čísla cíle.
     pub fn from(&self, source: GroupId) -> impl Iterator<Item = (GroupId, &Link)> {
-        self.map.range((source, GroupId(0))..=(source, GroupId(u32::MAX))).map(|(&(_, t), l)| (t, l))
+        self.map
+            .range((source, GroupId(0))..=(source, GroupId(u32::MAX)))
+            .map(|(&(_, t), l)| (t, l))
     }
 
     /// Řídká matice vazeb pro `groups` skupin (přepočítá se jen po změně vazeb).
     pub fn csr(&mut self, groups: usize) -> &LinkCsr {
-        if self.csr.as_ref().map_or(true, |c| c.row_start.len() != groups + 1) {
-            let mut csr = LinkCsr { row_start: vec![0; groups + 1], ..LinkCsr::default() };
+        if self
+            .csr
+            .as_ref()
+            .is_none_or(|c| c.row_start.len() != groups + 1)
+        {
+            let mut csr = LinkCsr {
+                row_start: vec![0; groups + 1],
+                ..LinkCsr::default()
+            };
             for (&(source, target), link) in &self.map {
                 if source.index() < groups {
                     csr.row_start[source.index() + 1] += 1;

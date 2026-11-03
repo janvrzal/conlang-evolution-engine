@@ -93,10 +93,16 @@ impl GroupInit {
             return Err(format!("Skupina '{}' musí mít kladnou populaci.", self.id));
         }
         if self.generation_years <= 0.0 {
-            return Err(format!("Skupina '{}' musí mít kladnou délku generace.", self.id));
+            return Err(format!(
+                "Skupina '{}' musí mít kladnou délku generace.",
+                self.id
+            ));
         }
         if !(0.0..=1.0).contains(&self.openness) {
-            return Err(format!("Otevřenost skupiny '{}' musí ležet v intervalu 0 až 1.", self.id));
+            return Err(format!(
+                "Otevřenost skupiny '{}' musí ležet v intervalu 0 až 1.",
+                self.id
+            ));
         }
         if self.prestige < 0.0 {
             return Err(format!("Prestiž skupiny '{}' nesmí být záporná.", self.id));
@@ -237,7 +243,10 @@ impl Groups {
 
     /// Žijící skupiny v kanonickém pořadí (podle jmen) – `World.group_ids()`.
     pub fn sorted(&self, names: &Numbering) -> Vec<GroupId> {
-        let mut ids: Vec<GroupId> = (0..self.len()).filter(|&i| self.alive[i]).map(GroupId::new).collect();
+        let mut ids: Vec<GroupId> = (0..self.len())
+            .filter(|&i| self.alive[i])
+            .map(GroupId::new)
+            .collect();
         ids.sort_by(|a, b| names.name(a.0).cmp(names.name(b.0)));
         ids
     }
@@ -253,6 +262,9 @@ impl Groups {
 
     /// Nejkratší délka generace žijících skupin; krok simulace nesmí být delší.
     pub fn generation_ceiling(&self) -> f64 {
-        (0..self.len()).filter(|&i| self.alive[i]).map(|i| self.generation_years[i]).fold(f64::INFINITY, f64::min)
+        (0..self.len())
+            .filter(|&i| self.alive[i])
+            .map(|i| self.generation_years[i])
+            .fold(f64::INFINITY, f64::min)
     }
 }

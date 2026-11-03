@@ -80,7 +80,12 @@ pub fn py_float_repr(value: f64) -> String {
         return if value > 0.0 { "inf" } else { "-inf" }.into();
     }
     if value == 0.0 {
-        return if value.is_sign_negative() { "-0.0" } else { "0.0" }.into();
+        return if value.is_sign_negative() {
+            "-0.0"
+        } else {
+            "0.0"
+        }
+        .into();
     }
     // `{:e}` dá nejkratší číslice: „d.ddde±x“.
     let text = format!("{:e}", value.abs());
@@ -95,12 +100,25 @@ pub fn py_float_repr(value: f64) -> String {
         } else if decpt >= length {
             format!("{}{}.0", digits, "0".repeat((decpt - length) as usize))
         } else {
-            format!("{}.{}", &digits[..decpt as usize], &digits[decpt as usize..])
+            format!(
+                "{}.{}",
+                &digits[..decpt as usize],
+                &digits[decpt as usize..]
+            )
         }
     } else {
-        let mantissa = if length > 1 { format!("{}.{}", &digits[..1], &digits[1..]) } else { digits.clone() };
+        let mantissa = if length > 1 {
+            format!("{}.{}", &digits[..1], &digits[1..])
+        } else {
+            digits.clone()
+        };
         let power = decpt - 1;
-        format!("{}e{}{:02}", mantissa, if power < 0 { "-" } else { "+" }, power.abs())
+        format!(
+            "{}e{}{:02}",
+            mantissa,
+            if power < 0 { "-" } else { "+" },
+            power.abs()
+        )
     };
     format!("{sign}{body}")
 }
@@ -190,7 +208,9 @@ impl Stream {
         all.push(Part::Str("stream"));
         all.push(Part::Uint(seed));
         all.extend_from_slice(parts);
-        Stream { state: stable_int(&all) }
+        Stream {
+            state: stable_int(&all),
+        }
     }
 
     /// Proud s daným 64bitovým klíčem (počáteční stav).
@@ -246,13 +266,21 @@ impl Stream {
         }
         let chunks = ((lam / POISSON_CHUNK).ceil() as u64).max(1);
         let part = lam / chunks as f64;
-        (0..chunks).map(|_| u64::from(poisson_inversion(part, self.random()))).sum()
+        (0..chunks)
+            .map(|_| u64::from(poisson_inversion(part, self.random())))
+            .sum()
     }
 }
 
 /// Klíč tahu inovací skupiny a kódu v kroku: `stable_int(seed, "innovation", tick, skupina, kód)`.
 pub fn innovation_group_key(seed: i64, tick: u64, group: &str, code: &str) -> u64 {
-    stable_int(&[Part::Int(seed), Part::Str("innovation"), Part::Uint(tick), Part::Str(group), Part::Str(code)])
+    stable_int(&[
+        Part::Int(seed),
+        Part::Str("innovation"),
+        Part::Uint(tick),
+        Part::Str(group),
+        Part::Str(code),
+    ])
 }
 
 /// Poissonův tah závislý jen na klíčích řádku a sloupce (`rng.hash_poisson` po prvcích).

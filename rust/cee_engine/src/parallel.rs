@@ -24,11 +24,16 @@ pub const SUM_BLOCK: usize = 256;
 
 /// Součet přes bloky pevné velikosti: bloky se sečtou souběžně, jejich součty postupně.
 pub fn ordered_sum(values: &[f64]) -> f64 {
-    let partial: Vec<f64> = values.par_chunks(SUM_BLOCK).map(|chunk| chunk.iter().sum()).collect();
+    let partial: Vec<f64> = values
+        .par_chunks(SUM_BLOCK)
+        .map(|chunk| chunk.iter().sum())
+        .collect();
     partial.iter().sum()
 }
 
 /// Nastaví počet vláken (jen jednou za proces; pozdější volání se ignoruje).
 pub fn set_threads(threads: usize) {
-    let _ = rayon::ThreadPoolBuilder::new().num_threads(threads.max(1)).build_global();
+    let _ = rayon::ThreadPoolBuilder::new()
+        .num_threads(threads.max(1))
+        .build_global();
 }

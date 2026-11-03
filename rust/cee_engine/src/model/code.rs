@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{ConceptId, LanguageId, MorphemeId, GroupId, VariableId, VariantId};
+use crate::ids::{ConceptId, GroupId, LanguageId, MorphemeId, VariableId, VariantId};
 use crate::model::forms::FormStore;
 use crate::model::repertoire::Repertoire;
 use crate::state::grammar::GrammarCodeState;
@@ -129,7 +129,11 @@ impl MorphemeSet {
 
     /// Prvky vzestupně podle čísla (pro pořadí jmen je seřadí volající).
     pub fn iter(&self) -> impl Iterator<Item = MorphemeId> + '_ {
-        self.present.iter().enumerate().filter(|(_, &p)| p).map(|(i, _)| MorphemeId::new(i))
+        self.present
+            .iter()
+            .enumerate()
+            .filter(|(_, &p)| p)
+            .map(|(i, _)| MorphemeId::new(i))
     }
 }
 
@@ -159,7 +163,10 @@ pub struct PhonologyState {
 
 impl PhonologyState {
     pub fn dominant_of(&self, concept: ConceptId) -> MorphemeId {
-        self.dominant.get(concept.index()).copied().unwrap_or(MorphemeId::NONE)
+        self.dominant
+            .get(concept.index())
+            .copied()
+            .unwrap_or(MorphemeId::NONE)
     }
 
     /// Změní dominantní kořen a zaznamená i přechodný stav bez kořene; `false`, když se nic nemění.

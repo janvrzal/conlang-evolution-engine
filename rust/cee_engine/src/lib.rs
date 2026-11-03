@@ -32,8 +32,8 @@ pub mod vocabulary;
 pub mod world;
 
 pub use ids::{
-    CellId, CodeId, ConceptId, Form, FormId, GroupId, LanguageId, MorphemeId, ProcessId, TerritoryId, VariableId,
-    VariantId, WordClassId,
+    CellId, CodeId, ConceptId, Form, FormId, GroupId, LanguageId, MorphemeId, ProcessId,
+    TerritoryId, VariableId, VariantId, WordClassId,
 };
 pub use simulation::{Simulation, SimulationConfig};
 pub use world::World;

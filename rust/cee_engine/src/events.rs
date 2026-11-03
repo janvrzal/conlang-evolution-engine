@@ -34,7 +34,11 @@ pub struct PendingEvent {
 
 impl PendingEvent {
     pub fn new(year: f64, kind: &str, params: Value) -> PendingEvent {
-        PendingEvent { year, kind: kind.to_owned(), params }
+        PendingEvent {
+            year,
+            kind: kind.to_owned(),
+            params,
+        }
     }
 }
 
@@ -48,7 +52,10 @@ impl WorldEvent for PendingEvent {
     }
 
     fn apply(&self, _world: &mut World, _history: &mut History, _tick: u32) -> Result<(), String> {
-        Err(format!("Událost '{}' (rok {}) zatím nemá provedení v Rustu (patří R1d).", self.kind, self.year))
+        Err(format!(
+            "Událost '{}' (rok {}) zatím nemá provedení v Rustu (patří R1d).",
+            self.kind, self.year
+        ))
     }
 
     fn describe(&self) -> Value {

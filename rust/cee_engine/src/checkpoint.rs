@@ -33,7 +33,9 @@ impl Checkpoint {
         let (version, checkpoint): (u32, Checkpoint) =
             postcard::from_bytes(bytes).map_err(|e| format!("kontrolní bod: {e}"))?;
         if version != CHECKPOINT_VERSION {
-            return Err(format!("kontrolní bod verze {version}, čekám {CHECKPOINT_VERSION}"));
+            return Err(format!(
+                "kontrolní bod verze {version}, čekám {CHECKPOINT_VERSION}"
+            ));
         }
         Ok(checkpoint)
     }

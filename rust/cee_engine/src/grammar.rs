@@ -74,11 +74,14 @@ struct CatalogFile {
 impl Catalog {
     pub fn from_json(text: &str) -> Result<Catalog, String> {
         // Export je řazen podle klíče, pořadí funkcí z YAML nese pole `order`.
-        let file: CatalogFile = serde_json::from_str(text).map_err(|e| format!("v2_grammar.json: {e}"))?;
+        let file: CatalogFile =
+            serde_json::from_str(text).map_err(|e| format!("v2_grammar.json: {e}"))?;
         let mut functions = Vec::with_capacity(file.order.len());
         let mut by_id = file.functions;
         for id in file.order {
-            let mut entry = by_id.remove(&id).ok_or_else(|| format!("funkce {id} chybí v katalogu"))?;
+            let mut entry = by_id
+                .remove(&id)
+                .ok_or_else(|| format!("funkce {id} chybí v katalogu"))?;
             entry.id = id;
             functions.push(entry);
         }
@@ -87,7 +90,9 @@ impl Catalog {
 
     pub fn shared() -> &'static Catalog {
         static CATALOG: OnceLock<Catalog> = OnceLock::new();
-        CATALOG.get_or_init(|| Catalog::from_json(crate::data::GRAMMAR_JSON).expect("vložený katalog gramatiky"))
+        CATALOG.get_or_init(|| {
+            Catalog::from_json(crate::data::GRAMMAR_JSON).expect("vložený katalog gramatiky")
+        })
     }
 
     pub fn get(&self, id: &str) -> Option<&GrammaticalFunction> {
@@ -102,7 +107,9 @@ impl Catalog {
                 .functions
                 .iter_mut()
                 .find(|f| &f.id == function)
-                .ok_or_else(|| format!("Parametry přepisují neznámé gramatické funkce: [{function}]."))?;
+                .ok_or_else(|| {
+                    format!("Parametry přepisují neznámé gramatické funkce: [{function}].")
+                })?;
             for (field, value) in fields {
                 match field.as_str() {
                     "need" => entry.need = *value,
@@ -213,9 +220,15 @@ pub mod profile {
 
     /// Menšinový jazyk: zápor za slovesem a pevné SOV.
     pub fn substrate() -> Grammar {
-        let mut grammar: Grammar = syntax().into_iter().filter(|(name, _)| *name != "NEG" && *name != "ORDER").collect();
+        let mut grammar: Grammar = syntax()
+            .into_iter()
+            .filter(|(name, _)| *name != "NEG" && *name != "ORDER")
+            .collect();
         grammar.push(("NEG", Construction::new("NEG", "post").with_source("step")));
-        grammar.push(("ORDER", Construction::new("ORDER", "fixed").with_order("SOV")));
+        grammar.push((
+            "ORDER",
+            Construction::new("ORDER", "fixed").with_order("SOV"),
+        ));
         // Pořadí klíčů jako ve slovníku Pythonu: PAST, PL, OBJ, NEG, ORDER (přepis nahrazuje na místě).
         grammar.sort_by_key(|(name, _)| PROFILE_ORDER.iter().position(|id| id == name));
         grammar

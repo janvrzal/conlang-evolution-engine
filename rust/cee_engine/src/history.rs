@@ -20,10 +20,13 @@ fn rounded(value: f64) -> f64 {
 fn round_value(value: Value) -> Value {
     match value {
         Value::Number(n) if n.is_f64() => {
-            serde_json::Number::from_f64(rounded(n.as_f64().unwrap_or(0.0))).map_or(Value::Null, Value::Number)
+            serde_json::Number::from_f64(rounded(n.as_f64().unwrap_or(0.0)))
+                .map_or(Value::Null, Value::Number)
         }
         Value::Array(items) => Value::Array(items.into_iter().map(round_value).collect()),
-        Value::Object(map) => Value::Object(map.into_iter().map(|(k, v)| (k, round_value(v))).collect()),
+        Value::Object(map) => {
+            Value::Object(map.into_iter().map(|(k, v)| (k, round_value(v))).collect())
+        }
         other => other,
     }
 }
@@ -40,6 +43,7 @@ pub struct Snapshot {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct History {
+    #[serde(with = "crate::json_string")]
     pub events: Vec<Map<String, Value>>,
     pub snapshots: Vec<Snapshot>,
     /// (varianta, skupina) → [(tik, frekvence)]; plní se jen na vyžádání.
@@ -61,14 +65,22 @@ impl History {
         self.events.push(event);
     }
 
-    pub fn of_kind<'a>(&'a self, kind: &'a str) -> impl Iterator<Item = &'a Map<String, Value>> + 'a {
-        self.events.iter().filter(move |e| e.get("kind").and_then(Value::as_str) == Some(kind))
+    pub fn of_kind<'a>(
+        &'a self,
+        kind: &'a str,
+    ) -> impl Iterator<Item = &'a Map<String, Value>> + 'a {
+        self.events
+            .iter()
+            .filter(move |e| e.get("kind").and_then(Value::as_str) == Some(kind))
     }
 
     /// Řádky logu: JSON s řazenými klíči (`json.dumps(sort_keys=True)`).
     pub fn lines(&self) -> Vec<String> {
         // `serde_json::Map` bez `preserve_order` drží klíče seřazené.
-        self.events.iter().map(|e| serde_json::to_string(e).expect("JSON")).collect()
+        self.events
+            .iter()
+            .map(|e| serde_json::to_string(e).expect("JSON"))
+            .collect()
     }
 
     /// Otisk celého logu (SHA-256 nad řádky); dva běhy se stejným semínkem ho mají shodný.
@@ -81,6 +93,9 @@ impl History {
             hash.update(line.as_bytes());
             hash.update(b"\n");
         }
-        hash.finalize().iter().map(|byte| format!("{byte:02x}")).collect()
+        hash.finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
     }
 }

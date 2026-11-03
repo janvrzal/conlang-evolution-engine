@@ -85,7 +85,11 @@ pub struct Simulation {
 }
 
 impl Simulation {
-    pub fn new(world: World, config: SimulationConfig, events: Vec<Box<dyn WorldEvent>>) -> Result<Simulation, String> {
+    pub fn new(
+        world: World,
+        config: SimulationConfig,
+        events: Vec<Box<dyn WorldEvent>>,
+    ) -> Result<Simulation, String> {
         Simulation::with_changes(world, config, events, default_changes())
     }
 
@@ -109,8 +113,14 @@ impl Simulation {
         }
         world.load_differing()?;
         let described = events.iter().map(|e| e.describe()).collect();
-        let mut sorted: Vec<(usize, Box<dyn WorldEvent>)> = events.into_iter().enumerate().collect();
-        sorted.sort_by(|a, b| a.1.year().partial_cmp(&b.1.year()).unwrap_or(std::cmp::Ordering::Equal).then(a.0.cmp(&b.0)));
+        let mut sorted: Vec<(usize, Box<dyn WorldEvent>)> =
+            events.into_iter().enumerate().collect();
+        sorted.sort_by(|a, b| {
+            a.1.year()
+                .partial_cmp(&b.1.year())
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.0.cmp(&b.0))
+        });
         Ok(Simulation {
             world,
             config,
@@ -142,7 +152,13 @@ impl Simulation {
         let year = self.year();
         let (tick, observe_every) = (self.tick, self.config.observe_every);
         {
-            let mut ctx = StepContext { world: &mut self.world, history: &mut self.history, config: &self.config, tick, year };
+            let mut ctx = StepContext {
+                world: &mut self.world,
+                history: &mut self.history,
+                config: &self.config,
+                tick,
+                year,
+            };
             phases::events::run(&mut ctx, &mut self.pending)?;
             phases::innovation::run(&mut ctx, &self.changes)?;
             phases::transmission::run(&mut ctx)?;
@@ -165,7 +181,12 @@ impl Simulation {
 
     /// Úplný stav běhu po posledním kroku (kopie; pokračování z něj je stejné).
     pub fn checkpoint(&self) -> Checkpoint {
-        Checkpoint { tick: self.tick, year: self.year(), world: self.world.clone(), history: self.history.clone() }
+        Checkpoint {
+            tick: self.tick,
+            year: self.year(),
+            world: self.world.clone(),
+            history: self.history.clone(),
+        }
     }
 
     /// Pokračování z kontrolního bodu s (případně jinými) pozdějšími událostmi.
@@ -173,13 +194,22 @@ impl Simulation {
         checkpoint: Checkpoint,
         config: SimulationConfig,
         events: Vec<Box<dyn WorldEvent>>,
+        changes: Vec<Box<dyn Change>>,
     ) -> Result<Simulation, String> {
-        let mut simulation = Simulation::with_changes(checkpoint.world, config, Vec::new(), default_changes())?;
+        let mut simulation =
+            Simulation::with_changes(checkpoint.world, config, Vec::new(), changes)?;
         simulation.history = checkpoint.history;
         simulation.tick = checkpoint.tick;
         simulation.events = events.iter().map(|e| e.describe()).collect();
-        let mut later: Vec<Box<dyn WorldEvent>> = events.into_iter().filter(|e| e.year() > checkpoint.year).collect();
-        later.sort_by(|a, b| a.year().partial_cmp(&b.year()).unwrap_or(std::cmp::Ordering::Equal));
+        let mut later: Vec<Box<dyn WorldEvent>> = events
+            .into_iter()
+            .filter(|e| e.year() > checkpoint.year)
+            .collect();
+        later.sort_by(|a, b| {
+            a.year()
+                .partial_cmp(&b.year())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         simulation.pending = later.into();
         Ok(simulation)
     }
