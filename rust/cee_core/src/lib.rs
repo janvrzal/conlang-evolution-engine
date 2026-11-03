@@ -7,6 +7,8 @@ pub mod assess;
 pub mod assess_index;
 pub mod bank;
 pub mod clarity;
+pub mod form_assess;
+pub mod form_restructure;
 pub mod index;
 pub mod morphology_index;
 pub mod phonology;
@@ -31,4 +33,4 @@ mod sites_python;
 
 /// Verze rozhraní mezi Pythonem a Rustem. Python rozšíření nepoužije, když se
 /// číslo liší od toho, které čeká (jiný worktree, starší sestavení).
-pub const INTERFACE_VERSION: u32 = 9;
+pub const INTERFACE_VERSION: u32 = 11;

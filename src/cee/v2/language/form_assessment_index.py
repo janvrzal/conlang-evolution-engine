@@ -5,10 +5,10 @@ něco, na čem závisí. Klíče jsou čísla z registru: hodnoty podle čísla 
 (jednotka, kořen, koncovka) jako čísla morfémů, dominantní kořeny jako pole podle čísla pojmu.
 Změny se hledají v deníku tvarů, užití, dominantních kořenů a frekvencí pojmů.
 
-Rust (``cee_core.AssessIndex``) drží zrcadlo hodnot pro tlaky: ``mirror`` je dvojice
-(rukojeť, token kódu). Každé zrušení hodnoty se do zrcadla hned zapíše, takže zrcadlo nikdy
-nenese hodnotu, kterou by tento index už nevrátil; chybějící hodnotu si Rust vyžádá a Python
-ji sem dodá (:func:`assess`).
+Tlaky v Rustu tento index nepoužívají: hodnocení tvarů si počítá Rust sám (``form_assess.rs``,
+z morfologického stavu indexu míst, úložiště tvarů a dominantních kořenů) a drží ho po verzi kódu.
+Tento index je referenční podoba v Pythonu (``CEE_NATIVE=0``, tlaky mimo Rust, zkoušky shody), a to
+včetně přírůstkového rušení hodnot podle závislostí.
 """
 
 from __future__ import annotations
@@ -71,13 +71,6 @@ class FormAssessmentIndex:
         self.cell_vars: dict[tuple[str, str], set[int]] = {}
         self.cells: dict[tuple[str, str], tuple[tuple[str, int], ...]] = {}
         self.endings: dict[int, tuple[int, ...] | None] = {}
-        #: Zrcadlo hodnot v Rustu: (rukojeť, token kódu), nebo ``None``.
-        self.mirror: tuple[Any, int] | None = None
-
-    def __getstate__(self) -> dict[str, Any]:
-        state = self.__dict__.copy()
-        state["mirror"] = None
-        return state
 
     @staticmethod
     def _roots(code: Any) -> Any:
@@ -85,11 +78,9 @@ class FormAssessmentIndex:
         return np.array(np.frombuffer(roots, dtype=np.int32)) if len(roots) else np.zeros(0, dtype=np.int32)
 
     def _drop(self, variables: set[int]) -> None:
-        """Zruší hodnoty proměnných (i v zrcadle)."""
+        """Zruší hodnoty proměnných."""
         for variable in variables:
-            if self.values.pop(variable, _MISSING) is not _MISSING and self.mirror is not None:
-                handle, token = self.mirror
-                handle.form_invalidate(token, variable)
+            self.values.pop(variable, None)
 
     def _sync(self, world: World, group_id: str) -> None:
         from cee.v2.morphology import class_stats
@@ -167,9 +158,6 @@ class FormAssessmentIndex:
         self.token, self.cursor = store.token, len(store.log)
         self.usage_cursor, self.dominant_cursor = len(state.usage_log), len(state.dominant_log)
         self.version = state.version
-        if self.mirror is not None:
-            handle, token = self.mirror
-            handle.form_synced(token, state.version)
 
     def assess(self, world: World, group_id: str, variable: str) -> FormAssessment | None:
         from cee.v2.morphology import _assess_reference, class_stats

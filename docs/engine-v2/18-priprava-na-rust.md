@@ -420,7 +420,7 @@ přechodu do Pythonu; Python se ptá jen na to, co v Rustu ještě není (viz �
   Zisk rozptylu vokálů se počítá v Rustu z polí souřadnic samohlásek (`__pow__(2)` je tam součin;
   `native.dispersion_matches()` to ověří na všech rozdílech souřadnic), ostatní součty `pairwise_sum`
   (`native.sums_match()`).
-- **Hodnocení tvarů** (`FormAssessmentIndex`): klíče jsou čísla (proměnná, morfém, koncovka),
+- **Hodnocení tvarů** (`FormAssessmentIndex`; od B6b to v Rustu počítá `form_assess.rs`, tento popis platí pro referenci v Pythonu): klíče jsou čísla (proměnná, morfém, koncovka),
   dominantní kořeny pole podle čísla pojmu. Hodnoty (`gain`, frekvence, dva příznaky splynutí) drží
   Rust jako zrcadlo podle (token kódu, číslo proměnné); každé zrušení hodnoty v Pythonu se do zrcadla
   hned zapíše (`mirror`), chybějící hodnotu dodá Python na požádání.
@@ -460,10 +460,11 @@ Co kód nezná, zapíše do `Needs` a výpočet té položky vynechá; po průch
 (`pressures_native.Supplier`) a kus se spočítá znovu (v ustáleném stavu se nevolá nic):
 přepočet vzorku (výběr a váhy), výchozí tvary morfémů, které ještě nejsou v bance, mapy hlásek
 procesů `change` a `tone`, nahraditelnost buňky paradigmatu jinou konstrukcí (cena dvojic téhož
-lexému), podíl slov se souhláskovou koncovkou (fonotaktika apokopy) a hodnocení tvarů
-(`morphology._assess_reference`, `class_stats`: počítá je dál Python při zrušení hodnoty, protože
-čtou `ExponentIndex` a tvoří nové tvary; hledání jejich dotčení je číselné). Tvary, které při
-hodnocení vznikly v Rustu, Python převezme po přenosu (`adopt_created`).
+lexému), podíl slov se souhláskovou koncovkou (fonotaktika apokopy) a výchozí tvary morfémů v aréně
+morfologického indexu míst (`morph_defaults`, jen když hodnocení tvaru potřebuje tvar, který index
+nezná). **Hodnocení tvarů už Python nedodává** (od B6b, viz níže): `form_sync` a `form_value`
+zmizely. Tvary, které při hodnocení vznikly v Rustu (výsledky procesů), Python převezme po přenosu
+(`adopt_created`).
 
 ### Co zůstává v Pythonu
 
@@ -499,6 +500,75 @@ Zlatá data tlaků (`test_v2_golden_pressures.py`, reference v Pythonu s `CEE_NA
 i přes Rust: `test_v2_native_pressures.py` zopakuje scénáře s Rustem, po přenosu bloku v ticích
 záznamů spočítá každý tlak záznamu v Rustu nad dávkou ze záznamu (`pressures_native.scores_of_batch`)
 a porovná ho s výstupem Pythonu bit po bitu; dále součet vážených tlaků pro 1 a 3 vlákna.
+
+## B6b: hodnocení tvarů a přestavba tvarů po analogii v Rustu
+
+Zadání `zadani-rust-b6b.md`, verze rozhraní 11. Hodnocení analogických změn tvarů (zisk, frekvence,
+splynutí s citačním tvarem) počítá Rust uvnitř `NativeCells.transmit` ze stavu, který už drží: z morfologického
+stavu indexu míst (`SiteIndex`, B5b), z úložiště tvarů kódů, z banky tvarů a z dominantních kořenů. Analogie,
+které ve skupině převážily, zapisuje jedno volání Rustu na kód.
+
+### Číselná podoba a rozhraní
+
+- **`form_assess.rs`** (čisté jádro bez Pythonu). Změny tvarů jsou zaregistrované podle čísla proměnné
+  (`FormChange`: operace 0 až 3, číslo morfému tvaru slova, číslo koncovky, hláska; registruje je
+  `NativeAssessmentIndex.ensure_form` při prvním sestavení popisu řádků) a mají pořadové číslo. Hodnoty drží `AssessIndex`
+  v husté tabulce každého kódu podle pořadí změny (stav nespočteno, `None`, hodnocení + čtyři čísla) pro
+  **jednu verzi kódu**: při změně `phonology.version` se tabulka zahodí a hodnoty se dopočítají, když je tlaky
+  potřebují (jen v dosažených buňkách). Hodnocení je čistá funkce stavu kódu, takže dopočtená hodnota je stejná jako ta, kterou
+  dřív ponechal `FormAssessmentIndex` po zrušení jen dotčených hodnot; proto **odpadlo hledání dotčených hodnocení**
+  (slovníky množin podle čísel, deníky tvarů, užití, kořenů a frekvencí) a s ním i CSR závislostí: tabulka podle pořadí a zahození
+  po verzi je levnější než jejich udržování. Python reference (`FormAssessmentIndex`, `CEE_NATIVE=0`) závislosti drží dál.
+- **Co se čte, ne počítá znovu.** Tvar a hranice slova z `FormStore.raw()` (tři pole podle čísla morfému, bez kopie), výchozí tvary z arény
+  morfologického indexu (`MorphIndex::default_form`; do banky se nic nezařazuje), počty koncovek buňky
+  (`cell_exponents`) a nejčastější podoba koncovky (`dominant_ending`) přímo ze stavu `MorphIndex` téhož kódu (`class_stats` v Rustu je ten
+  samý stav, ne kopie). Tvary nové podoby se nevytvářejí: stačí je porovnat po hláskách s citačním tvarem (`Rewrite`).
+  Frekvence užití lexému: dominantní kořeny podle čísla pojmu (`DominantMap.roots`), pořadí vložení pojmů do mapy (`DominantMap.order`
+  jako `int32`, drží se po razítku `lexicon_version << 32 | len(dominant_log)`), frekvence pojmů podle čísla (chybějící 0,3) a váhy buněk
+  paradigmatu (tabulka třída × buňka, 1 tam, kde se neváží). Součet frekvencí pojmů jednoho kořene je zleva doprava v pořadí vložení
+  (`sum` Pythonu 3.11); od Pythonu 3.12 sčítá `sum` kompenzovaně, proto `native.plain_sum_matches()` (součást `assess_enabled()`) zkouškou
+  ověří, že `sum` je prosté, jinak se hodnocení v Rustu nepoužije.
+- **Hranice volání.** `pressures_native._step` (jednou za krok) dorovná morfologii kódů kroku (`SiteIndex.prepare`, jen kódy, jejichž klíč se změnil) a
+  předá `PressureStep` navíc rukojeť indexu míst, pole hranic, koncovek a pořadí pojmů po kódech, sloupce morfémů (druh, třída, koncovka, hranice,
+  frekvence), frekvence pojmů a váhy buněk. Hodnocení tvarů je uvnitř `gather` (`pressures.rs`) bez zpětného volání. Z `Needs` zmizelo `form_sync`
+  a `form_value`; přibylo jen `morph_defaults` (výchozí tvar morfému, který aréna nezná, doplní Python `SiteIndex._supply_defaults`; v ustáleném
+  stavu se nevolá).
+- **Přestavba tvarů** (`form_restructure.rs`, `AssessIndex.apply_forms`, `morphology._native_writes`). Pro kód, jehož plán obsahuje
+  analogie k zapsání, spočítá jedno volání Rustu nové stavy tvarů všech těchto analogií v pořadí plánu. Rust zapisuje do vlastní kopie úložiště kódu
+  a po každém zápisu dorovná morfologický index kódu (`MorphIndex::sync`), takže další analogie vidí koncovky a podoby koncovek po předchozím
+  zápisu, jako když Python zapisoval a počítal `class_stats` znovu po každém zvýšení verze. Nový tvar zařadí do banky
+  (`Bank::intern_form`, nová metoda v `bank.rs`; číslo převezme Python přes `adopt_created`). Vrací zápisy (morfém, tvar, hranice, koncovka); Python je
+  provede ve stejném pořadí (`FormStore.put`, `requeue_all`, verze kódu, historie), takže úložiště kódu je stejné jako kopie, kterou index
+  dorovnal. Chybí-li výchozí tvar, vrátí jeho číslo a Python volání zopakuje (zařazení tvarů je idempotentní). `form_assess::rewrite` je společné
+  jádro hodnocení a přestavby (vyrovnání, rozšíření, reanalýza hranice).
+- **Proč ne jedno volání na tik pro všechny skupiny.** Smyčka v `Simulation._transmit` provádí pro skupinu postupně `phonology.restructure`,
+  `morphology.restructure`, syntax a prozódii a morfologická přestavba skupiny čte stav po její fonologické přestavbě (přepsané tvary, verze kódu), a
+  zápisy sdílí banku a historii v pořadí skupin. Volání před smyčkou by četlo starý stav; přeřazení fonologie všech skupin před morfologii by
+  změnilo pořadí záznamů v historii (otisky). Jedno volání na kód s analogií k zapsání je nejméně, co pořadí zápisu dovolí. Mimo Rust zůstávají
+  reanalýzy hranice (`prepend`, `drop_initial`; `units_of` v Pythonu tvoří nové morfémy), takže skupina s takovou analogií jde starou cestou.
+  `analogy_plan` zůstal jedním numpy voláním na tik; `changed_share` čte živé fondy (`pools.py`, mimo rozsah B6b).
+
+### Zkoušky
+
+- Rust: čtyři testy hodnocení (vyrovnání, rozšíření, reanalýza, uložení po verzi a výzva k doplnění výchozího tvaru) a tři testy přestavby
+  (zápis do banky, další analogie vidí stav po zápisu, výchozí tvar chybí).
+- `test_v2_native_form_assess.py`: čtyři morfologické tlaky v Rustu a v Pythonu bit po bitu po přepsání tvarů, změně dominantních kořenů
+  (víc pojmů na kořen, různé pořadí vložení), odchodu slova ze slovní zásoby a změně frekvencí; a že tlaky v Rustu nevolají `_assess_reference` ani `class_stats`.
+- `test_v2_native_restructure.py`: `morphology.restructure` s Rustem a se smyčkou v Pythonu dá stejné tvary, banku, verze, fronty, deníky a otisk historie.
+- Zlatá data tlaků a hodnocení projdou přes Rust (`test_v2_golden_pressures.py`, `test_v2_native_pressures.py`, `golden_assessment`).
+- Žádný existující test se nepřepisoval.
+
+### Výsledek
+
+Otisky všech sedmi světů z `scripts/v2_digests.py` beze změny s Rustem; s `CEE_NATIVE=0 --quick` beze změny šest světů bez údolí. Celá sada s Rustem: 1 370 prošlo.
+Celá sada s `CEE_NATIVE=0`: 1 258 prošlo, 111 přeskočeno, 1 selhal časový test `test_vykon_rezimu_udoli` (16 s proti limitu 10 s při vytíženém stroji;
+čistý Python, kód reference se nezměnil). Nic se neměřilo.
+
+### Co zůstává pro B6e
+
+Zápisy (`FormStore.put`), fronty fonologizace, verze kódu a historie po přestavbě; plán analogií (`changed_share` z fondů); reanalýza hranice a
+`units_of` (nové morfémy, `class_stats` jako Python slovníky); `class_stats` pro `changes/morphology.py`, `syntax.py` a `metrics.py`;
+vzorek slov (výběr a váhy) a ostatní dodávky `Needs`.
 
 ## Bitová shoda při přechodu do Rustu
 

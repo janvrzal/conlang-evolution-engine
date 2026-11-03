@@ -6,8 +6,9 @@ jednou za krok dá :class:`PressureStep` (skupiny, sloupce variant, plán tlaků
 a řídké položky tlaků, které se počítají z objektů světa (škola, tabu, konstrukce). Zpětné volání
 do Pythonu pro tlaky odpadá. Rozhraní, které bude B6 (hlavní smyčka v Rustu) potřebovat, jsou tato
 pole; co dnes dodává Python na požádání (:class:`Supplier`: výběr vzorku a jeho váhy, výchozí tvary
-mimo banku, mapy hlásek procesů, nahraditelnost buněk, podíl koncových souhlásek, hodnocení tvarů),
-se v B6 přesune do Rustu.
+mimo banku a v aréně morfologického indexu, mapy hlásek procesů, nahraditelnost buněk, podíl koncových
+souhlásek), se v B6 přesune do Rustu. Hodnocení analogických změn tvarů (B6b) počítá Rust sám ze
+stavu morfologického indexu míst, úložiště tvarů kódů a dominantních kořenů (``form_assess.rs``).
 
 Tlaky, které tento modul nezná (vlastní třídy), a režimy bez Rustu jdou dál cestou
 ``transmission.fitness_of``.
@@ -24,6 +25,7 @@ from cee.v2 import native
 from cee.v2.assessment import SAMPLE_WORDS, _redundant_cell
 from cee.v2.language.assessment_index import NativeAssessmentIndex, index_of
 from cee.v2.language.lexical_index import _default_form, related_keys
+from cee.v2.language.site_index import site_index
 from cee.v2.phonology import changed_id
 from cee.v2.pressures.base import Pressure, PressureBatch
 from cee.v2.pressures.lexical import _MOTIVATION, Taboo
@@ -85,6 +87,7 @@ class Supplier:
     Jedna instance patří jednomu kroku: zná kódy skupin v pořadí, jak je Rust číslu je (pozice).
     Metody nic nevrací Rustu přímo, kromě ``redundant`` a ``coda`` (hodnoty, které si Rust uloží);
     ostatní zapisují do světa či do indexu a Rust při dalším průchodu čte aktualizovaný stav.
+    Hodnocení analogických změn tvarů už Python nedodává: Rust si je spočítá sám.
     """
 
     def __init__(self, world: World, codes: Sequence[Code], group_ids: Sequence[str], index: NativeAssessmentIndex):
@@ -129,47 +132,13 @@ class Supplier:
         """Podíl slov se souhláskovou koncovkou ve slovní zásobě skupin."""
         return [coda_share(self.world, self.group_ids[group]) for group in groups]
 
-    def form_sync(self, groups: list[int]) -> None:
-        """Dorovná index hodnocení tvarů kódů na jejich aktuální verzi (zrušené hodnoty se zapíší do zrcadla)."""
-        for group in groups:
-            index = self._form_index(group)
-            index._sync(self.world, self.group_ids[group])
-            code = self.codes[group]
-            self.index.handle.form_synced(code.forms.token, code.phonology.version)
-
-    def form_value(self, items: list[tuple[int, int]]) -> None:
-        """Dodá hodnocení tvarů, která zrcadlu v Rustu chybí."""
-        world = self.world
-        names = world.registry.variables.names
-        for group, variable in items:
-            code = self.codes[group]
-            found = self._form_index(group).assess(world, self.group_ids[group], names[variable])
-            if found is None:
-                self.index.handle.form_set(code.forms.token, variable, False, 0.0, 0.0, False, False)
-            else:
-                self.index.handle.form_set(
-                    code.forms.token, variable, True, found.gain, found.frequency,
-                    found.syncretic_before, found.syncretic_after,
-                )
-
-    def _form_index(self, group: int) -> Any:
-        """Index hodnocení tvarů kódu (založí ho a napojí na zrcadlo v Rustu)."""
-        from cee.v2.language.form_assessment_index import FormAssessmentIndex
-
-        code = self.codes[group]
-        state = code.phonology
-        entry = state.cache.get("form-assessment-index")
-        index = entry[1] if entry is not None else FormAssessmentIndex()
-        state.cache["form-assessment-index"] = (state.version, index)
-        if index.mirror is None or index.mirror[0] is not self.index.handle or index.mirror[1] != code.forms.token:
-            # Nové napojení: zrcadlo nesmí nést hodnoty, které tento index nezná.
-            self.index.handle.form_clear(code.forms.token)
-            index.mirror = (self.index.handle, code.forms.token)
-        return index
+    def morph_defaults(self, numbers: list[int]) -> None:
+        """Doplní výchozí tvary morfémů do arény morfologického indexu míst (hodnocení tvarů je čte)."""
+        site_index(self.world)._supply_defaults(self.world, sorted(numbers))
 
     def supply(self, needs: tuple[Any, ...]) -> list[tuple[int, int, bool]]:
         """Totéž, co dělá Rust při přenosu, pro volání z Pythonu; vrací odpovědi na ``redundant``."""
-        samples, defaults, maps, redundant, _coda, form_sync, form_value = needs
+        samples, defaults, maps, redundant, _coda, morph_defaults = needs
         if samples:
             self.samples(list(samples))
         if defaults:
@@ -180,10 +149,8 @@ class Supplier:
         if redundant:
             items = [(int(group), int(morpheme)) for group, morpheme in redundant]
             found = [(group, morpheme, value) for (group, morpheme), value in zip(items, self.redundant(items))]
-        if form_sync:
-            self.form_sync(list(form_sync))
-        if form_value:
-            self.form_value(list(form_value))
+        if morph_defaults:
+            self.morph_defaults(list(morph_defaults))
         return found
 
 
@@ -234,6 +201,7 @@ class RowsPack:
                     change = world.form_changes.get(variable_id)
                     if change is None or changed not in slots:
                         continue
+                    index.ensure_form(world, variable_id)
                     self.flags[row] = (LEVEL if change.operation == "level" else 0) | (
                         LEXEME_WIDE if change.lexeme_wide else 0)
                 self.changed[row] = slots.index(changed)
@@ -298,7 +266,65 @@ def _variant_keys(world: World, index: NativeAssessmentIndex, size: int) -> npt.
     return _padded(held, size, 0)
 
 
-def _step(world: World, inputs: StepInputs, index: NativeAssessmentIndex, plan: list[list[tuple[int, float]]]) -> Any:
+def _dominant_order(index: NativeAssessmentIndex, code: Code, stamp: int) -> Any:
+    """Čísla pojmů s dominantním kořenem v pořadí vložení do mapy (``int32``); drží se, dokud se mapa nezmění.
+
+    Na pořadí stojí pořadí sčítání frekvencí pojmů jednoho kořene, tedy bitová shoda ``usage_frequency``.
+    """
+    held = index.scratch.setdefault("dominant-order", {})
+    found = held.get(code.forms.token)
+    if found is not None and found[0] == stamp:
+        return found[1]
+    order = code.phonology.dominant.order
+    array = np.fromiter(order, dtype=np.int32, count=len(order))
+    held[code.forms.token] = (stamp, array)
+    return array
+
+
+def _concept_frequencies(world: World, index: NativeAssessmentIndex) -> npt.NDArray[np.float64]:
+    """Frekvence pojmů podle čísla pojmu (chybějící 0,3 jako ``World.concept_frequency``); drží se po verzi."""
+    frequencies = world.concept_frequencies
+    concepts = world.registry.concepts
+    version = getattr(frequencies, "version", None)
+    key = (id(frequencies), version, len(concepts))
+    held = index.scratch.get("concept-frequencies")
+    if version is not None and held is not None and held[0] == key:
+        return held[1]
+    found = np.full(len(concepts), 0.3, dtype=np.float64)
+    numbers = concepts.numbers
+    for concept, value in frequencies.items():
+        number = numbers.get(concept)
+        if number is not None:
+            found[number] = value
+    index.scratch["concept-frequencies"] = (key, found)
+    return found
+
+
+def _paradigm_weights(world: World, index: NativeAssessmentIndex) -> tuple[npt.NDArray[np.float64], int]:
+    """Váha buňky paradigmatu podle (třída slova, buňka) po řádcích a počet buněk; 1 tam, kde se neváží."""
+    table = world.columns.morphemes
+    classes, cells = table.word_classes, table.cells
+    key = (len(classes), len(cells), len(world.paradigms))
+    held = index.scratch.get("paradigm-weights")
+    if held is not None and held[0] == key:
+        return held[1], held[2]
+    width = max(len(cells), 1)
+    weights = np.ones(len(classes) * width, dtype=np.float64)
+    for word_class, paradigm in world.paradigms.items():
+        row = classes.numbers.get(word_class)
+        if row is None:
+            continue
+        for cell, weight in zip(paradigm.cells, paradigm.weights):
+            column = cells.numbers.get(cell)
+            if column is not None:
+                weights[row * width + column] = weight
+    index.scratch["paradigm-weights"] = (key, weights, width)
+    return weights, width
+
+
+def _step(
+    world: World, inputs: StepInputs, index: NativeAssessmentIndex, plan: list[list[tuple[int, float]]], sites: Any,
+) -> Any:
     """Vstupy kroku pro Rust (jednou za krok, sdílí je všechny bloky)."""
     module = native._load()
     assert module is not None
@@ -307,16 +333,22 @@ def _step(world: World, inputs: StepInputs, index: NativeAssessmentIndex, plan: 
     bank = world.form_bank()._native
     assert bank is not None
     index.prepare(world)
+    # Morfologický stav kódů (koncovky a jejich podoby) čte hodnocení tvarů z indexu míst.
+    sites.prepare(world, codes)
     params = world.params
     variants = len(world.registry.variants)
     columns = world.columns.variants.arrays()
     names = world.columns.variants.payload_origins.names
     weights = np.array([_MOTIVATION.get(name, 0.0) for name in names] + [0.0], dtype=np.float64)
-    morphemes = world.columns.morphemes
+    morphemes: Any = world.columns.morphemes
     related = related_keys(world)
     supplier = Supplier(world, codes, group_ids, index)
+    stamps = np.array([(code.phonology.lexicon_version << 32) | len(code.phonology.dominant_log) for code in codes],
+                      dtype=np.int64)
+    stores = [code.forms.raw() for code in codes]
+    paradigm, cells = _paradigm_weights(world, index)
     return module.PressureStep(
-        bank, index.handle, supplier, plan,
+        bank, index.handle, sites.handle, supplier, plan,
         (inputs.tick, world.table is not None, params.clarity_short_factor, params.functional_load_scale,
          params.dispersion_factor, params.coda_tolerance_scale, params.stress_strength_multiplier,
          params.paradigm_merge_weight, params.redundant_merge_weight),
@@ -325,13 +357,17 @@ def _step(world: World, inputs: StepInputs, index: NativeAssessmentIndex, plan: 
          np.array([native.RULES.index(code.stress_rule) for code in codes], dtype=np.uint8),
          np.array([getattr(code, "stress_strength", "weak") == "strong" for code in codes], dtype=bool),
          np.array([code.l2_share for code in codes], dtype=np.float64),
-         _actuation_keys(world, index, inputs)),
-        [code.forms.raw()[0] for code in codes], [code.phonology.dominant.roots for code in codes],
+         _actuation_keys(world, index, inputs), stamps),
+        ([store[0] for store in stores], [store[1] for store in stores], [store[2] for store in stores],
+         [code.phonology.dominant.roots for code in codes],
+         [_dominant_order(index, code, int(stamp)) for code, stamp in zip(codes, stamps.tolist())]),
         np.ascontiguousarray(related, dtype=np.int64), weights,
         [morphemes.form, morphemes.lexeme, morphemes.cell,
          _padded(columns["change"], variants, -1), _padded(columns["morpheme"], variants, -1),
          _padded(columns["origin"], variants, -1), _padded(columns["appeal"], variants, np.nan),
-         _variant_keys(world, index, variants)],
+         _variant_keys(world, index, variants),
+         morphemes.kind, morphemes.word_class, morphemes.exponent, morphemes.boundary, morphemes.frequency],
+        (_concept_frequencies(world, index), paradigm, cells),
     )
 
 
@@ -403,9 +439,16 @@ def prepare(
     index = index_of(world)
     if not isinstance(index, NativeAssessmentIndex):
         return None
+    sites = site_index(world)
+    if not sites.native:
+        # Odvozený stav z jiného režimu (třeba obnova kontrolního bodu): index míst se postaví znovu.
+        world.sites = None
+        sites = site_index(world)
+        if not sites.native:
+            return None
     step = inputs.cache.get("pressure-step")
     if step is None:
-        step = inputs.cache["pressure-step"] = _step(world, inputs, index, plan)
+        step = inputs.cache["pressure-step"] = _step(world, inputs, index, plan, sites)
     held = block.pressure_rows
     if held is None or held[0] != block.layout or held[2] != len(inputs.group_ids):
         rule = world.groups[inputs.group_ids[0]].main_code.stress_rule

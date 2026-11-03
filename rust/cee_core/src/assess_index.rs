@@ -9,17 +9,21 @@
 //!   a výchozích tvarů), ne deníkem;
 //! - **uložená hodnocení** procesů (verze kódu, tik a pět hodnot), seřazená podle čísla proměnné.
 //!   Hodnocení zůstává platné, dokud se nezmění verze kódu, nejvýš `STALE_TICKS` ticků;
-//! - **zrcadlo hodnocení tvarů** (hodnoty počítá Python, tady se jen drží pro tlaky).
+//! - **hodnocení tvarů** (`form_assess`): změny tvarů zaregistrované podle čísla proměnné a hustá
+//!   tabulka hodnot každého kódu, platná pro jednu verzi kódu. Počítá je Rust ze stavu morfologického
+//!   indexu míst (koncovky a jejich podoby), z úložiště tvarů kódu a z dominantních kořenů.
 //!
 //! Co Rust nezná (výběr vzorku a váhy, výchozí tvary mimo banku, mapy hlásek procesů, cena
-//! dvojic stejného lexému v buňce, kterou jiná konstrukce nahrazuje, hodnocení tvarů), zapíše do
-//! `Needs` a výpočet té položky vynechá; volající dodá a zavolá znovu. Součty plovoucích čísel
+//! dvojic stejného lexému v buňce, kterou jiná konstrukce nahrazuje, výchozí tvar morfému
+//! v aréně morfologického indexu), zapíše do `Needs` a výpočet té položky vynechá; volající
+//! dodá a zavolá znovu. Součty plovoucích čísel
 //! jsou párové po celé šířce matice jako dřív (`assess::pairwise_sum`), takže výsledek je bit po
 //! bitu stejný jako v Pythonu.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::bank::{Bank, Outcome};
+use crate::form_assess::{self, FormChange, FormCtx, FormRegistry, FormState};
 
 /// Hodnocení se přepočítá nejdřív po tolika krocích, i když se verze kódu mění.
 pub const STALE_TICKS: i64 = 8;
@@ -57,10 +61,8 @@ pub struct Needs {
     pub redundant: BTreeSet<(usize, u32)>,
     /// Skupiny, kterým chybí podíl slov s koncovou souhláskou.
     pub coda: BTreeSet<usize>,
-    /// Skupiny, jejichž hodnocení tvarů se má dorovnat na aktuální verzi.
-    pub form_sync: BTreeSet<usize>,
-    /// (skupina, proměnná tvarů), jejichž hodnocení chybí.
-    pub form_value: BTreeSet<(usize, u32)>,
+    /// Morfémy, jejichž výchozí tvar chybí v aréně morfologického indexu míst (hodnocení tvarů).
+    pub morph_defaults: BTreeSet<u32>,
 }
 
 impl Needs {
@@ -70,8 +72,7 @@ impl Needs {
             && self.maps.is_empty()
             && self.redundant.is_empty()
             && self.coda.is_empty()
-            && self.form_sync.is_empty()
-            && self.form_value.is_empty()
+            && self.morph_defaults.is_empty()
     }
 }
 
@@ -119,16 +120,10 @@ struct Entry {
 }
 
 #[derive(Default)]
-struct FormMirror {
-    synced: Option<i64>,
-    values: HashMap<u32, FormEntry>,
-}
-
-#[derive(Default)]
 struct Group {
     sample: Sample,
     cache: Vec<Entry>,
-    form: FormMirror,
+    form: FormState,
 }
 
 /// Co o procesu potřebuje zisk rozptylu samohlásek.
@@ -149,6 +144,8 @@ pub struct AssessIndex {
     processes: HashMap<u32, ProcessInfo>,
     /// Souřadnice samohlásek (výška, zadnost, zaokrouhlení) podle čísla hlásky.
     coords: Vec<[f64; 3]>,
+    /// Analogické změny tvarů podle čísla proměnné (hodnocení tvarů, viz `form_assess`).
+    forms: FormRegistry,
 }
 
 fn nearest(coords: &[[f64; 3]], vowel: i32, others: &[i32]) -> f64 {
@@ -487,57 +484,33 @@ impl AssessIndex {
         self.groups.remove(&token);
     }
 
-    // --- zrcadlo hodnocení tvarů -----------------------------------------------------------------
+    // --- hodnocení tvarů ---------------------------------------------------------------------
 
-    /// Hodnota hodnocení tvaru; `None`, když ji kód (při své verzi) ještě nemá. Když zrcadlo
-    /// není dorovnané na verzi kódu, zapíše do `needs` dorovnání.
+    /// Zaregistruje analogickou změnu tvaru (číslo proměnné z registru).
+    pub fn register_form(&mut self, variable: u32, change: FormChange) {
+        self.forms.register(variable, change);
+    }
+
+    pub fn has_form(&self, variable: u32) -> bool {
+        self.forms.has(variable)
+    }
+
+    /// Zaregistrované analogické změny tvarů (čte je přestavba kódu).
+    pub fn forms(&self) -> &FormRegistry {
+        &self.forms
+    }
+
+    /// Hodnocení tvaru `variable` v kódu skupiny `g`; `None`, když výpočet čeká na výchozí tvar
+    /// morfému (zapsáno do `needs`). Hodnoty se drží po verzi kódu a dopočítávají se podle potřeby.
     pub fn form_lookup(
-        &self,
-        inp: &Inputs<'_>,
+        &mut self,
+        ctx: &FormCtx<'_>,
         g: usize,
         variable: u32,
         needs: &mut Needs,
-    ) -> Option<FormEntry> {
-        let version = inp.versions[g];
-        let mirror = self.groups.get(&inp.tokens[g]).map(|group| &group.form);
-        match mirror {
-            Some(mirror) if mirror.synced == Some(version) => match mirror.values.get(&variable) {
-                Some(entry) => Some(*entry),
-                None => {
-                    needs.form_value.insert((g, variable));
-                    None
-                }
-            },
-            _ => {
-                needs.form_sync.insert(g);
-                None
-            }
-        }
-    }
-
-    pub fn form_set(&mut self, token: i64, variable: u32, entry: FormEntry) {
-        self.groups
-            .entry(token)
-            .or_default()
-            .form
-            .values
-            .insert(variable, entry);
-    }
-
-    pub fn form_invalidate(&mut self, token: i64, variable: u32) {
-        if let Some(group) = self.groups.get_mut(&token) {
-            group.form.values.remove(&variable);
-        }
-    }
-
-    pub fn form_clear(&mut self, token: i64) {
-        if let Some(group) = self.groups.get_mut(&token) {
-            group.form.values.clear();
-        }
-    }
-
-    pub fn form_synced(&mut self, token: i64, version: i64) {
-        self.groups.entry(token).or_default().form.synced = Some(version);
+    ) -> Result<Option<FormEntry>, String> {
+        let group = self.groups.entry(ctx.inp.tokens[g]).or_default();
+        form_assess::lookup(&self.forms, &mut group.form, ctx, g, variable, needs)
     }
 }
 
@@ -648,46 +621,6 @@ mod tests {
         assert_eq!(index.export(9), expected);
         index.forget(9);
         assert!(index.export(9).is_empty());
-    }
-
-    #[test]
-    fn zrcadlo_tvaru_vyzaduje_dorovnani_a_pak_hodnotu() {
-        let mut index = AssessIndex::new();
-        let tokens = [5_i64];
-        let versions = [2_i64];
-        let rules = [0_u8];
-        let forms: Vec<&[i32]> = vec![&[]];
-        let inp = Inputs {
-            tokens: &tokens,
-            versions: &versions,
-            rules: &rules,
-            forms,
-            defaults: &[],
-            lexeme: &[],
-            cell: &[],
-            paradigm_weight: 1.0,
-            redundant_weight: 1.0,
-        };
-        let mut needs = Needs::default();
-        assert!(index.form_lookup(&inp, 0, 4, &mut needs).is_none());
-        assert!(needs.form_sync.contains(&0));
-        index.form_synced(5, 2);
-        let mut needs = Needs::default();
-        assert!(index.form_lookup(&inp, 0, 4, &mut needs).is_none());
-        assert!(needs.form_value.contains(&(0, 4)));
-        let entry = FormEntry {
-            present: true,
-            gain: 0.5,
-            frequency: 0.25,
-            before: false,
-            after: true,
-        };
-        index.form_set(5, 4, entry);
-        let mut needs = Needs::default();
-        assert_eq!(index.form_lookup(&inp, 0, 4, &mut needs), Some(entry));
-        assert!(needs.is_empty());
-        index.form_invalidate(5, 4);
-        assert!(index.form_lookup(&inp, 0, 4, &mut needs).is_none());
     }
 
     #[test]

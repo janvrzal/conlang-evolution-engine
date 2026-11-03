@@ -394,3 +394,14 @@ impl SiteIndex {
         (PyArray1::from_vec(py, found), PyArray1::from_vec(py, rates))
     }
 }
+
+impl SiteIndex {
+    /// Morfologický stav kódů (koncovky, jejich podoby a výchozí tvary), který čte hodnocení tvarů.
+    pub(crate) fn morph(&self) -> &crate::morphology_index::MorphIndex {
+        &self.inner.morph
+    }
+
+    pub(crate) fn morph_mut(&mut self) -> &mut crate::morphology_index::MorphIndex {
+        &mut self.inner.morph
+    }
+}
