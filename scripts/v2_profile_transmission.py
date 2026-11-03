@@ -77,17 +77,21 @@ def _subclasses(cls: type) -> list[type]:
 
 
 def pool_stats(simulation: Simulation) -> dict[str, float]:
-    """Velikost a zaplnění živých fondů: přidělené buňky proti buňkám se skutečným výskytem."""
+    """Velikost živých fondů: buňky husté a se skutečným výskytem, paměť řídkého a hustého uložení."""
     live = simulation.world.live
-    cells = occupied = nbytes = rows = held = 0
+    if hasattr(live, "stats"):
+        stats = live.stats()
+        return {"variables": stats["variables"], "groups": stats["groups"], "dense_cells": stats["dense_cells"],
+                "occupied": stats["entries"], "dense_MB": stats["dense_bytes"] / 1e6,
+                "sparse_MB": stats["sparse_bytes"] / 1e6}
+    cells = occupied = nbytes = rows = 0
     for block in live.iter_blocks():
         rows += len(block)
         cells += block.freqs.size
-        occupied += int((block.freqs > 0).sum())
-        held += int(block.present.sum())
+        occupied += int(((block.freqs > 0) | (block.previous != 0)).sum())
         nbytes += block.freqs.nbytes + block.previous.nbytes + block.present.nbytes + block.slot_keys.nbytes
-    return {"variables": rows, "groups": len(live.group_ids), "cells": cells, "occupied": occupied,
-            "held": held, "megabytes": nbytes / 1e6}
+    return {"variables": rows, "groups": len(live.group_ids), "dense_cells": cells, "occupied": occupied,
+            "dense_MB": nbytes / 1e6, "sparse_MB": float("nan")}
 
 
 def main() -> None:
@@ -112,11 +116,11 @@ def main() -> None:
     simulation = Simulation(world, events=events)
     if not plain:
         install()
-    started = time.perf_counter()
+    started, cpu_started = time.perf_counter(), time.process_time()
     simulation.run(years)
-    total = time.perf_counter() - started
+    total, cpu = time.perf_counter() - started, time.process_time() - cpu_started
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6  # macOS: bajty
-    print(f"{name}, {years} let, jádro: {native.status()}, celkem {total:.1f} s, špička paměti {peak:.0f} MB, "
+    print(f"{name}, {years} let, jádro: {native.status()}, celkem {total:.1f} s (procesor {cpu:.1f} s), špička paměti {peak:.0f} MB, "
           f"otisk {simulation.history.digest()[:16]}")
     if plain:
         print("fondy: " + ", ".join(f"{key} {value:.4g}" for key, value in pool_stats(simulation).items()))
@@ -154,7 +158,7 @@ def main() -> None:
         print(f"  {key:48s} {SECONDS[key]:7.2f} {100 * SECONDS[key] / total:6.1f} {CALLS[key]:9d}")
     stats = pool_stats(simulation)
     print("\nfondy na konci: " + ", ".join(f"{key} {value:.4g}" for key, value in stats.items()))
-    print(f"zaplnění buněk: {100 * stats['occupied'] / max(1, stats['cells']):.1f} % "
+    print(f"zaplnění buněk: {100 * stats['occupied'] / max(1, stats['dense_cells']):.1f} % "
           f"(buňky skupina × slot s výskytem proti přiděleným)")
 
 

@@ -24,6 +24,7 @@ from cee.v2 import contact, institutions
 from cee.v2 import phases_transmission as phases
 from cee.v2.pools import PoolBlock
 from cee.v2.pressures.base import Pressure, PressureBatch
+from cee.v2.registry import Numbering
 from cee.v2.rng import stable_int
 from cee.v2.world import SpeechGroup, World
 
@@ -217,7 +218,7 @@ def _channels(world: World, groups: Sequence[SpeechGroup], group_ids: Sequence[s
 
 def fitness_of(
     world: World,
-    block: PoolBlock,
+    block: PoolBlock | RowSlice,
     inputs: StepInputs,
     pressures: Mapping[str, Sequence[tuple[Pressure, float]]],
     heard: FloatArray,
@@ -257,6 +258,50 @@ def fitness_of(
     return fitness
 
 
+#: Nejvíc buněk (proměnné × skupiny × sloty) jednoho kusu bloku při přenosu. Větší blok se
+#: počítá po kusech řádků, aby přechodná pole (slyšené, tlaky, výběr, drift) nerostla s celým
+#: blokem. Řádky jsou na sobě nezávislé, takže kusy dají tytéž bity.
+CHUNK_CELLS = 1 << 20
+
+
+class RowSlice:
+    """Řádky ``[start, stop)`` bloku jako blok (pro přenos po kusech); jen čtení."""
+
+    def __init__(self, block: PoolBlock, start: int, stop: int):
+        self.block, self.start, self.stop = block, start, stop
+        self.capacity = block.capacity
+        self.numbering = block.numbering
+        self.variable_ids = block.variable_ids[start:stop]
+        self.slots = block.slots[start:stop]
+
+    def __len__(self) -> int:
+        return self.stop - self.start
+
+    @property
+    def freqs(self) -> FloatArray:
+        return self.block.freqs[self.start : self.stop]
+
+    @property
+    def previous(self) -> FloatArray:
+        return self.block.previous[self.start : self.stop]
+
+    @property
+    def present(self) -> npt.NDArray[np.bool_]:
+        return self.block.present[self.start : self.stop]
+
+    @property
+    def slot_keys(self) -> npt.NDArray[np.uint64]:
+        return self.block.slot_keys[self.start : self.stop]
+
+    @property
+    def slot_variants(self) -> npt.NDArray[np.int32]:
+        return self.block.slot_variants[self.start : self.stop]
+
+    def numbers_in(self, numbering: Numbering, rows: Sequence[int] | slice = slice(None)) -> npt.NDArray[np.intp]:
+        chosen = range(self.start, self.stop)[rows] if isinstance(rows, slice) else [self.start + row for row in rows]
+        return self.block.numbers_in(numbering, list(chosen))
+
+
 def transmit(
     world: World,
     block: PoolBlock,
@@ -275,7 +320,30 @@ def transmit(
     Jen složí vstupy z objektů: faktory kanálů po proměnných bloku (jedním
     polem na kanál), potom :func:`cee.v2.phases_transmission.hear`, tlaky
     na varianty (:func:`fitness_of`) a :func:`cee.v2.phases_transmission.settle`.
+    Velký blok (víc než ``CHUNK_CELLS`` buněk) se počítá po kusech řádků.
     """
+    size, width = len(block), max(1, len(inputs.group_ids) * block.capacity)
+    step = max(1, CHUNK_CELLS // width)
+    if size <= step:
+        return _transmit_rows(world, block, inputs, pressures, params, fitness_hook)
+    updated, baseline = np.empty_like(block.freqs), np.empty_like(block.freqs)
+    for start in range(0, size, step):
+        stop = min(size, start + step)
+        part = RowSlice(block, start, stop)
+        updated[start:stop], baseline[start:stop] = _transmit_rows(
+            world, part, inputs, pressures, params, fitness_hook
+        )
+    return updated, baseline
+
+
+def _transmit_rows(
+    world: World,
+    block: PoolBlock | RowSlice,
+    inputs: StepInputs,
+    pressures: Mapping[str, Sequence[tuple[Pressure, float]]],
+    params: TransmissionParams,
+    fitness_hook: Callable[..., FloatArray] | None,
+) -> tuple[FloatArray, FloatArray]:
     current, previous, present = block.freqs, block.previous, block.present
     columns = contact.variable_columns(world, block.variable_ids) if inputs.cross or inputs.channels else None
     flows = [(contact.borrowing_factors(world, columns, flow.channel), flow.blocks) for flow in inputs.cross]
