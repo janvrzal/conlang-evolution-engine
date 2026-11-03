@@ -70,17 +70,23 @@ def test_shoda_po_zmenach_dominance_a_checkpointu():
     _compare(context)
 
 
+def _state_of(context):
+    """Místa a míry všech sémantických změn (bity) pro porovnání před a po."""
+    return {
+        change.kind: (list(change.sites(context)), [rate.hex() for rate in change.rates(context, change.sites(context))])
+        for change in LEXICAL_CHANGES if isinstance(change, SemanticChange)
+    }
+
+
 def test_zmena_konfigurace_se_projevi_az_po_zmene_verze():
     world = village_grid(1, seed=7, semantics=True)
     Simulation(world)
     context = _context(world)
     _compare(context)
-    before = {change.kind: copy.deepcopy(change._sites(context)) for change in LEXICAL_CHANGES
-              if isinstance(change, SemanticChange)}
+    before = _state_of(context)
     world.derivational_suffix = ()
     world.concept_classes[next(iter(world.concept_classes))] = "different"
-    assert all(change._sites(context) == before[change.kind] for change in LEXICAL_CHANGES
-               if isinstance(change, SemanticChange))
+    assert _state_of(context) == before
     context.code.phonology.lexicon_version += 1
     _compare(context)
 
@@ -100,6 +106,7 @@ def test_duplicitni_vztahy_slozenina_a_vymena_odvozenin():
         (Relation(source, target, polysemy=2), Relation(source, target, polysemy=3)),
         {base_a: ((source, source), (source, target))},
     )
+    state.lexicon_version += 1  # změna grafu se projeví se změnou slovníku
     _compare(context)
     shift = next(change for change in LEXICAL_CHANGES if change.kind == "semantic_shift")
     assert len(shift._sites(context).get("lexical:" + target, ())) == 2

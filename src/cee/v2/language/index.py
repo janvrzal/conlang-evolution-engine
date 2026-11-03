@@ -22,6 +22,10 @@ from abc import ABC, abstractmethod
 from collections import Counter
 from typing import TYPE_CHECKING, Generic, Hashable, TypeVar
 
+from cee.v2.language.morphology_index import ExponentIndex
+
+__all__ = ["ContextIndex", "ExponentIndex", "VocabularyIndex"]
+
 if TYPE_CHECKING:
     from cee.v2.world import Code, World
 
@@ -151,41 +155,3 @@ class ContextIndex:
     def inventory(self) -> tuple[int, ...]:
         """Hlásky, které kód ve slovní zásobě užívá (seřazené)."""
         return self._inventory
-
-
-Exponent = tuple[str, str, str, tuple[int, ...]]
-
-
-class ExponentIndex(VocabularyIndex[Exponent]):
-    """Koncovky tvarů slov: (třída, buňka) → koncovka → počet, a jejich podoby."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.exponents: dict[tuple[str, str], Counter[str]] = {}
-        self.shapes: dict[str, Counter[tuple[int, ...]]] = {}
-
-    def contribution(self, world: World, code: Code, unit: str) -> Exponent | None:
-        morpheme = world.morphemes[unit]
-        if morpheme.kind != "word" or morpheme.word_class is None or morpheme.cell is None:
-            return None
-        state = world.unit_of(code, unit)
-        if state.exponent is None:
-            return None
-        return (morpheme.word_class, morpheme.cell, state.exponent, state.ending)
-
-    def add(self, value: Exponent) -> None:
-        word_class, cell, exponent, ending = value
-        self.exponents.setdefault((word_class, cell), Counter())[exponent] += 1
-        self.shapes.setdefault(exponent, Counter())[ending] += 1
-
-    def remove(self, value: Exponent) -> None:
-        word_class, cell, exponent, ending = value
-        _decrement(self.exponents[(word_class, cell)], exponent)
-        if not self.exponents[(word_class, cell)]:
-            del self.exponents[(word_class, cell)]
-        _decrement(self.shapes[exponent], ending)
-        if not self.shapes[exponent]:
-            del self.shapes[exponent]
-
-    def reset(self) -> None:
-        self.exponents, self.shapes = {}, {}

@@ -20,16 +20,18 @@ from __future__ import annotations
 
 import math
 from abc import abstractmethod
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Mapping, Sequence, cast
 
 import numpy as np
 
 from cee.v2 import phases
 from cee.v2.changes.base import Change, InnovationContext
+from cee.v2.changes.sites import column_totals, native_column
 from cee.v2.language.lexicon import Morpheme
 from cee.v2.language.protoforms import coin
 from cee.v2.language.segments import Form
-from cee.v2.language.semantic_index import SemanticSitesIndex
+from cee.v2.language.site_index import COL_BORROWING, COL_COINAGE, COL_SEMANTIC, site_index
 from cee.v2.pressures import Appeal, Conformity, Pressure
 from cee.v2.pressures.lexical import (
     Entrenchment,
@@ -64,6 +66,7 @@ class LexicalCoinage(Change):
     """
 
     kind = "lexical_coinage"
+    site_column = COL_COINAGE
     target = "lexical"
     pressures = {Appeal: 1.0, Conformity: 0.1, **LEXICAL_PRESSURES}
     # Nová slova vymýšlejí dospělí, tempo se proto řídí kalendářním časem.
@@ -83,6 +86,11 @@ class LexicalCoinage(Change):
         if count == 0:
             return 0.0
         return float(phases.uniform_rate(self.base_rate, count, self.rate_scale(context)))
+
+    def total_rates(self, contexts: Sequence[InnovationContext]) -> list[float]:
+        if native_column(self) is None:
+            return super().total_rates(contexts)
+        return column_totals(self, contexts)
 
     def sites(self, context: InnovationContext) -> Sequence[str]:
         return context.code.repertoire.variable_ids_of("lexical")
@@ -180,8 +188,30 @@ def _compatible(context: InnovationContext, first: str, second: str) -> bool:
     return classes.get(first) == classes.get(second)
 
 
+@dataclass(slots=True)
+class _SemanticView:
+    """Místa semantické změny kódu: názvy v pořadí jmen pojmů, míry, součet a (líně) váhy."""
+
+    names: list[str]
+    rates: np.ndarray
+    total: float
+    weights: np.ndarray | None = None
+    positions: dict[str, int] | None = None
+
+    def position(self, site: str) -> int | None:
+        if self.positions is None:
+            self.positions = {name: at for at, name in enumerate(self.names)}
+        return self.positions.get(site)
+
+
 class SemanticChange(Change):
-    """Rodič lexikálních změn řízených grafem pojmů."""
+    """Rodič lexikálních změn řízených grafem pojmů.
+
+    Místa a míry (pojmy, které mají cestu k novému slovu, a ``base_rate × součet vah cest``)
+    počítá index míst světa (:mod:`cee.v2.language.site_index`, v Rustu nad čísly); jedna dávka
+    pro všechny skupiny a druhy změn dává celkové míry (:mod:`cee.v2.changes.sites`). Podtřída
+    bez vlastního ``site_column`` (jiné ``options``) jede referenčním sestavením z ``options``.
+    """
 
     target = "lexical"
     rate_basis = "year"
@@ -198,20 +228,43 @@ class SemanticChange(Change):
     ) -> dict[str, object] | None:
         """Payload nové varianty, nebo ``None``, když cesta dnes nejde."""
 
-    def _index(self, context: InnovationContext) -> SemanticSitesIndex:
+    def total_rates(self, contexts: Sequence[InnovationContext]) -> list[float]:
+        if native_column(self) is None:
+            return super().total_rates(contexts)
+        return column_totals(self, contexts)
+
+    def _enabled(self, context: InnovationContext) -> bool:
+        return context.world.semantics is not None and context.world.table is not None
+
+    def _view(self, context: InnovationContext) -> _SemanticView:
+        """Místa kódu; platí do změny slovníku (``lexicon_version``) jako dřív index míst."""
         state = context.code.phonology
-        key = ("semantic-index", self.kind)
+        key = ("semantic-view", self.kind)
         cached = state.cache.get(key)
-        index = SemanticSitesIndex() if cached is None else cast(SemanticSitesIndex, cached[1])
-        index.sync(context, self)
-        state.cache[key] = (state.lexicon_version, index)
-        return index
+        if cached is not None and cached[0] == state.lexicon_version:
+            return cast(_SemanticView, cached[1])
+        if native_column(self) is None:
+            found = self._sites_reference(context)
+            names = sorted(found)
+            rates = np.array([self.base_rate * sum(weight for weight, _ in found[site]) for site in names],
+                             dtype=np.float64)
+        else:
+            world, code = context.world, context.code
+            index = site_index(world)
+            index.refresh(world, [context])
+            kind = cast(int, self.site_column) - COL_SEMANTIC
+            names = index.semantic_sites(world, code, kind)
+            rates = index.semantic_rates(code, kind, self.base_rate)
+        view = _SemanticView(names, rates, phases.rate_total(rates) if len(rates) else 0.0)
+        state.cache[key] = (state.lexicon_version, view)
+        return view
 
     def _sites(self, context: InnovationContext) -> dict[str, list[tuple[float, dict[str, object]]]]:
-        return self._index(context).found
+        """Možnosti všech míst (sestavené z ``options`` jen tam, kde index míst místo našel)."""
+        return {site: self.options(context, concept_of(site)) for site in self.sites(context)}
 
     def _sites_reference(self, context: InnovationContext) -> dict[str, list[tuple[float, dict[str, object]]]]:
-        """Původní úplné sestavení, nezávislé na produkční keši míst."""
+        """Původní úplné sestavení, nezávislé na indexu míst."""
         state = context.code.phonology
         key = ("lexical-sites-reference", self.kind)
         cached = state.cache.get(key)
@@ -227,48 +280,48 @@ class SemanticChange(Change):
         return found
 
     def sites(self, context: InnovationContext) -> Sequence[str]:
-        if context.world.semantics is None or context.world.table is None:
+        if not self._enabled(context):
             return ()
-        index = self._index(context)
-        index.ensure_ready()
-        return index.sorted_sites
+        return self._view(context).names
 
     def rate(self, context: InnovationContext, site: str) -> float:
-        return self._index(context).site_rates[site]
+        view = self._view(context)
+        found = view.position(site)
+        if found is None:
+            raise KeyError(site)
+        return float(view.rates[found])
 
     def rates(self, context: InnovationContext, sites: Sequence[str]) -> list[float]:
-        if context.world.semantics is None or context.world.table is None:
+        if not self._enabled(context):
             return []
-        index = self._index(context)
-        index.ensure_ready()
-        if sites is index.sorted_sites or sites == index.sorted_sites:
-            return index.rates_array.tolist()
+        view = self._view(context)
+        if sites is view.names or sites == view.names:
+            return view.rates.tolist()
         return [self.rate(context, site) for site in sites]
 
     def total_rate(self, context: InnovationContext) -> float:
-        if context.world.semantics is None or context.world.table is None:
+        if not self._enabled(context):
             return 0.0
-        index = self._index(context)
-        index.ensure_ready()
-        return index._total
+        return self._view(context).total
 
     def weighted_sites(
         self, context: InnovationContext
     ) -> tuple[Sequence[str], np.ndarray | None]:
-        if context.world.semantics is None or context.world.table is None:
+        if not self._enabled(context):
             return (), None
-        index = self._index(context)
-        index.ensure_ready()
-        if not index.sorted_sites or index._total <= 0.0:
+        view = self._view(context)
+        if not view.names or view.total <= 0.0:
             return (), None
-        if index._weights is None:
-            index._weights = phases.normalize_rates(index.rates_array, index._total)
-        return index.sorted_sites, index._weights
+        if view.weights is None:
+            view.weights = phases.normalize_rates(view.rates, view.total)
+        return view.names, view.weights
 
     def propose(
         self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
-        options = self._sites(context)[site]
+        options = self.options(context, concept_of(site))
+        if not options:
+            raise KeyError(site)
         weights = np.array([weight for weight, _ in options])
         option = options[int(rng.choice(len(options), p=weights / weights.sum()))][1]
         parts = (context.group.id, site, context.tick, index)
@@ -287,6 +340,7 @@ class SemanticShift(SemanticChange):
     """Slovo příbuzného pojmu se začne užívat i pro tento pojem (polysémie)."""
 
     kind = "semantic_shift"
+    site_column = COL_SEMANTIC + 0
     base_rate = 4e-4
 
     def options(self, context, concept):
@@ -323,6 +377,7 @@ class Conversion(SemanticChange):
     """
 
     kind = "conversion"
+    site_column = COL_SEMANTIC + 1
     base_rate = 1.5e-4
 
     def options(self, context, concept):
@@ -346,6 +401,7 @@ class Derivation(SemanticChange):
     """Kořen příbuzného pojmu + odvozovací přípona (*péct → pekař*)."""
 
     kind = "derivation"
+    site_column = COL_SEMANTIC + 2
     base_rate = 4e-4
 
     def options(self, context, concept):
@@ -371,6 +427,7 @@ class Compounding(SemanticChange):
     """Složenina ze dvou kořenů podle receptu (*sky + water → rain*)."""
 
     kind = "compounding"
+    site_column = COL_SEMANTIC + 3
     base_rate = 3e-4
 
     def options(self, context, concept):
@@ -397,6 +454,7 @@ class TabooReplacement(SemanticChange):
     """Tabuizovaný pojem dostane opis: slovo příbuzného pojmu nebo složeninu."""
 
     kind = "taboo_replacement"
+    site_column = COL_SEMANTIC + 4
     base_rate = 1e-3
 
     def options(self, context, concept):
@@ -427,6 +485,7 @@ class Contamination(SemanticChange):
     """Smíšení tvarů dvou příbuzných slov (začátek jednoho, konec druhého)."""
 
     kind = "contamination"
+    site_column = COL_SEMANTIC + 5
     base_rate = 2e-5
 
     def options(self, context, concept):
@@ -459,6 +518,7 @@ class BackFormation(SemanticChange):
     """
 
     kind = "back_formation"
+    site_column = COL_SEMANTIC + 6
     base_rate = 5e-5
 
     def options(self, context, concept):
@@ -510,6 +570,7 @@ class LexicalBorrowing(Change):
     """
 
     kind = "lexical_borrowing"
+    site_column = COL_BORROWING
     target = "lexical"
     pressures = LEXICAL_PRESSURES
     rate_basis = "year"
@@ -536,6 +597,45 @@ class LexicalBorrowing(Change):
 
     def rate(self, context: InnovationContext, site: str) -> float:
         return self.rates(context, [site])[0]
+
+    def total_rate(self, context: InnovationContext) -> float:
+        if native_column(self) is None:
+            return super().total_rate(context)
+        return column_totals(self, [context])[0]
+
+    def total_rates(self, contexts: Sequence[InnovationContext]) -> list[float]:
+        if native_column(self) is None:
+            return super().total_rates(contexts)
+        return column_totals(self, contexts)
+
+    def borrowing_inputs(
+        self, contexts: Sequence[InnovationContext]
+    ) -> tuple[int, bool, np.ndarray, list[bool], np.ndarray] | None:
+        """Vstupy dávky míst výpůjček: podíl vstupu od dárců podle kanálu a filtr výpůjček podle kanálu a pojmu.
+
+        Dárci (sousedé jiného jazyka) a jejich podíly počítá Python z kontaktu; v jednojazyčném světě
+        se nepočítá nic. Součet měr míst (``rates`` níže) dělá index míst světa.
+        """
+        from cee.v2.contact import distinct_channels
+
+        world = contexts[0].world
+        if world.table is None or len({g.main_code.language for g in world.groups.values()}) < 2:
+            return None
+        donors = [_donors(context) for context in contexts]
+        distinct = distinct_channels(world.params)
+        if not distinct:
+            channels: tuple[str, ...] = ("neighbor",)
+            exposure = np.array([sum(weight for weight, _ in found) for found in donors], dtype=np.float64)
+        else:
+            exposures = [_channel_exposures(context, found, distinct) if found else [] for context, found in
+                         zip(contexts, donors)]
+            channels = tuple(sorted({channel for row in exposures for channel, _ in row}))
+            exposure = np.zeros((len(contexts), len(channels)), dtype=np.float64)
+            for group, row in enumerate(exposures):
+                for channel, share in row:
+                    exposure[group, channels.index(channel)] = share
+        factors = site_index(world).borrowing_factors(world, channels)
+        return (len(channels), bool(distinct), exposure.ravel(), [bool(found) for found in donors], factors)
 
     def propose(
         self, context: InnovationContext, site: str, rng: RandomSource, index: int

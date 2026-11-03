@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from cee.v2.language.segments import SegmentTable
 
 #: Verze rozhraní, kterou tento Python čeká (viz ``INTERFACE_VERSION`` v Rustu).
-INTERFACE_VERSION = 6
+INTERFACE_VERSION = 8
 
 #: Čísla operací a pravidel přízvuku, jak je zná Rust (``process.rs``).
 OPERATIONS = ("change", "replace", "delete", "insert_before", "insert_after", "merge_next", "tone")
@@ -214,3 +214,16 @@ def new_sound_index(scales: list[float]) -> Any | None:
     module = _load()
     assert module is not None
     return module.SoundIndex(scales)
+
+
+def new_site_index() -> Any | None:
+    """Index míst morfologických, sémantických a syntaktických změn v Rustu, nebo ``None``.
+
+    Míry se v Rustu sčítají párově jako ``np.sum``; pokud numpy na stroji sčítá jinak
+    (:func:`sums_match`), počítá index Python.
+    """
+    if not enabled() or not sums_match():
+        return None
+    module = _load()
+    assert module is not None
+    return module.SiteIndex()

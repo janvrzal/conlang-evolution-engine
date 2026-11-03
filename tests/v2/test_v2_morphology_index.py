@@ -2,7 +2,9 @@
 
 from cee.v2.changes.base import InnovationContext
 from cee.v2.changes.morphology import Extension, Leveling
+from cee.v2.language import morphology_index
 from cee.v2.language.lexicon import UnitForm
+from cee.v2.language.site_index import SiteIndex
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
 
@@ -51,24 +53,27 @@ def test_zmeny_bunek_korene_a_clenstvi_proti_referenci():
 
 
 def test_jedina_bunka_neprepocita_nezavisle_jednotky(monkeypatch):
+    """Přírůstkově: změna tvaru jediné buňky přepočítá příspěvek jediné jednotky (číselná reference v Pythonu)."""
     context = _context()
     world, code = context.world, context.code
+    world.sites = SiteIndex()  # reference v Pythonu: počet přepočtených příspěvků jde spočítat
     change = Leveling()
     change._sites(context)
     unit = next(unit for unit in sorted(code.phonology.vocabulary) if world.morphemes[unit].kind == "word")
     value = world.unit_of(code, unit)
-    calls = []
-    original = Leveling._candidate
+    created = []
+    original = morphology_index._Contribution
 
-    def recorded(self, ctx, target):
-        calls.append(target)
-        return original(self, ctx, target)
+    def recorded(*arguments):
+        created.append(arguments)
+        return original(*arguments)
 
-    monkeypatch.setattr(Leveling, "_candidate", recorded)
+    monkeypatch.setattr(morphology_index, "_Contribution", recorded)
     code.forms.set(unit, UnitForm(value.form, 0, value.exponent))
     code.phonology.version += 1
     change._sites(context)
-    assert calls == [unit]
+    assert len(created) == 1
+    _check(context)
 
 
 def test_zmena_produktivni_koncovky_a_prazdne_podoby():

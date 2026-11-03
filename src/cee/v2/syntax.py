@@ -123,9 +123,7 @@ def _weakness_reference(world: World, code: Code, function: str) -> float:
 
 
 def weakness(world: World, code: Code, function: str) -> float:
-    """Podíl splynulých tvarů v gramatické buňce, průběžně udržovaný."""
-    from cee.v2.language.morphology_index import WeaknessIndex
-
+    """Podíl splynulých tvarů v gramatické buňce, průběžně udržovaný (index míst světa, v Rustu)."""
     entry = catalog_for(world).get(function)
     if entry is None or entry.cell is None:
         return 0.0
@@ -134,11 +132,16 @@ def weakness(world: World, code: Code, function: str) -> float:
     cached = state.cache.get(key)
     if cached is not None and cached[0] == state.version:
         return cast(float, cached[1])
-    held = state.cache.get("weakness-index")
-    index = cast(WeaknessIndex, held[1]) if held else WeaknessIndex()
-    state.cache["weakness-index"] = (state.version, index)
-    index.sync(world, code)
-    value = index.value((entry.word_class, entry.cell)) if entry.word_class is not None else 1.0
+    if entry.word_class is None:
+        value = 1.0
+    elif world.table is None:
+        value = _weakness_reference(world, code, function)
+    else:
+        from cee.v2.language.site_index import site_index
+
+        index = site_index(world)
+        index.prepare(world, [code])
+        value = index.weakness(world, code, entry.word_class, entry.cell)
     state.cache[key] = (state.version, value)
     return value
 

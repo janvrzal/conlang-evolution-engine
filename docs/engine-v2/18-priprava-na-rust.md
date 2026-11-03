@@ -219,7 +219,7 @@ s testem shody proti zlatým datům:
      (`Pressure.scores`) a vše za přenosem (události, slovní zásoba, aktivace); `mix`
      jako samostatná funkce má jen Python (Rust ho má uvnitř `hear`). Fondy, které by
      měly přejít spolu s tlaky: malá pole slotů a `LivePools` (`load`, `innovate`, `release`);
-5. hledání míst inovací a změny (indexy na čísla z registru a do Rustu celé; návrh a stav v oddílu „B5“ níže);
+5. hledání míst inovací a změny (indexy na čísla z registru a do Rustu celé; návrh a stav v oddílu „B5“ níže). **Hotovo 2026-11-03 (`zadani-rust-b5.md` a `zadani-rust-mista.md`, verze rozhraní 8)** pro zvukové, lexikální, sémantické, morfologické a syntaktické změny a výpůjčky slov; v Pythonu zůstala reanalýza hranice a prozodie (viz „Zbylé indexy míst (B5b)“);
 6. hlavní smyčka `Simulation`; Python zůstane pro popis světa, export,
    kalibrační skripty a API; desktopová aplikace (Tauri) může engine volat
    přímo z Rustu bez Pythonu.
@@ -244,8 +244,8 @@ bere pole zpět. Inventura je bez nového profilu (podíly z A7 a B3 výše).
 | `LexicalClarityIndex` | `dominant`, `root_concepts`, `root_forms`, `owners` (tvar → množina dvojic), `scores`, `by_form`, `by_root` | `forms.log`, `dominant_log`, verze, podpis grafu | `Clarity` (`pressures/lexical.py`), `lexicon.py` | druhý krok, **hotovo**: bez stavu; skóre je funkce polí (dominantní kořeny podle čísla pojmu, tvary kódu, výchozí tvary, banka, seřazené příbuzné dvojice), tabulka vlastníků tvaru se staví z dominantních kořenů při každé dávce (stovka položek na skupinu je levnější než dorovnávání), jedno volání `cee_core.clarity_scores` na dávku tlaků pro všechny skupiny |
 | `AssessmentVocabularyIndex` | vzorek nejčastějších tvarů (jména, tvary n-ticemi, `owners`, `vowels`), pozice změněných | `forms.log`, frekvence pojmů (`FrequencyMap.log`) | `assessment._vocabulary`, `NativeBank.assess_rows` | třetí krok: vzorek jako pole čísel morfémů a tvarů, vlastníci tvaru CSR |
 | `FormAssessmentIndex` | `values: dict[proměnná, FormAssessment]`, závislosti `unit_vars/root_vars/exponent_vars/cell_vars` | deníky tvarů, užití, dominantních kořenů, frekvencí | `Articulation`/morfologické tlaky | třetí krok: špinavé příznaky podle čísla proměnné, závislosti CSR |
-| `MorphologyCandidateIndex`, `WordMembershipIndex`, `ExponentIndex` | množiny a slovníky podle řetězců (jednotka, kořen, buňka, třída) | `vocabulary_log`, `forms.log` | `changes/morphology.py`, analogie | čtvrtý krok: stejné sloupce jako `MorphemeTable` (kořen, třída, buňka) + CSR podle buňky |
-| `SemanticDependencies` | `dominant`, `relations`, `compounds`, `sites` jako řetězce | `dominant_log`, `usage_log`, `vocabulary_log` | `changes/lexicon.py` | čtvrtý krok |
+| `MorphologyCandidateIndex`, `WordMembershipIndex`, `ExponentIndex` | množiny a slovníky podle řetězců (jednotka, kořen, buňka, třída) | `vocabulary_log`, `forms.log` | `changes/morphology.py`, analogie | **hotovo (B5b)**: sloupce podle čísla morfému jako `MorphemeTable`, stav v Rustu (`morphology_index.rs`) |
+| `SemanticDependencies`, `SemanticSitesIndex` | `dominant`, `relations`, `compounds`, `sites` jako řetězce | `dominant_log`, `usage_log`, `vocabulary_log` | `changes/lexicon.py` | **hotovo (B5b)**: graf v CSR, součty vah podle pojmu, stav v Rustu (`semantic_index.rs`) |
 
 Pořadí práce řídí cena: zvukové změny (prostředí a opory), pak lexikální
 jasnost, pak ostatní. Pozn.: jazyky a skupiny mají vlastní stav; svět sdílí
@@ -318,12 +318,83 @@ bance tvarů, protože banka se mezi kopiemi světa (checkpoint) sdílí a stav 
 jednou pro inventář; (3) vlákna nejsou zavedena. Zachovaná zvláštnost: změna pravidla
 přízvuku nepřepočítá prostředí slov, dokud se slovo nezmění (`counted_rule`).
 
-Zbývá, v tomto pořadí: `AssessmentVocabularyIndex` (vzorek jako pole čísel morfémů a
-tvarů, vlastníci tvaru v CSR) a `FormAssessmentIndex` (špinavé příznaky podle čísla
-proměnné, závislosti v CSR); pak `WordMembershipIndex`, `MorphologyCandidateIndex`,
-`ExponentIndex`, `SemanticDependencies` a místa inovací `changes/lexicon.py`,
-`morphology.py`, `syntax.py` (dnes dávkové jen u zvukových změn, ostatní změny jedou
-výchozím `total_rates` po skupinách); nakonec zlatá data míst a skóre tlaků z A7.
+Zbývá (mimo B5b): `AssessmentVocabularyIndex` (vzorek jako pole čísel morfémů a tvarů,
+vlastníci tvaru v CSR) a `FormAssessmentIndex` (špinavé příznaky podle čísla proměnné,
+závislosti v CSR). Místa inovací všech druhů změn jsou hotová v oddílu níže.
+
+### Zbylé indexy míst (B5b)
+
+Zadání `zadani-rust-mista.md`. Cíl: celé hledání míst inovací pro všechny druhy změn jako
+jedna dávka v Rustu nad čísly; hlavní smyčka (B6) pak nepotřebuje Python až do návrhu
+varianty (`propose`).
+
+**Číselná podoba.** Stav patří světu (`World.sites`, `cee.v2.language.site_index`) a žije v Rustu
+(`cee_core.SiteIndex`: `morphology_index.rs`, `semantic_index.rs`, `sites.rs`, vazba
+`sites_python.rs`). Python reference ve stejné podobě (`PythonSites`, `MorphIndex`,
+`SemanticDependencies`) je fallback (`CEE_NATIVE=0`) a reference testu Rust proti Pythonu.
+
+- *Morfologie* (klíč `FormStore.token`, sloupce podle čísla morfému z `MorphemeTable`: druh, třída,
+  buňka, lexém, koncovka, hranice). Členové jsou tvary slov ve slovní zásobě; hustý průchod po
+  členech porovnává syrová čísla úložiště kódu (tvar, hranice, koncovka, tvar kořene) s tím, co index
+  započítal, takže se nečte žádný deník. Příspěvek člena (koncovka, podoba koncovky, splynutí s citačním
+  tvarem, místo vyrovnání, místo rozšíření) je čistá funkce jeho tvaru, tvaru kořene a popisu buňky
+  (produktivní koncovka), proto je přírůstkový stav vždy stejný jako výpočet od nuly. Počty koncovek
+  jsou malé tabulky podle (třída, buňka) a podle koncovky; podoby koncovek jsou číslované (jedna
+  podoba, jedno číslo). Remízy (produktivní koncovka, podoba koncovky) a pořadí míst (`form:level|tvar|`,
+  `form:extend|tvar|koncovka`) rozhodují řetězcová ID, jako dřív; index proto drží jména morfémů jako
+  bajty UTF-8 (řadí se stejně jako body Unicode v Pythonu) a seřazená místa dá až na požádání.
+  Výchozí tvary morfémů, které kód nepřepsal, drží index ve vlastní aréně (Python je doplní na
+  požádání), takže do banky tvarů světa nic nezařazuje. `ExponentIndex` zůstal jako pohled
+  (`.exponents`, `.shapes`) pro `morphology.class_stats`, který se nezměnil.
+- *Sémantika.* Graf pojmů je CSR podle cíle (vztahy seřazené podle jména zdroje jako
+  `ConceptGraph.into`), recepty složenin také; váhy vztahů, které by potřebovaly `log1p`
+  (posun, konverze, odvození), a shodnost slovních druhů předpočítá Python, takže v Rustu není
+  žádná transcendentní funkce. Pro kód: dominantní kořeny podle čísla pojmu, příznaky míst
+  (lexikální proměnné) a tabu, pro každý druh změny součet vah cest podle pojmu (0 = bez místa),
+  vlastnosti kořenů (odvozenina z jediného pojmu, základ) a pro zpětné tvoření obrácený index
+  „pojem → pojmy, jejichž kořen z něj vznikl“. Změna dominantního kořene dotkne sám pojem, cíle jeho
+  vztahů a složenin a pojem, z něhož je odvozen starý či nový kořen; ty se přepočítají pro všech
+  sedm druhů. Míry se čtou jako `base × součet` v pořadí jmen pojmů a sčítají se párově (`pairwise_sum`).
+- *Syntax* („konstrukce jako čísla“). Katalog funkcí (šablona, slovní druh, třída a buňka podle
+  číslování morfémů, zdroje, dárci a zástupci v CSR) a druh a stupeň konstrukce podle čísla varianty.
+  Každý tik předá Python číslo dominantní varianty pro každou dvojici (skupina, funkce) a Rust z něj
+  vyhodnotí `applies` všech deseti změn včetně `CategoryLoss` (míra místa z slabosti koncovky a podílu
+  druhojazyčných mluvčích, celek párově). Slabost buňky a „zbytková koncovka“ čte z morfologického stavu
+  téhož kódu.
+- *Výpůjčky slov.* Python spočítá dárce a podíly vstupu podle kanálů (`contact`) a filtr výpůjček
+  podle kanálu a pojmu; Rust sečte míry míst (`základ × podíl × filtr`, u více kanálů součet přes
+  kanály) přes lexikální proměnné kódu.
+
+**Hranice volání.** `Simulation._innovate` volá `changes.sites.rate_sums`: zvukové změny jeden
+dotaz na index prostředí pro všechny rodiny (`batch_total_rates`, dřív jeden dotaz na rodinu), ostatní
+jednu dávku `SiteIndex.batch` (matice skupina × 21 sloupců: expresivní tvoření, 7 sémantických změn,
+vyrovnání, rozšíření, 10 syntaktických změn, výpůjčky; součty a počty míst). Místa a míry se čtou zvlášť
+jen pro (skupinu, změnu) s inovací (`weighted_sites`); `propose` zůstal v Pythonu. Stav se dorovnává jen
+u kódů, jejichž klíč (verze stavu, délka deníku tvarů a slovní zásoby, verze slovníku) se změnil.
+Hledání celkových měr tak stojí dvě dávková volání za tik (zvukový index a index míst, každé s případným
+doplněním výchozích tvarů či sady kandidátů) místo jednoho volání na skupinu a druh změny; jedno volání pro
+oba indexy najednou by vyžadovalo, aby si je Rust předával mezi sebou (zůstalo na B6).
+
+**Pořadí a bity.** Míry a součty jsou stejné jako dřív (`base × počet × násobek`, součty
+`np.sum`), ověřeno zlatými daty míst z A7 přes Rust, porovnáním dávky se `total_rate` po jedné změně
+a Rustu s referencí v Pythonu (`tests/v2/test_v2_site_index.py`). Stav indexu se při kopii světa a
+uložení nepřenáší (`__getstate__` nese jen volbu Rust/Python) a při dalším použití se deterministicky
+postaví znovu.
+
+**Zbytečné tvary v bance.** Po B5 měla banka ve světě `shift` v ticku 4 o polovinu víc tvarů
+(1 170 místo 792). Příčina: index prostředí zvukových změn zařazoval do banky výchozí tvar každého
+člena slovní zásoby, který kód nepřepsal (728 tvarů), aby měl jeho číslo. Oprava je hotová na větvi
+`engine-v2-rust-sites-bank-forms` (index drží výchozí tvary ve vlastní aréně a banka má opět 792 tvarů),
+**ale není sloučená**: jediný rozdíl, který se našel, je poslední bit jedné dávky zlatých dat tlaků
+(shift, tik 4, rozdíl 4e-19) přes pořadí ceny homofonů; otisky historie a připnuté otisky stavu jsou
+stejné. Sloučí se po opravě pořadí od agenta na tlaky.
+
+**Zůstalo v Pythonu.** Reanalýza hranice (`Rebracketing`, kandidáti podle verze stavu), prozodické
+změny (jedno místo), návrh variant (`propose`), čtení dominantních konstrukcí z živých fondů
+(`world.dominant`, jednou na skupinu a funkci za tik), dárci a podíly vstupu u výpůjček (`contact`),
+sestavení grafu a katalogu (jednou za změnu) a registrace konstrukcí. Vlákna nejsou zavedena (stav
+kódů je nezávislý, takže paralelizace po kódech by výsledek nezměnila; sdílená je jen tabulka
+podob koncovek).
 
 ## Bitová shoda při přechodu do Rustu
 

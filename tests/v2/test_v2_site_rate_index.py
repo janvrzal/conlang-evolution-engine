@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 import numpy as np
+import pytest
 
 from cee.v2.changes.base import InnovationContext
 from cee.v2.changes.lexicon import (
@@ -29,8 +28,8 @@ from cee.v2.changes.sound import (
     sound_index,
 )
 from cee.v2.language.index import ContextIndex
-from cee.v2.language.morphology_index import MorphologyCandidateIndex
-from cee.v2.language.semantic_index import SemanticSitesIndex
+from cee.v2.language.semantic_index import SemanticDependencies
+from cee.v2.language.site_index import SiteIndex
 from cee.v2.language.sound_index import NativeSoundIndex, SoundIndex
 from cee.v2.phonology import enter_vocabulary, leave_vocabulary
 from cee.v2.scenarios import village_grid
@@ -160,51 +159,50 @@ def test_continuous_equals_from_scratch_each_step() -> None:
                 state.cache.update(saved_cache)
 
 
-def test_incremental_dirty_concept_update() -> None:
-    """Inkrementálnost: změna jednoho dominantního kořene přepočítá jen dotčené pojmy."""
+def test_incremental_dirty_concept_update(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Inkrementálnost: změna jednoho dominantního kořene přepočítá jen dotčené pojmy (číselná reference v Pythonu)."""
     world = village_grid(2, seed=1, phonology=True, semantics=True)
     sim = Simulation(world)
+    world.sites = SiteIndex()  # reference v Pythonu: počet přepočtených pojmů jde spočítat
     group = world.groups[world.group_ids()[0]]
     context = InnovationContext(world, group, group.main_code, sim.tick, sim.year)
+    state = group.main_code.phonology
+    state.cache.clear()
 
     shift = SemanticShift()
     # První volání naplní index
     initial_total = shift.total_rate(context)
     assert initial_total > 0.0
 
-    # Počítadlo volání options
-    options_calls: list[str] = []
-    real_options = shift.options
+    calls: list[int] = []
+    real = SemanticDependencies._sum
 
-    def counting_options(ctx: InnovationContext, concept: str) -> list[tuple[float, dict[str, object]]]:
-        options_calls.append(concept)
-        return real_options(ctx, concept)
+    def counting(self: SemanticDependencies, kind: int, target: int, *rest: object) -> float:
+        calls.append(target)
+        return real(self, kind, target, *rest)  # type: ignore[arg-type]
 
-    shift.options = counting_options
+    monkeypatch.setattr(SemanticDependencies, "_sum", counting)
 
-    # Dotaz při nezměněné verzi nesmí options vůbec volat (O(1))
-    same_total = shift.total_rate(context)
-    assert same_total == initial_total
-    assert len(options_calls) == 0
+    # Dotaz při nezměněné verzi nesmí nic přepočítávat (O(1))
+    assert shift.total_rate(context) == initial_total
+    assert not calls
 
     # Změna dominantního kořene jednoho pojmu
-    state = group.main_code.phonology
     concept_to_change = "water" if "water" in state.dominant else next(iter(state.dominant))
     old_root = state.dominant[concept_to_change]
     state.dominant[concept_to_change] = "morpheme:dummy_test_root"
     state.dominant_log.append((concept_to_change, old_root, "morpheme:dummy_test_root"))
     state.lexicon_version += 1
 
-    # Dotaz po změně jednoho pojmu
     new_total = shift.total_rate(context)
     assert new_total >= 0.0
     # Muselo dojít k přepočtu dotčených pojmů, ale rozhodně ne všech ~150
-    assert 0 < len(options_calls) < 25
+    assert 0 < len(set(calls)) < 25
 
-    # Další dotaz se stejnou verzí opět nevolá nic
-    options_calls.clear()
+    # Další dotaz se stejnou verzí opět nepřepočítává nic
+    calls.clear()
     assert shift.total_rate(context) == new_total
-    assert len(options_calls) == 0
+    assert not calls
 
 
 def test_sound_support_index_inventory_transition_and_mutations() -> None:
@@ -285,32 +283,11 @@ def test_checkpoint_isolation_and_resume_digest() -> None:
     cp = sim.checkpoint()
     cp_world = cp.state[0]
 
-    # Ověříme, že indexy v živém světě a checkpointu nesdílejí žádné instance polí/slovníků
-    for gid in sim.world.group_ids():
-        live_cache = sim.world.groups[gid].main_code.phonology.cache
-        cp_cache = cp_world.groups[gid].main_code.phonology.cache
+    # Číselný index míst patří světu; kopie s ním nesdílí nic (stav se v kopii postaví znovu)
+    if sim.world.sites is not None:
+        assert cp_world.sites is not sim.world.sites
 
-        # Sémantické indexy
-        for key in list(live_cache.keys()):
-            if isinstance(key, tuple) and key[0] == "semantic-index":
-                live_idx = cast(SemanticSitesIndex, live_cache[key][1])
-                cp_idx = cast(SemanticSitesIndex, cp_cache[key][1])
-                assert live_idx is not cp_idx
-                assert live_idx.found is not cp_idx.found
-                assert live_idx.site_rates is not cp_idx.site_rates
-                assert live_idx.sorted_sites is not cp_idx.sorted_sites
-                assert live_idx.rates_array is not cp_idx.rates_array
-
-        # Morfologický index
-        if "morphology-candidate-index" in live_cache:
-            live_m = cast(MorphologyCandidateIndex, live_cache["morphology-candidate-index"][1])
-            cp_m = cast(MorphologyCandidateIndex, cp_cache["morphology-candidate-index"][1])
-            assert live_m is not cp_m
-            assert live_m.results is not cp_m.results
-            assert live_m.contributions is not cp_m.contributions
-            assert live_m.sorted_sites is not cp_m.sorted_sites
-
-        # Číselný index prostředí a opor patří světu; kopie s ním nesdílí žádné pole
+    # Číselný index prostředí a opor patří světu; kopie s ním nesdílí žádné pole
     live_sound, cp_sound = sim.world.sound, cp_world.sound
     assert isinstance(live_sound, (SoundIndex, NativeSoundIndex))
     assert type(live_sound) is type(cp_sound)

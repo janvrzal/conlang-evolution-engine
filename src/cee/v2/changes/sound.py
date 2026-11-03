@@ -1315,6 +1315,41 @@ _TOTAL_PRIOR: float = sum(change.prior for change in SOUND_CHANGES if not change
 def _total_prior() -> float:
     return _TOTAL_PRIOR
 
+
+def batch_total_rates(
+    changes: Sequence[Change], contexts: Sequence[InnovationContext]
+) -> dict[int, list[float]]:
+    """Součty měr zvukových změn všech skupin: jedno dorovnání a jeden dotaz na index světa pro všechny rodiny.
+
+    Klíč je pozice změny v ``changes``; změny s vlastními váhami priorů (jiná podtřída či ``prior``)
+    se tu nepočítají a volající je vyřídí po jedné (``total_rates``).
+    """
+    standard = [
+        (at, change) for at, change in enumerate(changes)
+        if isinstance(change, SoundChange) and _STANDARD_SOUND_PRIORS.get(type(change)) == change.prior
+    ]
+    if not standard or not contexts:
+        return {}
+    world = contexts[0].world
+    live = [
+        position for position, context in enumerate(contexts)
+        if context.world.table is not None and context.code.phonology.vocabulary
+    ]
+    found: dict[int, list[float]] = {at: [0.0] * len(contexts) for at, _ in standard}
+    if not live:
+        return found
+    index = sound_index(world)
+    codes = [contexts[position].code for position in live]
+    index.sync(world, codes, CATALOG)
+    matrix = index.totals(codes, len(SOUND_CHANGES))
+    has = [index.has_families(code) for code in codes]
+    for at, change in standard:
+        column = matrix[:, FAMILY_INDEX[change.kind]].tolist()
+        totals = found[at]
+        for position, indexed, value in zip(live, has, column):
+            totals[position] = value if indexed else Change.total_rate(change, contexts[position])
+    return found
+
 #: Číslo rodiny podle druhu změny (pořadí ``SOUND_CHANGES``).
 FAMILY_INDEX: dict[str, int] = {change.kind: number for number, change in enumerate(SOUND_CHANGES)}
 CATALOG.scales = [SOUND_INNOVATIONS_PER_GENERATION * (change.prior / _TOTAL_PRIOR) for change in SOUND_CHANGES]
