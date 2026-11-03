@@ -20,6 +20,8 @@
 
 use crate::assess_index::{AssessIndex, Inputs, Needs};
 use crate::bank::Bank;
+use crate::form_assess::{FormCtx, FormInputs};
+use crate::morphology_index::MorphIndex;
 use crate::transmission::{hash_normal_mixed, splitmix64};
 
 /// Čísla druhů proměnných (pořadí `cee.v2.tables.VARIABLE_KINDS`).
@@ -111,6 +113,9 @@ pub struct StepConst<'a> {
     pub variant_keys: &'a [u64],
     /// Váha původu slova podle kódu původu; poslední prvek (0) platí pro chybějící původ.
     pub origin_weights: &'a [f64],
+    /// Morfologický stav kódů (koncovky a jejich podoby) a pole pro hodnocení tvarů.
+    pub morph: &'a MorphIndex,
+    pub forms: FormInputs<'a>,
 }
 
 /// Měnitelný stav kroku sdílený bloky: paměť odpovědí, tabulky vlastníků, podíly koncových souhlásek.
@@ -251,8 +256,15 @@ pub fn gather(
                     }
                 }
             } else {
+                let ctx = FormCtx {
+                    bank: &*bank,
+                    morph: step.morph,
+                    inp,
+                    fi: &step.forms,
+                    roots: &step.roots,
+                };
                 for &g in &columns {
-                    if let Some(entry) = index.form_lookup(inp, g, rows.variable[row], needs) {
+                    if let Some(entry) = index.form_lookup(&ctx, g, rows.variable[row], needs) {
                         let at = local * chunk.groups + g;
                         out.values[at] = [
                             entry.gain,
@@ -694,6 +706,7 @@ mod tests {
     #[test]
     fn konformita_a_pritazlivost_se_scitaji_v_poradi_planu() {
         let bank = bank();
+        let morph = MorphIndex::new();
         let tokens = [1_i64, 2];
         let versions = [0_i64, 0];
         let rules = [0_u8, 0];
@@ -724,6 +737,21 @@ mod tests {
             variant_appeal: &[0.5, f64::NAN],
             variant_keys: &[10, 11],
             origin_weights: &[0.0],
+            morph: &morph,
+            forms: FormInputs {
+                boundary: vec![&[], &[]],
+                exponent: vec![&[], &[]],
+                order: vec![&[], &[]],
+                stamps: &[0, 0],
+                kind: &[],
+                class: &[],
+                unit_exponent: &[],
+                unit_boundary: &[],
+                frequency: &[],
+                weights: &[],
+                cells: 0,
+                concept_frequency: &[],
+            },
         };
         let rows = Rows {
             kind: &[LEXICAL],

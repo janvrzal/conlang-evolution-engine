@@ -10,11 +10,13 @@ use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods}
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
-use crate::assess_index::{self, FormEntry, Inputs, Needs, ProcessInfo};
+use crate::assess_index::{self, Inputs, Needs, ProcessInfo};
+use crate::form_assess::{FormChange, FormInputs};
 use crate::pressures::{
     self, Chunk, Gathered, Overlay, Params, Plan, Rows, Scorer, StepConst, StepState,
 };
 use crate::python::{failure, slice, Held, NativeBank};
+use crate::sites_python::SiteIndex;
 use crate::transmission::ranges;
 
 fn fail(message: &str) -> PyErr {
@@ -36,8 +38,7 @@ type NeedsOut = (
     Vec<(usize, Vec<i32>)>,
     Vec<(usize, u32)>,
     Vec<usize>,
-    Vec<usize>,
-    Vec<(usize, u32)>,
+    Vec<u32>,
 );
 
 fn needs_out(needs: Needs) -> NeedsOut {
@@ -51,8 +52,7 @@ fn needs_out(needs: Needs) -> NeedsOut {
             .collect(),
         needs.redundant.into_iter().collect(),
         needs.coda.into_iter().collect(),
-        needs.form_sync.into_iter().collect(),
-        needs.form_value.into_iter().collect(),
+        needs.morph_defaults.into_iter().collect(),
     )
 }
 
@@ -172,41 +172,30 @@ impl AssessIndex {
         self.inner.forget(token);
     }
 
-    /// Zrcadlo hodnocení tvarů: uloží hodnotu, zruší ji, vyprázdní kód, označí ho za dorovnaný.
-    #[allow(clippy::too_many_arguments)]
-    fn form_set(
+    /// Zaregistruje analogickou změnu tvaru (číslo proměnné z registru): operace (`level`, `extend`,
+    /// `prepend`, `drop_initial` jako 0 až 3), číslo morfému tvaru slova, číslo koncovky a hláska
+    /// reanalýzy (−1 = žádná).
+    fn register_form(
         &mut self,
-        token: i64,
         variable: u32,
-        present: bool,
-        gain: f64,
-        frequency: f64,
-        before: bool,
-        after: bool,
+        operation: u8,
+        unit: u32,
+        exponent: i32,
+        segment: i32,
     ) {
-        self.inner.form_set(
-            token,
+        self.inner.register_form(
             variable,
-            FormEntry {
-                present,
-                gain,
-                frequency,
-                before,
-                after,
+            FormChange {
+                operation,
+                unit,
+                exponent,
+                segment,
             },
         );
     }
 
-    fn form_invalidate(&mut self, token: i64, variable: u32) {
-        self.inner.form_invalidate(token, variable);
-    }
-
-    fn form_clear(&mut self, token: i64) {
-        self.inner.form_clear(token);
-    }
-
-    fn form_synced(&mut self, token: i64, version: i64) {
-        self.inner.form_synced(token, version);
+    fn has_form(&self, variable: u32) -> bool {
+        self.inner.has_form(variable)
     }
 
     /// Hodnocení procesu `variable` pro skupiny `groups` (pozice v polích kroku). Vrací
@@ -305,6 +294,9 @@ pub fn take_created<'py>(
 /// Pole z Pythonu, která tlaky čtou; drží se po dobu jednoho přenosu bloku (ne po každém průchodu).
 pub(crate) struct HeldSet {
     forms: Vec<Held<i32>>,
+    boundaries: Vec<Held<i32>>,
+    exponents: Vec<Held<i32>>,
+    orders: Vec<Held<i32>>,
     roots: Vec<Held<i32>>,
     defaults: Held<i32>,
     lexeme: Held<i32>,
@@ -314,22 +306,41 @@ pub(crate) struct HeldSet {
     origin: Held<i32>,
     appeal: Held<f64>,
     keys: Held<u64>,
+    kind: Held<i8>,
+    class: Held<i32>,
+    unit_exponent: Held<i32>,
+    unit_boundary: Held<i32>,
+    frequency: Held<f64>,
+    concept_frequency: Held<f64>,
+    weights: Held<f64>,
+}
+
+/// Pole kroku, která drží `PressureStep` jako objekty Pythonu (zpřístupní se vždy znovu).
+struct StepArrays {
+    forms: Vec<Py<PyAny>>,
+    boundaries: Vec<Py<PyAny>>,
+    exponents: Vec<Py<PyAny>>,
+    orders: Vec<Py<PyAny>>,
+    roots: Vec<Py<PyAny>>,
+    /// Výchozí tvary, lexémy a buňky morfémů a sloupce tabulky variant (změna, morfém, původ, přitažlivost,
+    /// klíče); dál druh, třída, koncovka, hranice a frekvence morfémů.
+    columns: Vec<Py<PyAny>>,
+    concept_frequency: Py<PyAny>,
+    weights: Py<PyAny>,
 }
 
 impl HeldSet {
-    fn new(
-        py: Python<'_>,
-        forms: &[Py<PyAny>],
-        roots: &[Py<PyAny>],
-        columns: &[Py<PyAny>],
-    ) -> PyResult<HeldSet> {
+    fn new(py: Python<'_>, arrays: &StepArrays) -> PyResult<HeldSet> {
         let objects = |list: &[Py<PyAny>]| -> Vec<Bound<'_, PyAny>> {
             list.iter().map(|item| item.bind(py).clone()).collect()
         };
-        let column = |at: usize| columns[at].bind(py).clone();
+        let column = |at: usize| arrays.columns[at].bind(py).clone();
         Ok(HeldSet {
-            forms: Held::<i32>::all(&objects(forms))?,
-            roots: Held::<i32>::all(&objects(roots))?,
+            forms: Held::<i32>::all(&objects(&arrays.forms))?,
+            boundaries: Held::<i32>::all(&objects(&arrays.boundaries))?,
+            exponents: Held::<i32>::all(&objects(&arrays.exponents))?,
+            orders: Held::<i32>::all(&objects(&arrays.orders))?,
+            roots: Held::<i32>::all(&objects(&arrays.roots))?,
             defaults: Held::<i32>::new(&column(0))?,
             lexeme: Held::<i32>::new(&column(1))?,
             cell: Held::<i32>::new(&column(2))?,
@@ -338,6 +349,13 @@ impl HeldSet {
             origin: Held::<i32>::new(&column(5))?,
             appeal: Held::<f64>::new(&column(6))?,
             keys: Held::<u64>::new(&column(7))?,
+            kind: Held::<i8>::new(&column(8))?,
+            class: Held::<i32>::new(&column(9))?,
+            unit_exponent: Held::<i32>::new(&column(10))?,
+            unit_boundary: Held::<i32>::new(&column(11))?,
+            frequency: Held::<f64>::new(&column(12))?,
+            concept_frequency: Held::<f64>::new(arrays.concept_frequency.bind(py))?,
+            weights: Held::<f64>::new(arrays.weights.bind(py))?,
         })
     }
 }
@@ -349,6 +367,8 @@ pub struct PressureStep {
     pub(crate) held: Option<HeldSet>,
     bank: Py<NativeBank>,
     index: Py<AssessIndex>,
+    /// Index míst světa: z jeho morfologického stavu se čtou koncovky a jejich podoby (hodnocení tvarů).
+    sites: Py<SiteIndex>,
     supplier: Py<PyAny>,
     plan: Plan,
     params: Params,
@@ -359,12 +379,11 @@ pub struct PressureStep {
     strong: Vec<bool>,
     l2: Vec<f64>,
     actuation_keys: Vec<u64>,
+    stamps: Vec<i64>,
     related: Vec<i64>,
     origin_weights: Vec<f64>,
-    forms: Vec<Py<PyAny>>,
-    roots: Vec<Py<PyAny>>,
-    /// Výchozí tvary, lexémy a buňky morfémů a sloupce tabulky variant (změna, morfém, původ, přitažlivost, klíče).
-    columns: Vec<Py<PyAny>>,
+    arrays: StepArrays,
+    form_cells: usize,
     state: StepState,
 }
 
@@ -374,12 +393,17 @@ type PlanIn = Vec<Vec<(u8, f64)>>;
 impl PressureStep {
     /// `plan` je pro každý druh proměnných seznam (číslo tlaku, váha) v pořadí sčítání;
     /// `scalars` je (tick, má tabulku, clarity_short_factor, functional_load_scale, dispersion_factor,
-    /// coda_tolerance_scale, stress_strength_multiplier, paradigm_merge_weight, redundant_merge_weight).
+    /// coda_tolerance_scale, stress_strength_multiplier, paradigm_merge_weight, redundant_merge_weight);
+    /// `groups` jsou pole podle skupiny (token, verze kódu, pravidlo přízvuku, silný přízvuk, podíl L2,
+    /// klíč ocenění, razítko dominantních kořenů); `code_arrays` pro každou skupinu pole tvarů, hranic,
+    /// koncovek, dominantních kořenů a pořadí vložení pojmů; `form_data` je (frekvence pojmů, váhy buněk
+    /// paradigmatu po řádcích o `cells` buňkách, `cells`).
     #[new]
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn new(
         bank: Py<NativeBank>,
         index: Py<AssessIndex>,
+        sites: Py<SiteIndex>,
         supplier: Py<PyAny>,
         plan: PlanIn,
         scalars: (i64, bool, f64, f64, f64, f64, f64, f64, f64),
@@ -390,12 +414,13 @@ impl PressureStep {
             PyReadonlyArray1<'_, bool>,
             PyReadonlyArray1<'_, f64>,
             PyReadonlyArray1<'_, u64>,
+            PyReadonlyArray1<'_, i64>,
         ),
-        forms: Vec<Py<PyAny>>,
-        roots: Vec<Py<PyAny>>,
+        code_arrays: CodeArrays,
         related: PyReadonlyArray1<'_, i64>,
         origin_weights: PyReadonlyArray1<'_, f64>,
         columns: Vec<Py<PyAny>>,
+        form_data: (Py<PyAny>, Py<PyAny>, usize),
     ) -> PyResult<Self> {
         let tokens = slice(&groups.0)?.to_vec();
         let versions = slice(&groups.1)?.to_vec();
@@ -403,8 +428,10 @@ impl PressureStep {
         let strong = slice(&groups.3)?.to_vec();
         let l2 = slice(&groups.4)?.to_vec();
         let actuation_keys = slice(&groups.5)?.to_vec();
+        let stamps = slice(&groups.6)?.to_vec();
         let related = slice(&related)?.to_vec();
         let origin_weights = slice(&origin_weights)?.to_vec();
+        let (forms, boundaries, exponents, roots, orders) = code_arrays;
         let count = tokens.len();
         if [
             versions.len(),
@@ -412,13 +439,17 @@ impl PressureStep {
             strong.len(),
             l2.len(),
             actuation_keys.len(),
+            stamps.len(),
             forms.len(),
+            boundaries.len(),
+            exponents.len(),
             roots.len(),
+            orders.len(),
         ]
         .iter()
         .any(|&size| size != count)
             || plan.len() != pressures::KINDS
-            || columns.len() != 8
+            || columns.len() != 13
         {
             return Err(fail("vstupy kroku pro tlaky mají špatný tvar"));
         }
@@ -429,6 +460,7 @@ impl PressureStep {
         Ok(PressureStep {
             bank,
             index,
+            sites,
             supplier,
             plan: Plan { kinds },
             params: Params {
@@ -447,16 +479,34 @@ impl PressureStep {
             strong,
             l2,
             actuation_keys,
+            stamps,
             related,
             origin_weights,
-            forms,
-            roots,
-            columns,
+            arrays: StepArrays {
+                forms,
+                boundaries,
+                exponents,
+                orders,
+                roots,
+                columns,
+                concept_frequency: form_data.0,
+                weights: form_data.1,
+            },
+            form_cells: form_data.2,
             state: StepState::default(),
             held: None,
         })
     }
 }
+
+/// Pole podle skupiny: tvary, hranice, koncovky, dominantní kořeny a pořadí vložení pojmů.
+type CodeArrays = (
+    Vec<Py<PyAny>>,
+    Vec<Py<PyAny>>,
+    Vec<Py<PyAny>>,
+    Vec<Py<PyAny>>,
+    Vec<Py<PyAny>>,
+);
 
 /// Popis řádků bloku z Pythonu (pole, která drží volající po dobu přenosu).
 pub struct RowsArgs<'py> {
@@ -535,8 +585,9 @@ fn pass(
     let me = &mut *guard;
     let mut bank_guard = me.bank.bind(py).borrow_mut();
     let mut index_guard = me.index.bind(py).borrow_mut();
+    let sites_guard = me.sites.bind(py).borrow();
     if me.held.is_none() {
-        me.held = Some(HeldSet::new(py, &me.forms, &me.roots, &me.columns)?);
+        me.held = Some(HeldSet::new(py, &me.arrays)?);
     }
     let held = me.held.as_ref().expect("pole jsou držena");
     let (held_forms, held_roots) = (&held.forms, &held.roots);
@@ -567,6 +618,21 @@ fn pass(
         variant_appeal: appeal.view(),
         variant_keys: keys.view(),
         origin_weights: &me.origin_weights,
+        morph: sites_guard.morph(),
+        forms: FormInputs {
+            boundary: held.boundaries.iter().map(|held| held.view()).collect(),
+            exponent: held.exponents.iter().map(|held| held.view()).collect(),
+            order: held.orders.iter().map(|held| held.view()).collect(),
+            stamps: &me.stamps,
+            kind: held.kind.view(),
+            class: held.class.view(),
+            unit_exponent: held.unit_exponent.view(),
+            unit_boundary: held.unit_boundary.view(),
+            frequency: held.frequency.view(),
+            weights: held.weights.view(),
+            cells: me.form_cells,
+            concept_frequency: held.concept_frequency.view(),
+        },
     };
     let variable: Vec<u32> = slice(&rows.variable)?.iter().map(|&v| v as u32).collect();
     let desc = Rows {
@@ -656,8 +722,7 @@ fn supply(py: Python<'_>, step: &Bound<'_, PressureStep>, needs: Needs) -> PyRes
         maps,
         redundant,
         coda,
-        form_sync,
-        form_value,
+        morph_defaults,
     } = needs;
     if !samples.is_empty() {
         supplier.call_method1("samples", (samples.into_iter().collect::<Vec<_>>(),))?;
@@ -690,11 +755,11 @@ fn supply(py: Python<'_>, step: &Bound<'_, PressureStep>, needs: Needs) -> PyRes
             me.state.coda[group] = value;
         }
     }
-    if !form_sync.is_empty() {
-        supplier.call_method1("form_sync", (form_sync.into_iter().collect::<Vec<_>>(),))?;
-    }
-    if !form_value.is_empty() {
-        supplier.call_method1("form_value", (form_value.into_iter().collect::<Vec<_>>(),))?;
+    if !morph_defaults.is_empty() {
+        supplier.call_method1(
+            "morph_defaults",
+            (morph_defaults.into_iter().collect::<Vec<_>>(),),
+        )?;
     }
     Ok(())
 }

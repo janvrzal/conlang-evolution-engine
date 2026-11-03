@@ -739,6 +739,31 @@ impl MorphIndex {
         (cells, shapes)
     }
 
+    /// Koncovky buňky (třída, buňka) kódu a počty tvarů, které je nesou (`class_stats.exponents`);
+    /// pořadí není určené, `None`, když buňka nemá žádný tvar s koncovkou. Hodnocení analogických
+    /// změn z toho čte podíly koncovek.
+    pub fn cell_exponents(&self, token: i64, class: i32, cell: i32) -> Option<&[(i32, u32)]> {
+        let stats = self.slot(token)?.find(class, cell)?;
+        if stats.exponents.is_empty() {
+            None
+        } else {
+            Some(&stats.exponents)
+        }
+    }
+
+    /// Nejčastější dnešní podoba koncovky (`class_stats.endings`), nebo `None`, když ji nenese
+    /// žádný tvar slova kódu. Při shodě počtů vyhrává menší posloupnost hlásek.
+    pub fn dominant_ending(&self, token: i64, exponent: i32) -> Option<&[i32]> {
+        let slot = self.slot(token)?;
+        slot.dominant_shape(exponent, &self.shapes)
+            .map(|shape| self.shapes.get(shape))
+    }
+
+    /// Výchozí tvar morfému v aréně (`Defaults`), pokud tam je.
+    pub fn default_form(&self, number: usize) -> Option<&[i32]> {
+        self.defaults.get(number)
+    }
+
     /// Čísla členů kódu vzestupně (pro testy).
     pub fn members(&self, token: i64) -> Vec<u32> {
         self.slot(token)

@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 
 #: Čísla pravidel přízvuku, jak je zná Rust (``cee.v2.native.RULES``).
 RULES = native.RULES
+#: Čísla operací analogických změn tvarů, jak je zná Rust (``form_assess.rs``).
+_FORM_OPERATIONS = {"level": 0, "extend": 1, "prepend": 2, "drop_initial": 3}
 
 
 def top_words(world: World, code: Code, count: int) -> list[str]:
@@ -374,6 +376,19 @@ class NativeAssessmentIndex:
                 np.ascontiguousarray(process.target.mask, dtype=bool),
             )
         return number, int(row)
+
+    def ensure_form(self, world: World, variable_id: str) -> None:
+        """Při prvním použití zaregistruje v Rustu analogickou změnu tvaru (čísla morfémů, operace, hláska)."""
+        number = world.registry.variables.intern(variable_id)
+        if self.handle.has_form(number):
+            return
+        change = world.form_changes[variable_id]
+        morphemes = world.registry.morphemes
+        self.handle.register_form(
+            number, _FORM_OPERATIONS[change.operation], morphemes.intern(change.unit),
+            -1 if change.exponent is None else morphemes.intern(change.exponent),
+            -1 if change.segment is None else change.segment,
+        )
 
     def assess_many(self, world: World, group_ids: list[str], variable_id: str, tick: int) -> list[object]:
         """Hodnocení jednoho procesu ve více skupinách (stejně jako :class:`AssessmentIndex`)."""
