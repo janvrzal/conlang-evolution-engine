@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from array import array
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Literal, Mapping, Sequence, cast
+from typing import TYPE_CHECKING, Any, Iterable, Literal, Mapping, Sequence, cast
 
 from cee.v2.language.bank import FormBank
 from cee.v2.language.journal import FrequencyMap
@@ -20,6 +20,9 @@ from cee.v2.repertoire import Distribution, Origin, Repertoire, Variable, Varian
 from cee.v2.rng import stable_id, stable_int
 from cee.v2.semantics import ConceptGraph
 from cee.v2.tables import LinkDict, LinkTable, WorldColumns
+
+if TYPE_CHECKING:
+    from cee.v2.edits import Edit
 
 TerritoryLevel = Literal["world", "continent", "region", "area", "settlement"]
 TERRITORY_LEVELS: tuple[TerritoryLevel, ...] = ("world", "continent", "region", "area", "settlement")
@@ -237,6 +240,9 @@ class World:
     trade: dict[tuple[str, str], float] = field(default_factory=dict)
     #: Pojem → (doména, půjčitelnost): odvozená keš z ``vocabulary`` a dat WOLD.
     traits: dict[str, tuple[str, float]] = field(default_factory=dict, repr=False)
+    #: Deník změn světa, které provedly události, státy a pozadí dějin
+    #: (``cee.v2.edits``): tik, operace, argumenty. Na dynamiku nemá vliv.
+    edit_log: list[Edit] = field(default_factory=list, repr=False)
 
     def __post_init__(self) -> None:
         # Slovníky entit zapisují nové klíče do registru (číslo = pořadí vzniku)
@@ -665,12 +671,37 @@ def gravity_links(
     Vrací počet vytvořených oboustranných vazeb. S ``groups`` jen mezi
     vybranými skupinami (např. uvnitř jednoho jazyka).
     """
+    pairs = gravity_pairs(
+        world, scale=scale, reference_population=reference_population,
+        reference_distance=reference_distance, max_distance=max_distance, groups=groups,
+    )
+    for first, second, strength in pairs:
+        world.connect(first, second, strength)
+    return len(pairs)
+
+
+# --- Podklady pro API změn světa (``cee.v2.edits``) ---------------------------------
+
+
+def gravity_pairs(
+    world: World,
+    *,
+    scale: float = 1.0,
+    reference_population: float = 1_000.0,
+    reference_distance: float = 10.0,
+    max_distance: float | None = None,
+    groups: Sequence[str] | None = None,
+) -> list[tuple[str, str, float]]:
+    """Dvojice skupin a síla jejich gravitační vazby (:func:`gravity_links` bez zápisu).
+
+    Dvojice jsou v pořadí, v jakém je ``gravity_links`` vytváří; stav světa se nemění.
+    """
     placed = [
         (group_id, world.position_of(group_id))
         for group_id in (world.group_ids() if groups is None else sorted(groups))
         if world.position_of(group_id) is not None
     ]
-    created = 0
+    pairs: list[tuple[str, str, float]] = []
     for index, (first, first_position) in enumerate(placed):
         for second, second_position in placed[index + 1 :]:
             assert first_position is not None and second_position is not None
@@ -679,6 +710,5 @@ def gravity_links(
                 continue
             mass = math.sqrt(world.groups[first].population * world.groups[second].population)
             pull = scale * (mass / reference_population) / (distance / reference_distance) ** 2
-            world.connect(first, second, pull / (1.0 + pull))
-            created += 1
-    return created
+            pairs.append((first, second, pull / (1.0 + pull)))
+    return pairs

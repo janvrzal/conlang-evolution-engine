@@ -4,16 +4,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Sequence
 
+from cee.v2.edits import Edit, Edits, by_tick
 from cee.v2.history import History
-from cee.v2.repertoire import Distribution
 from cee.v2.world import (
     TERRITORY_LEVELS,
-    Link,
     LinkKind,
-    SpeechGroup,
-    Territory,
     TerritoryLevel,
     World,
 )
@@ -38,13 +35,14 @@ class Border(WorldEvent):
     factor: float = 0.1
 
     def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
         weakened = 0
         for first in self.side_a:
             for second in self.side_b:
                 link = world.links.get((first, second))
                 if link is None:
                     continue
-                world.connect(first, second, link.strength * self.factor, link.kind)
+                edit.connect(first, second, link.strength * self.factor, link.kind)
                 weakened += 1
         history.record(
             "border", tick, self.year,
@@ -69,13 +67,13 @@ class Contact(WorldEvent):
     trade: bool = False
 
     def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
         for first, second in self.pairs:
-            world.connect(first, second, self.strength, self.kind)
-            key = (first, second) if first < second else (second, first)
+            edit.connect(first, second, self.strength, self.kind)
             if self.trade:
-                world.trade[key] = world.links[(first, second)].strength
+                edit.set_trade(first, second, world.links[(first, second)].strength)
             else:
-                world.trade.pop(key, None)
+                edit.set_trade(first, second, None)
         history.record("contact", tick, self.year, pairs=[list(pair) for pair in self.pairs],
                        strength=self.strength)
 
@@ -106,28 +104,21 @@ class LanguageShift(WorldEvent):
     domain: Literal["home", "public"] = "home"
 
     def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
         source, target = world.groups[self.group], world.groups[self.target]
-        world.materialize(target.id)
-        code = target.main_code.branch()
-        code.acquisition, code.l1_source, code.l2_share = "L2", source.id, 1.0
+        language = target.main_code.language
         community = source.community or source.id
-        source.community = community
+        edit.set_group(source.id, "community", community)
         population = max(1, round(source.population * self.initial_share))
         if self.domain == "home":
-            source.population = max(1, source.population - population)
-        group = world.add_group(
-            SpeechGroup(
-                id=f"{source.id}>{code.language}",
-                territory=source.territory,
-                population=population,
-                codes=[code],
-                generation_years=source.generation_years,
-                prestige=target.prestige,
-                openness=self.openness,
-                community=community,
-                domain=self.domain,
-            )
+            edit.set_group(source.id, "population", max(1, source.population - population))
+        group_id = f"{source.id}>{language}"
+        edit.add_group(
+            group_id, source.territory, population, target.id,
+            generation_years=source.generation_years, prestige=target.prestige, openness=self.openness,
+            community=community, domain=self.domain,
         )
+        edit.set_code(group_id, acquisition="L2", l1_source=source.id, l2_share=1.0)
         # Novým kódem mluví s těmi sousedy, kteří ho už umějí: s rodilými
         # mluvčími i se sousedními komunitami, které na něj přecházejí také.
         for link in world.neighbors(source.id):
@@ -137,12 +128,12 @@ class LanguageShift(WorldEvent):
                 same_community = other == neighbor.id or (
                     neighbor.community is not None and peer.community == neighbor.community
                 )
-                if same_community and other != group.id and peer.main_code.language == code.language:
-                    world.connect(group.id, other, link.strength, link.kind)
-        world.connect(group.id, source.id, self.internal_strength, "strong")
+                if same_community and other != group_id and peer.main_code.language == language:
+                    edit.connect(group_id, other, link.strength, link.kind)
+        edit.connect(group_id, source.id, self.internal_strength, "strong")
         history.record(
-            "bilingualism", tick, self.year, group=source.id, learners=group.id,
-            language=code.language, population=population, domain=self.domain,
+            "bilingualism", tick, self.year, group=source.id, learners=group_id,
+            language=language, population=population, domain=self.domain,
         )
 
 
@@ -161,29 +152,23 @@ class Codification(WorldEvent):
     literacy: float = 0.05
 
     def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
         source = world.groups[self.source]
-        world.materialize(source.id)
-        code = source.main_code.branch()
-        for variable_id in sorted(world.variables):
-            distribution = code.repertoire.get(variable_id)
-            if distribution is not None and not distribution.is_fixed:
-                code.repertoire.set(variable_id, Distribution.fixed(distribution.dominant()[0]))
-        code.l1_source, code.l2_share = None, 0.0
-        written = world.add_group(
-            SpeechGroup(
-                id=f"written:{source.id}", territory=source.territory, population=source.population,
-                codes=[code], generation_years=WRITTEN_GENERATION, prestige=source.prestige,
-                openness=0.0, written=True,
-            )
+        written = f"written:{source.id}"
+        edit.add_group(
+            written, source.territory, source.population, source.id, generation_years=WRITTEN_GENERATION,
+            prestige=source.prestige, openness=0.0, written=True,
         )
+        edit.fix_code(written)
+        edit.set_code(written, l1_source=None, l2_share=0.0)
         # Jednosměrná vazba: psaný kód může sledovat řeč zdroje (viz Printing),
         # zdroj se od něj přes síť neučí.
-        world.links[(written.id, source.id)] = Link(written.id, source.id, 1.0, "weak")
+        edit.set_link(written, source.id, 1.0, "weak")
         for reader in self.readers:
             group = world.groups[reader]
-            group.standard = written.id
-            group.literacy = max(group.literacy, self.literacy)
-        history.record("codification", tick, self.year, source=source.id, written=written.id,
+            edit.set_group(reader, "standard", written)
+            edit.set_group(reader, "literacy", max(group.literacy, self.literacy))
+        history.record("codification", tick, self.year, source=source.id, written=written,
                        readers=sorted(self.readers), literacy=self.literacy)
 
 
@@ -204,7 +189,7 @@ class Printing(WorldEvent):
     update: float = 0.3
 
     def apply(self, world: World, history: History, tick: int) -> None:
-        world.groups[self.written].openness = self.update
+        Edits(world, tick).set_group(self.written, "openness", self.update)
         history.record("printing", tick, self.year, written=self.written, update=self.update)
 
 
@@ -226,32 +211,31 @@ class Schooling(WorldEvent):
     diglossic: bool = False
 
     def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
         created = {}
         for group_id in self.groups:
             group = world.groups[group_id]
-            group.literacy = max(group.literacy, self.literacy)
+            edit.set_group(group_id, "literacy", max(group.literacy, self.literacy))
             if not self.diglossic:
-                group.schooling = max(group.schooling, self.schooling)
+                edit.set_group(group_id, "schooling", max(group.schooling, self.schooling))
                 continue
             if group.standard not in world.groups:
                 continue
             written = world.groups[group.standard]
-            world.materialize(written.id)
-            code = written.main_code.branch()
-            code.acquisition, code.l1_source, code.l2_share = "L2", group.id, 1.0
-            group.community = group.community or group.id
-            created[group_id] = world.add_group(SpeechGroup(
-                id=f"{group.id}>H", territory=group.territory,
-                population=max(1, round(group.population * self.schooling)),
-                codes=[code], generation_years=group.generation_years, prestige=written.prestige,
-                openness=group.openness, schooling=1.0, literacy=1.0, standard=written.id,
-                community=group.community, domain="public",
-            ))
+            edit.set_group(group_id, "community", group.community or group.id)
+            high_id = f"{group.id}>H"
+            edit.add_group(
+                high_id, group.territory, max(1, round(group.population * self.schooling)), written.id,
+                generation_years=group.generation_years, prestige=written.prestige, openness=group.openness,
+                schooling=1.0, literacy=1.0, standard=written.id, community=group.community, domain="public",
+            )
+            edit.set_code(high_id, acquisition="L2", l1_source=group.id, l2_share=1.0)
+            created[group_id] = high_id
         # Vysokou varietou spolu mluví vzdělaní lidé sousedních komunit.
-        for group_id, high in sorted(created.items()):
+        for group_id, high_id in sorted(created.items()):
             for link in world.neighbors(group_id):
                 if link.target in created:
-                    world.connect(high.id, created[link.target].id, link.strength, link.kind)
+                    edit.connect(high_id, created[link.target], link.strength, link.kind)
         history.record("schooling", tick, self.year, groups=sorted(self.groups),
                        schooling=self.schooling, literacy=self.literacy, diglossic=self.diglossic)
 
@@ -274,15 +258,16 @@ class ReligiousChange(WorldEvent):
     def apply(self, world: World, history: History, tick: int) -> None:
         if not world.groups[self.liturgy].written:
             raise ValueError(f"Liturgický kód '{self.liturgy}' musí být psaný kód.")
+        edit = Edits(world, tick)
         for group_id in self.groups:
-            group = world.groups[group_id]
-            group.liturgy, group.devotion = self.liturgy, self.devotion
+            edit.set_group(group_id, "liturgy", self.liturgy)
+            edit.set_group(group_id, "devotion", self.devotion)
         if self.network > 0:
             members = sorted(self.groups)
             for index, first in enumerate(members):
                 for second in members[index + 1 :]:
                     if (first, second) not in world.links:
-                        world.connect(first, second, self.network, "weak")
+                        edit.connect(first, second, self.network, "weak")
         history.record("religious_change", tick, self.year, liturgy=self.liturgy,
                        groups=sorted(self.groups), devotion=self.devotion)
 
@@ -322,42 +307,29 @@ class RefineTerritory(WorldEvent):
             )
         if not self.settlements:
             raise ValueError("Zjemnění potřebuje alespoň jedno sídlo.")
+        edit = Edits(world, tick)
         aggregate = aggregates[0]
         parent = world.territories[self.territory]
         level: TerritoryLevel = self.child_level or TERRITORY_LEVELS[-1]
         external = world.neighbors(aggregate.id)
-        world.materialize(aggregate.id)
         total_share = sum(spec.share for spec in self.settlements)
-        world.remove_group(aggregate.id)
 
+        # Sídla převezmou kódy souhrnné skupiny, ta zaniká až po nich.
         created: list[str] = []
         for spec in self.settlements:
-            world.add_territory(
-                Territory(
-                    id=spec.id, level=level,
-                    parent=parent.id, position=spec.position or parent.position,
-                    refined_from_year=self.year,
-                )
-            )
-            group = world.add_group(
-                SpeechGroup(
-                    id=spec.id,
-                    territory=spec.id,
-                    population=max(1, round(aggregate.population * spec.share / total_share)),
-                    codes=[code.branch() for code in aggregate.codes],
-                    generation_years=aggregate.generation_years,
-                    prestige=aggregate.prestige,
-                    openness=aggregate.openness,
-                    literacy=aggregate.literacy,
-                    schooling=aggregate.schooling,
-                )
+            edit.add_territory(spec.id, level, parent.id, spec.position or parent.position, self.year)
+            edit.add_group(
+                spec.id, spec.id, max(1, round(aggregate.population * spec.share / total_share)), aggregate.id,
+                codes="all", generation_years=aggregate.generation_years, prestige=aggregate.prestige,
+                openness=aggregate.openness, literacy=aggregate.literacy, schooling=aggregate.schooling,
             )
             for link in external:
-                world.connect(group.id, link.target, link.strength, link.kind)
-            created.append(group.id)
+                edit.connect(spec.id, link.target, link.strength, link.kind)
+            created.append(spec.id)
         for index, first in enumerate(created):
             for second in created[index + 1 :]:
-                world.connect(first, second, self.internal_strength, "strong")
+                edit.connect(first, second, self.internal_strength, "strong")
+        edit.remove_group(aggregate.id)
         history.record(
             "refinement", tick, self.year,
             territory=self.territory, aggregate=aggregate.id, groups=created,
@@ -382,38 +354,34 @@ class Migration(WorldEvent):
     prestige: float | None = None
 
     def apply(self, world: World, history: History, tick: int) -> None:
-        from cee.v2.world import gravity_links
-
+        edit = Edits(world, tick)
         moving = []
         for group_id, share in self.sources:
             group = world.groups[group_id]
             people = max(1, round(group.population * share))
-            group.population = max(1, group.population - people)
+            edit.set_group(group_id, "population", max(1, group.population - people))
             moving.append((people, group_id))
         arriving = sum(people for people, _ in moving)
         founded = self.target not in world.groups
         if founded:
             _, largest = max(moving, key=lambda item: (item[0], item[1]))
             origin = world.groups[largest]
-            world.materialize(largest)
             parent = world.territories[origin.territory].parent
-            world.add_territory(Territory(self.target, "settlement", parent=parent, position=self.position))
-            group = world.add_group(SpeechGroup(
-                id=self.target, territory=self.target, population=arriving,
-                codes=[origin.main_code.branch()], generation_years=origin.generation_years,
-                prestige=origin.prestige if self.prestige is None else self.prestige,
-                openness=origin.openness,
-            ))
+            edit.add_territory(self.target, "settlement", parent, self.position)
+            edit.add_group(
+                self.target, self.target, arriving, largest, generation_years=origin.generation_years,
+                prestige=origin.prestige if self.prestige is None else self.prestige, openness=origin.openness,
+            )
             others = [other for other in world.group_ids()
-                      if other != group.id and not world.groups[other].written]
-            gravity_links(world, max_distance=self.reach, groups=[group.id, *others])
+                      if other != self.target and not world.groups[other].written]
+            edit.connect_gravity([self.target, *others], max_distance=self.reach)
             native = max(people for people, _ in moving)
-            group.main_code.l2_share = (arriving - native) / arriving
+            edit.set_code(self.target, l2_share=(arriving - native) / arriving)
         else:
             group = world.groups[self.target]
             code = group.main_code
-            code.l2_share = (code.l2_share * group.population + arriving) / (group.population + arriving)
-            group.population += arriving
+            edit.set_code(self.target, l2_share=(code.l2_share * group.population + arriving) / (group.population + arriving))
+            edit.set_group(self.target, "population", group.population + arriving)
         history.record("migration", tick, self.year, target=self.target, founded=founded,
                        sources=[[group_id, people] for people, group_id in moving])
 
@@ -435,17 +403,17 @@ class Conquest(WorldEvent):
     strength: float = 0.5
 
     def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
         origin = world.groups[self.conqueror]
-        world.materialize(origin.id)
-        elite = world.add_group(SpeechGroup(
-            id=f"{self.territory}+{origin.id}", territory=self.territory, population=self.population,
-            codes=[origin.main_code.branch()], generation_years=origin.generation_years,
+        elite = f"{self.territory}+{origin.id}"
+        edit.add_group(
+            elite, self.territory, self.population, origin.id, generation_years=origin.generation_years,
             prestige=self.prestige, openness=origin.openness, elite=True,
-        ))
+        )
         for subject in self.subjects:
-            world.connect(elite.id, subject, self.strength, "weak")
-        world.connect(elite.id, origin.id, self.strength / 2, "weak")
-        history.record("conquest", tick, self.year, elite=elite.id, conqueror=origin.id,
+            edit.connect(elite, subject, self.strength, "weak")
+        edit.connect(elite, origin.id, self.strength / 2, "weak")
+        history.record("conquest", tick, self.year, elite=elite, conqueror=origin.id,
                        subjects=sorted(self.subjects))
 
 
@@ -461,9 +429,10 @@ class War(WorldEvent):
 
     def apply(self, world: World, history: History, tick: int) -> None:
         Border(self.year, self.side_a, self.side_b, self.factor).apply(world, History(), tick)
+        edit = Edits(world, tick)
         for group_id in (*self.side_a, *self.side_b):
             group = world.groups[group_id]
-            group.population = max(1, round(group.population * (1.0 - self.losses)))
+            edit.set_group(group_id, "population", max(1, round(group.population * (1.0 - self.losses))))
         history.record("war", tick, self.year, side_a=sorted(self.side_a), side_b=sorted(self.side_b),
                        factor=self.factor, losses=self.losses)
 
@@ -477,9 +446,10 @@ class Epidemic(WorldEvent):
     mortality: float = 0.3
 
     def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
         for group_id in self.groups:
             group = world.groups[group_id]
-            group.population = max(1, round(group.population * (1.0 - self.mortality)))
+            edit.set_group(group_id, "population", max(1, round(group.population * (1.0 - self.mortality))))
         history.record("epidemic", tick, self.year, groups=sorted(self.groups), mortality=self.mortality)
 
 
@@ -496,6 +466,7 @@ class StateCollapse(WorldEvent):
     def apply(self, world: World, history: History, tick: int) -> None:
         import math
 
+        edit = Edits(world, tick)
         members = set(self.groups)
         cut = 0
         for (first, second), _ in sorted(world.links.items()):
@@ -503,10 +474,33 @@ class StateCollapse(WorldEvent):
                 continue
             a, b = world.position_of(first), world.position_of(second)
             if a is not None and b is not None and math.dist(a, b) > self.reach:
-                del world.links[(first, second)]
+                edit.drop_link(first, second)
                 cut += 1
         for group_id in self.groups:
             group = world.groups[group_id]
-            group.schooling = 0.0
-            group.literacy *= self.literacy
+            edit.set_group(group_id, "schooling", 0.0)
+            edit.set_group(group_id, "literacy", group.literacy * self.literacy)
         history.record("state_collapse", tick, self.year, groups=sorted(self.groups), links_cut=cut)
+
+
+@dataclass(frozen=True)
+class ReplayEdits(WorldEvent):
+    """Přehraje zapsané změny světa jednoho ticku (deník změn, :mod:`cee.v2.edits`).
+
+    Nahrazuje události: běh bez nich, ve kterém se v ticích deníku provedou
+    tytéž operace, má dát stejný stav světa jako běh s událostmi. Rok je rok
+    ticku (:func:`replay_events`), aby se událost provedla přesně v něm.
+    """
+
+    year: float
+    edits: tuple[Edit, ...]
+
+    def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
+        for item in self.edits:
+            edit.replay(item)
+
+
+def replay_events(journal: Sequence[Edit], *, start_year: float, dt: float) -> list[WorldEvent]:
+    """Události přehrání deníku: jedna na každý tik s operacemi (rok jako ``Simulation.year``)."""
+    return [ReplayEdits(start_year + tick * dt, edits) for tick, edits in by_tick(journal)]

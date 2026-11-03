@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping, Sequence
 
+from cee.v2.edits import Edits
 from cee.v2.events import Conquest, Migration, WorldEvent
 from cee.v2.history import History
 from cee.v2.parameters import Parameters, level
@@ -41,10 +42,11 @@ class Plague(WorldEvent):
     mortality: float
 
     def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
         groups = groups_in(world, self.regions)
         for group_id in groups:
             group = world.groups[group_id]
-            group.population = max(1, round(group.population * (1.0 - self.mortality)))
+            edit.set_group(group_id, "population", max(1, round(group.population * (1.0 - self.mortality))))
         history.record("plague", tick, self.year, regions=sorted(self.regions), mortality=self.mortality,
                        groups=groups, background=True)
 
@@ -58,10 +60,11 @@ class Recovery(WorldEvent):
     factor: float
 
     def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
         groups = groups_in(world, self.regions)
         for group_id in groups:
             group = world.groups[group_id]
-            group.population = max(1, round(group.population * self.factor))
+            edit.set_group(group_id, "population", max(1, round(group.population * self.factor)))
         history.record("recovery", tick, self.year, regions=sorted(self.regions), factor=self.factor,
                        background=True)
 
@@ -102,6 +105,7 @@ class TradeShift(WorldEvent):
     factor: float
 
     def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
         first, second = self.regions
         changed = 0
         for (a, b), link in sorted(world.links.items()):
@@ -109,15 +113,12 @@ class TradeShift(WorldEvent):
                 continue
             pair = {region_of(world, a), region_of(world, b)}
             if pair == {first, second}:
-                world.connect(a, b, link.strength * self.factor, link.kind)
+                edit.connect(a, b, link.strength * self.factor, link.kind)
                 # Co obchodní cesta přidala (nebo ubrala) ze síly vazby, patří kanálu
                 # ``trade``; po jejím úpadku zůstane obecný kontakt sousedů.
                 kept = world.links[(a, b)].strength
                 carried = world.trade.get((a, b), 0.0) + link.strength * (self.factor - 1.0)
-                if carried > 0.0:
-                    world.trade[(a, b)] = min(kept, carried)
-                else:
-                    world.trade.pop((a, b), None)
+                edit.set_trade(a, b, min(kept, carried) if carried > 0.0 else None)
                 changed += 1
         history.record("trade", tick, self.year, regions=[first, second], factor=self.factor, links=changed,
                        background=True)
@@ -132,11 +133,12 @@ class PrestigeShift(WorldEvent):
     factor: float
 
     def apply(self, world: World, history: History, tick: int) -> None:
+        edit = Edits(world, tick)
         for group_id in groups_in(world, (self.region,)):
             base = world.base_prestige.get(group_id, world.groups[group_id].prestige)
-            world.base_prestige[group_id] = base * self.factor
-            world.groups[group_id].prestige = base * self.factor
-        refresh(world)
+            edit.set_base_prestige(group_id, base * self.factor)
+            edit.set_group(group_id, "prestige", base * self.factor)
+        refresh(world, tick)
         history.record("prestige", tick, self.year, region=self.region, factor=self.factor, background=True)
 
 
@@ -184,8 +186,9 @@ class EliteAssimilation(WorldEvent):
         language = world.groups[rulers[0]].main_code.language
         ended = [group_id for group_id in groups_in(world, (self.region,))
                  if "+" in group_id and world.groups[group_id].main_code.language == language]
+        edit = Edits(world, tick)
         for group_id in ended:
-            world.remove_group(group_id)
+            edit.remove_group(group_id)
         if ended:
             history.record("elite_assimilation", tick, self.year, conqueror=self.conqueror, region=self.region,
                            groups=ended, background=True)
