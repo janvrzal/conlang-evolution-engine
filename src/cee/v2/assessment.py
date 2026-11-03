@@ -22,6 +22,7 @@ from cee.v2.language.assessment_index import (
     Vocabulary,
     _count_vowels,
     clipped_frequencies,
+    index_of,
     selection,
 )
 from cee.v2.language.processes import Process, StressRule
@@ -195,28 +196,12 @@ def assess(world: World, group_id: str, variable_id: str, tick: int) -> ProcessA
 
 
 def assess_many(world: World, group_ids: list[str], variable_id: str, tick: int) -> list[ProcessAssessment]:
-    """Hodnocení jednoho procesu ve více skupinách; zastaralá se spočítají naráz."""
-    found: list[ProcessAssessment | None] = []
-    stale: list[int] = []
-    key = ("assessment", variable_id)
-    for position, group_id in enumerate(group_ids):
-        state = world.groups[group_id].main_code.phonology
-        cached = state.cache.get(key)
-        if cached is not None:
-            version, value = cached
-            stored_tick, stored = cast(tuple[int, ProcessAssessment], value)
-            if version == state.version or tick - stored_tick < STALE_TICKS:
-                found.append(stored)
-                continue
-        found.append(None)
-        stale.append(position)
-    if stale:
-        fresh = _assess_batch(world, [group_ids[position] for position in stale], variable_id)
-        for position, result in zip(stale, fresh):
-            found[position] = result
-            state = world.groups[group_ids[position]].main_code.phonology
-            state.cache[key] = (state.version, (tick, result))
-    return cast(list[ProcessAssessment], found)
+    """Hodnocení jednoho procesu ve více skupinách; zastaralá se spočítají naráz.
+
+    Uložená hodnocení a vzorky drží index světa (:func:`cee.v2.language.assessment_index.index_of`),
+    s Rustem v Rustu: tlaky v přenosu (``pressures_native``) čtou tytéž hodnoty.
+    """
+    return cast(list[ProcessAssessment], index_of(world).assess_many(world, list(group_ids), variable_id, tick))
 
 
 def _assess_batch_reference(world: World, group_ids: list[str], variable_id: str) -> list[ProcessAssessment]:
@@ -224,14 +209,21 @@ def _assess_batch_reference(world: World, group_ids: list[str], variable_id: str
     return _assess_matrix(world, group_ids, variable_id, _vocabulary_reference)
 
 
-def _assess_batch(world: World, group_ids: list[str], variable_id: str) -> list[ProcessAssessment]:
+def _assess_batch(
+    world: World, group_ids: list[str], variable_id: str,
+    vocabulary_of: Callable[[World, str], Vocabulary] | None = None,
+) -> list[ProcessAssessment]:
     """Hodnocení procesu ve více skupinách; s Rustem počítá matici jádro, jinak Python."""
+    vocabulary_of = vocabulary_of or _vocabulary
     if world.table is not None and world.form_bank()._native is not None and native.sums_match():
-        return _assess_batch_native(world, group_ids, variable_id)
-    return _assess_batch_python(world, group_ids, variable_id)
+        return _assess_batch_native(world, group_ids, variable_id, vocabulary_of)
+    return _assess_matrix(world, group_ids, variable_id, vocabulary_of)
 
 
-def _assess_batch_native(world: World, group_ids: list[str], variable_id: str) -> list[ProcessAssessment]:
+def _assess_batch_native(
+    world: World, group_ids: list[str], variable_id: str,
+    vocabulary_of: Callable[[World, str], Vocabulary] | None = None,
+) -> list[ProcessAssessment]:
     """Totéž co :func:`_assess_batch_python`, matici (skupiny × slova vzorku) počítá Rust.
 
     Python zůstává zdrojem pravdy o vzorku slov a jejich frekvencích; Rust dostane
@@ -242,6 +234,7 @@ def _assess_batch_native(world: World, group_ids: list[str], variable_id: str) -
     """
     table = world.table
     assert table is not None
+    vocabulary_of = vocabulary_of or _vocabulary
     process = world.processes[variable_id]
     bank = world.form_bank()
     results: list[ProcessAssessment] = [NEUTRAL] * len(group_ids)
@@ -249,7 +242,7 @@ def _assess_batch_native(world: World, group_ids: list[str], variable_id: str) -
     for position, group_id in enumerate(group_ids):
         by_rule.setdefault(world.groups[group_id].main_code.stress_rule, []).append(position)
     for rule, positions in sorted(by_rule.items()):
-        vocabularies = [_vocabulary(world, group_ids[position]) for position in positions]
+        vocabularies = [vocabulary_of(world, group_ids[position]) for position in positions]
         sizes = [len(vocabulary.ids) for vocabulary in vocabularies]
         width = max(sizes, default=0)
         if width == 0:

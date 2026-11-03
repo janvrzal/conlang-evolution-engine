@@ -6,13 +6,16 @@ Ve světě M1 vracejí nulu a jeho kalibrace zůstává beze změny.
 
 from __future__ import annotations
 
-from typing import Mapping
+from typing import TYPE_CHECKING, Iterator, Mapping, Sequence
 
 import numpy as np
 
 from cee.v2.language.lexical_index import clarity_scores
 from cee.v2.pressures.base import FloatArray, Pressure, PressureBatch
 from cee.v2.pressures.social import Actuation
+
+if TYPE_CHECKING:
+    from cee.v2.world import World
 
 #: Kolik generací musí slovo být v užívání, než ho tabu „opotřebuje“. Kratší
 #: lhůta než doba šíření nového opisu by nedovolila žádnému opisu převážit.
@@ -139,26 +142,39 @@ class Taboo(Pressure):
     name = "taboo"
 
     def scores(self, batch: PressureBatch) -> FloatArray:
-        world = batch.world
         result = np.zeros_like(batch.freqs)
-        groups = [world.groups[group_id] for group_id in batch.group_ids]
+        for row, column, slot, value in self.cells(
+            batch.world, batch.group_ids, batch.variable_ids, batch.slots, batch.tick
+        ):
+            result[row, column, slot] = value
+        return result
+
+    def cells(
+        self,
+        world: World,
+        group_ids: Sequence[str],
+        variable_ids: Sequence[str],
+        slots: Sequence[Sequence[str | None]],
+        tick: int,
+    ) -> Iterator[tuple[int, int, int, float]]:
+        """Buňky (řádek, skupina, slot), kde je slovo pro tabuizovaný pojem opotřebované, s hodnotou; ostatní jsou nula."""
+        groups = [world.groups[group_id] for group_id in group_ids]
         if not any(group.taboo for group in groups):
-            return result
-        for row, variable_id in enumerate(batch.variable_ids):
+            return
+        for row, variable_id in enumerate(variable_ids):
             concept = variable_id.split(":", 1)[1]
             columns = [column for column, group in enumerate(groups) if concept in group.taboo]
             if not columns:
                 continue
-            for slot, variant in enumerate(batch.slots[row]):
+            for slot, variant in enumerate(slots[row]):
                 if variant is None or "morpheme" not in world.variants[variant].payload:
                     continue
                 origin = world.variants[variant].origin
                 for column in columns:
                     generation = groups[column].generation_years / 25.0
-                    age = batch.tick - origin.tick if origin.change is not None else 10**9
+                    age = tick - origin.tick if origin.change is not None else 10**9
                     if age >= TABOO_GENERATIONS * generation:
-                        result[row, column, slot] = -0.6
-        return result
+                        yield row, column, slot, -0.6
 
 
 class LexicalActuation(Actuation):

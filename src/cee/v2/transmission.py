@@ -25,7 +25,7 @@ from typing import Any, Callable, Mapping, Sequence
 import numpy as np
 import numpy.typing as npt
 
-from cee.v2 import contact, institutions, native
+from cee.v2 import contact, institutions, native, pressures_native
 from cee.v2 import phases_transmission as phases
 from cee.v2.pools import PoolBlock
 from cee.v2.pressures.base import Pressure, PressureBatch
@@ -385,7 +385,10 @@ def _transmit_native(
     channel_factors = [np.ascontiguousarray(channel.factors(world, columns), dtype=np.float64)
                        for channel in inputs.channels]
     callback: Callable[..., FloatArray] | None
-    if not any(pressures.values()):
+    # Tlaky v Rustu: přenos je počítá sám, bez zpětného volání (viz ``pressures_native``).
+    in_rust = None if fitness_hook is not None or not any(pressures.values()) else pressures_native.prepare(
+        world, block, inputs, pressures)
+    if not any(pressures.values()) or in_rust is not None:
         callback = None
     elif fitness_hook is not None:
         chunk_rows = 0
@@ -398,10 +401,15 @@ def _transmit_native(
             part = RowSlice(block, start, stop, current)
             return np.ascontiguousarray(fitness_of(world, part, inputs, pressures, heard), dtype=np.float64)
     assert block.native is not None
-    return block.native.transmit(
-        inputs.native_step(), flow_factors, channel_factors, block.present, block.slot_keys,
-        (params.selection, params.kappa, params.adult_rate, params.establish_threshold), callback, chunk_rows,
-    )
+    try:
+        return block.native.transmit(
+            inputs.native_step(), flow_factors, channel_factors, block.present, block.slot_keys,
+            (params.selection, params.kappa, params.adult_rate, params.establish_threshold), callback, chunk_rows,
+            in_rust,
+        )
+    finally:
+        if in_rust is not None:
+            pressures_native.adopt_created(world)
 
 
 def _transmit_rows(

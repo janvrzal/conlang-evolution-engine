@@ -170,6 +170,11 @@ s testem shody proti zlatým datům:
    - plyne z toho, že další zisk nepřinesou další jádra, ale převedení
      stavu indexů na čísla z registru. Indexy pak přejdou do Rustu celé
      i s testy (tyto testy se pak vědomě přepíšou na nové rozhraní);
+   - **Dokončeno 2026-11-03 (B3b, `zadani-rust-tlaky.md`, verze rozhraní 7)**:
+     vzorek slov pro hodnocení procesů a uložená hodnocení jsou na číslech
+     a v Rustu (`assess_index.rs`), 23 tlaků jsou jádra v Rustu
+     (`pressures.rs`) volaná uvnitř `NativeCells.transmit` bez zpětného
+     volání; podrobně oddíl „B3b“ níže;
 4. přenos (míšení, výběr, drift) a živé fondy. **Příprava hotova 2026-11-03** (řádky A5 a A7): rozhraní pro Rust jsou funkce `cee.v2.phases_transmission` se zlatými daty; živé fondy jsou řídké, přenos se počítá nad hustými bloky kvůli pořadí sčítání. Čas přenosu je ale z 36 % ve tlacích, ne v číslech přenosu, takže zisk Rustu v tomto kroku bude malý, dokud tlaky a hodnocení nepřejdou na čísla z registru;
    **Hotovo 2026-11-03** (`zadani-rust-b4.md`, verze rozhraní 4):
    - **Krok 1, pevné pořadí míšení** (samostatný commit): `phases_transmission.mix`
@@ -318,12 +323,99 @@ bance tvarů, protože banka se mezi kopiemi světa (checkpoint) sdílí a stav 
 jednou pro inventář; (3) vlákna nejsou zavedena. Zachovaná zvláštnost: změna pravidla
 přízvuku nepřepočítá prostředí slov, dokud se slovo nezmění (`counted_rule`).
 
-Zbývá, v tomto pořadí: `AssessmentVocabularyIndex` (vzorek jako pole čísel morfémů a
-tvarů, vlastníci tvaru v CSR) a `FormAssessmentIndex` (špinavé příznaky podle čísla
-proměnné, závislosti v CSR); pak `WordMembershipIndex`, `MorphologyCandidateIndex`,
+`AssessmentVocabularyIndex` a `FormAssessmentIndex` jsou hotové v B3b (oddíl „B3b“ níže).
+
+Zbývá, v tomto pořadí: `WordMembershipIndex`, `MorphologyCandidateIndex`,
 `ExponentIndex`, `SemanticDependencies` a místa inovací `changes/lexicon.py`,
 `morphology.py`, `syntax.py` (dnes dávkové jen u zvukových změn, ostatní změny jedou
 výchozím `total_rates` po skupinách); nakonec zlatá data míst a skóre tlaků z A7.
+
+## B3b: tlaky a hodnocení v Rustu, napojené do přenosu
+
+Zadání `zadani-rust-tlaky.md`. Řetězec míšení → tlaky → výběr běží v Rustu bez
+přechodu do Pythonu; Python se ptá jen na to, co v Rustu ještě není (viz „Dodávky“).
+
+### Číselná podoba
+
+- **Vzorek slov kódu** (`language/assessment_index.py`, Rust `assess_index::Sample`): čísla
+  morfémů v pořadí jmen (na tom stojí pořadí součtů), `int64` čísla tvarů v bance, `float64`
+  váhy a jejich součet, počty samohlásek podle čísla hlásky. Výběr a váhy (frekvence užití)
+  počítá Python (`SampleKeeper`, stejná pravidla zneplatnění jako dřív: výběr při změně verze
+  slovní zásoby, váhy při změně slovní zásoby či frekvencí pojmů, jinak zůstávají); čísla tvarů a
+  samohlásky Rust dorovnává hustým průchodem po vzorku (120 čtení z polí `FormStore` a výchozích
+  tvarů), když se změní verze kódu. Deník tvarů se v Rustu nečte.
+- **Uložená hodnocení procesů**: seřazený vektor podle čísla proměnné (verze kódu, tik, pět hodnot),
+  tatáž pravidla platnosti (`STALE_TICKS`) a tatáž šířka matice párových součtů (nejdelší vzorek mezi
+  zastaralými skupinami téhož pravidla přízvuku a téhož volání; je to součást bitové shody).
+  Zisk rozptylu vokálů se počítá v Rustu z polí souřadnic samohlásek (`__pow__(2)` je tam součin;
+  `native.dispersion_matches()` to ověří na všech rozdílech souřadnic), ostatní součty `pairwise_sum`
+  (`native.sums_match()`).
+- **Hodnocení tvarů** (`FormAssessmentIndex`): klíče jsou čísla (proměnná, morfém, koncovka),
+  dominantní kořeny pole podle čísla pojmu. Hodnoty (`gain`, frekvence, dva příznaky splynutí) drží
+  Rust jako zrcadlo podle (token kódu, číslo proměnné); každé zrušení hodnoty v Pythonu se do zrcadla
+  hned zapíše (`mirror`), chybějící hodnotu dodá Python na požádání.
+- Stav obou indexů je **na světě** (`World.assessment`, odvozený stav), po tokenu úložiště tvarů
+  kódu (jako `World.sound`). Uložení a kopie světa nesou `SampleKeeper` a uložená hodnocení jako
+  pole; `index_of(world)` při změně režimu stav přenese. Python reference (`AssessmentIndex`) má
+  stejnou podobu a je fallbackem (`CEE_NATIVE=0`) i referencí testů.
+
+### Rozhraní tlaků v Rustu
+
+`NativeCells.transmit(..., pressures=(step, rows))`:
+
+- `PressureStep` (jednou za krok, sdílí ho každý blok): banka a index, dodavatel, plán tlaků
+  (pro každý druh proměnných seznam (číslo tlaku, váha) v pořadí sčítání z `pressures_by_kind`),
+  konstanty z `Parameters`, pole podle skupin (token, verze kódu, pravidlo přízvuku, silný přízvuk,
+  podíl L2, klíč ocenění změn v epoše, pole tvarů a dominantních kořenů kódu), sloupce tabulky
+  variant (změna, morfém, původ, přitažlivost, klíč ocenění) a morfémů (výchozí tvar, lexém, buňka).
+- popis řádků bloku (13 polí, drží se u bloku podle `PoolBlock.layout`): druh, pojem, číslo proměnné,
+  slot varianty „změna“, řádek procesu v bance, úspora a zřetelnost procesu, příznaky, ochrana
+  zažitého slova (z frekvencí pojmů), čísla variant ve slotech a řídké položky
+  (číslo tlaku, buňka bloku, hodnota).
+- Výpočet kusu bloku má dvě fáze: **podklady** (jedno vlákno, mění stav: hodnocení procesů a tvarů
+  v dosažených buňkách, podíl koncových souhlásek, tabulky vlastníků tvarů) a **skóre** (jen čtení,
+  řádky jsou nezávislé a dělí se na vlákna `CEE_THREADS`). Součet vážených tlaků má stejné pořadí
+  jako `fitness_of` (`fitness += síla * skóre` po tlacích druhu proměnných); nulové členy se
+  nepřičítají (`x + 0 = x`, fitness nikdy není −0).
+- `transmit` vrací pohledy na výsledky jako dřív; zpětné volání `fitness` zůstává pro tlaky, které
+  Rust nezná (vlastní třídy), pro paralelní běh (`fitness_hook`), svět bez tabulky hlásek a režim
+  bez Rustu.
+
+### Dodávky (co dnes dodává Python, v B6 přejde do Rustu)
+
+Co kód nezná, zapíše do `Needs` a výpočet té položky vynechá; po průchodu zavolá dodavatele
+(`pressures_native.Supplier`) a kus se spočítá znovu (v ustáleném stavu se nevolá nic):
+přepočet vzorku (výběr a váhy), výchozí tvary morfémů, které ještě nejsou v bance, mapy hlásek
+procesů `change` a `tone`, nahraditelnost buňky paradigmatu jinou konstrukcí (cena dvojic téhož
+lexému), podíl slov se souhláskovou koncovkou (fonotaktika apokopy) a hodnocení tvarů
+(`morphology._assess_reference`, `class_stats`: počítá je dál Python při zrušení hodnoty, protože
+čtou `ExponentIndex` a tvoří nové tvary; hledání jejich dotčení je číselné). Tvary, které při
+hodnocení vznikly v Rustu, Python převezme po přenosu (`adopt_created`).
+
+### Co zůstává v Pythonu
+
+Konstrukční tlaky (`Expressivity`, `Economy`, `Fusion`, `Learnability`, `Ambiguity`; čtou katalog
+funkcí, repertoár a paradigmata přes objekty v `syntax.py`), `Norm` (škola a spisovný jazyk) a `Taboo`
+(tabuizované pojmy, původ slova): Python je spočítá ze stavu na začátku kroku a předá jako řídké
+položky (`Overlay`); Rust je přičte na správné místo v pořadí tlaků. Škola a tabu jsou řídké (jen
+některé skupiny), konstrukční řádky jsou vzácné, takže nic z toho není horké místo. Bitová
+shoda drží i s nimi (zlatá data i otisky).
+
+### Pořadí sčítání ceny nových homofonů (vědomá změna posledních bitů)
+
+`merge_mass` sčítal ceny dvojic nových homofonů v pořadí čísel tvarů v bance, takže ho měnilo, že
+banka držela jiné tvary (stalo se v B5). Dvojice se teď sčítají vzestupně podle pozic ve vzorku
+(Python `assessment._new_pairs`, Rust `RowAssessment::pairs`). Rozdíl v zlatých datech: 15 ze 307
+řádků s dvojicemi, nejvýš 7e-18 absolutně (2,5e-16 relativně). Otisky historie všech sedmi světů
+i otisky stavu světů v `test_v2_edits.py` zůstaly stejné; přegenerovala se zlatá data hodnocení
+a tlaků (`golden_assessment.json.gz`, `golden_pressures.json.gz`).
+
+### Zlatá data
+
+Zlatá data tlaků (`test_v2_golden_pressures.py`, reference v Pythonu s `CEE_NATIVE=0`) procházejí
+i přes Rust: `test_v2_native_pressures.py` zopakuje scénáře s Rustem, po přenosu bloku v ticích
+záznamů spočítá každý tlak záznamu v Rustu nad dávkou ze záznamu (`pressures_native.scores_of_batch`)
+a porovná ho s výstupem Pythonu bit po bitu; dále součet vážených tlaků pro 1 a 3 vlákna.
 
 ## Bitová shoda při přechodu do Rustu
 

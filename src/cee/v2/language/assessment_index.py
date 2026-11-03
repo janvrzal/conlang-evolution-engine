@@ -19,15 +19,19 @@ od :class:`SampleKeeper` dostává jako pole.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable, cast
+from typing import TYPE_CHECKING, Any, Iterable, cast
 
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2 import native
 from cee.v2.language.journal import FrequencyMap
 
 if TYPE_CHECKING:
     from cee.v2.world import Code, World
+
+#: Čísla pravidel přízvuku, jak je zná Rust (``cee.v2.native.RULES``).
+RULES = native.RULES
 
 
 def top_words(world: World, code: Code, count: int) -> list[str]:
@@ -199,3 +203,263 @@ def _count_vowels(
     for segment in form:
         if vowel_mask[segment]:
             counts[segment] += sign
+
+
+# --- index světa: vzorky, uložená hodnocení a zrcadlo hodnocení tvarů --------------------------------
+
+
+def _entries_arrays(
+    entries: list[tuple[int, int, int, tuple[float, ...]]]
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.int64], npt.NDArray[np.int64], npt.NDArray[np.float64]]:
+    variables = np.array([entry[0] for entry in entries], dtype=np.int64)
+    versions = np.array([entry[1] for entry in entries], dtype=np.int64)
+    ticks = np.array([entry[2] for entry in entries], dtype=np.int64)
+    values = np.array([value for entry in entries for value in entry[3]], dtype=np.float64)
+    return variables, versions, ticks, values
+
+
+class AssessmentIndex:
+    """Vzorky kódů a uložená hodnocení procesů (reference v Pythonu); stav podle ``FormStore.token``.
+
+    Hodnocení zůstává platné, dokud se nezmění verze kódu, nejvýš ``STALE_TICKS`` ticků. Stav se
+    ukládá ve tvaru, který čte i :class:`NativeAssessmentIndex` (``snapshot``, ``restore``), takže
+    kontrolní bod z jednoho režimu jde obnovit v druhém.
+    """
+
+    native = False
+
+    def __init__(self) -> None:
+        self.groups: dict[int, _GroupState] = {}
+
+    def _group(self, token: int) -> _GroupState:
+        found = self.groups.get(token)
+        if found is None:
+            found = self.groups[token] = _GroupState()
+        return found
+
+    def vocabulary(self, world: World, code: Code) -> Vocabulary:
+        """Vzorek kódu dorovnaný na jeho aktuální verzi."""
+        group = self._group(code.forms.token)
+        version = code.phonology.version
+        if group.vocabulary is None or group.synced != version:
+            group.vocabulary = group.vocab.sync(world, code)
+            group.synced = version
+        return group.vocabulary
+
+    def assess_many(self, world: World, group_ids: list[str], variable_id: str, tick: int) -> list[object]:
+        """Hodnocení jednoho procesu ve více skupinách; zastaralá se spočítají naráz."""
+        from cee.v2.assessment import STALE_TICKS, ProcessAssessment, _assess_batch
+
+        number = world.registry.variables.intern(variable_id)
+        found: list[ProcessAssessment | None] = []
+        stale: list[int] = []
+        for position, group_id in enumerate(group_ids):
+            code = world.groups[group_id].main_code
+            entry = self._group(code.forms.token).cache.get(number)
+            if entry is not None:
+                version, stored_tick, stored = entry
+                if version == code.phonology.version or tick - stored_tick < STALE_TICKS:
+                    found.append(stored)
+                    continue
+            found.append(None)
+            stale.append(position)
+        if stale:
+            fresh = _assess_batch(
+                world, [group_ids[position] for position in stale], variable_id,
+                lambda w, group_id: self.vocabulary(w, w.groups[group_id].main_code),
+            )
+            for position, result in zip(stale, fresh):
+                found[position] = result
+                code = world.groups[group_ids[position]].main_code
+                self._group(code.forms.token).cache[number] = (code.phonology.version, tick, result)
+        return cast("list[object]", found)
+
+    # --- uložení --------------------------------------------------------------------------------------
+
+    def snapshot(self) -> dict[int, tuple[SampleKeeper, list[tuple[int, int, int, tuple[float, ...]]]]]:
+        out = {}
+        for token, group in self.groups.items():
+            entries = [
+                (variable, version, tick, (a.coverage, a.merge_mass, a.short_share, a.markedness_delta,
+                                           a.dispersion_delta))
+                for variable, (version, tick, a) in sorted(group.cache.items())
+            ]
+            out[token] = (group.vocab.keeper, entries)
+        return out
+
+    def restore(self, saved: dict[int, tuple[SampleKeeper, list[tuple[int, int, int, tuple[float, ...]]]]]) -> None:
+        from cee.v2.assessment import ProcessAssessment
+
+        for token, (keeper, entries) in saved.items():
+            group = self._group(token)
+            group.vocab.keeper = keeper
+            group.cache = {
+                variable: (version, tick, ProcessAssessment(*values)) for variable, version, tick, values in entries
+            }
+
+    def __getstate__(self) -> dict[str, object]:
+        return {"saved": self.snapshot()}
+
+    def __setstate__(self, state: dict[str, object]) -> None:
+        self.groups = {}
+        self.restore(cast("dict[int, tuple[SampleKeeper, list[tuple[int, int, int, tuple[float, ...]]]]]",
+                          state["saved"]))
+
+
+class _GroupState:
+    """Stav jednoho kódu v :class:`AssessmentIndex`: vzorek a uložená hodnocení (číslo proměnné → verze, tik, hodnocení)."""
+
+    __slots__ = ("vocab", "vocabulary", "synced", "cache")
+
+    def __init__(self) -> None:
+        self.vocab = AssessmentVocabularyIndex()
+        self.vocabulary: Vocabulary | None = None
+        self.synced = -1
+        self.cache: dict[int, tuple[int, int, Any]] = {}
+
+
+class NativeAssessmentIndex:
+    """Tentýž index v Rustu (``cee_core.AssessIndex``); rozhraní jako :class:`AssessmentIndex`.
+
+    Uložená hodnocení, čísla tvarů a samohlásky vzorků a zrcadlo hodnocení tvarů jsou v Rustu;
+    Python drží jen :class:`SampleKeeper` každého kódu (výběr a váhy, které počítá on) a odpovídá
+    na to, co si Rust vyžádá (viz :class:`cee.v2.pressures_native.Supplier`). Rust nelze zkopírovat
+    ani uložit, proto se při kopii světa a ukládání exportují uložená hodnocení a po obnově se
+    vrátí do nového rukojeti (zrcadlo tvarů a čísla tvarů vzorku se podle stavu kódu doplní samy).
+    """
+
+    native = True
+
+    def __init__(self, handle: Any) -> None:
+        self.handle = handle
+        self.keepers: dict[int, SampleKeeper] = {}
+        self.prepared = False
+        #: Odvozené pole pro přenos (klíče ocenění), neukládá se.
+        self.scratch: dict[str, Any] = {}
+        #: Uložený stav, pokud rozšíření chybí (obnova v jiném režimu).
+        self._saved: dict[int, tuple[SampleKeeper, list[tuple[int, int, int, tuple[float, ...]]]]] | None = None
+
+    def keeper(self, token: int) -> SampleKeeper:
+        found = self.keepers.get(token)
+        if found is None:
+            found = self.keepers[token] = SampleKeeper()
+        return found
+
+    def prepare(self, world: World) -> None:
+        """Jednou předá Rustu souřadnice samohlásek tabulky hlásek."""
+        if self.prepared:
+            return
+        table = world.table
+        assert table is not None
+        coordinates = np.zeros((len(table.vowel_mask), 3), dtype=np.float64)
+        for segment in np.flatnonzero(table.vowel_mask[:-1]).tolist():
+            coordinates[segment] = table.vowel_coordinates(segment)
+        self.handle.set_coordinates(coordinates)
+        self.prepared = True
+
+    def ensure_process(self, world: World, variable_id: str, rule: str) -> tuple[int, int]:
+        """Číslo proměnné procesu a jeho řádek v bance; při prvním použití proces zaregistruje v Rustu."""
+        from cee.v2.assessment import _shapes_vowels
+
+        process = world.processes[variable_id]
+        number = world.registry.variables.intern(variable_id)
+        row = world.form_bank().process_table(process, rule).index  # type: ignore[arg-type]
+        if not self.handle.has_process(number):
+            table = world.table
+            assert table is not None
+            shapes = _shapes_vowels(process, table)
+            segment = process.segment
+            self.handle.register_process(
+                number, shapes, -1 if segment is None else int(segment),
+                np.ascontiguousarray(process.target.mask, dtype=bool),
+            )
+        return number, int(row)
+
+    def assess_many(self, world: World, group_ids: list[str], variable_id: str, tick: int) -> list[object]:
+        """Hodnocení jednoho procesu ve více skupinách (stejně jako :class:`AssessmentIndex`)."""
+        from cee.v2.assessment import ProcessAssessment
+        from cee.v2.pressures_native import Supplier
+
+        if not group_ids:
+            return []
+        self.prepare(world)
+        codes = [world.groups[group_id].main_code for group_id in group_ids]
+        number, row = self.ensure_process(world, variable_id, codes[0].stress_rule)
+        supplier = Supplier(world, codes, list(group_ids), self)
+        bank = world.form_bank()._native
+        assert bank is not None
+        tokens = [code.forms.token for code in codes]
+        versions = [code.phonology.version for code in codes]
+        rules = [RULES.index(code.stress_rule) for code in codes]
+        forms = [code.forms.raw()[0] for code in codes]
+        params = world.params
+        known: list[tuple[int, int, bool]] = []
+        for _ in range(64):
+            needs, values = self.handle.assess(
+                bank, tokens, versions, rules, forms, world.columns.morphemes.form,
+                world.columns.morphemes.lexeme, world.columns.morphemes.cell,
+                (params.paradigm_merge_weight, params.redundant_merge_weight), known, number, row,
+                list(range(len(codes))), tick,
+            )
+            if not any(needs):
+                break
+            known.extend(supplier.supply(needs))
+        else:
+            raise RuntimeError("hodnocení procesu se nepodařilo dopočítat")
+        supplier.adopt()
+        return [ProcessAssessment(*row.tolist()) for row in values.reshape(len(codes), 5)]
+
+    # --- uložení --------------------------------------------------------------------------------------
+
+    def snapshot(self) -> dict[int, tuple[SampleKeeper, list[tuple[int, int, int, tuple[float, ...]]]]]:
+        if self.handle is None:
+            return dict(self._saved or {})
+        out = {}
+        for token, keeper in self.keepers.items():
+            variables, versions, ticks, values = self.handle.export(token)
+            entries = [
+                (int(variable), int(version), int(tick), tuple(values[5 * at: 5 * at + 5].tolist()))
+                for at, (variable, version, tick) in enumerate(zip(variables, versions, ticks))
+            ]
+            out[token] = (keeper, entries)
+        return out
+
+    def restore(self, saved: dict[int, tuple[SampleKeeper, list[tuple[int, int, int, tuple[float, ...]]]]]) -> None:
+        for token, (keeper, entries) in saved.items():
+            self.keepers[token] = keeper
+            if entries:
+                self.handle.import_cache(token, *_entries_arrays(entries))
+
+    def __getstate__(self) -> dict[str, object]:
+        return {"saved": self.snapshot()}
+
+    def __setstate__(self, state: dict[str, object]) -> None:
+        saved = cast("dict[int, tuple[SampleKeeper, list[tuple[int, int, int, tuple[float, ...]]]]]", state["saved"])
+        self.keepers = {}
+        self.prepared = False
+        self.scratch = {}
+        handle = native.new_assess_index()
+        self.handle = handle
+        self._saved = saved
+        if handle is not None:
+            self.restore(saved)
+
+
+def index_of(world: World) -> AssessmentIndex | NativeAssessmentIndex:
+    """Index hodnocení světa; Rust, je-li k dispozici (a svět má banku tvarů v Rustu), jinak Python.
+
+    Při změně režimu (obnova kontrolního bodu s jiným nastavením) se uložený stav přenese.
+    """
+    want = native.assess_enabled() and world.table is not None and world.form_bank()._native is not None
+    found = world.assessment
+    if found is not None and found.native == want and (not want or found.handle is not None):
+        return cast("AssessmentIndex | NativeAssessmentIndex", found)
+    fresh: AssessmentIndex | NativeAssessmentIndex
+    if want:
+        fresh = NativeAssessmentIndex(native.new_assess_index())
+    else:
+        fresh = AssessmentIndex()
+    if found is not None:
+        fresh.restore(found.snapshot())
+    world.assessment = fresh
+    return fresh

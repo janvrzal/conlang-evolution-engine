@@ -86,7 +86,10 @@ def test_konformita_je_funkce_cetnosti(golden):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("name", sorted(worlds.SCENARIOS))
-def test_tlaky_odpovidaji_zlatym_datum(golden, name):
+def test_tlaky_odpovidaji_zlatym_datum(golden, name, monkeypatch):
+    # Reference v Pythonu: s Rustem počítá tlaky sám přenos a ``fitness_of`` se nevolá; přes Rust
+    # prochází tatáž data ``test_v2_native_pressures``.
+    monkeypatch.setenv("CEE_NATIVE", "0")
     expected: dict[int, dict[int, dict[str, Any]]] = {}
     for record in golden[name]:
         expected.setdefault(record["tick"], {})[record["call"]] = record

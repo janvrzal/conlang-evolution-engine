@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence
 
 import numpy as np
 
 from cee.v2.pressures.base import FloatArray, Pressure, PressureBatch
 from cee.v2.rng import hash_normal, stable_int
+
+if TYPE_CHECKING:
+    from cee.v2.world import World
 
 
 class Conformity(Pressure):
@@ -87,23 +90,39 @@ class Norm(Pressure):
     strength = 0.3
 
     def scores(self, batch: PressureBatch) -> FloatArray:
+        result = np.zeros_like(batch.freqs)
+        for row, column, slot, value in self.cells(
+            batch.world, batch.group_ids, batch.variable_ids, batch.slots, batch.memo
+        ):
+            result[row, column, slot] = value
+        return result
+
+    def cells(
+        self,
+        world: World,
+        group_ids: Sequence[str],
+        variable_ids: Sequence[str],
+        slots: Sequence[Sequence[str | None]],
+        memo: dict[Any, Any],
+    ) -> Iterator[tuple[int, int, int, float]]:
+        """Buňky (řádek, skupina, slot) s nenulovým ocenění a jeho hodnota; ostatní jsou nula.
+
+        Řídká podoba ``scores``: z ní vychází i přenos v Rustu, který tyto buňky dostane jako řídké položky.
+        """
         from cee.v2.institutions import standard_of
 
-        world = batch.world
-        result = np.zeros_like(batch.freqs)
-        for column, group_id in enumerate(batch.group_ids):
+        for column, group_id in enumerate(group_ids):
             group = world.groups[group_id]
             standard = standard_of(world, group_id) if group.schooling > 0 else None
             if standard is None:
                 continue
             closed = group.main_code.phonology.closed
-            for row, variable_id in enumerate(batch.variable_ids):
+            for row, variable_id in enumerate(variable_ids):
                 key = ("codified", standard, variable_id)
-                if key not in batch.memo:
+                if key not in memo:
                     distribution = world.distribution(standard, variable_id)
-                    batch.memo[key] = None if distribution is None else distribution.dominant()[0]
-                codified = batch.memo[key]
-                if codified is None or codified not in batch.slots[row] or variable_id in closed:
+                    memo[key] = None if distribution is None else distribution.dominant()[0]
+                codified = memo[key]
+                if codified is None or codified not in slots[row] or variable_id in closed:
                     continue
-                result[row, column, list(batch.slots[row]).index(codified)] = self.strength * group.schooling
-        return result
+                yield row, column, list(slots[row]).index(codified), self.strength * group.schooling
