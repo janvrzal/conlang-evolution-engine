@@ -471,10 +471,7 @@ class Simulation:
         """Milníky, ustálení a zánik inovací v jednom bloku; vše vektorově."""
         group_ids = self.world.live.group_ids
         # Inovace = varianta, kterou vytvořila změna (sloupec ``change`` tabulky variant).
-        numbers = self.world.registry.variants.numbers
-        slot_numbers = np.array(
-            [[-1 if slot is None else numbers[slot] for slot in row] for row in block.slots], dtype=np.intp
-        ).reshape(len(block), block.capacity)
+        slot_numbers = block.numbers_in(self.world.registry.variants)
         innovation = phases.innovation_mask(slot_numbers, self.world.columns.variants.arrays()["change"])
         records: list[tuple[str, dict[str, Any]]] = []
 
@@ -555,12 +552,15 @@ class Simulation:
         """Procesy a analogie, které ve skupině překročily malý podíl a začnou působit."""
         group_ids = self.world.live.group_ids
         slots = np.full(len(block), -1, dtype=np.intp)
+        numbers = self.world.registry.variants.numbers
+        slot_numbers = block.numbers_in(self.world.registry.variants)
         for row, variable_id in enumerate(block.variable_ids):
             if variable_id not in self.world.processes and variable_id not in self.world.form_changes:
                 continue
-            changed = phonology.changed_id(variable_id)
-            if changed in block.slots[row]:
-                slots[row] = block.slots[row].index(changed)
+            changed = numbers.get(phonology.changed_id(variable_id))
+            found = () if changed is None else np.flatnonzero(slot_numbers[row] == changed)
+            if len(found):
+                slots[row] = found[0]
         rows, columns = phases.activation_cells(after, slots, self.world.params.activation_share)
         return [(group_ids[column], block.variable_ids[row]) for row, column in zip(rows, columns)]
 

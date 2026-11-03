@@ -5,6 +5,12 @@ potřebuje opak: jednu proměnnou přes všechny skupiny naráz. Proměnné, ve
 kterých se skupiny liší, proto leží v polích ``freqs`` o tvaru
 (proměnné, skupiny, sloty). Slot je místo pro jednu variantu dané proměnné.
 
+Slot drží **číslo varianty z registru** světa (:mod:`cee.v2.registry`, −1 =
+prázdný slot), ne řetězec: ``PoolBlock.slot_variants``. Řetězcová ID variant
+v ``PoolBlock.slots`` jsou odvozený pohled pro tlaky, testy a deníky; pole a
+převody pracují s čísly. Číslo neurčuje pořadí (to dál rozhoduje řetězec ID,
+viz :meth:`LivePools.get`).
+
 Proměnné se dělí do bloků podle počtu potřebných slotů (2, 4, 8, …). Jediná
 proměnná s mnoha soutěžícími variantami tak nezvětší pole všem ostatním.
 Proměnná, která je ve všech skupinách stejná a ustálená, se vrátí do
@@ -19,6 +25,7 @@ from typing import TYPE_CHECKING, Iterator, Sequence
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2.registry import Numbering
 from cee.v2.repertoire import Distribution
 from cee.v2.rng import stable_int
 
@@ -42,11 +49,15 @@ class PoolBlock:
     se řadí kanonicky.
     """
 
-    def __init__(self, groups: int, capacity: int):
+    def __init__(self, groups: int, capacity: int, numbering: Numbering | None = None):
         self.capacity = capacity
+        #: Číslování variant, podle kterého jsou ``slot_variants`` (registr světa).
+        self.numbering = Numbering("variant") if numbering is None else numbering
         self.variable_ids: list[str] = []
+        #: Řetězcová ID variant ve slotech (odvozený pohled na ``slot_variants``).
         self.slots: list[list[str | None]] = []
         self._rows: dict[str, int] = {}
+        self._variants = np.full((4, capacity), -1, dtype=np.int32)
         self._freqs = np.zeros((4, groups, capacity))
         self._previous = np.zeros_like(self._freqs)
         self._present = np.zeros((4, groups), dtype=bool)
@@ -79,6 +90,30 @@ class PoolBlock:
     def slot_keys(self) -> KeyArray:
         return self._keys[: len(self)]
 
+    @property
+    def slot_variants(self) -> npt.NDArray[np.int32]:
+        """Čísla variant ze registru ve slotech, tvar (proměnné, sloty); −1 = prázdný slot."""
+        return self._variants[: len(self)]
+
+    def numbers_in(self, numbering: Numbering, rows: Sequence[int] | slice = slice(None)) -> npt.NDArray[np.intp]:
+        """Čísla variant ve slotech podle ``numbering`` (registr světa), tvar (proměnné, sloty).
+
+        Má-li fond číslování světa, je to jen pole; jinak (samostatný sklad v
+        testech) se čísla dopočtou z řetězcových ID.
+        """
+        if self.numbering is numbering:
+            return self.slot_variants[rows].astype(np.intp)
+        chosen = self.slots[rows] if isinstance(rows, slice) else [self.slots[row] for row in rows]
+        return np.array(
+            [[-1 if variant is None else numbering.numbers[variant] for variant in row] for row in chosen],
+            dtype=np.intp,
+        ).reshape(len(chosen), self.capacity)
+
+    def set_slot(self, row: int, slot: int, variant_id: str | None) -> None:
+        """Zapíše variantu do slotu (číslo i řetězec); ``None`` slot uvolní."""
+        self.slots[row][slot] = variant_id
+        self._variants[row, slot] = -1 if variant_id is None else self.numbering.intern(variant_id)
+
     def row_of(self, variable_id: str) -> int:
         return self._rows[variable_id]
 
@@ -92,16 +127,19 @@ class PoolBlock:
             self._previous = np.concatenate([self._previous, np.zeros_like(self._previous[:grow])])
             self._present = np.concatenate([self._present, np.zeros_like(self._present[:grow])])
             self._keys = np.concatenate([self._keys, np.zeros_like(self._keys[:grow])])
+            self._variants = np.concatenate([self._variants, np.full_like(self._variants[:grow], -1)])
         width = freqs.shape[1]
         self._freqs[index] = 0.0
         self._previous[index] = 0.0
         self._keys[index] = 0
+        self._variants[index] = -1
         self._freqs[index, :, :width] = freqs
         self._previous[index, :, :width] = previous
         self._present[index] = present
         self._keys[index, :width] = keys
         self.variable_ids.append(variable_id)
         self.slots.append([*slots, *([None] * (self.capacity - width))])
+        self._variants[index, :width] = [-1 if slot is None else self.numbering.intern(slot) for slot in slots]
         self._rows[variable_id] = index
 
     def extract(self, rows: Sequence[int]) -> list[Row]:
@@ -119,6 +157,7 @@ class PoolBlock:
                 self._previous[row] = self._previous[last]
                 self._present[row] = self._present[last]
                 self._keys[row] = self._keys[last]
+                self._variants[row] = self._variants[last]
                 self.variable_ids[row] = self.variable_ids[last]
                 self.slots[row] = self.slots[last]
                 self._rows[self.variable_ids[row]] = row
@@ -128,12 +167,20 @@ class PoolBlock:
 
 
 class LivePools:
-    def __init__(self, group_ids: Sequence[str] = ()):
+    def __init__(self, group_ids: Sequence[str] = (), variants: Numbering | None = None):
         self.group_ids: list[str] = list(group_ids)
+        #: Číslování variant ve slotech; ve světě je to registr světa (:meth:`bind`).
+        self.variants: Numbering = Numbering("variant") if variants is None else variants
         self.group_index = {group_id: index for index, group_id in enumerate(self.group_ids)}
         self.blocks: dict[int, PoolBlock] = {}
         self._block_of: dict[str, int] = {}
         self._keys: dict[str, int] = {}
+
+    def bind(self, variants: Numbering) -> None:
+        """Přepne na číslování variant světa (volá ``World``; sklad musí být prázdný)."""
+        if self.blocks:
+            raise ValueError("Číslování variant lze přepnout jen v prázdném skladu.")
+        self.variants = variants
 
     # --- čtení --------------------------------------------------------
 
@@ -248,7 +295,7 @@ class LivePools:
             slot = block.slots[row].index(variant_id)
         else:
             slot = block.slots[row].index(None)
-            block.slots[row][slot] = variant_id
+            block.set_slot(row, slot, variant_id)
             block.slot_keys[row, slot] = self._key(variant_id)
         column = self.group_index[group_id]
         block.freqs[row, column] *= 1.0 - share
@@ -266,7 +313,7 @@ class LivePools:
             alive = (block.freqs > 0).any(axis=1)
             for row, slot in zip(*np.nonzero(~alive)):
                 if block.slots[row][slot] is not None:
-                    block.slots[row][slot] = None
+                    block.set_slot(row, slot, None)
                     block.slot_keys[row, slot] = 0
                     block.previous[row, :, slot] = 0.0
             held = np.where(block.present[:, :, None], block.freqs, 0.0)
@@ -338,7 +385,7 @@ class LivePools:
         capacity = max(capacity, _capacity_for(len(used)))
         block = self.blocks.get(capacity)
         if block is None:
-            block = self.blocks[capacity] = PoolBlock(len(self.group_ids), capacity)
+            block = self.blocks[capacity] = PoolBlock(len(self.group_ids), capacity, self.variants)
         block.append((variable_id, freqs[:, used], previous[:, used], present,
                       [slots[index] for index in used], keys[used]))
         self._block_of[variable_id] = capacity

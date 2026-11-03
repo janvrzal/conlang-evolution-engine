@@ -299,6 +299,7 @@ def fitness_of(
             slots=[block.slots[row] for row in rows],
             tick=inputs.tick,
             heard=heard[rows],
+            numbers=block.numbers_in(world.registry.variants, rows),
         )
         for pressure, strength in weighted:
             fitness[rows] += strength * pressure.scores(batch)
