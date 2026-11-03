@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Protocol
+from weakref import WeakKeyDictionary
 
 import numpy as np
 import numpy.typing as npt
@@ -345,21 +346,21 @@ class SoundIndex:
         )
 
 
-_TONE_CODES: dict[int, npt.NDArray[np.int32]] = {}
+_TONE_CODES: WeakKeyDictionary[SegmentTable, npt.NDArray[np.int32]] = WeakKeyDictionary()
 
 
 def _tone_codes(table: SegmentTable) -> npt.NDArray[np.int32]:
     """Kód tónu každé hlásky (0 = bez tónu); čistá funkce tabulky, proto zapamatovaná."""
-    found = _TONE_CODES.get(id(table))
+    found = _TONE_CODES.get(table)
     if found is None:
         found = np.zeros(len(table.ipa), dtype=np.int32)
         for segment in table._tone_base:  # type: ignore[attr-defined]
             found[segment] = table.tone_of(segment)
-        _TONE_CODES[id(table)] = found
+        _TONE_CODES[table] = found
     return found
 
 
-_CANONICAL: dict[int, npt.NDArray[np.int32]] = {}
+_CANONICAL: WeakKeyDictionary[SegmentTable, npt.NDArray[np.int32]] = WeakKeyDictionary()
 
 
 def _canonical_ids(table: SegmentTable) -> npt.NDArray[np.int32]:
@@ -368,7 +369,7 @@ def _canonical_ids(table: SegmentTable) -> npt.NDArray[np.int32]:
     Výčtová třída jedné hlásky (``changes.sound._single``) se staví ze zápisu hlásky, takže u necelistvých
     zápisů (``cᶣ`` se čte jako ``cʷ``) je to jiná hláska; Rust tu shodu potřebuje znát.
     """
-    found = _CANONICAL.get(id(table))
+    found = _CANONICAL.get(table)
     if found is None:
         out = []
         for symbol in table.ipa:
@@ -376,7 +377,7 @@ def _canonical_ids(table: SegmentTable) -> npt.NDArray[np.int32]:
                 out.append(table.id_of(symbol))
             except ValueError:
                 out.append(-1)
-        found = _CANONICAL[id(table)] = np.array(out, dtype=np.int32)
+        found = _CANONICAL[table] = np.array(out, dtype=np.int32)
     return found
 
 

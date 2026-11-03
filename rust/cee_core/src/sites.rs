@@ -714,4 +714,78 @@ mod tests {
         assert_eq!(counts[COL_SYNTAX + CATEGORY_LOSS], 1);
         assert_eq!(totals[COL_SYNTAX + CATEGORY_LOSS], 0.02);
     }
+
+    #[test]
+    fn reanalyza_hranice_podle_prikonky_zaporky_a_slovesnych_korenu() {
+        let mut index = SiteIndex::new();
+        index.catalog = catalog();
+        // Konstrukce 2: záporka před slovesem se zdrojem v pojmu 5.
+        index.constructions.set(2, PRE, -1, 5);
+        index
+            .semantic
+            .concepts
+            .extend(&["a", "b", "c", "d", "e", "f"]);
+        // Pojem 5 má kořen 3 (přiklonka), pojem 4 kořen 4 (sloveso).
+        let dominant = [-1, -1, -1, -1, 4, 3];
+        let input = crate::semantic_index::Input {
+            token: 9,
+            dominant: &dominant,
+            sites: &[],
+            taboo: &[],
+            suffix: false,
+        };
+        index
+            .semantic
+            .set_roots(&[3, 4], &[-1, -1], &[-1, -1], &[false, true]);
+        index.semantic.sync(&input).expect("sync");
+        // Hlásky: 0 = n, 1 = a, 2 = p; hranice 3. Samohláska je jen „a“.
+        let bank = Bank::new(3, vec![false, true, false, false]).unwrap();
+        let mut bases = [0.0; COLUMNS];
+        bases[COL_REBRACKETING] = 0.1;
+        let variants = [-1, 2];
+        let forms: &[i32] = &[];
+        let request = Request {
+            tokens: &[9],
+            forms: &[forms],
+            prosody: [false, false],
+            variants: &variants,
+            l2_share: &[0.0],
+            lexical: &[0],
+            morph_on: &[true],
+            semantic_on: &[false],
+            bases: &bases,
+            coinage_scale: 1.0,
+            analogy_boost: 0.0,
+            loss_boost: 0.0,
+            borrowing: None,
+        };
+        // Bez výchozích tvarů kořenů dávka řekne, které chybí.
+        let (_, needs) = index.totals(&bank, &request);
+        assert_eq!(needs, vec![3]);
+        // „an“ + „apn“: přiklonka končí souhláskou, sloveso začíná samohláskou: přenos „n“ ke slovesu.
+        index.morph.defaults.set(3, &[1, 0]);
+        index.morph.defaults.set(4, &[1, 2, 0]);
+        let ((totals, counts), needs) = index.totals(&bank, &request);
+        assert!(needs.is_empty());
+        assert_eq!(counts[COL_REBRACKETING], 1);
+        assert_eq!(totals[COL_REBRACKETING], 0.1);
+        assert_eq!(index.rebracketing_sites(9), &[(4, 0, 0)]);
+        // Přiklonka „na“ a sloveso „pan“: souhláska slovesa se připíše k záporce.
+        let mut other = SiteIndex::new();
+        other.catalog = catalog();
+        other.constructions.set(2, PRE, -1, 5);
+        other
+            .semantic
+            .concepts
+            .extend(&["a", "b", "c", "d", "e", "f"]);
+        other
+            .semantic
+            .set_roots(&[3, 4], &[-1, -1], &[-1, -1], &[false, true]);
+        other.semantic.sync(&input).expect("sync");
+        other.morph.defaults.set(3, &[0, 1]);
+        other.morph.defaults.set(4, &[2, 1, 0]);
+        let ((_, counts), _) = other.totals(&bank, &request);
+        assert_eq!(counts[COL_REBRACKETING], 1);
+        assert_eq!(other.rebracketing_sites(9), &[(4, 1, 2)]);
+    }
 }

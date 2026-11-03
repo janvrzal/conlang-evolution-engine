@@ -226,7 +226,13 @@ _CANDIDATES_LIMIT = 1 << 12
 
 
 class _CombinedSoundCandidates:
-    """Sjednocení kandidátů všech rodin zvukových změn pro jeden inventář."""
+    """Sjednocení kandidátů všech rodin zvukových změn pro jeden inventář.
+
+    Python reference a fallback (``CEE_NATIVE=0``). S rozšířením sady staví Rust
+    (``rust/cee_core/src/candidates.rs``) z rysů tabulky hlásek, v témže pořadí a se stejnými
+    klíči; Python pak postaví jen ``Process`` místa, které se skutečně použije
+    (:func:`process_from_spec`). Test ``test_v2_native_candidates`` obě sady porovnává.
+    """
 
     def __init__(self, table: SegmentTable, inventory: tuple[int, ...]):
         self.inventory = inventory

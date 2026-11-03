@@ -19,7 +19,8 @@ from cee.v2 import native, syntax
 from cee.v2.changes import DEFAULT_CHANGES
 from cee.v2.changes.base import InnovationContext
 from cee.v2.changes.lexicon import SemanticChange
-from cee.v2.changes.morphology import Extension, Leveling
+from cee.v2.changes.morphology import Extension, Leveling, Rebracketing
+from cee.v2.changes.prosody import PROSODY_CHANGES
 from cee.v2.changes.sites import native_column, rate_sums
 from cee.v2.changes.syntax import SyntacticChange
 from cee.v2.language import semantic_index
@@ -106,6 +107,34 @@ def test_rust_a_reference_v_pythonu_davaji_totez(name):
                 assert sites_a == sites_b and hexes(rates_a) == hexes(rates_b)
             compared += len(rust.candidates(world, code, False)) + len(rust.candidates(world, code, True))
     assert compared > 0
+
+
+def test_reanalyza_hranice_a_prozodie_jako_puvodni_vypocet():
+    """Místa a míry reanalýzy hranice a prozodických změn z indexu = původní výpočet (``candidates``, výchozí ``total_rate``)."""
+    from cee.v2 import phases
+    from cee.v2.changes.base import Change
+    from cee.v2.repertoire import Variable
+
+    world, events = dict(worlds())["grid"]()
+    simulation = Simulation(world, events=events)
+    rebracketing = next(change for change in DEFAULT_CHANGES if isinstance(change, Rebracketing))
+    found = 0
+    for _ in range(20):
+        simulation.step()
+        for context in contexts_of(simulation):
+            reference = Rebracketing.candidates(rebracketing, context)
+            expected = sorted(reference)
+            assert list(rebracketing.sites(context)) == expected
+            total = float(phases.uniform_rate(rebracketing.base_rate, len(expected), 1.0)) if expected else 0.0
+            assert rebracketing.total_rate(context) == total
+            for site in expected:
+                assert rebracketing._site_change(context, site) == reference[site]
+                assert Variable("form", reference[site].key).id == site
+            found += len(expected)
+            for change in PROSODY_CHANGES:
+                assert change.total_rate(context) == Change.total_rate(change, context)
+                assert change.total_rates([context]) == [Change.total_rate(change, context)]
+    assert found > 0
 
 
 @pytest.mark.parametrize("backend", ["python", "rust"])

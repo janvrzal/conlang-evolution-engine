@@ -1,4 +1,4 @@
-"""Hledání míst inovací všech druhů změn jako jedna dávka nad čísly (krok B5b).
+"""Hledání míst inovací všech druhů změn jako jedna dávka nad čísly (kroky B5b a B6d).
 
 Stav indexů míst (morfologie, sémantika, konstrukce) patří **světu** (``World.sites``,
 :func:`site_index`) a žije v Rustu (``cee_core.SiteIndex``, ``rust/cee_core/src/sites.rs``);
@@ -6,7 +6,10 @@ Python mu posílá jen pohledy na pole (příznaky slovní zásoby, tvary kódu,
 kořeny, sloupce světa) a malé přírůstkové tabulky (jména, výchozí tvary, vlastnosti
 kořenů, graf pojmů, katalog funkcí, druhy konstrukcí). Jedno volání :meth:`SiteIndex.batch`
 vrátí pro všechny skupiny a druhy změn celkové míry a počty míst (matice skupina × sloupec);
-místa a míry se čtou zvlášť jen tam, kde je inovace.
+místa a míry se čtou zvlášť jen tam, kde je inovace. :meth:`SiteIndex.batch_with_sound` k tomu
+v témže volání Rustu dorovná i index prostředí zvukových změn (``cee_core.innovation_totals``):
+oba indexy si data předávají v Rustu. Sloupce dávky jsou i místa reanalýzy hranice
+(``Rebracketing``: přiklonka záporky a slovesné kořeny) a dvou prozodických změn.
 
 Bez rozšíření (``CEE_NATIVE=0``) počítá totéž :class:`PythonSites` v Pythonu, ve stejné
 číselné podobě (reference testu Rust proti Pythonu). Obě podoby mají stejné rozhraní;
@@ -178,10 +181,10 @@ class PythonSites:
                         totals[group, COL_SYNTAX + kind] = uniform(float(bases[COL_SYNTAX + kind]), found, 1.0)
             if morph_on[group]:
                 row = variants[group * functions:(group + 1) * functions] if functions else ()
-                found = len(self._rebracketing_sites(
+                places = len(self._rebracketing_sites(
                     bank, token, row, forms[group] if len(forms) else (), needs))
-                counts[group, COL_REBRACKETING] = found
-                totals[group, COL_REBRACKETING] = uniform(float(bases[COL_REBRACKETING]), found, 1.0)
+                counts[group, COL_REBRACKETING] = places
+                totals[group, COL_REBRACKETING] = uniform(float(bases[COL_REBRACKETING]), places, 1.0)
             for at, column in enumerate((COL_STRESS_SHIFT, COL_STRESS_STRENGTH)):
                 if prosody[at]:
                     counts[group, column] = 1
@@ -197,8 +200,8 @@ class PythonSites:
         for function in range(catalog.get("count", 0)):
             if catalog["template"][function] != NEGATION:
                 continue
-            found = self.constructions.get(int(variants[function])) if variants[function] >= 0 else None
-            if found is not None and found[0] == PRE:
+            construction = self.constructions.get(int(variants[function])) if variants[function] >= 0 else None
+            if construction is not None and construction[0] == PRE:
                 source = self.construction_sources.get(int(variants[function]), -1)
                 break
         dominant = self.sem_sites.dominant(token)
@@ -213,7 +216,7 @@ class PythonSites:
                 needs.add(root)
             return default
 
-        found: list[tuple[int, int, int]] = []
+        places: list[tuple[int, int, int]] = []
         particle_root = dominant[source] if 0 <= source < len(dominant) else -1
         particle = form_of(particle_root) if particle_root >= 0 else None
         if particle:
@@ -223,11 +226,11 @@ class PythonSites:
                 if not form:
                     continue
                 if not vowel[last] and vowel[form[0]]:
-                    found.append((root, 0, last))
+                    places.append((root, 0, last))
                 elif vowel[last] and not vowel[form[0]] and len(form) >= 3:
-                    found.append((root, 1, form[0]))
-        self._rebracketing[token] = found
-        return found
+                    places.append((root, 1, form[0]))
+        self._rebracketing[token] = places
+        return places
 
     def rebracketing_sites(self, token: int) -> list[tuple[int, int, int]]:
         return list(self._rebracketing.get(token, []))
