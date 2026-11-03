@@ -19,7 +19,6 @@ znovu zařadí do front ostatních živých procesů.
 
 from __future__ import annotations
 
-import bisect
 import math
 from array import array
 from dataclasses import dataclass
@@ -30,7 +29,7 @@ import numpy as np
 
 from cee.v2 import native
 from cee.v2.history import History
-from cee.v2.language.columns import MorphemeSet, ProcessQueue
+from cee.v2.language.columns import ProcessQueue
 from cee.v2.language.lexicon import PhonologyState, UnitForm
 from cee.v2.language.processes import Process
 from cee.v2.language.segments import Form
@@ -38,7 +37,6 @@ from cee.v2.repertoire import Distribution, Origin, Variable, Variant
 from cee.v2.rng import Stream, stable_id
 
 if TYPE_CHECKING:
-    from cee.v2.language.processes import StressRule
     from cee.v2.world import Code, World
 
 # Prahy a rozptyl přepisu slov jsou data světa (``world.params``:
@@ -192,11 +190,14 @@ def requeue(world: World, code: Code, variable_id: str, morpheme_id: str) -> Non
 
 def requeue_all(world: World, code: Code, morpheme_id: str) -> None:
     """:func:`requeue` pro všechny živé procesy kódu v pořadí jejich vzniku (v Rustu naráz)."""
-    _queue_all(world, code, morpheme_id)
+    _queue_all(world, code, [morpheme_id])
 
 
 def active_processes(state: PhonologyState, world: World) -> list[str]:
     """Živé procesy kódu v pořadí jejich vzniku (chronologie změn)."""
+    if state.core is not None:
+        names = state.registry.processes.names
+        return [names[number] for number in state.core.live()]
     return sorted(
         (variable_id for variable_id in state.pending if variable_id not in state.closed),
         key=lambda variable_id: (state.order[variable_id], variable_id),
@@ -210,7 +211,8 @@ def activate(world: World, code: Code, variable_id: str) -> None:
         return
     state.order[variable_id] = len(state.order)
     state.record_lifecycle("process", "activate", variable_id)
-    if _activate_native(world, code, variable_id):
+    if state.core is not None:
+        _activate_core(world, code, variable_id)
         return
     # Celá slovní zásoba se posoudí jedním vyhledáním v tabulce procesu;
     # do fronty jdou jen slova, která změna opravdu mění.
@@ -241,12 +243,20 @@ def activate(world: World, code: Code, variable_id: str) -> None:
 
 def enter_vocabulary(world: World, code: Code, morpheme_id: str) -> None:
     """Slovo se stalo dominantním: projdou jím i změny, které právě běží."""
+    enter_units(world, code, [morpheme_id])
+
+
+def enter_units(world: World, code: Code, morpheme_ids: list[str]) -> None:
+    """:func:`enter_vocabulary` pro víc tvarů téhož slova; jejich zařazení do front je jedno volání v Rustu."""
     state = code.phonology
-    if not state.enter_vocabulary(morpheme_id):
-        return
-    state.version += 1
-    state.lexicon_version += 1
-    _queue_all(world, code, morpheme_id)
+    entered = []
+    for morpheme_id in morpheme_ids:
+        if state.enter_vocabulary(morpheme_id):
+            state.version += 1
+            state.lexicon_version += 1
+            entered.append(morpheme_id)
+    if entered:
+        _queue_all(world, code, entered)
 
 
 def leave_vocabulary(code: Code, morpheme_id: str) -> None:
@@ -256,92 +266,39 @@ def leave_vocabulary(code: Code, morpheme_id: str) -> None:
         state.lexicon_version += 1
 
 
-# --- Krok fonologizace v Rustu --------------------------------------------------------
-#
-# Rozhraní (``cee_core.NativeBank``): ``restructure_step`` (cyklus odebírání z
-# fronty jednoho procesu), ``queue_morpheme`` (zařazení morfému do front) a
-# ``activate`` (fronta nového procesu). Rust dostane existující pole (tvary
-# kódu, sloupce morfémů světa, příznaky front a přepsaných morfémů, sklony slov)
-# a vrátí rozhodnutí; zapisuje Python, ve stejném pořadí jako dřív. Co Rust
-# nemá (losované sklony slov, četnosti užití, výchozí tvary, mapy hlásek pro
-# ``change`` a ``tone``), vyžádá jako ``needs`` a nic nezapíše; Python to
-# doplní a volá znovu. Bez Rustu (``CEE_NATIVE=0``, jiná verze rozhraní, zmrazené
-# tvary) běží původní kód níže beze změny.
-
-_EMPTY_FLAGS = bytearray()
-
-
-def _kernel(world: World, code: Code) -> Any | None:
-    """Banka v Rustu pro krok fonologizace, nebo ``None`` (pak počítá Python).
-
-    Rust se nepoužije bez rozšíření, s ``CEE_NATIVE=0``, u zmrazených tvarů a
-    u kódu, jehož úložiště tvarů nepatří světu (číslování morfémů by nesedělo).
-    """
-    if not native.enabled() or world.table is None:
-        return None
-    store = code.forms
-    if store.frozen or store.context is not world:
-        return None
-    return world.form_bank()._native
-
-
-def _bias_column(world: World, variable_id: str) -> array | None:  # type: ignore[type-arg]
-    """Sloupec sklonů slov procesu (NaN = ještě nelosováno), dorostlý na všechny morfémy."""
-    number = world.registry.processes.numbers.get(variable_id)
-    if number is None:
-        return None
-    column = world.word_biases.get(number)
-    if column is None:
-        column = world.word_biases[number] = array("d")
-    missing = len(world.registry.morphemes) - len(column)
-    if missing > 0:
-        column.extend(array("d", [math.nan]) * missing)
-    return column
-
-
-def _targets(
-    world: World, code: Code, actives: list[str], rule: StressRule, *, strict: bool
-) -> tuple[list[Any], ...] | None:
-    """Fronty živých procesů pro Rust: řádek změny, příznaky, sklony, redukčnost.
-
-    ``strict`` je pravidlo ``restructure``: proces, jehož tabulka s pravidlem
-    přízvuku kódu v bance ještě není, se přeskočí (řádek −1), stejně jako ho
-    přeskočil ``FormBank.may_apply``. Jinak (``_queue``) se tabulka zakládá, ale
-    až když na proces dojde (řádek −2 a ``needs``): ``_applies`` ji zakládal také
-    jen pro slovo, které se nezapsalo a nečeká, a na existenci tabulky závisí
-    ``may_apply`` v pozdějším ``restructure``.
-    """
+def _queue_all(world: World, code: Code, morpheme_ids: list[str]) -> None:
+    """``_queue`` pro všechny živé procesy kódu v pořadí jejich vzniku (v Rustu naráz)."""
     state = code.phonology
-    bank = world.form_bank()
-    processes = world.processes
-    known = bank._rule_rows.get(rule)
-    numbers = world.registry.processes.numbers
-    columns = world.word_biases
-    size = len(world.registry.morphemes)
-    waiting_of, done_of = state.queued, state.restructured
-    rows: list[int] = []
-    queued: list[Any] = []
-    restructured: list[Any] = []
-    biases: list[Any] = []
-    reductive: list[bool] = []
-    for variable_id in actives:
-        process = processes[variable_id]
-        column = columns.get(numbers.get(variable_id, -1))
-        if column is None or len(column) < size:
-            column = _bias_column(world, variable_id)
-            if column is None:
-                return None
-        row = None if known is None else known.get(process.key)
-        rows.append((-1 if strict else -2) if row is None else row)
-        waiting = waiting_of.get(variable_id)
-        if waiting is None:
-            waiting = waiting_of[variable_id] = state.morpheme_set()
-        done = done_of.get(variable_id)
-        queued.append(waiting.flags)
-        restructured.append(_EMPTY_FLAGS if done is None else done.flags)
-        biases.append(column)
-        reductive.append(process.reductive)
-    return rows, queued, restructured, biases, reductive
+    if state.core is None:
+        for morpheme_id in morpheme_ids:
+            for variable_id in active_processes(state, world):
+                _queue(world, code, variable_id, morpheme_id)
+        return
+    if state.core.live():
+        _queue_core(world, code, [state.registry.morphemes.intern(name) for name in morpheme_ids])
+
+
+# --- Fronty ve stavu kódu v Rustu ---------------------------------------------------------
+#
+# Fronty živých procesů, příznaky čekajících a přepsaných morfémů, ``fixed_since``,
+# dominantní kořeny a paměť četností užití drží ``cee_core.NativeCode`` (PhonologyState.core)
+# podle čísla procesu a morfému. Python mu předává jen to, co mu patří: pole tvarů kódu,
+# sloupce morfémů světa, sklony slov (``world.word_biases``) a četnosti pojmů. Jádro nic nezapisuje
+# do objektů Pythonu: vrací přepsané tvary a události a zapíše je Python. Co jádro nemá
+# (losované sklony slov, výchozí tvary morfémů, mapy hlásek pro ``change`` a ``tone``, tabulky
+# procesů), vyžádá jako ``needs``; nic z toho nezapíše napůl a po doplnění se volá znovu.
+# Bez Rustu (``CEE_NATIVE=0``, jiná verze rozhraní) běží původní kód nad Pythonovými frontami.
+
+_EMPTY_BIAS = array("d")
+
+
+def _bank_handle(world: World, code: Code) -> Any:
+    """Banka v Rustu pro stav kódu; kód musí patřit světu (číslování morfémů)."""
+    if world.table is None or code.forms.context is not world:
+        raise RuntimeError("Fronty v Rustu potřebují kód světa s tabulkou hlásek.")
+    handle = world.form_bank()._native
+    native.sync_names(handle, world.registry.morphemes.names)
+    return handle
 
 
 def _constants(world: World) -> tuple[float, float]:
@@ -356,140 +313,99 @@ def _columns(world: World) -> tuple[Any, Any, Any, Any]:
     return columns.form, columns.boundary, columns.exponent, columns.lexeme
 
 
-def _frequencies(world: World, code: Code, lexemes: Any, known: dict[int, float]) -> None:
-    """Doplní do ``known`` četnosti užití lexémů (podle čísla), které tam ještě nejsou."""
-    missing = [lexeme for lexeme in lexemes if lexeme not in known]
-    if missing:
-        names = world.registry.morphemes.names
-        for lexeme, frequency in zip(missing, world.usage_frequencies(code, [names[n] for n in missing])):
-            known[lexeme] = frequency
+def _live_inputs(world: World, code: Code) -> tuple[list[str], list[array], list[bool]]:  # type: ignore[type-arg]
+    """Živé procesy kódu: ID proměnných, sklony slov a redukčnost; obnoví řádky tabulek v jádru.
+
+    Řádek tabulky procesu pro pravidlo přízvuku kódu se v jádru drží; obnovuje se jen
+    po změně pravidla, po založení tabulky v bance nebo po změně počtu živých procesů.
+    """
+    state = code.phonology
+    core = state.core
+    registry = world.registry
+    live = core.live()
+    names = registry.processes.names
+    ids = [names[number] for number in live]
+    processes = world.processes
+    rule = code.stress_rule
+    bank = world.form_bank()
+    key = (rule, len(bank._tables), len(live))
+    held = state.cache.get("native-rows")
+    if held is None or held[1] != key:
+        known = bank._rule_rows.get(rule)
+        own = bank._proc_index
+        core.set_rows(
+            [-1 if known is None else known.get(processes[v].key, -1) for v in ids],
+            [own.get(processes[v].key, -1) for v in ids],
+        )
+        state.cache["native-rows"] = (0, key)
+    biases = world.word_biases
+    return ids, [biases.get(number, _EMPTY_BIAS) for number in live], [processes[v].reductive for v in ids]
 
 
-def _resolve(
-    world: World, code: Code, needs: tuple[Any, ...], variable_ids: list[str],
-    known: dict[int, float], rows: list[int], rule: StressRule,
-) -> None:
-    """Doplní, co Rust vyžádal: sklony slov, četnosti, výchozí tvary, mapy hlásek a tabulky procesů."""
+def _resolve(world: World, code: Code, needs: tuple[Any, ...]) -> None:
+    """Doplní, co jádro vyžádalo: sklony slov, výchozí tvary, mapy hlásek a tabulky procesů."""
     biases, frequencies, forms, maps, tables = needs
-    names = world.registry.morphemes.names
-    for target, morpheme in biases:
-        word_bias(world, variable_ids[target], names[morpheme])
     if frequencies:
-        _frequencies(world, code, frequencies, known)
+        raise RuntimeError(f"Četnost užití lexémů {frequencies!r} jádro dopočítá samo.")
+    registry = world.registry
+    morphemes, processes = registry.morphemes.names, registry.processes.names
+    for process, morpheme in biases:
+        word_bias(world, processes[process], morphemes[morpheme])
     for morpheme in forms:
-        world.form_id_of(code, names[morpheme])
+        world.form_id_of(code, morphemes[morpheme])
     bank = world.form_bank()
     for row, segments in maps:
         bank._resolve(row, segments)
-    for target in tables:
-        rows[target] = bank.process_table(world.processes[variable_ids[target]], rule).index
+    for process in tables:
+        bank.process_table(world.processes[processes[process]], code.stress_rule)
 
 
-def _complete(
-    world: World, code: Code, variable_ids: list[str], known: dict[int, float], rows: list[int], rule: StressRule,
-    call: Any,
-) -> tuple[Any, ...]:
-    """Zavolá Rust a dokud vyžaduje doplnění, doplňuje a volá znovu; vrací úplnou odpověď.
-
-    Odpověď je úplná, když ``needs`` (její první položka) je prázdné. Nové tvary,
-    které vznikly v Rustu (poslední tři položky odpovědi), banka převezme pokaždé.
-    """
+def _queue_core(world: World, code: Code, numbers: list[int]) -> None:
+    """Zařadí morfémy (čísla) do front všech živých procesů kódu; jádro je zařadí po řadě."""
+    state = code.phonology
+    handle = _bank_handle(world, code)
     bank = world.form_bank()
     previous = None
-    while True:
-        answer: tuple[Any, ...] = call()
-        bank._adopt(*answer[-3:])
-        needs = answer[0]
+    while numbers:
+        _, biases, reductive = _live_inputs(world, code)
+        base, lead = _constants(world)
+        done, needs, first, flat, lengths = state.core.queue_units(
+            handle, native.RULES.index(code.stress_rule), base, lead, code.forms.raw(), _columns(world),
+            world.usage_inputs(state), biases, reductive, numbers,
+        )
+        bank._adopt(first, flat, lengths)
+        numbers = numbers[done:]
         if not any(needs):
-            return answer
+            return
+        if needs == previous and not done:
+            raise RuntimeError(f"Rust opakovaně vyžaduje totéž, bez pokroku: {needs!r}")
+        previous = needs
+        _resolve(world, code, needs)
+
+
+def _activate_core(world: World, code: Code, variable_id: str) -> None:
+    """:func:`activate` v Rustu: fronta nového procesu ze slovní zásoby."""
+    state = code.phonology
+    handle = _bank_handle(world, code)
+    bank = world.form_bank()
+    process = world.processes[variable_id]
+    number = state.registry.processes.intern(variable_id)
+    previous = None
+    while True:
+        row = bank.process_table(process, code.stress_rule).index
+        bias = world.word_biases.get(number, _EMPTY_BIAS)
+        base, lead = _constants(world)
+        needs, first, flat, lengths = state.core.activate(
+            handle, native.RULES.index(code.stress_rule), base, lead, code.forms.raw(), _columns(world),
+            world.usage_inputs(state), number, row, process.reductive, bias, state.vocabulary.flags,
+        )
+        bank._adopt(first, flat, lengths)
+        if not any(needs):
+            return
         if needs == previous:
             raise RuntimeError(f"Rust opakovaně vyžaduje totéž, bez pokroku: {needs!r}")
         previous = needs
-        _resolve(world, code, needs, variable_ids, known, rows, rule)
-
-
-def _queue_all(world: World, code: Code, morpheme_id: str) -> None:
-    """``_queue`` pro všechny živé procesy kódu v pořadí jejich vzniku (v Rustu naráz)."""
-    state = code.phonology
-    actives = active_processes(state, world)
-    handle = _kernel(world, code) if actives else None
-    number = world.registry.morphemes.numbers.get(morpheme_id)
-    rule = code.stress_rule
-    targets = None if handle is None or number is None else _targets(world, code, actives, rule, strict=False)
-    columns = _columns(world)
-    if targets is None or number >= len(columns[3]) or columns[3][number] < 0:
-        for variable_id in actives:
-            _queue(world, code, variable_id, morpheme_id)
-        return
-    known: dict[int, float] = {}
-    if any(targets[4]):
-        _frequencies(world, code, [columns[3][number]], known)
-    base, lead = _constants(world)
-    store = code.forms.raw()
-    code_rule = native.RULES.index(rule)
-    answer = _complete(
-        world, code, actives, known, targets[0], rule,
-        lambda: handle.queue_morpheme(code_rule, base, lead, store, columns, targets, known, number),
-    )
-    _, queue_ids, morphemes, logits = answer[:4]
-    names = world.registry.morphemes.names
-    for target, found, needed in zip(queue_ids, morphemes, logits):
-        variable_id = actives[target]
-        state.pending[variable_id].insert(needed, names[found])
-        state.queued[variable_id].add_number(found)
-
-
-def _by_name(morphemes: list[int], logits: list[float], names: list[str]) -> list[int]:
-    """Morfémy seřazené podle (logit, číslo) srovná v každém úseku shodných logitů podle jména.
-
-    Fronta řadí dvojice (logit, jméno morfému); Rust jména nezná, řadí shodné
-    logity (buňky téhož lexému) podle čísla, a pořadí čísel není pořadí jmen.
-    """
-    ordered = list(morphemes)
-    values = np.array(logits, dtype=np.float64)
-    tied = np.flatnonzero(values[1:] == values[:-1]).tolist()
-    position = 0
-    while position < len(tied):
-        last = position
-        while last + 1 < len(tied) and tied[last + 1] == tied[last] + 1:
-            last += 1
-        low, high = tied[position], tied[last] + 2
-        ordered[low:high] = sorted(ordered[low:high], key=names.__getitem__)
-        position = last + 1
-    return ordered
-
-
-def _activate_native(world: World, code: Code, variable_id: str) -> bool:
-    """:func:`activate` v Rustu; ``False``, když Rust není k dispozici (pak aktivuje Python)."""
-    handle = _kernel(world, code)
-    if handle is None:
-        return False
-    state = code.phonology
-    rule = code.stress_rule
-    process = world.processes[variable_id]
-    column = _bias_column(world, variable_id)
-    if column is None:
-        return False
-    row = world.form_bank().process_table(process, rule).index
-    done = state.restructured.get(variable_id)
-    targets = (
-        [row], [_EMPTY_FLAGS], [_EMPTY_FLAGS if done is None else done.flags], [column], [process.reductive],
-    )
-    base, lead = _constants(world)
-    store, columns, code_rule = code.forms.raw(), _columns(world), native.RULES.index(rule)
-    known: dict[int, float] = {}
-    answer = _complete(
-        world, code, [variable_id], known, targets[0], rule,
-        lambda: handle.activate(code_rule, base, lead, store, columns, targets, known, row, state.vocabulary.flags),
-    )
-    _, morphemes, logits = answer[:3]
-    ordered = _by_name(morphemes, logits, state.registry.morphemes.names)
-    queue = ProcessQueue(state.registry.morphemes)
-    queue.needed = array("d", logits)
-    queue.morphemes = array("i", ordered)
-    state.pending[variable_id] = queue
-    state.queued[variable_id] = MorphemeSet.from_numbers(state.registry.morphemes, ordered)
-    return True
+        _resolve(world, code, needs)
 
 
 @dataclass(frozen=True)
@@ -528,127 +444,133 @@ def _pop_python(
     return rewritten
 
 
-class _Kit:
-    """Fronty živých procesů kódu pro Rust, sestavené jednou za ``restructure``.
+class DeferredHistory:
+    """Záznamy fonologizace po skupinách; zapíšou se do historie, až na skupinu dojde řada.
 
-    Pole (příznaky front, sklony, ...) zůstávají po celý krok tytéž objekty, proto
-    se nemusí sestavovat pro každý proces zvlášť. Uzavřený proces se přeskočí
-    (řádek −1); příznaky přepsaných morfémů procesu, který je teprve založil,
-    se doplní (``adopt_done``).
+    Fonologizace všech skupin běží jedním voláním, ale historie má mít záznamy skupin
+    v pořadí, v jakém krok skupiny prochází (fonologie, morfologie, syntax, prozodie).
     """
 
-    __slots__ = ("order", "rows", "queued", "restructured", "biases", "reductive", "queues", "known")
+    def __init__(self) -> None:
+        self.records: dict[str, list[tuple[str, float, dict[str, Any]]]] = {}
 
-    def __init__(self, order: list[str], targets: tuple[list[Any], ...], queues: list[ProcessQueue]) -> None:
-        self.order = order
-        self.rows, self.queued, self.restructured, self.biases, self.reductive = targets
-        self.queues = queues
-        #: Četnosti užití lexémů spočítané v tomto kroku.
-        self.known: dict[int, float] = {}
-
-    def targets(self) -> tuple[list[Any], ...]:
-        return self.rows, self.queued, self.restructured, self.biases, self.reductive
-
-
-def _pop_native(
-    world: World, code: Code, handle: Any, variable_id: str, kit: list[_Kit | None], live: list[str],
-    queue: ProcessQueue, level: float,
-) -> list[str] | None:
-    """:func:`_pop_python` v Rustu; ``None``, když ho Rust převzít nemůže (pak jde Python).
-
-    Rust odebírá z čela fronty a rozhoduje, kam se přepsané slovo zařadí; zápis
-    (tvary, příznaky, fronty, verze) dělá Python po dávkách ve stejném pořadí
-    jako dřív. Chybí-li Rustu sklon slova, zastaví se před dalším slovem, Python
-    zapíše, co se stalo, doplní sklon a pokračuje.
-    """
-    count = bisect.bisect_left(queue.needed, level)
-    if count == 0:
-        return []
-    state = code.phonology
-    process = world.processes[variable_id]
-    bank = world.form_bank()
-    row = bank._proc_index.get(process.key)
-    columns = _columns(world)
-    lexemes = columns[3]
-    heads = queue.morphemes[:count]
-    if row is None or any(head >= len(lexemes) or lexemes[head] < 0 for head in heads):
-        return None
-    rule = code.stress_rule
-    held = kit[0]
-    if held is None:
-        built = _targets(world, code, live, rule, strict=True)
-        if built is None:
-            return None
-        held = kit[0] = _Kit(list(live), built, [state.pending[other] for other in live])
-    order, rows = held.order, held.rows
-    # Procesy uzavřené dřív v tomto kroku už cílem nejsou.
-    for position, other in enumerate(order):
-        if other not in state.pending:
-            rows[position] = -1
-    known = held.known
-    if any(held.reductive):
-        # Náskok z četnosti užití potřebuje každý přepsaný lexém; spočítá se předem.
-        _frequencies(world, code, {lexemes[head] for head in heads}, known)
-    base, lead = _constants(world)
-    store, code_rule, skip = code.forms.raw(), native.RULES.index(rule), order.index(variable_id)
-    names = state.registry.morphemes.names
-    waiting = state.queued[variable_id]
-    targets = held.targets()
-    rewritten: list[str] = []
-    previous = None
-    while True:
-        (needs, popped, moved, forms, cuts, exponents, targeted, queued, logits, first, flat, lengths) = (
-            handle.restructure_step(
-                code_rule, base, lead, store, columns, targets, known, row,
-                (queue.needed, queue.morphemes), level, skip,
-            )
-        )
-        bank._adopt(first, flat, lengths)
-        if popped:
-            for number in queue.morphemes[:popped]:
-                waiting.discard_number(number)
-            del queue.needed[:popped]
-            del queue.morphemes[:popped]
-        if moved:
-            done = state.restructured.get(variable_id)
-            if done is None:
-                done = state.restructured[variable_id] = state.morpheme_set()
-            held.restructured[skip] = done.flags
-            for number, form_id, cut, exponent in zip(moved, forms, cuts, exponents):
-                code.forms.put(number, form_id, cut, exponent)
-                done.add_number(number)
-                state.version += 1
-                rewritten.append(names[number])
-        for target, number, needed in zip(targeted, queued, logits):
-            held.queues[target].insert(needed, names[number])
-            state.queued[order[target]].add_number(number)
-        if not any(needs):
-            return rewritten
-        if not popped and needs == previous:
-            raise RuntimeError(f"Rust opakovaně vyžaduje totéž, bez pokroku: {needs!r}")
-        previous = needs
-        _resolve(world, code, needs, order, known, held.rows, rule)
+    def record(self, kind: str, tick: int, year: float, **payload: Any) -> None:
+        self.records.setdefault(payload["group"], []).append((kind, year, payload))
 
 
 def restructure(world: World, group_id: str, tick: int, dt: float, history: History, year: float) -> None:
     """Fonologizace a uzavírání procesů v jedné skupině (krok 6 ticku)."""
+    restructure_groups(world, [group_id], tick, dt, history, year)
+
+
+def restructure_groups(
+    world: World, group_ids: list[str], tick: int, dt: float, history: History, year: float
+) -> None:
+    """Fonologizace a uzavírání procesů ve skupinách po řadě; s Rustem jedním voláním za dávku.
+
+    Skupiny, jejichž kód drží fronty v Rustu, jdou naráz (jádro je zpracuje v daném
+    pořadí a zastaví se jen kvůli chybějícímu údaji); ostatní po jedné v Pythonu.
+    """
+    assert world.table is not None
+    batch: list[str] = []
+    for group_id in group_ids:
+        if world.groups[group_id].main_code.phonology.core is not None:
+            batch.append(group_id)
+            continue
+        if batch:
+            _restructure_core(world, batch, tick, dt, history, year)
+            batch = []
+        _restructure_python(world, group_id, tick, dt, history, year)
+    if batch:
+        _restructure_core(world, batch, tick, dt, history, year)
+
+
+def _restructure_core(
+    world: World, group_ids: list[str], tick: int, dt: float, history: History, year: float
+) -> None:
+    pending = list(group_ids)
+    words: dict[tuple[str, int], int] = {}
+    previous = None
+    resume = -1  # proces zastavené skupiny, od kterého se pokračuje (−1 = od začátku)
+    names = world.registry.processes.names
+    while pending:
+        arguments: list[Any] = []
+        sent: list[str] = []
+        for position, group_id in enumerate(pending):
+            group = world.groups[group_id]
+            code = group.main_code
+            state = code.phonology
+            if not state.core.live():
+                continue
+            ids, biases, reductive = _live_inputs(world, code)
+            levels, full = [], []
+            for variable_id in ids:
+                share = changed_share(world, group_id, variable_id)
+                levels.append(_logit(share) if share > 0 else -math.inf)
+                full.append(share >= 1.0)
+            _bank_handle(world, code)
+            arguments.append((
+                state.core, native.RULES.index(code.stress_rule), code.forms.raw(), biases, reductive, levels, full,
+                tick, world.params.closure_generations * group.generation_years,
+                resume if position == 0 else -1,
+            ))
+            sent.append(group_id)
+        if not arguments:
+            return
+        base, lead = _constants(world)
+        first_state = world.groups[sent[0]].main_code.phonology
+        handle = world.form_bank()._native
+        stopped, rewrites, events, first, flat, lengths = native.restructure_groups(
+            handle, base, lead, dt, _columns(world), world.usage_inputs(first_state), arguments,
+        )
+        world.form_bank()._adopt(first, flat, lengths)
+        for index, morpheme, form_id, cut, exponent in rewrites:
+            code = world.groups[sent[index]].main_code
+            code.forms.put(morpheme, form_id, cut, exponent)
+            code.phonology.version += 1
+        for index, process, kind, count, relics in events:
+            group_id = sent[index]
+            variable_id = names[process]
+            if kind == 2:
+                words[(group_id, process)] = words.get((group_id, process), 0) + count
+            elif kind == 0:
+                total = words.pop((group_id, process), 0) + count
+                if total:
+                    history.record("phonologized", tick, year, group=group_id, variable=variable_id, words=total)
+            else:
+                state = world.groups[group_id].main_code.phonology
+                state.closed.add(variable_id)
+                state.record_lifecycle("process", "close", variable_id)
+                state.version += 1
+                history.record(
+                    "process_closed", tick, year, group=group_id, variable=variable_id,
+                    restructured=count, relics=relics,
+                )
+        if stopped is None:
+            return
+        index, needs = stopped
+        resume = next(process for at, process, kind, _, _ in reversed(events) if at == index and kind == 2)
+        halted = world.groups[sent[index]].main_code
+        if needs == previous:
+            raise RuntimeError(f"Rust opakovaně vyžaduje totéž, bez pokroku: {needs!r}")
+        previous = needs
+        _resolve(world, halted, needs)
+        pending = pending[pending.index(sent[index]):]
+
+
+def _restructure_python(
+    world: World, group_id: str, tick: int, dt: float, history: History, year: float
+) -> None:
+    """Fonologizace jedné skupiny nad Pythonovými frontami (bez Rustu)."""
     group = world.groups[group_id]
     code = group.main_code
     state = code.phonology
-    assert world.table is not None
-    handle = _kernel(world, code)
     live = active_processes(state, world)
-    kit: list[_Kit | None] = [None]
     for variable_id in list(live):
         share = changed_share(world, group_id, variable_id)
         queue = state.pending[variable_id]
         level = _logit(share) if share > 0 else -math.inf
-        if handle is not None and (not queue.needed or queue.needed[0] >= level):
-            rewritten: list[str] | None = []  # nic nedošlo na práh
-        else:
-            rewritten = None if handle is None else _pop_native(world, code, handle, variable_id, kit, live, queue, level)
-        if rewritten is None:
-            rewritten = _pop_python(world, code, variable_id, queue, level)
+        rewritten = _pop_python(world, code, variable_id, queue, level)
         if rewritten:
             history.record(
                 "phonologized", tick, year, group=group_id, variable=variable_id,
@@ -672,6 +594,15 @@ def restructure(world: World, group_id: str, tick: int, dt: float, history: Hist
             state.fixed_since.pop(variable_id, None)
 
 
+def _written(world: World, state: PhonologyState, variable_id: str, morpheme_id: str) -> bool:
+    """Zapsal si morfém změnu procesu do podkladového tvaru?"""
+    if state.core is None:
+        return morpheme_id in state.restructured.get(variable_id, ())
+    process = state.registry.processes.numbers.get(variable_id)
+    number = state.registry.morphemes.numbers.get(morpheme_id)
+    return process is not None and number is not None and bool(state.core.is_done(process, number))
+
+
 def surface(world: World, group_id: str, morpheme_id: str) -> Form:
     """Dominantní povrchový tvar: podkladový tvar prohnaný živými procesy."""
     assert world.table is not None
@@ -679,7 +610,7 @@ def surface(world: World, group_id: str, morpheme_id: str) -> Form:
     state = code.phonology
     form = analogical(world, group_id, morpheme_id).form
     for variable_id in active_processes(state, world):
-        if morpheme_id in state.restructured.get(variable_id, ()):
+        if _written(world, state, variable_id, morpheme_id):
             continue
         share = changed_share(world, group_id, variable_id)
         if share <= 0 or word_probability(world, variable_id, morpheme_id, share, code) < 0.5:

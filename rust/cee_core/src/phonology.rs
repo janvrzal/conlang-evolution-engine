@@ -48,7 +48,13 @@ pub struct Units<'a> {
     pub default_exponent: &'a [i32],
     /// Číslo lexému každého morfému (u kořene a koncovky on sám).
     pub lexeme: &'a [i32],
+    /// Tvary přepsané v průběhu volání, které Python do `form`, `cut` a `exponent`
+    /// ještě nezapsal (dávka víc procesů a skupin v jednom volání); mají přednost.
+    pub overlay: &'a BTreeMap<usize, Unit>,
 }
+
+/// Prázdné přepsané tvary.
+pub static NO_OVERLAY: BTreeMap<usize, Unit> = BTreeMap::new();
 
 /// Aktuální stav tvaru slova: číslo tvaru v bance, hranice kmen | koncovka
 /// (−1 = žádná) a číslo morfému koncovky (−1 = žádná).
@@ -63,6 +69,9 @@ impl Units<'_> {
     /// Tvar morfému v kódu: uložený, jinak výchozí. `None`, když výchozí tvar
     /// ještě není v bance (Python ho zařadí přes `World.form_id_of`).
     pub fn get(&self, morpheme: usize) -> Option<Unit> {
+        if let Some(&unit) = self.overlay.get(&morpheme) {
+            return Some(unit);
+        }
         if let Some(&form) = self.form.get(morpheme).filter(|&&form| form >= 0) {
             return Some(Unit {
                 form: form as usize,
@@ -114,6 +123,19 @@ pub struct Params {
 
 /// Četnosti užití lexémů, které Python už spočítal (podle čísla lexému).
 pub type Frequencies = BTreeMap<usize, f64>;
+
+/// Zdroj četností užití lexémů (`usage_frequency` kořene): hotová mapa od Pythonu,
+/// nebo výpočet z dominantních kořenů kódu (`code_state::LiveUsage`). `None` =
+/// četnost nejde určit, volající ji vyžádá jako `Needs::freq`.
+pub trait Frequency {
+    fn of(&self, lexeme: usize) -> Option<f64>;
+}
+
+impl Frequency for Frequencies {
+    fn of(&self, lexeme: usize) -> Option<f64> {
+        self.get(&lexeme).copied()
+    }
+}
 
 /// Co musí Python doplnit, než se výpočet dokončí.
 #[derive(Default, Debug)]
@@ -169,14 +191,14 @@ fn needed(
     index: usize,
     morpheme: usize,
     lexeme: usize,
-    freq: &Frequencies,
+    freq: &dyn Frequency,
     needs: &mut Needs,
 ) -> Option<f64> {
     let mut lead = 0.0;
     let mut complete = true;
     if target.reductive {
-        match freq.get(&lexeme) {
-            Some(&frequency) => lead = params.lead_scale * (2.0 * frequency - 1.0),
+        match freq.of(lexeme) {
+            Some(frequency) => lead = params.lead_scale * (2.0 * frequency - 1.0),
             None => {
                 needs.freq.insert(lexeme);
                 complete = false;
@@ -210,7 +232,7 @@ fn queue_into(
     skip: Option<usize>,
     morpheme: usize,
     form_id: usize,
-    freq: &Frequencies,
+    freq: &dyn Frequency,
     needs: &mut Needs,
 ) -> Result<Vec<Insert>, String> {
     let lexeme = units.lexeme_of(morpheme)?;
@@ -254,7 +276,7 @@ pub fn queue_morpheme(
     units: &Units,
     targets: &[Target],
     morpheme: usize,
-    freq: &Frequencies,
+    freq: &dyn Frequency,
 ) -> Result<(Vec<Insert>, Needs), String> {
     let mut needs = Needs::default();
     let Some(unit) = units.get(morpheme) else {
@@ -297,7 +319,7 @@ pub fn step(
     level: f64,
     targets: &[Target],
     skip: usize,
-    freq: &Frequencies,
+    freq: &dyn Frequency,
 ) -> Result<StepOut, String> {
     let mut out = StepOut::default();
     while out.popped < queue_needed.len() && queue_needed[out.popped] < level {
@@ -369,7 +391,8 @@ pub fn activate(
     row: usize,
     vocabulary: &[u8],
     target: &Target,
-    freq: &Frequencies,
+    freq: &dyn Frequency,
+    names: Option<&[String]>,
 ) -> Result<ActivateOut, String> {
     let mut out = ActivateOut::default();
     let words: Vec<usize> = (0..vocabulary.len())
@@ -407,11 +430,17 @@ pub fn activate(
     if !out.needs.is_empty() {
         return Ok(out);
     }
+    // Shodné logity (buňky téhož lexému) řadí jméno morfému, jako `ProcessQueue`;
+    // bez jmen (testy jádra) číslo.
     pairs.sort_by(|left, right| {
+        let tie = match names {
+            Some(names) => names[left.1].as_bytes().cmp(names[right.1].as_bytes()),
+            None => left.1.cmp(&right.1),
+        };
         left.0
             .partial_cmp(&right.0)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then(left.1.cmp(&right.1))
+            .then(tie)
     });
     out.needed = pairs.iter().map(|pair| pair.0).collect();
     out.morphemes = pairs.iter().map(|pair| pair.1).collect();
@@ -487,6 +516,7 @@ mod tests {
             default_cut: none,
             default_exponent: none,
             lexeme,
+            overlay: &NO_OVERLAY,
         }
     }
 
@@ -683,6 +713,7 @@ mod tests {
             &[1, 1, 1],
             &target,
             &Frequencies::new(),
+            None,
         )
         .unwrap();
         assert!(out.needs.is_empty());
@@ -700,6 +731,7 @@ mod tests {
             &[1, 1, 0],
             &target,
             &Frequencies::new(),
+            None,
         )
         .unwrap();
         assert_eq!(out.morphemes, vec![0, 1]); // shodné logity: podle čísla

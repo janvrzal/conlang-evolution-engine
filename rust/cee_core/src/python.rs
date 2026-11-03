@@ -137,6 +137,7 @@ impl Inputs {
             default_cut: self.defaults[1].view(),
             default_exponent: self.defaults[2].view(),
             lexeme: self.defaults[3].view(),
+            overlay: &crate::phonology::NO_OVERLAY,
         }
     }
 
@@ -619,6 +620,7 @@ impl NativeBank {
             words.view(),
             own,
             &freq,
+            None,
         )
         .map_err(failure)?;
         let (first, flat, lengths) = self.bank.take_created();
@@ -760,6 +762,10 @@ mod cee_core {
     use super::sound_supports;
     #[pymodule_export]
     use super::NativeBank;
+    #[pymodule_export]
+    use crate::code_state_python::{
+        extend_names, names_count, restore_code, restructure_groups, NativeCode,
+    };
     #[pymodule_export]
     use crate::index_python::clarity_scores;
     #[pymodule_export]

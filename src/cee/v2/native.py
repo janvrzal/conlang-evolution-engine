@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from cee.v2.language.segments import SegmentTable
 
 #: Verze rozhraní, kterou tento Python čeká (viz ``INTERFACE_VERSION`` v Rustu).
-INTERFACE_VERSION = 11
+INTERFACE_VERSION = 14
 
 #: Čísla operací a pravidel přízvuku, jak je zná Rust (``process.rs``).
 OPERATIONS = ("change", "replace", "delete", "insert_before", "insert_after", "merge_next", "tone")
@@ -284,3 +284,35 @@ def new_assess_index() -> Any | None:
     module = _load()
     assert module is not None
     return module.AssessIndex()
+
+
+def new_code() -> Any | None:
+    """Prázdný stav fonologie kódu v Rustu (fronty, dominantní kořeny), nebo ``None`` bez Rustu."""
+    if not enabled():
+        return None
+    module = _load()
+    assert module is not None
+    return module.NativeCode()
+
+
+def sync_names(handle: Any, names: list[str]) -> None:
+    """Doplní bance v Rustu jména morfémů, která ještě nezná (řazení front podle jmen)."""
+    module = _load()
+    assert module is not None
+    known = module.names_count(handle)
+    if known < len(names):
+        module.extend_names(handle, known, names[known:])
+
+
+def restore_code(state: Any) -> Any:
+    """Stav fonologie kódu v Rustu z neutrální podoby (``NativeCode.export``)."""
+    module = _load()
+    assert module is not None
+    return module.restore_code(state)
+
+
+def restructure_groups(*arguments: Any) -> Any:
+    """Fonologizace skupin jedním voláním (``cee_core.restructure_groups``)."""
+    module = _load()
+    assert module is not None
+    return module.restructure_groups(*arguments)

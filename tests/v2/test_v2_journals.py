@@ -152,7 +152,7 @@ def test_process_and_form_lifecycle_transitions_are_journaled() -> None:
     process_id, _ = phonology.register(world, process, Origin("test", 0, 0.0, group_id))
     phonology.activate(world, code, process_id)
     code.repertoire.set(process_id, Distribution.fixed(phonology.changed_id(process_id)))
-    state.fixed_since[process_id] = 0
+    state.set_fixed_since(process_id, 0)
     phonology.restructure(world, group_id, 3, 25.0, History(), 75.0)
     assert ("process", "activate", process_id) in state.lifecycle_log
     assert ("process", "close", process_id) in state.lifecycle_log

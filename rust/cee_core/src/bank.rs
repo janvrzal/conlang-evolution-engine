@@ -109,6 +109,9 @@ pub struct Bank {
     screened: Vec<u32>,
     rows: Vec<Vec<u64>>,
     scratch: Scratch,
+    /// Jména morfémů podle čísla z registru (jen přibývají; Python je doplňuje po
+    /// kusech). Fronty fonologizace s nimi řadí shodné logity jako řetězce.
+    pub names: Vec<String>,
 }
 
 impl Bank {
@@ -133,7 +136,20 @@ impl Bank {
             screened: Vec::new(),
             rows: Vec::new(),
             scratch: Scratch::default(),
+            names: Vec::new(),
         })
+    }
+
+    /// Doplní jména morfémů od čísla `start`; `start` musí být dosavadní počet.
+    pub fn extend_names(&mut self, start: usize, names: Vec<String>) -> Result<(), String> {
+        if start != self.names.len() {
+            return Err(format!(
+                "jména morfémů se doplňují od čísla {}, ne od {start}",
+                self.names.len()
+            ));
+        }
+        self.names.extend(names);
+        Ok(())
     }
 
     /// Nastaví polosamohlásky (maska délky „počet hlásek + 1“); už spočítaná

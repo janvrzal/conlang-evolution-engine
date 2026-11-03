@@ -225,7 +225,7 @@ s testem shody proti zlatým datům:
      jako samostatná funkce má jen Python (Rust ho má uvnitř `hear`). Fondy, které by
      měly přejít spolu s tlaky: malá pole slotů a `LivePools` (`load`, `innovate`, `release`);
 5. hledání míst inovací a změny (indexy na čísla z registru a do Rustu celé; návrh a stav v oddílu „B5“ níže). **Hotovo 2026-11-03 (`zadani-rust-b5.md` a `zadani-rust-mista.md`, verze rozhraní 8)** pro zvukové, lexikální, sémantické, morfologické a syntaktické změny a výpůjčky slov; v Pythonu zůstala reanalýza hranice a prozodie (viz „Zbylé indexy míst (B5b)“);
-6. hlavní smyčka `Simulation`; Python zůstane pro popis světa, export,
+6. hlavní smyčka `Simulation` (část B6c, fronty a slovní zásoba v Rustu: oddíl „B6c“ níže); Python zůstane pro popis světa, export,
    kalibrační skripty a API; desktopová aplikace (Tauri) může engine volat
    přímo z Rustu bez Pythonu.
 
@@ -569,6 +569,81 @@ Celá sada s `CEE_NATIVE=0`: 1 258 prošlo, 111 přeskočeno, 1 selhal časový 
 Zápisy (`FormStore.put`), fronty fonologizace, verze kódu a historie po přestavbě; plán analogií (`changed_share` z fondů); reanalýza hranice a
 `units_of` (nové morfémy, `class_stats` jako Python slovníky); `class_stats` pro `changes/morphology.py`, `syntax.py` a `metrics.py`;
 vzorek slov (výběr a váhy) a ostatní dodávky `Needs`.
+
+## B6c: fronty, slovní zásoba a fonologizace kódu v Rustu
+
+Zadání `zadani-rust-b6c.md`, verze rozhraní 12. Krok fonologizace byl od B2 v Rustu, ale kolem něj
+Python skládal seznamy front při každém volání (`_targets`), držel fronty jako objekty a sledoval
+slovní zásobu po slovech. Teď fronty, dominantní kořeny a četnosti užití žijí v Rustu.
+
+### Číselná podoba
+
+- **`cee_core.NativeCode`** (`code_state.rs`, vazba `code_state_python.rs`) drží za jeden kód:
+  procesy v pořadí vzniku (číslo z `registry.processes`; živý nebo uzavřený; příznaky čekajících
+  a přepsaných morfémů jako `Vec<u8>` podle čísla morfému; fronta jako `Vec<f64>` logitů a
+  `Vec<i32>` morfémů; `fixed_since`; řádek tabulky procesu v bance pro pravidlo přízvuku kódu)
+  a **mapu dominantních kořenů** (kořen podle čísla pojmu, pořadí vstupu pojmu do mapy, pojmy
+  každého kořene) s **pamětí četností užití** podle čísla morfému.
+- **Pořadí fronty** je (potřebný logit, jméno morfému) jako dřív. Jména drží banka v Rustu
+  (`Bank::names`, doplňují se po kusech, `native.sync_names`); bajty UTF-8 se řadí jako body Unicode.
+  Pole `ranks()` se nepoužilo: přepočítávalo by se při každém novém morfému (každé vstupu slova).
+  Díky jménům odpadla oprava shodných logitů po aktivaci (`_by_name`).
+- **Četnosti užití** jsou čistá funkce dominantních kořenů kódu, četností pojmů a sloupců morfémů:
+  `kořen bez pojmů → statická frekvence`, jinak `min(1, součet četností pojmů kořene)` a u tvaru
+  buňky krát váha buňky. Pojmy se sčítají zleva doprava v pořadí vstupu do `DominantMap`
+  (`sum` v Pythonu 3.11 nekompenzuje, Rust sčítá stejně); jediná funkce `exp`/`log` v tom není.
+  Paměť se zneplatňuje po kořenech (`epoch` podle lexému: změna kořene pojmu zruší starý i nový
+  kořen) a celá při změně četností pojmů (verze `FrequencyMap`, `World.usage_inputs`). Python dodává
+  sloupce: četnosti pojmů podle čísla pojmu a váhy buněk podle čísla morfému (`World.usage_arrays`,
+  přírůstkově podle `MorphemeTable.present`). `World.usage_frequency(ies)` s Rustem je jedno volání.
+- Python drží dál: slovní zásobu, počty užití, `DominantMap`, deníky (`dominant_log`,
+  `usage_log`, `vocabulary_log`), tvary kódu, sklony slov (losuje `Stream`), `closed`, `order`,
+  verze. `PhonologyState.pending`, `queued`, `restructured` jsou s Rustem **pohledy ke čtení**
+  (snímky: `ProcessQueue`, `MorphemeSet`), bez Rustu původní slovníky (Python reference má tutéž
+  logiku jako dřív). Kopie, `branch()` a pickle jdou přes neutrální seznam procesů
+  (`PhonologyState.processes_snapshot` a `load_processes`), takže stav se dá uložit v jednom režimu
+  a obnovit ve druhém.
+
+### Hranice volání
+
+- `NativeCode.queue_units`: zařazení tvarů slova do front všech živých procesů (po `enter_vocabulary`
+  všech tvarů buňky najednou); `NativeCode.activate`: fronta nového procesu;
+  `cee_core.restructure_groups`: fonologizace **všech skupin tiku jedním voláním** (jádro projde skupiny
+  a živé procesy v pořadí, odebírá z front, přepisuje, zařazuje přepsané tvary do ostatních procesů,
+  hlídá `fixed_since` a uzavírá procesy). Rust nic nezapisuje do objektů Pythonu: vrací přepsané
+  tvary a události (`Finished`, `Partial`, `Closed`) a Python je zapíše ve stejném pořadí.
+- Chybí-li údaj (sklon slova, výchozí tvar morfému, mapa hlásek, tabulka procesu), Rust se zastaví
+  **před** další položkou, vrátí `needs`, Python doplní a zavolá znovu. Stav je v Rustu, takže hotová
+  práce se nezopakuje; po zastavení se pokračuje od zastaveného procesu (`resume`), ne od začátku
+  skupiny. Tvary přepsané v témže volání vidí další procesy skupiny přes přepis (`Units::overlay`),
+  než je Python zapíše.
+- Záznamy historie se z dávky vracejí po skupinách (`phonology.DeferredHistory`) a `Simulation._transmit`
+  je zapisuje v pořadí skupin mezi záznamy morfologie, syntaxe a prozódie; otisky historie zůstaly stejné.
+- `_crossings` a `_activations` už nepočítají druh řádků a čísla změněných variant po řádcích při
+  každém kroku: `Simulation._rows` je drží podle seznamu ID řádků bloku, aktivace jsou jedno
+  porovnání polí.
+
+### Zlatá data a testy
+
+`golden_bank`, `golden_assessment`, `golden_phases`, `golden_phonology` a ostatní zlatá data
+procházejí beze změny (`test_v2_native_phonology.py` volá nízkoúrovňové `restructure_step`,
+`queue_morpheme`, `activate` banky, které zůstaly). Nová data pro sledování slovní zásoby jsme
+nevyráběli: `threshold_crossings` a `activation_cells` jsou beze změny a mají zlatá data z A7;
+rozhodnutí o slovní zásobě (`set_dominant`, `adjust_uses`, `units_of`) se pořád dělají v Pythonu.
+`test_v2_native_code.py` porovnává četnosti užití z Rustu s výpočtem od nuly a ověřuje uložení
+stavu mezi režimy; `test_v2_native_phonology.py` porovnává celé běhy s Rustem a bez něj včetně front.
+
+### Co zůstalo v Pythonu a co zbývá pro B6e
+
+- `_follow_vocabulary` jede po buňkách přechodů: `morphology.units_of` zakládá nové morfémy
+  (čísla v registru, `class_stats` čtou stav kódu po předchozí buňce) a `contact.adopt` přepisuje tvary,
+  takže jeden dávkový přechod na blok by změnil pořadí vzniku morfémů a tvarů. Zařazení všech tvarů
+  buňky do front je ale jedno volání. Pro B6e (hlavní smyčka) je třeba převést `units_of`, `class_stats`
+  a `adopt` do Rustu, teprve pak jde `_follow_vocabulary` udělat jednou na blok a tik.
+- Výpočet podílů `changed_share` po dvojicích (skupina, proces) a logitů úrovně (`math.log`) zůstal
+  v Pythonu (čte živé fondy a transcendentní funkce); kandidát na přesun s fondy.
+- Sklony slov (`word_bias`, `Stream.normal`), tabulky procesů a mapy hlásek `change` a `tone`
+  dodává Python na požádání (`needs`).
 
 ## Bitová shoda při přechodu do Rustu
 

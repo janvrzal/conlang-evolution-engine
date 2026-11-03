@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 from array import array
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -26,8 +27,10 @@ from cee.v2 import native, phonology
 from cee.v2.language.bank import FormBank
 from cee.v2.language.processes import Process
 from cee.v2.language.segments import Pattern, default_table
+from cee.v2.repertoire import Origin
 from cee.v2.scenarios import language_shift, village_grid
 from cee.v2.simulation import Simulation
+from cee.v2.world import Code, SpeechGroup, Territory, World
 
 GOLDEN = Path(__file__).parent / "data" / "golden_phonology.json.gz"
 RULES = native.RULES
@@ -194,13 +197,29 @@ def test_aktivace_procesu_dava_stejnou_frontu_jako_python(golden, monkeypatch):
 
 
 def test_shodne_logity_ve_fronte_se_radi_podle_jmena_ne_podle_cisla():
-    names = ["b", "a", "d", "c", "e"]
-    # Čísla 1 až 3 mají shodný logit (−0,0 a 0,0 jsou si rovny), jména a, d, c.
-    assert phonology._by_name([0, 1, 2, 3, 4], [-1.0, 0.0, -0.0, 0.0, 2.0], names) == [0, 1, 3, 2, 4]
-    assert phonology._by_name([0, 1, 2, 3, 4], [1.0, 1.0, 1.0, 1.0, 2.0], names) == [1, 0, 3, 2, 4]
-    assert phonology._by_name([0, 1, 2, 3, 4], [1.0, 2.0, 2.0, 3.0, 3.0], names) == [0, 1, 2, 3, 4]
-    assert phonology._by_name([4, 3, 2], [1.0, 1.0, 1.0], names) == [3, 2, 4]
-    assert phonology._by_name([], [], names) == []
+    # Bez rozptylu sklonů slov mají všechna slova stejný potřebný logit; fronta je pak řadí podle
+    # jména morfému (jako dvojice (logit, jméno)), i když pořadí čísel je jiné.
+    words = {"water": "pata", "fire": "kata", "earth": "mata", "wind": "tata", "sun": "nata", "moon": "sata"}
+    world = World(seed=5)
+    world.add_territory(Territory("world", "world"))
+    world.add_territory(Territory("v", "settlement", parent="world"))
+    base = world.seed_lexicon(list(words), dict(words), None)
+    group = world.add_group(SpeechGroup("v", "v", 500, [Code("main", base.branch())]))
+    code = group.main_code
+    code.phonology.vocabulary.update(morpheme.id for morpheme in world.morphemes.values())
+    world.params = replace(world.params, word_bias_sd=0.0)
+    table = world.table
+    process = Process(
+        family="voicing", target=table.segments(["t"]), operation="change", changes=(("voi", "+"),),
+        left=table.VOWEL, right=table.VOWEL,
+    )
+    process_id, _ = phonology.register(world, process, Origin("test", 0, 0.0, "v"))
+    phonology.activate(world, code, process_id)
+    pairs = code.phonology.pending[process_id].pairs()
+    assert len(pairs) == 6 and len({needed for needed, _ in pairs}) == 1
+    assert pairs == sorted(pairs)
+    numbers = world.registry.morphemes.numbers
+    assert [numbers[name] for _, name in pairs] != sorted(numbers[name] for _, name in pairs)
 
 
 # --- celé běhy s Rustem a bez něj ------------------------------------------------------------
@@ -223,7 +242,11 @@ def _state(world: Any) -> dict[str, Any]:
             "restructured": {variable: sorted(done) for variable, done in sorted(state.restructured.items())},
             "closed": sorted(state.closed), "order": sorted(state.order.items()),
             "version": state.version, "lexicon_version": state.lexicon_version,
-            "fixed_since": sorted(state.fixed_since.items()), "lifecycle": list(state.lifecycle_log),
+            "fixed_since": sorted(
+                (found["process"], found["fixed_since"]) for found in state.processes_snapshot()
+                if found["fixed_since"] is not None
+            ),
+            "lifecycle": list(state.lifecycle_log),
             "vocabulary": sorted(state.vocabulary), "stress_rule": code.stress_rule,
         }
     return {"morphemes": len(names), "codes": codes}
@@ -303,4 +326,4 @@ def test_bez_rozsireni_poctita_python(monkeypatch):
     world = village_grid(4, seed=2, phonology=True)
     assert world.form_bank()._native is None
     Simulation(world).run(120.0)
-    assert phonology._kernel(world, next(iter(world.groups.values())).main_code) is None
+    assert next(iter(world.groups.values())).main_code.phonology.core is None
