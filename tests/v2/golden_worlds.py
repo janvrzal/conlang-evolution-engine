@@ -146,9 +146,10 @@ def sample(stream: Stream, items: Sequence[Any], count: int) -> list[Any]:
     return [items[index] for index in sorted(picked)]
 
 
-def sample_ticks(name: str, ticks: int, count: int) -> list[int]:
-    """Tiky vzorku scénáře (1 až ``ticks``), deterministicky ze ``Stream``."""
-    return sample(Stream(0, "golden-ticks", name), list(range(1, ticks + 1)), count)
+def sample_ticks(name: str, ticks: int, count: int, purpose: str = "") -> list[int]:
+    """Tiky vzorku scénáře (1 až ``ticks``), deterministicky ze ``Stream``; ``purpose`` odliší vzorky."""
+    parts = (name, purpose) if purpose else (name,)
+    return sample(Stream(0, "golden-ticks", *parts), list(range(1, ticks + 1)), count)
 
 
 def sample_groups(name: str, tick: int, group_ids: Sequence[str], count: int) -> list[str]:
