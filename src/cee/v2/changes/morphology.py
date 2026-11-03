@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import ClassVar, Mapping, Sequence, cast
 
-from cee.v2 import morphology
+from cee.v2 import morphology, phases
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.morphology import FormChange
 from cee.v2.pressures import Actuation, Conformity, Pressure
@@ -65,7 +65,7 @@ class AnalogicalChange(Change):
         count = len(self._sites(context))
         if count == 0:
             return 0.0
-        return float(self.base_rate * count * self.rate_scale(context))
+        return float(phases.uniform_rate(self.base_rate, count, self.rate_scale(context)))
 
     def sites(self, context: InnovationContext) -> Sequence[str]:
         if context.world.table is None or not context.world.paradigms:

@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Mapping, Sequence, cast
 
 import numpy as np
 
+from cee.v2 import phases
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.lexicon import Morpheme
 from cee.v2.language.protoforms import coin
@@ -81,7 +82,7 @@ class LexicalCoinage(Change):
         count = len(context.code.repertoire.variable_ids_of("lexical"))
         if count == 0:
             return 0.0
-        return float(self.base_rate * count * self.rate_scale(context))
+        return float(phases.uniform_rate(self.base_rate, count, self.rate_scale(context)))
 
     def sites(self, context: InnovationContext) -> Sequence[str]:
         return context.code.repertoire.variable_ids_of("lexical")
@@ -261,7 +262,7 @@ class SemanticChange(Change):
         if not index.sorted_sites or index._total <= 0.0:
             return (), None
         if index._weights is None:
-            index._weights = index.rates_array / index._total
+            index._weights = phases.normalize_rates(index.rates_array, index._total)
         return index.sorted_sites, index._weights
 
     def propose(

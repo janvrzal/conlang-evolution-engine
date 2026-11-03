@@ -10,8 +10,12 @@ tvarů i hodnocení procesů.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, cast
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Literal, cast
 
+import numpy as np
+
+from cee.v2 import phases
 from cee.v2.history import History
 from cee.v2.language.lexicon import next_token
 from cee.v2.language.processes import StressRule
@@ -79,37 +83,71 @@ def dominant_strength(world: World, group_id: str) -> Literal["weak", "strong"]:
     return cast(Literal["weak", "strong"], world.variants[dominant_id].payload["strength"])
 
 
-def restructure(world: World, group_id: str, tick: int, history: History, year: float) -> None:
-    code = world.groups[group_id].main_code
-    rule_var = stress_rule_variable_id()
-    if rule_var in world.variables:
-        rule_found = world.dominant(group_id, rule_var)
-        if rule_found is not None:
-            var_id, share = rule_found
-            if share >= 0.5:
-                new_rule = cast(StressRule, world.variants[var_id].payload["rule"])
-                if new_rule != code.stress_rule:
-                    old_rule = code.stress_rule
-                    code.stress_rule = new_rule
-                    code.phonology.version += 1
-                    code.phonology.cache.clear()
-                    code.forms.token = next_token()
-                    history.record(
-                        "stress_rule_changed", tick, year,
-                        group=group_id, old=old_rule, new=new_rule
-                    )
+#: Nové pravidlo přízvuku a nová síla přízvuku skupiny (``None`` = beze změny).
+StressPlan = tuple[StressRule | None, Literal["weak", "strong"] | None]
 
-    strength_var = stress_strength_variable_id()
-    if strength_var in world.variables:
-        strength_found = world.dominant(group_id, strength_var)
-        if strength_found is not None:
-            var_id, share = strength_found
-            if share >= 0.5:
-                new_strength = cast(Literal["weak", "strong"], world.variants[var_id].payload["strength"])
-                if new_strength != code.stress_strength:
-                    old_strength = code.stress_strength
-                    code.stress_strength = new_strength
-                    history.record(
-                        "stress_strength_changed", tick, year,
-                        group=group_id, old=old_strength, new=new_strength
-                    )
+
+def _updates(
+    world: World, group_ids: Sequence[str], variable_id: str, key: str, values: Sequence[Any], current: str
+) -> dict[str, Any]:
+    """Skupiny, kde převládající hodnota prozodické proměnné mění vlastnost kódu, a nová hodnota."""
+    if variable_id not in world.variables:
+        return {}
+    shares, dominant, held = [], [], []
+    for group_id in group_ids:
+        found = world.dominant(group_id, variable_id)
+        if found is None:
+            shares.append(0.0)
+            dominant.append(-1)
+        else:
+            shares.append(found[1])
+            dominant.append(values.index(world.variants[found[0]].payload[key]))
+        now = getattr(world.groups[group_id].main_code, current, None)
+        held.append(values.index(now) if now in values else -2)
+    changed = phases.stress_updates(
+        np.array(shares, dtype=np.float64), np.array(dominant, dtype=np.intp), np.array(held, dtype=np.intp)
+    )
+    return {group_id: values[dominant[index]] for index, group_id in enumerate(group_ids) if changed[index]}
+
+
+def plan(world: World, group_ids: Sequence[str]) -> dict[str, StressPlan]:
+    """Skupiny, kde se mění pravidlo nebo síla přízvuku (ostatní ve výsledku chybí).
+
+    Čte jen rozdělení prozodických proměnných a dnešní vlastnosti kódu, takže
+    plán platí pro celý krok bez ohledu na pořadí skupin.
+    """
+    rules = _updates(world, group_ids, stress_rule_variable_id(), "rule", STRESS_RULES, "stress_rule")
+    strengths = _updates(world, group_ids, stress_strength_variable_id(), "strength", STRESS_STRENGTHS, "stress_strength")
+    return {
+        group_id: (rules.get(group_id), strengths.get(group_id))
+        for group_id in group_ids if group_id in rules or group_id in strengths
+    }
+
+
+def restructure(
+    world: World, group_id: str, tick: int, history: History, year: float, planned: StressPlan | None = None
+) -> None:
+    """Převládající pravidlo a síla přízvuku se zapíšou do kódu.
+
+    ``planned`` (:func:`plan`) smí volající spočítat předem pro všechny
+    skupiny; bez něj se spočte jen pro tuto skupinu.
+    """
+    code = world.groups[group_id].main_code
+    new_rule, new_strength = plan(world, [group_id]).get(group_id, (None, None)) if planned is None else planned
+    if new_rule is not None:
+        old_rule = code.stress_rule
+        code.stress_rule = new_rule
+        code.phonology.version += 1
+        code.phonology.cache.clear()
+        code.forms.token = next_token()
+        history.record(
+            "stress_rule_changed", tick, year,
+            group=group_id, old=old_rule, new=new_rule
+        )
+    if new_strength is not None:
+        old_strength = code.stress_strength
+        code.stress_strength = new_strength
+        history.record(
+            "stress_strength_changed", tick, year,
+            group=group_id, old=old_strength, new=new_strength
+        )

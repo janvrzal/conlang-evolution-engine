@@ -8,7 +8,7 @@ from typing import Any, Iterator, Sequence
 
 import numpy as np
 
-from cee.v2 import contact, morphology, phonology, prosody, syntax, variation
+from cee.v2 import contact, morphology, phases, phonology, prosody, syntax, variation
 from cee.v2.changes import DEFAULT_CHANGES, Change, InnovationContext, pressures_by_kind
 from cee.v2.changes.lexicon import with_appeal
 from cee.v2.events import WorldEvent
@@ -21,6 +21,7 @@ from cee.v2.transmission import TransmissionParams, prepare, transmit
 from cee.v2.world import World
 
 _MILESTONES = (0.1, 0.5, 0.9)
+_LEVELS = np.array(_MILESTONES)
 _EMPTY = Distribution((), np.zeros(0))
 _INNOVATION_CHANGE_DOMAIN = "innovation-change"
 
@@ -259,18 +260,9 @@ class Simulation:
         if not entries or not self.changes:
             return
 
-        group_keys = np.array(
-            [
-                stable_int(
-                    self.world.seed,
-                    "innovation",
-                    self.tick,
-                    ctx.group.id,
-                    ctx.code.id,
-                )
-                for ctx, _, _, _ in entries
-            ],
-            dtype=np.uint64,
+        group_keys = phases.innovation_group_keys(
+            self.world.seed, self.tick,
+            [ctx.group.id for ctx, _, _, _ in entries], [ctx.code.id for ctx, _, _, _ in entries],
         )
         renewals = np.array([renewal for _, renewal, _, _ in entries], dtype=np.float64)
         frequencies = np.array([frequency for _, _, _, frequency in entries], dtype=np.float64)
@@ -279,15 +271,17 @@ class Simulation:
         # se uplatní první inovace; v paralelním běhu jen pro vlastní skupiny.
         owned = [index for index, (ctx, _, _, _) in enumerate(entries)
                  if self.shards is None or self.shards.owns(ctx.group.id)]
-        expected = np.zeros((len(entries), len(self.changes)), dtype=np.float64)
+        rate_sums = np.zeros((len(entries), len(self.changes)), dtype=np.float64)
         for change_idx, change in enumerate(self.changes):
-            tempos = (renewals if change.rate_basis == "generation" else self.config.dt) * frequencies
             for group_idx in owned:
                 rate_sum = change.total_rate(entries[group_idx][0])
                 if rate_sum > 0.0:
-                    expected[group_idx, change_idx] = float(rate_sum) * float(tempos[group_idx])
-            if change.kind in self._rate_scales:
-                expected[:, change_idx] *= self._rate_scales[change.kind]
+                    rate_sums[group_idx, change_idx] = float(rate_sum)
+        expected = phases.expected_counts(
+            rate_sums, renewals, frequencies, self.config.dt,
+            np.array([change.rate_basis == "generation" for change in self.changes], dtype=bool),
+            np.array([self._rate_scales.get(change.kind, 1.0) for change in self.changes], dtype=np.float64),
+        )
         if self.shards is not None:
             for rows, values in self.shards.gather("expected", (owned, expected[owned])):
                 expected[rows] = values
@@ -349,10 +343,9 @@ class Simulation:
         cumulated = None if weights is None else cumulative(weights)
         live = self.world.live
         for index in range(count):
-            if cumulated is None:
-                site = sites[rng.integers(len(sites))]
-            else:
-                site = sites[Stream.pick(cumulated, rng.random())]
+            # Výběr místa je funkce stavu proudu; návrh varianty pak čerpá z téhož proudu.
+            picked, rng.state = phases.draw_site(rng.state, len(sites), cumulated)
+            site = sites[picked]
             variant = change.propose(context, site, rng, index)
             if variant is None:
                 continue
@@ -384,26 +377,19 @@ class Simulation:
         if rate_sum <= 0.0:
             return
         share, frequency = self.innovation_scale(context.group.id)
-        tempo = (renewal if change.rate_basis == "generation" else self.config.dt) * frequency
-        expected = float(rate_sum * tempo) * self._rate_scales.get(change.kind, 1.0)
-        group_key = np.uint64(
-            stable_int(
-                self.world.seed,
-                "innovation",
-                self.tick,
-                context.group.id,
-                context.code.id,
-            )
+        expected = phases.expected_counts(
+            np.array([[rate_sum]], dtype=np.float64),
+            np.array([renewal], dtype=np.float64),
+            np.array([frequency], dtype=np.float64),
+            self.config.dt,
+            np.array([change.rate_basis == "generation"], dtype=bool),
+            np.array([self._rate_scales.get(change.kind, 1.0)], dtype=np.float64),
         )
-        change_key = np.uint64(stable_int(_INNOVATION_CHANGE_DOMAIN, change.kind))
-        count = int(
-            hash_poisson(
-                np.array([group_key], dtype=np.uint64),
-                np.array([change_key], dtype=np.uint64),
-                np.array([expected], dtype=np.float64),
-                pairwise=True,
-            )[0]
+        group_keys = phases.innovation_group_keys(
+            self.world.seed, self.tick, [context.group.id], [context.code.id]
         )
+        change_key = np.array([stable_int(_INNOVATION_CHANGE_DOMAIN, change.kind)], dtype=np.uint64)
+        count = int(hash_poisson(group_keys, change_key, expected[0], pairwise=True)[0])
         if count > 0:
             self._apply_innovations(change, context, share, count)
 
@@ -455,19 +441,29 @@ class Simulation:
                 if distribution is not None:
                     self.world.groups[group_id].main_code.repertoire.set(variable_id, distribution)
         if self.world.table is not None:
-            for group_id in (list(reversed(live.group_ids)) if self.reverse_groups else live.group_ids):
-                if self.world.groups[group_id].written:
-                    continue
+            groups = [
+                group_id for group_id in (list(reversed(live.group_ids)) if self.reverse_groups else live.group_ids)
+                if not self.world.groups[group_id].written
+            ]
+            # Rozhodnutí o analogiích, nových koncovkách a přízvuku čtou jen rozdělení
+            # proměnných a stav vlastní skupiny, takže jdou spočítat pro všechny skupiny naráz.
+            analogies = morphology.analogy_plan(
+                self.world, [group_id for group_id in groups if self.world.groups[group_id].main_code.phonology.morph_active]
+            )
+            constructions = syntax.ready_constructions(self.world, groups) if self._grammar else {}
+            stress = prosody.plan(self.world, groups)
+            for group_id in groups:
                 state = self.world.groups[group_id].main_code.phonology
                 if state.pending:
                     phonology.restructure(
                         self.world, group_id, self.tick, self.config.dt, self.history, year
                     )
                 if state.morph_active:
-                    morphology.restructure(self.world, group_id, self.tick, self.history, year)
+                    morphology.restructure(self.world, group_id, self.tick, self.history, year, analogies.get(group_id))
                 if self._grammar:
-                    syntax.restructure(self.world, group_id, self.tick, self.history, year)
-                prosody.restructure(self.world, group_id, self.tick, self.history, year)
+                    syntax.restructure(self.world, group_id, self.tick, self.history, year, constructions[group_id])
+                if group_id in stress:
+                    prosody.restructure(self.world, group_id, self.tick, self.history, year, stress[group_id])
 
     def _changes(
         self, block: PoolBlock, before: np.ndarray, after: np.ndarray
@@ -478,24 +474,20 @@ class Simulation:
         numbers = self.world.registry.variants.numbers
         slot_numbers = np.array(
             [[-1 if slot is None else numbers[slot] for slot in row] for row in block.slots], dtype=np.intp
-        ).reshape(len(block), 1, block.capacity)
-        change = self.world.columns.variants.arrays()["change"]
-        innovation = (slot_numbers >= 0) & (change[slot_numbers] >= 0) if len(change) else slot_numbers < -1
+        ).reshape(len(block), block.capacity)
+        innovation = phases.innovation_mask(slot_numbers, self.world.columns.variants.arrays()["change"])
         records: list[tuple[str, dict[str, Any]]] = []
 
         def describe(row: int, slot: int, **extra: Any) -> dict[str, Any]:
             return {"variable": block.variable_ids[row], "variant": block.slots[row][slot], **extra}
 
-        levels = np.array(_MILESTONES)
-        reached_before = np.searchsorted(levels, before, side="right")
-        reached_after = np.searchsorted(levels, after, side="right")
-        for row, column, slot in zip(*np.nonzero((reached_after > reached_before) & innovation)):
-            for level in _MILESTONES[reached_before[row, column, slot] : reached_after[row, column, slot]]:
+        milestones, established, extinct = phases.change_events(before, after, innovation, _LEVELS)
+        for row, column, slot, first, last in zip(*milestones):
+            for level in _MILESTONES[first:last]:
                 records.append(("milestone", describe(row, slot, group=group_ids[column], level=level)))
-        for row, column, slot in zip(*np.nonzero((after == 1.0) & (before < 1.0) & innovation)):
+        for row, column, slot in zip(*established):
             records.append(("established", describe(row, slot, group=group_ids[column])))
-        gone = (before > 0).any(axis=1) & ~(after > 0).any(axis=1) & innovation[:, 0, :]
-        for row, slot in zip(*np.nonzero(gone)):
+        for row, slot in zip(*extinct):
             records.append(("extinct", describe(row, slot)))
         return records
 
@@ -526,14 +518,12 @@ class Simulation:
         lexical = np.array(
             [self.world.variables[variable_id].kind == "lexical" for variable_id in block.variable_ids],
             dtype=bool,
-        )[:, None, None]
+        )
         # Nejdřív odchody, potom příchody: kořen, který jeden pojem opouští a
         # druhý (posunem) přebírá, tak ze slovní zásoby na okamžik nevypadne.
-        for direction, mask in (
-            ("leave", (before >= 0.5) & (after < 0.5) & lexical),
-            ("enter", (before < 0.5) & (after >= 0.5) & lexical),
-        ):
-            cells = list(zip(*np.nonzero(mask)))
+        leave, enter = phases.threshold_crossings(before, after, lexical, 0.5)
+        for direction, found in (("leave", leave), ("enter", enter)):
+            cells = list(zip(*found))
             for row, column, slot in (sorted(cells, key=lambda cell: (-cell[1], cell[0], cell[2]))
                                       if self.reverse_groups else cells):
                 variant = block.slots[row][slot]
@@ -564,22 +554,20 @@ class Simulation:
     def _activations(self, block: PoolBlock, after: np.ndarray) -> list[tuple[str, str]]:
         """Procesy a analogie, které ve skupině překročily malý podíl a začnou působit."""
         group_ids = self.world.live.group_ids
-        found = []
+        slots = np.full(len(block), -1, dtype=np.intp)
         for row, variable_id in enumerate(block.variable_ids):
             if variable_id not in self.world.processes and variable_id not in self.world.form_changes:
                 continue
             changed = phonology.changed_id(variable_id)
-            if changed not in block.slots[row]:
-                continue
-            slot = block.slots[row].index(changed)
-            for column in np.flatnonzero(after[row, :, slot] >= self.world.params.activation_share):
-                found.append((group_ids[column], variable_id))
-        return found
+            if changed in block.slots[row]:
+                slots[row] = block.slots[row].index(changed)
+        rows, columns = phases.activation_cells(after, slots, self.world.params.activation_share)
+        return [(group_ids[column], block.variable_ids[row]) for row, column in zip(rows, columns)]
 
     def _trace(self, block: PoolBlock, before: np.ndarray, after: np.ndarray) -> None:
         variants = self.world.variants
         group_ids = self.world.live.group_ids
-        for row, column, slot in zip(*np.nonzero((before > 0) | (after > 0))):
+        for row, column, slot in zip(*phases.trace_cells(before, after)):
             variant = block.slots[row][slot]
             if variant is None or variants[variant].origin.change is None:
                 continue

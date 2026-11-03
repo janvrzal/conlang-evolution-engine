@@ -14,7 +14,9 @@ from __future__ import annotations
 
 from typing import ClassVar, Mapping, Sequence
 
-from cee.v2 import syntax
+import numpy as np
+
+from cee.v2 import phases, syntax
 from cee.v2.changes.base import Change, InnovationContext
 from cee.v2.language.constructions import Construction, catalog_for
 from cee.v2.pressures import Actuation, Conformity, Pressure
@@ -269,10 +271,29 @@ class CategoryLoss(SyntacticChange):
         return self._pressure(context, current) > 0.0
 
     def rate(self, context: InnovationContext, site: str) -> float:
-        current = syntax.dominant(context.world, context.group.id, site.split(":", 1)[1])
-        if current is None:
-            return 0.0
-        return self.base_rate * self._pressure(context, current)
+        return self.rates(context, [site])[0]
+
+    def rates(self, context: InnovationContext, sites: Sequence[str]) -> list[float]:
+        """Míry míst naráz: z konstrukcí složí pole a spočte je ``phases.category_loss_rates``."""
+        currents = [syntax.dominant(context.world, context.group.id, site.split(":", 1)[1]) for site in sites]
+        present = np.array([current is not None for current in currents], dtype=bool)
+        free = np.zeros(len(sites), dtype=bool)
+        bound = np.zeros(len(sites), dtype=bool)
+        synthetic = np.zeros(len(sites), dtype=bool)
+        weakness = np.zeros(len(sites), dtype=np.float64)
+        for index, current in enumerate(currents):
+            if current is None:
+                continue
+            free[index] = current.kind == "periphrastic" and current.stage == "free"
+            bound[index] = current.bound
+            if current.kind == "synthetic" and not free[index] and bound[index]:
+                synthetic[index] = True
+                weakness[index] = syntax.weakness(context.world, context.code, current.function)
+        rates = phases.category_loss_rates(
+            self.base_rate, present, free, bound, synthetic, weakness,
+            context.world.params.category_loss_l2_boost, context.code.l2_share,
+        )
+        return [float(rate) for rate in rates]
 
     def next(
         self, context: InnovationContext, current: Construction, rng: RandomSource

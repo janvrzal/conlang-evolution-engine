@@ -19,10 +19,14 @@ navíc jsou tu jen tyto věci:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 from functools import lru_cache
 from typing import TYPE_CHECKING, cast
 
+import numpy as np
+
+from cee.v2 import phases
 from cee.v2.history import History
 from cee.v2.language.constructions import Construction, GrammaticalFunction, catalog, catalog_for
 from cee.v2.language.lexicon import Morpheme, UnitForm
@@ -270,51 +274,98 @@ def _ensure_cell(world: World, entry: GrammaticalFunction) -> None:
         )
 
 
-def restructure(world: World, group_id: str, tick: int, history: History, year: float) -> None:
-    """Nová syntetická konstrukce, která převážila, se zapíše do tvarů slov."""
+#: Nová syntetická konstrukce k zapsání: funkce, ID varianty a konstrukce.
+ReadyConstruction = tuple[GrammaticalFunction, str, Construction]
+
+
+def ready_constructions(world: World, group_ids: Sequence[str]) -> dict[str, list[ReadyConstruction]]:
+    """Pro každou skupinu funkce, jejichž nová syntetická konstrukce převážila a čeká na zápis.
+
+    Rozhodnutí je funkce polí (:func:`cee.v2.phases.grammar_ready`) nad
+    podílem dominantní konstrukce, jejím druhem a zápisem ve skupině. Čte jen
+    rozdělení proměnných a značku „už zapsáno“ té skupiny, takže plán jedné
+    skupiny nezávisí na zápisech jiných skupin ani jiných funkcí; funkce jsou
+    seřazené podle jména jako dřív.
+    """
+    entries = functions(world, "inflection")
+    rows = []
+    for group_id in group_ids:
+        applied = world.groups[group_id].main_code.phonology.grammar_applied
+        for entry in entries:
+            distribution = world.distribution(group_id, variable_id(entry.id))
+            if distribution is None or entry.word_class not in world.paradigms:
+                continue
+            variant, share = distribution.dominant()
+            rows.append((group_id, entry, variant, construction_of(world, variant), share, variant in applied))
+    plan: dict[str, list[ReadyConstruction]] = {group_id: [] for group_id in group_ids}
+    if not rows:
+        return plan
+    ready = phases.grammar_ready(
+        np.array([row[4] for row in rows], dtype=np.float64),
+        world.params.grammar_threshold,
+        np.array([row[3].kind == "synthetic" for row in rows], dtype=bool),
+        np.array([row[3].exponent is not None for row in rows], dtype=bool),
+        np.array([row[5] for row in rows], dtype=bool),
+    )
+    for (group_id, entry, variant, construction, _, _), found in zip(rows, ready.tolist()):
+        if found:
+            plan[group_id].append((entry, variant, construction))
+    return plan
+
+
+def restructure(
+    world: World, group_id: str, tick: int, history: History, year: float,
+    ready: list[ReadyConstruction] | None = None,
+) -> None:
+    """Nová syntetická konstrukce, která převážila, se zapíše do tvarů slov.
+
+    ``ready`` (:func:`ready_constructions`) smí volající spočítat předem pro
+    všechny skupiny; bez něj se spočte jen pro tuto skupinu.
+    """
     from cee.v2.morphology import citation_form
     from cee.v2.phonology import enter_vocabulary, requeue_all
 
     code = world.groups[group_id].main_code
     state = code.phonology
-    for entry in functions(world, "inflection"):
-        distribution = world.distribution(group_id, variable_id(entry.id))
-        if distribution is None or entry.word_class not in world.paradigms:
-            continue
-        variant, share = distribution.dominant()
-        construction = construction_of(world, variant)
-        if (
-            share < world.params.grammar_threshold or construction.kind != "synthetic"
-            or construction.exponent is None or variant in state.grammar_applied
-        ):
-            continue
+    if ready is None:
+        ready = ready_constructions(world, [group_id])[group_id]
+    for entry, variant, construction in ready:
         state.mark_grammar_applied(variant)
         _ensure_cell(world, entry)
         paradigm = world.paradigms[entry.word_class]
         donor = catalog_for(world)[construction.donor] if construction.donor else None
         ending = world.morphemes[construction.exponent].form
-        rewritten = kept = 0
         roots = sorted({
             world.morphemes[unit].lexeme_id for unit in state.vocabulary
             if world.morphemes[unit].kind in ("root", "word")
             and world.morphemes[unit].word_class == entry.word_class
         })
-        for root in roots:
-            unit = unit_id(root, entry.cell or "", paradigm)
-            exists = unit in state.vocabulary
-            if donor is not None:
-                # Exaptace: tvar dárcovské buňky s touto koncovkou dostane novou funkci.
-                donor_unit = unit_id(root, donor.cell or "", paradigm)
-                if donor_unit not in state.vocabulary:
-                    continue
-                new = world.unit_of(code, donor_unit)
-                if new.exponent != construction.exponent:
-                    continue
-            elif exists and world.usage_frequency(code, root) >= world.params.conserved_frequency:
-                # Velmi častá slova si starý tvar ponechají (silná slovesa vedle
-                # nové pravidelné koncovky, angl. *sang* vedle *walked*).
+        units = [unit_id(root, entry.cell or "", paradigm) for root in roots]
+        exists = np.array([unit in state.vocabulary for unit in units], dtype=bool)
+        donor_units = [unit_id(root, donor.cell or "", paradigm) for root in roots] if donor is not None else []
+        # Tvary lexémů se zápisem jiných lexémů nemění, takže vstupy jdou sebrat předem.
+        donor_present = np.array([unit in state.vocabulary for unit in donor_units], dtype=bool)
+        donor_matches = np.array(
+            [present and world.unit_of(code, unit).exponent == construction.exponent
+             for unit, present in zip(donor_units, donor_present.tolist())], dtype=bool,
+        )
+        # Častost jen tam, kde o ponechání starého tvaru rozhoduje (existující lexém, žádný dárce).
+        frequency = np.array(
+            [world.usage_frequency(code, root) if donor is None and present else 0.0
+             for root, present in zip(roots, exists.tolist())], dtype=np.float64,
+        )
+        actions = phases.ending_actions(
+            donor is not None, exists, donor_present, donor_matches, frequency, world.params.conserved_frequency
+        ).tolist()
+        rewritten = kept = 0
+        for index, (root, unit, action) in enumerate(zip(roots, units, actions)):
+            if action == phases.ENDING_KEPT:
                 kept += 1
                 continue
+            if action == phases.ENDING_SKIP:
+                continue
+            if action == phases.ENDING_FROM_DONOR:
+                new = world.unit_of(code, donor_units[index])
             else:
                 citation = citation_form(world, code, root)
                 new = UnitForm(citation + ending, len(citation), construction.exponent)
@@ -329,7 +380,7 @@ def restructure(world: World, group_id: str, tick: int, history: History, year: 
                 )
             code.forms.set(unit, new)
             rewritten += 1
-            if exists:
+            if exists[index]:
                 requeue_all(world, code, unit)
             else:
                 enter_vocabulary(world, code, unit)
