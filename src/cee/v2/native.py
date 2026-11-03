@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from cee.v2.language.segments import SegmentTable
 
 #: Verze rozhraní, kterou tento Python čeká (viz ``INTERFACE_VERSION`` v Rustu).
-INTERFACE_VERSION = 3
+INTERFACE_VERSION = 4
 
 #: Čísla operací a pravidel přízvuku, jak je zná Rust (``process.rs``).
 OPERATIONS = ("change", "replace", "delete", "insert_before", "insert_after", "merge_next", "tone")
@@ -82,6 +82,57 @@ def sums_match() -> bool:
     return _SUMS
 
 
+_LIBM: bool | None = None
+
+
+def libm_matches() -> bool:
+    """Dává knihovna systému v Rustu bit po bitu totéž co ``numpy`` (``exp``, ``log``, ``cos``)?
+
+    Výběr v přenosu používá ``exp``, šum driftu ``log`` a ``cos``. Rust je počítá funkcemi
+    knihovny systému, ``numpy`` svými (na jiném stroji či s jinou verzí mohou mít jiný poslední
+    bit). Ověří se jednou na náhodných vstupech v rozsahu, který model používá, včetně celého
+    ``hash_normal``; kdo neprojde, počítá ``settle`` Python a otisky se nerozejdou.
+    """
+    global _LIBM
+    if _LIBM is None:
+        _LIBM = False
+        module = _load()
+        if module is not None:
+            import numpy as np
+
+            from cee.v2.rng import hash_normal
+
+            rng = np.random.default_rng(20261103)
+            count = 20000
+            empty = np.zeros(0, dtype=np.uint64)
+            exps = rng.uniform(-8.0, 8.0, count)
+            logs = (rng.integers(0, 1 << 53, count) + 0.5) / float(1 << 53)
+            coss = rng.uniform(0.0, 2.0 * np.pi, count)
+            keys = rng.integers(0, np.iinfo(np.uint64).max, size=(2, count), dtype=np.uint64)
+            ok = np.array_equal(module.libm_probe("exp", exps, empty), np.exp(exps))
+            ok &= np.array_equal(module.libm_probe("ln", logs, empty), np.log(logs))
+            ok &= np.array_equal(module.libm_probe("cos", coss, empty), np.cos(coss))
+            ok &= np.array_equal(
+                module.libm_probe("hash_normal", np.zeros(count), np.ascontiguousarray(keys.T.reshape(-1))),
+                hash_normal(keys[0], keys[1], pairwise=True),
+            )
+            _LIBM = bool(ok)
+    return _LIBM
+
+
+def transmit_enabled() -> bool:
+    """Počítá se přenos bloku (míšení, výběr, drift) celý v Rustu? Vyžaduje shodu knihovny (:func:`libm_matches`)."""
+    return enabled() and libm_matches()
+
+
+def threads() -> int:
+    """Počet vláken Rustu (``CEE_THREADS``, výchozí 1); vlákna dělí jen nezávislé úseky, bity se nemění."""
+    try:
+        return max(1, int(os.environ.get("CEE_THREADS", "1")))
+    except ValueError:
+        return 1
+
+
 def status() -> str:
     """Čitelný popis pro výpisy skriptů: ``rust`` či ``python`` a důvod."""
     if os.environ.get("CEE_NATIVE", "") == "0":
@@ -125,3 +176,28 @@ def glide_mask(table: SegmentTable) -> Any:
     sonorant = vectors[:, index["son"]] == 1
     consonantal = vectors[:, index["cons"]] == 1
     return np.append(~syllabic & sonorant & ~consonantal, False)
+
+
+def new_cells(groups: int, capacity: int) -> Any | None:
+    """Prázdné uložení buněk bloku fondů v Rustu (``NativeCells``), nebo ``None`` bez Rustu."""
+    if not enabled():
+        return None
+    module = _load()
+    assert module is not None
+    return module.NativeCells(groups, capacity, threads())
+
+
+def cells_from_flat(groups: int, capacity: int, *state: Any) -> Any | None:
+    """Uložení buněk v Rustu ze stavu ``flat``, nebo ``None`` bez Rustu."""
+    if not enabled():
+        return None
+    module = _load()
+    assert module is not None
+    return module.NativeCells.from_flat(groups, capacity, *state, threads())
+
+
+def new_step(*arrays: Any) -> Any:
+    """Vstupy kroku pro přenos v Rustu (``NativeStep``)."""
+    module = _load()
+    assert module is not None
+    return module.NativeStep(*arrays)

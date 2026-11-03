@@ -10,17 +10,22 @@ vektorově nad :class:`cee.v2.pools.LivePools`.
 tenká fasáda: z objektů světa (skupiny, vazby, proměnné, tlaky) složí vstupní
 pole, zavolá je a výsledek předá dál. Na objektech zůstává sbírání vlastností
 skupin a proměnných, tlaky na varianty a klíče driftu.
+
+S Rustem (:func:`_transmit_native`) je přenos bloku jediné volání ``NativeCells.transmit``:
+míšení, tlaky (zpětné volání Pythonu po kusech řádků) a výběr s driftem počítá Rust nad
+stavem, který drží. Až tlaky přejdou do Rustu, zpětné volání zmizí a celý řetězec
+míšení → tlaky → výběr poběží v Rustu bez přechodu přes Python.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 import numpy.typing as npt
 
-from cee.v2 import contact, institutions
+from cee.v2 import contact, institutions, native
 from cee.v2 import phases_transmission as phases
 from cee.v2.pools import PoolBlock
 from cee.v2.pressures.base import Pressure, PressureBatch
@@ -128,6 +133,25 @@ class StepInputs:
     tick: int
     #: Interference, čtení, škola a liturgie, v tomto pořadí; jen neprázdné.
     channels: Sequence[Channel]
+    #: Odvozené vstupy pro Rust (``NativeStep``), sestaví se při prvním přenosu bloku v kroku.
+    cache: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
+
+    def native_step(self) -> Any:
+        """Vstupy kroku v Rustu, jednou za krok sdílené všemi bloky (sít, kanály, kohorty a klíče driftu)."""
+        step = self.cache.get("step")
+        if step is None:
+            floats, ints = np.float64, np.int64
+            step = self.cache["step"] = native.new_step(
+                [np.ascontiguousarray(group, dtype=ints) for group in self.members],
+                [np.ascontiguousarray(block, dtype=floats) for block in self.blocks],
+                np.ascontiguousarray(self.alone, dtype=ints), np.ascontiguousarray(self.alone_weight, dtype=floats),
+                [[np.ascontiguousarray(block, dtype=floats) for block in flow.blocks] for flow in self.cross],
+                [(np.ascontiguousarray(channel.learners, dtype=ints), np.ascontiguousarray(channel.sources, dtype=ints),
+                  np.ascontiguousarray(channel.weights, dtype=floats)) for channel in self.channels],
+                np.ascontiguousarray(self.renewal, dtype=floats), np.ascontiguousarray(self.drift_scale, dtype=floats),
+                np.ascontiguousarray(self.loss_floor, dtype=floats), np.ascontiguousarray(self.row_keys, dtype=np.uint64),
+            )
+        return step
 
 
 def _components(mixing: FloatArray) -> list[npt.NDArray[np.intp]]:
@@ -267,8 +291,9 @@ CHUNK_CELLS = 1 << 20
 class RowSlice:
     """Řádky ``[start, stop)`` bloku jako blok (pro přenos po kusech); jen čtení."""
 
-    def __init__(self, block: PoolBlock, start: int, stop: int):
+    def __init__(self, block: PoolBlock, start: int, stop: int, freqs: FloatArray | None = None):
         self.block, self.start, self.stop = block, start, stop
+        self._freqs = freqs
         self.capacity = block.capacity
         self.numbering = block.numbering
         self.variable_ids = block.variable_ids[start:stop]
@@ -279,7 +304,8 @@ class RowSlice:
 
     @property
     def freqs(self) -> FloatArray:
-        return self.block.freqs[self.start : self.stop]
+        # Rust předá výřez hned, aby se hustý pohled bloku nestavěl znovu.
+        return self.block.freqs[self.start : self.stop] if self._freqs is None else self._freqs
 
     @property
     def previous(self) -> FloatArray:
@@ -324,6 +350,8 @@ def transmit(
     """
     size, width = len(block), max(1, len(inputs.group_ids) * block.capacity)
     step = max(1, CHUNK_CELLS // width)
+    if block.native is not None and native.transmit_enabled():
+        return _transmit_native(world, block, inputs, pressures, params, fitness_hook, 0 if size <= step else step)
     if size <= step:
         return _transmit_rows(world, block, inputs, pressures, params, fitness_hook)
     updated, baseline = np.empty_like(block.freqs), np.empty_like(block.freqs)
@@ -334,6 +362,46 @@ def transmit(
             world, part, inputs, pressures, params, fitness_hook
         )
     return updated, baseline
+
+
+def _transmit_native(
+    world: World,
+    block: PoolBlock,
+    inputs: StepInputs,
+    pressures: Mapping[str, Sequence[tuple[Pressure, float]]],
+    params: TransmissionParams,
+    fitness_hook: Callable[..., FloatArray] | None,
+    chunk_rows: int,
+) -> tuple[FloatArray, FloatArray]:
+    """Přenos bloku v Rustu: jedno volání, v něm míšení, tlaky (zpětné volání) a výběr s driftem.
+
+    Stav bloku, míšení a ustálení jsou v Rustu; Python dodá jen faktory kanálů po proměnných bloku
+    a tlaky (:func:`fitness_of`), které Rust zavolá po kusech řádků mezi míšením a výběrem. Výsledek
+    jsou pohledy na pole Rustu, platné do příštího přenosu bloku.
+    """
+    columns = contact.variable_columns(world, block.variable_ids) if inputs.cross or inputs.channels else None
+    flow_factors = [np.ascontiguousarray(contact.borrowing_factors(world, columns, flow.channel), dtype=np.float64)
+                    for flow in inputs.cross]
+    channel_factors = [np.ascontiguousarray(channel.factors(world, columns), dtype=np.float64)
+                       for channel in inputs.channels]
+    callback: Callable[..., FloatArray] | None
+    if not any(pressures.values()):
+        callback = None
+    elif fitness_hook is not None:
+        chunk_rows = 0
+
+        def callback(start: int, stop: int, current: FloatArray, heard: FloatArray) -> FloatArray:
+            assert fitness_hook is not None
+            return np.ascontiguousarray(fitness_hook(world, block, inputs, pressures, heard), dtype=np.float64)
+    else:
+        def callback(start: int, stop: int, current: FloatArray, heard: FloatArray) -> FloatArray:
+            part = RowSlice(block, start, stop, current)
+            return np.ascontiguousarray(fitness_of(world, part, inputs, pressures, heard), dtype=np.float64)
+    assert block.native is not None
+    return block.native.transmit(
+        inputs.native_step(), flow_factors, channel_factors, block.present, block.slot_keys,
+        (params.selection, params.kappa, params.adult_rate, params.establish_threshold), callback, chunk_rows,
+    )
 
 
 def _transmit_rows(
