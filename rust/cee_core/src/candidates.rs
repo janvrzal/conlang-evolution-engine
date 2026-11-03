@@ -80,6 +80,7 @@ pub fn symbol_list() -> Vec<String> {
 }
 
 /// Snímek tabulky hlásek, který Rust potřebuje k sestavení kandidátů.
+#[derive(Clone)]
 pub struct SegTable {
     names: Vec<String>,
     width: usize,
@@ -314,6 +315,12 @@ impl Pat {
             Pat::Boundary => segment == t.boundary,
             Pat::ConsonantOrBoundary => segment == t.boundary || !t.is_vowel(segment),
         }
+    }
+
+    /// Maska vzoru přes všechny hlásky tabulky; poslední prvek je hranice slova
+    /// (`Pattern.mask` v Pythonu, tak ji čeká `process::Proc`).
+    pub fn mask(&self, t: &SegTable) -> Vec<bool> {
+        (0..=t.boundary).map(|s| self.contains(t, s)).collect()
     }
 
     /// Předpis vzoru pro Python: druh, dvojice (rys, hodnota) a čísla hlásek.

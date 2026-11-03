@@ -38,7 +38,7 @@ pub struct UsageInputs<'a> {
 }
 
 /// Dominantní kořeny pojmů a paměť četností užití.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Usage {
     /// Číslo pojmu → číslo dominantního kořene, −1 = žádný.
     roots: Vec<i32>,
@@ -176,7 +176,7 @@ impl Frequency for LiveUsage<'_, '_> {
 }
 
 /// Jeden proces kódu: fronta čekajících morfémů a přepsané morfémy.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Proc {
     /// Číslo procesu v registru.
     pub number: usize,
@@ -197,7 +197,7 @@ pub struct Proc {
 }
 
 /// Fronty a četnosti jednoho kódu.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct CodeState {
     /// Procesy v pořadí, ve kterém kód zasáhly (živé i uzavřené).
     pub procs: Vec<Proc>,
