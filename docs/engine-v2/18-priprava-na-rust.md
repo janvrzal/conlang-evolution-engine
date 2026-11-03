@@ -228,6 +228,8 @@ s testem shody proti zlatým datům:
 6. hlavní smyčka `Simulation`; Python zůstane pro popis světa, export,
    kalibrační skripty a API; desktopová aplikace (Tauri) může engine volat
    přímo z Rustu bez Pythonu.
+   **Pozorování (B6a) hotovo 2026-11-03** (`zadani-rust-b6a.md`, verze rozhraní 10): `observe.observe` je
+   jedno volání Rustu za pozorování (oddíl „B6a“ níže); zbytek B6 (B6b až B6e) dělají jiné části.
 
 Rozdělení na více crate (tabulka hlásek, změny, přenos, události) zkrátí
 překlad po malé změně; konstanty a katalogy zůstanou daty
@@ -499,6 +501,89 @@ Zlatá data tlaků (`test_v2_golden_pressures.py`, reference v Pythonu s `CEE_NA
 i přes Rust: `test_v2_native_pressures.py` zopakuje scénáře s Rustem, po přenosu bloku v ticích
 záznamů spočítá každý tlak záznamu v Rustu nad dávkou ze záznamu (`pressures_native.scores_of_batch`)
 a porovná ho s výstupem Pythonu bit po bitu; dále součet vážených tlaků pro 1 a 3 vlákna.
+
+## B6a: pozorování (dialekty a jazyky) v Rustu
+
+Zadání `zadani-rust-b6a.md`, verze rozhraní 10. `Simulation._observe` → `observe.observe` je jedno volání
+`cee_core.observe_step` za pozorování (`rust/cee_core/src/observe.rs`, vazba `observe_python.rs`); Python
+skládá vstup z polí (`observe._gather`) a zapisuje výsledek. Bez rozšíření, s `CEE_NATIVE=0` nebo bez bitové
+shody knihoven (`native.observe_matches`) počítá Python reference nad týmiž poli.
+
+### Číselná podoba a hranice volání
+
+- **Vstup jednoho volání** (nic se nekopíruje, kromě malých polí): pro každý blok živých fondů hustý pohled
+  `freqs (řádky, skupiny, sloty)` a `present (řádky, skupiny)` (sdílená paměť s Rustem), vybrané řádky
+  (proměnné slov a konstrukcí) a pořadí proměnných při výběru vzorku sloupců (`stable_int("observe", jméno)`,
+  hašuje se jednou za běh); čísla mluvených skupin mezi živými; **dominantní kořeny všech živých skupin
+  jako CSR** (`ptr`, číslo pojmu, číslo kořene, číslo tvaru) ve vkládacím pořadí `DominantMap`; **tabulka
+  různých tvarů** jako CSR hlásek; pořadí pojmů podle názvu (`Numbering.ranks`) a `SegmentTable.vectors`
+  (int8); vazby jako dvojice pozic mluvených skupin (`LinkTable`), polohy, čísla dosavadních linií, prahy.
+- **Tvar jako číslo.** Číslo tvaru v tabulce je podle *obsahu*: stejný obsah, stejné číslo. Tvar uložený
+  v `FormStore` má číslo z banky; výchozí tvar morfému, který v bance ještě není, se předá podle obsahu
+  a do banky se **nezařazuje** (test `test_vyber_tvaru_nic_nezarazuje_do_banky...`). Čísla tvarů v bance
+  se mezi Rustem a Pythonem liší, proto zlatá data vybírají tvary podle obsahu.
+- **Co dělá Rust** (jedno volání, bez zpětného volání): rysy (proměnlivé sloupce, vzorek proměnných nad
+  2 000 sloupců, vložení podílů do 13 intervalů v `f32`, čtverce skupin párovým součtem), kategorie tvarů
+  a vzdálenosti mezi tvary téhož kořene pojmu (editační vzdálenost z vektorů rysů; číslování kategorií
+  řazením, ne hašováním, jako pořadí prvního výskytu), kandidáti sloučení (vazby a čtyři nejbližší
+  sousedé na mřížce), **obě průměrné vazby** (dialekty a jazyky s hysterezí; kandidáti se počítají jednou)
+  a s `keep_distances` matice vzdáleností kódů (`distance_matrix` po blocích proměnných jako `np.sum(axis=(0, 3))`
+  a `cognate_matrix`; horní trojúhelník po souvislých úsecích řádků na `CEE_THREADS` vláknech, spodní se zrcadlí).
+  Rysy se na vláknech dělí po skupinách. Vrací shluky jako seznamy pozic, matici a pro testy volitelně rysy.
+- **Vzdálenost tvarů v dávce.** Editační vzdálenost je jen součty, podíl a minimum, takže stačí stejný
+  postup tabulky; cena záměny hlásek je podíl odlišných rysů (`FEATURE_SCALE`, předává se při volání)
+  s hustou pamětí cen v rámci volání. Dvojice tvarů téhož kořene pojmu se počítají jednou na dvojici
+  (vzdálenost je přesně symetrická). Paměť vzdáleností mezi pozorováními (`_DISTANCES`) Rust nemá: dvojice
+  jsou levnější přepočítat, než hledat, a výsledek by neměnila.
+- **Slovníky v pořadí vkládání** (`Sparse`): `forms`, `spread` a četnosti linií jsou vektory sloupců a hodnot
+  v pořadí vkládání s binárním hledáním; na pořadí stojí `sum(weight * large.get(...))` a sloučení shluků jako
+  v `dict`. Hašovací mapy v Rustu nejsou.
+
+### Bitová shoda: co není čistá aritmetika
+
+- **Skalární součin `f32` řádků `shares[a] @ shares[b]`** volá BLAS, jehož pořadí sčítání neznáme (na tomto
+  stroji Accelerate; vlastní pokusy s pevným počtem pruhů, FMA a stromy součtu se s ním neshodly ani na
+  malých délkách). Rust proto na macOS volá **tutéž funkci `cblas_sdot` z Accelerate** (`#[link(name =
+  "Accelerate", kind = "framework")]`, bez nové crate). Jinde (jiný BLAS) žádná shoda zaručena není:
+  `native.observe_matches()` jednou ověří shodu na maticích šířek násobků 13 a bez shody pozorování počítá
+  Python (jako `libm_matches` u přenosu).
+- Dále se ověřují `hypot` (vzdálenost sousedů; `np.hypot` a `f64::hypot` volají libm), celočíselné dělení
+  `x // size` s opravou zaokrouhlení (`numpy` a Python používají `divmod` s opravou, Rust ji opakuje) a
+  součet `float32` přes osy `(0, 3)` matice vzdáleností (po řádcích párový součet přes sloty, mezi řádky
+  postupně; tak to dělá `numpy` pro souvislé pole). `sums_match` hlídá párové součty čtverců.
+- Pořadí a remízy: halda nad `(hodnota, a, b, verze a, verze b)` (pořadí výběru je dané úplným
+  uspořádáním, ne implementací haldy), součty `sum(...)` z `dict` v pořadí vkládání, `max(0.0, value)`
+  vrací +0, četnosti tvarů a linií jsou celá čísla v `f64`, takže jejich součty na pořadí nezávisejí.
+
+### Zlatá data a testy
+
+- `scripts/v2_golden_observe.py` (Python reference), `tests/v2/golden_observe.py`, `tests/v2/data/golden_observe.json.gz`
+  (asi 29 kB), `test_v2_golden_observe.py`: ve všech sedmi scénářích z `golden_worlds.py` po 3 až 4 tickách
+  rysy mluvených skupin (otisky matice vložení, slovníků tvarů a rozptylu, čtverce), kandidáti sloučení,
+  dialekty, jazyky a události `LineageTracker` pro dvě dvojice prahů (tracker se mezi ticky předává), matice
+  vzdáleností kódů a 276 editačních vzdáleností vybraných tvarů. Test běh zopakuje a porovná bit po bitu
+  v Pythonu i v Rustu. Stav světa se neukládá (viz A7).
+- `test_v2_native_observe.py`: Rust proti Pythonu na skutečném světě (rysy, kandidáti, shluky, 1 až 7 vláken,
+  matice vzdáleností a `cognate_matrix`, celé `observe` včetně psaných skupin a veřejné domény), na syntetických
+  blocích se vzorkem proměnných, na stovkách náhodných rysů se slovníky ve zvoleném pořadí vkládání (vazba, hystereze),
+  na náhodných polohách (mřížka s remízami, shodné polohy), editační vzdálenosti pro dva dělitele a běh s pozorováním
+  v obou režimech (otisk historie a matice).
+
+### Přepsané testy (viz „Přepis existujících testů“ v zadání)
+
+`test_v2_observe.py`: `_features(world, ids)` a `constrained_average_linkage(world, ids, threshold, features=...)`
+fixovaly objektové rozhraní (svět a ID řetězce); nahradily je pomocné funkce `_features(world, ids)` nad poli
+(`_gather`) a `_linkage(...)` s kandidáty z `_geometry`/`_candidates` a čísly linií místo řetězců. Testované chování
+a hodnoty (vložení blízké vzdálenosti všech dvojic, vazba shluku jako průměr dvojic, hystereze) jsou stejné.
+
+### Co zůstává v Pythonu a pro B6e
+
+`LineageTracker` a sestavení snímku (malé), skládání vstupu z polí (smyčka po skupinách pro dominantní kořeny,
+`ranks` a polohy; vše lineární v počtu skupin), hustý pohled na bloky fondů (`pool.freqs`; po kroku se zahazuje
+a při pozorování znovu staví z řídkého uložení: B6e by měl číst řídké buňky z `NativeCells` přímo a hustou
+matici nestavět), `world.links` a polohy. Pro hlavní smyčku v Rustu bez Pythonu zbývá: dominantní kořeny a tvary
+přímo z polí kódu v Rustu (dnes přes `DominantMap.order`), tabulka tvarů z arény banky místo kopie obsahu, vazby
+a polohy z tabulek světa, a stav dosavadních linií. Výkon se v B6a neměřil (měří hlavní agent najednou).
 
 ## Bitová shoda při přechodu do Rustu
 
