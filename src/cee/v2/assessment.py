@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -313,6 +313,99 @@ def _assess_batch_reference(world: World, group_ids: list[str], variable_id: str
 
 
 def _assess_batch(world: World, group_ids: list[str], variable_id: str) -> list[ProcessAssessment]:
+    """Hodnocení procesu ve více skupinách; s Rustem počítá matici jádro, jinak Python."""
+    if world.table is not None and world.form_bank()._native is not None:
+        return _assess_batch_native(world, group_ids, variable_id)
+    return _assess_batch_python(world, group_ids, variable_id)
+
+
+def _assess_batch_native(world: World, group_ids: list[str], variable_id: str) -> list[ProcessAssessment]:
+    """Totéž co :func:`_assess_batch_python`, matici (skupiny × slova vzorku) počítá Rust.
+
+    Python zůstává zdrojem pravdy o vzorku slov a jejich frekvencích; Rust dostane
+    čísla tvarů a váhy po řádcích a vrátí součty (sčítá párově jako ``numpy``, po
+    celé šířce matice), dvojice nových homofonů v pořadí, v jakém je prochází
+    Python, a samohlásky před změnou a po ní. Cenu dvojic (:func:`_pair`) a zisk
+    rozptylu vokálů (:func:`_dispersion_gain`) počítá dál Python.
+    """
+    table = world.table
+    assert table is not None
+    process = world.processes[variable_id]
+    bank = world.form_bank()
+    results: list[ProcessAssessment] = [NEUTRAL] * len(group_ids)
+    by_rule: dict[str, list[int]] = {}
+    for position, group_id in enumerate(group_ids):
+        by_rule.setdefault(world.groups[group_id].main_code.stress_rule, []).append(position)
+    for rule, positions in sorted(by_rule.items()):
+        vocabularies = [_vocabulary(world, group_ids[position]) for position in positions]
+        sizes = [len(vocabulary.ids) for vocabulary in vocabularies]
+        width = max(sizes, default=0)
+        if width == 0:
+            continue
+        offsets = np.zeros(len(sizes) + 1, dtype=np.int64)
+        np.cumsum(sizes, out=offsets[1:])
+        raw = bank.assess_rows(
+            process, cast(StressRule, rule),
+            np.concatenate([vocabulary.ids for vocabulary in vocabularies]),
+            np.concatenate([vocabulary.weights for vocabulary in vocabularies]),
+            offsets, width, _shapes_vowels(process, table),
+        )
+
+        def pair_mass(row: int, first: int, second: int) -> float:
+            vocabulary = vocabularies[row]
+            return _pair(
+                world, vocabulary.frequency, vocabulary.morphemes[first], vocabulary.morphemes[second],
+                group_ids[positions[row]],
+            )
+
+        found = assessments_from_rows(raw, [vocabulary.total for vocabulary in vocabularies], pair_mass, process, table)
+        for position, assessment in zip(positions, found):
+            results[position] = assessment
+    return results
+
+
+def assessments_from_rows(
+    raw: tuple[Any, ...], totals: list[float], pair_mass: Callable[[int, int, int], float], process: Process,
+    table: SegmentTable,
+) -> list[ProcessAssessment]:
+    """Hodnocení jednotlivých řádků matice ze součtů, které vrátil Rust (``assess_rows``).
+
+    ``totals`` jsou úhrnné frekvence slovníků řádků, ``pair_mass(řádek, první,
+    druhá)`` cena dvojice nových homofonů. Řádek, kterého se změna netýká,
+    dostane :data:`NEUTRAL`.
+    """
+    (mass, short, marked, pair_counts, pair_first, pair_second,
+     before_counts, before_flat, after_counts, after_flat) = raw
+    pair_ends = np.cumsum(pair_counts).tolist()
+    before_ends, after_ends = np.cumsum(before_counts).tolist(), np.cumsum(after_counts).tolist()
+    first_list, second_list = pair_first.tolist(), pair_second.tolist()
+    before_list, after_list = before_flat.tolist(), after_flat.tolist()
+    vowels = _shapes_vowels(process, table)
+    found: list[ProcessAssessment] = []
+    for row, total in enumerate(totals):
+        row_mass = float(mass[row])
+        if row_mass <= 0:
+            found.append(NEUTRAL)
+            continue
+        merge = 0.0
+        for index in range(pair_ends[row] - pair_counts[row], pair_ends[row]):
+            merge += pair_mass(row, first_list[index], second_list[index])
+        before: set[int] = set()
+        after: set[int] = set()
+        if vowels:
+            before = set(before_list[before_ends[row] - before_counts[row]:before_ends[row]])
+            after = set(after_list[after_ends[row] - after_counts[row]:after_ends[row]])
+        found.append(ProcessAssessment(
+            coverage=row_mass / total,
+            merge_mass=merge / total,
+            short_share=float(short[row]) / row_mass,
+            markedness_delta=float(marked[row]) / row_mass,
+            dispersion_delta=_dispersion_gain(process, before, after, table),
+        ))
+    return found
+
+
+def _assess_batch_python(world: World, group_ids: list[str], variable_id: str) -> list[ProcessAssessment]:
     """Hodnocení procesu ve více skupinách jako operace nad maticí (skupiny × slova vzorku)."""
     table = world.table
     if table is None:

@@ -12,6 +12,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
+use crate::assess::{Assessed, Matrix};
 use crate::bank::{Bank, Outcome};
 use crate::phonology::{self, Needs, Params, Target, Units};
 use crate::process::Proc;
@@ -191,10 +192,19 @@ pub struct NativeBank {
 #[pymethods]
 impl NativeBank {
     /// `boundary` je číslo hranice slova (počet hlásek), `vowel` maska
-    /// samohlásek s hranicí na konci.
+    /// samohlásek s hranicí na konci; `glide` je maska polosamohlásek (sonorita 3)
+    /// stejné délky, bez ní se hodnocení příznakovosti slabik nepočítá správně.
     #[new]
-    fn new(boundary: i32, vowel: PyReadonlyArray1<'_, bool>) -> PyResult<Self> {
-        let bank = Bank::new(boundary, slice(&vowel)?.to_vec()).map_err(failure)?;
+    #[pyo3(signature = (boundary, vowel, glide=None))]
+    fn new(
+        boundary: i32,
+        vowel: PyReadonlyArray1<'_, bool>,
+        glide: Option<PyReadonlyArray1<'_, bool>>,
+    ) -> PyResult<Self> {
+        let mut bank = Bank::new(boundary, slice(&vowel)?.to_vec()).map_err(failure)?;
+        if let Some(glide) = glide {
+            bank.set_glide(slice(&glide)?.to_vec()).map_err(failure)?;
+        }
         Ok(NativeBank { bank })
     }
 
@@ -322,6 +332,95 @@ impl NativeBank {
     /// doplnit mapu) nebo −4 (vznikl nový tvar, převezme ho `results`).
     fn result(&mut self, row: usize, rule: u8, form_id: usize) -> PyResult<i64> {
         self.bank.result(row, rule, form_id).map_err(failure)
+    }
+
+    /// Hodnocení změny `row` (pravidlo přízvuku `rule`) nad maticí slovních zásob
+    /// (`cee.v2.assessment._assess_batch`): `ids` a `weights` jsou řádky matice
+    /// za sebou, `offsets` jejich meze (řádků + 1 čísel) a `width` šířka matice
+    /// v Pythonu (nejdelší řádek); podle ní se sčítá jako `numpy`.
+    ///
+    /// Vrací `(needs, hmota, krátká hmota, příznakovost, počty dvojic, první,
+    /// druhá, počty samohlásek před, samohlásky před, počty po, samohlásky po,
+    /// první_nové_číslo, nové_hlásky, nové_délky)`. Je-li `needs` neprázdné,
+    /// nic se nespočítalo: Python doplní mapy (`set_map`) a zeptá se znovu.
+    #[pyo3(signature = (row, rule, ids, weights, offsets, width, want_vowels))]
+    #[allow(clippy::too_many_arguments)]
+    fn assess_rows<'py>(
+        &mut self,
+        py: Python<'py>,
+        row: usize,
+        rule: u8,
+        ids: PyReadonlyArray1<'py, i64>,
+        weights: PyReadonlyArray1<'py, f64>,
+        offsets: PyReadonlyArray1<'py, i64>,
+        width: usize,
+        want_vowels: bool,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        let matrix = Matrix {
+            ids: slice(&ids)?,
+            weights: slice(&weights)?,
+            offsets: slice(&offsets)?,
+            width,
+        };
+        let assessed = self
+            .bank
+            .assess_rows(row, rule, &matrix, want_vowels)
+            .map_err(failure)?;
+        let (first, flat, lengths) = self.bank.take_created();
+        let (needs, rows) = match assessed {
+            Assessed::Needs(needs) => (needs, Vec::new()),
+            Assessed::Done(rows) => (Vec::new(), rows),
+        };
+        let floats = |pick: fn(&crate::assess::RowAssessment) -> f64| {
+            PyArray1::from_vec(py, rows.iter().map(pick).collect::<Vec<f64>>())
+        };
+        let counts = |pick: fn(&crate::assess::RowAssessment) -> usize| {
+            PyArray1::from_vec(
+                py,
+                rows.iter().map(|r| pick(r) as i64).collect::<Vec<i64>>(),
+            )
+        };
+        let pairs: Vec<(u32, u32)> = rows.iter().flat_map(|r| r.pairs.iter().copied()).collect();
+        let before: Vec<i64> = rows
+            .iter()
+            .flat_map(|r| r.before.iter().map(|&s| i64::from(s)))
+            .collect();
+        let after: Vec<i64> = rows
+            .iter()
+            .flat_map(|r| r.after.iter().map(|&s| i64::from(s)))
+            .collect();
+        PyTuple::new(
+            py,
+            [
+                needs.into_pyobject(py)?.into_any(),
+                floats(|r| r.mass).into_any(),
+                floats(|r| r.short).into_any(),
+                floats(|r| r.marked).into_any(),
+                counts(|r| r.pairs.len()).into_any(),
+                PyArray1::from_vec(
+                    py,
+                    pairs.iter().map(|p| i64::from(p.0)).collect::<Vec<i64>>(),
+                )
+                .into_any(),
+                PyArray1::from_vec(
+                    py,
+                    pairs.iter().map(|p| i64::from(p.1)).collect::<Vec<i64>>(),
+                )
+                .into_any(),
+                counts(|r| r.before.len()).into_any(),
+                PyArray1::from_vec(py, before).into_any(),
+                counts(|r| r.after.len()).into_any(),
+                PyArray1::from_vec(py, after).into_any(),
+                first.into_pyobject(py)?.into_any(),
+                PyArray1::from_vec(py, flat).into_any(),
+                PyArray1::from_vec(py, lengths).into_any(),
+            ],
+        )
+    }
+
+    /// Příznakovost slabičné stavby tvaru (`cee.v2.assessment.markedness`); pro testy.
+    fn markedness(&mut self, form_id: usize) -> PyResult<f64> {
+        self.bank.markedness_of(form_id).map_err(failure)
     }
 
     /// Předfiltr jednoho tvaru (`FormBank.screen`).
@@ -541,10 +640,18 @@ impl NativeBank {
     }
 }
 
+/// Párový součet jako `np.sum` (viz `assess::pairwise_sum`); pro testy shody.
+#[pyfunction]
+fn pairwise_sum(values: PyReadonlyArray1<'_, f64>) -> PyResult<f64> {
+    Ok(crate::assess::pairwise_sum(slice(&values)?))
+}
+
 #[pymodule]
 mod cee_core {
     use pyo3::prelude::*;
 
+    #[pymodule_export]
+    use super::pairwise_sum;
     #[pymodule_export]
     use super::NativeBank;
 

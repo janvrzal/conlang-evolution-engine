@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from cee.v2.language.segments import SegmentTable
 
 #: Verze rozhraní, kterou tento Python čeká (viz ``INTERFACE_VERSION`` v Rustu).
-INTERFACE_VERSION = 2
+INTERFACE_VERSION = 3
 
 #: Čísla operací a pravidel přízvuku, jak je zná Rust (``process.rs``).
 OPERATIONS = ("change", "replace", "delete", "insert_before", "insert_after", "merge_next", "tone")
@@ -67,4 +67,18 @@ def new_bank(table: SegmentTable) -> Any | None:
         return None
     module = _load()
     assert module is not None
-    return module.NativeBank(table.boundary, table.vowel_mask)
+    return module.NativeBank(table.boundary, table.vowel_mask, glide_mask(table))
+
+
+def glide_mask(table: SegmentTable) -> Any:
+    """Maska polosamohlásek (``SegmentTable.sonority == 3``) s hranicí slova na konci.
+
+    Vektorově to samé, co ``sonority``: ne slabičná, sonorantní a nesouhláskové.
+    """
+    import numpy as np
+
+    vectors, index = table.vectors, table.index
+    syllabic = vectors[:, index["syl"]] == 1
+    sonorant = vectors[:, index["son"]] == 1
+    consonantal = vectors[:, index["cons"]] == 1
+    return np.append(~syllabic & sonorant & ~consonantal, False)

@@ -90,7 +90,11 @@ pub enum Applied {
 
 pub struct Bank {
     boundary: i32,
-    vowel: Vec<bool>,
+    pub(crate) vowel: Vec<bool>,
+    /// Hlásky, které jsou polosamohlásky (sonorita 3), pro příznakovost slabik.
+    pub(crate) glide: Vec<bool>,
+    /// Příznakovost slabičné stavby tvaru (NaN = zatím nespočítaná), viz `assess`.
+    pub(crate) marked: Vec<f64>,
     flat: Vec<i32>,
     starts: Vec<usize>,
     lengths: Vec<u32>,
@@ -115,6 +119,8 @@ impl Bank {
         Ok(Bank {
             boundary,
             segment_bits: vec![SegmentBits::default(); vowel.len()],
+            glide: vec![false; vowel.len()],
+            marked: Vec::new(),
             vowel,
             flat: Vec::new(),
             starts: Vec::new(),
@@ -130,6 +136,17 @@ impl Bank {
         })
     }
 
+    /// Nastaví polosamohlásky (maska délky „počet hlásek + 1“); už spočítaná
+    /// příznakovost tvarů se zahodí.
+    pub fn set_glide(&mut self, glide: Vec<bool>) -> Result<(), String> {
+        if glide.len() != self.vowel.len() {
+            return Err("maska polosamohlásek musí mít délku „počet hlásek + 1“".into());
+        }
+        self.glide = glide;
+        self.marked.clear();
+        Ok(())
+    }
+
     pub fn len(&self) -> usize {
         self.lengths.len()
     }
@@ -142,7 +159,7 @@ impl Bank {
         self.procs.len()
     }
 
-    fn form(&self, id: usize) -> &[i32] {
+    pub(crate) fn form(&self, id: usize) -> &[i32] {
         let start = self.starts[id];
         &self.flat[start..start + self.lengths[id] as usize]
     }

@@ -11,6 +11,30 @@ if TYPE_CHECKING:
     from cee.v2.world import World
 
 
+_MISSING: object = object()
+
+
+def assess(world: World, group_id: str, variable_id: str) -> FormAssessment | None:
+    """Uložené hodnocení analogické změny; rychlá cesta pro už platnou hodnotu.
+
+    Totéž co ``cee.v2.morphology.assess``. Tlaky se na jedno hodnocení ptají
+    pro každou dvojici (proměnná, skupina) znovu, takže v ustáleném stavu
+    (index už dorovnaný na verzi kódu a hodnota uložená, i ``None``) stačí
+    jedno nahlédnutí do slovníku; ostatní případy jdou původní cestou.
+    """
+    state = world.groups[group_id].main_code.phonology
+    entry = state.cache.get("form-assessment-index")
+    if entry is not None:
+        index = entry[1]
+        if index.version == state.version:
+            found = index.values.get(variable_id, _MISSING)
+            if found is not _MISSING:
+                return found  # type: ignore[no-any-return]
+    from cee.v2.morphology import assess as slow
+
+    return slow(world, group_id, variable_id)
+
+
 class FormAssessmentIndex:
     """Uchovává jen data a ruší hodnoty podle přírůstkových deníků."""
 
