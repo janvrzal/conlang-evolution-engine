@@ -23,7 +23,7 @@ import numpy.typing as npt
 from cee.v2 import native
 from cee.v2.assessment import SAMPLE_WORDS, _redundant_cell
 from cee.v2.language.assessment_index import NativeAssessmentIndex, index_of
-from cee.v2.language.lexical_index import related_keys
+from cee.v2.language.lexical_index import _default_form, related_keys
 from cee.v2.phonology import changed_id
 from cee.v2.pressures.base import Pressure, PressureBatch
 from cee.v2.pressures.lexical import _MOTIVATION, Taboo
@@ -104,11 +104,10 @@ class Supplier:
             self.index.handle.set_sample(token, code.phonology.version, keeper.morphemes, keeper.weights, keeper.total)
 
     def defaults(self, items: list[tuple[int, int]]) -> None:
-        """Zařadí do banky výchozí tvary morfémů (zapíše je do sloupce morfémů světa)."""
+        """Zařadí do banky výchozí tvary morfémů (zapíše je do sloupce morfémů světa), i když je kód přepsal."""
         self.adopt()
-        names = self.world.registry.morphemes.names
-        for group, morpheme in items:
-            self.world.form_id_of(self.codes[group], names[morpheme])
+        for _, morpheme in sorted({(0, morpheme) for _, morpheme in items}):
+            _default_form(self.world, morpheme)
 
     def maps(self, items: list[tuple[int, list[int]]]) -> None:
         """Spočítá mapy hlásek operací ``change`` a ``tone`` pro řádky změn."""

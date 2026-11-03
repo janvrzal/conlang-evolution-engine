@@ -192,3 +192,30 @@ def test_kontrolni_bod_jde_obnovit_v_rustu_i_z_pythonu_do_rustu(monkeypatch):
         resumed = Simulation.resume(pickle.loads(saved))
         resumed.run(300.0)
         assert resumed.history.digest() == digest, (first, second)
+
+
+def _eroded_world():
+    world = village_grid(3, seed=7, phonology=True, morphology=True, semantics=True)
+    for variable_id, variable in sorted(world.variables.items()):
+        if variable.kind != "lexical":
+            continue
+        root = world.stored(world.group_ids()[0], variable_id)
+        morpheme = world.variants[root.variants[0]].payload["morpheme"]
+        form = world.morphemes[morpheme].form
+        if len(form) < 4:
+            continue
+        for group in world.groups.values():
+            group.main_code.forms.set(morpheme, UnitForm(form[:2], None, None))
+            group.main_code.phonology.version += 1
+    return world
+
+
+@needs_native
+def test_vychozi_tvar_se_doplni_i_kdyz_kod_slovo_prepsal(monkeypatch):
+    """Erodované slovo (kód má vlastní tvar, výchozí není v bance) dá s Rustem stejný běh jako bez něj."""
+    rust = Simulation(_eroded_world())
+    rust.run(200.0)
+    monkeypatch.setenv("CEE_NATIVE", "0")
+    python = Simulation(_eroded_world())
+    python.run(200.0)
+    assert rust.history.digest() == python.history.digest()

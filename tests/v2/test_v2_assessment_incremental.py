@@ -101,7 +101,10 @@ def test_ruzne_sirky_lexikon_a_frekvence():
 
 def test_stale_ticks_zachovava_okamzik_prepocitani(monkeypatch):
     import cee.v2.assessment as assessment
+    from cee.v2 import native
 
+    # Reference v Pythonu (index v Rustu hlídá stejné pravidlo v ``test_v2_native_pressures``).
+    monkeypatch.setattr(native, "assess_enabled", lambda: False)
     world = village_grid(1, seed=11, phonology=True)
     group_id = next(iter(world.groups))
     code = world.groups[group_id].main_code
