@@ -57,7 +57,22 @@ s testem shody proti zlatým datům:
    - sestavení: `maturin build --release`. Do sdíleného venv se
      rozšíření neinstaluje; agent ho dal do
      `rust/cee_core/target/py` a ten přidal do `PYTHONPATH`.
-2. aplikace zvukových změn a fonologizace;
+2. aplikace zvukových změn a fonologizace.
+   **Hotovo 2026-11-03** (`zadani-rust-b2.md`):
+   - `NativeBank` umí krok fonologizace kódu po dávkách
+     (`restructure_step`, `queue_morpheme`, `activate`, verze rozhraní 2).
+     Vstupy jsou pole `FormStore`, sloupce světa, příznaky front a sloupce
+     sklonů slov předané bez kopírování. Rust nic nezapisuje, vrací
+     rozhodnutí a Python je zapíše ve stejném pořadí jako dřív;
+   - logity a sklony slov počítá Python, takže bitová shoda nezávisí na
+     libm. Chybějící hodnoty si Rust vyžádá (`needs`) a Python je doplní;
+   - otisky jsou stejné s Rustem i bez něj. Zlatá data kontrolují 18 015
+     přepisů a 9 937 zařazení do fronty bit po bitu;
+   - fonologie ve valley-50 trvá 3,7 s místo 7–8 s a celek je asi
+     o 8 % rychlejší (valley-50 asi 30 s). Zbytek času je v tlacích,
+     přenosu a hodnocení (krok 3 a 4 až po A5);
+   - zbývá: sestavování seznamů front (`_targets`, asi 2 s) a četnosti
+     užití (asi 1 s) v Pythonu;
 3. hodnocení (artikulace, funkční zátěž, lexikální jasnost) a tlaky;
 4. přenos (míšení, výběr, drift) a živé fondy;
 5. hledání míst inovací a změny;
