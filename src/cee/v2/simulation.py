@@ -289,9 +289,9 @@ class Simulation:
         owned = [index for index, (ctx, _, _, _) in enumerate(entries)
                  if self.shards is None or self.shards.owns(ctx.group.id)]
         rate_sums = np.zeros((len(entries), len(self.changes)), dtype=np.float64)
+        owned_contexts = [entries[group_idx][0] for group_idx in owned]
         for change_idx, change in enumerate(self.changes):
-            for group_idx in owned:
-                rate_sum = change.total_rate(entries[group_idx][0])
+            for group_idx, rate_sum in zip(owned, change.total_rates(owned_contexts)):
                 if rate_sum > 0.0:
                     rate_sums[group_idx, change_idx] = float(rate_sum)
         expected = phases.expected_counts(

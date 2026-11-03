@@ -15,17 +15,17 @@ from cee.v2.changes.sound import (
     PalatalAffrication,
     Palatalization,
     SecondaryPalatalization,
-    SoundSupportIndex,
     VowelDenazalization,
     VowelNasalization,
     _Candidates,
     context_stats,
+    sound_index,
 )
 from cee.v2.history import History
-from cee.v2.language.index import ContextIndex
 from cee.v2.language.lexicon import UnitForm
 from cee.v2.language.processes import Process
 from cee.v2.language.segments import default_table
+from cee.v2.language.sound_index import SoundIndex
 from cee.v2.repertoire import Distribution, Origin
 from cee.v2.world import Code, SpeechGroup, Territory, World
 
@@ -220,10 +220,8 @@ def test_right2_stats_candidates_and_incremental_sound_index_stay_equal(table):
     assert indexed_support() == explicit_before
 
     state = code.phonology
-    context_index = state.cache["context-index"][1]
-    support_index = state.cache["sound-support-index"][1]
-    assert isinstance(context_index, ContextIndex)
-    assert isinstance(support_index, SoundSupportIndex)
+    index = sound_index(world)
+    assert isinstance(index, SoundIndex)
     changed_unit = next(
         morpheme.id for morpheme in world.morphemes.values()
         if morpheme.meaning == "nasal_before_vowel" and morpheme.kind == "root"
@@ -239,8 +237,7 @@ def test_right2_stats_candidates_and_incremental_sound_index_stay_equal(table):
     assert stats_after.support(process, table) == explicit_after
     assert _Candidates([process], table).supports(stats_after, table)[0] == explicit_after
     assert indexed_support() == explicit_after
-    assert state.cache["context-index"][1] is context_index
-    assert state.cache["sound-support-index"][1] is support_index
+    assert sound_index(world) is index
 
 
 def _world_with_words(words, seed=12):

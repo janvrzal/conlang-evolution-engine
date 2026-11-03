@@ -209,6 +209,8 @@ class World:
     migration: float = 0.0
     #: Banka různých tvarů a tabulky procesů (M6d); vzniká až při potřebě.
     bank: FormBank | None = None
+    #: Číselný index prostředí a opor zvukových změn (``changes.sound.sound_index``); odvozený stav, vzniká při prvním použití.
+    sound: Any = None
     #: Výchozí tvar každého morfému (neměnný), aby se netvořil při každém čtení.
     default_units: dict[str, UnitForm] = field(default_factory=dict)
     #: Seedované sklony slov ke změně (``phonology.word_bias``): číslo procesu

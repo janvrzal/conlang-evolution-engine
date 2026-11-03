@@ -1,11 +1,12 @@
 """Banka tvarů, tabulky procesů a průběžné indexy (výkonová vrstva M6d)."""
 
-import numpy as np
 
+from cee.v2.changes.sound import CATALOG, sound_index
 from cee.v2.language.bank import UNCHANGED, FormBank
-from cee.v2.language.index import ContextIndex, ExponentIndex
+from cee.v2.language.index import ExponentIndex
 from cee.v2.language.lexicon import FormStore, UnitForm
 from cee.v2.language.processes import Process
+from cee.v2.language.sound_index import SoundIndex
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
 
@@ -36,27 +37,36 @@ def test_ulozeni_tvaru_vede_denik_a_vetev_ma_novou_identitu():
     assert branch.get("a") == UnitForm((1, 2), None, None)
 
 
+def _context_multiset(index, code):
+    """Počty prostředí kódu jako seřazená pole n-tic (nezávisí na číslování prostředí)."""
+    columns = index.context_counts(code)
+    return sorted(zip(*(column.tolist() for column in columns)))
+
+
 def test_prubezne_indexy_se_shoduji_s_vypoctem_od_nuly():
     world = village_grid(3, seed=2, syntax=True, semantics=True)
     simulation = Simulation(world)
     kept = {}
+    index = sound_index(world)
     for group in world.group_ids():
         code = world.groups[group].main_code
-        kept[group] = (ContextIndex(), ExponentIndex())
-        for index in kept[group]:
-            index.sync(world, code)
+        kept[group] = ExponentIndex()
+        kept[group].sync(world, code)
+        index.sync(world, [code], CATALOG, force=True)
     for year in (300, 600, 900):
         simulation.run(year)
         for group in world.group_ids():
             code = world.groups[group].main_code
-            contexts, exponents = kept[group]
-            contexts.sync(world, code)
+            exponents = kept[group]
             exponents.sync(world, code)
-            fresh_contexts, fresh_exponents = ContextIndex(), ExponentIndex()
-            fresh_contexts.sync(world, code)
+            index.sync(world, [code], CATALOG, force=True)
+            fresh_exponents, fresh = ExponentIndex(), SoundIndex()
             fresh_exponents.sync(world, code)
-            assert contexts.counts == fresh_contexts.counts
+            fresh.sync(world, [code], CATALOG, force=True)
+            assert _context_multiset(index, code) == _context_multiset(fresh, code)
+            assert index.inventory(code) == fresh.inventory(code)
+            assert index.supports(code).tolist() == fresh.supports(code).tolist()
             assert exponents.exponents == fresh_exponents.exponents
             assert exponents.shapes == fresh_exponents.shapes
     assert any(len(world.groups[group].main_code.forms.log) for group in world.group_ids())
-    assert np.all([len(kept[group][0].counts) > 0 for group in world.group_ids()])
+    assert all(len(_context_multiset(index, world.groups[group].main_code)) > 0 for group in world.group_ids())
