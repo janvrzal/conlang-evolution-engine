@@ -289,7 +289,7 @@ def _concept_frequencies(world: World, index: NativeAssessmentIndex) -> npt.NDAr
     key = (id(frequencies), version, len(concepts))
     held = index.scratch.get("concept-frequencies")
     if version is not None and held is not None and held[0] == key:
-        return held[1]  # type: ignore[no-any-return]
+        return held[1]
     found = np.full(len(concepts), 0.3, dtype=np.float64)
     numbers = concepts.numbers
     for concept, value in frequencies.items():
@@ -307,7 +307,7 @@ def _paradigm_weights(world: World, index: NativeAssessmentIndex) -> tuple[npt.N
     key = (len(classes), len(cells), len(world.paradigms))
     held = index.scratch.get("paradigm-weights")
     if held is not None and held[0] == key:
-        return held[1], held[2]  # type: ignore[no-any-return]
+        return held[1], held[2]
     width = max(len(cells), 1)
     weights = np.ones(len(classes) * width, dtype=np.float64)
     for word_class, paradigm in world.paradigms.items():
