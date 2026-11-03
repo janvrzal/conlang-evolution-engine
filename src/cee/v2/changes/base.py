@@ -80,6 +80,10 @@ class Change(ABC):
             return float(phases.uniform_rate(self.base_rate, len(sites), self.rate_scale(context)))
         return phases.rate_total(self.rates(context, sites))
 
+    def total_rates(self, contexts: Sequence[InnovationContext]) -> list[float]:
+        """Celkové míry všech zadaných skupin; indexované změny je počítají dávkou, výchozí je po jedné."""
+        return [self.total_rate(context) for context in contexts]
+
     def weighted_sites(
         self, context: InnovationContext
     ) -> tuple[Sequence[str], np.ndarray | None]:

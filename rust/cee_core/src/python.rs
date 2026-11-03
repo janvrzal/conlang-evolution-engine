@@ -19,11 +19,11 @@ use crate::phonology::{self, Needs, Params, Target, Units};
 use crate::process::Proc;
 use crate::support::{self, Contexts, Masks};
 
-fn failure(message: String) -> PyErr {
+pub(crate) fn failure(message: String) -> PyErr {
     PyValueError::new_err(message)
 }
 
-fn slice<'a, T: numpy::Element, D: Dimension>(
+pub(crate) fn slice<'a, T: numpy::Element, D: Dimension>(
     array: &'a PyReadonlyArray<'_, T, D>,
 ) -> PyResult<&'a [T]> {
     array
@@ -34,10 +34,10 @@ fn slice<'a, T: numpy::Element, D: Dimension>(
 /// Pole z Pythonu (`array.array`, `bytearray`, numpy) držená po dobu jednoho
 /// volání. Během něj Python nic nemění (drží se zámek GIL), po návratu se
 /// zpřístupnění pole uvolní a Python smí pole zase měnit či zvětšovat.
-struct Held<T: Element>(Option<PyBuffer<T>>);
+pub(crate) struct Held<T: Element>(Option<PyBuffer<T>>);
 
 impl<T: Element> Held<T> {
-    fn new(object: &Bound<'_, PyAny>) -> PyResult<Self> {
+    pub(crate) fn new(object: &Bound<'_, PyAny>) -> PyResult<Self> {
         let buffer = PyUntypedBuffer::get(object)?;
         // Prázdné pole nemusí mít platnou ani zarovnanou adresu; nečte se.
         if buffer.item_count() == 0 {
@@ -50,11 +50,11 @@ impl<T: Element> Held<T> {
         Ok(Held(Some(buffer)))
     }
 
-    fn all(objects: &[Bound<'_, PyAny>]) -> PyResult<Vec<Self>> {
+    pub(crate) fn all(objects: &[Bound<'_, PyAny>]) -> PyResult<Vec<Self>> {
         objects.iter().map(Held::new).collect()
     }
 
-    fn view(&self) -> &[T] {
+    pub(crate) fn view(&self) -> &[T] {
         match self.0.as_ref().and_then(|buffer| buffer.as_slice_ptr()) {
             // SAFETY: pole je souvislé a po dobu volání (zámek GIL) ho nikdo
             // nemění ani nezmenšuje, drží ho `PyBuffer`; jádro ho jen čte.
@@ -190,7 +190,7 @@ fn inserts_out(inserts: &[phonology::Insert]) -> (Vec<usize>, Vec<usize>, Vec<f6
 /// Banka tvarů a tabulky procesů v Rustu; zrcadlo `FormBank` z Pythonu.
 #[pyclass(module = "cee_core")]
 pub struct NativeBank {
-    bank: Bank,
+    pub(crate) bank: Bank,
 }
 
 #[pymethods]
@@ -760,6 +760,10 @@ mod cee_core {
     use super::sound_supports;
     #[pymodule_export]
     use super::NativeBank;
+    #[pymodule_export]
+    use crate::index_python::clarity_scores;
+    #[pymodule_export]
+    use crate::index_python::SoundIndex;
     #[pymodule_export]
     use crate::python_pools::{
         hear, libm_probe, normalized, settle, NativeCells, NativeStep, Slab,

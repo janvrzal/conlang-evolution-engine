@@ -147,6 +147,11 @@ impl Bank {
         Ok(())
     }
 
+    /// Číslo hranice slova (počet hlásek tabulky).
+    pub fn boundary(&self) -> i32 {
+        self.boundary
+    }
+
     pub fn len(&self) -> usize {
         self.lengths.len()
     }

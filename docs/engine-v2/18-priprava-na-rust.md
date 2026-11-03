@@ -219,7 +219,7 @@ s testem shody proti zlatým datům:
      (`Pressure.scores`) a vše za přenosem (události, slovní zásoba, aktivace); `mix`
      jako samostatná funkce má jen Python (Rust ho má uvnitř `hear`). Fondy, které by
      měly přejít spolu s tlaky: malá pole slotů a `LivePools` (`load`, `innovate`, `release`);
-5. hledání míst inovací a změny;
+5. hledání míst inovací a změny (indexy na čísla z registru a do Rustu celé; návrh a stav v oddílu „B5“ níže);
 6. hlavní smyčka `Simulation`; Python zůstane pro popis světa, export,
    kalibrační skripty a API; desktopová aplikace (Tauri) může engine volat
    přímo z Rustu bez Pythonu.
@@ -227,6 +227,103 @@ s testem shody proti zlatým datům:
 Rozdělení na více crate (tabulka hlásek, změny, přenos, události) zkrátí
 překlad po malé změně; konstanty a katalogy zůstanou daty
 (`Parameters`, YAML/JSON), takže kalibrace nepotřebuje překlad.
+
+## B5: indexy na čísla a hledání míst inovací v Rustu (návrh)
+
+Zadání `zadani-rust-b5.md`. Čas dnes nejde do aritmetiky, ale do indexů nad
+řetězcovými slovníky a do Python obalů. Cíl: stav indexů v plochých sloupcích
+podle čísel z registru, žijící v Rustu; Python posílá jen pohledy na pole a
+bere pole zpět. Inventura je bez nového profilu (podíly z A7 a B3 výše).
+
+### Inventura
+
+| Index | Stav dnes | Aktualizace | Čtenáři | Návrh |
+|---|---|---|---|---|
+| `ContextIndex` | `Counter` pětic (předchozí, hláska, další, přízvuk, druhá další), `Counter` hlásek, `_counted: dict[str, tuple]`, `deltas` | deník `FormStore.log` (řetězce), `vocabulary_log`, token úložiště; po slovech | `SoundSupportIndex`, `context_stats` (legacy), `contact.inventory` | **hotovo**, viz „Zvukové změny“ |
+| `SoundSupportIndex` | opory kandidátů (`int64`), efektivní opory, po rodinách seznam míst (řetězce ID proměnných), míry, součet, `supported_map` | rozdíly počtů prostředí → `eval_supports` (Rust z B3) | `SoundChange.sites/rates/total_rate/weighted_sites/propose` | **hotovo**, viz níže |
+| `LexicalClarityIndex` | `dominant`, `root_concepts`, `root_forms`, `owners` (tvar → množina dvojic), `scores`, `by_form`, `by_root` | `forms.log`, `dominant_log`, verze, podpis grafu | `Clarity` (`pressures/lexical.py`), `lexicon.py` | druhý krok, **hotovo**: bez stavu; skóre je funkce polí (dominantní kořeny podle čísla pojmu, tvary kódu, výchozí tvary, banka, seřazené příbuzné dvojice), tabulka vlastníků tvaru se staví z dominantních kořenů při každé dávce (stovka položek na skupinu je levnější než dorovnávání), jedno volání `cee_core.clarity_scores` na dávku tlaků pro všechny skupiny |
+| `AssessmentVocabularyIndex` | vzorek nejčastějších tvarů (jména, tvary n-ticemi, `owners`, `vowels`), pozice změněných | `forms.log`, frekvence pojmů (`FrequencyMap.log`) | `assessment._vocabulary`, `NativeBank.assess_rows` | třetí krok: vzorek jako pole čísel morfémů a tvarů, vlastníci tvaru CSR |
+| `FormAssessmentIndex` | `values: dict[proměnná, FormAssessment]`, závislosti `unit_vars/root_vars/exponent_vars/cell_vars` | deníky tvarů, užití, dominantních kořenů, frekvencí | `Articulation`/morfologické tlaky | třetí krok: špinavé příznaky podle čísla proměnné, závislosti CSR |
+| `MorphologyCandidateIndex`, `WordMembershipIndex`, `ExponentIndex` | množiny a slovníky podle řetězců (jednotka, kořen, buňka, třída) | `vocabulary_log`, `forms.log` | `changes/morphology.py`, analogie | čtvrtý krok: stejné sloupce jako `MorphemeTable` (kořen, třída, buňka) + CSR podle buňky |
+| `SemanticDependencies` | `dominant`, `relations`, `compounds`, `sites` jako řetězce | `dominant_log`, `usage_log`, `vocabulary_log` | `changes/lexicon.py` | čtvrtý krok |
+
+Pořadí práce řídí cena: zvukové změny (prostředí a opory), pak lexikální
+jasnost, pak ostatní. Pozn.: jazyky a skupiny mají vlastní stav; svět sdílí
+banku tvarů, takže i čísla tvarů a prostředí.
+
+### Zvukové změny: číselná podoba a hranice volání
+
+Stav jednoho kódu (skupiny) je ve **světovém objektu** `SoundIndex` (patří
+bance tvarů, protože číslo tvaru platí jen s ní; ve světě `FormBank.sound_index`,
+v Rustu `cee_core.SoundIndex`). Skupiny v něm mají řádek podle čísla úložiště
+tvarů (`FormStore.token`).
+
+- **Tvary a slovní zásoba bez deníků.** Pro každý morfém (číslo z registru)
+  drží kód pole `counted_form` (číslo tvaru, který index započítal, −2 =
+  nezapočítáno) a `counted_rule` (pravidlo přízvuku při započtení). Při volání
+  Python předá bez kopírování tři pohledy: pole tvarů kódu (`FormStore.raw()[0]`),
+  výchozí tvary světa (`columns.morphemes.form`) a příznaky slovní zásoby
+  (`MorphemeSet.flags`). Rust jedním hustým průchodem po morfémech (desítky tisíc
+  bajtů, výrazně levnější než jedno volání z Pythonu) najde změněné položky a
+  dorovná jen je. Deník řetězců se tak nečte vůbec a index se při kopii světa
+  nemůže rozejít s deníkem. Zůstalo se starým chováním: po změně pravidla
+  přízvuku se prostředí nepřepočítají, dokud se tvar slova nezmění (existující
+  zvláštnost; `counted_rule` ji drží, ať se otisky nezmění), a změna úložiště
+  (jiný token) index celý přepočte.
+- **Prostředí jako čísla.** Pětice (předchozí, hláska, další, přízvuk, druhá
+  další) je v Rustu zabalená do dvou `u64` a pamatovaná jen pro tvar
+  (mapa tvar × pravidlo → seznam prostředí v CSR). Žádný `Counter`: opory se
+  přičítají přímo, `segment_occurrences[hláska]` (počet výskytů) určuje inventář.
+- **Opory kandidátů** (`Vec<i64>` podle řádku kandidáta v sjednocení rodin pro
+  inventář). Sada kandidátů (masky cíl, vlevo, vpravo, druhý vpravo, přízvuk,
+  hranice rodin) zůstává v Pythonu, protože ji vyrábí `candidates()` rodin;
+  Rustu se předá jednou pro inventář (`register_candidates`) a on ji přepíše na
+  **transponované bitové sady** (pro každý sloupec hlásky bity kandidátů).
+  Shoda jednoho výskytu s kandidáty je AND čtyř řádků po 64 kandidátech;
+  přírůstek opory je celočíselný, takže výsledek nezávisí na pořadí sčítání.
+  Změny tvarů přičtou a odečtou jen svá prostředí (čistý rozdíl po
+  seřazení), změna inventáře přepočte opory z tvarů celé slovní zásoby.
+- **Rodiny.** Pro každou rodinu Rust drží seznam míst (kandidáti s oporou ≥ 2),
+  míry `(scale · min(1, opora / 8)) / n` a součet `pairwise_sum` (jako
+  `np.sum`); přepočítá jen rodiny, kterým se změnily efektivní opory.
+  Váhy `rates / total` počítá Python jen pro skupiny s nenulovým počtem inovací.
+- **Hranice.** `Change.total_rates(contexts)` je dávkové: jedno volání
+  `sync` pro všechny skupiny tiku vrací matici součtů (skupina × rodina);
+  místa, míry a opory pro (skupinu, rodinu) s inovací se čtou zvlášť po jedné
+  (vzácné). Chybí-li Rustu sada kandidátů pro nový inventář, vrátí `needs`
+  (inventář) a Python ji zaregistruje a zavolá znovu (jako ve smyčce B2).
+  `propose` zůstává v Pythonu (A5).
+- **Python reference** má tutéž podobu (pole `counted_form`, `counted_rule`,
+  prostředí jako čísla, opory v `numpy`), je fallbackem (`CEE_NATIVE=0`) a
+  referencí testu Rust proti Pythonu. Celé je přírůstkové: změna jednoho tvaru
+  stojí řádově její prostředí, ne celou slovní zásobu; změna inventáře je
+  jediný případ plného přepočtu (v Pythonu hustý maticový součin jako dosud).
+- **Vlákna.** Skupiny se zapisují do vlastního stavu a vlastních výstupů,
+  takže jsou nezávislé; paralelizace po skupinách (`rayon`) je možná bez
+  změny výsledku. Nezavedeno, dokud se nepotvrdí na celé sadě.
+- **Checkpointy a pickle.** Python drží jen číselná pole; stav v Rustu se
+  exportuje a obnovuje (`counted_form`, `counted_rule`, token) a podle něj se
+  opory přepočítají, takže zůstane i zachovaná zvláštnost s pravidlem přízvuku.
+
+### Stav práce (B5)
+
+Hotovo (verze rozhraní 5): `ContextIndex` a `SoundSupportIndex` v číselné podobě
+(`cee.v2.language.sound_index`, Python reference `SoundIndex`, Rust `cee_core.SoundIndex`,
+`rust/cee_core/src/index.rs`; `ContextIndex` zůstal jako průčelí pro `contact.inventory`),
+dávkové `Change.total_rates` volané z `Simulation._innovate`, a lexikální jasnost
+(`lexical_index.clarity_scores`, `rust/cee_core/src/clarity.rs`).
+Odchylky od návrhu výše: (1) jazykový stav indexu je na **světě** (`World.sound`), ne na
+bance tvarů, protože banka se mezi kopiemi světa (checkpoint) sdílí a stav kódů ne;
+(2) sada kandidátů zůstala v Pythonu (vyrábí ji `candidates()` rodin), Rust ji dostane
+jednou pro inventář; (3) vlákna nejsou zavedena. Zachovaná zvláštnost: změna pravidla
+přízvuku nepřepočítá prostředí slov, dokud se slovo nezmění (`counted_rule`).
+
+Zbývá, v tomto pořadí: `AssessmentVocabularyIndex` (vzorek jako pole čísel morfémů a
+tvarů, vlastníci tvaru v CSR) a `FormAssessmentIndex` (špinavé příznaky podle čísla
+proměnné, závislosti v CSR); pak `WordMembershipIndex`, `MorphologyCandidateIndex`,
+`ExponentIndex`, `SemanticDependencies` a místa inovací `changes/lexicon.py`,
+`morphology.py`, `syntax.py` (dnes dávkové jen u zvukových změn, ostatní změny jedou
+výchozím `total_rates` po skupinách); nakonec zlatá data míst a skóre tlaků z A7.
 
 ## Bitová shoda při přechodu do Rustu
 

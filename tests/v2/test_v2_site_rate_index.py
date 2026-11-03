@@ -20,16 +20,18 @@ from cee.v2.changes.lexicon import (
 )
 from cee.v2.changes.morphology import Extension, Leveling, Rebracketing
 from cee.v2.changes.sound import (
+    CATALOG,
     FULL_SUPPORT,
     SOUND_CHANGES,
     SOUND_INNOVATIONS_PER_GENERATION,
     SoundChange,
-    SoundSupportIndex,
     _total_prior,
+    sound_index,
 )
 from cee.v2.language.index import ContextIndex
 from cee.v2.language.morphology_index import MorphologyCandidateIndex
 from cee.v2.language.semantic_index import SemanticSitesIndex
+from cee.v2.language.sound_index import NativeSoundIndex, SoundIndex
 from cee.v2.phonology import enter_vocabulary, leave_vocabulary
 from cee.v2.scenarios import village_grid
 from cee.v2.simulation import Simulation
@@ -243,10 +245,18 @@ def test_sound_support_index_inventory_transition_and_mutations() -> None:
             assert list(change.sites(context)) == sorted(change._supported_legacy(context))
 
     # 5. Přechod inventáře: odebrání všech slov obsahujících vybranou hlásku
-    ci = cast(ContextIndex, state.cache["context-index"][1])
+    index = sound_index(world)
+    index.sync(world, [code], CATALOG)
+    ci = ContextIndex()
+    ci.sync(world, code)
     inv_before = ci.inventory()
-    # Najdeme hlásku s nejmenším výskytem
-    target_seg = min(ci.segment_counts, key=lambda s: ci.segment_counts[s])
+    assert inv_before == index.inventory(code)
+    # Najdeme hlásku s nejmenším počtem výskytů
+    _, segments, _, _, _, counts = index.context_counts(code, world)
+    occurrences: dict[int, int] = {}
+    for segment, count in zip(segments.tolist(), counts.tolist()):
+        occurrences[segment] = occurrences.get(segment, 0) + count
+    target_seg = min(occurrences, key=lambda s: (occurrences[s], s))
     for unit in list(state.vocabulary):
         form = world.form_of(code, unit)
         if target_seg in form:
@@ -256,8 +266,11 @@ def test_sound_support_index_inventory_transition_and_mutations() -> None:
     assert target_seg not in inv_after
     assert len(inv_after) < len(inv_before)
 
-    # SoundSupportIndex musí detekovat změnu inventáře a provést full rebuild
+    # Index opor musí detekovat změnu inventáře a provést full rebuild; keš reference
+    # podle ``state.version`` se zahodí (odebrání bez logu verzi nezvýší, viz bod 4).
+    state.cache.pop("context-stats", None)
     for change in SOUND_CHANGES:
+        state.cache.pop(("sound-sites", change.kind), None)
         sites = change.sites(context)
         ref = change._supported_legacy(context)
         assert list(sites) == sorted(ref)
@@ -297,23 +310,27 @@ def test_checkpoint_isolation_and_resume_digest() -> None:
             assert live_m.contributions is not cp_m.contributions
             assert live_m.sorted_sites is not cp_m.sorted_sites
 
-        # Zvukový index opor
-        if "sound-support-index" in live_cache:
-            live_ss = cast(SoundSupportIndex, live_cache["sound-support-index"][1])
-            cp_ss = cast(SoundSupportIndex, cp_cache["sound-support-index"][1])
-            assert live_ss is not cp_ss
-            assert live_ss.supports is not cp_ss.supports
-            assert live_ss.effective_supports is not cp_ss.effective_supports
-            assert live_ss.families is not cp_ss.families
-
-        # Index prostředí
-        if "context-index" in live_cache:
-            live_ci = cast(ContextIndex, live_cache["context-index"][1])
-            cp_ci = cast(ContextIndex, cp_cache["context-index"][1])
-            assert live_ci is not cp_ci
-            assert live_ci.counts is not cp_ci.counts
-            assert live_ci.segment_counts is not cp_ci.segment_counts
-            assert live_ci.deltas is not cp_ci.deltas
+        # Číselný index prostředí a opor patří světu; kopie s ním nesdílí žádné pole
+    live_sound, cp_sound = sim.world.sound, cp_world.sound
+    assert isinstance(live_sound, (SoundIndex, NativeSoundIndex))
+    assert type(live_sound) is type(cp_sound)
+    assert live_sound is not cp_sound
+    codes = [sim.world.groups[gid].main_code for gid in sim.world.group_ids()]
+    cp_codes = [cp_world.groups[gid].main_code for gid in sim.world.group_ids()]
+    live_sound.sync(sim.world, codes, CATALOG)
+    cp_sound.sync(cp_world, cp_codes, CATALOG)
+    if isinstance(live_sound, SoundIndex):
+        assert live_sound.slots is not cp_sound.slots and live_sound.contexts is not cp_sound.contexts
+    for code, cp_code in zip(codes, cp_codes):
+        assert live_sound.inventory(code) == cp_sound.inventory(cp_code)
+        if isinstance(live_sound, SoundIndex):
+            live_slot, cp_slot = live_sound.slots[code.forms.token], cp_sound.slots[cp_code.forms.token]
+            assert live_slot is not cp_slot
+            assert live_slot.counted_form is not cp_slot.counted_form
+            assert live_slot.counts is not cp_slot.counts
+            assert live_slot.supports is not cp_slot.supports
+            assert live_slot.families is not cp_slot.families
+        assert np.array_equal(live_sound.supports(code), cp_sound.supports(cp_code))
 
     # Nepřerušený běh
     sim.run(200)

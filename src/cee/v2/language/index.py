@@ -129,81 +129,28 @@ def _decrement(counter: Counter[Key], key: Key) -> None:
         del counter[key]
 
 
-Context = tuple[int, int, int, bool, int]
+class ContextIndex:
+    """Průčelí k indexu prostředí hlásek světa (:mod:`cee.v2.language.sound_index`).
 
-
-class ContextIndex(VocabularyIndex[tuple[Context, ...]]):
-    """Kolikrát se ve slovní zásobě vyskytuje (předchozí, hláska, následující, přízvuk, za-následující)."""
+    Stav (prostředí, výskyty hlásek, opory zvukových změn) drží číselný index
+    patřící bance tvarů světa; tento objekt si jen pamatuje inventář z posledního
+    dorovnání, ať nedrží odkaz na svět (kopie stavu kódu nepočítá nad cizím světem).
+    """
 
     def __init__(self) -> None:
-        super().__init__()
-        self.counts: Counter[Context] = Counter()
-        self.segment_counts: Counter[int] = Counter()
-        self.generation: int = 0
-        self.deltas: list[tuple[Context, int]] = []
-        self._step_delta: Counter[Context] = Counter()
-        self._in_reset: bool = False
+        self._inventory: tuple[int, ...] = ()
+
+    def sync(self, world: World, code: Code) -> None:
+        """Dorovná index světa na aktuální slovní zásobu kódu."""
+        from cee.v2.changes.sound import CATALOG, sound_index
+
+        index = sound_index(world)
+        index.sync(world, [code], CATALOG, force=True)
+        self._inventory = index.inventory(code)
 
     def inventory(self) -> tuple[int, ...]:
-        return tuple(sorted(self.segment_counts))
-
-    def contribution(self, world: World, code: Code, unit: str) -> tuple[Context, ...]:
-        from cee.v2.changes.sound import form_contexts
-
-        assert world.table is not None
-        return form_contexts(world.form_of(code, unit), world.table, code.stress_rule)
-
-    def add(self, value: tuple[Context, ...]) -> None:
-        for key in value:
-            old = self.counts[key]
-            self.counts[key] = old + 1
-            if old == 0:
-                self.segment_counts[key[1]] += 1
-            if not self._in_reset:
-                self._step_delta[key] += 1
-
-    def remove(self, value: tuple[Context, ...]) -> None:
-        for key in value:
-            old = self.counts[key]
-            if old <= 1:
-                if old == 1:
-                    del self.counts[key]
-                    self.segment_counts[key[1]] -= 1
-                    if self.segment_counts[key[1]] <= 0:
-                        del self.segment_counts[key[1]]
-            else:
-                self.counts[key] = old - 1
-            if not self._in_reset:
-                self._step_delta[key] -= 1
-
-    def reset(self) -> None:
-        self.counts.clear()
-        self.segment_counts.clear()
-        self.generation += 1
-        self.deltas.clear()
-        self._step_delta.clear()
-
-    def sync(self, world: World, code: Code) -> bool:
-        state, forms = code.phonology, code.forms
-        reset_needed = (
-            self._token != forms.token
-            or self._cursor > len(forms.log)
-            or self._vocab_cursor > len(state.vocabulary_log)
-        )
-        self._step_delta.clear()
-        self._in_reset = reset_needed
-        try:
-            touched = super().sync(world, code)
-        finally:
-            self._in_reset = False
-
-        if not reset_needed and self._step_delta:
-            for ctx, diff in sorted(self._step_delta.items()):
-                if diff != 0:
-                    self.deltas.append((ctx, diff))
-            self._step_delta.clear()
-        return touched
-        return touched
+        """Hlásky, které kód ve slovní zásobě užívá (seřazené)."""
+        return self._inventory
 
 
 Exponent = tuple[str, str, str, tuple[int, ...]]

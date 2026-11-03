@@ -26,9 +26,9 @@ import numpy.typing as npt
 
 from cee.v2 import native
 from cee.v2.changes.base import Change, InnovationContext
-from cee.v2.language.index import ContextIndex
 from cee.v2.language.processes import Process, StressRule, stressed_nucleus
 from cee.v2.language.segments import TONE_CODES, TONES, Pattern, SegmentTable
+from cee.v2.language.sound_index import NativeSoundIndex, SoundIndex
 from cee.v2.phonology import register
 from cee.v2.pressures import (
     Actuation,
@@ -127,22 +127,18 @@ def context_stats(context: InnovationContext) -> ContextStats | None:
     cached = state.cache.get("context-stats")
     if cached is not None and cached[0] == state.version:
         return cast(ContextStats, cached[1])
-    # Počty prostředí drží průběžný index; dorovná jen změněná slova.
-    index = state.cache.get("context-index")
-    if index is None:
-        index = state.cache["context-index"] = (0, ContextIndex())
-    contexts = cast(ContextIndex, index[1])
-    contexts.sync(world, code)
-    counts = contexts.counts
-    keys = sorted(counts)
+    # Počty prostředí drží průběžný index světa; dorovná jen změněná slova.
+    index = sound_index(world)
+    index.sync(world, [code], CATALOG)
+    previous, segment, following, stressed, following2, count = index.context_counts(code, world)
     stats = ContextStats(
-        previous=np.array([key[0] for key in keys], dtype=np.intp),
-        segment=np.array([key[1] for key in keys], dtype=np.intp),
-        following=np.array([key[2] for key in keys], dtype=np.intp),
-        stressed=np.array([key[3] for key in keys], dtype=bool),
-        following2=np.array([key[4] for key in keys], dtype=np.intp),
-        count=np.array([counts[key] for key in keys], dtype=np.float64),
-        inventory=tuple(sorted({key[1] for key in keys})),
+        previous=previous,
+        segment=segment,
+        following=following,
+        stressed=stressed,
+        following2=following2,
+        count=count.astype(np.float64),
+        inventory=tuple(sorted({int(value) for value in np.unique(segment)})),
     )
     state.cache["context-stats"] = (state.version, stats)
     return stats
@@ -229,16 +225,6 @@ _CANDIDATES: dict[tuple[str, int, tuple[int, ...]], _Candidates] = {}
 _CANDIDATES_LIMIT = 1 << 12
 
 
-@dataclass
-class _FamilyRateState:
-    sites: list[str]
-    rates_array: npt.NDArray[np.float64]
-    total: float
-    weights: npt.NDArray[np.float64] | None
-    supported_map: dict[str, tuple[Process, float]] | None
-    site_indices: dict[str, int]
-
-
 class _CombinedSoundCandidates:
     """Sjednocení kandidátů všech rodin zvukových změn pro jeden inventář."""
 
@@ -264,6 +250,8 @@ class _CombinedSoundCandidates:
             self.family_candidates[change.kind] = uniq
 
         self.all_processes = all_processes
+        #: Konec každé rodiny (v pořadí ``SOUND_CHANGES``) v řádcích kandidátů.
+        self.family_ends = [self.family_slices[change.kind].stop for change in SOUND_CHANGES]
         self.masks = _Columns(all_processes, table, inventory)
         self.right2_rows = self.masks.right2_rows
         self.stressed_rows = np.array([i for i, p in enumerate(all_processes) if p.stress == "stressed"],
@@ -345,192 +333,67 @@ def _combined_candidates(table: SegmentTable, inventory: tuple[int, ...]) -> _Co
     return found
 
 
-class SoundSupportIndex:
-    """Společný průběžný index opor pro všech 20 rodin zvukových změn."""
+class _SoundCatalog:
+    """Sady kandidátů a míry rodin, jak je potřebuje index světa (``language.sound_index``)."""
+
+    #: Míra rodiny na jednotku opory: ``SOUND_INNOVATIONS_PER_GENERATION · prior / součet priorů``.
+    scales: list[float]
 
     def __init__(self) -> None:
-        self.version: int = -1
-        self.table_id: int | None = None
-        self.inventory: tuple[int, ...] = ()
-        self.context_generation: int = -1
-        self.delta_cursor: int = 0
-        self.supports: npt.NDArray[np.int64] = np.zeros(0, dtype=np.int64)
-        self.effective_supports: npt.NDArray[np.int64] = np.zeros(0, dtype=np.int64)
-        self.families: dict[str, _FamilyRateState] = {}
+        self.scales = []
 
-    def sync(self, world: World, code: Code) -> None:
-        state = code.phonology
-        table = world.table
-        if table is None or not state.vocabulary:
-            self.version = state.version
-            self.table_id = id(table) if table is not None else None
-            self.inventory = ()
-            self.supports = np.zeros(0, dtype=np.int64)
-            self.effective_supports = np.zeros(0, dtype=np.int64)
-            self.families.clear()
-            return
+    @staticmethod
+    def candidates(table: SegmentTable, inventory: tuple[int, ...]) -> _CombinedSoundCandidates:
+        return _combined_candidates(table, inventory)
 
-        index_holder = state.cache.get("context-index")
-        if index_holder is None:
-            index_holder = state.cache["context-index"] = (0, ContextIndex())
-        contexts = cast(ContextIndex, index_holder[1])
 
-        if (
-            self.version == state.version
-            and self.table_id == id(table)
-            and len(contexts._counted) == len(state.vocabulary)
-        ):
-            return
+class _FamilyView:
+    """Místa jedné rodiny u jednoho kódu: názvy proměnných, míry, součet a váhy."""
 
-        touched = contexts.sync(world, code)
-        if (
-            not touched
-            and self.table_id == id(table)
-            and self.context_generation == contexts.generation
-            and self.delta_cursor == len(contexts.deltas)
-            and len(self.supports) > 0
-        ):
-            self.version = state.version
-            return
+    def __init__(self, index: SoundIndex | NativeSoundIndex, code: Code, table: SegmentTable, family: int, kind: str) -> None:
+        self.index, self.code, self.table, self.kind = index, code, table, kind
+        self.positions, self.rates, self.total = index.family(code, family)
+        self.combined = _combined_candidates(table, index.inventory(code))
+        self._family = family
+        candidates = self.combined.family_candidates[kind]
+        self.names: list[str] = [candidates[position][0] for position in self.positions.tolist()]
 
-        inventory = contexts.inventory()
-        if not inventory:
-            self.version = state.version
-            self.table_id = id(table)
-            self.inventory = ()
-            self.supports = np.zeros(0, dtype=np.int64)
-            self.effective_supports = np.zeros(0, dtype=np.int64)
-            self.families.clear()
-            return
+    @property
+    def weights(self) -> npt.NDArray[np.float64] | None:
+        return (self.rates / self.total) if self.total > 0.0 else None
 
-        full_rebuild = (
-            self.table_id != id(table)
-            or self.inventory != inventory
-            or self.context_generation != contexts.generation
-            or self.delta_cursor > len(contexts.deltas)
-            or len(self.supports) == 0
-        )
-        combined = _combined_candidates(table, inventory)
-        if full_rebuild:
-            if not contexts.counts:
-                self.supports = np.zeros(len(combined.all_processes), dtype=np.int64)
-            else:
-                items = list(contexts.counts.items())
-                keys = [key for key, _ in items]
-                counts_arr = np.array([count for _, count in items], dtype=np.int64)
-                prev = np.array([k[0] for k in keys], dtype=np.intp)
-                seg = np.array([k[1] for k in keys], dtype=np.intp)
-                foll = np.array([k[2] for k in keys], dtype=np.intp)
-                str_arr = np.array([k[3] for k in keys], dtype=bool)
-                foll2 = np.array([k[4] for k in keys], dtype=np.intp)
-                self.supports = combined.eval_supports(prev, seg, foll, str_arr, foll2, counts_arr, table)
-            self.table_id = id(table)
-            self.inventory = inventory
-            self.context_generation = contexts.generation
-            self.delta_cursor = len(contexts.deltas)
-            self.effective_supports = np.zeros(0, dtype=np.int64)
-        else:
-            new_deltas = contexts.deltas[self.delta_cursor:]
-            self.delta_cursor = len(contexts.deltas)
-            if not new_deltas:
-                self.version = state.version
-                return
-            agg: dict[tuple[int, int, int, bool, int], int] = {}
-            for ctx, diff in new_deltas:
-                agg[ctx] = agg.get(ctx, 0) + diff
-            items = [(ctx, diff) for ctx, diff in agg.items() if diff != 0]
-            if not items:
-                self.version = state.version
-                return
-            keys = [key for key, _ in items]
-            diffs_arr = np.array([count for _, count in items], dtype=np.int64)
-            prev = np.array([k[0] for k in keys], dtype=np.intp)
-            seg = np.array([k[1] for k in keys], dtype=np.intp)
-            foll = np.array([k[2] for k in keys], dtype=np.intp)
-            str_arr = np.array([k[3] for k in keys], dtype=bool)
-            foll2 = np.array([k[4] for k in keys], dtype=np.intp)
-            delta_supps = combined.eval_supports(prev, seg, foll, str_arr, foll2, diffs_arr, table)
-            self.supports = self.supports + delta_supps
+    def position_of(self, site: str) -> int | None:
+        try:
+            return self.names.index(site)
+        except ValueError:
+            return None
 
-        new_effective = np.where(self.supports < 2, np.int64(0), np.minimum(np.int64(8), self.supports))
-        if len(self.effective_supports) == len(new_effective) and np.array_equal(new_effective, self.effective_supports):
-            self.version = state.version
-            return
-        total_prior = _total_prior()
+    def process_of(self, site: str) -> Process:
+        found = self.position_of(site)
+        if found is None:
+            raise KeyError(site)
+        return self.combined.family_candidates[self.kind][int(self.positions[found])][1]
 
-        for ch in SOUND_CHANGES:
-            kind = ch.kind
-            sl = combined.family_slices[kind]
-            old_eff = (
-                self.effective_supports[sl]
-                if len(self.effective_supports) == len(self.supports)
-                else None
-            )
-            new_eff_slice = new_effective[sl]
-            if old_eff is not None and kind in self.families and np.array_equal(new_eff_slice, old_eff):
-                fam_state = self.families[kind]
-                fam_state.supported_map = None
-                continue
+    def supported(self) -> dict[str, tuple[Process, float]]:
+        candidates = self.combined.family_candidates[self.kind]
+        supports = self.index.supports(self.code)
+        start = self.combined.family_slices[self.kind].start
+        return {
+            candidates[position][0]: (candidates[position][1], float(supports[start + position]))
+            for position in self.positions.tolist()
+        }
 
-            cands = combined.family_candidates[kind]
-            fam_supps = self.supports[sl]
-            sites: list[str] = []
-            fam_active_supps: list[float] = []
-            site_indices: dict[str, int] = {}
-            for i in range(len(cands)):
-                s = fam_supps[i]
-                if s >= MIN_SUPPORT:
-                    var_id = cands[i][0]
-                    site_indices[var_id] = len(sites)
-                    sites.append(var_id)
-                    fam_active_supps.append(float(s))
 
-            n_sites = len(sites)
-            if n_sites == 0:
-                self.families[kind] = _FamilyRateState(
-                    sites=[],
-                    rates_array=np.zeros(0, dtype=np.float64),
-                    total=0.0,
-                    weights=None,
-                    supported_map=None,
-                    site_indices={},
-                )
-            else:
-                scale = SOUND_INNOVATIONS_PER_GENERATION * (ch.prior / total_prior)
-                rates_list = [
-                    (scale * min(1.0, supp / FULL_SUPPORT)) / n_sites
-                    for supp in fam_active_supps
-                ]
-                rates_array = np.array(rates_list, dtype=np.float64)
-                total = float(np.sum(rates_array))
-                weights = (rates_array / total) if total > 0.0 else None
-                self.families[kind] = _FamilyRateState(
-                    sites=sites,
-                    rates_array=rates_array,
-                    total=total,
-                    weights=weights,
-                    supported_map=None,
-                    site_indices=site_indices,
-                )
+def sound_index(world: World) -> SoundIndex | NativeSoundIndex:
+    """Index prostředí a opor světa; kopie světa (checkpoint) dostane vlastní kopii stavu."""
+    index = world.sound
+    if index is None:
+        handle = native.new_sound_index(CATALOG.scales) if world.form_bank()._native is not None else None
+        index = world.sound = SoundIndex() if handle is None else NativeSoundIndex(handle, CATALOG.scales)
+    return cast("SoundIndex | NativeSoundIndex", index)
 
-        self.effective_supports = new_effective
-        self.version = state.version
 
-    def get_supported_map(
-        self, fam_state: _FamilyRateState, combined: _CombinedSoundCandidates, kind: str
-    ) -> dict[str, tuple[Process, float]]:
-        if fam_state.supported_map is not None:
-            return fam_state.supported_map
-        sl = combined.family_slices[kind]
-        cands = combined.family_candidates[kind]
-        fam_supps = self.supports[sl]
-        found: dict[str, tuple[Process, float]] = {}
-        for i in range(len(cands)):
-            s = fam_supps[i]
-            if s >= MIN_SUPPORT:
-                found[cands[i][0]] = (cands[i][1], float(s))
-        fam_state.supported_map = found
-        return found
+CATALOG = _SoundCatalog()
 
 
 class SoundChange(Change):
@@ -551,81 +414,97 @@ class SoundChange(Change):
     def candidates(self, table: SegmentTable, inventory: Sequence[int]) -> list[Process]:
         """Procesy, které rodina umí v daném inventáři vyrobit."""
 
-    def _get_support_index(self, context: InnovationContext) -> SoundSupportIndex | None:
+    def _family_view(self, context: InnovationContext) -> _FamilyView | None:
+        """Místa a míry rodiny z indexu světa; ``None`` pro vlastní váhy priorů nebo prázdný inventář."""
         if _STANDARD_SOUND_PRIORS.get(type(self)) != self.prior:
             return None
         world, code = context.world, context.code
         table = world.table
-        state = code.phonology
-        if table is None or not state.vocabulary:
+        if table is None or not code.phonology.vocabulary:
             return None
-        index_holder = state.cache.get("sound-support-index")
-        if index_holder is None:
-            support_idx = SoundSupportIndex()
-            state.cache["sound-support-index"] = (0, support_idx)
-        else:
-            support_idx = cast(SoundSupportIndex, index_holder[1])
-        support_idx.sync(world, code)
-        return support_idx
+        index = sound_index(world)
+        index.sync(world, [code], CATALOG)
+        if not index.has_families(code):
+            return None
+        return _FamilyView(index, code, table, FAMILY_INDEX[self.kind], self.kind)
 
     def sites(self, context: InnovationContext) -> Sequence[str]:
         if context.world.table is None or not context.code.phonology.vocabulary:
             return ()  # svět bez hláskových tvarů (M1) nebo prázdná slovní zásoba
-        idx = self._get_support_index(context)
-        if idx is not None and self.kind in idx.families:
-            return idx.families[self.kind].sites
+        view = self._family_view(context)
+        if view is not None:
+            return view.names
         self._supported_legacy(context)
         return cast(list[str], context.code.phonology.cache[("sound-sites-sorted", self.kind)][1])
 
     def total_rate(self, context: InnovationContext) -> float:
         if context.world.table is None or not context.code.phonology.vocabulary:
             return 0.0
-        idx = self._get_support_index(context)
-        if idx is not None and self.kind in idx.families:
-            return idx.families[self.kind].total
+        view = self._family_view(context)
+        if view is not None:
+            return view.total
         return super().total_rate(context)
+
+    def total_rates(self, contexts: Sequence[InnovationContext]) -> list[float]:
+        """Součty měr všech skupin naráz: jedno dorovnání indexu světa na tik místo jednoho na skupinu."""
+        if not contexts or _STANDARD_SOUND_PRIORS.get(type(self)) != self.prior:
+            return super().total_rates(contexts)
+        world = contexts[0].world
+        live = [
+            position for position, context in enumerate(contexts)
+            if context.world.table is not None and context.code.phonology.vocabulary
+        ]
+        totals = [0.0] * len(contexts)
+        if not live:
+            return totals
+        index = sound_index(world)
+        codes = [contexts[position].code for position in live]
+        index.sync(world, codes, CATALOG)
+        column = index.totals(codes, len(SOUND_CHANGES))[:, FAMILY_INDEX[self.kind]]
+        for position, code, value in zip(live, codes, column.tolist()):
+            if index.has_families(code):
+                totals[position] = value
+            else:
+                totals[position] = super().total_rate(contexts[position])
+        return totals
 
     def weighted_sites(
         self, context: InnovationContext
     ) -> tuple[Sequence[str], npt.NDArray[np.float64] | None]:
         if context.world.table is None or not context.code.phonology.vocabulary:
             return (), None
-        idx = self._get_support_index(context)
-        if idx is not None and self.kind in idx.families:
-            fam = idx.families[self.kind]
-            return fam.sites, fam.weights
+        view = self._family_view(context)
+        if view is not None:
+            return view.names, view.weights
         return super().weighted_sites(context)
 
     def rate(self, context: InnovationContext, site: str) -> float:
-        idx = self._get_support_index(context)
-        if idx is not None and self.kind in idx.families:
-            fam = idx.families[self.kind]
-            i = fam.site_indices.get(site)
-            if i is not None:
-                return float(fam.rates_array[i])
-            raise KeyError(site)
+        view = self._family_view(context)
+        if view is not None:
+            found = view.position_of(site)
+            if found is None:
+                raise KeyError(site)
+            return float(view.rates[found])
         supported = self._supported_legacy(context)
         share = self.prior / _total_prior()
         _, support = supported[site]
         return SOUND_INNOVATIONS_PER_GENERATION * share * min(1.0, support / FULL_SUPPORT) / len(supported)
 
     def rates(self, context: InnovationContext, sites: Sequence[str]) -> list[float]:
-        idx = self._get_support_index(context)
-        if idx is not None and self.kind in idx.families:
-            fam = idx.families[self.kind]
-            if sites is fam.sites or sites == fam.sites:
-                return fam.rates_array.tolist()
-            return [float(fam.rates_array[fam.site_indices[s]]) for s in sites]
+        view = self._family_view(context)
+        if view is not None:
+            if sites is view.names or sites == view.names:
+                return view.rates.tolist()
+            rates = view.rates
+            return [float(rates[cast(int, view.position_of(site))]) for site in sites]
         supported = self._supported_legacy(context)
         scale = SOUND_INNOVATIONS_PER_GENERATION * (self.prior / _total_prior())
         return [scale * min(1.0, supported[site][1] / FULL_SUPPORT) / len(supported) for site in sites]
 
     def _supported(self, context: InnovationContext) -> dict[str, tuple[Process, float]]:
-        idx = self._get_support_index(context)
-        if idx is not None and self.kind in idx.families:
-            assert context.world.table is not None
-            combined = _combined_candidates(context.world.table, idx.inventory)
-            return idx.get_supported_map(idx.families[self.kind], combined, self.kind)
+        view = self._family_view(context)
+        if view is not None:
+            return view.supported()
         return self._supported_legacy(context)
 
     def _supported_legacy(self, context: InnovationContext) -> dict[str, tuple[Process, float]]:
@@ -661,7 +540,8 @@ class SoundChange(Change):
     def propose(
         self, context: InnovationContext, site: str, rng: RandomSource, index: int
     ) -> Variant | None:
-        process, _ = self._supported(context)[site]
+        view = self._family_view(context)
+        process = self._supported_legacy(context)[site][0] if view is None else view.process_of(site)
         _, variant = register(
             context.world, process,
             Origin(self.kind, context.tick, context.year, context.group.id),
@@ -1434,3 +1314,7 @@ _TOTAL_PRIOR: float = sum(change.prior for change in SOUND_CHANGES if not change
 
 def _total_prior() -> float:
     return _TOTAL_PRIOR
+
+#: Číslo rodiny podle druhu změny (pořadí ``SOUND_CHANGES``).
+FAMILY_INDEX: dict[str, int] = {change.kind: number for number, change in enumerate(SOUND_CHANGES)}
+CATALOG.scales = [SOUND_INNOVATIONS_PER_GENERATION * (change.prior / _TOTAL_PRIOR) for change in SOUND_CHANGES]

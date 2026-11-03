@@ -1,174 +1,144 @@
-"""Průběžná mapa homofonů a skóre lexikální jasnosti."""
+"""Lexikální jasnost jako výpočet nad poli (krok B5, Python reference).
+
+Skóre dvojice (morfém ``m``, pojem ``c``) u jedné skupiny:
+
+- ``-0,5``, když je tvar ``m`` erodovaný: má nejvýš dvě hlásky a je kratší než
+  jeho výchozí tvar (krátké slovo odjakživa je stabilní);
+- dalších ``-0,4``, když stejný tvar má jako dominantní kořen jiný morfém ``r``
+  pro jiný pojem ``d``, který s ``c`` není doloženě příbuzný (polysémie
+  příbuzných pojmů se za homofonii nepočítá).
+
+Vstupem jsou jen pole: dominantní kořeny skupiny (pojem → kořen, ``DominantMap.roots``),
+tvary kódu (``FormStore.raw()``), výchozí tvary světa (sloupec morfémů), banka tvarů
+a seřazená pole příbuzných dvojic pojmů. Tabulka vlastníků tvarů (tvar → dvojice
+(pojem, kořen)) se při každém volání staví znovu z dominantních kořenů: je to
+stovka položek na skupinu, takže je to levnější než ji dorovnávat podle deníků,
+a výsledek nemůže zastarat. Volání je jedno na dávku tlaků pro všechny skupiny
+(Rust: ``cee_core.clarity_scores``, ``rust/cee_core/src/clarity.rs``).
+"""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+import numpy as np
+import numpy.typing as npt
+
+from cee.v2 import native
 
 if TYPE_CHECKING:
     from cee.v2.world import Code, World
 
-Pair = tuple[str, str]
+#: Pokuta za erodovaný tvar a za homofonii s nepříbuzným pojmem.
+ERODED = -0.5
+HOMOPHONE = -0.4
+
+_RELATED: dict[tuple[int, int], tuple[Any, Any, npt.NDArray[np.int64]]] = {}
 
 
-class LexicalClarityIndex:
-    """Příspěvky dominantních kořenů a memo dotázaných kandidátů.
+def related_keys(world: World) -> npt.NDArray[np.int64]:
+    """Seřazené klíče příbuzných dvojic pojmů: ``min(a, b) << 32 | max(a, b)`` (čísla pojmů z registru)."""
+    graph = world.semantics
+    if graph is None:
+        return np.zeros(0, dtype=np.int64)
+    key = (id(graph), id(world.registry))
+    found = _RELATED.get(key)
+    if found is None:
+        if len(_RELATED) >= 16:
+            _RELATED.clear()
+        intern = world.registry.concepts.intern
+        keys = sorted(
+            (min(a, b) << 32) | max(a, b)
+            for a, b in ((intern(x), intern(y)) for x, y in (sorted(pair) for pair in getattr(graph, "_pairs") if len(pair) == 2))
+        )
+        found = _RELATED[key] = (graph, world.registry, np.array(keys, dtype=np.int64))
+    return found[2]
 
-    Neuchovává odkazy na svět; změna identity deníku vyvolá úplnou obnovu.
-    Tvary jsou v indexu čísla z banky tvarů světa (stejné číslo = stejný tvar),
-    ne n-tice hlásek.
-    """
 
-    def __init__(self) -> None:
-        self.token: int | None = None
-        self.cursor = 0
-        self.dominant_cursor = 0
-        self.version = -1
-        self.lexicon_version = -1
-        self.dominant: dict[str, str] = {}
-        self.root_concepts: dict[str, set[str]] = {}
-        self.root_forms: dict[str, int] = {}
-        self.owners: dict[int, set[Pair]] = {}
-        self.scores: dict[Pair, float] = {}
-        self.score_forms: dict[Pair, int] = {}
-        self.by_form: dict[int, set[Pair]] = {}
-        self.by_root: dict[str, set[Pair]] = {}
-        self.graph_signature: object = None
+def _default_form(world: World, number: int) -> int:
+    """Číslo výchozího tvaru morfému v bance; při prvním použití ho do sloupce doplní."""
+    column = world.columns.morphemes.form
+    if number < len(column) and column[number] >= 0:
+        return int(column[number])
+    name = world.registry.morphemes.names[number]
+    found = world.form_bank().id_of(world._default_unit(name).form)
+    if number < len(column):
+        column[number] = found
+        world.columns.morphemes.version += 1
+    return found
 
-    def _forget(self, key: Pair) -> None:
-        form = self.score_forms.pop(key)
-        del self.scores[key]
-        self.by_form[form].remove(key)
-        if not self.by_form[form]:
-            del self.by_form[form]
-        self.by_root[key[0]].remove(key)
-        if not self.by_root[key[0]]:
-            del self.by_root[key[0]]
 
-    def _clear_scores(self) -> None:
-        self.scores.clear()
-        self.score_forms.clear()
-        self.by_form.clear()
-        self.by_root.clear()
+def _effective(world: World, code: Code, numbers: npt.NDArray[np.int64]) -> npt.NDArray[np.int64]:
+    """Číslo tvaru každého z morfémů v kódu (uložený tvar, jinak výchozí)."""
+    store = code.forms.raw()[0]
+    found = np.empty(len(numbers), dtype=np.int64)
+    for at, number in enumerate(numbers.tolist()):
+        stored = store[number] if number < len(store) else -1
+        found[at] = stored if stored >= 0 else _default_form(world, number)
+    return found
 
-    def _add(self, concept: str, root: str, form: int) -> None:
-        self.dominant[concept] = root
-        self.root_concepts.setdefault(root, set()).add(concept)
-        self.root_forms[root] = form
-        self.owners.setdefault(form, set()).add((root, concept))
 
-    def _remove(self, concept: str) -> int:
-        root = self.dominant.pop(concept)
-        form = self.root_forms[root]
-        self.owners[form].remove((root, concept))
-        if not self.owners[form]:
-            del self.owners[form]
-        self.root_concepts[root].remove(concept)
-        if not self.root_concepts[root]:
-            del self.root_concepts[root]
-            del self.root_forms[root]
-        return form
+def clarity_scores(
+    world: World,
+    codes: list[Code],
+    groups: npt.NDArray[np.int64],
+    morphemes: npt.NDArray[np.int64],
+    concepts: npt.NDArray[np.int64],
+) -> npt.NDArray[np.float64]:
+    """Skóre jasnosti dvojic (morfém, pojem) u skupin ``codes[groups]``; Rust, nebo Python."""
+    if not len(groups):
+        return np.zeros(0, dtype=np.float64)
+    related = related_keys(world)
+    kernel = native.kernel("clarity_scores")
+    bank = world.form_bank()._native
+    if kernel is not None and bank is not None:
+        roots = [code.phonology.dominant.roots for code in codes]
+        forms = [code.forms.raw()[0] for code in codes]
+        defaults = world.columns.morphemes.form
+        while True:
+            found = kernel(bank, roots, forms, defaults, related, groups, morphemes, concepts)
+            if isinstance(found, list):  # chybějící výchozí tvary doplní Python
+                for number in found:
+                    _default_form(world, number)
+                continue
+            return found  # type: ignore[no-any-return]
+    return _clarity_reference(world, codes, groups, morphemes, concepts, related)
 
-    @staticmethod
-    def _graph_signature(world: World) -> object:
-        graph = world.semantics
-        return None if graph is None else (id(graph), id(graph.relations))
 
-    def sync(self, world: World, code: Code) -> None:
-        state, forms = code.phonology, code.forms
-        # Stejně jako původní cache je změna grafu vidět až při změně verze.
-        if self.version == state.version:
-            return
-        signature = self._graph_signature(world)
-        journal = state.dominant_log
-        if (self.token != forms.token or self.cursor > len(forms.log)
-                or self.dominant_cursor > len(journal)):
-            self.dominant.clear()
-            self.root_concepts.clear()
-            self.root_forms.clear()
-            self.owners.clear()
-            self._clear_scores()
-            for concept, root in state.dominant.items():
-                self._add(concept, root, world.form_id_of(code, root))
-        else:
-            if self.graph_signature != signature:
-                self._clear_scores()
-            changed = set(forms.log[self.cursor:])
-            dirty_forms: set[int] = set()
-            # Běžné přepisy tvarů nemění dominantní kořeny. Kontrola celé
-            # mapy je záloha při změně slovní zásoby či neznámém zásahu.
-            modified = {concept for concept, _, _ in journal[self.dominant_cursor:]}
-            if (self.lexicon_version != state.lexicon_version
-                    or (not changed and not modified)):
-                modified.update(concept for concept in self.dominant.keys() | state.dominant.keys()
-                                if self.dominant.get(concept) != state.dominant.get(concept))
-            modified = {concept for concept in modified
-                        if self.dominant.get(concept) != state.dominant.get(concept)}
-            for concept in modified:
-                if concept in self.dominant:
-                    dirty_forms.add(self._remove(concept))
-            for root in changed & self.root_concepts.keys():
-                old = self.root_forms[root]
-                new = world.form_id_of(code, root)
-                if old != new:
-                    concepts = self.root_concepts[root].copy()
-                    for concept in concepts:
-                        self._remove(concept)
-                    for concept in concepts:
-                        self._add(concept, root, new)
-                    dirty_forms.update((old, new))
-            for concept in modified:
-                new_root = state.dominant.get(concept)
-                if new_root is not None:
-                    form = world.form_id_of(code, new_root)
-                    self._add(concept, new_root, form)
-                    dirty_forms.add(form)
-            dirty: set[Pair] = set()
-            for form in dirty_forms:
-                dirty.update(self.by_form.get(form, ()))
-            for root in changed:
-                dirty.update(self.by_root.get(root, ()))
-            for key in dirty:
-                self._forget(key)
-        self.token, self.cursor, self.version = forms.token, len(forms.log), state.version
-        self.lexicon_version = state.lexicon_version
-        self.dominant_cursor = len(journal)
-        self.graph_signature = signature
-
-    def score(self, world: World, code: Code, morpheme: str, concept: str) -> float:
-        key = (morpheme, concept)
-        found = self.scores.get(key)
-        if found is not None:
-            return found
-        form = world.form_id_of(code, morpheme)
-        length = len(world.form_bank().forms[form])
-        eroded = length <= 2 and length < len(world.morphemes[morpheme].form)
-        value = -0.5 if eroded else 0.0
-        for root, other in self.owners.get(form, ()):
-            if root != morpheme and other != concept and not (
-                world.semantics is not None and world.semantics.related(concept, other)
-            ):
-                value -= 0.4
-                break
-        self.scores[key] = value
-        self.score_forms[key] = form
-        self.by_form.setdefault(form, set()).add(key)
-        self.by_root.setdefault(morpheme, set()).add(key)
-        return value
-
-    def scores_many(
-        self, world: World, code: Code, pairs: list[Pair]
-    ) -> list[float]:
-        """Načte skóre více dvojic ve stejném pořadí, včetně duplicit.
-
-        Už spočítané dvojice se čtou přímo z paměti; metoda :meth:`score` se
-        volá jen pro nové.
-        """
-        known = self.scores.get
-        values: list[float] = []
-        append = values.append
-        for pair in pairs:
-            value = known(pair)
-            if value is None:
-                value = self.score(world, code, pair[0], pair[1])
-            append(value)
-        return values
+def _clarity_reference(
+    world: World,
+    codes: list[Code],
+    groups: npt.NDArray[np.int64],
+    morphemes: npt.NDArray[np.int64],
+    concepts: npt.NDArray[np.int64],
+    related: npt.NDArray[np.int64],
+) -> npt.NDArray[np.float64]:
+    result = np.zeros(len(groups), dtype=np.float64)
+    for group in np.unique(groups).tolist():
+        code = codes[group]
+        at = np.nonzero(groups == group)[0]
+        roots = np.frombuffer(code.phonology.dominant.roots, dtype=np.int32).astype(np.int64)
+        owners = np.nonzero(roots >= 0)[0]
+        owner_roots = roots[owners]
+        owner_forms = _effective(world, code, owner_roots)
+        query = morphemes[at]
+        forms = _effective(world, code, query)
+        defaults = np.array([_default_form(world, number) for number in query.tolist()], dtype=np.int64)
+        lengths = world.form_bank()._lengths  # až po zařazení tvarů: pole se při růstu banky nahrazuje
+        length = lengths[forms]
+        eroded = (length <= 2) & (length < lengths[defaults])
+        value = np.where(eroded, ERODED, 0.0)
+        if len(owners):
+            same = (
+                (owner_forms[None, :] == forms[:, None])
+                & (owner_roots[None, :] != query[:, None])
+                & (owners[None, :] != concepts[at][:, None])
+            )
+            low = np.minimum(owners[None, :], concepts[at][:, None])
+            high = np.maximum(owners[None, :], concepts[at][:, None])
+            keys = (low << 32) | high
+            position = np.minimum(np.searchsorted(related, keys), max(len(related) - 1, 0))
+            linked = (related[position] == keys) if len(related) else np.zeros(keys.shape, dtype=bool)
+            value = np.where((same & ~linked).any(axis=1), value + HOMOPHONE, value)
+        result[at] = value
+    return result
