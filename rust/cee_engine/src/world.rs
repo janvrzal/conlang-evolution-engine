@@ -436,9 +436,7 @@ impl World {
     ) -> (VariableId, VariantId) {
         let name = variable_name(VariableKind::Construction, &construction.function);
         let variable = match self.registry.variables.get(&name) {
-            Some(found) if found.min(u32::MAX - 1) < self.variables.len() as u32 => {
-                VariableId(found)
-            }
+            Some(found) if found < self.variables.len() as u32 => VariableId(found),
             _ => self.store_variable(
                 VariableKind::Construction,
                 &construction.function,
