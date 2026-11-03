@@ -30,7 +30,7 @@ from cee.v2.morphology import class_stats
 from cee.v2.scenarios import language_shift, village_grid
 from cee.v2.simulation import Simulation
 
-RUST = native.available() and native.sums_match()
+RUST = native.enabled() and native.sums_match()
 
 
 def contexts_of(simulation: Simulation) -> list[InnovationContext]:
