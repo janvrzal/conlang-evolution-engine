@@ -8,7 +8,7 @@ from typing import Any, Iterator, Sequence
 
 import numpy as np
 
-from cee.v2 import contact, morphology, phonology, prosody, syntax, variation
+from cee.v2 import contact, morphology, phases, phonology, prosody, syntax, variation
 from cee.v2.changes import DEFAULT_CHANGES, Change, InnovationContext, pressures_by_kind
 from cee.v2.changes.lexicon import with_appeal
 from cee.v2.events import WorldEvent
@@ -259,18 +259,9 @@ class Simulation:
         if not entries or not self.changes:
             return
 
-        group_keys = np.array(
-            [
-                stable_int(
-                    self.world.seed,
-                    "innovation",
-                    self.tick,
-                    ctx.group.id,
-                    ctx.code.id,
-                )
-                for ctx, _, _, _ in entries
-            ],
-            dtype=np.uint64,
+        group_keys = phases.innovation_group_keys(
+            self.world.seed, self.tick,
+            [ctx.group.id for ctx, _, _, _ in entries], [ctx.code.id for ctx, _, _, _ in entries],
         )
         renewals = np.array([renewal for _, renewal, _, _ in entries], dtype=np.float64)
         frequencies = np.array([frequency for _, _, _, frequency in entries], dtype=np.float64)
@@ -279,15 +270,17 @@ class Simulation:
         # se uplatní první inovace; v paralelním běhu jen pro vlastní skupiny.
         owned = [index for index, (ctx, _, _, _) in enumerate(entries)
                  if self.shards is None or self.shards.owns(ctx.group.id)]
-        expected = np.zeros((len(entries), len(self.changes)), dtype=np.float64)
+        rate_sums = np.zeros((len(entries), len(self.changes)), dtype=np.float64)
         for change_idx, change in enumerate(self.changes):
-            tempos = (renewals if change.rate_basis == "generation" else self.config.dt) * frequencies
             for group_idx in owned:
                 rate_sum = change.total_rate(entries[group_idx][0])
                 if rate_sum > 0.0:
-                    expected[group_idx, change_idx] = float(rate_sum) * float(tempos[group_idx])
-            if change.kind in self._rate_scales:
-                expected[:, change_idx] *= self._rate_scales[change.kind]
+                    rate_sums[group_idx, change_idx] = float(rate_sum)
+        expected = phases.expected_counts(
+            rate_sums, renewals, frequencies, self.config.dt,
+            np.array([change.rate_basis == "generation" for change in self.changes], dtype=bool),
+            np.array([self._rate_scales.get(change.kind, 1.0) for change in self.changes], dtype=np.float64),
+        )
         if self.shards is not None:
             for rows, values in self.shards.gather("expected", (owned, expected[owned])):
                 expected[rows] = values
@@ -349,10 +342,9 @@ class Simulation:
         cumulated = None if weights is None else cumulative(weights)
         live = self.world.live
         for index in range(count):
-            if cumulated is None:
-                site = sites[rng.integers(len(sites))]
-            else:
-                site = sites[Stream.pick(cumulated, rng.random())]
+            # Výběr místa je funkce stavu proudu; návrh varianty pak čerpá z téhož proudu.
+            picked, rng.state = phases.draw_site(rng.state, len(sites), cumulated)
+            site = sites[picked]
             variant = change.propose(context, site, rng, index)
             if variant is None:
                 continue
@@ -384,26 +376,19 @@ class Simulation:
         if rate_sum <= 0.0:
             return
         share, frequency = self.innovation_scale(context.group.id)
-        tempo = (renewal if change.rate_basis == "generation" else self.config.dt) * frequency
-        expected = float(rate_sum * tempo) * self._rate_scales.get(change.kind, 1.0)
-        group_key = np.uint64(
-            stable_int(
-                self.world.seed,
-                "innovation",
-                self.tick,
-                context.group.id,
-                context.code.id,
-            )
+        expected = phases.expected_counts(
+            np.array([[rate_sum]], dtype=np.float64),
+            np.array([renewal], dtype=np.float64),
+            np.array([frequency], dtype=np.float64),
+            self.config.dt,
+            np.array([change.rate_basis == "generation"], dtype=bool),
+            np.array([self._rate_scales.get(change.kind, 1.0)], dtype=np.float64),
         )
-        change_key = np.uint64(stable_int(_INNOVATION_CHANGE_DOMAIN, change.kind))
-        count = int(
-            hash_poisson(
-                np.array([group_key], dtype=np.uint64),
-                np.array([change_key], dtype=np.uint64),
-                np.array([expected], dtype=np.float64),
-                pairwise=True,
-            )[0]
+        group_keys = phases.innovation_group_keys(
+            self.world.seed, self.tick, [context.group.id], [context.code.id]
         )
+        change_key = np.array([stable_int(_INNOVATION_CHANGE_DOMAIN, change.kind)], dtype=np.uint64)
+        count = int(hash_poisson(group_keys, change_key, expected[0], pairwise=True)[0])
         if count > 0:
             self._apply_innovations(change, context, share, count)
 

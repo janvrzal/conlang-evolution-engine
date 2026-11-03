@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Mapping, Sequence
 
 import numpy as np
 
+from cee.v2 import phases
 from cee.v2.pressures.base import Pressure
 from cee.v2.repertoire import VariableKind, Variant
 from cee.v2.rng import RandomSource
@@ -76,9 +77,8 @@ class Change(ABC):
         if not sites:
             return 0.0
         if self.uses_uniform_rate():
-            return float(self.base_rate * len(sites) * self.rate_scale(context))
-        rates_arr = np.asarray(self.rates(context, sites), dtype=np.float64)
-        return float(np.sum(rates_arr))
+            return float(phases.uniform_rate(self.base_rate, len(sites), self.rate_scale(context)))
+        return phases.rate_total(self.rates(context, sites))
 
     def weighted_sites(
         self, context: InnovationContext
@@ -89,11 +89,10 @@ class Change(ABC):
             return (), None
         if self.uses_uniform_rate():
             return sites, None
-        rates_arr = np.asarray(self.rates(context, sites), dtype=np.float64)
-        total = float(np.sum(rates_arr))
-        if total <= 0.0:
+        _, weights = phases.site_weights(self.rates(context, sites))
+        if weights is None:
             return (), None
-        return sites, rates_arr / total
+        return sites, weights
 
     def uses_uniform_rate(self) -> bool:
         return type(self).rate is Change.rate

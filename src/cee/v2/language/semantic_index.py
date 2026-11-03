@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 import numpy.typing as npt
 
+from cee.v2 import phases
+
 if TYPE_CHECKING:
     from cee.v2.changes.base import InnovationContext
     from cee.v2.changes.lexicon import SemanticChange
@@ -163,6 +165,6 @@ class SemanticSitesIndex:
             dtype=np.float64,
             count=len(self.sorted_sites),
         )
-        self._total = float(np.sum(self.rates_array)) if len(self.rates_array) else 0.0
+        self._total = phases.rate_total(self.rates_array)
         self._weights = None
         self._dirty = False
