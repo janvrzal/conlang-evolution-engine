@@ -765,6 +765,8 @@ mod cee_core {
     #[pymodule_export]
     use crate::index_python::SoundIndex;
     #[pymodule_export]
+    use crate::pressures_python::{pressure_scores, take_created, AssessIndex, PressureStep};
+    #[pymodule_export]
     use crate::python_pools::{
         hear, libm_probe, normalized, settle, NativeCells, NativeStep, Slab,
     };

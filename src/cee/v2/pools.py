@@ -407,6 +407,10 @@ class PoolBlock:
         self._cells = new_cells(groups, capacity)
         self._dense: tuple[FloatArray, FloatArray] | None = None
         self._staged_dense: tuple[FloatArray, FloatArray] | None = None
+        #: Roste s každou změnou řádků a slotů (proměnné, varianty ve slotech); podle něj se
+        #: zneplatňuje popis řádků pro tlaky v Rustu (``pressures_native``), který držíme u bloku.
+        self.layout = 0
+        self.pressure_rows: Any = None
 
     def __len__(self) -> int:
         return len(self.variable_ids)
@@ -417,6 +421,7 @@ class PoolBlock:
         state = dict(self.__dict__)
         state["_dense"] = None
         state["_staged_dense"] = None
+        state["pressure_rows"] = None
         state["_cells"] = self._cells.flat()
         return state
 
@@ -508,6 +513,7 @@ class PoolBlock:
         """Zapíše variantu do slotu (číslo i řetězec); ``None`` slot uvolní."""
         self.slots[row][slot] = variant_id
         self._variants[row, slot] = -1 if variant_id is None else self.numbering.intern(variant_id)
+        self.layout += 1
 
     def row_of(self, variable_id: str) -> int:
         return self._rows[variable_id]
@@ -599,6 +605,7 @@ class PoolBlock:
         self._rows[variable_id] = index
         self._cells.append(np.ascontiguousarray(freqs), np.ascontiguousarray(previous))
         self._dense = None
+        self.layout += 1
 
     def extract(self, rows: Sequence[int]) -> list[Row]:
         """Vyjme řádky z bloku a vrátí jejich obsah (kopie)."""
@@ -621,6 +628,7 @@ class PoolBlock:
             self.variable_ids.pop()
             self.slots.pop()
         self._dense = None
+        self.layout += 1
         return taken
 
     def add_share(self, row: int, column: int, slot: int, share: float) -> None:

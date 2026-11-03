@@ -17,9 +17,11 @@ use numpy::{
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyTuple};
 
 use crate::pools::{Cells, Row};
+use crate::pressures::Gathered;
+use crate::pressures_python::{fitness_chunk, PressureStep, RowsArgs};
 use crate::transmission::{
     self, Channel, Cohorts, Component, Flow, HearScratch, Links, Network, Shape, State,
 };
@@ -614,7 +616,7 @@ impl NativeCells {
     /// `fitness` jsou tlaky nulové. Vrací nové podíly a základny jako pohledy bez kopie,
     /// platné do příštího přenosu bloku. `params` je (selection, kappa, adult_rate, establish_threshold).
     /// Vyžaduje `libm_matches` (viz `cee.v2.native`): `exp`, `ln` a `cos` knihovny systému.
-    #[pyo3(signature = (step, flow_factors, channel_factors, present, slot_keys, params, fitness=None, chunk_rows=0))]
+    #[pyo3(signature = (step, flow_factors, channel_factors, present, slot_keys, params, fitness=None, chunk_rows=0, pressures=None))]
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     fn transmit<'py>(
         slf: &Bound<'py, Self>,
@@ -626,6 +628,7 @@ impl NativeCells {
         params: (f64, f64, f64, f64),
         fitness: Option<Bound<'py, PyAny>>,
         chunk_rows: usize,
+        pressures: Option<(Bound<'py, PressureStep>, Bound<'py, PyTuple>)>,
     ) -> PyResult<(Bound<'py, PyArray3<f64>>, Bound<'py, PyArray3<f64>>)> {
         let py = slf.py();
         let [rows, groups, capacity] = slf.borrow().shape();
@@ -679,6 +682,7 @@ impl NativeCells {
         };
         let updated = acquire(py, &mut updated_slot, rows * stride, false)?;
         let baseline = acquire(py, &mut baseline_slot, rows * stride, false)?;
+        let mut pressure_scratch = Gathered::default();
         let result = (|| -> PyResult<()> {
             let current_all = dense_f.borrow();
             let previous_all = dense_p.borrow();
@@ -729,20 +733,43 @@ impl NativeCells {
                         &mut heard_data.data,
                     );
                 }
-                let pressures;
-                let pressure_data: Option<&[f64]> = match &fitness {
-                    Some(call) => {
+                let pressures_found;
+                let native_found: Vec<f64>;
+                let pressure_data: Option<&[f64]> = match (&pressures, &fitness) {
+                    (Some((native_step, native_rows)), _) => {
+                        let rows_args = RowsArgs::extract(native_rows)?;
+                        let heard_data = heard.borrow();
+                        let mut found = Vec::new();
+                        fitness_chunk(
+                            py,
+                            native_step,
+                            &rows_args,
+                            first,
+                            count,
+                            groups,
+                            capacity,
+                            &current_all.data[cells.clone()],
+                            &heard_data.data,
+                            threads,
+                            false,
+                            &mut pressure_scratch,
+                            &mut found,
+                        )?;
+                        native_found = found;
+                        Some(&native_found)
+                    }
+                    (None, Some(call)) => {
                         let current_view =
                             view(py, &dense_f, first * stride, [count, groups, capacity])?;
                         let heard_view = view(py, &heard, 0, [count, groups, capacity])?;
                         let found = call.call1((first, last, current_view, heard_view))?;
-                        pressures = found.extract::<PyReadonlyArray3<'_, f64>>()?;
-                        if pressures.shape() != [count, groups, capacity] {
+                        pressures_found = found.extract::<PyReadonlyArray3<'_, f64>>()?;
+                        if pressures_found.shape() != [count, groups, capacity] {
                             return Err(failure("tlaky mají špatný tvar"));
                         }
-                        Some(slice3(&pressures)?)
+                        Some(slice3(&pressures_found)?)
                     }
-                    None => None,
+                    (None, None) => None,
                 };
                 let heard_data = heard.borrow();
                 transmission::settle(
@@ -773,6 +800,10 @@ impl NativeCells {
             }
             Ok(())
         })();
+        if let Some((native_step, _)) = &pressures {
+            // Pole, která tlaky četly, se uvolní: Python je smí zase měnit.
+            native_step.borrow_mut().held = None;
+        }
         {
             let mut me = slf.borrow_mut();
             me.out = [updated_slot, baseline_slot];

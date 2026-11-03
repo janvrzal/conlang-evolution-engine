@@ -213,6 +213,9 @@ class World:
     sound: Any = None
     #: Číselný index míst morfologických, sémantických a syntaktických změn (``language.site_index``); odvozený stav.
     sites: Any = None
+    #: Vzorky a uložená hodnocení zvukových procesů a hodnocení tvarů pro tlaky
+    #: (``language.assessment_index``); odvozený stav, vzniká při prvním použití.
+    assessment: Any = None
     #: Výchozí tvar každého morfému (neměnný), aby se netvořil při každém čtení.
     default_units: dict[str, UnitForm] = field(default_factory=dict)
     #: Seedované sklony slov ke změně (``phonology.word_bias``): číslo procesu
