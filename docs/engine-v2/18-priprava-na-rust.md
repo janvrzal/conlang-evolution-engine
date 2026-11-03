@@ -29,7 +29,60 @@ Každý krok je malý commit, po každém `scripts/v2_digests.py` beze změny
 | A5 | fáze kroku jako funkce nad poli (inovace, tlaky, přenos, fonologizace, morfologie, syntax, prozódie, kontakt); třídy zůstanou tenkou fasádou. Součástí jsou **řídké fondy podle variant** (rozhodnuto s uživatelem 2026-11-02): živé fondy (`pools.py`) dnes drží každou proměnnou jako husté pole skupiny × sloty, takže varianta ve 3 vesnicích z 50 má řádek přes všech 50, a sloty jsou řetězcová ID variant, která tlaky a přenos při každé dávce překládají na čísla (zjištění z A4). Nově: sloty jako čísla variant z registru a výskyt varianty jako řídký seznam (skupina, podíl) uložený po variantách, tedy mapa rozšíření slova přímo v datech (pro atlas v UI). Přenos potřebuje „co je u mě a u sousedů“, proto zvážit dvojí index (po variantách i po skupinách) nebo husté bloky jen pro proměnné rozšířené skoro všude. Paměť a čas pak rostou s počtem skutečných výskytů, ne se součinem vesnic a variant; rozhoduje to u velkých map. Bitová shoda jen při zachovaném pořadí sčítání (jinak vědomá změna otisků s ověřením branami)  | část hotova 2026-11-03 (`zadani-faze.md`, modul `cee.v2.phases`): inovace (klíče, tempo, míry a váhy míst, výběr místa), milníky a ustálení, přechody přes práh, aktivace, analogie, nové koncovky a pravidlo přízvuku jsou čisté funkce nad poli, třídy je jen volají. Otisky beze změny. Zbývá přenos, tlaky, kontakt a řídké fondy |
 | A6 | přenositelná náhoda: model dnes vedle hashovaného šumu (`rng.stable_int`, `hash_normal`, `hash_poisson`; blake2b a splitmix64, v Rustu snadno stejné) používá i `numpy.random.Generator` (PCG64 a algoritmy `poisson`, `choice`, `uniform`, `normal` numpy). Ty v Rustu bitově zopakovat nejde rozumně; nahradit je hashovanými losy (asi 27 míst: tvorba protojazyka 11, pozadí dějin 6, lexikální změny 3, variabilita 2, syntax 2, výběr místa inovace a prozódie po 1). **Vědomá změna otisků**, ověřená branami | hotovo 2026-11-02 (`zadani-nahoda.md`): `rng.Stream` (klíč z `stable_int`, jádro SplitMix64, `random` 53 bitů, `integers` Lemire, `choice` postupné kumulativní součty + `bisect_right`, `normal` Box–Muller přes libm, `poisson` inverzí po kusech λ ≤ 30; algoritmy v docstringu, referenční tahy v `test_v2_stream.py`) nahradil numpy ve výběru místa inovace, návrzích změn, sklonech slov a velkých λ v `hash_poisson`. Tvorba světa (protojazyk, pozadí dějin, rozdání variability) zůstala na numpy, svět po `build()` je beze změny; při přechodu desktopu na čistý Rust ji bude třeba převést (jednorázová změna slov protojazyka). Nové otisky v `scripts/v2_digests.py`. Ověření: audit bran na seedech 101..120 bez významného rozdílu (nejmenší p = 0,24, Jespersenův cyklus 6/20 → 2/20), statistika inovací na 8 seedech v limitu u všech 39 typů změn, retence za 1 000 let izolovaná 0,900 → 0,899 a kontakt 0,915 → 0,913; valley-50 v šumu. Brána Fergusonovy diglosie (pevné seedy 1, 2) s novou náhodou neprošla; podíl na 20 seedech je ale 10/20 už před A6 (11/20 po) |
 | A7 | zlatá data: záznam vstupů a výstupů každé funkce z A5 ze skutečných běhů pro ověření Rust implementace kus po kusu  | pro funkce z `cee.v2.phases` hotovo 2026-11-03: `scripts/v2_golden_phases.py` (grid-5x5, shift, valley-50 zkráceně a čtyři světy pro vzácné cesty), `tests/v2/data/golden_{innovation,vocabulary,grammar}.json.gz` (asi 200, 410 a 90 kB), test `test_v2_golden_phases.py`. Profil (s Rustem z B2): inovace 34 % času valley-50 a 30 % grid-5x5, z toho skoro vše ve hledání míst (`total_rate`), u valley-50 z dvou třetin ve zvukových změnách (`changes/sound.py`, 22 % celku); morfologie 2 %, syntax a prozódie pod 0,2 %, sledování slovní zásoby 5 %, čisté funkce nad poli dohromady asi 1,5 %. Zlatá data přenosu, tlaků a kontaktu zbývají |
-| A8 | hranice pro události a státy (`events`, `polity`, `background`, `contact`): jsou vzácné a nejsou horké, zůstanou nejdéle v Pythonu a budou svět měnit přes API | |
+| A8 | hranice pro události a státy (`events`, `polity`, `background`, `contact`): jsou vzácné a nejsou horké, zůstanou nejdéle v Pythonu a budou svět měnit přes API | hotovo 2026-11-03 (`zadani-hranice-udalosti.md`) pro `events`, `polity` a `background`: modul `cee.v2.edits` (18 operací, deník `World.edit_log`, přehrání `events.ReplayEdits`); popis pod tabulkou fáze A. Otisky beze změny. `contact.community_step` zatím mění svět přímo |
+
+## A8: API změn světa
+
+Události (`events`), státy (`polity`) a pozadí dějin (`background`) mění svět
+**jen** přes `cee.v2.edits.Edits(world, tick)`. Test
+`test_udalosti_staty_a_pozadi_nesahaji_na_svet_mimo_edits` to hlídá rozborem
+zdrojového kódu (žádný zápis do atributu, žádný zápis do slovníků světa,
+žádné volání mutátorů světa).
+
+**Operace** mají jméno a pojmenované argumenty z čísel, řetězců, bool a `None`
+(seznam jen pro polohu a oblasti státu). Pořadí provedení je pořadí volání, nic
+se neřadí. Operace, která nic nezměnila, se nezapíše.
+
+| Operace | Účinek | Rust převezme jako |
+|---|---|---|
+| `add_territory` | nové území, zařadí se k potomkům rodiče | zápis do stromu území |
+| `add_group` | nová skupina s kódem (`main`) nebo všemi kódy (`all`) skupiny `code_from` (`branch()`; předtím se živé proměnné dárce zapíšou do repertoáru) | nový řádek sloupců skupin a kopie stavu kódu dárce |
+| `remove_group` | skupina zmizí i s vazbami a obchodním podílem | smazání řádku a vazeb |
+| `set_group` | jedno skalární pole skupiny (`GROUP_FIELDS`) | zápis do sloupce |
+| `set_code` | `acquisition`, `l1_source`, `l2_share` hlavního kódu | zápis do sloupců kódu |
+| `fix_code` | nestálé proměnné hlavního kódu na dominantní variantu (shodu rozhoduje první podle ID) | složená operace nad repertoárem |
+| `connect`, `set_link`, `drop_link` | oboustranná vazba (ořez na 0 až 1), jednosměrná vazba, zrušení vazby | zápis do CSR vazeb |
+| `set_trade` | obchodní podíl dvojice (abecedně seřazené), `None` zruší | zápis do mapy obchodu |
+| `set_border_factor` | násobek oslabení vazby hranicí | zápis do mapy hranic |
+| `set_base_prestige`, `set_prestige_mirror` | základní prestiž a předloha prestiže | zápis do map prestiže |
+| `add_state`, `set_state`, `set_state_link`, `remove_state` | stát (`Polity`), jeho `regions`/`policy`/`border` a vazby na sídlo | zápis do tabulky států |
+| `set_standard` | spisovný jazyk státu či regionu | zápis do mapy norem |
+
+Složené změny se rozloží na operace i s vypočtenými hodnotami (gravitační
+vazby: `Edits.connect_gravity` zapíše každou vazbu s vypočtenou silou;
+`refresh` zapíše jen vazby, hranice a prestiže, které se opravdu změnily), takže
+Rust nepotřebuje znát vzorce. Rozhodování, *kdy a jaké* operace volat, zůstává
+v Pythonu.
+
+**Deník změn** `World.edit_log` (`Edit`: tik, operace, argumenty) patří světu,
+kopíruje se s ním (checkpointy, `deepcopy`, pickle) a jde uložit jako řádky JSON
+(`journal_lines`, `load_journal`). `events.replay_events(deník, start_year=,
+dt=)` vyrobí události `ReplayEdits`, které v týchž ticích provedou tytéž
+operace: běh bez událostí, do kterého se vloží deník, dá stejný stav světa,
+stejný deník a stejnou historii kromě záznamů, které zapisují samy události.
+Test `test_v2_edits.py` to ověřuje na sedmi světech, které dohromady použijí
+všech 18 operací a všechny druhy událostí (dobytí a elita, obchod, liturgie,
+přesun jazyka, kodifikace, škola, tisk, zjemnění, migrace, státy, spisovné
+jazyky, odtržení, obrození, pozadí dějin).
+
+**Mimo API zůstává** `contact.community_step` (přechod komunit, vznik a zánik
+skupin domácí a veřejné domény; mění svět přímo, na `contact.py` pracuje jiný
+agent), živé fondy (`world.live`: synchronizace po událostech v
+`Simulation._apply_events`), `World.materialize` (součást `add_group`) a tvorba
+světa (`scenarios`, `spec`, `variation`). Operace stačí i pro `contact.py`
+(`set_group` pro `population`, `transmitted`, `immigration`, `add_group`,
+`set_code`, `remove_group`, `connect`, `set_border_factor`,
+`set_prestige_mirror`), ten se na ně převede dalším krokem.
 
 ## Fáze B: pořadí přepisu
 

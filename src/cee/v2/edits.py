@@ -115,6 +115,7 @@ GROUP_FIELDS: dict[str, str] = {
     "preserved": "bool",
     "revival": "float",
     "elite": "bool",
+    "transmitted": "bool",
 }
 
 #: Pole kódu, která smí ``set_code`` nastavit.
