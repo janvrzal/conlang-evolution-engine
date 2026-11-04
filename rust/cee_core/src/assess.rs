@@ -183,6 +183,32 @@ impl Bank {
         width: usize,
         want_vowels: bool,
     ) -> RowAssessment {
+        self.ensure_marked(ids, changed);
+        self.assess_row_ready(ids, changed, weights, width, want_vowels)
+    }
+
+    /// Spočítá příznakovost tvarů, které hodnocení řádku potřebuje (původní a změněné tvary
+    /// slov, kterých se změna týká), aby šel řádek vyhodnotit jen čtením banky
+    /// ([`Bank::assess_row_ready`]), třeba souběžně.
+    pub fn ensure_marked(&mut self, ids: &[i64], changed: &[i64]) {
+        for (&id, &after) in ids.iter().zip(changed) {
+            if after >= 0 {
+                self.marked_of(id as usize);
+                self.marked_of(after as usize);
+            }
+        }
+    }
+
+    /// [`Bank::assess_row`] nad bankou jen pro čtení: příznakovost tvarů musí být předem
+    /// spočítaná (`ensure_marked`). Výsledek je bit po bitu stejný.
+    pub fn assess_row_ready(
+        &self,
+        ids: &[i64],
+        changed: &[i64],
+        weights: &[f64],
+        width: usize,
+        want_vowels: bool,
+    ) -> RowAssessment {
         let length = ids.len();
         let mut mass_terms = vec![0.0_f64; width.max(length)];
         let mut short_terms = vec![0.0_f64; width.max(length)];
@@ -201,7 +227,7 @@ impl Bank {
             if new_length <= 2 && new_length < old_length {
                 short_terms[k] = weight;
             }
-            marked_terms[k] = weight * (self.marked_of(new) - self.marked_of(old));
+            marked_terms[k] = weight * (self.marked[new] - self.marked[old]);
         }
         let mut result = RowAssessment::default();
         if any {
