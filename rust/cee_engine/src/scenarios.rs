@@ -22,6 +22,7 @@ use crate::model::territory::{Territory, TerritoryLevel};
 use crate::parameters::Parameters;
 use crate::protoform::{protolanguage, ProtoSpec};
 use crate::rng::{stable_int, Part};
+use crate::vocabulary::Vocabulary;
 use crate::world::{gravity_links, Endings, World};
 
 /// Odvozovací přípona protojazyka (jmenná, typ *-ka*).
@@ -74,6 +75,8 @@ pub struct SeedOptions {
     pub prosody: bool,
     pub stress_rule: StressRule,
     pub stress_strength: StressStrength,
+    /// Větší slovník a vlastní pojmy (`None` = výchozí slovník).
+    pub vocabulary: Option<Arc<Vocabulary>>,
 }
 
 impl Default for SeedOptions {
@@ -87,6 +90,7 @@ impl Default for SeedOptions {
             prosody: false,
             stress_rule: StressRule::Penult,
             stress_strength: StressStrength::Weak,
+            vocabulary: None,
         }
     }
 }
@@ -199,7 +203,14 @@ fn seed_prosody(
 }
 
 /// Třída slova každého ohebného pojmu výchozího slovníku.
-fn word_classes(concepts: &[String]) -> HashMap<String, String> {
+fn word_classes(concepts: &[String], vocabulary: Option<&Vocabulary>) -> HashMap<String, String> {
+    if let Some(vocabulary) = vocabulary {
+        let found = vocabulary.word_classes();
+        return concepts
+            .iter()
+            .filter_map(|c| found.get(c).map(|class| (c.clone(), class.clone())))
+            .collect();
+    }
     let defaults = Defaults::shared();
     concepts
         .iter()
@@ -212,12 +223,15 @@ fn word_classes(concepts: &[String]) -> HashMap<String, String> {
 }
 
 /// Graf pojmů světa z vložených dat (`core_graph()`).
-fn install_graph(world: &mut World) -> Result<(), String> {
-    let graph = ConceptGraph::core(
-        &mut world.registry,
-        crate::data::CORE_SEMANTICS_JSON,
-        Defaults::shared(),
-    )?;
+fn install_graph(world: &mut World, vocabulary: Option<&Vocabulary>) -> Result<(), String> {
+    let graph = match vocabulary {
+        Some(vocabulary) => vocabulary.graph(world)?,
+        None => ConceptGraph::core(
+            &mut world.registry,
+            crate::data::CORE_SEMANTICS_JSON,
+            Defaults::shared(),
+        )?,
+    };
     world.grow_concepts();
     world.semantics = Some(Arc::new(graph));
     Ok(())
@@ -249,13 +263,15 @@ pub fn seed_language(
     } else if morphology {
         install_paradigms(world, None, true)?;
     }
+    let vocabulary = options.vocabulary.as_deref();
     if options.semantics {
-        install_graph(world)?;
+        install_graph(world, vocabulary)?;
     }
     if !(phonology || morphology || options.semantics) {
         return world.seed_lexicon(&concepts, None, None, None, &Endings::new(), "proto", None);
     }
     let fixed = HashMap::new();
+    let known = vocabulary.map(Vocabulary::known_frequencies);
     let (forms, frequencies) = protolanguage(
         &ProtoSpec {
             concepts: &concepts,
@@ -264,11 +280,11 @@ pub fn seed_language(
             vowels: &Defaults::shared().default_vowels,
             fixed: &fixed,
             tones: &[],
-            known_frequencies: None,
+            known_frequencies: known.as_ref(),
         },
         ConceptData::shared(),
     )?;
-    let classes = morphology.then(|| word_classes(&concepts));
+    let classes = morphology.then(|| word_classes(&concepts, vocabulary));
     let used = if syntax {
         syntax_endings()
     } else if morphology {
@@ -471,6 +487,7 @@ pub fn seed_lineages(
     seed: i64,
     concepts: &[String],
     semantics: bool,
+    vocabulary: Option<&Vocabulary>,
 ) -> Result<HashMap<String, Arc<Repertoire>>, String> {
     let concepts = dedup_with(concepts, &GRAMMATICAL_SOURCES);
     let mut cells: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
@@ -510,9 +527,10 @@ pub fn seed_lineages(
         world.set_paradigm(class, &all);
     }
     if semantics {
-        install_graph(world)?;
+        install_graph(world, vocabulary)?;
     }
-    let classes = word_classes(&concepts);
+    let classes = word_classes(&concepts, vocabulary);
+    let known = vocabulary.map(Vocabulary::known_frequencies);
     let used = syntax_endings();
     let mut bases = HashMap::new();
     for language in languages {
@@ -529,7 +547,7 @@ pub fn seed_lineages(
                 vowels: &language.vowels,
                 fixed: &language.words,
                 tones: &language.tones,
-                known_frequencies: None,
+                known_frequencies: known.as_ref(),
             },
             ConceptData::shared(),
         )?;
@@ -568,7 +586,10 @@ pub fn region_world(
     languages: &[ProtoLanguage],
 ) -> Result<World, String> {
     let mut world = World::new(seed, params);
-    let concepts = default_concepts();
+    let concepts = options
+        .vocabulary
+        .as_ref()
+        .map_or_else(default_concepts, |v| v.ids());
     let ids: Vec<&str> = regions.iter().map(|r| r.id.as_str()).collect();
     let unique: std::collections::HashSet<&&str> = ids.iter().collect();
     if unique.len() != ids.len() {
@@ -623,7 +644,14 @@ pub fn region_world(
                 }
             }
         }
-        let bases = seed_lineages(&mut world, languages, seed, &concepts, options.semantics)?;
+        let bases = seed_lineages(
+            &mut world,
+            languages,
+            seed,
+            &concepts,
+            options.semantics,
+            options.vocabulary.as_deref(),
+        )?;
         for language in languages {
             if !language.endonym.is_empty() {
                 let lang = world.language(&language.id);
@@ -651,6 +679,9 @@ pub fn region_world(
             seed_language(&mut world, seed, &concepts, options)?,
         )])
     };
+    if let Some(vocabulary) = &options.vocabulary {
+        vocabulary.apply_traits(&mut world);
+    }
     let mut villages_of: HashMap<String, Vec<GroupId>> = HashMap::new();
     for region in regions {
         let lineage = if languages.is_empty() {
@@ -800,7 +831,14 @@ pub fn contact_world(
     let mut world = World::new(seed, params);
     world.add_territory("world", None, Territory::new(TerritoryLevel::World))?;
     let protos: Vec<ProtoLanguage> = languages.iter().map(|l| l.proto.clone()).collect();
-    let bases = seed_lineages(&mut world, &protos, seed, &default_concepts(), semantics)?;
+    let bases = seed_lineages(
+        &mut world,
+        &protos,
+        seed,
+        &default_concepts(),
+        semantics,
+        None,
+    )?;
     for language in languages {
         let base = bases[&language.proto.id].clone();
         let lang_id = world.language(&language.proto.id);

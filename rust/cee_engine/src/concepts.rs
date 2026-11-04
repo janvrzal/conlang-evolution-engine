@@ -37,6 +37,61 @@ pub struct ConceptData {
     catalog: Vec<Value>,
     frequencies: Value,
     mean_borrowed: f64,
+    /// Významy katalogu v pořadí ID WOLD.
+    items: Vec<CatalogItem>,
+    /// ID pojmu katalogu (mimo pojmy enginu) → číslo významu v `items`, v pořadí ID WOLD.
+    ids: Vec<(String, usize)>,
+}
+
+/// Význam katalogu WOLD (zrcadlo záznamu `v2_concepts.json`, část `catalog`).
+#[derive(Clone, Debug)]
+pub struct CatalogItem {
+    pub wold_id: String,
+    pub name: String,
+    pub concepticon_id: Option<i64>,
+    pub concepticon_gloss: Option<String>,
+    pub category: String,
+    pub domain: String,
+    pub borrowed: Option<f64>,
+    pub languages: i64,
+}
+
+/// Číselný klíč ID významu WOLD (`10-47` jako `[10, 47]`), aby `2-9` přišlo před `2-10`.
+pub fn wold_key(wold_id: &str) -> Vec<u32> {
+    wold_id.split('-').filter_map(|p| p.parse().ok()).collect()
+}
+
+/// ID pojmu z názvu významu WOLD: `the mountain or hill` dá `mountain-or-hill`.
+pub fn slug(name: &str) -> String {
+    let mut text = name.trim().to_lowercase();
+    for prefix in ["the ", "to ", "a ", "an "] {
+        if let Some(rest) = text.strip_prefix(prefix) {
+            text = rest.to_owned();
+            break;
+        }
+    }
+    if let Some(body) = text.strip_suffix(')') {
+        if let Some(open) = body.rfind('(') {
+            let digits = &body[open + 1..];
+            if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+                text = format!("{}-{digits}", &body[..open]);
+            }
+        }
+    }
+    let mut out = String::new();
+    let mut dash = false;
+    for c in text.chars() {
+        if c.is_ascii_lowercase() || c.is_ascii_digit() {
+            if dash && !out.is_empty() {
+                out.push('-');
+            }
+            dash = false;
+            out.push(c);
+        } else {
+            dash = true;
+        }
+    }
+    out
 }
 
 fn scaled(value: f64) -> f64 {
@@ -58,11 +113,58 @@ impl ConceptData {
             .filter_map(|item| item["borrowed"].as_f64())
             .collect();
         let mean_borrowed = scores.iter().sum::<f64>() / scores.len().max(1) as f64;
+        let items: Vec<CatalogItem> = {
+            let mut found: Vec<CatalogItem> = catalog
+                .iter()
+                .map(|item| CatalogItem {
+                    wold_id: item["wold_id"].as_str().unwrap_or_default().to_owned(),
+                    name: item["name"].as_str().unwrap_or_default().to_owned(),
+                    concepticon_id: item["concepticon_id"].as_i64(),
+                    concepticon_gloss: item["concepticon_gloss"].as_str().map(str::to_owned),
+                    category: item["category"].as_str().unwrap_or_default().to_owned(),
+                    domain: item["domain"].as_str().unwrap_or("core").to_owned(),
+                    borrowed: item["borrowed"].as_f64(),
+                    languages: item["languages"].as_i64().unwrap_or(0),
+                })
+                .collect();
+            found.sort_by_key(|i| wold_key(&i.wold_id));
+            found
+        };
+        let engine = root["concepts"].as_object().cloned().unwrap_or_default();
+        let known: std::collections::HashSet<&str> = engine
+            .values()
+            .filter_map(|e| e["wold_id"].as_str())
+            .collect();
+        let mut taken: std::collections::HashSet<String> = engine.keys().cloned().collect();
+        taken.extend(
+            crate::grammar::GRAMMATICAL_SOURCES
+                .iter()
+                .map(|s| (*s).to_owned()),
+        );
+        let mut ids = Vec::new();
+        for (at, item) in items.iter().enumerate() {
+            if known.contains(item.wold_id.as_str()) {
+                continue;
+            }
+            let base = slug(&item.name);
+            if crate::grammar::GRAMMATICAL_SOURCES.contains(&base.as_str()) {
+                continue;
+            }
+            let concept = if taken.contains(&base) {
+                format!("{base}-{}", item.wold_id)
+            } else {
+                base
+            };
+            taken.insert(concept.clone());
+            ids.push((concept, at));
+        }
         Ok(ConceptData {
             concepts: root["concepts"].clone(),
             catalog,
             frequencies,
             mean_borrowed,
+            items,
+            ids,
         })
     }
 
@@ -80,13 +182,19 @@ impl ConceptData {
 
     /// Doména enginu pojmu (`core` u pojmu mimo data).
     pub fn domain(&self, concept: &str) -> &str {
-        self.concepts[concept]["domain"].as_str().unwrap_or("core")
+        match self.concepts[concept]["domain"].as_str() {
+            Some(found) => found,
+            None => self
+                .catalog_item(concept)
+                .map_or("core", |i| i.domain.as_str()),
+        }
     }
 
     /// Půjčitelnost pojmu (průměr WOLD u pojmu mimo data nebo bez skóre).
     pub fn borrowed(&self, concept: &str) -> f64 {
         self.concepts[concept]["borrowed"]
             .as_f64()
+            .or_else(|| self.catalog_item(concept).and_then(|i| i.borrowed))
             .unwrap_or(self.mean_borrowed)
     }
 
@@ -99,6 +207,10 @@ impl ConceptData {
     pub fn frequency(&self, concept: &str) -> Option<f64> {
         self.frequencies["concepts"][concept]["log_frequency"]
             .as_f64()
+            .or_else(|| {
+                let item = self.catalog_item(concept)?;
+                self.frequencies["catalog"][item.wold_id.as_str()][0].as_f64()
+            })
             .map(scaled)
     }
 
@@ -132,6 +244,139 @@ impl ConceptData {
             }
         }
         (values / counted.max(1.0)) / (rarity / all.len().max(1) as f64)
+    }
+
+    /// Význam katalogu podle ID pojmu (jen pojmy mimo engine; `catalog_ids`).
+    pub fn catalog_item(&self, concept: &str) -> Option<&CatalogItem> {
+        let at = self.ids.iter().find(|(id, _)| id == concept)?.1;
+        Some(&self.items[at])
+    }
+
+    /// Významy katalogu mimo pojmy enginu podle ID pojmu v pořadí ID WOLD.
+    pub fn catalog_ids(&self) -> impl Iterator<Item = (&str, &CatalogItem)> {
+        self.ids
+            .iter()
+            .map(|(id, at)| (id.as_str(), &self.items[*at]))
+    }
+
+    /// Pořadí, ve kterém se slovník rozšiřuje o pojmy katalogu: nejdřív významy Swadeshova
+    /// seznamu (Calude a Pagel 2011), pak ostatní; uvnitř skupiny sestupně podle frekvence,
+    /// při shodě podle ID WOLD (`concept_data.catalog_order`).
+    pub fn catalog_order(&self) -> Vec<String> {
+        let table = &self.frequencies["catalog"];
+        let mut keyed: Vec<(bool, f64, Vec<u32>, &str)> = self
+            .ids
+            .iter()
+            .map(|(id, at)| {
+                let item = &self.items[*at];
+                let row = &table[item.wold_id.as_str()];
+                (
+                    row[1].as_str() != Some("calude2011"),
+                    -row[0].as_f64().unwrap_or(0.0),
+                    wold_key(&item.wold_id),
+                    id.as_str(),
+                )
+            })
+            .collect();
+        keyed.sort_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                .then(a.2.cmp(&b.2))
+        });
+        keyed.into_iter().map(|k| k.3.to_owned()).collect()
+    }
+
+    /// Záznam pojmu enginu (`concepts`): ID WOLD, název, Concepticon, kategorie a doména.
+    pub fn engine_item(&self, concept: &str) -> Option<CatalogItem> {
+        let e = self.concepts.get(concept)?;
+        Some(CatalogItem {
+            wold_id: e["wold_id"].as_str()?.to_owned(),
+            name: e["name"].as_str().unwrap_or_default().to_owned(),
+            concepticon_id: e["concepticon_id"].as_i64(),
+            concepticon_gloss: e["concepticon_gloss"].as_str().map(str::to_owned),
+            category: e["category"].as_str().unwrap_or_default().to_owned(),
+            domain: e["domain"].as_str().unwrap_or("core").to_owned(),
+            borrowed: e["borrowed"].as_f64(),
+            languages: e["languages"].as_i64().unwrap_or(0),
+        })
+    }
+
+    /// Význam katalogu podle ID WOLD, ID Concepticonu nebo glosu (`concept_data.find`).
+    pub fn find(
+        &self,
+        wold: Option<&str>,
+        concepticon: Option<i64>,
+        gloss: Option<&str>,
+    ) -> Option<&CatalogItem> {
+        let matches: Vec<&CatalogItem> = if let Some(wold) = wold {
+            return self.items.iter().find(|i| i.wold_id == wold);
+        } else if let Some(id) = concepticon {
+            self.items
+                .iter()
+                .filter(|i| i.concepticon_id == Some(id))
+                .collect()
+        } else if let Some(gloss) = gloss {
+            let wanted = gloss.trim().to_lowercase();
+            let by_gloss: Vec<&CatalogItem> = self
+                .items
+                .iter()
+                .filter(|i| i.concepticon_gloss.as_deref().unwrap_or("").to_lowercase() == wanted)
+                .collect();
+            if by_gloss.is_empty() {
+                let strip = |name: &str| {
+                    let lower = name.to_lowercase();
+                    for prefix in ["the ", "to ", "a ", "an "] {
+                        if let Some(rest) = lower.strip_prefix(prefix) {
+                            return rest.to_owned();
+                        }
+                    }
+                    lower
+                };
+                self.items
+                    .iter()
+                    .filter(|i| strip(&i.name) == wanted)
+                    .collect()
+            } else {
+                by_gloss
+            }
+        } else {
+            return None;
+        };
+        // Víc shod: vyhraje význam doložený ve víc jazycích, pak nižší ID WOLD.
+        matches.into_iter().min_by(|a, b| {
+            b.languages
+                .cmp(&a.languages)
+                .then(wold_key(&a.wold_id).cmp(&wold_key(&b.wold_id)))
+        })
+    }
+
+    /// Průměrná půjčitelnost významů katalogu (jen domény `domain`, je-li zadaná).
+    pub fn mean_borrowed_in(&self, domain: Option<&str>) -> f64 {
+        let scores: Vec<f64> = self
+            .items
+            .iter()
+            .filter(|i| domain.is_none_or(|d| i.domain == d))
+            .filter_map(|i| i.borrowed)
+            .collect();
+        scores.iter().sum::<f64>() / scores.len().max(1) as f64
+    }
+
+    /// Průměrná frekvence (stupnice enginu) významů katalogu (jen domény `domain`, je-li zadaná).
+    pub fn mean_frequency(&self, domain: Option<&str>) -> f64 {
+        let values: Vec<f64> = self
+            .items
+            .iter()
+            .filter(|i| domain.is_none_or(|d| i.domain == d))
+            .filter_map(|i| self.item_frequency(i))
+            .collect();
+        values.iter().sum::<f64>() / values.len().max(1) as f64
+    }
+
+    /// Frekvence významu katalogu na stupnici enginu (`None`, když ji data nemají).
+    pub fn item_frequency(&self, item: &CatalogItem) -> Option<f64> {
+        self.frequencies["catalog"][item.wold_id.as_str()][0]
+            .as_f64()
+            .map(scaled)
     }
 
     /// Počet významů katalogu mimo pojmy enginu (kolik pojmů lze přidat k výchozímu slovníku).
@@ -226,6 +471,15 @@ impl ConceptGraph {
                 colexification: count("colexification"),
             });
         }
+        Ok(ConceptGraph::with_relations(registry, relations, defaults))
+    }
+
+    /// Graf z daných vztahů a receptů složenin výchozích pojmů (vztahy jiného slovníku).
+    pub fn with_relations(
+        registry: &mut Registry,
+        relations: Vec<Relation>,
+        defaults: &Defaults,
+    ) -> ConceptGraph {
         let mut recipes: Vec<(ConceptId, Vec<(ConceptId, ConceptId)>)> = Vec::new();
         let mut names: Vec<&String> = defaults.compounds.keys().collect();
         names.sort();
@@ -236,7 +490,7 @@ impl ConceptGraph {
                 .collect();
             recipes.push((registry.concept(target), options));
         }
-        Ok(ConceptGraph::build(registry, relations, recipes))
+        ConceptGraph::build(registry, relations, recipes)
     }
 
     fn build(
