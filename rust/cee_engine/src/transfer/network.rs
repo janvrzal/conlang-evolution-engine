@@ -80,6 +80,10 @@ pub struct StepInputs {
     pub loss_floor: Vec<f64>,
     pub row_keys: Vec<u64>,
     pub tick: u32,
+    /// Váha domény pojmu v kanálu: `[kanál podle `CHANNELS`][doména podle `DOMAINS`]`.
+    pub domains: [[f64; 5]; 6],
+    /// Kotva a normalizace váhy půjčitelnosti pojmu (`ConceptData::borrowing_scale`).
+    pub borrowing_scale: (f64, f64),
 }
 
 /// Řídké míšení: pro každého učícího se (řádek) nenulové zdroje vzestupně podle sloupce.
@@ -235,10 +239,7 @@ pub fn prepare(world: &World, params: &TransmissionParams, tick: u32) -> StepInp
                 .map_or(0.0, |&(_, w)| w),
         );
     }
-    let languages: Vec<_> = axis
-        .iter()
-        .map(|&g| groups.main_code(g).language)
-        .collect();
+    let languages: Vec<_> = axis.iter().map(|&g| groups.main_code(g).language).collect();
     let foreign = |row: usize, column: usize| languages[row] != languages[column];
     let mut cross: Vec<CrossFlow> = Vec::new();
     let any_foreign = matrix
@@ -342,6 +343,20 @@ pub fn prepare(world: &World, params: &TransmissionParams, tick: u32) -> StepInp
             ])
         })
         .collect();
+    let mut domains = [[1.0; 5]; 6];
+    for (channel, name) in crate::parameters::CHANNELS.iter().enumerate() {
+        for (domain, slot) in crate::parameters::DOMAINS.iter().zip(&mut domains[channel]) {
+            *slot = world
+                .params
+                .channel_domains
+                .get(*name)
+                .and_then(|row| row.get(*domain))
+                .copied()
+                .unwrap_or(1.0);
+        }
+    }
+    let borrowing_scale =
+        crate::concepts::ConceptData::shared().borrowing_scale(world.params.borrowability_strength);
     StepInputs {
         axis,
         components,
@@ -354,6 +369,8 @@ pub fn prepare(world: &World, params: &TransmissionParams, tick: u32) -> StepInp
         loss_floor,
         row_keys,
         tick,
+        domains,
+        borrowing_scale,
     }
 }
 
@@ -442,10 +459,7 @@ mod tests {
             vec![(3, 0.5), (4, 0.5)],
             vec![(3, 0.5), (4, 0.5)],
         ];
-        assert_eq!(
-            components(&matrix),
-            vec![vec![0, 2], vec![1], vec![3, 4]]
-        );
+        assert_eq!(components(&matrix), vec![vec![0, 2], vec![1], vec![3, 4]]);
     }
 
     #[test]
