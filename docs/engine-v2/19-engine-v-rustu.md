@@ -42,6 +42,7 @@ rust/                      pracovní prostor Cargo (Cargo.toml, Cargo.lock, prof
 | `protoform`, `scenarios`, `spec` | tvary protojazyka, scénáře, `WorldSpec` | `protoforms.py`, `scenarios.py`, `spec.py` |
 | `events`, `history`, `export` | rozhraní událostí, log + snímky, export `cee-v2/1` | `events.py`, `history.py`, `export.py` |
 | `simulation`, `phases/*`, `changes/*` | smyčka, fáze kroku, rozhraní změn | `simulation.py` |
+| `phonology/*`, `changes/sound` | zvukové změny, index prostředí, fronty fonologizace (R1b) | `phonology.py`, `changes/sound.py` |
 | `checkpoint`, `parallel`, `state/*` | kontrolní body, vlákna, stavy oblastí R1 | – |
 
 ## 2. Datový model
@@ -204,7 +205,7 @@ příkladu `WorldSpec` je **shodný s Pythonem** (viz výsledek v zprávě R0).
 | patří | co chybí |
 |---|---|
 | **R1a** | přenos (`prepare`, `transmit`, míšení, selekce, drift), tlaky, aktivace procesů a analogií, záznamy milníků, sledování slovní zásoby po přenosu |
-| **R1b** | zvukové změny a kandidáti, index prostředí, přestavba (fonologizace), sledování slovní zásoby, banka tvarů a tabulky procesů (registrace, hodnocení) |
+| **R1b** | hotovo, viz [R1b](#r1b-fonologie-a-zvukové-změny); chybí jen hodnocení procesů tlaky (R1a, přes `phonology::row_of`) a `surface` (povrchový tvar slova) |
 | **R1c** | morfologie, syntax, prozodie, sémantické a lexikální změny, místa změn a návrh inovací (`Change`), souběžná variabilita protojazyka (`variation.rs`), větší slovník a vlastní pojmy (`vocabulary`) |
 | **R1d** | události (`State`, `Conquest`, … místo `PendingEvent`), kontakt a komunity, politika, pozadí dějin, instituce, pozorování (shluky, `LineageTracker`), `states`/`borders`/`census`/`dialect_facts`/`lineages` v exportu, `naming` |
 | **R2** | integrace, brány v Rustu, porovnání chování s Pythonem, vazba pro server (`runner.py` → Rust), smazání Pythonu v2, `Simulation::branch` |
@@ -220,3 +221,52 @@ příkladu `WorldSpec` je **shodný s Pythonem** (viz výsledek v zprávě R0).
 - Svět v Rustu nemá souběžnou variabilitu slovní zásoby (viz `variation.rs`); export ticku 0 jí není dotčen.
 - `WorldSpec` s větším slovníkem, vlastními pojmy nebo `background` ≠ `none` se odmítne chybou.
 - Události jsou nosiče bez provedení: běh, který na událost narazí, skončí chybou.
+
+
+## R1b: fonologie a zvukové změny
+
+Hotovo: 33 rodin zvukových změn jako `Change`, index prostředí a opor, fonologizace s frontami,
+uzavření procesu, sledování slovní zásoby po přenosu a aktivace procesu. Python se nespouštěl.
+
+### Návrh
+
+| část | soubor | obsah |
+|---|---|---|
+| změny | `changes/sound.rs` | `SoundChange { family }` pro každou z 33 rodin (`cee_core::candidates::FAMILIES`), priory a rozpočet (`scales`: 0,6 inovace na generaci pro netónové rodiny, tóny mimo), registrace v `default_changes()` |
+| index | `phonology/index.rs` | `with_group(world, skupina, čtení)`: dorovná `cee_core::index::SoundIndex` na stav kódu (razítko = verze fonologie, verze tvarů, délka deníku slovní zásoby, počet morfémů, pravidlo přízvuku) a předá ho čtení; index je za zámkem v `World.sound.runtime`, takže míry se počítají souběžně přes skupiny a výsledek nezávisí na pořadí (opory jsou celá čísla); snímek tabulky hlásek pro stavbu kandidátů je vložený a staví se jednou (`snapshot`) |
+| procesy | `phonology/rows.rs` | `register` (z kandidáta založí procesní proměnnou `process:klíč`, variantu „žádná změna“ a „změna“, `ProcessDef` a číslo procesu; tatáž změna je tatáž proměnná), `row_of` (řádek procesu v bance tvarů, registruje se líně), `resolve_maps` (výstupy `change`/`tone` počítá tabulka hlásek), `changed_share` |
+| sloupce | `phonology/columns.rs` | sloupce morfémů ve tvaru pro jádro (váha buňky, lexém, výchozí tvar, hranice, koncovka), četnosti pojmů, `sync_usage` (dominantní kořeny kódu z deníku `dominant_log`), sklon slova `draw_bias`/`word_bias` |
+| fronty | `phonology/queues.rs` | `activate`, `enter_units`, `leave_vocabulary`, `requeue_all`, `restructure_groups` nad `cee_core::code_state::CodeState`; chybějící sklony slov a mapy hlásek jádro vyžádá a doplní se v cyklu |
+| hooky | `phases/hooks.rs` | `follow_vocabulary` (odchody před příchody, dominantní kořeny, počty užití, `adopt`, `units_of`, vstup a odchod ze slovní zásoby), `is_sound_process` (druh proměnné `Process`), `activate_process` |
+| stav | `state/sound.rs` | `SoundCodeState { order, queues, lifecycle_log }` (uložené), `Runtime` (odvozené: index, sklony slov, řádky procesů, sloupce) |
+
+**Místa zvukových změn.** V Pythonu je místem ID procesní proměnné, která vzniká až při návrhu. V Rustu je
+místem pořadí kandidáta v rodině (`VariableId` jako nosič pořadí). `propose` ho přeloží na kandidáta,
+zaregistruje proměnnou a vrátí ji v `NewVariant::variable`; fáze inovací pak dál používá tuto proměnnou
+(`site = variant.variable`, jediná změna ve společném souboru `phases/innovation.rs`).
+
+**Odvozený stav a kontrolní body.** `Runtime` se při kopii světa a po načtení zahodí; banka tvarů se kopíruje
+bez procesů a zaregistrují se znovu (`ensure_rows`, přesně v pořadí čísel procesů). Fronty (`Queues`) se ukládají
+(bez řádků banky a paměti četností); paměť četností užití se po obnově doplní z `dominant_log`. Test
+`kontrolni_bod_uprostred_fonologizace_da_stejny_beh` dává po obnově stejný běh.
+
+**Zjednodušení proti Pythonu.** Řádek procesu v bance je jeden pro všechna pravidla přízvuku (tabulky výsledků se
+zakládají líně v jádru), takže odpadá `NO_TABLE` a „tabulka pro pravidlo“. Výchozí tvary morfémů jsou vždy
+v bance (`Morphemes.form`), proto odpadá aréna výchozích tvarů indexu. Záznamy `phonologized` a
+`process_closed` se píšou po skupinách v pořadí průchodu fonologie (ne proloženě s morfologií skupiny).
+
+### Pro ostatní oblasti
+
+- **R1a:** `phonology::row_of(world, proces)` dá řádek procesu v bance pro hodnocení tlaků; procesy se do banky
+  smí registrovat jen přes něj (`ensure_rows` jinak hlásí rozpor). `phonology::changed_share` je podíl změny
+  ve skupině. Tlaky zvukových změn (`SOUND_PRESSURES` v Pythonu: Articulation 1,0; Clarity 0,6; FunctionalLoad 1,0;
+  Dispersion 0,5; Phonotactics 0,4; Conformity 0,1; Actuation 1,0) patří přenosu, ne sem.
+- **R1c:** po přepsání tvaru analogií volej `phonology::requeue_all(world, skupina, morfém)`; nové tvary slov
+  (`units_of` pro nové lexémy a výpůjčky) vstupují přes `phonology::enter_units`. `surface` (povrchový tvar
+  slova pro export) zatím není; export čte podkladové tvary.
+- **R1d:** `hooks::adopt` volá `follow_vocabulary` jen při prvním vstupu slova do kódu.
+
+### Brány milníků, kterých se oblast týká
+
+Brány M2 až M7 měří zvukové změny přes `innovation` (change ∈ rodiny), `phonologized` (slova), `process_closed`
+a rozdělení procesních proměnných; po sloučení s přenosem (R1a) je k tomu potřeba jen to, co je tu hotové.

@@ -205,6 +205,12 @@ pub fn ensure_rows(world: &mut World) -> Result<(), String> {
     let Some(table) = world.table.clone() else {
         return Ok(());
     };
+    // Fronty řadí shodné logity podle jmen morfémů (bajty UTF-8 jako body Unicode).
+    let known = world.bank.bank.names.len();
+    if known < world.registry.morphemes.len() {
+        let names = world.registry.morphemes.names()[known..].to_vec();
+        world.bank.bank.extend_names(known, names)?;
+    }
     let runtime = &mut world.sound.runtime;
     if runtime.rows.len() < world.processes.len() {
         runtime.rows.resize(world.processes.len(), -1);
