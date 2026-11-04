@@ -109,7 +109,10 @@ fn mizeni_ma_radky_se_souctem_jedna() {
     assert_eq!(rows.len(), axis.len());
     for entries in &rows {
         let total: f64 = entries.iter().map(|&(_, w)| w).sum();
-        assert!((total - 1.0).abs() < 1e-12, "řádek míšení má součet {total}");
+        assert!(
+            (total - 1.0).abs() < 1e-12,
+            "řádek míšení má součet {total}"
+        );
         assert!(entries.windows(2).all(|pair| pair[0].0 < pair[1].0));
     }
 }
@@ -121,7 +124,10 @@ fn pritazliva_inovace_se_siri_a_podily_jsou_v_poradku() {
     let history = &simulation.history;
     assert!(history.of_kind("innovation").count() > 0);
     let milestones = history.of_kind("milestone").count();
-    assert!(milestones > 0, "inovace s vysokou přitažlivostí se musí šířit");
+    assert!(
+        milestones > 0,
+        "inovace s vysokou přitažlivostí se musí šířit"
+    );
     assert!(
         history.of_kind("milestone").any(|e| e["level"] == 0.9),
         "někde musí inovace překročit devadesát procent"
@@ -243,7 +249,11 @@ fn norm_zvyhodni_kodifikovanou_variantu_uumerne_skolni_docazce() {
             let column = 1;
             for (at, (b, a)) in before.iter().zip(&after).enumerate() {
                 if at == column * block.capacity + slot {
-                    assert!((a - b - 0.3 * 0.5).abs() < 1e-12, "norma {} místo 0,15", a - b);
+                    assert!(
+                        (a - b - 0.3 * 0.5).abs() < 1e-12,
+                        "norma {} místo 0,15",
+                        a - b
+                    );
                 } else {
                     assert_eq!(b, a);
                 }
@@ -347,8 +357,15 @@ fn ekonomie_tresta_volny_opis_a_nic_jineho_nedela() {
     let (variable, free) = world.register_construction(&periphrasis, &Origin::inherited(0.0));
     let synthetic = world.dominant(world.live.group_ids[0], variable).unwrap().0;
     let group = world.live.group_ids[0];
-    let pair = Distribution::from_pairs(vec![(synthetic, 0.9), (free, 0.1)], &world.registry.variants);
-    world.groups.main_code_mut(group).repertoire.set(variable, pair);
+    let pair = Distribution::from_pairs(
+        vec![(synthetic, 0.9), (free, 0.1)],
+        &world.registry.variants,
+    );
+    world
+        .groups
+        .main_code_mut(group)
+        .repertoire
+        .set(variable, pair);
     assert!(world.load_differing().unwrap().contains(&variable));
     let params_only_economy = {
         let mut params = (*world.params).clone();
@@ -385,7 +402,10 @@ fn ekonomie_tresta_volny_opis_a_nic_jineho_nedela() {
     let zeros = vec![0.0; cells];
     pressures.fitness(block, row, 1, &zeros, &zeros, &mut out);
     let free_slot = block.slots[row].iter().position(|&v| v == free).unwrap();
-    let synthetic_slot = block.slots[row].iter().position(|&v| v == synthetic).unwrap();
+    let synthetic_slot = block.slots[row]
+        .iter()
+        .position(|&v| v == synthetic)
+        .unwrap();
     for g in 0..world.live.group_ids.len() {
         assert!((out[g * block.capacity + free_slot] + 0.15).abs() < 1e-15);
         assert_eq!(out[g * block.capacity + synthetic_slot], 0.0);
