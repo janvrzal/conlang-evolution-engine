@@ -98,15 +98,29 @@ fn mix_component(
         source,
         weight,
     } = &component.links;
+    // Zdroj, který nemá v žádném slotu nic, do součtu nepřidá nic (`w × 0` je +0), takže se
+    // přeskočí a ostatním se projdou jen sloty po poslední nenulový.
+    let mut extent = vec![0usize; component.members.len()];
     for variable in 0..variables {
         let plane = variable * groups;
+        for (index, &member) in component.members.iter().enumerate() {
+            let from = (plane + member) * width;
+            extent[index] = values[from..from + width]
+                .iter()
+                .rposition(|&value| value != 0.0)
+                .map_or(0, |last| last + 1);
+        }
         for (row, &target) in component.members.iter().enumerate() {
             let at = (plane + target) * width;
             let (first, last) = (start[row], start[row + 1]);
             for index in first..last {
+                let size = extent[source[index]];
+                if size == 0 {
+                    continue;
+                }
                 let from = (plane + component.members[source[index]]) * width;
                 let w = weight[index];
-                for slot in 0..width {
+                for slot in 0..size {
                     out[at + slot] += w * values[from + slot];
                 }
             }
@@ -426,6 +440,11 @@ struct CellScratch {
     children: Vec<f64>,
     tail: Vec<f64>,
     sorted: Vec<f64>,
+    /// Sloty nosiče buňky (vzestupně) a kompaktní kopie hodnot nosiče.
+    support: Vec<usize>,
+    heard: Vec<f64>,
+    current: Vec<f64>,
+    result: Vec<f64>,
 }
 
 /// Nové frekvence a trendová základna proměnných `[first, last)` (`phases_transmission.settle`):
@@ -448,6 +467,9 @@ pub fn settle_range(
         &mut scratch.children,
         &mut scratch.tail,
         &mut scratch.sorted,
+        &mut scratch.heard,
+        &mut scratch.current,
+        &mut scratch.result,
     ] {
         field.resize(slots, 0.0);
     }
@@ -495,6 +517,8 @@ fn settle_cell(
 ) {
     let slots = cell.current.len();
     let group = cell.group;
+    updated.fill(0.0);
+    baseline.fill(0.0);
     let CellScratch {
         selected,
         weighted,
@@ -502,14 +526,38 @@ fn settle_cell(
         children,
         tail,
         sorted,
+        support,
+        heard,
+        current,
+        result,
     } = scratch;
+    // Počítá se jen s nosičem buňky: sloty, kde je něco z `current`, `previous` a `heard`.
+    // Ostatní sloty dávají ve všech krocích přesně nulu a součet sloty s nulou nemění,
+    // takže výsledky jsou stejné jako při výpočtu přes všechny sloty.
+    support.clear();
     for slot in 0..slots {
-        let pressure = cell.fitness.map_or(0.0, |fitness| fitness[slot]);
-        weighted[slot] = cell.heard[slot] * (cohorts.selection * pressure).exp();
+        if cell.current[slot] != 0.0 || cell.previous[slot] != 0.0 || cell.heard[slot] != 0.0 {
+            support.push(slot);
+        }
     }
-    normalize_cell(weighted, cell.heard, selected, sorted);
-    for slot in 0..slots {
-        let share = selected[slot];
+    let n = support.len();
+    if n == 0 {
+        return;
+    }
+    for (at, &slot) in support.iter().enumerate() {
+        heard[at] = cell.heard[slot];
+        current[at] = cell.current[slot];
+        // Neslyšená varianta má váhu nulovou, ať je tlak jakýkoli (exp je konečné).
+        weighted[at] = if heard[at] == 0.0 {
+            0.0
+        } else {
+            let pressure = cell.fitness.map_or(0.0, |fitness| fitness[slot]);
+            heard[at] * (cohorts.selection * pressure).exp()
+        };
+    }
+    normalize_cell(&weighted[..n], &heard[..n], &mut selected[..n], sorted);
+    for (at, &slot) in support.iter().enumerate() {
+        let share = selected[at];
         let spread = share * (1.0 - share);
         // Varianta, kterou kohorta vůbec neslyší, nemůže driftem vzniknout; šum jen tam, kde soutěží varianty.
         let drift = if spread > 0.0 {
@@ -520,37 +568,37 @@ fn settle_cell(
             0.0
         };
         let trend = cohorts.kappa * (cell.current[slot] - cell.previous[slot]);
-        grown[slot] = (share + trend + drift).max(0.0);
+        grown[at] = (share + trend + drift).max(0.0);
     }
-    normalize_cell(grown, selected, children, sorted);
+    normalize_cell(&grown[..n], &selected[..n], &mut children[..n], sorted);
     let renewed = cohorts.renewal[group];
     let floor = cohorts.loss_floor[group];
-    for slot in 0..slots {
-        let adults =
-            cell.current[slot] + cohorts.adult_rate * (cell.heard[slot] - cell.current[slot]);
-        let mixed = (1.0 - renewed) * adults + renewed * children[slot];
-        tail[slot] = if mixed < floor { 0.0 } else { mixed };
+    for at in 0..n {
+        let adults = current[at] + cohorts.adult_rate * (heard[at] - current[at]);
+        let mixed = (1.0 - renewed) * adults + renewed * children[at];
+        tail[at] = if mixed < floor { 0.0 } else { mixed };
     }
-    normalize_cell(tail, cell.current, updated, sorted);
+    normalize_cell(&tail[..n], &current[..n], &mut result[..n], sorted);
     // Vedoucí varianta (první maximum); nad prahem a pod celou se ustálí a zbude sama.
     let mut leader = 0;
-    for slot in 1..slots {
-        if updated[slot] > updated[leader] {
-            leader = slot;
+    for at in 1..n {
+        if result[at] > result[leader] {
+            leader = at;
         }
     }
-    let top = updated[leader];
+    let top = result[leader];
     if top >= cohorts.establish_threshold && top < 1.0 {
-        for (slot, value) in updated.iter_mut().enumerate() {
-            *value = if slot == leader { 1.0 } else { 0.0 };
+        for (at, value) in result[..n].iter_mut().enumerate() {
+            *value = if at == leader { 1.0 } else { 0.0 };
         }
     }
     if !cell.present {
-        updated.fill(0.0);
+        result[..n].fill(0.0);
     }
     let mut alive = 0;
-    for slot in 0..slots {
-        baseline[slot] = if updated[slot] > 0.0 {
+    for (at, &slot) in support.iter().enumerate() {
+        updated[slot] = result[at];
+        baseline[slot] = if result[at] > 0.0 {
             alive += 1;
             cell.previous[slot] + renewed * (cell.current[slot] - cell.previous[slot])
         } else {
