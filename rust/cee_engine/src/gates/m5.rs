@@ -133,14 +133,14 @@ pub fn run_shifted(seed: i64) -> Result<Shifted, String> {
 pub fn check_s3_prechod(simulation: &Simulation) -> Report {
     let mut report = Report::new();
     let world = &simulation.world;
-    let shifted: BTreeSet<&str> = simulation
+    let shifted: BTreeSet<String> = simulation
         .history
         .of_kind("language_shift")
-        .map(|event| super::metrics::text(event, "group"))
+        .map(|event| super::metrics::text(&event, "group").to_owned())
         .collect();
     report.flag(
         "přešly právě x0, x1 a x2",
-        shifted == ["x0", "x1", "x2"].into_iter().collect(),
+        shifted == ["x0", "x1", "x2"].map(String::from).into_iter().collect(),
     );
     let target = world.registry.languages.get("y");
     let others = world

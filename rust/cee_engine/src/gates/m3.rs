@@ -105,7 +105,7 @@ pub fn check_analogie(simulation: &Simulation) -> Report {
         .history
         .of_kind("analogy")
         .filter_map(|event| {
-            let variable = VariableId(world.registry.variables.get(text(event, "variable"))?);
+            let variable = VariableId(world.registry.variables.get(text(&event, "variable"))?);
             let unit = world.form_changes.get(&variable)?.unit;
             Some(world.morphemes.frequency[world.morphemes.lexeme_id(unit).index()])
         })

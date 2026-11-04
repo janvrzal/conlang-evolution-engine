@@ -213,7 +213,7 @@ pub fn grammar(world: &World, group: GroupId) -> Map<String, Value> {
 pub fn lineages(simulation: &Simulation) -> Vec<Value> {
     let world = &simulation.world;
     let mut found: std::collections::BTreeMap<String, Map<String, Value>> = Default::default();
-    for event in &simulation.history.events {
+    for event in simulation.history.events.iter() {
         match event.get("kind").and_then(Value::as_str) {
             Some("language_emerged" | "language_split") => {
                 let Some(id) = event.get("lineage").and_then(Value::as_str) else {

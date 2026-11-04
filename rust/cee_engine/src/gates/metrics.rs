@@ -221,16 +221,16 @@ fn correlation(x: &[f64], y: &[f64]) -> f64 {
 
 /// Podíl inovací, které se aspoň v jedné skupině ustálily (metrika 8).
 pub fn establishment_fraction(history: &History) -> f64 {
-    let innovations: BTreeSet<&str> = history
+    let innovations: BTreeSet<String> = history
         .of_kind("innovation")
-        .map(|event| text(event, "variant"))
+        .map(|event| text(&event, "variant").to_owned())
         .collect();
     if innovations.is_empty() {
         return 0.0;
     }
-    let established: BTreeSet<&str> = history
+    let established: BTreeSet<String> = history
         .of_kind("established")
-        .map(|event| text(event, "variant"))
+        .map(|event| text(&event, "variant").to_owned())
         .filter(|variant| innovations.contains(variant))
         .collect();
     established.len() as f64 / innovations.len() as f64
@@ -376,9 +376,8 @@ pub fn lexicon_profile(world: &World, group: GroupId) -> LexiconProfile {
 pub fn established_processes(history: &History) -> BTreeSet<String> {
     history
         .of_kind("established")
-        .map(|event| text(event, "variable"))
+        .map(|event| text(&event, "variable").to_owned())
         .filter(|name| name.starts_with("process:"))
-        .map(str::to_owned)
         .collect()
 }
 

@@ -130,7 +130,7 @@ pub fn check_clen_invariants(simulation: &Simulation) -> (Report, bool) {
     let grammaticalized = simulation
         .history
         .of_kind("grammaticalized")
-        .any(|event| text(event, "function") == "DEFINITE");
+        .any(|event| text(&event, "function") == "DEFINITE");
     if grammaticalized {
         report.flag(
             "srostlý člen dal jazyku buňku DEF",

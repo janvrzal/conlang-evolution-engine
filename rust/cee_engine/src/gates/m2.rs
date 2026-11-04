@@ -217,9 +217,9 @@ pub fn check_jazyky_se_lisi(runs: &[&PhonologyRun]) -> Report {
 pub fn check_zvukove_zmeny_se_siri(run: &PhonologyRun) -> Report {
     let mut report = Report::new();
     let history = &run.simulation.history;
-    let mut per_change: BTreeMap<&str, f64> = BTreeMap::new();
+    let mut per_change: BTreeMap<String, f64> = BTreeMap::new();
     for event in history.of_kind("established") {
-        let variable = text(event, "variable");
+        let variable = text(&event, "variable").to_owned();
         if variable.starts_with("process:") {
             *per_change.entry(variable).or_insert(0.0) += 1.0;
         }
