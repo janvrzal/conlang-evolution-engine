@@ -226,6 +226,21 @@ impl SegmentTable {
             .collect()
     }
 
+    /// Rysy všech hlásek za sebou (řádek po řádku, šířka `features.len()`).
+    pub fn vectors(&self) -> &[i8] {
+        &self.vectors
+    }
+
+    /// Zápisy tónů podle kódu (kód 1 je na pozici 0), jak je dává `TONES` v Pythonu.
+    pub fn tone_symbols(&self) -> Vec<String> {
+        let mut found: Vec<(&u32, &String)> = self.tone_codes.iter().map(|(k, v)| (v, k)).collect();
+        found.sort();
+        found
+            .into_iter()
+            .map(|(_, symbol)| symbol.clone())
+            .collect()
+    }
+
     /// Kód tónu samohlásky (0 = bez tónu).
     pub fn tone_of(&self, segment: i32) -> u32 {
         self.tone_base

@@ -17,8 +17,8 @@ use crate::ids::GroupId;
 use crate::phases::StepContext;
 
 /// Fonologizace skupin (R1b).
-pub fn phonology(_ctx: &mut StepContext<'_>, _groups: &[GroupId]) -> Result<(), String> {
-    Ok(()) // TODO(R1b)
+pub fn phonology(ctx: &mut StepContext<'_>, groups: &[GroupId]) -> Result<(), String> {
+    crate::phonology::restructure_groups(ctx, groups)
 }
 
 /// Analogické přestavby tvarů skupiny (R1c).

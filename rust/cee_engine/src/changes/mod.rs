@@ -15,6 +15,8 @@
 //! (rayon, výsledek nezávisí na počtu vláken). `propose` smí svět měnit (např. založit
 //! nový morfém) a běží sekvenčně v kanonickém pořadí skupin a změn.
 
+pub mod sound;
+
 use crate::ids::{GroupId, VariableId};
 use crate::model::repertoire::{Origin, Payload};
 use crate::rng::Stream;
@@ -75,5 +77,7 @@ pub trait Change: Send + Sync {
 /// R0: prázdný seznam – inovační fáze běží, ale bez změn nic nenavrhne. Agenti R1 sem
 /// přidávají `Box::new(...)` svých změn.
 pub fn default_changes() -> Vec<Box<dyn Change>> {
-    Vec::new()
+    let mut changes: Vec<Box<dyn Change>> = Vec::new();
+    changes.extend(sound::sound_changes());
+    changes
 }
