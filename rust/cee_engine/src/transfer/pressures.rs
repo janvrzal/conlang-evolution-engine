@@ -17,9 +17,12 @@ use cee_core::transmission::{hash_normal_mixed, splitmix64};
 
 use crate::grammar::{Construction, GrammaticalFunction, Template};
 use crate::ids::{ConceptId, MorphemeId, VariableId, VariantId};
+use crate::model::code::StressStrength;
+use crate::model::lexicon::FormOperation;
 use crate::model::pools::PoolBlock;
 use crate::model::repertoire::{Payload, VariableKind};
 use crate::rng::{stable_int, Part};
+use crate::transfer::assessed::{apocope, form_score, process_score, RowAssessment};
 use crate::transfer::network::StepInputs;
 use crate::world::World;
 
@@ -310,12 +313,22 @@ impl<'a> Pressures<'a> {
             let now = &current[local * stride..(local + 1) * stride];
             let heard = &heard[local * stride..(local + 1) * stride];
             let variants = &block.slots[row];
+            let assessed = self.assess_row(kind, variable, variants, now, heard);
             for &(pressure, weight) in &plan[kind_number(kind)] {
                 if weight == 0.0 {
                     continue;
                 }
                 self.apply(
-                    pressure, weight, variable, variants, now, heard, cells, groups, slots,
+                    pressure,
+                    weight,
+                    variable,
+                    variants,
+                    now,
+                    heard,
+                    cells,
+                    assessed.as_ref(),
+                    groups,
+                    slots,
                 );
             }
         }
@@ -331,6 +344,7 @@ impl<'a> Pressures<'a> {
         current: &[f64],
         heard: &[f64],
         cells: &mut [f64],
+        assessed: Option<&RowAssessment>,
         groups: usize,
         slots: usize,
     ) {
@@ -488,10 +502,118 @@ impl<'a> Pressures<'a> {
                     );
                 }
             }
+            id::ARTICULATION
+            | id::CLARITY
+            | id::DISPERSION
+            | id::FUNCTIONAL_LOAD
+            | id::PHONOTACTICS
+            | id::UNIFORMITY
+            | id::CONSERVATION
+            | id::TEACHABILITY
+            | id::DISTINCTIVENESS => {
+                if let Some(assessed) = assessed {
+                    self.assessed_pressure(pressure, weight, variable, assessed, cells, slots);
+                }
+            }
             id::AMBIGUITY | id::ECONOMY | id::EXPRESSIVITY | id::FUSION | id::LEARNABILITY => {
                 self.construction(pressure, weight, variable, variants, cells, groups, slots)
             }
             _ => {}
+        }
+    }
+
+    // --- tlaky nad hodnocením ------------------------------------------------------------
+
+    /// Hodnocení změny řádku (procesu či analogie) ve skupinách, kam dolehla; jednou pro všechny
+    /// tlaky řádku. `None` pro řádky, které žádnou změnu nesledují.
+    fn assess_row(
+        &self,
+        kind: VariableKind,
+        variable: VariableId,
+        variants: &[VariantId],
+        current: &[f64],
+        heard: &[f64],
+    ) -> Option<RowAssessment> {
+        if !matches!(kind, VariableKind::Process | VariableKind::Form) {
+            return None;
+        }
+        let world = self.world;
+        let changed = *world.transfer.derived.changed.get(variable.index())?;
+        let slot = variants.iter().position(|v| v.0 == changed)?;
+        let tracked = match kind {
+            VariableKind::Process => world
+                .process(world.variables.process[variable.index()])
+                .is_some(),
+            _ => world.form_changes.contains_key(&variable),
+        };
+        if !tracked {
+            return None;
+        }
+        let slots = variants.len();
+        let columns: Vec<usize> = (0..self.inputs.axis.len())
+            .filter(|&g| current[g * slots + slot] > 0.0 || heard[g * slots + slot] > 0.0)
+            .collect();
+        if columns.is_empty() {
+            return None;
+        }
+        let values =
+            crate::transfer::seams::assess_cells(world, variable, &columns, self.inputs.tick);
+        Some(RowAssessment {
+            slot,
+            columns,
+            values,
+        })
+    }
+
+    fn assessed_pressure(
+        &mut self,
+        pressure: u8,
+        weight: f64,
+        variable: VariableId,
+        assessed: &RowAssessment,
+        cells: &mut [f64],
+        slots: usize,
+    ) {
+        let world = self.world;
+        let params = &world.params;
+        if pressure == id::TEACHABILITY && !self.any_l2 {
+            return;
+        }
+        let process = match world.variables.kind[variable.index()] {
+            VariableKind::Process => world.process(world.variables.process[variable.index()]),
+            _ => None,
+        };
+        let form = world.form_changes.get(&variable);
+        for (&g, values) in assessed.columns.iter().zip(&assessed.values) {
+            let Some(values) = values else { continue };
+            let group = self.inputs.axis[g];
+            let score = match (process, form) {
+                (Some(process), _) => {
+                    let code = world.groups.main_code(group);
+                    let coda = if pressure == id::PHONOTACTICS && apocope(process) {
+                        crate::transfer::seams::coda_share(world, group)
+                    } else {
+                        0.0
+                    };
+                    process_score(
+                        pressure,
+                        process,
+                        values,
+                        code.stress_strength == StressStrength::Strong,
+                        coda,
+                        params,
+                    )
+                }
+                (None, Some(change)) => form_score(
+                    pressure,
+                    change.operation == FormOperation::Level,
+                    change.operation.lexeme_wide(),
+                    values,
+                    self.l2[g],
+                ),
+                _ => 0.0,
+            };
+            add(&mut cells[g * slots + assessed.slot], weight * score);
         }
     }
 

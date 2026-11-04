@@ -9,6 +9,7 @@
 //! | [`block`] | přenos bloku (`hear`, tlaky, `settle`) a události z před/po | `transmission.transmit`, `simulation._plan` |
 //! | [`seams`] | místa, kde se čte stav jiné oblasti, který zatím chybí | – |
 
+pub mod assessed;
 pub mod block;
 pub mod factors;
 pub mod network;
