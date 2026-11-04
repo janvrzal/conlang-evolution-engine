@@ -26,10 +26,10 @@ use cee_core::bank::Outcome;
 use crate::ids::{GroupId, MorphemeId, ProcessId, VariableId};
 use crate::model::lexicon::{ProcessDef, Stress};
 use crate::model::repertoire::VariableKind;
-use crate::parallel;
 use crate::morphology::{
     apply_form_change, citation_id, class_stats, concept_totals, usage_frequency,
 };
+use crate::parallel;
 use crate::phonology::rows::{resolve_maps, row_of};
 use crate::segments::SegmentTable;
 use crate::transfer::assessed::Assessment;

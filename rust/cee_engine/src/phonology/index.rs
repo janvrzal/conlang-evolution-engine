@@ -6,8 +6,8 @@
 //! zapamatuje stav kódu, ze kterého byl počítán, další dotaz v témže stavu nestojí nic.
 
 use cee_core::candidates::{self, SegTable};
-use rayon::prelude::*;
 use cee_core::index::{GroupInput, SoundIndex};
+use rayon::prelude::*;
 
 use crate::changes::sound::scales;
 use crate::ids::GroupId;

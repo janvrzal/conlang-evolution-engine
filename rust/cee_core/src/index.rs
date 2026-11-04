@@ -121,6 +121,18 @@ impl Contexts {
         found
     }
 
+    /// Totéž jen pro čtení: už zapamatovaný seznam prostředí, jinak `None`.
+    fn cached_of_form(&self, form: usize, rule: u8) -> Option<(usize, usize)> {
+        let outside = form >= PRIVATE as usize;
+        let (table, key) = if outside {
+            (&self.private_forms[rule as usize], form - PRIVATE as usize)
+        } else {
+            (&self.forms[rule as usize], form)
+        };
+        let &(start, length) = table.get(key)?;
+        (start != UNKNOWN).then_some((start as usize, length as usize))
+    }
+
     /// Prostředí všech hlásek tvaru (čistá funkce tvaru a pravidla, proto zapamatovaná):
     /// začátek a délka seznamu v `pool`.
     fn of_form(
@@ -477,9 +489,7 @@ impl SoundIndex {
             }
         }
         self.prebuild_sets(&pending)?;
-        for found in pending {
-            self.sync_group_apply(bank, found)?;
-        }
+        self.apply_all(bank, pending)?;
         Ok(needs)
     }
 
@@ -626,12 +636,144 @@ impl SoundIndex {
         }))
     }
 
+    /// Druhá část dorovnání všech skupin: opory kandidátů se počítají **souběžně** (každá skupina
+    /// čte sdílená prostředí a sadu a píše do vlastního pole opor), ukládají se sekvenčně. Skupina,
+    /// jejíž prostředí ještě nejsou zapamatovaná (nemělo by nastat), jde starou sekvenční cestou.
+    fn apply_all(&mut self, bank: &Bank, pending: Vec<Pending>) -> Result<(), String> {
+        if pending.len() < 2 {
+            for found in pending {
+                self.sync_group_apply(bank, found)?;
+            }
+            return Ok(());
+        }
+        // Sady, které mezitím zmizely, se postaví znovu (sekvenčně).
+        for found in &pending {
+            let inventory = &self.groups[found.at].inventory;
+            if !self.set_ids.contains_key(inventory) {
+                let table = self.table.as_ref().ok_or("sada kandidátů zmizela")?;
+                build_set(
+                    &mut self.sets,
+                    &mut self.set_ids,
+                    self.scales.len(),
+                    table,
+                    inventory,
+                )?;
+            }
+        }
+        struct Work {
+            found: Pending,
+            slot: usize,
+            supports: Vec<i64>,
+            done: bool,
+        }
+        let mut work: Vec<Work> = Vec::with_capacity(pending.len());
+        for found in pending {
+            let group = &mut self.groups[found.at];
+            let slot = *self
+                .set_ids
+                .get(&group.inventory)
+                .ok_or("sada kandidátů zmizela")?;
+            let supports = if found.full {
+                Vec::new()
+            } else {
+                std::mem::take(&mut group.supports)
+            };
+            work.push(Work {
+                found,
+                slot,
+                supports,
+                done: false,
+            });
+        }
+        let results: Vec<Result<bool, String>> = {
+            use rayon::prelude::*;
+            let (contexts, sets, groups) = (&self.contexts, &self.sets, &self.groups);
+            let vowel = &bank.vowel;
+            let compute = |item: &mut Work| -> Result<bool, String> {
+                let set = sets[item.slot].as_ref().ok_or("sada kandidátů zmizela")?;
+                if !item.found.full {
+                    for &(context, diff) in &item.found.nets {
+                        set.add(contexts, vowel, context as usize, diff, &mut item.supports)?;
+                    }
+                    return Ok(true);
+                }
+                let group = &groups[item.found.at];
+                let mut pooled: Vec<u32> = Vec::new();
+                for number in 0..group.counted_form.len() {
+                    let form = group.counted_form[number];
+                    if form >= 0 {
+                        let Some((start, length)) =
+                            contexts.cached_of_form(form as usize, group.counted_rule[number])
+                        else {
+                            return Ok(false);
+                        };
+                        pooled.extend_from_slice(&contexts.pool[start..start + length]);
+                    }
+                }
+                pooled.sort_unstable();
+                item.supports = vec![0; set.count];
+                let mut run = 0;
+                while run < pooled.len() {
+                    let context = pooled[run];
+                    let mut end = run + 1;
+                    while end < pooled.len() && pooled[end] == context {
+                        end += 1;
+                    }
+                    set.add(
+                        contexts,
+                        vowel,
+                        context as usize,
+                        (end - run) as i64,
+                        &mut item.supports,
+                    )?;
+                    run = end;
+                }
+                Ok(true)
+            };
+            work.par_iter_mut().map(compute).collect()
+        };
+        for (item, result) in work.iter_mut().zip(results) {
+            item.done = result?;
+        }
+        // Uložení v pořadí skupin: nejdřív se sady nových inventářů uchopí (`refs`), teprve potom se
+        // uvolňují dosavadní, aby sada, kterou potřebuje jiná skupina, nezanikla.
+        let families = self.scales.len();
+        let mut previous: Vec<usize> = Vec::new();
+        for item in &mut work {
+            if !item.done {
+                continue;
+            }
+            let group = &mut self.groups[item.found.at];
+            group.supports = std::mem::take(&mut item.supports);
+            if item.found.full {
+                if let Some(old) = group.set.replace(item.slot) {
+                    previous.push(old);
+                }
+                group.valid_for = Some(group.inventory.clone());
+                group.effective.clear();
+                group.families.clear();
+                group.families.resize(families, Family::default());
+                self.sets[item.slot]
+                    .as_mut()
+                    .ok_or("sada kandidátů zmizela")?
+                    .refs += 1;
+            }
+        }
+        for old in previous {
+            self.release_set(old);
+        }
+        for item in work {
+            if item.done {
+                self.refresh_families(item.found.at, item.slot);
+            } else {
+                self.sync_group_apply(bank, item.found)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Druhá část dorovnání skupiny: opory kandidátů a rodiny (sada pro inventář už je postavená).
-    fn sync_group_apply(
-        &mut self,
-        bank: &Bank,
-        pending: Pending,
-    ) -> Result<(), String> {
+    fn sync_group_apply(&mut self, bank: &Bank, pending: Pending) -> Result<(), String> {
         let Pending { at, full, nets } = pending;
         let Self {
             contexts,
