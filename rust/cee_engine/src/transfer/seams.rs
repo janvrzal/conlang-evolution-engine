@@ -28,7 +28,17 @@ pub fn closed(world: &World, group: GroupId, variable: VariableId) -> bool {
         .queues
         .state
         .find(process.index())
-        .is_some_and(|at| !world.groups.main_code(group).phonology.sound.queues.state.procs[at].live)
+        .is_some_and(|at| {
+            !world
+                .groups
+                .main_code(group)
+                .phonology
+                .sound
+                .queues
+                .state
+                .procs[at]
+                .live
+        })
 }
 
 /// Hodnocení změny (procesu či analogie) ve skupinách `columns` (sloupce osy), kam dolehla.
@@ -45,7 +55,9 @@ pub fn assess_cells(
     _tick: u32,
 ) -> Vec<Option<crate::transfer::assessed::Assessment>> {
     match world.variables.kind.get(variable.index()) {
-        Some(VariableKind::Process) => crate::transfer::assess::process_cells(world, variable, columns),
+        Some(VariableKind::Process) => {
+            crate::transfer::assess::process_cells(world, variable, columns)
+        }
         Some(VariableKind::Form) => crate::transfer::assess::form_cells(world, variable, columns),
         _ => vec![None; columns.len()],
     }

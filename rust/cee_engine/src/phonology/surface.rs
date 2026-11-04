@@ -12,7 +12,9 @@ use cee_core::process::{apply, missing_map, Proc, Scratch};
 
 use crate::ids::{GroupId, MorphemeId, ProcessId, VariableId, VariantId};
 use crate::model::lexicon::Operation;
-use crate::morphology::{apply_form_change, changed_share as morph_share, concept_totals, usage_frequency};
+use crate::morphology::{
+    apply_form_change, changed_share as morph_share, concept_totals, usage_frequency,
+};
 use crate::phonology::columns::bias_value;
 use crate::phonology::rows::{changed_share, proc_of};
 use crate::world::World;
@@ -88,7 +90,15 @@ fn apply_local(
     let mut scratch = Scratch::default();
     loop {
         let mut missing = BTreeSet::new();
-        missing_map(proc, form, &table.vowel, table.boundary(), rule, &mut scratch, &mut missing);
+        missing_map(
+            proc,
+            form,
+            &table.vowel,
+            table.boundary(),
+            rule,
+            &mut scratch,
+            &mut missing,
+        );
         if missing.is_empty() {
             break;
         }
@@ -103,10 +113,17 @@ fn apply_local(
                     .collect();
                 table.changed(segment, &changes, &def.allow).ok()?
             };
-            proc.map[segment as usize] = output.map_or(-1, |o| o);
+            proc.map[segment as usize] = output.unwrap_or(-1);
         }
     }
-    apply(proc, form, &table.vowel, table.boundary(), rule, &mut scratch)
+    apply(
+        proc,
+        form,
+        &table.vowel,
+        table.boundary(),
+        rule,
+        &mut scratch,
+    )
 }
 
 /// Dominantní povrchový tvar morfému ve skupině (živé procesy v pořadí jejich vzniku).
@@ -131,7 +148,14 @@ fn surface_cached(
         state
             .live()
             .into_iter()
-            .filter(|&at| state.procs[at].done.get(morpheme.index()).copied().unwrap_or(0) != 1)
+            .filter(|&at| {
+                state.procs[at]
+                    .done
+                    .get(morpheme.index())
+                    .copied()
+                    .unwrap_or(0)
+                    != 1
+            })
             .map(|at| (state.procs[at].number, state.procs[at].reductive))
             .collect()
     };
@@ -145,13 +169,17 @@ fn surface_cached(
     };
     for (number, reductive) in live {
         let process = ProcessId::new(number);
-        let (variable, changed) =
-            info_pure(world, process).ok_or_else(|| format!("proces č. {number} nemá proměnnou"))?;
+        let (variable, changed) = info_pure(world, process)
+            .ok_or_else(|| format!("proces č. {number} nemá proměnnou"))?;
         let share = changed_share(world, group, variable, changed);
         if share <= 0.0 {
             continue;
         }
-        let lead = if reductive { lead_scale * (2.0 * frequency - 1.0) } else { 0.0 };
+        let lead = if reductive {
+            lead_scale * (2.0 * frequency - 1.0)
+        } else {
+            0.0
+        };
         let value = logit(share) + lead + bias_value(world, number, lexeme.index());
         if 1.0 / (1.0 + (-value).exp()) < 0.5 {
             continue;
@@ -173,7 +201,12 @@ pub fn surface_lexicon(world: &World, group: GroupId) -> Result<Vec<(String, Vec
         .iter()
         .enumerate()
         .filter(|(_, root)| !root.is_none())
-        .map(|(concept, &root)| (world.registry.concepts.name(concept as u32).to_owned(), root))
+        .map(|(concept, &root)| {
+            (
+                world.registry.concepts.name(concept as u32).to_owned(),
+                root,
+            )
+        })
         .collect();
     concepts.sort();
     let mut cache = Vec::new();

@@ -22,7 +22,9 @@ use cee_core::bank::Outcome;
 use crate::ids::{GroupId, MorphemeId, ProcessId, VariableId};
 use crate::model::lexicon::{ProcessDef, Stress};
 use crate::model::repertoire::VariableKind;
-use crate::morphology::{apply_form_change, citation_id, class_stats, concept_totals, usage_frequency};
+use crate::morphology::{
+    apply_form_change, citation_id, class_stats, concept_totals, usage_frequency,
+};
 use crate::phonology::rows::{resolve_maps, row_of};
 use crate::segments::SegmentTable;
 use crate::transfer::assessed::Assessment;
@@ -156,7 +158,8 @@ fn nearest(table: &SegmentTable, vowel: i32, others: &[i32]) -> f64 {
             continue;
         }
         let (h, b, r) = table.vowel_coordinates(other);
-        let distance = ((height - h).powi(2) + (back - b).powi(2) + 0.25 * (rounded - r).powi(2)).sqrt();
+        let distance =
+            ((height - h).powi(2) + (back - b).powi(2) + 0.25 * (rounded - r).powi(2)).sqrt();
         best = Some(best.map_or(distance, |found| found.min(distance)));
     }
     best.unwrap_or(0.0)
@@ -164,12 +167,7 @@ fn nearest(table: &SegmentTable, vowel: i32, others: &[i32]) -> f64 {
 
 /// Zisk rozptylu samohlásek (`_dispersion_gain`): o kolik se nový vokál vzdálí od sousedů oproti
 /// vokálu, ze kterého vznikl; `before` a `after` jsou samohlásky slovní zásoby před změnou a po ní.
-fn dispersion_gain(
-    def: &ProcessDef,
-    table: &SegmentTable,
-    before: &[i32],
-    after: &[i32],
-) -> f64 {
+fn dispersion_gain(def: &ProcessDef, table: &SegmentTable, before: &[i32], after: &[i32]) -> f64 {
     if !shapes_vowels(def, table) {
         return 0.0;
     }
@@ -183,7 +181,9 @@ fn dispersion_gain(
         .iter()
         .filter(|&&v| def.target.mask.get(v as usize).copied().unwrap_or(false))
         .map(|&v| nearest(table, v, before))
-        .fold(None, |best: Option<f64>, d| Some(best.map_or(d, |b| b.max(d))));
+        .fold(None, |best: Option<f64>, d| {
+            Some(best.map_or(d, |b| b.max(d)))
+        });
     match source {
         None => 0.0,
         Some(source) => nearest(table, output, after) - source,
@@ -200,10 +200,8 @@ fn redundant_cell(world: &World, group: GroupId, morpheme: MorphemeId) -> bool {
         return false;
     }
     crate::syntax::catalog(world).iter().any(|f| {
-        let same_class = f
-            .word_class()
-            .and_then(|n| world.registry.word_class_of(n))
-            == Some(class);
+        let same_class =
+            f.word_class().and_then(|n| world.registry.word_class_of(n)) == Some(class);
         let same_cell = f
             .cell
             .as_deref()
@@ -376,7 +374,9 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                     .transfer
                     .assessments
                     .get(group, job.variable)
-                    .is_some_and(|s| s.version == version || tick.saturating_sub(s.tick) < STALE_TICKS);
+                    .is_some_and(|s| {
+                        s.version == version || tick.saturating_sub(s.tick) < STALE_TICKS
+                    });
                 if fresh {
                     continue;
                 }
@@ -451,8 +451,7 @@ pub fn form_cells(
                     - stats.share(class, cell, current.exponent)
             };
             let totals = concept_totals(world, group);
-            let frequency =
-                usage_frequency(world, &totals, world.morphemes.lexeme_id(change.unit));
+            let frequency = usage_frequency(world, &totals, world.morphemes.lexeme_id(change.unit));
             Some([
                 gain,
                 frequency,

@@ -1,13 +1,13 @@
 //! Integrace oblastí enginu (R2a): hodnocení procesů a analogií pro tlaky, plán tlaků ze změn,
 //! kontrolní bod s uloženými hodnoceními a švy mezi přenosem, fonologií, morfologií a kontaktem.
 
+use cee_core::pressures::id;
 use cee_engine::changes::{default_changes, lexicon, Change};
 use cee_engine::checkpoint::Checkpoint;
 use cee_engine::model::repertoire::VariableKind;
 use cee_engine::scenarios;
 use cee_engine::transfer::pressures::{kind_number, plan, plan_for};
 use cee_engine::{Simulation, SimulationConfig};
-use cee_core::pressures::id;
 
 fn simulation(name: &str) -> Simulation {
     let (world, events) = scenarios::by_name(name).expect("scénář");
@@ -72,7 +72,7 @@ fn analogie_se_hodnoti_ze_stavu_kodu() {
     let axis = world.live.group_ids.len();
     let columns: Vec<usize> = (0..axis).collect();
     let mut found = 0;
-    for (&variable, _) in &world.form_changes {
+    for &variable in world.form_changes.keys() {
         let values = cee_engine::transfer::seams::assess_cells(world, variable, &columns, sim.tick);
         assert_eq!(values.len(), axis);
         for value in values.into_iter().flatten() {
@@ -86,7 +86,10 @@ fn analogie_se_hodnoti_ze_stavu_kodu() {
         }
     }
     assert!(!world.form_changes.is_empty(), "svět má analogie");
-    assert!(found > 0, "aspoň jedna analogie má v některé skupině hodnocení");
+    assert!(
+        found > 0,
+        "aspoň jedna analogie má v některé skupině hodnocení"
+    );
 }
 
 #[test]

@@ -207,11 +207,11 @@ příkladu `WorldSpec` je **shodný s Pythonem** (viz výsledek v zprávě R0).
 
 | patří | co chybí |
 |---|---|
-| **R1a** | hodnocení procesů a analogií pro tlaky nad hodnocením (`transfer::seams::assess_cells`; čeká na banku tvarů s tabulkami procesů R1b a morfologický index R1c), stav `closed` pro tlak `Norm` (`transfer::seams::closed`, R1b); zbytek přenosu je hotový, viz oddíl R1a |
-| **R1b** | hotovo, viz [R1b](#r1b-fonologie-a-zvukové-změny); chybí jen hodnocení procesů tlaky (R1a, přes `phonology::row_of`) a `surface` (povrchový tvar slova) |
-| **R1c** | **hotovo** (viz [oddíl R1c](#r1c-morfologie-syntax-prozodie-sémantika-a-lexikon)): morfologie, syntax, prozodie, sémantické a lexikální změny, místa a návrh inovací, souběžná variabilita, větší slovník a vlastní pojmy; zbývá napojení na přenos a slovní zásobu (R1a/R1b) a porovnání s Pythonem (R2) |
-| **R1d** | hotovo kromě drobností v oddílu R1d (viz [R1d](#r1d-události-kontakt-společnost-a-pozorování)); chybí jen přenos výpůjček přes kanály v přenosu (R1a) a v morfologii (R1c), které čtou rozhraní `contact` |
-| **R2** | integrace (R2a), vazba pro server: hotovo (R2c), **brány v Rustu a audit na semínkách: hotovo, viz [R2b](#r2b-brány-milníků-v-rustu)**, porovnání chování s Pythonem, vazba pro server (`runner.py` → Rust), smazání Pythonu v2, `Simulation::branch` |
+| **R1a** | hotovo; tlaky nad hodnocením a `closed` doplnila R2a (viz [R2a](#r2a-integrace-oblastí)) |
+| **R1b** | hotovo, viz [R1b](#r1b-fonologie-a-zvukové-změny); hodnocení procesů a `surface` doplnila R2a |
+| **R1c** | **hotovo** (viz [oddíl R1c](#r1c-morfologie-syntax-prozodie-sémantika-a-lexikon)): morfologie, syntax, prozodie, sémantické a lexikální změny, místa a návrh inovací, souběžná variabilita, větší slovník a vlastní pojmy; napojení na fonologii a slovní zásobu doplnila R2a |
+| **R1d** | hotovo (viz [R1d](#r1d-události-kontakt-společnost-a-pozorování)); přenos i výpůjčky čtou rozhraní `contact` (R2a) |
+| **R2** | integrace (R2a): **hotovo, viz [R2a](#r2a-integrace-oblastí)**, vazba pro server: hotovo (R2c), **brány v Rustu a audit na semínkách: hotovo, viz [R2b](#r2b-brány-milníků-v-rustu)**, porovnání chování s Pythonem, vazba pro server (`runner.py` → Rust), smazání Pythonu v2, `Simulation::branch` |
 
 ### Známá omezení a odchylky od Pythonu
 
@@ -488,6 +488,34 @@ Server (`cee.api.v2`) importuje `cee.v2.runner`, `cee.v2.parameters` a `cee.v2.s
 * **Smaže se:** `world`, `simulation`, `export`, `history`, `events`, `polity`, `scenarios`, `background`, `naming`, `checkpoint`,
   `language/*`, `phonology`, `transfer`, `pressures` a ostatní moduly enginu, `build`, `background_events`, `_world`.
 
+## R2a: integrace oblastí
+
+Hotovo: tlaky nad hodnocením, švy mezi oblastmi, plán tlaků ze změn, `surface`. Python se nespouštěl.
+
+- **Kontrolní bod uprostřed fonologizace.** Příčina nebyla v odvozeném stavu, ale v testu: proces byl pevný jen v
+  první skupině, takže proměnná se lišila mezi skupinami, aniž byla živá; obnovený běh ji načetl do fondů a přenos
+  ji rozmíchal. Test teď nastaví změnu ve všech skupinách. Nový test kontrolního bodu běží s přirozenými inovacemi.
+- **Hodnocení procesů** (`transfer/assess.rs`): dvouprůchodový návrh. `assess::refresh` (má `&mut World`, volá se
+  v `phases::transmission::run` před přenosem) pro každý sledovaný proces spočítá hodnocení ve skupinách, které
+  změnu mají nebo ji mohou slyšet (zdroje v síti, mezi jazyky i kanálech mimo síť), nad vzorkem 120 nejčastějších
+  slov kódu (banka tvarů, ceny nových homofonů, rozptyl samohlásek). Platí do změny verze kódu, nejvýš 8 ticků;
+  ukládá se do `TransferState::assessments` (i v kontrolním bodu). Vzorek je odvozený (`Derived::samples`).
+  Tlaky čtou uložené hodnoty ze `&World` (`seams::assess_cells`). Hodnocení analogií (`form_cells`) se počítá rovnou
+  z pohledů morfologie. `seams::closed` je uzavřený proces kódu. `FormBank` nově nastavuje polosamohlásky
+  (příznakovost slabik).
+- **Švy.** Morfologie a syntax volají `phonology::requeue_all` a `enter_units` (náhrady R1c odpadly);
+  `follow_vocabulary` bere tvary buněk přes `vocabulary::units_in`; přenos (`BorrowTable`, `channel_split`,
+  `interference_factor`, `distinct_channels`) i `LexicalBorrowing` používají rozhraní `contact`, vlastní kopie zmizely.
+- **`Change::target` a `Change::pressures`.** Plán tlaků se skládá z deklarací změn (`pressures::plan_for`,
+  zrcadlo `pressures_by_kind`, tlaky seřazené podle jména); `plan(params)` je plán výchozích změn.
+  `phases::transmission::run` bere seznam změn.
+- **`phonology::surface` / `surface_lexicon`** (nad `&World`, banka se nemění): povrchový tvar slova s živými procesy;
+  bránové metriky (`gates::metrics`) ho čtou. Export jazyka dál čte podkladové tvary jako Python.
+  `Snapshot::group_ids` se plní vždy. `cee scenario --history log.jsonl` zapíše log jako JSON řádky.
+- **Chování.** Po integraci procházejí všechny brány R2b (62 testů), viz tabulka v závěrečné zprávě. Scénář valley-50
+  do 2000 let dává 41 jazyků z 50 vesnic (vzdálenost sousedů 0,35); Python (`village_grid`, otevřenost 0,1) uvádí
+  0,29 po 3000 letech, rozdíl tedy zůstává a patří do kalibrace (R2 porovnání s Pythonem), brány ho nezachytí.
+
 ## R2b: brány milníků v Rustu
 
 Hotovo: všech 10 souborů bran M1 až M6c je převedených (52 stochastických bran auditu a deterministické
@@ -521,9 +549,7 @@ Brána `m4b::clen_vznikne` se v auditu počítá jako „člen na tomto semínku
 
 ### Odchylky od Pythonu
 
-- **Bez povrchového tvaru.** `phonology.surface` Rust zatím nemá, `lexicon_profile` (délka slov, inventář, homofonie, M2, M3,
-  M3b, M4) proto čte podkladové tvary dominantních kořenů. Pokud R2a doplní `surface`, stačí ho zavolat v
-  `metrics::lexicon_profile` a `metrics::lexicon_forms`.
+- **Povrchový tvar** (`phonology::surface`) metriky `lexicon_profile` a `lexicon_forms` už používají (R2a).
 - **Počet mluvených skupin snímku** bez `keep_distances` Snapshot nemá (`group_ids` je prázdné); M6a a M6b ho berou ze součtu
   velikostí nářečí.
 - **Přepsané zvukové změny** (`phonology.restructured`, M5 substrát) se čtou z příznaků `done` ve frontách kódu

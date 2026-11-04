@@ -58,8 +58,7 @@ pub fn block_factors(world: &World, inputs: &StepInputs, block: &PoolBlock) -> B
                         }
                         let frequency = world.concept_frequency(concept);
                         let mut factor = 1.0 - params.reading_core_resistance * frequency;
-                        let weight =
-                            inputs.borrow.domain(contact::READING, concept);
+                        let weight = inputs.borrow.domain(contact::READING, concept);
                         if weight != 1.0 {
                             factor *= weight;
                         }
@@ -74,8 +73,7 @@ pub fn block_factors(world: &World, inputs: &StepInputs, block: &PoolBlock) -> B
                             VariableKind::Prosody => 0.0,
                         };
                         if kind == VariableKind::Lexical {
-                            let weight =
-                                inputs.borrow.domain(contact::SCHOOL, concept);
+                            let weight = inputs.borrow.domain(contact::SCHOOL, concept);
                             if weight != 1.0 {
                                 factor *= weight;
                             }
@@ -87,8 +85,7 @@ pub fn block_factors(world: &World, inputs: &StepInputs, block: &PoolBlock) -> B
                             return 0.0;
                         }
                         let factor = 1.0 - world.concept_frequency(concept);
-                        let weight =
-                            inputs.borrow.domain(contact::LITURGY, concept);
+                        let weight = inputs.borrow.domain(contact::LITURGY, concept);
                         if weight == 1.0 {
                             factor
                         } else {

@@ -24,8 +24,8 @@ use crate::contact;
 use crate::ids::{ConceptId, GroupId, MorphemeId, VariableId, VariantId};
 use crate::model::lexicon::{MorphemeInit, MorphemeKind, MorphemeMeta};
 use crate::model::repertoire::{Origin, Payload, VariableKind};
-use crate::rng::{stable_id, Part, Stream};
 use crate::parameters::CHANNELS;
+use crate::rng::{stable_id, Part, Stream};
 use crate::syntax::dominant_root;
 use crate::world::World;
 
