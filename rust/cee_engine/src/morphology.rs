@@ -99,10 +99,7 @@ impl ClassStats {
             return 0.0;
         }
         let total: u32 = counts.iter().map(|c| c.1).sum();
-        let own = counts
-            .iter()
-            .find(|c| c.0 == exponent)
-            .map_or(0, |c| c.1);
+        let own = counts.iter().find(|c| c.0 == exponent).map_or(0, |c| c.1);
         f64::from(own) / f64::from(total)
     }
 
@@ -129,9 +126,7 @@ fn word_units(world: &World, group: GroupId) -> Vec<MorphemeId> {
 
 /// Citační tvar lexému tvaru slova (číslo tvaru v bance).
 fn citation_id(world: &World, group: GroupId, unit: MorphemeId) -> u32 {
-    world
-        .unit_of(group, world.morphemes.lexeme_id(unit))
-        .form
+    world.unit_of(group, world.morphemes.lexeme_id(unit)).form
 }
 
 /// Počty koncovek kódu (pohled `morphology.class_stats`).
@@ -380,7 +375,11 @@ pub fn changed_name(variable: &str) -> String {
 }
 
 /// Formová proměnná analogické změny; tatáž změna = tatáž proměnná (`morphology.register`).
-pub fn register(world: &mut World, change: &FormChange, origin: &Origin) -> (VariableId, VariantId) {
+pub fn register(
+    world: &mut World,
+    change: &FormChange,
+    origin: &Origin,
+) -> (VariableId, VariantId) {
     let key = change.key(&world.registry.morphemes);
     let name = variable_name(VariableKind::Form, &key);
     let known = world
@@ -558,7 +557,13 @@ pub type AnalogyPlan = Vec<(VariableId, MorphemeId, Decision)>;
 
 /// Rozhodnutí o živých analogiích skupiny v pořadí jmen proměnných (`morphology.analogy_plan`).
 pub fn analogy_plan(world: &World, group: GroupId) -> AnalogyPlan {
-    let mut items = world.groups.main_code(group).phonology.grammar.morph_active.clone();
+    let mut items = world
+        .groups
+        .main_code(group)
+        .phonology
+        .grammar
+        .morph_active
+        .clone();
     items.sort_by(|a, b| {
         world
             .registry
@@ -676,7 +681,12 @@ pub fn units_of(world: &mut World, group: GroupId, root: MorphemeId) -> Vec<Morp
         };
         let stem = world.form_of(group, root).to_vec();
         if loan {
-            let missing = world.groups.main_code(group).forms.get(existing.unwrap_or(MorphemeId::NONE)).is_none()
+            let missing = world
+                .groups
+                .main_code(group)
+                .forms
+                .get(existing.unwrap_or(MorphemeId::NONE))
+                .is_none()
                 || existing.is_none();
             if missing {
                 let unit = match existing {
@@ -816,8 +826,7 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
             "concept": meaning,
             "cell": cell_name,
         });
-        ctx.history
-            .record("analogy", ctx.tick, ctx.year, payload);
+        ctx.history.record("analogy", ctx.tick, ctx.year, payload);
     }
     Ok(())
 }
@@ -832,7 +841,8 @@ pub fn concept_totals(world: &World, group: GroupId) -> HashMap<MorphemeId, f64>
         if root.is_none() {
             continue;
         }
-        *totals.entry(root).or_insert(0.0) += world.concepts.frequency_of(crate::ids::ConceptId::new(at));
+        *totals.entry(root).or_insert(0.0) +=
+            world.concepts.frequency_of(crate::ids::ConceptId::new(at));
     }
     totals
 }
@@ -851,7 +861,10 @@ pub fn usage_frequency(
     let mut total = sum.min(1.0);
     let class = world.morphemes.word_class[morpheme.index()];
     let cell = world.morphemes.cell[morpheme.index()];
-    if world.morphemes.kind[morpheme.index()] == MorphemeKind::Word && !class.is_none() && !cell.is_none() {
+    if world.morphemes.kind[morpheme.index()] == MorphemeKind::Word
+        && !class.is_none()
+        && !cell.is_none()
+    {
         if let Some(Some(paradigm)) = world.paradigms.get(class.index()) {
             if let Some(weight) = paradigm.weight(cell) {
                 total *= weight;

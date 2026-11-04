@@ -15,6 +15,11 @@
 //! (rayon, výsledek nezávisí na počtu vláken). `propose` smí svět měnit (např. založit
 //! nový morfém) a běží sekvenčně v kanonickém pořadí skupin a změn.
 
+pub mod lexicon;
+pub mod morphology;
+pub mod prosody;
+pub mod syntax;
+
 use crate::ids::{GroupId, VariableId};
 use crate::model::repertoire::{Origin, Payload};
 use crate::rng::Stream;
@@ -72,8 +77,13 @@ pub trait Change: Send + Sync {
 
 /// Všechny změny enginu v kanonickém pořadí (pořadí určuje indexy sloupců náhody).
 ///
-/// R0: prázdný seznam – inovační fáze běží, ale bez změn nic nenavrhne. Agenti R1 sem
-/// přidávají `Box::new(...)` svých změn.
+/// Pořadí jako `DEFAULT_CHANGES` v Pythonu: lexikální, zvukové (R1b), morfologické,
+/// syntaktické, prozodické. R1b přidá své zvukové změny mezi lexikální a morfologické.
 pub fn default_changes() -> Vec<Box<dyn Change>> {
-    Vec::new()
+    let mut all = lexicon::changes();
+    // Zde: zvukové změny (R1b, `changes/sound.rs`).
+    all.extend(morphology::changes());
+    all.extend(syntax::changes());
+    all.extend(prosody::changes());
+    all
 }

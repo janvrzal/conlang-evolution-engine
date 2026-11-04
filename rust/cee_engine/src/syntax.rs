@@ -157,19 +157,15 @@ pub fn applied(world: &World, group: GroupId, construction: &Construction) -> bo
         "variant",
         &[Part::Str("construction"), Part::Str(&construction.key())],
     );
-    world
-        .registry
-        .variants
-        .get(&name)
-        .is_some_and(|n| {
-            world
-                .groups
-                .main_code(group)
-                .phonology
-                .grammar
-                .grammar_applied
-                .contains(&VariantId(n))
-        })
+    world.registry.variants.get(&name).is_some_and(|n| {
+        world
+            .groups
+            .main_code(group)
+            .phonology
+            .grammar
+            .grammar_applied
+            .contains(&VariantId(n))
+    })
 }
 
 /// Je výraz vázaný na slovo (koncovka nebo přiklonka)?
@@ -227,7 +223,10 @@ pub fn strength(
             1.0 - weakness(world, group, &construction.function)
         }
         "pre" | "embraced" | "post" => {
-            let words = [construction.source.as_deref(), construction.reinforcer.as_deref()];
+            let words = [
+                construction.source.as_deref(),
+                construction.reinforcer.as_deref(),
+            ];
             let sounding = words
                 .into_iter()
                 .flatten()
@@ -358,7 +357,12 @@ pub struct Ready {
 /// zapsáno“ té skupiny; funkce jsou v pořadí jmen.
 pub fn ready_constructions(world: &World, group: GroupId) -> Vec<Ready> {
     let mut plan = Vec::new();
-    let applied = &world.groups.main_code(group).phonology.grammar.grammar_applied;
+    let applied = &world
+        .groups
+        .main_code(group)
+        .phonology
+        .grammar
+        .grammar_applied;
     for entry in functions(world, Some(Template::Inflection)) {
         let Some(variable) = variable_of(world, &entry.id) else {
             continue;
@@ -422,10 +426,7 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
             .clone()
             .ok_or("chybí paradigma")?;
         let citation = world.registry.cells.name(paradigm.citation().0).to_owned();
-        let donor = construction
-            .donor
-            .as_deref()
-            .and_then(|d| entry(world, d));
+        let donor = construction.donor.as_deref().and_then(|d| entry(world, d));
         let exponent = construction
             .exponent
             .as_deref()
@@ -461,16 +462,17 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
                 .name(a.0)
                 .cmp(world.registry.morphemes.name(b.0))
         });
-        let unit_of_cell = |world: &World, root: MorphemeId, cell: &str| -> (String, Option<MorphemeId>) {
-            let name = unit_name(world.registry.morphemes.name(root.0), cell, &citation);
-            let found = world
-                .registry
-                .morphemes
-                .get(&name)
-                .map(MorphemeId)
-                .filter(|&m| world.morphemes.contains(m));
-            (name, found)
-        };
+        let unit_of_cell =
+            |world: &World, root: MorphemeId, cell: &str| -> (String, Option<MorphemeId>) {
+                let name = unit_name(world.registry.morphemes.name(root.0), cell, &citation);
+                let found = world
+                    .registry
+                    .morphemes
+                    .get(&name)
+                    .map(MorphemeId)
+                    .filter(|&m| world.morphemes.contains(m));
+                (name, found)
+            };
         let totals = morphology::concept_totals(world, group);
         let mut rewritten = 0_u32;
         let mut kept = 0_u32;
@@ -516,10 +518,9 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
                     continue;
                 }
                 Ending::Skip => continue,
-                Ending::FromDonor => world.unit_of(
-                    group,
-                    donor_unit.flatten().ok_or("dárcovský tvar chybí")?,
-                ),
+                Ending::FromDonor => {
+                    world.unit_of(group, donor_unit.flatten().ok_or("dárcovský tvar chybí")?)
+                }
                 Ending::FromCitation => {
                     let citation_form = world.form_of(group, root).to_vec();
                     let mut form = citation_form.clone();

@@ -22,18 +22,18 @@ pub fn phonology(_ctx: &mut StepContext<'_>, _groups: &[GroupId]) -> Result<(), 
 }
 
 /// Analogické přestavby tvarů skupiny (R1c).
-pub fn morphology(_ctx: &mut StepContext<'_>, _group: GroupId) -> Result<(), String> {
-    Ok(()) // TODO(R1c)
+pub fn morphology(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), String> {
+    crate::morphology::restructure(ctx, group)
 }
 
 /// Zapsání nových koncovek a konstrukcí skupiny (R1c).
-pub fn syntax(_ctx: &mut StepContext<'_>, _group: GroupId) -> Result<(), String> {
-    Ok(()) // TODO(R1c)
+pub fn syntax(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), String> {
+    crate::syntax::restructure(ctx, group)
 }
 
 /// Posun přízvuku skupiny (R1c).
-pub fn prosody(_ctx: &mut StepContext<'_>, _group: GroupId) -> Result<(), String> {
-    Ok(()) // TODO(R1c)
+pub fn prosody(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), String> {
+    crate::prosody::restructure(ctx, group)
 }
 
 /// Spustí všechny podfáze přestaveb v pořadí kroku.

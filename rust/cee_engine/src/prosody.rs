@@ -42,9 +42,7 @@ fn payload_text(world: &World, variable: VariableId, group: GroupId) -> Option<(
     let (variant, share) = world.dominant(group, variable)?;
     match &world.variants.payload[variant.index()] {
         crate::model::repertoire::Payload::StressRule(value)
-        | crate::model::repertoire::Payload::StressStrength(value) => {
-            Some((value.clone(), share))
-        }
+        | crate::model::repertoire::Payload::StressStrength(value) => Some((value.clone(), share)),
         _ => None,
     }
 }

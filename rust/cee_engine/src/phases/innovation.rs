@@ -184,6 +184,8 @@ fn apply_innovations(
         let Some(variant) = change.propose(ctx.world, context, site, &mut rng, index) else {
             continue;
         };
+        // Formové změny vznikají až při návrhu: místo je pořadí kandidáta, platí proměnná varianty.
+        let site = variant.variable;
         let world = &mut *ctx.world;
         if world.live.contains(site) {
             if !world.live.holds(group, site) {

@@ -25,6 +25,9 @@ pub const FREQUENCY_RANGE: (f64, f64) = (0.05, 0.9);
 /// Frekvence pojmu, který nikdo nenastavil (`World.concept_frequency`).
 pub const DEFAULT_FREQUENCY: f64 = 0.3;
 
+/// Půjčitelnost pod touto hodnotou se bere jako tato hodnota (slovo, které WOLD nikde nenašla přejaté).
+pub const BORROWED_FLOOR: f64 = 0.01;
+
 /// Domény enginu (mechanismy, které na slova působí nejvíc).
 pub const DOMAINS: [&str; 5] = ["core", "learned", "culture", "religion", "power"];
 
@@ -97,6 +100,38 @@ impl ConceptData {
         self.frequencies["concepts"][concept]["log_frequency"]
             .as_f64()
             .map(scaled)
+    }
+
+    /// Průměrná půjčitelnost výchozích pojmů z dat (kotva `borrowability_strength`; `contact.reference`).
+    pub fn reference_borrowed(&self) -> f64 {
+        let scores: Vec<f64> = self
+            .concepts
+            .as_object()
+            .map(|m| m.values().filter_map(|e| e["borrowed"].as_f64()).collect())
+            .unwrap_or_default();
+        scores.iter().sum::<f64>() / scores.len().max(1) as f64
+    }
+
+    /// Normalizace váhy přenositelnosti pojmu: průměr váhy přes výchozí pojmy vůči průměru
+    /// `1 − frekvence` (průměrná míra výpůjček se s `strength` nemění; `contact._normalizer`).
+    pub fn borrowing_normalizer(&self, strength: f64) -> f64 {
+        let mean = self.reference_borrowed();
+        let Some(all) = self.concepts.as_object() else {
+            return 1.0;
+        };
+        let mut rarity = 0.0;
+        let mut values = 0.0;
+        let mut counted = 0.0_f64;
+        for (name, entry) in all {
+            let rare = 1.0 - self.frequency(name).unwrap_or(0.0);
+            rarity += rare;
+            if let Some(borrowed) = entry["borrowed"].as_f64() {
+                values += rare.powf((1.0 - strength).max(0.0))
+                    * (borrowed.max(BORROWED_FLOOR) / mean).powf(strength);
+                counted += 1.0;
+            }
+        }
+        (values / counted.max(1.0)) / (rarity / all.len().max(1) as f64)
     }
 
     /// Počet významů katalogu mimo pojmy enginu (kolik pojmů lze přidat k výchozímu slovníku).
