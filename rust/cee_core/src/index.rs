@@ -326,6 +326,14 @@ pub struct GroupInput<'a> {
     pub forms: &'a [i32],
 }
 
+/// Práce, která zbývá po první části dorovnání skupiny.
+struct Pending {
+    at: usize,
+    /// Opory se počítají celé (změnil se inventář), jinak jen z rozdílu `nets`.
+    full: bool,
+    nets: Vec<(u32, i64)>,
+}
+
 /// Co Rust vyžaduje od Pythonu, než dokončí dorovnání.
 #[derive(Default, Debug)]
 pub struct Needs {
@@ -408,9 +416,8 @@ impl SoundIndex {
         unstressed_rows: &[i64],
         family_ends: Vec<usize>,
     ) -> Result<(), String> {
-        register(
-            &mut self.sets,
-            &mut self.set_ids,
+        let inventory_key = inventory.clone();
+        let set = prepare_set(
             self.scales.len(),
             Registration {
                 inventory,
@@ -423,7 +430,9 @@ impl SoundIndex {
                 family_ends,
                 built: None,
             },
-        )
+        )?;
+        insert_set(&mut self.sets, &mut self.set_ids, inventory_key, set);
+        Ok(())
     }
 
     /// Nastaví snímek tabulky hlásek; od té chvíle si Rust sady kandidátů staví sám.
@@ -452,23 +461,74 @@ impl SoundIndex {
 
     /// Dorovná skupiny na aktuální stav. Co chybí (výchozí tvary, sady kandidátů),
     /// vrátí; volající to doplní a zavolá znovu (dorovnání je opakovatelné).
+    ///
+    /// Postup ve třech částech: (1) rozdíl tvarů a inventář každé skupiny, (2) chybějící sady
+    /// kandidátů pro nové inventáře se **staví souběžně** (čistá funkce tabulky hlásek a inventáře;
+    /// do tabulky sad se zapisují sekvenčně v pořadí skupin), (3) opory a rodiny každé skupiny.
+    /// Výsledek je stejný, jako kdyby se skupiny dorovnávaly po jedné: opory jsou celá čísla
+    /// a sada je funkce inventáře.
     pub fn sync(&mut self, bank: &Bank, inputs: &[GroupInput<'_>]) -> Result<Needs, String> {
         let mut needs = Needs::default();
+        let mut pending: Vec<Pending> = Vec::new();
         for (position, input) in inputs.iter().enumerate() {
             let at = self.group_of(input.token);
-            self.sync_group(bank, at, position, input, &mut needs)?;
+            if let Some(found) = self.sync_group_diff(bank, at, position, input, &mut needs)? {
+                pending.push(found);
+            }
+        }
+        self.prebuild_sets(&pending)?;
+        for found in pending {
+            self.sync_group_apply(bank, found)?;
         }
         Ok(needs)
     }
 
-    fn sync_group(
+    /// Postaví sady kandidátů pro inventáře, které ještě nemají sadu (každý jednou, v pořadí
+    /// skupin), souběžně; zapíše je do tabulky sad sekvenčně v témže pořadí.
+    fn prebuild_sets(&mut self, pending: &[Pending]) -> Result<(), String> {
+        let Some(table) = self.table.as_ref() else {
+            return Ok(());
+        };
+        let mut missing: Vec<&Vec<u32>> = Vec::new();
+        for found in pending {
+            let inventory = &self.groups[found.at].inventory;
+            if !self.set_ids.contains_key(inventory) && !missing.contains(&inventory) {
+                missing.push(inventory);
+            }
+        }
+        if missing.is_empty() {
+            return Ok(());
+        }
+        let families = self.scales.len();
+        let built: Vec<Result<CandidateSet, String>> = if missing.len() > 1 {
+            use rayon::prelude::*;
+            missing
+                .par_iter()
+                .map(|inventory| make_set(table, families, inventory))
+                .collect()
+        } else {
+            missing
+                .iter()
+                .map(|inventory| make_set(table, families, inventory))
+                .collect()
+        };
+        let inventories: Vec<Vec<u32>> = missing.into_iter().cloned().collect();
+        for (inventory, set) in inventories.into_iter().zip(built) {
+            insert_set(&mut self.sets, &mut self.set_ids, inventory, set?);
+        }
+        Ok(())
+    }
+
+    /// První část dorovnání skupiny: rozdíl tvarů a inventář. Vrátí práci pro druhou část,
+    /// má-li skupina co dopočítat (opory a rodiny).
+    fn sync_group_diff(
         &mut self,
         bank: &Bank,
         at: usize,
         position: usize,
         input: &GroupInput<'_>,
         needs: &mut Needs,
-    ) -> Result<(), String> {
+    ) -> Result<Option<Pending>, String> {
         let size = input.flags.len().max(self.groups[at].counted_form.len());
         let effective = |number: usize| -> i32 {
             if number >= input.flags.len() || input.flags[number] == 0 {
@@ -487,18 +547,15 @@ impl SoundIndex {
             .collect();
         if !missing.is_empty() {
             needs.defaults.push((position, missing));
-            return Ok(());
+            return Ok(None);
         }
         let Self {
             contexts,
             groups,
             delta,
             nets,
-            pooled,
-            sets,
             set_ids,
             table,
-            scales,
             ..
         } = self;
         let group = &mut groups[at];
@@ -548,23 +605,49 @@ impl SoundIndex {
             group.supports.clear();
             group.effective.clear();
             group.families.clear();
-            return Ok(());
+            return Ok(None);
         }
         let full = group.valid_for.as_ref() != Some(&group.inventory);
         if !full && nets.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
-        if !set_ids.contains_key(&group.inventory) {
-            if let Some(table) = table.as_ref() {
-                build_set(sets, set_ids, scales.len(), table, &group.inventory)?;
-            } else {
-                // Sada pro nový inventář chybí; podpory se po jejím doplnění přepočítají celé.
-                group.valid_for = None;
-                if !needs.sets.contains(&group.inventory) {
-                    needs.sets.push(group.inventory.clone());
-                }
-                return Ok(());
+        if !set_ids.contains_key(&group.inventory) && table.is_none() {
+            // Sada pro nový inventář chybí; podpory se po jejím doplnění přepočítají celé.
+            group.valid_for = None;
+            if !needs.sets.contains(&group.inventory) {
+                needs.sets.push(group.inventory.clone());
             }
+            return Ok(None);
+        }
+        Ok(Some(Pending {
+            at,
+            full,
+            nets: if full { Vec::new() } else { nets.clone() },
+        }))
+    }
+
+    /// Druhá část dorovnání skupiny: opory kandidátů a rodiny (sada pro inventář už je postavená).
+    fn sync_group_apply(
+        &mut self,
+        bank: &Bank,
+        pending: Pending,
+    ) -> Result<(), String> {
+        let Pending { at, full, nets } = pending;
+        let Self {
+            contexts,
+            groups,
+            pooled,
+            sets,
+            set_ids,
+            table,
+            scales,
+            ..
+        } = self;
+        let group = &mut groups[at];
+        if !set_ids.contains_key(&group.inventory) {
+            // Sadu mezitím uvolnila jiná skupina: postaví se znovu.
+            let table = table.as_ref().ok_or("sada kandidátů zmizela")?;
+            build_set(sets, set_ids, scales.len(), table, &group.inventory)?;
         }
         let Some(&slot) = set_ids.get(&group.inventory) else {
             return Err("sada kandidátů zmizela".into());
@@ -905,12 +988,17 @@ fn build_set(
     table: &SegTable,
     inventory: &[u32],
 ) -> Result<(), String> {
+    let set = make_set(table, families, inventory)?;
+    insert_set(sets, set_ids, inventory.to_vec(), set);
+    Ok(())
+}
+
+/// Sada kandidátů všech rodin pro inventář (čistá funkce tabulky hlásek a inventáře).
+fn make_set(table: &SegTable, families: usize, inventory: &[u32]) -> Result<CandidateSet, String> {
     let built = candidates::build(table, inventory)?;
     let masks = candidates::masks(table, inventory, &built);
     let ends = built.family_ends.clone();
-    register(
-        sets,
-        set_ids,
+    prepare_set(
         families,
         Registration {
             inventory: inventory.to_vec(),
@@ -926,13 +1014,8 @@ fn build_set(
     )
 }
 
-/// Zapíše sadu kandidátů z masek (transponované bitové sady) do tabulky sad.
-fn register(
-    sets: &mut Vec<Option<CandidateSet>>,
-    set_ids: &mut FxMap<Vec<u32>, usize>,
-    families: usize,
-    given: Registration<'_>,
-) -> Result<(), String> {
+/// Sada kandidátů z masek (transponované bitové sady).
+fn prepare_set(families: usize, given: Registration<'_>) -> Result<CandidateSet, String> {
     let Registration {
         inventory,
         columns,
@@ -1007,6 +1090,16 @@ fn register(
         built,
         refs: 0,
     };
+    Ok(set)
+}
+
+/// Zapíše sadu kandidátů do tabulky sad (do prvního volného místa).
+fn insert_set(
+    sets: &mut Vec<Option<CandidateSet>>,
+    set_ids: &mut FxMap<Vec<u32>, usize>,
+    inventory: Vec<u32>,
+    set: CandidateSet,
+) {
     let slot = match sets.iter().position(Option::is_none) {
         Some(free) => {
             sets[free] = Some(set);
@@ -1018,7 +1111,6 @@ fn register(
         }
     };
     set_ids.insert(inventory, slot);
-    Ok(())
 }
 
 /// Seřadí změny prostředí a sečte je po číslech; nulové součty vynechá.
