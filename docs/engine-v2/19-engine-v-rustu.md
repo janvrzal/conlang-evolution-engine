@@ -141,10 +141,78 @@ Port `rng.py` bit po bitu, vektory z Pythonu v `tests/fixtures/rng.json`:
 
 ## 5. Vlákna (`rayon`, MIT/Apache-2.0)
 
-Návrh v `parallel.rs`; jedno použití: míry inovací přes skupiny ve fázi 2. Pravidla: souběh jen ve čtení
-(výsledky v pořadí vstupu), zápis sekvenčně v kanonickém pořadí, náhoda z klíče, součty po blocích pevné
-velikosti (`ordered_sum`). Výsledek je stejný pro 1 i více vláken (test `vysledek_nezavisi_na_poctu_vlaken`);
-počet vláken: `RAYON_NUM_THREADS` nebo `cee … --threads N`.
+Pravidla souběhu (`parallel.rs`): souběh jen ve čtení nebo do vlastního výstupu každé úlohy (výsledky v pořadí
+vstupu), zápis do sdíleného stavu sekvenčně v kanonickém pořadí, náhoda z klíče (`Stream::new`), součty po
+blocích pevné velikosti (`ordered_sum`). Výsledek je stejný pro libovolný počet vláken: otisk historie
+(`History::digest`) i export shodují testy `tests/threads.rs` (1, 2, 3, 4 a 8 vláken; valley-50, grid-5x5,
+shift, island-city a příklad `WorldSpec`, s prahem rozdělení nastaveným na nulu, aby se souběh zkoušel i na
+malých světech) a `vysledek_nezavisi_na_poctu_vlaken` v `tests/engine.rs`. Jednovláknový výsledek se proti stavu
+před touto změnou nezměnil ani o bit (stejné otisky na všech scénářích `cee scenarios` a na příkladu), takže
+brány nebylo třeba přepočítávat.
+
+### Měření po fázích
+
+`cee … --phase-times` (nebo `CEE_PHASE_TIMES=1`) vypíše na konci běhu skutečný čas (ne čas procesoru) po fázích
+kroku a podfázích; v běžném běhu stojí fáze jedno čtení atomického příznaku (`timing.rs`). Měří se jen v hlavním
+vlákně, uvnitř souběžných částí se neměří.
+
+Valley-50 do roku 1500, **jedno vlákno, před úpravou** (ms z celkových 3272): inovace 732 (míry 641, zápis 84),
+přenos 2228 (příprava 6, hodnocení procesů `assess` 233, bloky 1589, zápis 397), přestavby 182 (fonologie 77,
+morfologie 97), pozorování 130. Uvnitř bloků: **tlaky 925**, výběr a drift (`settle`) 488, míšení (`hear`) 78,
+události řádků 85. Z tlaků 597 ms spolkla hodnocení analogií (`assess_row`), která pro každý řádek a skupinu
+znovu stavěla úhrn pojmů (`concept_totals`). V příkladu `WorldSpec` je poměr podobný (z 1825 ms: inovace 408,
+přenos 1269 [bloky 765, zápis 390, hodnocení 107], přestavby 58, komunity 37, pozorování 37).
+
+### Co běží souběžně
+
+| část | jak | poznámka |
+|---|---|---|
+| míry inovací (`rate_sum`) a místa (`weighted_sites`) | `par_iter` přes skupiny | zvukové změny čtou index pod `RwLock` (už dorovnané skupiny souběžně) |
+| přenos: míšení, tlaky, výběr a drift, události řádků | **úlohy po kusech řádků** (`transfer::block::jobs`, `transmit_rows`), `par_iter` přes úlohy všech bloků najednou | jedna úloha = `hear` + tlaky + `settle` + události; výsledky se skládají v pořadí bloků a řádků |
+| pomocné tabulky tlaků (vlastníci tvarů, slabost buněk, dominantní konstrukce, úhrny pojmů) | `OnceLock` sdílený úlohami | čisté funkce stavu, takže nezáleží, která úloha je postaví |
+| uvolnění ustálených řádků (`LivePools::release`, hledání jednotných řádků) | `par_iter` přes řádky | |
+| pozorování (příznaky skupin, vzdálenosti) | `std::thread::scope` v jádře (už dřív) | shlukování (`linkage`) zůstává sériové |
+
+Úlohy mají cílovou velikost 4096 buněk (`JOB_CELLS`), uvnitř úlohy je vše na jednom vlákně (dřívější vnořené
+`std::thread::scope` v `hear` a `settle` se pro úlohy nepoužívá, je to jedna fork-join hranice na krok místo
+~30). Svět s méně než `MIN_PARALLEL_CELLS` (16384) buňkami bloků v kroku se nedělí (grid 4×1 a podobné běží
+jako dřív; práh jde pro test změnit `parallel::set_min_parallel_cells`).
+
+Zůstává sériové, protože zapisuje do sdílené banky tvarů nebo sdíleného indexu, kde na pořadí záleží (čísla
+nových tvarů a prostředí se přidělují v pořadí zápisu): dorovnání indexu zvukových změn (`SoundIndex::sync`),
+hodnocení procesů (`transfer/assess.rs::refresh`: `Bank::results` mění banku), návrh a zápis inovací
+(`propose` s `&mut World`), sledování slovní zásoby (`follow_vocabulary`, `contact::adopt`), aktivace, fonologizace
+a přestavby (`rebuild`), komunity, shlukování při pozorování. Souběh v nich by chtěl bankou sdílenou po
+skupinách (vlastní arény s pozdějším sloučením v kanonickém pořadí) nebo dvouprůchodový návrh (čtení souběžně,
+zápis sekvenčně); to je další krok.
+
+### Výsledky (Apple M2, 4 výkonná + 4 úsporná jádra; medián ze 3 běhů, střídavě, s; stroj bez další zátěže kromě samotných měření)
+
+Před = `engine-v2-dynamika` (e4112ea; u village-400 s tímto jediným scénářem navíc), po = tato větev. Otisky
+historie jsou stejné ve všech 3 během i pro všechny počty vláken.
+
+| scénář | před 1 | 2 | 4 | 8 | po 1 | 2 | 4 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|---|
+| valley-50 (do 1500) | 3,64 | 3,23 | 3,00 | 3,00 | 2,84 | 2,17 | 1,83 | 1,87 | 1,90 |
+| příklad `WorldSpec` | 2,00 | 1,73 | 1,58 | 1,60 | 1,74 | 1,34 | 1,11 | 1,15 | 1,16 |
+| grid-5x5 (do 1500) | 1,18 | 1,07 | 1,02 | 1,04 | 0,98 | 0,80 | 0,71 | 0,72 | 0,73 |
+| village-400 (do 400) | 12,25 | 10,20 | 9,28 | 8,98 | 10,42 | 6,49 | 4,75 | 4,31 | 4,35 |
+
+Zrychlení proti jednomu vláknu před úpravou: valley-50 1,9×, příklad 1,7×, grid-5x5 1,6×, village-400 2,8×
+(při 8 vláknech); jednovláknový běh je rychlejší o 15 až 20 % (úhrny pojmů se staví jednou na sloupec).
+Nad čtyři vlákna výkon neroste (Apple M2 má jen 4 výkonná jádra; 7 a 8 vláken jsou stejně rychlé) a podíl
+sériových částí (viz výše) roste: u valley-50 při 8 vláknech zbývá z 1702 ms asi 350 ms na míry inovací (z toho
+~300 ms sériové dorovnání indexu), 240 ms na hodnocení procesů, 370 ms na zápis přenosu, 190 ms na přestavby,
+125 ms na pozorování a 90 ms na zápis inovací; bloky přenosu spadly z 1589 ms na 329 ms.
+
+### Počet vláken
+
+`parallel::default_threads(reserve)`: všechna dostupná jádra mínus `reserve`, aspoň jedno; `RAYON_NUM_THREADS`
+má přednost, `cee --threads N` také. CLI používá `reserve = 0` (běh je jediná úloha stroje), vazba pro server
+`cee_py` `reserve = 1` při importu modulu: jedno jádro zůstane UI, prohlížeči a serveru, které by jinak
+soupeřily s vlákny enginu o čas (měřili jsme jen vlákna enginu na volném stroji; nad 4 výkonná jádra stejně
+zrychlení neroste, takže jádro navíc pro UI nestojí skoro nic). Doporučení: na stroji s ≥ 8 jádry nechat
+výchozí hodnotu; na zatíženém stroji nebo při běhu vedle UI použít počet výkonných jader (zde 4).
 
 ## 6. Export a historie
 
@@ -184,8 +252,8 @@ Nové crates, všechny **MIT nebo Apache-2.0**: `serde`, `serde_json` (s `float_
 ## 10. Příkazy
 
 ```
-cee run <spec.json> -o export.json [--threads N]
-cee scenario <jméno> --until <rok> [-o export.json] [--checkpoint stav.bin]
+cee run <spec.json> -o export.json [--threads N] [--phase-times]
+cee scenario <jméno> --until <rok> [-o export.json] [--checkpoint stav.bin] [--threads N] [--phase-times]
 cee export-tick0 <scénář|spec.json> [-o tick0.json]
 cee scenarios
 cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]
