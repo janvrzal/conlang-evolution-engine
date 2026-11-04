@@ -804,19 +804,66 @@ pub fn gravity_pairs(
         .filter_map(|&g| world.position_of(g).map(|p| (g, p)))
         .collect();
     let mut pairs = Vec::new();
-    for (index, &(first, first_position)) in placed.iter().enumerate() {
-        for &(second, second_position) in &placed[index + 1..] {
-            let distance =
-                (first_position.0 - second_position.0).hypot(first_position.1 - second_position.1);
-            if distance == 0.0 || max_distance.is_some_and(|m| distance > m) {
-                continue;
+    let consider = |index: usize, other: usize, pairs: &mut Vec<(GroupId, GroupId, f64)>| {
+        let (first, first_position) = placed[index];
+        let (second, second_position) = placed[other];
+        let distance =
+            (first_position.0 - second_position.0).hypot(first_position.1 - second_position.1);
+        if distance == 0.0 || max_distance.is_some_and(|m| distance > m) {
+            return;
+        }
+        let mass = (f64::from(world.groups.population[first.index()])
+            * f64::from(world.groups.population[second.index()]))
+        .sqrt();
+        let pull = scale * (mass / reference_population) / (distance / reference_distance).powi(2);
+        pairs.push((first, second, pull / (1.0 + pull)));
+    };
+    // S dosahem se dvojice hledají v mřížce (buňka = dosah, sousední buňky); kandidáti se řadí
+    // podle pořadí skupin, takže vazby vznikají ve stejném pořadí jako při průchodu všech dvojic.
+    let grid = max_distance.and_then(|reach| {
+        let cell = reach * (1.0 + 1e-9);
+        let usable = cell.is_finite()
+            && cell > 0.0
+            && placed.iter().all(|&(_, (x, y))| {
+                (x / cell).abs() < 1e15 && (y / cell).abs() < 1e15 && x.is_finite() && y.is_finite()
+            });
+        usable.then_some(cell)
+    });
+    match grid {
+        Some(cell) => {
+            let at = |position: (f64, f64)| {
+                (
+                    (position.0 / cell).floor() as i64,
+                    (position.1 / cell).floor() as i64,
+                )
+            };
+            let mut buckets: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+            for (index, &(_, position)) in placed.iter().enumerate() {
+                buckets.entry(at(position)).or_default().push(index);
             }
-            let mass = (f64::from(world.groups.population[first.index()])
-                * f64::from(world.groups.population[second.index()]))
-            .sqrt();
-            let pull =
-                scale * (mass / reference_population) / (distance / reference_distance).powi(2);
-            pairs.push((first, second, pull / (1.0 + pull)));
+            let mut near: Vec<usize> = Vec::new();
+            for (index, &(_, position)) in placed.iter().enumerate() {
+                let (cx, cy) = at(position);
+                near.clear();
+                for dx in -1..=1 {
+                    for dy in -1..=1 {
+                        if let Some(list) = buckets.get(&(cx + dx, cy + dy)) {
+                            near.extend(list.iter().copied().filter(|&other| other > index));
+                        }
+                    }
+                }
+                near.sort_unstable();
+                for &other in &near {
+                    consider(index, other, &mut pairs);
+                }
+            }
+        }
+        None => {
+            for index in 0..placed.len() {
+                for other in index + 1..placed.len() {
+                    consider(index, other, &mut pairs);
+                }
+            }
         }
     }
     pairs
