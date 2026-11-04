@@ -184,11 +184,15 @@ fn fixed_process(sim: &mut Simulation) -> (GroupId, ProcessId, VariableId) {
         variant.payload,
         variant.origin,
     );
-    sim.world
-        .groups
-        .main_code_mut(group)
-        .repertoire
-        .set(variant.variable, Distribution::fixed(id));
+    // Změna je ve všech skupinách na 100 %: proměnná se tak nikde neliší, a proto není živá
+    // (rozdílná proměnná by po obnově z kontrolního bodu skončila ve fondech a přenos by ji míchal).
+    for other in sim.world.group_ids() {
+        sim.world
+            .groups
+            .main_code_mut(other)
+            .repertoire
+            .set(variant.variable, Distribution::fixed(id));
+    }
     phonology::activate(&mut sim.world, group, process).unwrap();
     (group, process, variant.variable)
 }
@@ -341,6 +345,35 @@ fn kontrolni_bod_uprostred_fonologizace_da_stejny_beh() {
             .collect::<Vec<_>>()
     };
     assert_eq!(forms(&resumed), forms(&straight));
+}
+
+#[test]
+fn kontrolni_bod_za_behu_s_prirozenymi_inovacemi_da_stejny_beh() {
+    let mut straight = simulation();
+    for _ in 0..12 {
+        straight.step().unwrap();
+    }
+    let mut first = simulation();
+    for _ in 0..6 {
+        first.step().unwrap();
+    }
+    let restored = Checkpoint::from_bytes(&first.checkpoint().to_bytes().unwrap()).unwrap();
+    let config = SimulationConfig {
+        observe_every: 2,
+        ..SimulationConfig::default()
+    };
+    let mut resumed = Simulation::resume(
+        restored,
+        config,
+        Vec::new(),
+        cee_engine::changes::default_changes(),
+    )
+    .unwrap();
+    for _ in 0..6 {
+        resumed.step().unwrap();
+    }
+    assert!(straight.history.of_kind("innovation").count() > 0);
+    assert_eq!(resumed.history.digest(), straight.history.digest());
 }
 
 fn step_context<'a>(
