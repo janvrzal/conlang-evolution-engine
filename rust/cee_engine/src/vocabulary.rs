@@ -82,6 +82,7 @@ pub fn seed_vocabulary(world: &mut World, group: GroupId) -> Result<(), String> 
         state.version += 1;
         state.lexicon_version += 1;
         crate::views::refresh(world, group, &units);
+        crate::views::vocabulary_changed(world, group, &units);
     }
     Ok(())
 }

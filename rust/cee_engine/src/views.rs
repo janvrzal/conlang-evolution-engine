@@ -555,6 +555,7 @@ pub fn build_missing(world: &mut World) {
             let dominant = DominantIndex::build(world, group);
             world.groups.main_code_mut(group).phonology.grammar.dominant = dominant;
             crate::changes::lexicon::build_rates(world, group);
+            vocabulary_changed(world, group, &[]);
         }
         let code = world.groups.main_code(group);
         if code.phonology.grammar.index.built || code.phonology.vocabulary.is_empty() {
@@ -938,6 +939,7 @@ pub fn dominant_changed(
         index = DominantIndex::build(world, group);
     }
     world.groups.main_code_mut(group).phonology.grammar.dominant = index;
+    lexemes_reweighed(world, group, [old, new]);
     crate::changes::lexicon::update_rates(world, group, concept, old, new);
 }
 
@@ -990,5 +992,192 @@ fn verify_dominant(world: &World, group: GroupId) -> Result<(), String> {
             "{name}: součty četností se liší od výpočtu od nuly"
         ));
     }
+    verify_sample(world, group)?;
     crate::changes::lexicon::verify_rates(world, group)
+}
+
+// --- vzorek nejčastějších slov ------------------------------------------------------------
+
+/// Klíč slova ve vzorku: nejčastější první, shodu rozhodne jméno (pořadí `select`).
+#[derive(Clone, Debug)]
+struct SampleKey {
+    freq: f64,
+    name: String,
+    unit: MorphemeId,
+}
+
+impl PartialEq for SampleKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other).is_eq()
+    }
+}
+
+impl Eq for SampleKey {}
+
+impl PartialOrd for SampleKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SampleKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other
+            .freq
+            .total_cmp(&self.freq)
+            .then_with(|| self.name.cmp(&other.name))
+            .then_with(|| self.unit.cmp(&other.unit))
+    }
+}
+
+/// Slova slovní zásoby kódu seřazená podle četnosti užití (podklad vzorku slov pro hodnocení
+/// procesů); upravuje se při vstupu a odchodu slova a při změně součtu četností jeho lexému.
+#[derive(Clone, Debug, Default)]
+pub struct SampleIndex {
+    built: bool,
+    /// Lexém → slova jeho tvarů ve slovní zásobě (všechna, ne jen `Word`).
+    members: HashMap<MorphemeId, Vec<MorphemeId>>,
+    keys: HashMap<MorphemeId, SampleKey>,
+    ordered: BTreeSet<SampleKey>,
+}
+
+impl SampleIndex {
+    pub fn is_built(&self) -> bool {
+        self.built
+    }
+
+    /// Prvních `limit` slov v pořadí od nejčastějšího: (číslo, četnost).
+    pub fn top(&self, limit: usize) -> impl Iterator<Item = (MorphemeId, f64)> + '_ {
+        self.ordered.iter().take(limit).map(|k| (k.unit, k.freq))
+    }
+
+    fn update(
+        &mut self,
+        world: &World,
+        group: GroupId,
+        totals: &HashMap<MorphemeId, f64>,
+        unit: MorphemeId,
+    ) {
+        let code = world.groups.main_code(group);
+        let lexeme = world.morphemes.lexeme_id(unit);
+        let present = code.phonology.vocabulary.contains(unit);
+        let known = self.keys.contains_key(&unit);
+        if present && !known {
+            self.members.entry(lexeme).or_default().push(unit);
+        } else if !present && known {
+            if let Some(list) = self.members.get_mut(&lexeme) {
+                list.retain(|&u| u != unit);
+                if list.is_empty() {
+                    self.members.remove(&lexeme);
+                }
+            }
+        }
+        let wanted = present.then(|| {
+            (
+                crate::morphology::usage_frequency(world, totals, unit),
+                unit,
+            )
+        });
+        match (self.keys.get(&unit), wanted) {
+            (Some(held), Some((freq, _))) if held.freq.to_bits() == freq.to_bits() => {}
+            (held, wanted) => {
+                if held.is_some() {
+                    if let Some(old) = self.keys.remove(&unit) {
+                        self.ordered.remove(&old);
+                    }
+                }
+                if let Some((freq, unit)) = wanted {
+                    let key = SampleKey {
+                        freq,
+                        name: world.registry.morphemes.name(unit.0).to_owned(),
+                        unit,
+                    };
+                    self.ordered.insert(key.clone());
+                    self.keys.insert(unit, key);
+                }
+            }
+        }
+    }
+
+    fn build(world: &World, group: GroupId, totals: &HashMap<MorphemeId, f64>) -> SampleIndex {
+        let mut index = SampleIndex::default();
+        let units: Vec<MorphemeId> = world
+            .groups
+            .main_code(group)
+            .phonology
+            .vocabulary
+            .iter()
+            .collect();
+        for unit in units {
+            index.update(world, group, totals, unit);
+        }
+        index.built = true;
+        index
+    }
+}
+
+/// Slova vstoupila do slovní zásoby kódu nebo ji opustila: dorovná pořadí podle četnosti.
+pub fn vocabulary_changed(world: &mut World, group: GroupId, units: &[MorphemeId]) {
+    let grammar = &mut world.groups.main_code_mut(group).phonology.grammar;
+    let mut index = std::mem::take(&mut grammar.sample);
+    let dominant = std::mem::take(&mut grammar.dominant);
+    if dominant.built {
+        let totals = &dominant.totals;
+        if index.built {
+            for &unit in units {
+                index.update(world, group, totals, unit);
+            }
+        } else {
+            index = SampleIndex::build(world, group, totals);
+        }
+    }
+    let grammar = &mut world.groups.main_code_mut(group).phonology.grammar;
+    grammar.sample = index;
+    grammar.dominant = dominant;
+}
+
+/// Součet četností lexému se změnil: dorovná jeho slova ve vzorku.
+fn lexemes_reweighed(world: &mut World, group: GroupId, roots: [MorphemeId; 2]) {
+    let grammar = &mut world.groups.main_code_mut(group).phonology.grammar;
+    if !grammar.sample.built || !grammar.dominant.built {
+        return;
+    }
+    let mut index = std::mem::take(&mut grammar.sample);
+    let dominant = std::mem::take(&mut grammar.dominant);
+    for root in roots {
+        let units: Vec<MorphemeId> = index.members.get(&root).cloned().unwrap_or_default();
+        for unit in units {
+            index.update(world, group, &dominant.totals, unit);
+        }
+    }
+    let grammar = &mut world.groups.main_code_mut(group).phonology.grammar;
+    grammar.sample = index;
+    grammar.dominant = dominant;
+}
+
+/// Porovná pořadí vzorku s tříděním od nuly.
+fn verify_sample(world: &World, group: GroupId) -> Result<(), String> {
+    let grammar = &world.groups.main_code(group).phonology.grammar;
+    if !grammar.sample.built {
+        return Err("pořadí vzorku není postavené".into());
+    }
+    let fresh = SampleIndex::build(world, group, &grammar.dominant.totals);
+    let held: Vec<(MorphemeId, u64)> = grammar
+        .sample
+        .ordered
+        .iter()
+        .map(|k| (k.unit, k.freq.to_bits()))
+        .collect();
+    let want: Vec<(MorphemeId, u64)> = fresh
+        .ordered
+        .iter()
+        .map(|k| (k.unit, k.freq.to_bits()))
+        .collect();
+    if held != want {
+        return Err(format!(
+            "{}: pořadí vzorku se liší od výpočtu od nuly",
+            world.group_name(group)
+        ));
+    }
+    Ok(())
 }

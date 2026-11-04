@@ -44,10 +44,12 @@ const MAX_COMPOUND: usize = 10;
 /// Lexikální proměnné kódu v pořadí jmen (`repertoire.variable_ids_of("lexical")`).
 fn lexical_variables(world: &World, group: GroupId) -> Arc<Vec<VariableId>> {
     let code = world.groups.main_code(group);
+    // Seznam se staví znovu jen s novou lexikální proměnnou světa (ne s každou proměnnou).
+    let version = world.variables.lexical_version;
     code.phonology
         .grammar
         .cache
-        .get_or("lexical-variables", world.variables.len() as u64, || {
+        .get_or("lexical-variables", version, || {
             let _t = crate::timing::scope("views/lexical-variables");
             code.repertoire
                 .variable_ids_by_name(&world.registry.variables)
@@ -683,8 +685,21 @@ pub fn update_rates(
     world.groups.main_code_mut(group).phonology.grammar.rates = rates;
 }
 
-/// Porovná míry s výpočtem od nuly.
+/// Porovná míry s výpočtem od nuly (a seznam lexikálních proměnných s tím, co by dal nový výpočet).
 pub fn verify_rates(world: &World, group: GroupId) -> Result<(), String> {
+    let code = world.groups.main_code(group);
+    let fresh: Vec<VariableId> = code
+        .repertoire
+        .variable_ids_by_name(&world.registry.variables)
+        .into_iter()
+        .filter(|v| world.variables.kind.get(v.index()) == Some(&VariableKind::Lexical))
+        .collect();
+    if *lexical_variables(world, group) != fresh {
+        return Err(format!(
+            "{}: seznam lexikálních proměnných se liší od výpočtu od nuly",
+            world.group_name(group)
+        ));
+    }
     let held = &world.groups.main_code(group).phonology.grammar.rates;
     if !held.built {
         return Err("míry sémantických změn nejsou postavené".into());

@@ -185,6 +185,7 @@ pub fn enter_units(world: &mut World, group: GroupId, units: &[MorphemeId]) -> R
         return Ok(());
     }
     crate::views::refresh(world, group, &entered);
+    crate::views::vocabulary_changed(world, group, &entered);
     queue_units(world, group, &entered)
 }
 
@@ -195,6 +196,7 @@ pub fn leave_vocabulary(world: &mut World, group: GroupId, unit: MorphemeId) {
         state.version += 1;
         state.lexicon_version += 1;
         crate::views::refresh(world, group, &[unit]);
+        crate::views::vocabulary_changed(world, group, &[unit]);
     }
 }
 
