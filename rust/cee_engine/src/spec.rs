@@ -486,11 +486,12 @@ pub fn check(spec: &WorldSpec) -> Vec<Issue> {
         let (path, text) = with_path(&problem, "vocabulary");
         found.push(Issue::error(path, text));
     }
-    if !found.is_empty() {
-        return found;
-    }
+    let failed = !found.is_empty();
     for (path, text) in crate::vocabulary::warnings(spec.vocabulary, &custom) {
         found.push(Issue::warning(path, text));
+    }
+    if failed {
+        return found;
     }
     let mut known: HashSet<String> = crate::vocabulary::base_ids(spec.vocabulary)
         .into_iter()
