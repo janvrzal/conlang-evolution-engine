@@ -1346,7 +1346,7 @@ pub fn by_name_seeded(name: &str, seed: i64) -> Scenario {
     }
 }
 
-/// Scénář podle jména (pro CLI): `valley-50`, `grid-5x5`, `phonology`, `morphology`, `syntax`,
+/// Scénář podle jména (pro CLI): `valley-50`, `village-400`, `grid-5x5`, `phonology`, `morphology`, `syntax`,
 /// `shift`, `island-city`, `diglossia`, `conquest`, `market`, `migration`, `conversion`, `tree`, `kingdom`.
 pub fn by_name(name: &str) -> Scenario {
     let none = |world: Result<World, String>| world.map(|w| (w, Vec::new()));
@@ -1400,6 +1400,17 @@ pub fn by_name(name: &str) -> Scenario {
                 ..SeedOptions::default()
             },
         )),
+        // Velký svět pro měření souběhu (doc. 19, oddíl 5): mřížka 20×20 vesnic jako valley-50.
+        "village-400" => none(village_grid_default(
+            20,
+            20,
+            1,
+            &SeedOptions {
+                syntax: true,
+                semantics: true,
+                ..SeedOptions::default()
+            },
+        )),
         "shift" => language_shift(2, 300.0),
         "island-city" => none(island_and_city(2, 0.3)),
         "diglossia" => diglossia(1, 500.0, Some(1500.0), true, 0.05, false),
@@ -1414,12 +1425,13 @@ pub fn by_name(name: &str) -> Scenario {
 }
 
 /// Jména scénářů pro `cee scenario`.
-pub const SCENARIO_NAMES: [&str; 14] = [
+pub const SCENARIO_NAMES: [&str; 15] = [
     "phonology",
     "morphology",
     "syntax",
     "grid-5x5",
     "valley-50",
+    "village-400",
     "shift",
     "island-city",
     "diglossia",

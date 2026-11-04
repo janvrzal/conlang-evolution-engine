@@ -174,6 +174,8 @@ fn vocabulary_max_size() -> usize {
 
 #[pymodule]
 fn cee_engine_py(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Server sdílí stroj s UI: jedno jádro zůstane volné (`RAYON_NUM_THREADS` má přednost).
+    cee_engine::parallel::init_default(1);
     module.add_class::<Run>()?;
     module.add_function(wrap_pyfunction!(check_spec, module)?)?;
     module.add_function(wrap_pyfunction!(vocabulary_max_size, module)?)?;
