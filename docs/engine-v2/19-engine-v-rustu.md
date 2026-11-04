@@ -203,7 +203,7 @@ příkladu `WorldSpec` je **shodný s Pythonem** (viz výsledek v zprávě R0).
 
 | patří | co chybí |
 |---|---|
-| **R1a** | přenos (`prepare`, `transmit`, míšení, selekce, drift), tlaky, aktivace procesů a analogií, záznamy milníků, sledování slovní zásoby po přenosu |
+| **R1a** | hodnocení procesů a analogií pro tlaky nad hodnocením (`transfer::seams::assess_cells`; čeká na banku tvarů s tabulkami procesů R1b a morfologický index R1c), stav `closed` pro tlak `Norm` (`transfer::seams::closed`, R1b); zbytek přenosu je hotový, viz oddíl R1a |
 | **R1b** | zvukové změny a kandidáti, index prostředí, přestavba (fonologizace), sledování slovní zásoby, banka tvarů a tabulky procesů (registrace, hodnocení) |
 | **R1c** | morfologie, syntax, prozodie, sémantické a lexikální změny, místa změn a návrh inovací (`Change`), souběžná variabilita protojazyka (`variation.rs`), větší slovník a vlastní pojmy (`vocabulary`) |
 | **R1d** | události (`State`, `Conquest`, … místo `PendingEvent`), kontakt a komunity, politika, pozadí dějin, instituce, pozorování (shluky, `LineageTracker`), `states`/`borders`/`census`/`dialect_facts`/`lineages` v exportu, `naming` |
@@ -220,3 +220,35 @@ příkladu `WorldSpec` je **shodný s Pythonem** (viz výsledek v zprávě R0).
 - Svět v Rustu nemá souběžnou variabilitu slovní zásoby (viz `variation.rs`); export ticku 0 jí není dotčen.
 - `WorldSpec` s větším slovníkem, vlastními pojmy nebo `background` ≠ `none` se odmítne chybou.
 - Události jsou nosiče bez provedení: běh, který na událost narazí, skončí chybou.
+
+## R1a: přenos, živé fondy a tlaky (`transfer/`, `phases/transmission.rs`)
+
+Fáze 3 kroku (`phases::transmission::run`) je napsaná celá a běží v pořadí Pythonu:
+příprava kroku → přenos všech bloků ze **starého** stavu → zápis po blocích (smluvené body
+`record_grammar`, `follow_vocabulary`, uložení nových podílů) → aktivace (`hooks::activate`) seřazené
+podle jmen (skupina, proměnná) → záznamy → `release`.
+
+| modul | obsah |
+|---|---|
+| `transfer::network` | `prepare`: míšení po řádcích řídce (`mixing`, hustá matice se nestaví nikdy), komponenty, osamocené skupiny, vazby mezi jazyky po kanálech `neighbor`/`elite`/`trade` (`FlowChannel`), kanály mimo síť (`SideKind`: interference, čtení, škola, liturgie), kohorty (rozsah driftu, práh zániku), klíče driftu, váhy domén a normalizace půjčitelnosti |
+| `transfer::factors` | filtry kanálů podle druhu proměnné, frekvence a domény pojmu, po řádcích bloku |
+| `transfer::block` | `transmit_block`: po kusech řádků (nejvýš 2^20 buněk) `cee_core::transmission::{hear, settle}` nad hustým výřezem, tlaky, a z před/po milníky 0,1 / 0,5 / 0,9, ustálení, zánik, přechody prahu dominance slov, aktivace, dráhy; nový stav hned jako řídké `Row` |
+| `transfer::pressures` | plán tlaků podle druhu proměnné (zrcadlo `pressures_by_kind`, přepis `pressure_weights`, `Norm` všude) a všech 23 tlaků: `conformity`, `appeal`, `entrenchment`, `motivation`, `actuation`, `lexical_actuation`, `lexical_clarity`, `taboo`, `norm`, pět konstrukčních (`expressivity`, `economy`, `fusion`, `learnability`, `ambiguity`) a devět nad hodnocením |
+| `transfer::assessed` | skóre procesů a analogií z pěti hodnot hodnocení (čisté funkce, testované proti vzorcům Pythonu) |
+| `transfer::seams` | to, co přenos čte z cizích oblastí a ve společném modelu zatím není |
+| `state::transfer` | `TransferState { steps, derived }`; `Derived` (sloupce variant podle čísla varianty, mapa proměnná → varianta „změna“) se neukládá a po kopii či obnově se staví znovu |
+
+**Datový model.** Sloupce variant (`morpheme`, `motivation`, `appeal`, `key`) jsou odvozené z tabulky variant
+a jen přibývají; tlaky čtou čísla, ne řetězce. Plán tlaků a stav tlaků (vlastníci tvarů pro lexikální jasnost,
+slabost buněk, dominantní konstrukce) se staví jednou za krok a líně. Hustá pole žijí jen po dobu jednoho kusu
+bloku; `compact` z Pythonu v Rustu nemá co dělat (hustý pohled se nikde nedrží).
+
+**Chování oproti Pythonu.** Všechny bloky se počítají ze starého stavu. Šum driftu a ocenění změn jsou hashované
+z klíčů (semínko, tik či epocha, jméno skupiny a varianty), takže výsledek nezávisí na pořadí ani na počtu vláken
+(`tests/transfer.rs`). Bitová shoda s Pythonem se nehlídá. Plán tlaků je pevný (výchozí změny); až se změny
+zaregistrují v `default_changes()`, může se plán skládat z jejich deklarací jako v Pythonu.
+
+**Metriky bran, kterých se oblast týká.** Brány M2 až M7 čtou záznamy `milestone`, `established` a `extinct`
+(jména `variable`, `variant`, `group`, `level`, seřazené stejně jako v Pythonu), dráhy inovací
+(`record_trajectories`), podíly ve skupinách (`World::distribution`) a šíření slov, procesů a konstrukcí.
+Tlaky nad hodnocením (zvukové procesy, analogie) jsou nulové, dokud R1b a R1c nedodají `seams::assess_cells`.
