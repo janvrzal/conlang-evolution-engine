@@ -105,20 +105,12 @@ pub fn sync_usage(world: &mut World, group: GroupId) {
     }
 }
 
-/// Dolosuje sklon slova (lexému morfému) vůči procesu a zapamatuje ho.
-pub fn draw_bias(world: &mut World, process: usize, morpheme: usize) -> Result<(), String> {
-    let runtime = &mut world.sound.runtime;
-    let lexeme = match runtime.columns.lexeme.get(morpheme) {
-        Some(&lexeme) if lexeme >= 0 => lexeme as usize,
-        _ => {
-            return Err(format!(
-                "morfém č. {morpheme} nemá lexém ve sloupcích světa"
-            ))
-        }
-    };
+/// Sklon lexému vůči procesu: seedovaná normální náhoda, čistá funkce (semínko, proces, lexém,
+/// `word_bias_sd`); sloupce světa ho jen pamatují.
+pub fn bias_value(world: &World, process: usize, lexeme: usize) -> f64 {
     let variable = world.registry.processes.name(process as u32);
     let lexeme_name = world.registry.morphemes.name(lexeme as u32);
-    let value = Stream::new(
+    Stream::new(
         world.seed as u64,
         &[
             Part::Str("word-bias"),
@@ -126,7 +118,21 @@ pub fn draw_bias(world: &mut World, process: usize, morpheme: usize) -> Result<(
             Part::Str(lexeme_name),
         ],
     )
-    .normal(0.0, world.params.word_bias_sd);
+    .normal(0.0, world.params.word_bias_sd)
+}
+
+/// Dolosuje sklon slova (lexému morfému) vůči procesu a zapamatuje ho.
+pub fn draw_bias(world: &mut World, process: usize, morpheme: usize) -> Result<(), String> {
+    let lexeme = match world.sound.runtime.columns.lexeme.get(morpheme) {
+        Some(&lexeme) if lexeme >= 0 => lexeme as usize,
+        _ => {
+            return Err(format!(
+                "morfém č. {morpheme} nemá lexém ve sloupcích světa"
+            ))
+        }
+    };
+    let value = bias_value(world, process, lexeme);
+    let runtime = &mut world.sound.runtime;
     if runtime.biases.len() <= process {
         runtime.biases.resize_with(process + 1, Vec::new);
     }

@@ -78,76 +78,67 @@ pub fn kind_number(kind: VariableKind) -> usize {
     }
 }
 
-/// Plán tlaků podle výchozích změn (`pressures_by_kind`): sloučené tlaky změn téhož cíle
-/// (nejvyšší váha), `Norm` na všech druzích, váhy přepsané z `pressure_weights`.
+/// Plán tlaků výchozích změn (`pressures_by_kind(DEFAULT_CHANGES)`); viz [`plan_for`].
 pub fn plan(params: &crate::parameters::Parameters) -> Result<Plan, String> {
-    let table: [&[(u8, f64)]; 5] = [
-        // process
-        &[
-            (id::ACTUATION, 1.0),
-            (id::ARTICULATION, 1.0),
-            (id::CLARITY, 0.6),
-            (id::CONFORMITY, 0.1),
-            (id::DISPERSION, 0.5),
-            (id::FUNCTIONAL_LOAD, 1.0),
-            (id::PHONOTACTICS, 0.4),
-        ],
-        // lexical
-        &[
-            (id::APPEAL, 1.0),
-            (id::CONFORMITY, 0.1),
-            (id::ENTRENCHMENT, 1.0),
-            (id::LEXICAL_ACTUATION, 1.0),
-            (id::LEXICAL_CLARITY, 1.0),
-            (id::MOTIVATION, 1.0),
-            (id::TABOO, 1.0),
-        ],
-        // form
-        &[
-            (id::ACTUATION, 1.0),
-            (id::CONFORMITY, 0.1),
-            (id::CONSERVATION, 1.0),
-            (id::DISTINCTIVENESS, 1.0),
-            (id::TEACHABILITY, 1.0),
-            (id::UNIFORMITY, 1.0),
-        ],
-        // construction
-        &[
-            (id::ACTUATION, 1.0),
-            (id::AMBIGUITY, 1.0),
-            (id::CONFORMITY, 0.1),
-            (id::ECONOMY, 1.0),
-            (id::EXPRESSIVITY, 1.0),
-            (id::FUSION, 1.0),
-            (id::LEARNABILITY, 1.0),
-        ],
-        // prosody
-        &[(id::ACTUATION, 1.0), (id::CONFORMITY, 0.1)],
-    ];
+    plan_for(&crate::changes::default_changes(), params)
+}
+
+/// Plán tlaků podle deklarací změn (`pressures_by_kind`): všechny varianty jedné proměnné se
+/// hodnotí stejnými tlaky, i když je vyrobily různé změny, proto se tlaky sdružují podle cílového
+/// druhu proměnné (`Change::target`); deklaruje-li tentýž tlak víc změn, platí nejvyšší váha.
+/// `Norm` (škola) působí na každý cílový druh. `Parameters::pressure_weights` přepíše výslednou
+/// váhu tlaku podle jeho jména; neznámý tlak se odmítne. Tlaky jsou seřazené podle jména jako
+/// v Pythonu (pořadí sčítání).
+pub fn plan_for(
+    changes: &[Box<dyn crate::changes::Change>],
+    params: &crate::parameters::Parameters,
+) -> Result<Plan, String> {
+    let mut declared: [Vec<(u8, f64)>; 5] = Default::default();
+    for change in changes {
+        let target = &mut declared[kind_number(change.target())];
+        if !target.iter().any(|&(pressure, _)| pressure == id::NORM) {
+            target.push((id::NORM, 1.0));
+        }
+        for &(pressure, weight) in change.pressures() {
+            match target.iter_mut().find(|item| item.0 == pressure) {
+                Some(found) => found.1 = found.1.max(weight),
+                None => target.push((pressure, weight)),
+            }
+        }
+    }
+    let known: Vec<&str> = {
+        let mut names: Vec<&str> = declared
+            .iter()
+            .flatten()
+            .map(|&(pressure, _)| NAMES[pressure as usize])
+            .collect();
+        names.push(NAMES[id::NORM as usize]);
+        names
+    };
     for name in params.pressure_weights.keys() {
-        if !NAMES.contains(&name.as_str()) {
+        if !known.contains(&name.as_str()) {
+            let mut sorted = known.clone();
+            sorted.sort_unstable();
+            sorted.dedup();
             return Err(format!(
-                "Neznámé tlaky v pressure_weights: [{name}]; známé jsou {NAMES:?}."
+                "Neznámé tlaky v pressure_weights: [{name}]; známé jsou {sorted:?}."
             ));
         }
     }
-    let weight_of = |pressure: u8, weight: f64| {
-        params
-            .pressure_weights
-            .get(NAMES[pressure as usize])
-            .copied()
-            .unwrap_or(weight)
-    };
     let mut plan: Plan = Default::default();
-    for (kind, items) in table.iter().enumerate() {
-        for &(pressure, weight) in *items {
-            // Slovní ocenění změny zastupuje obecné; lexikální druh obecné nemá.
-            if kind == 1 && pressure == id::ACTUATION {
-                continue;
-            }
-            plan[kind].push((pressure, weight_of(pressure, weight)));
-        }
-        plan[kind].push((id::NORM, weight_of(id::NORM, 1.0)));
+    for (kind, mut items) in declared.into_iter().enumerate() {
+        items.sort_by(|a, b| NAMES[a.0 as usize].cmp(NAMES[b.0 as usize]));
+        plan[kind] = items
+            .into_iter()
+            .map(|(pressure, weight)| {
+                let weight = params
+                    .pressure_weights
+                    .get(NAMES[pressure as usize])
+                    .copied()
+                    .unwrap_or(weight);
+                (pressure, weight)
+            })
+            .collect();
     }
     Ok(plan)
 }

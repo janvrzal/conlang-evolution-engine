@@ -7,7 +7,7 @@
 //! míst`), jen u zániku kategorie se odvozuje od slabosti koncovky a podílu druhojazyčných
 //! mluvčích.
 
-use crate::changes::{Change, InnovationContext, NewVariant, Sites};
+use crate::changes::{Change, InnovationContext, NewVariant, Sites, SYNTAX_PRESSURES};
 use crate::grammar::{Construction, Template};
 use crate::ids::{ConceptId, GroupId, VariableId, VariantId};
 use crate::model::repertoire::{Origin, VariableKind};
@@ -277,6 +277,14 @@ impl Change for SyntacticChange {
 
     fn rate_basis_generation(&self) -> bool {
         true
+    }
+
+    fn target(&self) -> VariableKind {
+        VariableKind::Construction
+    }
+
+    fn pressures(&self) -> &'static [(u8, f64)] {
+        &SYNTAX_PRESSURES
     }
 
     fn weighted_sites(&self, world: &World, ctx: &InnovationContext) -> Sites {

@@ -25,7 +25,7 @@ use crate::ids::{GroupId, VariableId, VariantId};
 use crate::phases::{hooks, StepContext};
 use crate::transfer::block::{leaves_before_enters, transmit_block, BlockOutcome, MILESTONES};
 use crate::transfer::network::{prepare, TransmissionParams};
-use crate::transfer::pressures::{plan, Pressures};
+use crate::transfer::pressures::{plan_for, Pressures};
 
 /// Vrátí ustálené proměnné z fondů do repertoárů skupin.
 pub fn release(ctx: &mut StepContext<'_>) {
@@ -57,7 +57,10 @@ struct Record {
 }
 
 /// Provede fázi přenosu.
-pub fn run(ctx: &mut StepContext<'_>) -> Result<(), String> {
+pub fn run(
+    ctx: &mut StepContext<'_>,
+    changes: &[Box<dyn crate::changes::Change>],
+) -> Result<(), String> {
     ctx.world.transfer.steps += 1;
     if ctx.world.live.is_empty() {
         return Ok(());
@@ -79,7 +82,7 @@ pub fn run(ctx: &mut StepContext<'_>) -> Result<(), String> {
     // Všechny bloky se počítají ze starého stavu; svět se zatím nemění.
     let outcomes: Vec<(usize, BlockOutcome)> = {
         let world = &*ctx.world;
-        let pressure_plan = plan(&world.params)?;
+        let pressure_plan = plan_for(changes, &world.params)?;
         let mut pressures = Pressures::new(world, &inputs, &pressure_plan)?;
         world
             .live

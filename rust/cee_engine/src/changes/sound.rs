@@ -17,9 +17,9 @@
 
 use cee_core::candidates::FAMILIES;
 
-use crate::changes::{Change, InnovationContext, NewVariant, Sites};
+use crate::changes::{Change, InnovationContext, NewVariant, Sites, SOUND_PRESSURES};
 use crate::ids::{VariableId, VariantId};
-use crate::model::repertoire::{Origin, Payload};
+use crate::model::repertoire::{Origin, Payload, VariableKind};
 use crate::phonology::index::with_group;
 use crate::phonology::register;
 use crate::rng::Stream;
@@ -84,6 +84,14 @@ impl Change for SoundChange {
 
     fn rate_basis_generation(&self) -> bool {
         true
+    }
+
+    fn target(&self) -> VariableKind {
+        VariableKind::Process
+    }
+
+    fn pressures(&self) -> &'static [(u8, f64)] {
+        &SOUND_PRESSURES
     }
 
     fn weighted_sites(&self, world: &World, ctx: &InnovationContext) -> Sites {

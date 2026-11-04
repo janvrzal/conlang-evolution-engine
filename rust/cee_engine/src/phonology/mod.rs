@@ -22,12 +22,15 @@
 //!
 //! **Pro ostatní oblasti.** `requeue_all` zařadí morfém, jehož tvar se změnil (analogie),
 //! do front živých procesů (R1c); `row_of` dá řádek procesu v bance pro hodnocení tlaků
-//! (R1a); `changed_share` je podíl změněné varianty ve skupině.
+//! (R1a); `changed_share` je podíl změněné varianty ve skupině; `surface` a `surface_lexicon` dávají
+//! povrchové tvary slov skupiny (metriky bran, ladění).
 
 pub mod columns;
 pub mod index;
 pub mod queues;
 pub mod rows;
+pub mod surface;
 
 pub use queues::{activate, enter_units, leave_vocabulary, requeue_all, restructure_groups};
 pub use rows::{changed_share, register, row_of, Registered};
+pub use surface::{surface, surface_lexicon};

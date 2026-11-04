@@ -17,12 +17,15 @@
 
 use std::sync::Arc;
 
-use crate::changes::{Change, InnovationContext, NewVariant, Sites};
-use crate::concepts::{ConceptData, BORROWED_FLOOR, DOMAINS};
+use crate::changes::{
+    Change, InnovationContext, NewVariant, Sites, COINAGE_PRESSURES, LEXICAL_PRESSURES,
+};
+use crate::contact;
 use crate::ids::{ConceptId, GroupId, MorphemeId, VariableId, VariantId};
 use crate::model::lexicon::{MorphemeInit, MorphemeKind, MorphemeMeta};
 use crate::model::repertoire::{Origin, Payload, VariableKind};
 use crate::rng::{stable_id, Part, Stream};
+use crate::parameters::CHANNELS;
 use crate::syntax::dominant_root;
 use crate::world::World;
 
@@ -32,8 +35,6 @@ const COINAGE_RATE: f64 = 4e-4;
 const BORROWING_RATE: f64 = 1e-3;
 const APPEAL_MEAN: f64 = -0.05;
 const APPEAL_SD: f64 = 0.15;
-/// Filtr výpůjček pro slova (`contact.BORROWING["lexical"]`).
-const LEXICAL_BORROWING: f64 = 0.5;
 /// Nejdelší složenina, která se v řeči ujme (počet hlásek).
 const MAX_COMPOUND: usize = 10;
 
@@ -238,6 +239,14 @@ impl LexicalCoinage {
 impl Change for LexicalCoinage {
     fn kind(&self) -> &'static str {
         "lexical_coinage"
+    }
+
+    fn target(&self) -> VariableKind {
+        VariableKind::Lexical
+    }
+
+    fn pressures(&self) -> &'static [(u8, f64)] {
+        &COINAGE_PRESSURES
     }
 
     fn weighted_sites(&self, world: &World, ctx: &InnovationContext) -> Sites {
@@ -603,6 +612,14 @@ impl Change for SemanticChange {
         }
     }
 
+    fn target(&self) -> VariableKind {
+        VariableKind::Lexical
+    }
+
+    fn pressures(&self) -> &'static [(u8, f64)] {
+        &LEXICAL_PRESSURES
+    }
+
     fn weighted_sites(&self, world: &World, ctx: &InnovationContext) -> Sites {
         if !Self::enabled(world) {
             return Sites::default();
@@ -767,53 +784,28 @@ fn plain_name(kind: &str, parts: &[Part<'_>]) -> String {
 
 // --- výpůjčky ----------------------------------------------------------------------------
 
-/// Váha kanálu ve výpůjčkách: kanály, které se v přenosu odlišují od obecného kontaktu sousedů.
-fn distinct_channels(world: &World) -> Vec<&'static str> {
-    let table = &world.params.channel_domains;
-    let base = table.get("neighbor");
-    ["elite", "trade"]
-        .into_iter()
-        .filter(|channel| table.get(*channel) != base)
-        .collect()
-}
-
-/// Přenositelnost slova pojmu (`contact.transfer`): vzácná slova se půjčují snáz než základní.
-fn transfer(world: &World, concept: ConceptId) -> f64 {
-    let rarity = 1.0 - world.concept_frequency(concept);
+/// Filtr výpůjček slova v kanálu (`contact.borrowing_factor`) podle rozhraní kontaktu R1d:
+/// `0,5 × přenositelnost pojmu × váha domény v kanálu`. Normalizaci přenositelnosti (průměr přes
+/// pojmy z dat) si svět pamatuje podle síly půjčitelnosti.
+fn borrowing_factor(world: &World, concept: ConceptId, channel: usize) -> f64 {
     let strength = world.params.borrowability_strength;
-    if strength == 0.0 {
-        return rarity;
-    }
-    let (reference, normalizer) =
+    let normalizer = if strength == 0.0 {
+        1.0
+    } else {
         *world
             .grammar
             .cache
-            .get_or("borrowing-reference", strength.to_bits(), || {
-                let data = ConceptData::shared();
-                (
-                    data.reference_borrowed(),
-                    data.borrowing_normalizer(strength),
-                )
-            });
-    let borrowed = world.concepts.borrowed[concept.index()].max(BORROWED_FLOOR);
-    let mut weight = (borrowed / reference).powf(strength);
-    if strength < 1.0 {
-        weight *= rarity.powf(1.0 - strength);
-    }
-    weight / normalizer
-}
-
-/// Filtr výpůjček slova v kanálu (`contact.borrowing_factor`).
-fn borrowing_factor(world: &World, concept: ConceptId, channel: &str) -> f64 {
-    let mut factor = LEXICAL_BORROWING * transfer(world, concept);
-    let domain = DOMAINS[world.concepts.domain[concept.index()] as usize];
-    let weight = world
-        .params
-        .channel_domains
-        .get(channel)
-        .and_then(|row| row.get(domain))
-        .copied()
-        .unwrap_or(1.0);
+            .get_or("borrowing-normalizer", strength.to_bits(), || {
+                contact::normalizer(strength)
+            })
+    };
+    let mut factor = contact::borrowing_kind(VariableKind::Lexical)
+        * contact::transfer(world, concept, normalizer);
+    let weight = contact::domain_weight(
+        &world.params,
+        channel,
+        world.concepts.domain[concept.index()],
+    );
     if weight != 1.0 {
         factor *= weight;
     }
@@ -863,30 +855,23 @@ pub fn donors(world: &World, group: GroupId) -> Vec<(f64, GroupId)> {
         .collect()
 }
 
-/// Kanály, kterými slova od dárce přicházejí, a jejich podíl (součet 1).
+/// Kanály, kterými slova od dárce přicházejí, a jejich podíl (součet 1): rozdělení vazby
+/// dává `contact::channel_split`, tady se vynechají kanály s nulovým podílem.
 fn donor_channels(
     world: &World,
     group: GroupId,
     donor: GroupId,
-    distinct: &[&'static str],
-) -> Vec<(&'static str, f64)> {
-    if distinct.contains(&"elite") && world.groups.elite[donor.index()] {
-        return vec![("elite", 1.0)];
-    }
-    let share = if distinct.contains(&"trade") {
-        world.trade_share(group, donor)
-    } else {
-        0.0
-    };
-    if share > 0.0 {
-        if share < 1.0 {
-            vec![("neighbor", 1.0 - share), ("trade", share)]
-        } else {
-            vec![("trade", 1.0)]
-        }
-    } else {
-        vec![("neighbor", 1.0)]
-    }
+    distinct: &[usize],
+) -> Vec<(usize, f64)> {
+    let split = contact::channel_split(world, group, donor, distinct);
+    [
+        (contact::NEIGHBOR, split.neighbor),
+        (contact::ELITE, split.elite),
+        (contact::TRADE, split.trade),
+    ]
+    .into_iter()
+    .filter(|&(_, share)| share > 0.0)
+    .collect()
 }
 
 /// Podíl vstupu skupiny od cizích dárců podle kanálů, seřazeno podle názvu kanálu.
@@ -894,9 +879,9 @@ fn channel_exposures(
     world: &World,
     group: GroupId,
     donors: &[(f64, GroupId)],
-    distinct: &[&'static str],
-) -> Vec<(&'static str, f64)> {
-    let mut totals: Vec<(&'static str, f64)> = Vec::new();
+    distinct: &[usize],
+) -> Vec<(usize, f64)> {
+    let mut totals: Vec<(usize, f64)> = Vec::new();
     for &(weight, donor) in donors {
         for (channel, share) in donor_channels(world, group, donor, distinct) {
             match totals.iter_mut().find(|t| t.0 == channel) {
@@ -905,7 +890,7 @@ fn channel_exposures(
             }
         }
     }
-    totals.sort_by(|a, b| a.0.cmp(b.0));
+    totals.sort_by(|a, b| CHANNELS[a.0].cmp(CHANNELS[b.0]));
     totals
 }
 
@@ -915,9 +900,9 @@ fn borrowing_rates(world: &World, group: GroupId, sites: &[VariableId]) -> Vec<f
     if found.is_empty() {
         return Vec::new();
     }
-    let distinct = distinct_channels(world);
-    let channels: Vec<(&'static str, f64)> = if distinct.is_empty() {
-        vec![("neighbor", found.iter().map(|d| d.0).sum())]
+    let distinct = contact::distinct_channels(&world.params);
+    let channels: Vec<(usize, f64)> = if distinct.is_empty() {
+        vec![(contact::NEIGHBOR, found.iter().map(|d| d.0).sum())]
     } else {
         channel_exposures(world, group, &found, &distinct)
     };
@@ -946,6 +931,14 @@ pub struct LexicalBorrowing;
 impl Change for LexicalBorrowing {
     fn kind(&self) -> &'static str {
         "lexical_borrowing"
+    }
+
+    fn target(&self) -> VariableKind {
+        VariableKind::Lexical
+    }
+
+    fn pressures(&self) -> &'static [(u8, f64)] {
+        &LEXICAL_PRESSURES
     }
 
     fn weighted_sites(&self, world: &World, ctx: &InnovationContext) -> Sites {
@@ -980,7 +973,7 @@ impl Change for LexicalBorrowing {
             return None;
         }
         let concept = concept_of(world, site);
-        let distinct = distinct_channels(world);
+        let distinct = contact::distinct_channels(&world.params);
         let weights: Vec<f64> = if distinct.is_empty() {
             found.iter().map(|d| d.0).collect()
         } else {

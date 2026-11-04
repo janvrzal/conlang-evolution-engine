@@ -161,7 +161,7 @@ impl Simulation {
             };
             phases::events::run(&mut ctx, &mut self.pending)?;
             phases::innovation::run(&mut ctx, &self.changes)?;
-            phases::transmission::run(&mut ctx)?;
+            phases::transmission::run(&mut ctx, &self.changes)?;
             phases::rebuild::run(&mut ctx)?;
             if phases::communities::run(&mut ctx)? {
                 ctx.world.sync_live_groups()?;

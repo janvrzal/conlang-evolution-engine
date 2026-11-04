@@ -7,10 +7,10 @@
 
 use std::sync::Arc;
 
-use crate::changes::{Change, InnovationContext, NewVariant, Sites};
+use crate::changes::{Change, InnovationContext, NewVariant, Sites, MORPH_PRESSURES};
 use crate::ids::{GroupId, VariableId, VariantId};
 use crate::model::lexicon::FormChange;
-use crate::model::repertoire::Origin;
+use crate::model::repertoire::{Origin, VariableKind};
 use crate::morphology::{self, FormSites};
 use crate::rng::Stream;
 use crate::world::World;
@@ -71,6 +71,14 @@ impl Change for AnalogicalChange {
 
     fn rate_basis_generation(&self) -> bool {
         true
+    }
+
+    fn target(&self) -> VariableKind {
+        VariableKind::Form
+    }
+
+    fn pressures(&self) -> &'static [(u8, f64)] {
+        &MORPH_PRESSURES
     }
 
     fn weighted_sites(&self, world: &World, ctx: &InnovationContext) -> Sites {
