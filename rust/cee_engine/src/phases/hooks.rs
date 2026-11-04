@@ -81,13 +81,19 @@ fn follow_one(ctx: &mut StepContext<'_>, crossing: &Crossing) -> Result<(), Stri
         }
     }
     if enter {
+        let _t = crate::timing::scope("w/vocab/adopt");
         adopt(ctx, group, morpheme)?;
     }
     // Tvary buněk paradigmatu: nový lexém a výpůjčka je dostanou podle produktivních koncovek kódu.
-    let units = units_in(ctx.world, group, morpheme);
+    let units = {
+        let _t = crate::timing::scope("w/vocab/units");
+        units_in(ctx.world, group, morpheme)
+    };
     if enter {
+        let _t = crate::timing::scope("w/vocab/enter");
         phonology::enter_units(ctx.world, group, &units)
     } else {
+        let _t = crate::timing::scope("w/vocab/leave");
         for unit in units {
             phonology::leave_vocabulary(ctx.world, group, unit);
         }
