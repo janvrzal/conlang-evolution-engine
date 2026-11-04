@@ -60,10 +60,29 @@ struct SegmentBits {
     known: usize,
 }
 
-/// Výsledky jednoho procesu s jedním pravidlem přízvuku pro každý tvar.
+/// Hasher čísla tvaru: násobení zlatým řezem, aby se využily i horní bity (viz `hashbrown`).
+#[derive(Default)]
+struct SpreadHasher(u64);
+
+impl Hasher for SpreadHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            self.0 = (self.0.rotate_left(5) ^ u64::from(byte)).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        }
+    }
+    fn write_u32(&mut self, value: u32) {
+        self.0 = u64::from(value).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    }
+}
+
+/// Výsledky jednoho procesu s jedním pravidlem přízvuku: řídce, jen pro tvary, na které se
+/// proces skutečně ptal (chybějící tvar = `UNKNOWN`).
 #[derive(Default)]
 struct Table {
-    results: Vec<i64>,
+    results: HashMap<u32, i64, BuildHasherDefault<SpreadHasher>>,
 }
 
 /// Co vrátí dávkový výpočet: buď výsledky, nebo hlásky, jejichž výstup změny
@@ -385,12 +404,8 @@ impl Bank {
         Ok(self.tables[slot].get_or_insert_with(Table::default))
     }
 
-    fn grow_results(&mut self, row: usize, rule: u8, top: usize) -> Result<(), String> {
-        let table = self.table_mut(row, rule)?;
-        if top >= table.results.len() {
-            let size = (top + 1).max(2 * table.results.len()).max(64);
-            table.results.resize(size, UNKNOWN);
-        }
+    fn grow_results(&mut self, row: usize, rule: u8, _top: usize) -> Result<(), String> {
+        self.table_mut(row, rule)?;
         Ok(())
     }
 
@@ -399,7 +414,7 @@ impl Bank {
         self.tables
             .get(slot)
             .and_then(|table| table.as_ref())
-            .and_then(|table| table.results.get(form_id))
+            .and_then(|table| table.results.get(&(form_id as u32)))
             .copied()
             .unwrap_or(UNKNOWN)
     }
@@ -407,7 +422,7 @@ impl Bank {
     fn store(&mut self, row: usize, rule: u8, form_id: usize, value: i64) {
         let slot = row * RULE_COUNT + rule as usize;
         if let Some(Some(table)) = self.tables.get_mut(slot) {
-            table.results[form_id] = value;
+            table.results.insert(form_id as u32, value);
         }
     }
 
@@ -658,7 +673,9 @@ impl Bank {
     pub fn stored_results(&self, row: usize, rule: u8) -> Vec<i64> {
         let slot = row * RULE_COUNT + rule as usize;
         match self.tables.get(slot).and_then(|table| table.as_ref()) {
-            Some(table) => table.results[..self.len().min(table.results.len())].to_vec(),
+            Some(table) => (0..self.len())
+                .map(|id| table.results.get(&(id as u32)).copied().unwrap_or(UNKNOWN))
+                .collect(),
             None => Vec::new(),
         }
     }

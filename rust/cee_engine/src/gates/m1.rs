@@ -329,7 +329,6 @@ pub fn east_events(
                 })
             }
         })
-        .cloned()
         .collect()
 }
 

@@ -212,7 +212,7 @@ pub fn check_jespersenuv_cyklus(simulation: &Simulation) -> Report {
         .of_kind("established")
         .filter(|event| text(event, "variable") == "construction:NEG")
         .filter_map(|event| {
-            let variant = variant_named(world, text(event, "variant"))?;
+            let variant = variant_named(world, text(&event, "variant"))?;
             syntax::construction_of(world, variant).map(|c| c.kind.clone())
         })
         .collect();

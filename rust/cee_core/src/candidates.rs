@@ -338,29 +338,43 @@ impl Pat {
 
     /// Klíč vzoru (`Pattern.key`).
     pub fn key(&self, t: &SegTable) -> String {
+        let mut out = String::new();
+        self.write_key(t, &mut out);
+        out
+    }
+
+    /// Připíše klíč vzoru za `out` (bez mezikroků v řetězcích).
+    fn write_key(&self, t: &SegTable, out: &mut String) {
+        use std::fmt::Write;
         match self {
             Pat::Features(items, _) => {
                 if items.is_empty() {
-                    "*".into()
+                    out.push('*');
                 } else {
-                    items
-                        .iter()
-                        .map(|(name, value)| format!("{value}{name}"))
-                        .collect::<Vec<_>>()
-                        .join(",")
+                    for (at, (name, value)) in items.iter().enumerate() {
+                        if at > 0 {
+                            out.push(',');
+                        }
+                        let _ = write!(out, "{value}{name}");
+                    }
                 }
             }
-            Pat::Segments(ids, _) => format!(
-                "{{{}}}",
-                ids.iter()
-                    .map(|&i| if i == u32::MAX { "" } else { t.ipa(i) })
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ),
-            Pat::Vowel => "V".into(),
-            Pat::Consonant => "C".into(),
-            Pat::Boundary => "#".into(),
-            Pat::ConsonantOrBoundary => "C|#".into(),
+            Pat::Segments(ids, _) => {
+                out.push('{');
+                for (at, &i) in ids.iter().enumerate() {
+                    if at > 0 {
+                        out.push(',');
+                    }
+                    if i != u32::MAX {
+                        out.push_str(t.ipa(i));
+                    }
+                }
+                out.push('}');
+            }
+            Pat::Vowel => out.push('V'),
+            Pat::Consonant => out.push('C'),
+            Pat::Boundary => out.push('#'),
+            Pat::ConsonantOrBoundary => out.push_str("C|#"),
         }
     }
 }
@@ -536,32 +550,58 @@ impl Candidate {
 
     /// Kanonický klíč procesu (`Process.key`).
     pub fn key(&self, t: &SegTable) -> String {
-        let mut parts: Vec<String> = vec![
-            FAMILIES[self.family].to_string(),
-            self.target.key(t),
-            self.operation.name().to_string(),
-            self.changes
-                .iter()
-                .map(|(name, value)| format!("{value}{name}"))
-                .collect::<Vec<_>>()
-                .join(","),
-            self.segment.map(|s| s.to_string()).unwrap_or_default(),
-            self.left.as_ref().map(|p| p.key(t)).unwrap_or_default(),
-            self.right.as_ref().map(|p| p.key(t)).unwrap_or_default(),
-            self.stress.name().unwrap_or("").to_string(),
-            if self.medial { "medial" } else { "" }.to_string(),
-        ];
+        let mut out = String::new();
+        self.write_key(t, &mut out);
+        out
+    }
+
+    /// Připíše kanonický klíč procesu za `out`.
+    fn write_key(&self, t: &SegTable, out: &mut String) {
+        use std::fmt::Write;
+        out.push_str(FAMILIES[self.family]);
+        out.push('|');
+        self.target.write_key(t, out);
+        out.push('|');
+        out.push_str(self.operation.name());
+        out.push('|');
+        for (at, (name, value)) in self.changes.iter().enumerate() {
+            if at > 0 {
+                out.push(',');
+            }
+            let _ = write!(out, "{value}{name}");
+        }
+        out.push('|');
+        if let Some(segment) = self.segment {
+            let _ = write!(out, "{segment}");
+        }
+        out.push('|');
+        if let Some(left) = &self.left {
+            left.write_key(t, out);
+        }
+        out.push('|');
+        if let Some(right) = &self.right {
+            right.write_key(t, out);
+        }
+        out.push('|');
+        out.push_str(self.stress.name().unwrap_or(""));
+        out.push('|');
+        if self.medial {
+            out.push_str("medial");
+        }
         if !self.allow.is_empty() || self.right2.is_some() {
             let mut allow = self.allow.clone();
             allow.sort();
             allow.dedup();
-            parts.push(allow.join(","));
-            parts.push(self.right2.as_ref().map(|p| p.key(t)).unwrap_or_default());
+            out.push('|');
+            out.push_str(&allow.join(","));
+            out.push('|');
+            if let Some(right2) = &self.right2 {
+                right2.write_key(t, out);
+            }
         }
         if let Some(tone) = self.tone {
-            parts.push(format!("tone{tone}"));
+            let _ = write!(out, "|tone{tone}");
         }
-        parts.join("|")
     }
 }
 
@@ -1585,16 +1625,19 @@ pub fn build(t: &SegTable, inventory: &[u32]) -> Result<Built, String> {
     let mut family_ends = Vec::with_capacity(FAMILIES.len());
     for (family, builder) in BUILDERS.iter().enumerate() {
         let mut keyed: Vec<(String, Candidate)> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
         for candidate in builder(&maker, family)? {
             if candidate.unresolved() {
                 return Err("zápis hlásky v inventáři tabulka nerozebere".into());
             }
-            let id = format!("process:{}", candidate.key(t));
-            if keyed.iter().all(|(seen, _)| *seen != id) {
+            let mut id = String::from("process:");
+            candidate.write_key(t, &mut id);
+            // První vyhrává; duplicity se hlídají hašovací sadou, ne průchodem celého seznamu.
+            if seen.insert(id.clone()) {
                 keyed.push((id, candidate));
             }
         }
-        keyed.sort_by(|a, b| a.0.cmp(&b.0));
+        keyed.sort_unstable_by(|a, b| a.0.cmp(&b.0));
         for (id, candidate) in keyed {
             ids.push(id);
             candidates.push(candidate);

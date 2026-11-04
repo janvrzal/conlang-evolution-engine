@@ -38,7 +38,7 @@ pub fn check_strom_odpovida(simulation: &Simulation) -> Report {
     let mut report = Report::new();
     let history = &simulation.history;
     let splits: Vec<_> = history.of_kind("language_split").collect();
-    let clusters: Vec<BTreeSet<char>> = splits.iter().map(|e| event_groups(e)).collect();
+    let clusters: Vec<BTreeSet<char>> = splits.iter().map(event_groups).collect();
     let single = |c: char| BTreeSet::from([c]);
     report.flag(
         "rozštěpení: nejdřív C, potom B nebo A",

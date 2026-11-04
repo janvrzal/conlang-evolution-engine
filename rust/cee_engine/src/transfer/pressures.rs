@@ -145,6 +145,14 @@ pub fn plan_for(
     Ok(plan)
 }
 
+/// Živé buňky řádku (neprázdné `current` nebo `heard`): skupiny a dvojice (skupina, slot) podle
+/// pořadí buněk; jen pro ně je tlak potřeba.
+#[derive(Clone, Copy)]
+struct Live<'a> {
+    groups: &'a [usize],
+    cells: &'a [(usize, usize)],
+}
+
 /// Katalog gramatických funkcí s odvozenými čísly pro tlaky na konstrukce.
 struct Catalog {
     functions: Vec<GrammaticalFunction>,
@@ -289,7 +297,9 @@ impl<'a> Pressures<'a> {
 
     /// Fitness řádků `[first, first + count)` bloku do `out` (`count × skupiny × sloty`,
     /// vynulované); `current` a `heard` mají týž tvar. Smí se volat souběžně z více vláken
-    /// (pomocné tabulky jsou za `OnceLock`); každé volání píše jen do svého `out`.
+    /// (pomocné tabulky jsou za `OnceLock`); každé volání píše jen do svého `out`. Tlak se
+    /// počítá jen v buňkách, kde je `current` nebo `heard` nenulové (jen tam ho `settle` čte);
+    /// ostatní buňky zůstanou nulové.
     pub fn fitness(
         &self,
         block: &PoolBlock,
@@ -311,6 +321,30 @@ impl<'a> Pressures<'a> {
             let heard = &heard[local * stride..(local + 1) * stride];
             let variants = &block.slots[row];
             let assessed = self.assess_row(kind, variable, variants, now, heard);
+            // Skupiny, které proměnnou nemají a neslyší (v žádném slotu), settle nečte: tlak
+            // se počítá jen pro živé skupiny a ostatní buňky zůstanou nulové.
+            // Stejně se přeskočí sloty skupiny, které nemají a neslyší (buňky `(skupina, slot)`).
+            let mut live: Vec<usize> = Vec::new();
+            let mut live_cells: Vec<(usize, usize)> = Vec::new();
+            for g in 0..groups {
+                let before = live_cells.len();
+                for slot in 0..slots {
+                    let at = g * slots + slot;
+                    if now[at] != 0.0 || heard[at] != 0.0 {
+                        live_cells.push((g, slot));
+                    }
+                }
+                if live_cells.len() > before {
+                    live.push(g);
+                }
+            }
+            if live.is_empty() {
+                continue;
+            }
+            let live = Live {
+                groups: &live,
+                cells: &live_cells,
+            };
             for &(pressure, weight) in &plan[kind_number(kind)] {
                 if weight == 0.0 {
                     continue;
@@ -324,7 +358,7 @@ impl<'a> Pressures<'a> {
                     heard,
                     cells,
                     assessed.as_ref(),
-                    groups,
+                    live,
                     slots,
                 );
             }
@@ -342,7 +376,7 @@ impl<'a> Pressures<'a> {
         heard: &[f64],
         cells: &mut [f64],
         assessed: Option<&RowAssessment>,
-        groups: usize,
+        live: Live<'_>,
         slots: usize,
     ) {
         let world = self.world;
@@ -350,20 +384,20 @@ impl<'a> Pressures<'a> {
         let columns = &world.transfer.derived.variants;
         match pressure {
             id::CONFORMITY => {
-                for (cell, &share) in cells.iter_mut().zip(current) {
-                    add(cell, weight * (2.0 * share - 1.0));
+                for &(g, slot) in live.cells {
+                    let at = g * slots + slot;
+                    add(&mut cells[at], weight * (2.0 * current[at] - 1.0));
                 }
             }
             id::APPEAL => {
-                for (slot, &variant) in variants.iter().enumerate() {
+                for &(g, slot) in live.cells {
+                    let variant = variants[slot];
                     if variant.is_none() {
                         continue;
                     }
                     let appeal = columns.appeal[variant.index()];
                     let term = weight * if appeal.is_nan() { 0.0 } else { appeal }.clamp(-1.0, 1.0);
-                    for g in 0..groups {
-                        add(&mut cells[g * slots + slot], term);
-                    }
+                    add(&mut cells[g * slots + slot], term);
                 }
             }
             id::ENTRENCHMENT if has_table => {
@@ -380,19 +414,19 @@ impl<'a> Pressures<'a> {
                 if params.entrenchment_base != 0.0 {
                     protection += params.entrenchment_base;
                 }
-                for g in 0..groups {
-                    for (slot, &variant) in variants.iter().enumerate() {
-                        if variant.is_none() || !columns.is_word(variant) {
-                            continue;
-                        }
-                        if current[g * slots + slot] >= 0.5 {
-                            add(&mut cells[g * slots + slot], weight * protection);
-                        }
+                for &(g, slot) in live.cells {
+                    let variant = variants[slot];
+                    if variant.is_none() || !columns.is_word(variant) {
+                        continue;
+                    }
+                    if current[g * slots + slot] >= 0.5 {
+                        add(&mut cells[g * slots + slot], weight * protection);
                     }
                 }
             }
             id::MOTIVATION if has_table => {
-                for (slot, &variant) in variants.iter().enumerate() {
+                for &(g, slot) in live.cells {
+                    let variant = variants[slot];
                     if variant.is_none() {
                         continue;
                     }
@@ -400,56 +434,52 @@ impl<'a> Pressures<'a> {
                     let term = weight
                         * (columns.motivation[variant.index()]
                             + if appeal.is_nan() { 0.0 } else { appeal });
-                    for g in 0..groups {
-                        add(&mut cells[g * slots + slot], term);
-                    }
+                    add(&mut cells[g * slots + slot], term);
                 }
             }
             id::ACTUATION | id::LEXICAL_ACTUATION => {
                 let lexical = pressure == id::LEXICAL_ACTUATION;
-                for (slot, &variant) in variants.iter().enumerate() {
+                for &(g, slot) in live.cells {
+                    let variant = variants[slot];
                     if variant.is_none()
                         || !world.variants.innovation[variant.index()]
                         || (lexical && !columns.is_word(variant))
                     {
                         continue;
                     }
-                    let mixed = splitmix64(columns.key[variant.index()]);
-                    for g in 0..groups {
-                        // Slot, který kohorta neslyší, výběr nečte (slyšený × exp(…) je nula).
-                        if heard[g * slots + slot] <= 0.0 && current[g * slots + slot] <= 0.0 {
-                            continue;
-                        }
-                        let noise = hash_normal_mixed(self.actuation_keys[g], mixed);
-                        add(
-                            &mut cells[g * slots + slot],
-                            weight * (ACTUATION_SPREAD * noise).clamp(-1.0, 1.0),
-                        );
+                    // Slot, který kohorta neslyší, výběr nečte (slyšený × exp(…) je nula).
+                    if heard[g * slots + slot] <= 0.0 && current[g * slots + slot] <= 0.0 {
+                        continue;
                     }
+                    let mixed = splitmix64(columns.key[variant.index()]);
+                    let noise = hash_normal_mixed(self.actuation_keys[g], mixed);
+                    add(
+                        &mut cells[g * slots + slot],
+                        weight * (ACTUATION_SPREAD * noise).clamp(-1.0, 1.0),
+                    );
                 }
             }
             id::LEXICAL_CLARITY if has_table => {
                 let concept = world.variables.concept[variable.index()];
-                for g in 0..groups {
-                    for (slot, &variant) in variants.iter().enumerate() {
-                        if variant.is_none() || !columns.is_word(variant) {
-                            continue;
-                        }
-                        let at = g * slots + slot;
-                        if current[at] <= 0.0 && heard[at] <= 0.0 {
-                            continue;
-                        }
-                        let morpheme = MorphemeId(columns.morpheme[variant.index()] as u32);
-                        add(
-                            &mut cells[at],
-                            weight * self.lexical_clarity(g, morpheme, concept),
-                        );
+                for &(g, slot) in live.cells {
+                    let variant = variants[slot];
+                    if variant.is_none() || !columns.is_word(variant) {
+                        continue;
                     }
+                    let at = g * slots + slot;
+                    if current[at] <= 0.0 && heard[at] <= 0.0 {
+                        continue;
+                    }
+                    let morpheme = MorphemeId(columns.morpheme[variant.index()] as u32);
+                    add(
+                        &mut cells[at],
+                        weight * self.lexical_clarity(g, morpheme, concept),
+                    );
                 }
             }
             id::TABOO if self.any_taboo => {
                 let concept = world.variables.concept[variable.index()];
-                for g in 0..groups {
+                for &g in live.groups {
                     let group = self.inputs.axis[g];
                     if !world.groups.taboo[group.index()].contains(&concept) {
                         continue;
@@ -477,7 +507,7 @@ impl<'a> Pressures<'a> {
                 }
             }
             id::NORM if self.any_school => {
-                for g in 0..groups {
+                for &g in live.groups {
                     let group = self.inputs.axis[g];
                     let schooling = world.groups.schooling[group.index()];
                     let standard = world.groups.standard[group.index()];
@@ -513,7 +543,7 @@ impl<'a> Pressures<'a> {
                 }
             }
             id::AMBIGUITY | id::ECONOMY | id::EXPRESSIVITY | id::FUSION | id::LEARNABILITY => {
-                self.construction(pressure, weight, variable, variants, cells, groups, slots)
+                self.construction(pressure, weight, variable, variants, cells, live, slots)
             }
             _ => {}
         }
@@ -827,7 +857,7 @@ impl<'a> Pressures<'a> {
         variable: VariableId,
         variants: &[VariantId],
         cells: &mut [f64],
-        groups: usize,
+        live: Live<'_>,
         slots: usize,
     ) {
         let world = self.world;
@@ -839,23 +869,24 @@ impl<'a> Pressures<'a> {
         if pressure == id::LEARNABILITY && !self.any_l2 {
             return;
         }
-        for (slot, &variant) in variants.iter().enumerate() {
-            if variant.is_none() {
-                continue;
-            }
-            let Payload::Construction(construction) = &world.variants.payload[variant.index()]
-            else {
-                continue;
-            };
-            let construction = construction.clone();
-            for g in 0..groups {
+        {
+            for &(g, slot) in live.cells {
+                let variant = variants[slot];
+                if variant.is_none() {
+                    continue;
+                }
+                let Payload::Construction(construction) = &world.variants.payload[variant.index()]
+                else {
+                    continue;
+                };
+                let construction: &Construction = construction;
                 let score = match pressure {
                     id::ECONOMY => -params.economy_word_cost * f64::from(construction.words()),
                     id::FUSION => {
                         let rank = self.dominant_construction(g, function).map(rank_of);
                         match rank {
                             Some(current)
-                                if current != 0 && rank_of(&construction) == current + 1 =>
+                                if current != 0 && rank_of(construction) == current + 1 =>
                             {
                                 params.fusion_bonus
                             }
@@ -863,7 +894,7 @@ impl<'a> Pressures<'a> {
                         }
                     }
                     id::LEARNABILITY => {
-                        let bound = f64::from(u8::from(is_bound(&construction)));
+                        let bound = f64::from(u8::from(is_bound(construction)));
                         -params.learnability_strength * bound * self.l2[g]
                     }
                     id::EXPRESSIVITY => {
@@ -877,7 +908,7 @@ impl<'a> Pressures<'a> {
                             if unexpressed {
                                 need *= params.emergence_need_scale;
                             }
-                            need * self.strength(g, variant, &construction)
+                            need * self.strength(g, variant, construction)
                         }
                     }
                     _ => {
@@ -886,7 +917,7 @@ impl<'a> Pressures<'a> {
                         let compensated = self.catalog.compensates[function].clone();
                         for target in compensated {
                             let lost = self.weakness(g, target);
-                            if self.carries_role(&construction) {
+                            if self.carries_role(construction) {
                                 score -= params.order_rigidity * (1.0 - lost);
                             } else {
                                 score -= self.catalog.functions[target].need * lost;

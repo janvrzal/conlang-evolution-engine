@@ -107,7 +107,7 @@ pub fn check_elita_prejde(simulation: &Simulation) -> Report {
     let shifts: Vec<_> = simulation.history.of_kind("language_shift").collect();
     report.flag(
         "přešla právě skupina l0+e0",
-        shifts.len() == 1 && text(shifts[0], "group") == "l0+e0",
+        shifts.len() == 1 && text(&shifts[0], "group") == "l0+e0",
     );
     if let Some(first) = shifts.first() {
         let delay = first
@@ -234,7 +234,7 @@ fn shifted_years(seed: i64, loyalty: f64) -> Result<BTreeMap<String, f64>, Strin
         .of_kind("language_shift")
         .map(|event| {
             (
-                text(event, "group").to_owned(),
+                text(&event, "group").to_owned(),
                 event
                     .get("year")
                     .and_then(|y| y.as_f64())

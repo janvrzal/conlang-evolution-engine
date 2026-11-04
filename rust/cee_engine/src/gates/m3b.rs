@@ -116,7 +116,7 @@ fn taboo_replacements(taboo: bool, seed: i64) -> Result<BTreeSet<String>, String
         .history
         .of_kind("established")
         .filter(|event| text(event, "variable") == "lexical:dog")
-        .map(|event| text(event, "variant").to_owned())
+        .map(|event| text(&event, "variant").to_owned())
         .collect())
 }
 

@@ -78,7 +78,7 @@ pub fn summarize(simulation: &Simulation) -> Value {
     // Počet inovací = počet různých variant podle druhu změny (jako v Pythonu: stejná varianta
     // ve víc skupinách nebo po zániku znovu se počítá jednou).
     for e in history.of_kind("innovation") {
-        change_of.insert(text(e, "variant"), text(e, "change"));
+        change_of.insert(text(&e, "variant"), text(&e, "change"));
     }
     let mut innovations: BTreeMap<String, u64> = BTreeMap::new();
     for change in change_of.values() {
@@ -87,15 +87,15 @@ pub fn summarize(simulation: &Simulation) -> Value {
     let by_change = |kind: &str| {
         let mut found: BTreeMap<String, u64> = BTreeMap::new();
         for e in history.of_kind(kind) {
-            if let Some(change) = change_of.get(&text(e, "variant")) {
+            if let Some(change) = change_of.get(&text(&e, "variant")) {
                 *found.entry(change.clone()).or_default() += 1;
             }
         }
         found
     };
     let mut kinds: BTreeMap<String, u64> = BTreeMap::new();
-    for e in &history.events {
-        let kind = text(e, "kind");
+    for e in history.events.iter() {
+        let kind = text(&e, "kind");
         if kind != "milestone" {
             *kinds.entry(kind).or_default() += 1;
         }

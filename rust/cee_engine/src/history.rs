@@ -48,10 +48,114 @@ pub struct Snapshot {
     pub distances: Option<Vec<f64>>,
 }
 
+/// Záznamy historie uložené kompaktně: každý záznam jako řádek JSON (klíče seřazené, přesně ten
+/// text, ze kterého se počítá otisk) v jednom řetězci, k tomu konec řádku a číslo druhu.
+/// Objekt se z řádku sestaví až při čtení (`iter`, `get`, `History::of_kind`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EventLog {
+    text: String,
+    ends: Vec<usize>,
+    kinds: Vec<u16>,
+    kind_names: Vec<String>,
+}
+
+impl EventLog {
+    pub fn len(&self) -> usize {
+        self.ends.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ends.is_empty()
+    }
+
+    pub fn push(&mut self, event: Map<String, Value>) {
+        let kind = event.get("kind").and_then(Value::as_str).unwrap_or("");
+        let number = match self.kind_names.iter().position(|name| name == kind) {
+            Some(found) => found,
+            None => {
+                self.kind_names.push(kind.to_owned());
+                self.kind_names.len() - 1
+            }
+        };
+        self.text
+            .push_str(&serde_json::to_string(&event).expect("JSON"));
+        self.ends.push(self.text.len());
+        self.kinds.push(number as u16);
+    }
+
+    pub fn extend(&mut self, events: impl IntoIterator<Item = Map<String, Value>>) {
+        for event in events {
+            self.push(event);
+        }
+    }
+
+    /// Řádek JSON záznamu číslo `index`.
+    pub fn line(&self, index: usize) -> &str {
+        let start = if index == 0 { 0 } else { self.ends[index - 1] };
+        &self.text[start..self.ends[index]]
+    }
+
+    pub fn lines(&self) -> impl Iterator<Item = &str> + '_ {
+        (0..self.len()).map(|index| self.line(index))
+    }
+
+    /// Záznam číslo `index` jako objekt.
+    pub fn get(&self, index: usize) -> Option<Map<String, Value>> {
+        (index < self.len())
+            .then(|| serde_json::from_str(self.line(index)).expect("záznam historie je JSON"))
+    }
+
+    /// Všechny záznamy po řadě jako objekty.
+    pub fn iter(&self) -> impl Iterator<Item = Map<String, Value>> + '_ {
+        (0..self.len()).filter_map(|index| self.get(index))
+    }
+
+    /// Záznamy daného druhu; ostatní řádky se nerozebírají.
+    pub fn of_kind<'a>(&'a self, kind: &str) -> impl Iterator<Item = Map<String, Value>> + 'a {
+        let wanted = self.kind_names.iter().position(|name| name == kind);
+        (0..self.len())
+            .filter(move |&index| Some(self.kinds[index] as usize) == wanted)
+            .filter_map(|index| self.get(index))
+    }
+}
+
+impl std::ops::Index<usize> for EventLog {
+    type Output = str;
+
+    /// Řádek JSON záznamu (objekt viz [`EventLog::get`]).
+    fn index(&self, index: usize) -> &str {
+        self.line(index)
+    }
+}
+
+/// Kontrolní body ukládají záznamy jako jediný řetězec s polem JSON.
+impl Serialize for EventLog {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut text = String::with_capacity(self.text.len() + self.len() + 2);
+        text.push('[');
+        for (index, line) in self.lines().enumerate() {
+            if index > 0 {
+                text.push(',');
+            }
+            text.push_str(line);
+        }
+        text.push(']');
+        serializer.serialize_str(&text)
+    }
+}
+
+impl<'de> Deserialize<'de> for EventLog {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let events: Vec<Map<String, Value>> = crate::json_string::deserialize(deserializer)?;
+        let mut log = EventLog::default();
+        log.extend(events);
+        Ok(log)
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct History {
-    #[serde(with = "crate::json_string")]
-    pub events: Vec<Map<String, Value>>,
+    pub events: EventLog,
     pub snapshots: Vec<Snapshot>,
     /// (varianta, skupina) → [(tik, frekvence)]; plní se jen na vyžádání.
     pub trajectories: std::collections::BTreeMap<(VariantId, GroupId), Vec<(u32, f64)>>,
@@ -78,22 +182,14 @@ impl History {
         event
     }
 
-    pub fn of_kind<'a>(
-        &'a self,
-        kind: &'a str,
-    ) -> impl Iterator<Item = &'a Map<String, Value>> + 'a {
-        self.events
-            .iter()
-            .filter(move |e| e.get("kind").and_then(Value::as_str) == Some(kind))
+    pub fn of_kind<'a>(&'a self, kind: &str) -> impl Iterator<Item = Map<String, Value>> + 'a {
+        self.events.of_kind(kind)
     }
 
     /// Řádky logu: JSON s řazenými klíči (`json.dumps(sort_keys=True)`).
     pub fn lines(&self) -> Vec<String> {
         // `serde_json::Map` bez `preserve_order` drží klíče seřazené.
-        self.events
-            .iter()
-            .map(|e| serde_json::to_string(e).expect("JSON"))
-            .collect()
+        self.events.lines().map(str::to_owned).collect()
     }
 
     /// Otisk celého logu (SHA-256 nad řádky); dva běhy se stejným semínkem ho mají shodný.
@@ -102,7 +198,7 @@ impl History {
     /// otisk je proto určený k porovnání běhů Rustu mezi sebou, ne s otiskem Pythonu.
     pub fn digest(&self) -> String {
         let mut hash = Sha256::new();
-        for line in self.lines() {
+        for line in self.events.lines() {
             hash.update(line.as_bytes());
             hash.update(b"\n");
         }
