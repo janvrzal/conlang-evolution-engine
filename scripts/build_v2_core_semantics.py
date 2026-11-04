@@ -21,7 +21,6 @@ from pathlib import Path
 
 import networkx as nx
 
-
 HOME = Path.home() / ".cee"
 DATSEMSHIFT = HOME / "data" / "datsemshift" / "cldf" / "parameters.csv"
 COMBINED = HOME / "semantics" / "graph.graphml"

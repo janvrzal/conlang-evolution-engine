@@ -11,7 +11,16 @@ from importlib import resources
 import pytest
 
 from cee.v2 import runner
-from cee.v2.spec import EVENT_KINDS, SpecError, WorldSpec, errors, levels, parse, vocabulary_options, warnings
+from cee.v2.spec import (
+    EVENT_KINDS,
+    SpecError,
+    WorldSpec,
+    errors,
+    levels,
+    parse,
+    vocabulary_options,
+    warnings,
+)
 
 try:
     binding = runner.native()

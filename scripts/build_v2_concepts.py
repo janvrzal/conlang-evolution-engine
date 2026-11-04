@@ -29,7 +29,6 @@ import json
 from collections import Counter
 from pathlib import Path
 
-
 WOLD = Path.home() / ".cee" / "data" / "wold" / "wold-master" / "cldf"
 OUT = Path(__file__).resolve().parents[1] / "src" / "cee" / "data" / "v2_concepts.json"
 DEFAULT_CONCEPTS = json.loads(
