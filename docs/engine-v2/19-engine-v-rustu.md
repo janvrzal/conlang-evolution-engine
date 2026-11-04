@@ -165,7 +165,8 @@ stejným výsledkem jako souvislý běh (test `kontrolni_bod_a_pokracovani`). Fr
 
 Rust čte `v2_concepts.json`, `v2_concept_frequencies.json`, `v2_core_semantics.json`,
 `v2_catalog_semantics.json` a `v2_standing_variation.json` ze `src/cee/data/` a nově vyrobené
-`v2_segments.json`, `v2_grammar.json`, `v2_defaults.json` (skript `scripts/export_v2_data.py`).
+`v2_segments.json`, `v2_grammar.json`, `v2_defaults.json` (skript `scripts/export_v2_data.py`). Metaparametry
+(`v2_parameters.json`) mají vlastní oddíl níže („Metaparametry“).
 **Volba: vložení do binárky (`include_str!`)**: binárka a vazba pro server jsou samostatné, bez cesty k datům
 za běhu a bez rozjetí verze dat a kódu; cena je velikost (asi 3 MB) a sestavení po změně dat.
 
@@ -616,3 +617,52 @@ Co z toho plyne pro R2a (zjištěno čtením metrik, v enginu se nic neměnilo):
 
 Vlastnost, která v Pythonu je a v Rustu se v bránách nepoužívá: `World.concept_frequencies` jako slovník je v Rustu sloupec
 `ConceptColumns::frequency` s `NaN` pro nenastavené; brány berou pojmy s nenastavenou frekvencí za neexistující.
+
+## Metaparametry: jeden zdroj pravdy
+
+Metaparametry (`Parameters`, 66 polí: konstanty dynamiky, tabulky slovních úrovní, váhy tlaků, kanály a domény) se převezmou
+**jednou při stavbě světa** a během běhu se nemění; později se budou nastavovat v UI. Výchozí hodnoty, druhy, popisy, skupiny
+a meze jsou **jen v jednom souboru**, `src/cee/data/v2_parameters.json`. Skript `scripts/export_v2_parameters.py` ho vyrobil
+jednorázově z dřívějšího `parameters.py` (hodnoty a komentáře `#:`); od té doby je soubor zdroj a upravuje se přímo,
+skript už nemá co číst.
+
+**Kdo ho čte.** Rust: `Parameters::default()` ho sestaví z vloženého textu (`data::PARAMETERS_JSON`, `include_str!`, jednou
+a pak kopíruje), v kódu nezůstaly žádné opsané hodnoty. `Parameters::from_overrides` (přepisy z `WorldSpec.parameters`)
+ověří každý přepis podle souboru a vrátí chybu s cestou `parameters.<jméno>[.<klíč>…]`: neznámé jméno, špatný druh (`očekáváno
+číslo`, `očekávána tabulka …`), jméno mimo `keys`/`inner_keys`, hodnota mimo `min`/`max`; pak `normalize` doplní `channel_domains`
+výchozími váhami a ověří pole gramatiky. Python: `cee.v2.parameters` bere výchozí hodnoty dataclassu z téhož souboru
+(`_number`, `_table`; dataclass zůstane, dokud existuje Python engine), `check_override(jméno, hodnota)` dělá stejnou kontrolu
+jako Rust a `spec._parameters` z ní skládá `Issue` s cestou `parameters.<jméno>`. Server: `GET /api/v2/schema` vrací navíc
+`parameters` (`groups` a `items`).
+
+**Formát souboru** (`"format": "cee-v2-parameters/1"`):
+
+```json
+{
+ "format": "cee-v2-parameters/1",
+ "groups": [{"id": "sound", "title": "Zvukové změny"}, …],
+ "parameters": [
+  {"name": "capital_prestige", "kind": "number", "default": 2.0, "description": "…", "group": "society"},
+  {"name": "channel_domains", "kind": "table2", "default": {"elite": {"power": 3.0, …}, …}, "description": "…",
+   "group": "contact", "keys": ["neighbor", …], "inner_keys": ["core", …], "min": 0.0}
+ ]
+}
+```
+
+* `name`: jméno pole `Parameters` (i klíč v `WorldSpec.parameters`); `description`: český popis; `group`: `id` ze `groups`
+  (pro řazení a nadpisy v UI); `default`: výchozí hodnota podle druhu.
+* `kind`: `number` (číslo), `table` (jméno → číslo), `table2` (jméno → jméno → číslo), `level_table` a `level_table2`
+  (totéž, ale jména jsou slovní úrovně, které autor světa zadává jménem, např. `centralization_levels`; UI z nich nabízí výběr).
+  Přepis tabulky nahradí celou tabulku (kromě `channel_domains`, kde se chybějící položky doplní výchozími).
+* Meze, jen kde je dosavadní kód vynucuje (jinde klíč chybí): `keys` (povolená vnější jména), `inner_keys` (povolená vnitřní
+  jména), `min`/`max` (číselné meze všech hodnot). Dnes: `channel_domains` (kanály, domény, váha nejméně 0) a `grammar`
+  (`inner_keys` = `need`, `context`, `coverage`).
+
+**`GET /api/v2/schema`**, klíč `parameters`: `{"groups": [...], "items": [...]}`; každá položka je záznam ze souboru plus
+`levels` (seřazená jména úrovní) u `level_table`/`level_table2`. UI zobrazí položky podle skupin, upravené hodnoty pošle
+v `WorldSpec.parameters` jako dřív; `POST /api/v2/validate` vrátí chyby s cestou `parameters.<jméno>`.
+
+**Testy.** Rust `tests/parameters.rs` (soubor pokrývá všech 66 polí, výchozí hodnoty, přepis, chyby jména a druhu, meze,
+shoda `keys`/`inner_keys` s konstantami), `tests/vectors.rs::vychozi_parametry` (shoda s hodnotami Pythonu). Python
+`tests/v2/test_v2_parameters.py`, `test_v2_spec.py` (přepisy), `tests/test_api_v2.py` (schéma). Jednorázově se před smazáním
+opsaných hodnot ověřilo, že všech 66 výchozích hodnot souboru shoduje s dřívějším Pythonem i s Rustem.
