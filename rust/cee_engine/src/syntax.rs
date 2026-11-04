@@ -473,7 +473,7 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
                     .filter(|&m| world.morphemes.contains(m));
                 (name, found)
             };
-        let totals = morphology::concept_totals(world, group);
+        let totals = morphology::concept_totals(world, group).into_owned();
         let mut rewritten = 0_u32;
         let mut kept = 0_u32;
         for root in roots {

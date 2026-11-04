@@ -99,4 +99,9 @@ pub struct GrammarCodeState {
     /// z kontrolního bodu se postaví znovu.
     #[serde(skip)]
     pub index: crate::views::ClassIndex,
+    /// Totéž pro dominantní kořeny: odvozeniny, součty četností pojmů, míry sémantických změn.
+    #[serde(skip)]
+    pub dominant: crate::views::DominantIndex,
+    #[serde(skip)]
+    pub rates: crate::views::SemanticRates,
 }

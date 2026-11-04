@@ -533,7 +533,7 @@ pub fn form_cells(
     columns: &[usize],
 ) -> Vec<Option<Assessment>> {
     form_cells_with(world, variable, columns, |column| {
-        Cow::Owned(concept_totals(world, world.live.group_ids[column]))
+        concept_totals(world, world.live.group_ids[column])
     })
 }
 

@@ -551,6 +551,12 @@ pub fn verifying() -> bool {
 pub fn build_missing(world: &mut World) {
     for group in world.group_ids() {
         let code = world.groups.main_code(group);
+        if !code.phonology.grammar.dominant.built {
+            let dominant = DominantIndex::build(world, group);
+            world.groups.main_code_mut(group).phonology.grammar.dominant = dominant;
+            crate::changes::lexicon::build_rates(world, group);
+        }
+        let code = world.groups.main_code(group);
         if code.phonology.grammar.index.built || code.phonology.vocabulary.is_empty() {
             continue;
         }
@@ -712,6 +718,7 @@ pub fn verify_group(world: &World, group: GroupId) -> Result<(), String> {
     if !index.built {
         return Ok(());
     }
+    verify_dominant(world, group)?;
     let reference = reference::compute(world, group);
     let name = world.group_name(group).to_owned();
     // Počty koncovek.
@@ -766,4 +773,222 @@ pub fn verify(world: &World) -> Result<(), String> {
         verify_group(world, group)?;
     }
     Ok(())
+}
+
+// --- dominantní kořeny: odvozeniny, součty četností a míry sémantických změn ---------------
+
+use crate::ids::ConceptId;
+
+/// Počet druhů sémantických změn (`changes::lexicon::Semantic`).
+pub const SEMANTIC_KINDS: usize = 7;
+
+/// Pohledy odvozené z dominantních kořenů kódu; upravují se při každé změně dominantního kořene
+/// pojmu ([`set_dominant`]).
+#[derive(Clone, Debug, Default)]
+pub struct DominantIndex {
+    built: bool,
+    /// Počet pojmů registru, pro který je pohled postavený.
+    concepts: usize,
+    /// Základní pojem → (pojem, kořen) odvozenin z něj, seřazeno podle jména pojmu.
+    derived: Vec<Vec<(ConceptId, MorphemeId)>>,
+    /// Kořen → pojmy, které vyjadřuje (vzestupně podle čísla pojmu).
+    by_root: HashMap<MorphemeId, Vec<ConceptId>>,
+    /// Kořen → součet četností jeho pojmů (v pořadí čísel pojmů, jako při výpočtu od nuly).
+    totals: HashMap<MorphemeId, f64>,
+}
+
+/// Míry sémantických změn podle druhu a pojmu (`None` = pojem nemá cestu); verze druhu roste
+/// jen se změnou některé míry.
+#[derive(Clone, Debug, Default)]
+pub struct SemanticRates {
+    pub built: bool,
+    pub concepts: usize,
+    pub rates: Vec<Vec<Option<f64>>>,
+    pub versions: [u64; SEMANTIC_KINDS],
+}
+
+/// Základní pojem odvozeniny, kterou kořen je (`_derivations`).
+pub fn derivation_base(world: &World, root: MorphemeId) -> Option<usize> {
+    let meta = &world.morphemes.meta[root.index()];
+    if meta.etymology.as_deref() == Some("derivation") && meta.sources.len() == 1 {
+        world
+            .registry
+            .concepts
+            .get(&meta.sources[0])
+            .map(|b| b as usize)
+    } else {
+        None
+    }
+}
+
+fn concept_name_cmp(world: &World, a: ConceptId, b: ConceptId) -> std::cmp::Ordering {
+    world
+        .registry
+        .concepts
+        .name(a.0)
+        .cmp(world.registry.concepts.name(b.0))
+}
+
+impl DominantIndex {
+    pub fn is_built(&self) -> bool {
+        self.built
+    }
+
+    /// Odvozeniny podle základního pojmu.
+    pub fn derived(&self) -> &[Vec<(ConceptId, MorphemeId)>] {
+        &self.derived
+    }
+
+    /// Součty četností pojmů podle dominantního kořene.
+    pub fn totals(&self) -> &HashMap<MorphemeId, f64> {
+        &self.totals
+    }
+
+    fn total_of(world: &World, concepts: &[ConceptId]) -> f64 {
+        let mut total = 0.0;
+        for &concept in concepts {
+            total += world.concepts.frequency_of(concept);
+        }
+        total
+    }
+
+    /// Postaví pohled od nuly z dominantních kořenů kódu.
+    pub fn build(world: &World, group: GroupId) -> DominantIndex {
+        let code = world.groups.main_code(group);
+        let size = world.registry.concepts.len();
+        let mut index = DominantIndex {
+            built: true,
+            concepts: size,
+            derived: vec![Vec::new(); size],
+            ..DominantIndex::default()
+        };
+        let mut items: Vec<(ConceptId, MorphemeId)> = Vec::new();
+        for (at, &root) in code.phonology.dominant.iter().enumerate() {
+            if root.is_none() {
+                continue;
+            }
+            index
+                .by_root
+                .entry(root)
+                .or_default()
+                .push(ConceptId::new(at));
+            items.push((ConceptId::new(at), root));
+        }
+        for (root, concepts) in &index.by_root {
+            index
+                .totals
+                .insert(*root, DominantIndex::total_of(world, concepts));
+        }
+        items.sort_by(|a, b| concept_name_cmp(world, a.0, b.0));
+        for (other, root) in items {
+            if let Some(base) = derivation_base(world, root) {
+                index.derived[base].push((other, root));
+            }
+        }
+        index
+    }
+
+    /// Dominantní kořen pojmu se změnil z `old` na `new`.
+    fn change(&mut self, world: &World, concept: ConceptId, old: MorphemeId, new: MorphemeId) {
+        if !old.is_none() {
+            if let Some(base) = derivation_base(world, old) {
+                self.derived[base].retain(|&(c, _)| c != concept);
+            }
+            if let Some(list) = self.by_root.get_mut(&old) {
+                list.retain(|&c| c != concept);
+                if list.is_empty() {
+                    self.by_root.remove(&old);
+                    self.totals.remove(&old);
+                } else {
+                    let total = DominantIndex::total_of(world, list);
+                    self.totals.insert(old, total);
+                }
+            }
+        }
+        if !new.is_none() {
+            if let Some(base) = derivation_base(world, new) {
+                let list = &mut self.derived[base];
+                let at = list.partition_point(|&(c, _)| {
+                    concept_name_cmp(world, c, concept) == std::cmp::Ordering::Less
+                });
+                list.insert(at, (concept, new));
+            }
+            let list = self.by_root.entry(new).or_default();
+            let at = list.partition_point(|&c| c < concept);
+            list.insert(at, concept);
+            let total = DominantIndex::total_of(world, list);
+            self.totals.insert(new, total);
+        }
+    }
+}
+
+/// Dominantní kořen pojmu kódu se změnil (volá se po zápisu do `phonology.dominant`).
+pub fn dominant_changed(
+    world: &mut World,
+    group: GroupId,
+    concept: ConceptId,
+    old: MorphemeId,
+    new: MorphemeId,
+) {
+    let mut index =
+        std::mem::take(&mut world.groups.main_code_mut(group).phonology.grammar.dominant);
+    if index.built && index.concepts == world.registry.concepts.len() {
+        index.change(world, concept, old, new);
+    } else {
+        index = DominantIndex::build(world, group);
+    }
+    world.groups.main_code_mut(group).phonology.grammar.dominant = index;
+    crate::changes::lexicon::update_rates(world, group, concept, old, new);
+}
+
+/// Změní dominantní kořen pojmu kódu a dorovná odvozené pohledy; `false`, když se nic nemění.
+pub fn set_dominant(
+    world: &mut World,
+    group: GroupId,
+    concept: ConceptId,
+    root: MorphemeId,
+) -> bool {
+    let state = &mut world.groups.main_code_mut(group).phonology;
+    let old = state.dominant_of(concept);
+    if !state.set_dominant(concept, root) {
+        return false;
+    }
+    dominant_changed(world, group, concept, old, root);
+    true
+}
+
+/// Součty četností pojmů podle dominantního kořene kódu: průběžný pohled, nebo (dokud není
+/// postavený) výpočet od nuly.
+pub fn totals(world: &World, group: GroupId) -> std::borrow::Cow<'_, HashMap<MorphemeId, f64>> {
+    let index = &world.groups.main_code(group).phonology.grammar.dominant;
+    if index.built {
+        std::borrow::Cow::Borrowed(&index.totals)
+    } else {
+        std::borrow::Cow::Owned(DominantIndex::build(world, group).totals)
+    }
+}
+
+/// Porovná odvozeniny a součty s výpočtem od nuly.
+fn verify_dominant(world: &World, group: GroupId) -> Result<(), String> {
+    let code = world.groups.main_code(group);
+    let index = &code.phonology.grammar.dominant;
+    if !index.built {
+        return Err("pohled dominantních kořenů není postavený".into());
+    }
+    let name = world.group_name(group);
+    let fresh = DominantIndex::build(world, group);
+    if index.derived != fresh.derived {
+        return Err(format!("{name}: odvozeniny se liší od výpočtu od nuly"));
+    }
+    if index.totals.len() != fresh.totals.len()
+        || index
+            .totals
+            .iter()
+            .any(|(k, v)| fresh.totals.get(k).map(|f| f.to_bits()) != Some(v.to_bits()))
+    {
+        return Err(format!(
+            "{name}: součty četností se liší od výpočtu od nuly"
+        ));
+    }
+    crate::changes::lexicon::verify_rates(world, group)
 }

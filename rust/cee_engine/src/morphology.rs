@@ -667,18 +667,12 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
 // --- četnost užití tvarů --------------------------------------------------------------------
 
 /// Součet četností pojmů, které vyjadřuje dominantní kořen (kořen → součet), pro jeden kód.
-pub fn concept_totals(world: &World, group: GroupId) -> HashMap<MorphemeId, f64> {
-    let _t = crate::timing::scope("views/concept-totals");
-    let code = world.groups.main_code(group);
-    let mut totals: HashMap<MorphemeId, f64> = HashMap::new();
-    for (at, &root) in code.phonology.dominant.iter().enumerate() {
-        if root.is_none() {
-            continue;
-        }
-        *totals.entry(root).or_insert(0.0) +=
-            world.concepts.frequency_of(crate::ids::ConceptId::new(at));
-    }
-    totals
+/// Udržuje se průběžně ([`crate::views::DominantIndex`]).
+pub fn concept_totals(
+    world: &World,
+    group: GroupId,
+) -> std::borrow::Cow<'_, HashMap<MorphemeId, f64>> {
+    crate::views::totals(world, group)
 }
 
 /// Jak často kód tvar užívá (`world.usage_frequency`): součet četností pojmů, které vyjadřuje;
