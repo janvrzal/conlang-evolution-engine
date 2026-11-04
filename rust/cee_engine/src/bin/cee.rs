@@ -5,18 +5,20 @@
 //! cee scenario <jméno> --until <rok> [-o export.json] [--threads N]
 //! cee export-tick0 <scénář|spec.json> [-o tick0.json]
 //! cee scenarios
+//! cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]
 //! ```
 
 use std::process::ExitCode;
 
 use cee_engine::checkpoint::Checkpoint;
 use cee_engine::export;
+use cee_engine::gates;
 use cee_engine::scenarios;
 use cee_engine::spec::{self, WorldSpec};
 use cee_engine::{Simulation, SimulationConfig};
 
 fn usage() -> String {
-    "Použití:\n  cee run <spec.json> -o export.json [--threads N]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios".to_owned()
+    "Použití:\n  cee run <spec.json> -o export.json [--threads N]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios\n  cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]".to_owned()
 }
 
 struct Options {
@@ -25,6 +27,10 @@ struct Options {
     until: Option<f64>,
     threads: Option<usize>,
     checkpoint: Option<String>,
+    seeds: Option<String>,
+    only: Option<String>,
+    metrics: bool,
+    list: bool,
 }
 
 fn parse(args: &[String]) -> Result<Options, String> {
@@ -34,6 +40,10 @@ fn parse(args: &[String]) -> Result<Options, String> {
         until: None,
         threads: None,
         checkpoint: None,
+        seeds: None,
+        only: None,
+        metrics: false,
+        list: false,
     };
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -59,6 +69,10 @@ fn parse(args: &[String]) -> Result<Options, String> {
                 )
             }
             "--checkpoint" => options.checkpoint = Some(value("--checkpoint")?),
+            "--seeds" => options.seeds = Some(value("--seeds")?),
+            "--only" => options.only = Some(value("--only")?),
+            "--metrics" => options.metrics = true,
+            "--list" => options.list = true,
             other if other.starts_with('-') => return Err(format!("neznámý přepínač {other}")),
             other => options.positional.push(other.to_owned()),
         }
@@ -132,6 +146,24 @@ fn main() -> ExitCode {
                 };
                 let simulation = Simulation::new(world, SimulationConfig::default(), events)?;
                 write(&options.output, &export::export(&simulation, true))
+            }
+            "gates" => {
+                if options.list {
+                    print!("{}", gates::audit::list());
+                    return Ok(());
+                }
+                let audit = gates::audit::AuditOptions {
+                    seeds: gates::parse_seeds(options.seeds.as_deref().unwrap_or("101..120"))?,
+                    only: options
+                        .only
+                        .as_deref()
+                        .map(|text| text.split(',').map(|s| s.trim().to_owned()).collect())
+                        .unwrap_or_default(),
+                    metrics: options.metrics,
+                    jsonl: options.output.clone(),
+                };
+                print!("{}", gates::audit::run(&audit)?);
+                Ok(())
             }
             "scenarios" => {
                 println!("{}", scenarios::SCENARIO_NAMES.join("\n"));
