@@ -485,6 +485,24 @@ impl Bank {
         Ok(Outcome::Done(out))
     }
 
+    /// Výsledky procesu pro tvary, jsou-li **všechny** už známé (jen čtení; stejné hodnoty, jaké by
+    /// vrátilo [`Bank::results`], které by nic nezměnilo). Jinak `None`.
+    pub fn known_results(&self, row: usize, rule: u8, form_ids: &[i64]) -> Option<Vec<i64>> {
+        let size = self.len();
+        let mut out = Vec::with_capacity(form_ids.len());
+        for &id in form_ids {
+            if id < 0 || id as usize >= size {
+                return None;
+            }
+            let found = self.stored(row, rule, id as usize);
+            if found == UNKNOWN {
+                return None;
+            }
+            out.push(found);
+        }
+        Some(out)
+    }
+
     /// Výsledek pro jeden tvar bez režie polí. Vrací už známý výsledek,
     /// ``NEEDS_MAP``, když Python musí napřed doplnit mapu hlásek, nebo
     /// ``CREATED``, když vznikl nový tvar, který si má Python převzít

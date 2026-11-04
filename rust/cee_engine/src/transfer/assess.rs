@@ -233,7 +233,7 @@ fn pair_cost(world: &World, group: GroupId, sample: &Sample, first: usize, secon
 
 /// Hodnocení procesu ve skupině nad jejím vzorkem (`assess`), část první: výsledky procesu
 /// pro slova vzorku. Mění banku (nové tvary, mapy hlásek), proto běží sekvenčně v kanonickém
-/// pořadí; vrací tvary slov po změně a banku s předpočítanou příznakovostí těchto tvarů.
+/// pořadí; vrací tvary slov po změně.
 fn changed_forms(
     world: &mut World,
     sample: &Sample,
@@ -241,14 +241,12 @@ fn changed_forms(
     row: usize,
 ) -> Result<Vec<i64>, String> {
     let rule = world.groups.main_code(group).stress_rule.as_rule();
-    let changed = loop {
+    loop {
         match world.bank.bank.results(row, rule, &sample.ids)? {
-            Outcome::Done(changed) => break changed,
+            Outcome::Done(changed) => return Ok(changed),
             Outcome::Needs(segments) => resolve_maps(world, &[(row, segments)])?,
         }
-    };
-    world.bank.bank.ensure_marked(&sample.ids, &changed);
-    Ok(changed)
+    }
 }
 
 /// Hodnocení procesu ve skupině, část druhá: jen čtení (svět i banka), proto může běžet
@@ -432,19 +430,31 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
         for job in &jobs {
             rows.push(row_of(world, job.process)?);
         }
-        let mut items: Vec<Item> = Vec::with_capacity(wanted.len());
-        for &(at, group, version) in &wanted {
-            let row = rows[at];
-            if samples[group.index()].ids.is_empty() {
-                items.push(Item {
-                    job: at,
-                    group,
-                    version,
-                    changed: Vec::new(),
-                });
-                continue;
+        // Už známé výsledky procesu se přečtou souběžně (jen čtení banky); zbytek sekvenčně v pořadí.
+        let known: Vec<Option<Vec<i64>>> = {
+            let bank = &world.bank.bank;
+            let samples = &samples;
+            let rows = &rows;
+            let find = |&(at, group, _): &(usize, GroupId, u64)| {
+                let ids = &samples[group.index()].ids;
+                if ids.is_empty() {
+                    return Some(Vec::new());
+                }
+                let rule = world.groups.main_code(group).stress_rule.as_rule();
+                bank.known_results(rows[at], rule, ids)
+            };
+            if parallel::worth_splitting(wanted.len() * SAMPLE_WORDS) {
+                wanted.par_iter().map(find).collect()
+            } else {
+                wanted.iter().map(find).collect()
             }
-            let changed = changed_forms(world, &samples[group.index()], group, row)?;
+        };
+        let mut items: Vec<Item> = Vec::with_capacity(wanted.len());
+        for (&(at, group, version), known) in wanted.iter().zip(known) {
+            let changed = match known {
+                Some(changed) => changed,
+                None => changed_forms(world, &samples[group.index()], group, rows[at])?,
+            };
             items.push(Item {
                 job: at,
                 group,
@@ -471,6 +481,13 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                 items.iter().map(one).collect()
             }
         };
+        // Příznakovost tvarů, kterou souběh dopočítával, se uloží (v pořadí položek).
+        for item in &items {
+            let ids = &samples[item.group.index()].ids;
+            if !world.bank.bank.all_marked(ids, &item.changed) {
+                world.bank.bank.ensure_marked(ids, &item.changed);
+            }
+        }
         for (item, value) in items.iter().zip(values) {
             world.transfer.assessments.put(
                 item.group,
