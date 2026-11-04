@@ -1,7 +1,7 @@
 //! Příkazový řádek enginu: `cee run`, `cee scenario`, `cee export-tick0`.
 //!
 //! ```text
-//! cee run <spec.json> -o export.json [--threads N]
+//! cee run <spec.json> -o export.json [--threads N] [--phase-times]
 //! cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--history log.jsonl]
 //! cee export-tick0 <scénář|spec.json> [-o tick0.json]
 //! cee scenarios
@@ -19,7 +19,7 @@ use cee_engine::spec::{self, WorldSpec};
 use cee_engine::{Simulation, SimulationConfig};
 
 fn usage() -> String {
-    "Použití:\n  cee run <spec.json> -o export.json [--threads N]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--history log.jsonl]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios\n  cee behavior [scénář ...] [--seeds 1..3] [-o behavior.json]\n  cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]".to_owned()
+    "Použití:\n  cee run <spec.json> -o export.json [--threads N] [--phase-times]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--phase-times] [--history log.jsonl]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios\n  cee behavior [scénář ...] [--seeds 1..3] [-o behavior.json]\n  cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]".to_owned()
 }
 
 struct Options {
@@ -33,6 +33,7 @@ struct Options {
     only: Option<String>,
     metrics: bool,
     list: bool,
+    phase_times: bool,
 }
 
 fn parse(args: &[String]) -> Result<Options, String> {
@@ -47,6 +48,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         only: None,
         metrics: false,
         list: false,
+        phase_times: false,
     };
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -77,6 +79,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "--only" => options.only = Some(value("--only")?),
             "--metrics" => options.metrics = true,
             "--list" => options.list = true,
+            "--phase-times" => options.phase_times = true,
             other if other.starts_with('-') => return Err(format!("neznámý přepínač {other}")),
             other => options.positional.push(other.to_owned()),
         }
@@ -107,6 +110,7 @@ fn run_simulation(mut simulation: Simulation, until: f64, options: &Options) -> 
         text.push('\n');
         std::fs::write(path, text).map_err(|e| format!("{path}: {e}"))?;
     }
+    eprint!("{}", cee_engine::timing::report());
     eprintln!(
         "hotovo: rok {}, {} kroků, {} záznamů, otisk {}",
         simulation.year(),
@@ -122,8 +126,13 @@ fn main() -> ExitCode {
     let result = (|| -> Result<(), String> {
         let (command, rest) = args.split_first().ok_or_else(usage)?;
         let options = parse(rest)?;
-        if let Some(threads) = options.threads {
-            cee_engine::parallel::set_threads(threads);
+        cee_engine::timing::enable_from_env();
+        if options.phase_times {
+            cee_engine::timing::enable();
+        }
+        match options.threads {
+            Some(threads) => cee_engine::parallel::set_threads(threads),
+            None => cee_engine::parallel::init_default(0),
         }
         match command.as_str() {
             "run" => {

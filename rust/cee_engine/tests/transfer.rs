@@ -224,7 +224,7 @@ fn norm_zvyhodni_kodifikovanou_variantu_uumerne_skolni_docazce() {
     let compute = |world: &World, block: &cee_engine::model::pools::PoolBlock, row: usize| {
         let inputs = prepare(world, &params, 1);
         let pressure_plan = plan(&world.params).unwrap();
-        let mut pressures = Pressures::new(world, &inputs, &pressure_plan).unwrap();
+        let pressures = Pressures::new(world, &inputs, &pressure_plan).unwrap();
         let cells = axis.len() * block.capacity;
         let mut current = vec![0.0; cells];
         let mut previous = vec![0.0; cells];
@@ -298,7 +298,7 @@ fn tabu_opotrebuje_inovovane_slovo_po_deseti_generacich() {
     let compute = |world: &World, tick: u32, block: &cee_engine::model::pools::PoolBlock, row| {
         let inputs = prepare(world, &params, tick);
         let pressure_plan = plan(&world.params).unwrap();
-        let mut pressures = Pressures::new(world, &inputs, &pressure_plan).unwrap();
+        let pressures = Pressures::new(world, &inputs, &pressure_plan).unwrap();
         let cells = axis.len() * block.capacity;
         let mut current = vec![0.0; cells];
         let mut previous = vec![0.0; cells];
@@ -399,7 +399,7 @@ fn ekonomie_tresta_volny_opis_a_nic_jineho_nedela() {
     };
     let inputs = prepare(&world, &params, 1);
     let pressure_plan = plan(&world.params).unwrap();
-    let mut pressures = Pressures::new(&world, &inputs, &pressure_plan).unwrap();
+    let pressures = Pressures::new(&world, &inputs, &pressure_plan).unwrap();
     let (block, row) = world
         .live
         .iter_blocks()

@@ -13,9 +13,11 @@
 //!    ([`ordered_sum`]), ne podle toho, jak se práce rozdělila na vlákna.
 //!
 //! Počet vláken je tak jen otázka rychlosti: výsledek je stejný pro 1 i 64 vláken
-//! (test `tests/determinism.rs`). Jedno použití na ukázku: fáze inovací
-//! (`phases::innovation`), kde se míry počítají přes skupiny. Počet vláken řídí obvyklá
-//! proměnná `RAYON_NUM_THREADS` (nebo `cee --threads N`).
+//! (test `tests/determinism.rs`). Počet vláken řídí obvyklá proměnná `RAYON_NUM_THREADS`
+//! (nebo `cee --threads N`); bez nich [`default_threads`]. Co běží souběžně, popisuje
+//! `docs/engine-v2/19-engine-v-rustu.md`, oddíl 5.
+
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use rayon::prelude::*;
 
@@ -36,4 +38,44 @@ pub fn set_threads(threads: usize) {
     let _ = rayon::ThreadPoolBuilder::new()
         .num_threads(threads.max(1))
         .build_global();
+}
+
+/// Výchozí počet vláken: všechna dostupná jádra bez `reserve` jader (nejméně jedno vlákno).
+///
+/// CLI nechává `reserve = 0` (běh je jediná úloha stroje), server `reserve = 1`, aby zbylo
+/// jádro pro UI, prohlížeč a samotný server, které by jinak soupeřily s vlákny enginu o čas.
+/// Proměnná `RAYON_NUM_THREADS` má přednost (rozhoduje uživatel).
+pub fn default_threads(reserve: usize) -> usize {
+    if let Some(chosen) = std::env::var("RAYON_NUM_THREADS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|&value| value > 0)
+    {
+        return chosen;
+    }
+    let cores = std::thread::available_parallelism().map_or(1, usize::from);
+    cores.saturating_sub(reserve).max(1)
+}
+
+/// Nastaví globální počet vláken na [`default_threads`] (jen jednou za proces).
+pub fn init_default(reserve: usize) {
+    set_threads(default_threads(reserve));
+}
+
+/// Nejmenší práce (buňky bloků v kroku), kterou se vyplatí rozdělit mezi vlákna; menší světy
+/// (pod ~10 skupin) běží na jednom vlákně bez režie rozdělení.
+pub const MIN_PARALLEL_CELLS: usize = 1 << 14;
+
+static MIN_CELLS: AtomicUsize = AtomicUsize::new(MIN_PARALLEL_CELLS);
+
+/// Změní práh rozdělení práce (jen pro testy: s nulou se dělí i malé světy, aby test
+/// determinismu opravdu prověřil souběh). Výsledek běhu práh nemění.
+pub fn set_min_parallel_cells(cells: usize) {
+    MIN_CELLS.store(cells, Ordering::Relaxed);
+}
+
+/// Vyplatí se práce o `cells` buňkách rozdělit mezi vlákna? Rozhoduje jen o rychlosti:
+/// kdo to používá, nesmí z odpovědi odvozovat výsledek.
+pub fn worth_splitting(cells: usize) -> bool {
+    rayon::current_num_threads() > 1 && cells >= MIN_CELLS.load(Ordering::Relaxed)
 }
