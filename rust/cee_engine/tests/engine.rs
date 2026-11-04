@@ -180,7 +180,7 @@ fn kontrolni_bod_a_pokracovani() {
 }
 
 #[test]
-fn spec_se_postavi_a_odmitne_nepodporovane() {
+fn spec_se_postavi_a_odmitne_chybne() {
     let text = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../src/cee/data/v2_example_world.json"
@@ -192,6 +192,8 @@ fn spec_se_postavi_a_odmitne_nepodporovane() {
     assert_eq!(events.len(), 8);
     let mut bigger = world_spec.clone();
     bigger.vocabulary = 200;
+    assert!(spec::build(&bigger).is_ok(), "větší slovník se staví");
+    bigger.vocabulary = 1_000_000;
     assert!(spec::build(&bigger).is_err());
     let mut unknown = world_spec;
     unknown.parameters.insert("nesmysl".into(), 1.into());

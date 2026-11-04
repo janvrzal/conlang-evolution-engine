@@ -36,6 +36,13 @@ pub fn units_of(world: &World, root: MorphemeId) -> Vec<MorphemeId> {
     units
 }
 
+/// Tvary slova (citační tvar a buňky paradigmatu) pro kód skupiny; chybějící tvary lexému vzniklého
+/// za běhu a výpůjčky se založí podle produktivních koncovek kódu (`morphology.units_of`).
+/// Volá je přenos slovní zásoby (R1b) při vstupu nového slova do kódu.
+pub fn units_in(world: &mut World, group: GroupId, root: MorphemeId) -> Vec<MorphemeId> {
+    crate::morphology::units_of(world, group, root)
+}
+
 /// Doplní slovní zásobu jedné skupiny, pokud ji nemá.
 pub fn seed_vocabulary(world: &mut World, group: GroupId) -> Result<(), String> {
     if !world

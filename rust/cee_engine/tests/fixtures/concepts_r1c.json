@@ -1,0 +1,88 @@
+{
+ "catalog_ids_len": 1304,
+ "catalog_ids_head": [
+  "world",
+  "land",
+  "plain",
+  "valley",
+  "island",
+  "mainland",
+  "shore",
+  "cave",
+  "lake",
+  "bay",
+  "wave",
+  "spring-or-well"
+ ],
+ "catalog_ids_tail": [
+  "here",
+  "other",
+  "next",
+  "same",
+  "nothing"
+ ],
+ "catalog_order_head": [
+  "and",
+  "in",
+  "at",
+  "he",
+  "with",
+  "they",
+  "other",
+  "if",
+  "because",
+  "you-singular",
+  "we-2-94",
+  "how",
+  "some",
+  "three",
+  "here",
+  "be-alive",
+  "there",
+  "where",
+  "when",
+  "few",
+  "wife",
+  "four",
+  "five",
+  "hold",
+  "play"
+ ],
+ "catalog_order_tail": [
+  "toucan",
+  "tapir",
+  "mumble",
+  "digging-stick-yamstick",
+  "fishhook"
+ ],
+ "reference": 0.16028590604026843,
+ "normalizer_3": 5.106587626900806,
+ "normalizer_05": 1.1159438851452446,
+ "mean_borrowed": 0.25422462277091895,
+ "mean_borrowed_culture": 0.3411964509394569,
+ "mean_frequency": 0.17608054504297693,
+ "mean_frequency_power": 0.16557248342145756,
+ "slugs": {
+  "the mountain or hill": "mountain-or-hill",
+  "to run (2)": "run-2",
+  "an apple": "apple",
+  "A big  thing!": "big-thing",
+  "(3)": "3"
+ },
+ "domain_head": {
+  "and": "learned",
+  "in": "core",
+  "at": "core",
+  "he": "core",
+  "with": "core"
+ },
+ "freq_head": {
+  "and": 0.9,
+  "in": 0.9,
+  "at": 0.9,
+  "he": 0.9,
+  "with": 0.9
+ },
+ "find_gloss": "1-31",
+ "find_concepticon": "1-1"
+}

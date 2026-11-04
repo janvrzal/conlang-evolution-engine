@@ -667,8 +667,8 @@ pub fn units_of(world: &mut World, group: GroupId, root: MorphemeId) -> Vec<Morp
             .filter(|&m| world.morphemes.contains(m));
         let stats = class_stats(world, group);
         let Some(exponent) = stats.productive(class, cell) else {
-            if !loan && existing.is_some() {
-                result.push(existing.expect("tvar slova"));
+            if let (false, Some(found)) = (loan, existing) {
+                result.push(found);
             }
             continue;
         };

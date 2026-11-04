@@ -308,15 +308,16 @@ impl ConceptData {
         concepticon: Option<i64>,
         gloss: Option<&str>,
     ) -> Option<&CatalogItem> {
-        let matches: Vec<&CatalogItem> = if let Some(wold) = wold {
+        if let Some(wold) = wold {
             return self.items.iter().find(|i| i.wold_id == wold);
-        } else if let Some(id) = concepticon {
+        }
+        let matches: Vec<&CatalogItem> = if let Some(id) = concepticon {
             self.items
                 .iter()
                 .filter(|i| i.concepticon_id == Some(id))
                 .collect()
-        } else if let Some(gloss) = gloss {
-            let wanted = gloss.trim().to_lowercase();
+        } else {
+            let wanted = gloss?.trim().to_lowercase();
             let by_gloss: Vec<&CatalogItem> = self
                 .items
                 .iter()
@@ -339,8 +340,6 @@ impl ConceptData {
             } else {
                 by_gloss
             }
-        } else {
-            return None;
         };
         // Víc shod: vyhraje význam doložený ve víc jazycích, pak nižší ID WOLD.
         matches.into_iter().min_by(|a, b| {

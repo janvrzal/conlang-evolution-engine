@@ -20,10 +20,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::ids::{MorphemeId, VariableId, VariantId};
 
+/// Pohled uložený v keši: verze stavu, ze kterého vznikl, a hodnota.
+type View = (u64, Arc<dyn Any + Send + Sync>);
+
 /// Odvozené pohledy kódu držené podle verze stavu (viz popis modulu).
 #[derive(Default)]
 pub struct ViewCache {
-    inner: Mutex<BTreeMap<&'static str, (u64, Arc<dyn Any + Send + Sync>)>>,
+    inner: Mutex<BTreeMap<&'static str, View>>,
 }
 
 impl ViewCache {
