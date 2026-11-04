@@ -6,6 +6,7 @@
 //! rozhraní fází pro R1 a stav hotového: `docs/engine-v2/19-engine-v-rustu.md`.
 
 pub mod background;
+pub mod behavior;
 pub mod changes;
 pub mod checkpoint;
 pub mod concepts;

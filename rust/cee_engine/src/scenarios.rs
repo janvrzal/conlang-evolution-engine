@@ -1284,6 +1284,68 @@ pub fn kingdom(
     Ok((world, events))
 }
 
+/// Scénář podle jména s vlastním semínkem (jen sedm scénářů z `scripts/v2_digests.py`; ostatní
+/// se staví s výchozím semínkem). Slouží srovnání chování s Pythonem (`cee behavior`).
+pub fn by_name_seeded(name: &str, seed: i64) -> Scenario {
+    let none = |world: Result<World, String>| world.map(|w| (w, Vec::new()));
+    let options = |phonology, morphology, semantics, syntax| SeedOptions {
+        phonology,
+        morphology,
+        semantics,
+        syntax,
+        ..SeedOptions::default()
+    };
+    match name {
+        "phonology" => none(village_grid_default(
+            4,
+            1,
+            seed,
+            &options(true, false, false, false),
+        )),
+        "morphology" => none(village_grid_default(
+            4,
+            1,
+            seed,
+            &options(false, true, true, false),
+        )),
+        "syntax" => none(village_grid_default(
+            4,
+            1,
+            seed,
+            &options(false, false, true, true),
+        )),
+        "grid-5x5" => none(village_grid_default(
+            5,
+            5,
+            seed,
+            &options(false, true, true, false),
+        )),
+        "valley-50" => none(village_grid_default(
+            10,
+            5,
+            seed,
+            &options(false, false, true, true),
+        )),
+        "shift" => language_shift(seed, 300.0),
+        "island-city" => none(island_and_city(seed, 0.3)),
+        // Údolí s otevřeností z kalibrace kontinua (`region_world`, doc. 14) místo 0,1.
+        "valley-50-open" => none(village_grid(
+            10,
+            5,
+            seed,
+            &options(false, false, true, true),
+            &default_concepts(),
+            10.0,
+            500,
+            25.0,
+            0.5,
+            2.0,
+            Parameters::default(),
+        )),
+        _ => by_name(name),
+    }
+}
+
 /// Scénář podle jména (pro CLI): `valley-50`, `grid-5x5`, `phonology`, `morphology`, `syntax`,
 /// `shift`, `island-city`, `diglossia`, `conquest`, `market`, `migration`, `conversion`, `tree`, `kingdom`.
 pub fn by_name(name: &str) -> Scenario {

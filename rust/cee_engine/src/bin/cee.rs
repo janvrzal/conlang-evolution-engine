@@ -5,6 +5,7 @@
 //! cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--history log.jsonl]
 //! cee export-tick0 <scénář|spec.json> [-o tick0.json]
 //! cee scenarios
+//! cee behavior [scénář ...] [--seeds 1..3] [-o behavior.json]
 //! cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]
 //! ```
 
@@ -18,7 +19,7 @@ use cee_engine::spec::{self, WorldSpec};
 use cee_engine::{Simulation, SimulationConfig};
 
 fn usage() -> String {
-    "Použití:\n  cee run <spec.json> -o export.json [--threads N]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--history log.jsonl]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios\n  cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]".to_owned()
+    "Použití:\n  cee run <spec.json> -o export.json [--threads N]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--history log.jsonl]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios\n  cee behavior [scénář ...] [--seeds 1..3] [-o behavior.json]\n  cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]".to_owned()
 }
 
 struct Options {
@@ -172,6 +173,17 @@ fn main() -> ExitCode {
                 };
                 print!("{}", gates::audit::run(&audit)?);
                 Ok(())
+            }
+            "behavior" => {
+                let seeds = match options.seeds.as_deref() {
+                    Some(text) => gates::parse_seeds(text)?,
+                    None => cee_engine::behavior::SEEDS.to_vec(),
+                };
+                let only: Vec<String> = options.positional.clone();
+                if only.first().map(String::as_str) == Some("region-square") {
+                    return write(&options.output, &cee_engine::behavior::run_square(&seeds)?);
+                }
+                write(&options.output, &cee_engine::behavior::run(&only, &seeds)?)
             }
             "scenarios" => {
                 println!("{}", scenarios::SCENARIO_NAMES.join("\n"));

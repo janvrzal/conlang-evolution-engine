@@ -515,7 +515,8 @@ Hotovo: tlaky nad hodnocením, švy mezi oblastmi, plán tlaků ze změn, `surfa
   `Snapshot::group_ids` se plní vždy. `cee scenario --history log.jsonl` zapíše log jako JSON řádky.
 - **Chování.** Po integraci procházejí všechny brány R2b (62 testů), viz tabulka v závěrečné zprávě. Scénář valley-50
   do 2000 let dává 41 jazyků z 50 vesnic (vzdálenost sousedů 0,35); Python (`village_grid`, otevřenost 0,1) uvádí
-  0,29 po 3000 letech, rozdíl tedy zůstává a patří do kalibrace (R2 porovnání s Pythonem), brány ho nezachytí.
+  0,29 po 3000 letech. Šlo o srovnání různých věcí (3000 let a mřížka 5×5 proti 2000 let a údolí 10×5); při stejném
+  scénáři Python dává totéž, viz [Kalibrace proti Pythonu](#kalibrace-proti-pythonu).
 
 ## R2b: brány milníků v Rustu
 
@@ -666,3 +667,94 @@ v `WorldSpec.parameters` jako dřív; `POST /api/v2/validate` vrátí chyby s ce
 shoda `keys`/`inner_keys` s konstantami), `tests/vectors.rs::vychozi_parametry` (shoda s hodnotami Pythonu). Python
 `tests/v2/test_v2_parameters.py`, `test_v2_spec.py` (přepisy), `tests/test_api_v2.py` (schéma). Jednorázově se před smazáním
 opsaných hodnot ověřilo, že všech 66 výchozích hodnot souboru shoduje s dřívějším Pythonem i s Rustem.
+
+
+## Kalibrace proti Pythonu
+
+Podle chování, ne bitově. Referenci spočítal `scripts/v2_reference_behavior.py` jedním během Pythonu (`CEE_NATIVE=0`, semínka 1 až 3,
+sedm scénářů z `scripts/v2_digests.py`; výsledek `tests/v2/data/reference_behavior.json`). Rust počítá totéž příkazem
+`cee behavior [scénář ...] [--seeds 1..3] [-o soubor.json]` (`src/behavior.rs`, stejný tvar výstupu); `cee behavior region-square
+--seeds 101..104` měří kontinuum čtyř regionů z dokumentu 14 a scénář `valley-50-open` je údolí s otevřeností 0,5.
+Souhrn: inovace (různé varianty) a ustálení/zánik podle druhu změny, fonologizovaná slova, retence slovní zásoby na konci, počty
+nářečí a jazyků a vzdálenost nejbližších sousedů ve snímcích (roky 200, 500, 1000, 1500, 2000), přechody jazyka (počty událostí).
+
+### Metriky Rust / Python (průměr ze semínek 1 až 3)
+
+| scénář | inovací (varianty) | ustálení | zánik | fonologizovaná slova | retence | nářečí / jazyků na konci | sousedé na konci |
+|---|---|---|---|---|---|---|---|
+| phonology (1000 let) | 274 / 274 | 0,3 / 0,3 | 221 / 221 | 11 / 11 | 1,00 / 1,00 | 1 / 1 | 0,003 / 0,003 |
+| morphology (1000) | 366 / 368 | 47 / 56 | 293 / 287 | 63 / 66 | 0,877 / 0,860 | 2,0 / 1 | 0,051 / 0,056 |
+| syntax (1000) | 398 / 399 | 105 / 89 | 306 / 305 | 157 / 149 | 0,883 / 0,868 | 2,0 / 1 | 0,050 / 0,055 |
+| grid-5x5 (1000) | 1149 / 1163 | 971 / 1035 | 490 / 489 | 3531 / 3537 | 0,744 / 0,740 | 25 / 1 | 0,210 / 0,214 |
+| shift (900) | 715 / 716 | 145 / 146 | 614 / 613 | 358 / 353 | 0,903 / 0,908 | 3,3 / 1 | 0,061 / 0,055 |
+| island-city (800) | 723 / 729 | 333 / 320 | 776 / 771 | 528 / 554 | 0,901 / 0,907 | 3,3 / 1 | 0,047 / 0,044 |
+| valley-50 (2000) | 3601 / 3635 | 24253 / 24500 | 2171 / 2192 | 78543 / 78743 | 0,552 / 0,548 | 50 / 41,3 vs 39 jazyků | 0,328 / 0,333 |
+
+(Ve sloupci nářečí / jazyků je pro Rust i Python totéž číslo, kde se shodují; u phonology až shift se liší jen počtem nářečí
+v rámci rozptylu semínek 1 až 3: Rust 2,0 / 2,0 / 3,3 / 3,3, Python 2,7 / 2,3 / 3,7 / 2,7.) Všechny rozdíly jsou v rozptylu
+semínek (do 10 %); u nejmenších počtů (ustálení v morphology a syntax) kolísá i Python mezi semínky o víc než rozdíl enginů.
+
+**Před** opravou (první běh `cee behavior`) vycházelo u inovací 1,3 až 2,6krát víc než v Pythonu (grid-5x5 2502 proti 1187,
+valley-50 9513 proti 3625). Nebyla to chyba enginu: Rust počítal události `innovation`, referenční skript různé varianty
+(stejná varianta ve víc skupinách nebo po zániku znovu je jedna). Ustálení, zánik, retence i vzdálenosti se shodovaly už tehdy,
+takže dynamika byla stejná. Po sjednocení definice (Rust počítá různé varianty) jsou čísla v tabulce.
+
+### Příčiny rozdílů
+
+- **Rychlost rozrůzňování: v enginu žádná odchylka od Pythonu.** Valley-50 dává v Pythonu na semínkách 1 až 3 39 jazyků a sousedy
+  0,333, v Rustu 41 a 0,328. Rozdíl, který zadání uvádělo (0,35 proti 0,29), vznikl srovnáním různých běhů: 0,29 platí pro mřížku
+  5×5 po 3000 letech (doc. 05), kdežto údolí 10×5 po 2000 letech dává 0,33 v obou enginech. Rozdíl po 1000 letech 5×5
+  (0,210 Rust / 0,214 Python) je nulový.
+- **Příčina 41 jazyků je scénář, ne engine.** `village_grid` má otevřenost 0,1; kalibrace kontinua (doc. 14) ukázala, že s ní
+  se sousedé rozcházejí příliš a 80 km se rozpadne na čtyři jazyky, a zvolila 0,5 jen pro `region_world`
+  (`Parameters.village_openness`). `village_grid` zůstal na 0,1, protože na něm stojí brány M1 až M6 a otisky; je to stresový
+  scénář, ne model reálné krajiny. Při otevřenosti 0,5 (`valley-50-open`, 2000 let, semínka 1 až 3): jeden jazyk, sousedé
+  0,098 (pásmo atlasů 0,05 až 0,15), 47 až 50 nářečí (pozorovatel dělí už od 0,05), retence 0,73 za 2000 let, tedy
+  0,86 za tisíciletí (cíl ze Swadeshe asi 0,86 až 0,88).
+- **Kontinuum čtyř regionů** (`region_world`, otevřenost 0,5, `cee behavior region-square --seeds 101..104`, sousedé v roce
+  1000 / 2000 / 3000; přes hranici a vzdálené v roce 3000; jazyků vždy 1):
+
+| | sousedé 1000 | 2000 | 3000 | přes hranici 3000 | vzdálené 3000 |
+|---|---:|---:|---:|---:|---:|
+| Rust (101..104, průměr) | 0,059 | 0,061 | 0,076 | 0,197 | 0,243 |
+| cíl doc. 14 (pásmo 0,05 až 0,15; pořadí; 1 jazyk) | | pásmo | pásmo | | |
+| doc. 14 (Python z 31. 10., před stálou variabilitou) | 0,025 | 0,048 | 0,061 | 0,153 | 0,194 |
+
+  Pásmo atlasů, pořadí sousedé < přes hranici < vzdálené a jeden jazyk na 80 km platí. Od doc. 14 přibyla stálá variabilita
+  protojazyka (už v roce 200 jsou sousedé 0,05 v Rustu i Pythonu), proto je rok 1000 vyšší než tehdejších 0,025; růst 2000 → 3000
+  je 24 % (doc. 14: 27 %, kritérium rovnováhy +10 % se nesplňuje v žádném z nich, doc. 14 to uvádí jako otevřenou otázku).
+- **Drobnosti bez zásahu:** `shift` a `island-city` nemají u skupin bez území (přistěhovalci) polohu, vzdálenost sousedů se tam
+  nepočítá (u shift 0 v roce 200).
+
+Změny enginu proto nejsou žádné; konstanty v `v2_parameters.json` se neměnily (nic nenasvědčuje, že by odchylka byla v konstantě,
+a doporučení změnit `village_openness` pro `village_grid` by rozbilo prahy bran M1 až M6, které se měnit nesmějí).
+
+### Audit bran na semínkách 101 až 120 (`cee gates`)
+
+Míra průchodu Rust / Python (`09-zpevneni-bran.md`, 20 semínek). Stejná (rozdíl nejvýš 2 z 20) je 44 z 52 bran; plný výpis je
+v `cee gates --seeds 101..120`. Odlišné:
+
+| brána | Rust | Python | poznámka |
+|---|---:|---:|---|
+| `m4b::exaptace` | 7/20 | 15/20 | **nižší**: skupin s exaptací 0 až 3 (práh 4 z 6) |
+| `m5::s3_substrat` | 4/20 | 11/20 | **nižší** |
+| `m4::jespersen` | 4/20 | 8/20 | **nižší** (v obou slabá brána, ochrana proti regresi) |
+| `m6b::migrace` | 12/20 | 15/20 | nižší, v pásmu křehkých |
+| `m3b::tabu` | 9/20 | 11/20 | v rozptylu |
+| `m4b::clen_vznikne` | 4/20 | (20/20 ve starém znění „2 ze 3“) | dnešní znění „1 až N−1 z 50“ čeká asi 20 % (doc. 05 řádek o členu); 20 % odpovídá |
+| `m6b::superstrat` / `jazyk_trhu` | 19 / 20 | 16 / 16 | vyšší |
+| `m4::velky_cyklus` | 17/20 | 15/20 | vyšší |
+| `m2::metrika_6`, `ruznost_seedu` | 6/6 trojic | 20/20 | Rust audit dělí 20 semínek na 6 trojic |
+
+Všech 62 testů bran (`cargo test --release --test gates -- --ignored --test-threads=1`) prošlo.
+
+### Co zbývá
+
+- **Exaptace, substrát S3 a Jespersen** mají v Rustu znatelně nižší míru průchodu než v Pythonu, i když souhrnné metriky
+  výše sedí a kód `strength`, `residual_exponent`, `compensation` je přepis bez zjevné odchylky. Příčina nenalezena; podezření:
+  jiný proud náhody u stálé variability (`variation.rs` místo numpy) mění startovní stav těchto malých světů o šesti vesnicích
+  a dolní okraj brány (4 skupiny z 6) je citlivý, nebo odchylka v tlaku na konstrukce. Pro dohledání je potřeba referenční
+  běh Pythonu na `exaptace` (události `exapted` po skupinách) a `grammaticalized`, což tato kalibrace (jediný běh) neobsahovala.
+- Referenční skript Pythonu počítá různé varianty, ne události `innovation`; počty událostí z Pythonu se tedy nedají srovnat.
+- `village_grid` s otevřeností 0,5 (nebo kalibrace kontinua na `village_grid`) by vyžadovala nový audit bran M1 a nová semínka;
+  neděláno (prahy a semínka se nemění).
