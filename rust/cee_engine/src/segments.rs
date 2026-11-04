@@ -201,6 +201,16 @@ impl SegmentTable {
         self.ipa.len() as i32
     }
 
+    /// Všechny řádky rysů za sebou (`len() × width()`), pro editační vzdálenost tvarů.
+    pub fn vectors(&self) -> &[i8] {
+        &self.vectors
+    }
+
+    /// Počet rysů v řádku.
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
     pub fn row(&self, segment: usize) -> &[i8] {
         &self.vectors[segment * self.width..(segment + 1) * self.width]
     }

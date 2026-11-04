@@ -20,6 +20,7 @@ pub mod ids;
 pub mod json_string;
 pub mod legacy_numpy;
 pub mod model;
+pub mod naming;
 pub mod observe;
 pub mod parallel;
 pub mod parameters;

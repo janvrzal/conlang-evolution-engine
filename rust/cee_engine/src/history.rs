@@ -39,6 +39,13 @@ pub struct Snapshot {
     pub dialects: Vec<Vec<String>>,
     /// Linie jazyka → skupiny, které ji právě mluví.
     pub languages: std::collections::BTreeMap<String, Vec<String>>,
+    /// Jména mluvených skupin v pořadí řádků `distances` (jen s `keep_distances`).
+    #[serde(default)]
+    pub group_ids: Vec<String>,
+    /// Čtvercová matice vzdáleností mluvených skupin po řádcích (`code_distances`); jen s
+    /// `keep_distances`, protože roste se čtvercem počtu skupin.
+    #[serde(default)]
+    pub distances: Option<Vec<f64>>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
