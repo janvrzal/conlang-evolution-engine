@@ -14,6 +14,7 @@ pub mod data;
 pub mod edits;
 pub mod events;
 pub mod export;
+pub mod gates;
 pub mod grammar;
 pub mod history;
 pub mod ids;
