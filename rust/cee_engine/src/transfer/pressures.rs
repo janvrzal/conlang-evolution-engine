@@ -302,7 +302,9 @@ impl<'a> Pressures<'a> {
 
     /// Fitness řádků `[first, first + count)` bloku do `out` (`count × skupiny × sloty`,
     /// vynulované); `current` a `heard` mají týž tvar. Smí se volat souběžně z více vláken
-    /// (pomocné tabulky jsou za `OnceLock`); každé volání píše jen do svého `out`.
+    /// (pomocné tabulky jsou za `OnceLock`); každé volání píše jen do svého `out`. Tlak se
+    /// počítá jen v buňkách, kde je `current` nebo `heard` nenulové (jen tam ho `settle` čte);
+    /// ostatní buňky zůstanou nulové.
     pub fn fitness(
         &self,
         block: &PoolBlock,
@@ -891,7 +893,7 @@ impl<'a> Pressures<'a> {
                         let rank = self.dominant_construction(g, function).map(rank_of);
                         match rank {
                             Some(current)
-                                if current != 0 && rank_of(&construction) == current + 1 =>
+                                if current != 0 && rank_of(construction) == current + 1 =>
                             {
                                 params.fusion_bonus
                             }
@@ -899,7 +901,7 @@ impl<'a> Pressures<'a> {
                         }
                     }
                     id::LEARNABILITY => {
-                        let bound = f64::from(u8::from(is_bound(&construction)));
+                        let bound = f64::from(u8::from(is_bound(construction)));
                         -params.learnability_strength * bound * self.l2[g]
                     }
                     id::EXPRESSIVITY => {
@@ -913,7 +915,7 @@ impl<'a> Pressures<'a> {
                             if unexpressed {
                                 need *= params.emergence_need_scale;
                             }
-                            need * self.strength(g, variant, &construction)
+                            need * self.strength(g, variant, construction)
                         }
                     }
                     _ => {
@@ -922,7 +924,7 @@ impl<'a> Pressures<'a> {
                         let compensated = self.catalog.compensates[function].clone();
                         for target in compensated {
                             let lost = self.weakness(g, target);
-                            if self.carries_role(&construction) {
+                            if self.carries_role(construction) {
                                 score -= params.order_rigidity * (1.0 - lost);
                             } else {
                                 score -= self.catalog.functions[target].need * lost;

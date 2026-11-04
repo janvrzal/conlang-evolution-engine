@@ -408,7 +408,9 @@ fn ekonomie_tresta_volny_opis_a_nic_jineho_nedela() {
     let cells = world.live.group_ids.len() * block.capacity;
     let mut out = vec![0.0; cells];
     let zeros = vec![0.0; cells];
-    pressures.fitness(block, row, 1, &zeros, &zeros, &mut out);
+    // Tlak se počítá jen pro buňky, které něco slyší nebo mají; všechny buňky tu něco slyší.
+    let heard = vec![1.0; cells];
+    pressures.fitness(block, row, 1, &zeros, &heard, &mut out);
     let free_slot = block.slots[row].iter().position(|&v| v == free).unwrap();
     let synthetic_slot = block.slots[row]
         .iter()
