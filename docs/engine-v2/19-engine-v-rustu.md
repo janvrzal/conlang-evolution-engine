@@ -13,20 +13,21 @@ agenti R1. Co je hotové a co patří komu, je v [posledním oddíle](#stav-co-j
 
 ```
 rust/                      pracovní prostor Cargo (Cargo.toml, Cargo.lock, profil release)
-├── cee_core/              jádra výpočtů + vazba PyO3 (feature `python`, výchozí zapnutá)
-└── cee_engine/            čistý Rust, žádné PyO3; závisí na cee_core bez feature `python`
-    ├── src/lib.rs         moduly (viz níže)
-    ├── src/bin/cee.rs     CLI `cee`
-    └── tests/             vectors.rs (vektory z Pythonu), engine.rs (kostra), fixtures/
+├── cee_core/              jádra výpočtů, čistá knihovna (vazba na Python byla smazána, viz konec dokumentu)
+├── cee_engine/            čistý Rust, žádné PyO3; závisí na cee_core
+│   ├── src/lib.rs         moduly (viz níže)
+│   ├── src/bin/cee.rs     CLI `cee`
+│   └── tests/             vectors.rs (vektory z Pythonu), engine.rs (kostra), fixtures/
+└── cee_py/                tenká vazba PyO3 nad cee_engine pro server (modul `cee_engine_py`)
 ```
 
-- **`cee_core`** zůstává a dál slouží Python enginu (maturin). `cee_engine` z něj volá jádra:
+- **`cee_core`** (dnes bez vazby na Python) poskytuje jádra, která `cee_engine` volá:
   banka tvarů a tabulky procesů (`bank`, `process`), řídké fondy (`pools::Cells` je uložení
   bloků živých proměnných), součty jako `np.sum` (`assess::pairwise_sum`), SplitMix
   (`transmission::splitmix64`, `hash_normal`). Další jádra (`transmission`, `pressures`, `index`,
   `candidates`, `sites`, `form_assess` …) napojí agenti R1 na model světa.
 - **`default-members = ["cee_engine"]`**: `cargo test` a `cargo clippy` v `rust/` stavějí čistý Rust.
-  Rozšíření pro Python se staví z `rust/cee_core` přes maturin (wheel pak leží v `rust/target/wheels`).
+  Vazba pro server se staví z `rust/cee_py` přes maturin (wheel pak leží v `rust/target/wheels`).
 
 ### Moduly `cee_engine`
 
@@ -192,9 +193,9 @@ cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [
 
 `cee gates` je audit bran na semínkách (viz [R2b](#r2b-brány-milníků-v-rustu)).
 
-Porovnání ticku 0 s Pythonem: `PYTHONPATH=src python scripts/v2_compare_tick0.py` (volitelně
-`--with-variation`, nebo cesta k `WorldSpec`). Vektory z Pythonu pro testy:
-`PYTHONPATH=src python scripts/export_v2_rust_vectors.py`.
+Porovnání ticku 0 s Pythonem (`scripts/v2_compare_tick0.py`) a vektory z Pythonu pro testy
+(`scripts/export_v2_rust_vectors.py`) zmizely se smazáním Pythonu; uložené vektory zůstaly v
+`rust/cee_engine/tests/fixtures/` jako zmrazená reference.
 
 ## 11. Stav: co je hotové a komu co patří
 
@@ -457,18 +458,18 @@ prostoru, ale ne `default-members`, takže `cargo test` a `clippy` v `rust/` ji 
   zastaví; `cancelled`, `finished`.
 * Čtení: `start_year`, `end_year`, `year`, `tick`, `snapshots`, `frame()` (lehký snímek, text JSON), `export(timeline=True)`
   (úplný export `cee-v2/1`, text JSON). Čtení jde mezi kroky, protože simulace je za `Mutex`.
-* `check_spec(spec_json) -> str | None`: zkušební stavba světa; `None` = jde postavit, jinak zpráva.
+* `check_spec(spec_json) -> list[{path, message, severity}]`: ověření popisu (slovník, slova, stavba světa, zkušební
+  provedení událostí); prázdný seznam = bez problémů, chyby jdou před varováními. `vocabulary_max_size() -> int`.
 
 `src/cee/v2/runner.py` už Python engine nepoužívá: `prepare` ověří schéma pydanticem (`spec.parse`), zbytek (neznámé regiony,
 slova, parametry, pořadí událostí) ohlásí stavba světa v Rustu a vrátí se jako `SpecError` s cestou `(svět)`. Vlákno běhu volá
 `advance(1)`, po každém pozorování uloží `frame()` a na konci `export()`. Zrušení nastaví `Event` i příznak v Rustu. Rozhraní
 `Run` (`status_view`, `frames`, `result`, `cancel`) a odpovědi `/api/v2` se nezměnily; testy `tests/test_api_v2.py` procházejí.
 
-**Odchylky.** Chyby ze zkušebního provedení událostí v Pythonu (`spec.check`) mají cestu `events.N`, stavba světa v Rustu
-ohlásí jen jednu zprávu s cestou `(svět)`; endpoint `/validate` dál používá `spec.check` (Python engine). Stav enginu v Rustu
-je zatím stejně neúplný jako v zbytku R2 (některé události běh ukončí chybou, viz omezení výše).
+**Odchylky (stav v době R2c).** Chyby ze zkušebního provedení událostí měl Python (`spec.check`), Rust hlásil jen jednu
+zprávu s cestou `(svět)`. Od smazání Pythonu v2 dává všechny chyby s cestou Rust (viz poslední oddíl).
 
-### Co ze `src/cee/v2` server po přepnutí ještě importuje
+### Co ze `src/cee/v2` server po přepnutí ještě importoval (návrh před smazáním)
 
 Server (`cee.api.v2`) importuje `cee.v2.runner`, `cee.v2.parameters` a `cee.v2.spec`. `runner` bere ze `spec` jen `WorldSpec`,
 `parse`, `Issue`, `SpecError`, `errors`. Jenže `spec.py` na úrovni modulu importuje `concept_data`, `vocabulary`, `events`,
@@ -758,3 +759,66 @@ Všech 62 testů bran (`cargo test --release --test gates -- --ignored --test-th
 - Referenční skript Pythonu počítá různé varianty, ne události `innovation`; počty událostí z Pythonu se tedy nedají srovnat.
 - `village_grid` s otevřeností 0,5 (nebo kalibrace kontinua na `village_grid`) by vyžadovala nový audit bran M1 a nová semínka;
   neděláno (prahy a semínka se nemění).
+
+
+## Smazání Pythonu v2
+
+Uživatel schválil smazání Python enginu v2 (větev `engine-v2-remove-python`). Server, projekty, úložiště a engine v1
+(`src/cee/engine`, `pipeline.py` …) zůstávají v Pythonu a nezměnily se.
+
+### Co zmizelo
+
+| oblast | rozsah |
+|---|---|
+| `src/cee/v2` (simulace, svět, změny, tlaky, přenos, fonologie, morfologie, syntax, pozorování, export, scénáře, události, polity, pozadí, `native.py`, `concept_data.py`, `vocabulary.py` …) | 68 souborů, asi 24 600 řádků |
+| `tests/v2` (brány M1 až M6c, zlatá data, jádra, otisky, kontrolní body …) | 95 souborů, asi 14 750 řádků, deset `golden_*.json.gz` (3,2 MB) |
+| `scripts/` (otisky, zlatá data, profily, kalibrace, audit, export dat z Pythonu) | 35 skriptů, asi 7 000 řádků |
+| `rust/cee_core`: vazba PyO3 (`python.rs`, `*_python.rs`, `python_pools.rs`, feature `python`, `pyproject.toml`) a nepoužitá jádra `clarity`, `sites`, `semantic_index`, `support` | 12 souborů, asi 6 900 řádků |
+
+### Co zůstalo v Pythonu a proč
+
+| soubor | obsah |
+|---|---|
+| `src/cee/v2/spec.py` | schéma popisu světa (pydantic `WorldSpec` a události bez `.event()`/`.custom()`), `Issue`, `SpecError`, `errors`, `warnings`, `parse` (české zprávy pydanticu), `levels`, `EVENT_KINDS`, `FORMAT`, `check_parameters`, `vocabulary_options`; UI z něj bere JSON schéma formuláře |
+| `src/cee/v2/parameters.py` | čtení `v2_parameters.json` (`parameter_schema`, `check_override`, `default_levels`): schéma pro UI a ověření přepisů s cestou k poli i u vnořených tabulek. Rust má vlastní ověření téhož souboru (první chyba), Python vrací všechny |
+| `src/cee/v2/runner.py` | vlákno běhu, snímky, zrušení nad vazbou `cee_engine_py`; `check` = schéma a přepisy v Pythonu, zbytek v Rustu |
+| `src/cee/api/v2.py` | endpointy `/api/v2` (schema, validate, runs); `validate` volá `runner.check` |
+| `src/cee/data/v2_*.json` | data jsou v Rustu vložená přes `include_str!`, takže zůstávají; `v2_segments.json` je odvozen z PanPhon (David R. Mortensen a kol., MIT) a atribuce v dokumentu 19, oddíl Data, platí dál |
+
+Sémantické ověření (`spec.check`) je v Rustu: `cee_engine::spec::check` vrací všechny chyby s cestou (`events.3.year`,
+`regions`, `languages.0.words.hand`, `concepts.1.related.0.concept`, `parameters.x` …) a varování, vazba ho nabízí jako
+`check_spec`. Slova se ověřují rozborem IPA v Rustu, takže zprávy o hláskách jsou stručnější než dřív (slovo s neznámou
+hláskou je „engine nezná některou hlásku ve slově“; zpráva „zapsalo by se jako …“ zůstala jen pro zápisy, které rozbor
+zkrátí). Zkušební provedení událostí běží na světě po `Simulation::new`, tedy ve stavu, ve kterém začíná běh.
+
+`cee_core` zůstal samostatným crate: i bez Pythonu má 15 modulů (asi 11 700 řádků) a `cee_engine` z něj volá banku tvarů,
+procesy, přenos, tlaky a indexy. Sloučení by jen přesunulo soubory, proto se neprovedlo.
+
+### Závislosti
+
+`numpy` odešel z hlavních závislostí `pyproject.toml` (používá ho už jen datový skript
+`build_v2_concept_frequencies.py`, který má extra `data`). `panphon` zůstává, protože ho importuje engine v1
+(`cee.engine.phonology`). `networkx`, `lingpy`, `pydantic`, `pyyaml` používá v1 nebo server. Značka `slow` v pytestu zanikla
+s Python branami.
+
+### Náhrady smazaných testů a skriptů
+
+| smazáno | náhrada |
+|---|---|
+| `tests/v2/test_v2_m*_gate.py`, `gate_checks.py`, `scripts/v2_gate_rates.py` | `cargo test --release --test gates -- --ignored --test-threads=1`, `cee gates` (audit na semínkách) |
+| zlatá data, `v2_golden_*.py`, `test_v2_golden_*.py`, `test_v2_native_*.py`, otisky `v2_digests.py`, kontrolní body Pythonu | Rust testy `vectors.rs`, `engine.rs`, `r1c.rs`, `r2a.rs`, `sound.rs`, `transfer.rs`, `society.rs` a determinismus téhož semínka; uložené vektory jsou ve `rust/cee_engine/tests/fixtures/` |
+| `v2_reference_behavior.py`, `v2_calibrate*.py`, `v2_region_continuum.py`, `v2_measure_variation.py`, `v2_innovation_stats.py` | `cee behavior [scénář] [--seeds 1..3]`, `cee behavior region-square`; výsledek Pythonu zůstal jako `tests/v2/data/reference_behavior.json` |
+| `v2_kingdom.py`, `v2_revival.py`, `v2_state_border.py`, `v2_typology.py`, `v2_reachability.py`, `v2_erosion_chain.py`, `v2_ending_erosion.py`, `v2_prosody_sensitivity.py` | `cee scenario <jméno> --until <rok>` a `cee run <spec.json>`; ruční pokusy se dělají nad scénáři a `WorldSpec`, žádná jednotlivá náhrada |
+| `v2_timing.py`, `v2_profile_*.py`, `v2_spec_timing.py` | žádná náhrada (profilování Python enginu); měření času v Rustu dělá `cargo test --release` a `cee run` s `time` |
+| `v2_compare_tick0.py`, `export_v2_rust_vectors.py` | žádná náhrada (porovnání Rustu s Pythonem už nemá s čím) |
+| `export_v2_data.py`, `export_v2_parameters.py` | žádná náhrada; `v2_segments.json`, `v2_defaults.json`, `v2_grammar.json`, `v2_parameters.json` jsou teď primární data a upravují se ručně (parametry podle formátu v oddíle Metaparametry) |
+| `tests/v2/test_v2_spec.py` (ověření popisu světa) | `tests/test_v2_spec.py` (přes vazbu) a `rust/cee_engine/tests/spec_check.rs` |
+| `tests/v2/test_v2_parameters.py` | `rust/cee_engine/tests/parameters.rs` a test přepisů v `tests/test_v2_spec.py` |
+
+Skripty `build_v2_*.py` zůstaly (data z otevřených zdrojů); `build_v2_concepts.py` a `build_v2_core_semantics.py` čtou výchozí
+pojmy z `v2_defaults.json` místo z `cee.v2.scenarios`.
+
+### Poznámka k historii
+
+Komentáře v `cee_core` a ostatní dokumenty `docs/engine-v2/` dál popisují Python jako zdroj chování (porovnání, kalibrace).
+Je to historie; Python engine najdeš v gitu před commitem „Delete the Python engine v2“.

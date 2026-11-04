@@ -1,3 +1,7 @@
+> **Poznámka (2026-11-04):** Python engine v2 byl smazán (viz oddíl „Smazání Pythonu v2“ v
+> [19-engine-v-rustu.md](19-engine-v-rustu.md)). Tento dokument zůstává jako historie fáze A; skripty,
+> testy a moduly `src/cee/v2`, o kterých mluví, už v repozitáři nejsou.
+
 # Příprava na Rust (fáze A) a přepis (fáze B)
 
 Sepsáno 2026-11-01. Rozhodnutí s uživatelem: engine v2 nejdřív v Pythonu

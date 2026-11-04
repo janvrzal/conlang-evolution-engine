@@ -8,77 +8,33 @@ Tento soubor slouží jako vstupní bod a referenční manuál pro budoucí LLM 
 3. **Data nepatří na Git:** Složky jako `runs/`, výstupní `.csv` soubory a vygenerovaná velká data necommitujeme.
 4. **Vlastnosti slova (`origin_year` atd.):** Slova musí nést historii. Například výpůjčky dostávají `origin_year`, díky kterému unikají starším zvukovým změnám. Tento systém se používá místo psaní složitých `IF` bloků a udržuje kód elegantní.
 
-## 1b. Engine v2 (nové jádro, vzniká od 2026-10)
+## 1b. Engine v2 (celý v Rustu)
 
-Vedle legacy jádra (`src/cee/engine/`, popsané níže) vzniká od nuly nové
-jádro **`src/cee/v2/`**. Návrh a závazná specifikace jsou v
-`docs/engine-v2/` (README → iterace 1–5; pro kód platí
-`05-specifikace.md`, včetně stavu milníků a známých mezer). Legacy zůstává
-funkční, dokud ho v2 nepřekoná v metrikách; v2 z něj nesmí importovat
-simulační logiku (jen data: `FeatureMapper`/PanPhon, `cee.semantics`).
+Engine v2 běží **celý v Rustu** (`rust/cee_engine`, jádra v `rust/cee_core`, popis a návod
+v `docs/engine-v2/19-engine-v-rustu.md` a `rust/README.md`). Python engine v2 (`src/cee/v2`) byl smazán;
+zůstalo v něm jen schéma popisu světa a validace polí (`spec.py`), metaparametry pro UI (`parameters.py`)
+a běh na pozadí přes vazbu `rust/cee_py` (`runner.py`), které používá server (`src/cee/api/v2.py`).
+Starší dokumenty v `docs/engine-v2/` jsou historie návrhu a kalibrace; popisují Python jako zdroj chování.
+Legacy jádro (`src/cee/engine/`, popsané níže) zůstává v Pythonu beze změny.
 
-Pravidla v2, která se snadno poruší:
+Pravidla v2, která platí dál (v Rustu):
 
-* **Jazyk není homogenní.** Základní jednotkou je skupina mluvčích; jazyk
-  kódu je jeho repertoár (proměnné → varianty s frekvencemi). Dialekty a
-  jazyky se počítají až v `observe.py`.
-* **Každá změna = inovace + selekce (tlaky) + šíření.** Nic se neaplikuje
-  plošně. Nová změna je podtřída `Change`, nový tlak podtřída `Pressure`;
-  šíření (`transmission.py`) je jedno pro všechno.
-* **Čti stav jen přes `World.distribution()`.** Proměnné, ve kterých se
-  skupiny liší, leží ve sloupcovém skladu `World.live` (`pools.py`), ne v
-  repertoárech.
-* **Determinismus i při přiblížení mapy.** Náhoda jen z `rng.py` se
-  stabilními ID (nikdy indexy, `uuid4`, `hash()` ani iterace přes `set`);
-  míšení po komponentách sítě, součty přes sloty seřazené. Testy hlídají,
-  že zjemnění jedné oblasti nezmění historii nepropojené oblasti ani v
-  posledním bitu.
-* **Tvary slov** jsou `UnitForm` (tvar, hranice kmen | koncovka, koncovka)
-  ve `FormStore` kódu; zvukové procesy se aplikují dvoufázově a výstup je
-  vždy skutečná hláska (`SegmentTable.changed`). Sekundární artikulaci smí
-  změna přidat pouze výslovným záměrem (`Process.allow`); jiné značky nesmí
-  vzniknout vedlejším produktem nejbližšího vektoru. Již přítomné značky
-  se zachovávají, dokud je výslovná změna neodstraní.
-* **Kód je uzel sítě.** Vícejazyčná komunita jsou skupiny se společným
-  `community`, jedna na kód; kontakt mezi liniemi jazyků (`Code.language`)
-  prochází filtry v `contact.py`. Nový morfém nese `language` kódu, ve
-  kterém vznikl. Psaný kód je skupina s `written=True` bez mluvčích:
-  nesmí inovovat ani se počítat do dialektů; mluvčí ho slyší jen kanály
-  čtení a školy (`institutions.py`).
-* **Gramatické funkce jsou data.** Minulý čas, člen, pád, zápor apod. jsou
-  řádky `cee/data/v2_grammar.yaml`; jazyk je má podle profilu protojazyka.
-  Do kódu změn a tlaků nepiš jména konkrétních funkcí, čti katalog.
-* **Testy v2**: rychlá sada `pytest -m "not slow"` (asi 20–30 s); brány
-  milníků (`*_gate.py`) jsou `slow` a celá sada trvá asi 6–7 minut. Optimalizace
-  nesmí změnit výsledek: ověř otisk logu (`History.digest`) proti předchozímu
-  commitu. Když změna proudu náhody shodí stochastickou bránu, nezkoušej jiné
-  seedy ani konstanty. Změř míru průchodu před a po (`scripts/v2_gate_rates.py`)
-  a rozhodni podle ní. Audit a zpevnění bran jsou v `docs/engine-v2/09-zpevneni-bran.md`.
-* **Kalibrační konstanty v2 patří světu** (`world.params`, `src/cee/v2/parameters.py`):
-  nepřidávej nové modulové konstanty dynamiky a nikdy je neměň přepisem globálních
-  proměnných nebo sdíleného `catalog()`. Pro pokusy předej `Parameters` scénáři
-  (`village_grid(..., params=...)`); přepisy katalogu jdou přes `grammar`
-  a `catalog_for(world)`, váhy tlaků přes `pressure_weights`. Výjimka: priory zvukových
-  změn a `CLARITY_DELETE_*` (`changes/sound.py`) a konstanty pozorovatele zůstávají modulové.
-* **M6e: průběžné indexy, dávková inovace a zpevnění bran**: neúspěšná Numba
-  integrace a číselné zrcadlo tvarů byly vráceny (`06-denik-numba.md`); měřič
-  `scripts/v2_timing.py` zůstává. Audit závislostí a výsledky indexů tlaků jsou
-  v `docs/engine-v2/07-prubezne-indexy.md`, dávkové losování počtu inovací přes
-  `rng.hash_poisson` a indexy míst s mírami (`SemanticSitesIndex`,
-  `MorphologyCandidateIndex`, `SoundSupportIndex`, `VocabularyIndex`) v
-  `docs/engine-v2/08-davkova-inovace.md` a přechod na neutrální doménový klíč
-  `"innovation-change"` se zpevněním stochastických bran (`k` z `N` podle Wilsonovy
-  dolní meze na nezávislých seedech) v `docs/engine-v2/09-zpevneni-bran.md`.
-  Příspěvky slov dorovnávej přírůstkově podle deníků, float agregace (`np.sum`)
-  počítej vždy jednorázově v kanonickém pořadí (nikdy průběžným
-  přičítáním/odečítáním) a v `transmission._normalized` drž sekvenční součet
-  slotů zleva doprava. Od zavedení neutrálního klíče `"innovation-change"` platí
-  bitová shoda všech 7 referenčních otisků v `scripts/v2_digests.py` i
-  checkpointů. Scénář `valley-50` běží za ~23,6–25,4 s (fáze inovace 2,12×
-  rychlejší) a `grid-5x5` za ~2,2–2,5 s; neprezentuj původní orientační cíle
-  údolí ≤ 5–8 s / mřížka ≤ 1 s jako splněné.
-* **Kalibrační konstanty** mají ve specifikaci zdůvodnění a naměřené
-  hodnoty; při změně je přeměř a aktualizuj oddíl „Stav Mx“.
+* **Jazyk není homogenní.** Základní jednotkou je skupina mluvčích; jazyk kódu je jeho repertoár
+  (proměnné → varianty s frekvencemi). Dialekty a jazyky se počítají až při pozorování.
+* **Každá změna = inovace + selekce (tlaky) + šíření.** Nic se neaplikuje plošně; šíření je jedno pro všechno.
+* **Determinismus.** Náhoda jen z `rng.rs` se stabilními ID (nikdy indexy ani pořadí hashovacích map);
+  stejné semínko dá stejný výsledek i při jiném počtu vláken. Přijímá se podle chování, ne bitově podle Pythonu.
+* **Gramatické funkce, metaparametry a data jsou soubory** v `src/cee/data/v2_*.json` (`v2_grammar.json`,
+  `v2_parameters.json` …); kód změn a tlaků nezná jména konkrétních funkcí. Soubory se upravují ručně,
+  skripty `scripts/build_v2_*.py` vyrábějí jen data z otevřených zdrojů (WOLD, WALS, DatSemShift …).
+* **Kalibrační konstanty patří světu** (`Parameters` ve světě, přepisy v `WorldSpec.parameters`); nepřidávej
+  globální konstanty dynamiky.
+* **Testy a brány:** `cd rust && cargo test --release`; stochastické brány milníků
+  `cargo test --release --test gates -- --ignored --test-threads=1`, audit na semínkách `cee gates`
+  (pravidlo `k` z `N` podle Wilsonovy dolní meze, `docs/engine-v2/09-zpevneni-bran.md`). Když změna proudu náhody
+  shodí stochastickou bránu, nezkoušej jiné seedy ani konstanty; změř míru průchodu před a po.
+* **Python testy** (`pytest`) pokrývají v1, server a vazbu (`tests/test_v2_spec.py`, `test_v2_rust_binding.py`,
+  `test_api_v2.py`; potřebují sestavenou vazbu, postup je v `rust/README.md`).
 
 ## 2. Architektura Projektu
 

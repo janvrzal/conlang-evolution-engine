@@ -5,6 +5,7 @@
 //! mezitím obsluhuje dotazy UI. Zrušení je příznak mimo zámek běhu: `cancel()` nečeká na
 //! rozpracovaný krok a `advance` se zastaví po jeho dokončení.
 
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -139,16 +140,42 @@ impl Run {
     }
 }
 
-/// Zkušební stavba světa z popisu bez běhu: `None` = svět jde postavit, jinak zpráva o chybě.
+/// Ověření popisu světa bez běhu: seznam `{path, message, severity}`; prázdný = bez problémů.
+///
+/// Chyby jdou před varováními. Schéma polí ověřuje pydantic na straně Pythonu; tady se staví
+/// svět a zkouší události (stavy a regiony, které neexistují, slova, slovník, parametry).
 #[pyfunction]
-fn check_spec(py: Python<'_>, spec_json: &str) -> Option<String> {
+fn check_spec(py: Python<'_>, spec_json: &str) -> Vec<BTreeMap<&'static str, String>> {
     let text = spec_json.to_owned();
-    py.detach(move || simulation(&text).err())
+    let issues = py.detach(move || match WorldSpec::from_json(&text) {
+        Ok(world_spec) => spec::check(&world_spec),
+        Err(message) => vec![spec::Issue::error("(svět)", message)],
+    });
+    let (errors, warnings): (Vec<_>, Vec<_>) =
+        issues.into_iter().partition(|i| i.severity == "error");
+    errors
+        .into_iter()
+        .chain(warnings)
+        .map(|issue| {
+            BTreeMap::from([
+                ("path", issue.path),
+                ("message", issue.message),
+                ("severity", issue.severity.to_owned()),
+            ])
+        })
+        .collect()
+}
+
+/// Největší slovník: výchozí pojmy a všechny pojmy katalogu WOLD.
+#[pyfunction]
+fn vocabulary_max_size() -> usize {
+    cee_engine::vocabulary::max_size()
 }
 
 #[pymodule]
 fn cee_engine_py(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<Run>()?;
     module.add_function(wrap_pyfunction!(check_spec, module)?)?;
+    module.add_function(wrap_pyfunction!(vocabulary_max_size, module)?)?;
     Ok(())
 }

@@ -15,7 +15,7 @@ path = "src/bin/cee.rs"
 
 [dependencies]
 # Jádra (banka tvarů, procesy, přenos, tlaky, indexy); bez vazby na Python.
-cee_core = { path = "../cee_core", default-features = false }
+cee_core = { path = "../cee_core" }
 # Všechny crates mají licenci MIT nebo Apache-2.0 (viz docs/engine-v2/19-engine-v-rustu.md).
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

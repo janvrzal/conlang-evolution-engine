@@ -12,7 +12,6 @@ dependencies = [
     "panphon>=0.20.0",
     "lingpy>=2.6.11",
     "networkx>=3.0",
-    "numpy>=1.26",
     "typer>=0.12.0",
     "pydantic>=2.7.0",
     "pyyaml>=6.0.1",
@@ -23,6 +22,11 @@ dependencies = [
 ui = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
+]
+# Skripty `scripts/build_v2_*.py`, které z otevřených zdrojů vyrábějí datové soubory enginu v2;
+# server ani engine v1 je nepotřebují. (numpy stejně přijde jako závislost panphonu a lingpy.)
+data = [
+    "numpy>=1.26",
 ]
 neo4j = [
     "neo4j>=5.14.0",
@@ -42,9 +46,6 @@ packages = ["src/cee"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = [
-    "slow: brány milníků enginu v2 (dlouhé simulace); rychlá sada: pytest -m \"not slow\"",
-]
 
 [tool.ruff]
 target-version = "py311"

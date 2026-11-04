@@ -246,6 +246,32 @@ impl SegmentTable {
             .collect()
     }
 
+    /// Tónové značky, kterými se tón zapisuje diakritikou (kombinující znak → tónová písmena).
+    pub fn tone_mark_letters(&self, mark: char) -> Option<&str> {
+        self.tone_marks.get(&mark).map(String::as_str)
+    }
+
+    /// Zapíše se tvar zpět beze ztráty? Tóny diakritikou se počítají jako tónové značky;
+    /// přízvuk a hranice slabik (`ˈ ˌ .`) určuje jazyk, ne zápis. Neznámá hláska je chyba.
+    pub fn lossless(&self, ipa: &str) -> Result<Option<String>, String> {
+        let form = self.parse(ipa)?;
+        let signature = |text: &str| {
+            let mut chars: Vec<char> = normalized(text).chars().collect();
+            chars.sort_unstable();
+            chars
+        };
+        let expected: String = normalized(ipa)
+            .chars()
+            .filter(|c| !"ˈˌ.‿|‖".contains(*c))
+            .map(|c| {
+                self.tone_mark_letters(c)
+                    .map_or_else(|| c.to_string(), str::to_owned)
+            })
+            .collect();
+        let rendered = self.render(&form);
+        Ok((signature(&rendered) != signature(&expected)).then_some(rendered))
+    }
+
     /// Kód tónu samohlásky (0 = bez tónu).
     pub fn tone_of(&self, segment: i32) -> u32 {
         self.tone_base

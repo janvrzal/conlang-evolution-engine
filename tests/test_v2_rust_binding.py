@@ -41,8 +41,9 @@ def test_zruseni_a_neplatny_popis():
     assert handle.advance(5) is False and handle.cancelled and handle.tick == 0
     with pytest.raises(ValueError):
         binding.Run(json.dumps({**example(), "regions": []}))
-    assert binding.check_spec(json.dumps(example())) is None
-    assert binding.check_spec("{}")
+    assert binding.check_spec(EXAMPLE.read_text(encoding="utf-8")) == []
+    issues = binding.check_spec("{}")
+    assert issues and set(issues[0]) == {"path", "message", "severity"}
 
 
 def test_runner_na_vazbe():

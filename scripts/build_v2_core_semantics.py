@@ -1,7 +1,7 @@
 """Výřez sémantických vztahů pro základní slovní zásobu enginu v2.
 
 Ze stažených dat (``cee`` cache v ``~/.cee``) vytáhne vztahy mezi pojmy
-``cee.v2.scenarios.DEFAULT_CONCEPTS`` a uloží je do
+``default_concepts`` v ``src/cee/data/v2_defaults.json`` a uloží je do
 ``src/cee/data/v2_core_semantics.json``. Výřez je malý, nese citace,
 licence a SHA-256 vstupů, takže simulace i CI fungují bez sítě a bez cache.
 
@@ -21,12 +21,13 @@ from pathlib import Path
 
 import networkx as nx
 
-from cee.v2.scenarios import DEFAULT_CONCEPTS
-
 HOME = Path.home() / ".cee"
 DATSEMSHIFT = HOME / "data" / "datsemshift" / "cldf" / "parameters.csv"
 COMBINED = HOME / "semantics" / "graph.graphml"
 OUT = Path(__file__).resolve().parents[1] / "src" / "cee" / "data" / "v2_core_semantics.json"
+DEFAULT_CONCEPTS = json.loads(
+    (Path(__file__).resolve().parents[1] / "src" / "cee" / "data" / "v2_defaults.json").read_text(encoding="utf-8")
+)["default_concepts"]
 
 #: Pojmy, jejichž Concepticon glos se liší od anglického ID.
 GLOSS_OVERRIDES = {

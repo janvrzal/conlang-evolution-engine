@@ -5,7 +5,7 @@ stažené v ``~/.cee/data/wold``) vytáhne pro každý význam sémantickou obla
 a skóre výpůjčky, stáří a jednoduchosti (průměry přes 41 jazyků) a uloží je
 do ``src/cee/data/v2_concepts.json``:
 
-- ``concepts``: pojmy enginu (``cee.v2.scenarios.DEFAULT_CONCEPTS``)
+- ``concepts``: pojmy enginu (``default_concepts`` v ``src/cee/data/v2_defaults.json``)
   spárované s významem WOLD přes glos Concepticonu;
 - ``catalog``: všechny významy WOLD doložené aspoň v ``MIN_LANGUAGES``
   jazycích (zásobník pro větší slovník);
@@ -29,10 +29,11 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from cee.v2.scenarios import DEFAULT_CONCEPTS
-
 WOLD = Path.home() / ".cee" / "data" / "wold" / "wold-master" / "cldf"
 OUT = Path(__file__).resolve().parents[1] / "src" / "cee" / "data" / "v2_concepts.json"
+DEFAULT_CONCEPTS = json.loads(
+    (Path(__file__).resolve().parents[1] / "src" / "cee" / "data" / "v2_defaults.json").read_text(encoding="utf-8")
+)["default_concepts"]
 #: Verze dat (commit lexibank/wold), ze které je výřez.
 WOLD_COMMIT = "1df62b9bdc7292b35982aea49b4d5bd1951f6f3e"
 #: Význam doložený v méně jazycích je doplněk jednoho slovníku (ID ``…-999xx``).
