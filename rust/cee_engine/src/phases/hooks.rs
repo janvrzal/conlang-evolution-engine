@@ -65,27 +65,35 @@ fn follow_one(ctx: &mut StepContext<'_>, crossing: &Crossing) -> Result<(), Stri
         state.version += 1;
         state.lexicon_version += 1;
         if enter {
-            state.set_dominant(concept, morpheme);
+            crate::views::set_dominant(ctx.world, group, concept, morpheme);
+            let state = &mut ctx.world.groups.main_code_mut(group).phonology;
             if state.adjust_uses(morpheme, 1, 0) > 1 {
                 return Ok(());
             }
         } else {
             if state.dominant_of(concept) == morpheme {
-                state.set_dominant(concept, MorphemeId::NONE);
+                crate::views::set_dominant(ctx.world, group, concept, MorphemeId::NONE);
             }
+            let state = &mut ctx.world.groups.main_code_mut(group).phonology;
             if state.adjust_uses(morpheme, -1, 1) > 0 {
                 return Ok(());
             }
         }
     }
     if enter {
+        let _t = crate::timing::scope("w/vocab/adopt");
         adopt(ctx, group, morpheme)?;
     }
     // Tvary buněk paradigmatu: nový lexém a výpůjčka je dostanou podle produktivních koncovek kódu.
-    let units = units_in(ctx.world, group, morpheme);
+    let units = {
+        let _t = crate::timing::scope("w/vocab/units");
+        units_in(ctx.world, group, morpheme)
+    };
     if enter {
+        let _t = crate::timing::scope("w/vocab/enter");
         phonology::enter_units(ctx.world, group, &units)
     } else {
+        let _t = crate::timing::scope("w/vocab/leave");
         for unit in units {
             phonology::leave_vocabulary(ctx.world, group, unit);
         }

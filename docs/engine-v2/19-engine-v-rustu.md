@@ -45,6 +45,7 @@ rust/                      pracovní prostor Cargo (Cargo.toml, Cargo.lock, prof
 | `simulation`, `phases/*`, `changes/*` | smyčka, fáze kroku, rozhraní změn | `simulation.py` |
 | `phonology/*`, `changes/sound` | zvukové změny, index prostředí, fronty fonologizace (R1b) | `phonology.py`, `changes/sound.py` |
 | `checkpoint`, `parallel`, `state/*` | kontrolní body, vlákna, stavy oblastí R1 | – |
+| `views` | průběžně udržované pohledy kódu (koncovky tříd, slabost buněk, místa analogií, odvozeniny, součty četností, míry sémantických změn, pořadí vzorku slov) | `morphology.ClassStats` a keše pohledů |
 
 ## 2. Datový model
 
@@ -191,8 +192,8 @@ Zůstává sériové, protože zapisuje do sdílené banky tvarů, registru jmen
   zařazuje slova do front procesů (`queue_units` → `bank.results` s přidělováním čísel a případným doplněním map
   hlásek). Přechody téže skupiny na sobě závisejí (každý mění verzi kódu a tím neplatí pohled `class_stats`, který
   další přechod staví znovu), přechody různých skupin sdílejí banku a registr. Dvouprůchodový návrh by tu chtěl
-  „zkušební“ svět nebo banku s přidělováním čísel až při slučování; to je další krok (nejvíc času je v `units_of`,
-  tedy v opakovaném sestavování `class_stats`, které by pomohlo spíš přírůstkové udržování než souběh);
+  „zkušební“ svět nebo banku s přidělováním čísel až při slučování; nejvíc času bylo v `units_of`, tedy v opakovaném
+  sestavování `class_stats`, což odstranilo přírůstkové udržování pohledů (viz „Třetí kolo“ níže); zbývá zápis do banky;
 - aktivace procesů (`phonology::activate`, ~70 ms), fonologizace a morfologie v přestavbách (`rebuild`, ~190 ms),
   komunity: totéž, zápis do banky skupina po skupině, na jejichž pořadí záleží;
 - návrh a zápis inovací (`propose` s `&mut World`, ~90 ms): zakládá proměnné, procesy a varianty v registru;
@@ -260,6 +261,116 @@ Zrychlení proti stavu před touto úpravou při 8 vláknech: valley-50 1,11×, 
 village-400 1,05× (jednovláknový běh beze změny, v rámci šumu měření). Zisk je malý, protože podstatnou část
 sériového času drží právě části, které zůstaly sériové (hlavně `follow_vocabulary` a přestavby); `assess::refresh`
 a dorovnání indexu se zrychlily nejvíc (hodnocení 1,6× až 2,8× při 8 vláknech, dorovnání ~1,5×).
+
+### Třetí kolo: průběžně udržované pohledy kódu (větev `engine-v2-incremental-views`)
+
+Největší sériové části (`follow_vocabulary`, `adopt`, přestavby) nebrzdilo chybějící vlákno, ale to, že se odvozené
+pohledy kódu stavěly znovu přes celou slovní zásobu po každé změně verze kódu (`ViewCache` podle `code_version`):
+`morphology::class_stats` (volal ho každý přechod slova v `units_of`, tlaky, hodnocení analogií i brány), slabost
+buněk, místa vyrovnání a rozšíření, odvozeniny, součty četností pojmů, míry sémantických změn a pořadí vzorku
+slov. Teď je to **stav kódu**, který se upravuje v místech, kde se mění jeho vstupy (modul `views`, pole
+`GrammarCodeState::{index, dominant, rates, sample}`):
+
+| pohled | co se drží | kde se upravuje |
+|---|---|---|
+| `class_stats` (`ClassIndex`) | počty koncovek podle (třída, buňka) v pořadí jmen koncovek a nejčastější (produktivní) koncovka; počty podob koncovky a nejčastější podoba | `views::refresh` po vstupu a odchodu slova (`phonology::enter_units`, `leave_vocabulary`, `seed_vocabulary`) a po zápisu tvaru (`views::set_form` místo `forms.set`: analogie, výpůjčky, `adopt`, syntaktická přestavba, `phonology::queues::apply` dávkově po zvukových změnách) |
+| `cell_weakness` | (splynulé tvary, všechny tvary) podle (třída, buňka) | totéž |
+| `leveling_sites`, `extension_sites` | členové seřazení podle jména formové proměnné (`BTreeMap`), verze roste jen se změnou členů; hotový `FormSites` se z nich staví jen po změně | totéž; změní-li se produktivní koncovka buňky nebo to, zda zní, přehodnotí se jen slova té buňky |
+| odvozeniny (`derivations`) | základní pojem → odvozeniny podle jména pojmu | `views::set_dominant` (změna dominantního kořene pojmu) |
+| `concept_totals` | kořen → součet četností jeho pojmů (po jednom pojmu v pořadí čísel, součet je bit po bitu stejný jako při výpočtu od nuly) | `views::set_dominant` |
+| míry sémantických změn | pojem → základní míra × součet vah cest pro 7 druhů; verze druhu roste jen se změnou míry | `views::set_dominant` přepočte jen pojem, pojmy, do kterých z něj vedou vztahy nebo složeniny, a základy odvozenin (`changes::lexicon::update_rates`) |
+| vzorek slov pro hodnocení procesů (`select`) | slova slovní zásoby seřazená podle četnosti užití a jména (`SampleIndex`) | vstup a odchod slova (`views::vocabulary_changed`) a změna součtu četností lexému |
+| seznam lexikálních proměnných kódu | klíč je verze lexikálních proměnných světa (`Variables::lexical_version`), ne počet všech proměnných | zápis lexikální proměnné; kopie kódu zdědí hotové pohledy (`ViewCache::clone`) |
+
+Příspěvek slova (jeho třída, buňka, koncovka, podoba koncovky, splynutí s citačním tvarem, kmen vs. citační tvar) je
+čistá funkce stavu slova a tvaru jeho lexémů, takže úprava je „odečti starý příspěvek, přičti nový“ a nezávisí na
+pořadí změn; zápis tvaru lexému navíc přehodnotí jeho ostatní slova. Remízy vycházejí stejně jako dřív: nejčastější
+koncovka je první ve jménech (koncovky se drží v pořadí jmen), nejčastější podoba první v pořadí hlásek, součty
+četností se sčítají v pořadí čísel pojmů. Hot cesty pracují jen s čísly z registru; řetězec se skládá jen při
+změně členství míst (klíč řazení) a při vstupu slova do pořadí vzorku.
+
+**Uložení a obnova.** Pohledy nejsou součástí kontrolního bodu (`#[serde(skip)]`) a kopie kódu je kopíruje.
+Po načtení kontrolního bodu je `Simulation::with_changes` postaví deterministicky znovu (`views::build_missing`);
+dokud pohled není postavený, čtení spočte stav od nuly (správně, jen pomalu).
+
+**Kontrola proti výpočtu od nuly.** `views::verify` porovná všechny pohledy všech skupin s původním algoritmem
+(`views::reference`, odvozeniny, součty, míry, pořadí vzorku a seznam lexikálních proměnných se staví znovu).
+`tests/views.rs` ji volá po každém kroku na scénářích morphology, syntax, valley-50, shift, island-city, conquest
+a na příkladu `WorldSpec` (do roku 600) a po uložení a obnově z kontrolního bodu; v ladicím sestavení běží po každém
+kroku sama a v běžném sestavení ji zapne proměnná prostředí `CEE_VERIFY_VIEWS=1` (otisky všech scénářů níže byly
+ověřeny i s ní).
+
+**Co stál přepočet pohledů před úpravou** (jedno vlákno, `--phase-times`, ms a podíl z celkového času běhu; zdroj: čas
+stavby pohledů uvnitř keší, které se nově měří jako `views/…`):
+
+| pohled | valley-50 | příklad `WorldSpec` | village-400 |
+|---|---|---|---|
+| `class_stats` | 224 (8,0 %) | 241 (13,9 %) | 217 (2,3 %) |
+| sémantické změny (míry, vč. seznamu lexikálních proměnných) | 114 (4,1 %) | 68 (3,9 %) | 153 (1,6 %) |
+| seznam lexikálních proměnných | 50 (1,8 %) | 71 (4,0 %) | 76 (0,8 %) |
+| vzorek slov (`select`) | 59 (2,1 %) | 39 (2,2 %) | 124 (1,3 %) |
+| místa rozšíření / vyrovnání | 36 / 31 (1,3 / 1,1 %) | 27 / 14 (1,6 / 0,8 %) | 104 / 24 (1,1 / 0,2 %) |
+| součty četností pojmů | 35 (1,2 %) | 22 (1,3 %) | 75 (0,8 %) |
+| odvozeniny | 26 (0,9 %) | 15 (0,9 %) | 29 (0,3 %) |
+| slabost buněk | 14 (0,5 %) | 9 (0,5 %) | 28 (0,3 %) |
+| vektory skupin pro dorovnání indexu zvukových změn (`group_vectors`) | 11 (0,4 %) | 6 (0,3 %) | 58 (0,6 %) |
+
+Po úpravě zbývá z pohledů jen: seznam lexikálních proměnných 0,1 % (stavba jen při zápisu nové lexikální proměnné),
+vzorek slov 0,7 % (třídění 120 vybraných slov podle jména při každé změně slovní zásoby) a `group_vectors`. Ten jsem
+**nechal beze změny**, protože stojí 0,4 až 0,6 % běhu (11, 6 a 58 ms): je to rozdíl tvarů pro `SoundIndex::sync`
+(prochází pole podle čísla morfému a porovnává se předchozím stavem), tedy už je to přírůstkový spotřebitel a jeho
+přepsání by přinesla zanedbatelný zisk. Přepočet míst `rebracketing_sites` se nekešoval ani dřív (závisí na rozdělení
+konstrukcí, volá se jen z přestavby).
+
+**Čas po fázích** při 8 vláknech (ms; jeden běh; před = `engine-v2-dynamika`, po = tato větev; stroj nebyl volný,
+viz poznámku u měření):
+
+| fáze | valley-50 před | po | příklad před | po | village-400 před | po |
+|---|---|---|---|---|---|---|
+| innovation | 710 | 521 | 271 | 312 | 1171 | 979 |
+| – rates | 257 | 91 | 113 | 92 | 366 | 179 |
+| transmission/assess | 298 | 245 | 82 | 127 | 245 | 225 |
+| transmission/blocks | 600 | 538 | 238 | 338 | 2669 | 2672 |
+| transmission/write | 641 | 507 | 485 | 500 | 812 | 766 |
+| – w/vocab | 316 | 189 | 375 | 304 | 381 | 293 |
+| rebuild | 402 | 273 | 78 | 93 | 164 | 119 |
+| – rebuild/morphology | 203 | 76 | 49 | 32 | 105 | 54 |
+
+Na jednom vlákně (jen úpravy tohoto kola, proti jeho základu `63d6446`; ms, průměr dvou běhů na zatíženém stroji, takže
+jde o poměry): valley-50 `w/vocab` 296 → 186, `innovation/rates` 708 → 195 (míry sémantických změn a seznamy
+lexikálních proměnných), `rebuild/morphology` 192 → 79; příklad `w/vocab` 508 → 286 (zbytek je `adopt` a
+`enter_units`, obojí sekvenční zápis do banky a registru), `innovation/rates` 556 → 155, `rebuild/morphology` 77 → 30.
+
+**Wall-clock celého běhu** (s; medián ze 3 běhů, střídavě dyn/základ/po; 1, 4 a 8 vláken; před = `engine-v2-dynamika`,
+základ = `63d6446`, po = tato větev; **stroj ale nebyl volný**: vedle běžel cizí benchmark jiného agenta, proto jsou
+čísla zašuměná a uvádím dvě úplné sady po sobě):
+
+| scénář | vláken | před | základ | po (sada 2) | po (sada 1) |
+|---|---|---|---|---|---|
+| valley-50 | 1 / 4 / 8 | 3,00 / 1,62 / 1,65 | 2,89 / 1,64 / 1,79 | 2,46 / 1,44 / 1,58 | 2,58 / 2,14 / 1,61 |
+| příklad `WorldSpec` | 1 / 4 / 8 | 2,91 / 2,28 / 2,27 | 2,52 / 2,31 / 2,31 | 2,45 / 1,84 / 1,87 | 2,27 / 1,18 / 1,01 |
+| grid-5x5 | 1 / 4 / 8 | 2,01 / 1,30 / 1,38 | 2,05 / 1,26 / 1,32 | 1,75 / 1,21 / 1,18 | 0,86 / 0,62 / 0,63 |
+| village-400 | 1 / 4 / 8 | 18,72 / 5,80 / 5,43 | 18,59 / 5,81 / 5,66 | 12,28 / 5,40 / 5,64 | 11,89 / 5,73 / 4,88 |
+
+(Sada 1 se měřila s jinými relativními zátěžemi stroje než sada 2; v sadě 1 běžely „před“ a „základ“ pro
+valley-50 1/4/8: 2,91/3,08/2,03 a 3,09/3,11/2,00, příklad 2,71/2,08/1,36 a 3,16/1,97/1,20, grid 1,00/0,66/0,69
+a 0,99/0,66/0,68, village 11,12/5,24/4,99 a 10,93/5,10/4,65.) Po úpravě je běh na jednom vláknu v obou sadách
+rychlejší než před i než základ (valley-50 asi o 15 až 20 %, příklad o 3 až 20 %, grid-5x5 o 15 %); při 4 a 8 vláknech
+je zisk menší (sériová část se zmenšila, ale bloky přenosu a zápis přenosu zůstávají), na village-400 je v rámci šumu
+beze změny (dominují bloky přenosu, které s pohledy nesouvisejí).
+
+**Souběh `follow_vocabulary` a přestaveb po skupinách jsem nezaváděl.** Přírůstkové pohledy souběh neuvolnily:
+přechody téže skupiny na sobě stále závisejí (každý mění stav pohledu), přechody různých skupin sdílejí banku
+tvarů a registr jmen, kde se čísla nových tvarů a morfémů přidělují v pořadí zápisu. Zbývající čas v `w/vocab` je
+právě tento zápis (`enter_units`: zařazení do front a `bank.results`; `adopt` u příkladu 61 ms: `inventory` a `adapt`
+jsou čisté, ale další přechod téže skupiny čte stav po předchozím) a časy `units_of` spadly z desítek ms na
+6 až 9 ms (`w/vocab/units`). Další krok, pokud bude třeba: dvouprůchodově předpočítat `adapt` pro první přechod
+každé skupiny, což ale potřebuje pořadí zápisů zachovat jako dnes.
+
+**Determinismus.** Otisky historie na jednom vlákně jsou stejné jako před úpravou na všech scénářích `cee scenarios`
+(do roku 1200, village-400 do 300) i na příkladu `WorldSpec` (do 1500), také s `CEE_VERIFY_VIEWS=1`; `tests/threads.rs`
+(1, 2, 3, 4 a 8 vláken) a všech 62 bran (`cargo test --release --test gates -- --ignored --test-threads=1`) prošly,
+brány nebylo třeba přepočítávat.
 
 ### Počet vláken
 

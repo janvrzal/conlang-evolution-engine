@@ -335,7 +335,9 @@ pub fn adopt(world: &mut World, group: GroupId, morpheme: MorphemeId) -> Result<
     let native = inventory(world, group);
     let adapted = adapt(world, &native, &donor);
     let form = world.bank.id_of(&adapted);
-    world.groups.main_code_mut(group).forms.set(
+    crate::views::set_form(
+        world,
+        group,
         morpheme,
         UnitForm {
             form,

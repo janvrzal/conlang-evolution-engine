@@ -473,7 +473,7 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
                     .filter(|&m| world.morphemes.contains(m));
                 (name, found)
             };
-        let totals = morphology::concept_totals(world, group);
+        let totals = morphology::concept_totals(world, group).into_owned();
         let mut rewritten = 0_u32;
         let mut kept = 0_u32;
         for root in roots {
@@ -558,7 +558,7 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
                     id
                 }
             };
-            world.groups.main_code_mut(group).forms.set(unit, new);
+            crate::views::set_form(world, group, unit, new);
             rewritten += 1;
             if exists {
                 crate::phonology::requeue_all(world, group, unit)?;

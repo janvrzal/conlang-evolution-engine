@@ -22,7 +22,7 @@
 //! (`phonology::requeue_all`) a vstup tvaru do slovní zásoby (`phonology::enter_units`) volá
 //! morfologie a syntax přímo; dočasné náhrady z R1c odpadly.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -68,149 +68,20 @@ pub struct NewUnit {
 
 // --- koncovky tříd ---------------------------------------------------------------------
 
-/// Kolik lexémů nese kterou koncovku a jak ta koncovka dnes zní (`morphology.ClassStats`).
-#[derive(Debug, Default)]
-pub struct ClassStats {
-    /// (třída, buňka) → koncovka → počet lexémů; koncovky v pořadí jmen.
-    exponents: BTreeMap<(WordClassId, CellId), Vec<(MorphemeId, u32)>>,
-    /// Koncovka → nejčastější dnešní podoba koncovky.
-    endings: BTreeMap<MorphemeId, Vec<i32>>,
-}
-
-impl ClassStats {
-    /// Nejčastější koncovka buňky (shodu rozhodne první ve jménech).
-    pub fn productive(&self, class: WordClassId, cell: CellId) -> Option<MorphemeId> {
-        let counts = self.exponents.get(&(class, cell))?;
-        let mut best: Option<(MorphemeId, u32)> = None;
-        for &(exponent, count) in counts {
-            if best.is_none_or(|(_, held)| count > held) {
-                best = Some((exponent, count));
-            }
-        }
-        best.map(|(exponent, _)| exponent)
-    }
-
-    /// Podíl lexémů buňky, které nesou koncovku `exponent`.
-    pub fn share(&self, class: WordClassId, cell: CellId, exponent: MorphemeId) -> f64 {
-        let Some(counts) = self.exponents.get(&(class, cell)) else {
-            return 0.0;
-        };
-        if counts.is_empty() || exponent.is_none() {
-            return 0.0;
-        }
-        let total: u32 = counts.iter().map(|c| c.1).sum();
-        let own = counts.iter().find(|c| c.0 == exponent).map_or(0, |c| c.1);
-        f64::from(own) / f64::from(total)
-    }
-
-    /// Dnešní podoba koncovky (`None` = koncovka v kódu není).
-    pub fn ending(&self, exponent: MorphemeId) -> Option<&[i32]> {
-        self.endings.get(&exponent).map(Vec::as_slice)
-    }
-
-    /// Koncovka s neprázdnou podobou (prázdná koncovka v Pythonu neplatí).
-    pub fn sounding(&self, exponent: MorphemeId) -> bool {
-        self.ending(exponent).is_some_and(|e| !e.is_empty())
-    }
-}
-
-/// Tvary slov ve slovní zásobě kódu (kind `Word`), v pořadí čísel.
-fn word_units(world: &World, group: GroupId) -> Vec<MorphemeId> {
-    let code = world.groups.main_code(group);
-    code.phonology
-        .vocabulary
-        .iter()
-        .filter(|&unit| world.morphemes.kind[unit.index()] == MorphemeKind::Word)
-        .collect()
-}
-
 /// Citační tvar lexému tvaru slova (číslo tvaru v bance).
 pub(crate) fn citation_id(world: &World, group: GroupId, unit: MorphemeId) -> u32 {
     world.unit_of(group, world.morphemes.lexeme_id(unit)).form
 }
 
-/// Počty koncovek kódu (pohled `morphology.class_stats`).
-pub fn class_stats(world: &World, group: GroupId) -> Arc<ClassStats> {
-    let code = world.groups.main_code(group);
-    code.phonology
-        .grammar
-        .cache
-        .get_or("class-stats", code_version(code), || {
-            let mut counts: HashMap<(WordClassId, CellId), HashMap<MorphemeId, u32>> =
-                HashMap::new();
-            let mut shapes: HashMap<MorphemeId, BTreeMap<Vec<i32>, u32>> = HashMap::new();
-            for unit in word_units(world, group) {
-                let class = world.morphemes.word_class[unit.index()];
-                let cell = world.morphemes.cell[unit.index()];
-                if class.is_none() || cell.is_none() {
-                    continue;
-                }
-                let state = world.unit_of(group, unit);
-                if state.exponent.is_none() {
-                    continue;
-                }
-                *counts
-                    .entry((class, cell))
-                    .or_default()
-                    .entry(state.exponent)
-                    .or_insert(0) += 1;
-                let form = world.bank.form(state.form);
-                let (_, ending) = split(form, state.boundary);
-                *shapes
-                    .entry(state.exponent)
-                    .or_default()
-                    .entry(ending.to_vec())
-                    .or_insert(0) += 1;
-            }
-            let names = &world.registry.morphemes;
-            let exponents = counts
-                .into_iter()
-                .map(|(key, held)| {
-                    let mut items: Vec<(MorphemeId, u32)> = held.into_iter().collect();
-                    items.sort_by(|a, b| names.name(a.0 .0).cmp(names.name(b.0 .0)));
-                    (key, items)
-                })
-                .collect();
-            let endings = shapes
-                .into_iter()
-                .map(|(exponent, held)| {
-                    let mut best: Option<(&Vec<i32>, u32)> = None;
-                    for (shape, &count) in &held {
-                        if best.is_none_or(|(_, kept)| count > kept) {
-                            best = Some((shape, count));
-                        }
-                    }
-                    (exponent, best.map(|b| b.0.clone()).unwrap_or_default())
-                })
-                .collect();
-            ClassStats { exponents, endings }
-        })
+/// Počty koncovek kódu (pohled `morphology.class_stats`): kolik lexémů nese kterou koncovku a jak
+/// ta koncovka dnes zní. Udržuje se průběžně ([`crate::views`]).
+pub fn class_stats(world: &World, group: GroupId) -> crate::views::Stats<'_> {
+    crate::views::stats(world, group)
 }
 
 /// Podíl tvarů buňky, které splynuly s citačním tvarem (`syntax._weakness_reference`).
 pub fn cell_weakness(world: &World, group: GroupId, class: WordClassId, cell: CellId) -> f64 {
-    let code = world.groups.main_code(group);
-    let table = code
-        .phonology
-        .grammar
-        .cache
-        .get_or("weakness", code_version(code), || {
-            let mut counts: HashMap<(WordClassId, CellId), (u32, u32)> = HashMap::new();
-            for unit in word_units(world, group) {
-                let class = world.morphemes.word_class[unit.index()];
-                let cell = world.morphemes.cell[unit.index()];
-                let entry = counts.entry((class, cell)).or_insert((0, 0));
-                entry.1 += 1;
-                if world.unit_of(group, unit).form == citation_id(world, group, unit) {
-                    entry.0 += 1;
-                }
-            }
-            counts
-        });
-    match table.get(&(class, cell)) {
-        Some(&(merged, total)) if total > 0 => f64::from(merged) / f64::from(total),
-        _ => 1.0,
-    }
+    crate::views::stats(world, group).weakness(class, cell)
 }
 
 // --- místa analogických změn --------------------------------------------------------------
@@ -250,65 +121,43 @@ pub fn active(world: &World) -> bool {
     world.table.is_some() && world.paradigms.iter().any(Option::is_some)
 }
 
-/// Vyrovnání: tvar buňky s kmenem jiným než citační tvar.
+/// Místa z průběžného pohledu: pořadí jmen formových proměnných drží pohled sám.
+fn sites_of(changes: Vec<FormChange>, keys: Vec<String>) -> FormSites {
+    FormSites { changes, keys }
+}
+
+/// Vyrovnání: tvar buňky s kmenem jiným než citační tvar. Členy drží průběžný pohled, hotový
+/// seznam se staví znovu jen po změně členů.
 pub fn leveling_sites(world: &World, group: GroupId) -> Arc<FormSites> {
     let code = world.groups.main_code(group);
+    let index = &code.phonology.grammar.index;
+    if !index.is_built() {
+        let (changes, keys) = crate::views::stats(world, group).level_sites();
+        return Arc::new(sites_of(changes, keys));
+    }
     code.phonology
         .grammar
         .cache
-        .get_or("level-sites", code_version(code), || {
-            let mut found = Vec::new();
-            for unit in word_units(world, group) {
-                let state = world.unit_of(group, unit);
-                let form = world.bank.form(state.form);
-                let (stem, _) = split(form, state.boundary);
-                let citation = world.bank.form(citation_id(world, group, unit));
-                if stem != citation {
-                    found.push(FormChange {
-                        operation: FormOperation::Level,
-                        unit,
-                        exponent: MorphemeId::NONE,
-                        segment: None,
-                    });
-                }
-            }
-            FormSites::from(world, found)
+        .get_or("level-sites", index.level_version, || {
+            let (changes, keys) = index.level_sites();
+            sites_of(changes, keys)
         })
 }
 
 /// Rozšíření vzoru: buňka s menšinovou koncovkou, nebo splynulá s citačním tvarem.
 pub fn extension_sites(world: &World, group: GroupId) -> Arc<FormSites> {
     let code = world.groups.main_code(group);
-    let stats = class_stats(world, group);
+    let index = &code.phonology.grammar.index;
+    if !index.is_built() {
+        let (changes, keys) = crate::views::stats(world, group).extension_sites();
+        return Arc::new(sites_of(changes, keys));
+    }
     code.phonology
         .grammar
         .cache
-        .get_or("extension-sites", code_version(code), || {
-            let mut found = Vec::new();
-            for unit in word_units(world, group) {
-                let class = world.morphemes.word_class[unit.index()];
-                let cell = world.morphemes.cell[unit.index()];
-                if class.is_none() || cell.is_none() {
-                    continue;
-                }
-                let Some(productive) = stats.productive(class, cell) else {
-                    continue;
-                };
-                if !stats.sounding(productive) {
-                    continue;
-                }
-                let current = world.unit_of(group, unit);
-                let syncretic = current.form == citation_id(world, group, unit);
-                if current.exponent != productive || syncretic {
-                    found.push(FormChange {
-                        operation: FormOperation::Extend,
-                        unit,
-                        exponent: productive,
-                        segment: None,
-                    });
-                }
-            }
-            FormSites::from(world, found)
+        .get_or("extension-sites", index.ext_version, || {
+            let (changes, keys) = index.extension_sites();
+            sites_of(changes, keys)
         })
 }
 
@@ -685,7 +534,9 @@ pub fn units_of(world: &mut World, group: GroupId, root: MorphemeId) -> Vec<Morp
                 let mut form = stem.clone();
                 form.extend_from_slice(&ending);
                 let form_id = world.bank.id_of(&form);
-                world.groups.main_code_mut(group).forms.set(
+                crate::views::set_form(
+                    world,
+                    group,
                     unit,
                     UnitForm {
                         form: form_id,
@@ -777,7 +628,9 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
             };
             let Some(new) = new else { continue };
             let form = world.bank.id_of(&new.form);
-            world.groups.main_code_mut(group).forms.set(
+            crate::views::set_form(
+                world,
+                group,
                 target,
                 UnitForm {
                     form,
@@ -814,17 +667,12 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
 // --- četnost užití tvarů --------------------------------------------------------------------
 
 /// Součet četností pojmů, které vyjadřuje dominantní kořen (kořen → součet), pro jeden kód.
-pub fn concept_totals(world: &World, group: GroupId) -> HashMap<MorphemeId, f64> {
-    let code = world.groups.main_code(group);
-    let mut totals: HashMap<MorphemeId, f64> = HashMap::new();
-    for (at, &root) in code.phonology.dominant.iter().enumerate() {
-        if root.is_none() {
-            continue;
-        }
-        *totals.entry(root).or_insert(0.0) +=
-            world.concepts.frequency_of(crate::ids::ConceptId::new(at));
-    }
-    totals
+/// Udržuje se průběžně ([`crate::views::DominantIndex`]).
+pub fn concept_totals(
+    world: &World,
+    group: GroupId,
+) -> std::borrow::Cow<'_, HashMap<MorphemeId, f64>> {
+    crate::views::totals(world, group)
 }
 
 /// Jak často kód tvar užívá (`world.usage_frequency`): součet četností pojmů, které vyjadřuje;

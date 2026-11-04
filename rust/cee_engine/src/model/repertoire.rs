@@ -64,6 +64,10 @@ pub struct Variables {
     pub concept: Vec<ConceptId>,
     /// U procesní proměnné číslo procesu, jinak `NONE`.
     pub process: Vec<ProcessId>,
+    /// Roste, když se uloží nebo přepíše lexikální proměnná (podle něj platí seznamy
+    /// lexikálních proměnných kódů); neukládá se.
+    #[serde(skip)]
+    pub lexical_version: u64,
 }
 
 impl Variables {
@@ -85,12 +89,16 @@ impl Variables {
         concept: ConceptId,
     ) {
         let at = id.index();
+        let was_lexical = self.kind.get(at) == Some(&VariableKind::Lexical);
         while self.kind.len() <= at {
             self.kind.push(VariableKind::Lexical);
             self.key.push(String::new());
             self.default.push(VariantId::NONE);
             self.concept.push(ConceptId::NONE);
             self.process.push(ProcessId::NONE);
+        }
+        if kind == VariableKind::Lexical || was_lexical {
+            self.lexical_version += 1;
         }
         self.kind[at] = kind;
         self.key[at] = key.to_owned();

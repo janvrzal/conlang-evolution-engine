@@ -78,8 +78,9 @@ pub fn run_eroded(seed: i64) -> Result<(Simulation, BTreeSet<VariableId>), Strin
         eroded.insert(variable);
         let short = world.bank.id_of(&form[..2]);
         for group in world.group_ids() {
-            let code = world.groups.main_code_mut(group);
-            code.forms.set(
+            crate::views::set_form(
+                &mut world,
+                group,
                 morpheme,
                 UnitForm {
                     form: short,
@@ -87,7 +88,7 @@ pub fn run_eroded(seed: i64) -> Result<(Simulation, BTreeSet<VariableId>), Strin
                     exponent: MorphemeId::NONE,
                 },
             );
-            code.phonology.version += 1;
+            world.groups.main_code_mut(group).phonology.version += 1;
         }
     }
     let mut simulation = Simulation::new(world, SimulationConfig::default(), Vec::new())?;

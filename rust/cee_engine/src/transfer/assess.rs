@@ -125,7 +125,24 @@ impl Sample {
 /// Výběr vzorku: nejčastější tvary slovní zásoby (shodu rozhodne jméno), v pořadí jmen,
 /// s váhami nejméně 0,01 (`top_words`, `clipped_frequencies`).
 fn select(world: &World, group: GroupId) -> (Vec<MorphemeId>, Vec<f64>, f64) {
+    let _t = crate::timing::scope("views/sample-select");
     let code = world.groups.main_code(group);
+    let held = &code.phonology.grammar.sample;
+    if held.is_built() {
+        // Pořadí podle četnosti drží průběžný pohled ([`crate::views::SampleIndex`]); vzorek
+        // jsou jeho první slova v pořadí jmen.
+        let names = &world.registry.morphemes;
+        let mut keyed: Vec<(f64, MorphemeId)> =
+            held.top(SAMPLE_WORDS).map(|(unit, f)| (f, unit)).collect();
+        keyed.sort_by(|a, b| names.name(a.1 .0).cmp(names.name(b.1 .0)));
+        let weights: Vec<f64> = keyed.iter().map(|&(f, _)| f.max(MIN_WEIGHT)).collect();
+        let total: f64 = weights.iter().sum();
+        return (
+            keyed.into_iter().map(|(_, m)| m).collect(),
+            weights,
+            if total == 0.0 { 1.0 } else { total },
+        );
+    }
     let totals = concept_totals(world, group);
     let names = &world.registry.morphemes;
     let mut keyed: Vec<(f64, MorphemeId)> = code
@@ -532,7 +549,7 @@ pub fn form_cells(
     columns: &[usize],
 ) -> Vec<Option<Assessment>> {
     form_cells_with(world, variable, columns, |column| {
-        Cow::Owned(concept_totals(world, world.live.group_ids[column]))
+        concept_totals(world, world.live.group_ids[column])
     })
 }
 

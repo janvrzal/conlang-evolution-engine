@@ -62,9 +62,12 @@ impl ViewCache {
 }
 
 impl Clone for ViewCache {
-    /// Kopie stavu začíná s prázdnou keší (pohledy se postaví znovu).
+    /// Kopie stavu zdědí hotové pohledy (neměnné, `Arc`): každý nese verzi stavu, ze kterého
+    /// vznikl, a kopie má stav stejný, takže pohled platí, dokud se stav kopie nezmění.
     fn clone(&self) -> Self {
-        ViewCache::default()
+        ViewCache {
+            inner: Mutex::new(self.inner.lock().expect("keš pohledů").clone()),
+        }
     }
 }
 
@@ -95,4 +98,16 @@ pub struct GrammarCodeState {
     /// Odvozené pohledy (místa změn, koncovky tříd); nikdy se neukládají.
     #[serde(skip)]
     pub cache: ViewCache,
+    /// Průběžně udržované pohledy slov kódu ([`crate::views`]); neukládají se, po obnově
+    /// z kontrolního bodu se postaví znovu.
+    #[serde(skip)]
+    pub index: crate::views::ClassIndex,
+    /// Totéž pro dominantní kořeny: odvozeniny, součty četností pojmů, míry sémantických změn.
+    #[serde(skip)]
+    pub dominant: crate::views::DominantIndex,
+    #[serde(skip)]
+    pub rates: crate::views::SemanticRates,
+    /// Pořadí slov slovní zásoby podle četnosti užití (vzorek pro hodnocení procesů).
+    #[serde(skip)]
+    pub sample: crate::views::SampleIndex,
 }

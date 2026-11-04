@@ -43,7 +43,9 @@ fn experiment(seed: i64, cell: Option<&str>, particle: Option<&str>) -> Result<S
                 let citation = world.form_of(group, lexeme).to_vec();
                 let exponent = world.unit_of(group, unit).exponent;
                 let form = world.bank.id_of(&citation);
-                world.groups.main_code_mut(group).forms.set(
+                crate::views::set_form(
+                    world,
+                    group,
                     unit,
                     UnitForm {
                         form,
@@ -69,7 +71,9 @@ fn experiment(seed: i64, cell: Option<&str>, particle: Option<&str>) -> Result<S
                     .find(|&s| table.is_vowel(s));
                 if let Some(vowel) = vowel {
                     let form = world.bank.id_of(&[vowel]);
-                    world.groups.main_code_mut(group).forms.set(
+                    crate::views::set_form(
+                        world,
+                        group,
                         root,
                         UnitForm {
                             form,

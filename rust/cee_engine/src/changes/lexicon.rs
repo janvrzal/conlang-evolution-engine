@@ -27,6 +27,7 @@ use crate::model::repertoire::{Origin, Payload, VariableKind};
 use crate::parameters::CHANNELS;
 use crate::rng::{stable_id, Part, Stream};
 use crate::syntax::dominant_root;
+use crate::views::{SemanticRates, SEMANTIC_KINDS};
 use crate::world::World;
 
 /// Podíl expresivního tvoření ve světě s významy (jen malá část obměny slovníku).
@@ -43,10 +44,13 @@ const MAX_COMPOUND: usize = 10;
 /// Lexikální proměnné kódu v pořadí jmen (`repertoire.variable_ids_of("lexical")`).
 fn lexical_variables(world: &World, group: GroupId) -> Arc<Vec<VariableId>> {
     let code = world.groups.main_code(group);
+    // Seznam se staví znovu jen s novou lexikální proměnnou světa (ne s každou proměnnou).
+    let version = world.variables.lexical_version;
     code.phonology
         .grammar
         .cache
-        .get_or("lexical-variables", world.variables.len() as u64, || {
+        .get_or("lexical-variables", version, || {
+            let _t = crate::timing::scope("views/lexical-variables");
             code.repertoire
                 .variable_ids_by_name(&world.registry.variables)
                 .into_iter()
@@ -62,15 +66,6 @@ fn concept_of(world: &World, site: VariableId) -> ConceptId {
 
 fn concept_name(world: &World, concept: ConceptId) -> &str {
     world.registry.concepts.name(concept.0)
-}
-
-/// Verze slovní zásoby kódu, podle které platí odvozené pohledy (změna dominantních kořenů).
-fn lexicon_version(world: &World, group: GroupId) -> u64 {
-    let state = &world.groups.main_code(group).phonology;
-    state
-        .lexicon_version
-        .wrapping_mul(1_000_003)
-        .wrapping_add(state.dominant_log.len() as u64)
 }
 
 fn origin(kind: &str, ctx: &InnovationContext, parent: VariantId) -> Origin {
@@ -528,75 +523,221 @@ impl SemanticChange {
         found
     }
 
-    fn view(&self, world: &World, group: GroupId) -> Arc<View> {
-        let mut version = lexicon_version(world, group);
-        if self.which == Semantic::Taboo {
-            let taboo: u64 = world.groups.taboo[group.index()]
-                .iter()
-                .map(|c| u64::from(c.0) + 1)
-                .sum();
-            version = version.wrapping_add(taboo << 40);
+    /// Slot druhu v průběžném pohledu měr.
+    fn slot(&self) -> usize {
+        Semantic::ALL
+            .iter()
+            .position(|&w| w == self.which)
+            .expect("druh sémantické změny")
+    }
+
+    /// Míra změny pojmu: základní míra krát součet vah cest; `None` bez cesty.
+    fn rate_of(&self, world: &World, group: GroupId, concept: ConceptId) -> Option<f64> {
+        let paths = self.paths(world, group, concept);
+        (!paths.is_empty()).then(|| self.base_rate() * paths.iter().map(|p| p.weight).sum::<f64>())
+    }
+
+    /// Místa změny z měr pojmů (průběžný pohled) nebo, když není postavený, z cest od nuly.
+    fn build_view(&self, world: &World, group: GroupId, rates: Option<&[Option<f64>]>) -> View {
+        let mut view = View::default();
+        if !Self::enabled(world) {
+            return view;
         }
+        for &site in lexical_variables(world, group).iter() {
+            let concept = concept_of(world, site);
+            let rate = match rates {
+                Some(held) => held.get(concept.index()).copied().flatten(),
+                None => self.rate_of(world, group, concept),
+            };
+            if let Some(rate) = rate {
+                view.sites.push(site);
+                view.rates.push(rate);
+            }
+        }
+        view.total = view.rates.iter().sum();
+        view
+    }
+
+    fn view(&self, world: &World, group: GroupId) -> Arc<View> {
         let code = world.groups.main_code(group);
+        let held = &code.phonology.grammar.rates;
+        if !held.built {
+            return Arc::new(self.build_view(world, group, None));
+        }
+        let slot = self.slot();
         code.phonology
             .grammar
             .cache
-            .get_or(self.kind(), version, || {
-                let mut view = View::default();
-                if !Self::enabled(world) {
-                    return view;
-                }
-                for &site in lexical_variables(world, group).iter() {
-                    let paths = self.paths(world, group, concept_of(world, site));
-                    if !paths.is_empty() {
-                        view.sites.push(site);
-                        view.rates
-                            .push(self.base_rate() * paths.iter().map(|p| p.weight).sum::<f64>());
-                    }
-                }
-                view.total = view.rates.iter().sum();
-                view
+            .get_or(self.kind(), held.versions[slot], || {
+                self.build_view(world, group, Some(&held.rates[slot]))
             })
     }
 }
 
-/// Základní pojem → (pojem, kořen) odvozenin z něj, seřazeno podle jména pojmu
-/// (`_derivations`); pole podle čísla základního pojmu.
-fn derivations(world: &World, group: GroupId) -> Arc<Vec<Vec<(ConceptId, MorphemeId)>>> {
-    let code = world.groups.main_code(group);
-    code.phonology
-        .grammar
-        .cache
-        .get_or("derivations", lexicon_version(world, group), || {
-            let mut index: Vec<Vec<(ConceptId, MorphemeId)>> =
-                vec![Vec::new(); world.registry.concepts.len()];
-            let mut items: Vec<(ConceptId, MorphemeId)> = code
-                .phonology
-                .dominant
-                .iter()
-                .enumerate()
-                .filter(|(_, root)| !root.is_none())
-                .map(|(at, &root)| (ConceptId::new(at), root))
-                .collect();
-            items.sort_by(|a, b| concept_name_cmp(world, a.0, b.0));
-            for (other, root) in items {
-                let meta = &world.morphemes.meta[root.index()];
-                if meta.etymology.as_deref() == Some("derivation") && meta.sources.len() == 1 {
-                    if let Some(base) = world.registry.concepts.get(&meta.sources[0]) {
-                        index[base as usize].push((other, root));
+impl Semantic {
+    const ALL: [Semantic; SEMANTIC_KINDS] = [
+        Semantic::Shift,
+        Semantic::Conversion,
+        Semantic::Derivation,
+        Semantic::Compounding,
+        Semantic::Taboo,
+        Semantic::Contamination,
+        Semantic::BackFormation,
+    ];
+}
+
+/// Míry všech druhů změn pro všechny pojmy kódu, od nuly.
+fn fresh_rates(world: &World, group: GroupId) -> SemanticRates {
+    let size = world.registry.concepts.len();
+    let mut rates = SemanticRates {
+        built: true,
+        concepts: size,
+        rates: vec![vec![None; size]; SEMANTIC_KINDS],
+        versions: [0; SEMANTIC_KINDS],
+    };
+    if SemanticChange::enabled(world) {
+        for (slot, which) in Semantic::ALL.into_iter().enumerate() {
+            let change = SemanticChange::new(which);
+            for at in 0..size {
+                rates.rates[slot][at] = change.rate_of(world, group, ConceptId::new(at));
+            }
+        }
+    }
+    rates
+}
+
+/// Postaví míry sémantických změn kódu od nuly.
+pub fn build_rates(world: &mut World, group: GroupId) {
+    let rates = fresh_rates(world, group);
+    let state = &mut world.groups.main_code_mut(group).phonology.grammar;
+    state.rates = rates;
+    state.cache.clear();
+}
+
+/// Pojmy, jejichž cesty závisí na dominantním kořeni pojmu (ten, do kterého vedou vztahy z něj,
+/// a složeniny, které ho obsahují); graf je neměnný, takže se staví jednou za svět.
+fn dependents(world: &World) -> Arc<Vec<Vec<ConceptId>>> {
+    world.grammar.cache.get_or("sem-dependents", 0, || {
+        let size = world.registry.concepts.len();
+        let mut list: Vec<Vec<ConceptId>> = vec![Vec::new(); size];
+        if let Some(graph) = world.semantics.as_deref() {
+            for relation in &graph.relations {
+                if let Some(entry) = list.get_mut(relation.source.index()) {
+                    entry.push(relation.target);
+                }
+            }
+            for at in 0..size {
+                for &(left, right) in graph.compounds_of(ConceptId::new(at)) {
+                    for part in [left, right] {
+                        if let Some(entry) = list.get_mut(part.index()) {
+                            entry.push(ConceptId::new(at));
+                        }
                     }
                 }
             }
-            index
-        })
+        }
+        list
+    })
 }
 
-fn concept_name_cmp(world: &World, a: ConceptId, b: ConceptId) -> std::cmp::Ordering {
-    world
-        .registry
-        .concepts
-        .name(a.0)
-        .cmp(world.registry.concepts.name(b.0))
+/// Dominantní kořen pojmu se změnil: přepočítají se míry jen pojmů, kterých se to týká.
+pub fn update_rates(
+    world: &mut World,
+    group: GroupId,
+    concept: ConceptId,
+    old: MorphemeId,
+    new: MorphemeId,
+) {
+    let mut rates = std::mem::take(&mut world.groups.main_code_mut(group).phonology.grammar.rates);
+    if !rates.built || rates.concepts != world.registry.concepts.len() {
+        rates = fresh_rates(world, group);
+        world
+            .groups
+            .main_code(group)
+            .phonology
+            .grammar
+            .cache
+            .clear();
+    } else if SemanticChange::enabled(world) {
+        let mut affected: Vec<ConceptId> = vec![concept];
+        affected.extend(dependents(world).get(concept.index()).into_iter().flatten());
+        for root in [old, new] {
+            if !root.is_none() {
+                if let Some(base) = crate::views::derivation_base(world, root) {
+                    affected.push(ConceptId::new(base));
+                }
+            }
+        }
+        affected.sort();
+        affected.dedup();
+        for (slot, which) in Semantic::ALL.into_iter().enumerate() {
+            let change = SemanticChange::new(which);
+            for &at in &affected {
+                let found = change.rate_of(world, group, at);
+                let held = &mut rates.rates[slot][at.index()];
+                if held.map(f64::to_bits) != found.map(f64::to_bits) {
+                    *held = found;
+                    rates.versions[slot] += 1;
+                }
+            }
+        }
+    }
+    world.groups.main_code_mut(group).phonology.grammar.rates = rates;
+}
+
+/// Porovná míry s výpočtem od nuly (a seznam lexikálních proměnných s tím, co by dal nový výpočet).
+pub fn verify_rates(world: &World, group: GroupId) -> Result<(), String> {
+    let code = world.groups.main_code(group);
+    let fresh: Vec<VariableId> = code
+        .repertoire
+        .variable_ids_by_name(&world.registry.variables)
+        .into_iter()
+        .filter(|v| world.variables.kind.get(v.index()) == Some(&VariableKind::Lexical))
+        .collect();
+    if *lexical_variables(world, group) != fresh {
+        return Err(format!(
+            "{}: seznam lexikálních proměnných se liší od výpočtu od nuly",
+            world.group_name(group)
+        ));
+    }
+    let held = &world.groups.main_code(group).phonology.grammar.rates;
+    if !held.built {
+        return Err("míry sémantických změn nejsou postavené".into());
+    }
+    let fresh = fresh_rates(world, group);
+    for slot in 0..SEMANTIC_KINDS {
+        let same = held.rates[slot].len() == fresh.rates[slot].len()
+            && held.rates[slot]
+                .iter()
+                .zip(&fresh.rates[slot])
+                .all(|(a, b)| a.map(f64::to_bits) == b.map(f64::to_bits));
+        if !same {
+            return Err(format!(
+                "{}: míry sémantické změny {slot} se liší od výpočtu od nuly",
+                world.group_name(group)
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Základní pojem → (pojem, kořen) odvozenin z něj, seřazeno podle jména pojmu
+/// (`_derivations`); pole podle čísla základního pojmu. Udržuje se průběžně
+/// ([`crate::views::DominantIndex`]).
+fn derivations(
+    world: &World,
+    group: GroupId,
+) -> std::borrow::Cow<'_, [Vec<(ConceptId, MorphemeId)>]> {
+    let index = &world.groups.main_code(group).phonology.grammar.dominant;
+    if index.is_built() {
+        std::borrow::Cow::Borrowed(index.derived())
+    } else {
+        std::borrow::Cow::Owned(
+            crate::views::DominantIndex::build(world, group)
+                .derived()
+                .to_vec(),
+        )
+    }
 }
 
 impl Change for SemanticChange {

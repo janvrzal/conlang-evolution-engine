@@ -12,8 +12,6 @@
 //! `dispersion`, `phonotactics`; `uniformity`, `conservation`, `teachability`,
 //! `distinctiveness`) čtou hodnocení nad vzorky slov; počítá je [`crate::transfer::assess`].
 
-use std::borrow::Cow;
-use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use cee_core::pressures::id;
@@ -237,8 +235,6 @@ pub struct Pressures<'a> {
     weakness: Vec<OnceLock<f64>>,
     /// Dominantní varianta konstrukční proměnné funkce podle (sloupec, funkce).
     dominant: Vec<OnceLock<Option<VariantId>>>,
-    /// Úhrny četností pojmů podle kořenů, podle sloupce osy (hodnocení analogií).
-    totals: Vec<OnceLock<HashMap<MorphemeId, f64>>>,
 }
 
 impl<'a> Pressures<'a> {
@@ -288,7 +284,6 @@ impl<'a> Pressures<'a> {
             owners: (0..columns).map(|_| OnceLock::new()).collect(),
             weakness: (0..columns * functions).map(|_| OnceLock::new()).collect(),
             dominant: (0..columns * functions).map(|_| OnceLock::new()).collect(),
-            totals: (0..columns).map(|_| OnceLock::new()).collect(),
         })
     }
 
@@ -560,9 +555,7 @@ impl<'a> Pressures<'a> {
         }
         let values = if kind == VariableKind::Form {
             crate::transfer::assess::form_cells_with(world, variable, &columns, |column| {
-                Cow::Borrowed(self.totals[column].get_or_init(|| {
-                    crate::morphology::concept_totals(world, self.inputs.axis[column])
-                }))
+                crate::morphology::concept_totals(world, self.inputs.axis[column])
             })
         } else {
             crate::transfer::seams::assess_cells(world, variable, &columns, self.inputs.tick)

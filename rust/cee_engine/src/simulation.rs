@@ -106,6 +106,7 @@ impl Simulation {
         world.sync_live_groups()?;
         if world.table.is_some() {
             seed_vocabulary_all(&mut world)?;
+            crate::views::build_missing(&mut world);
         }
         if !world.varied {
             world.varied = true;
@@ -185,6 +186,10 @@ impl Simulation {
                 let _t = crate::timing::scope("observe");
                 phases::observe::run(&mut ctx)?;
             }
+        }
+        if crate::views::verifying() {
+            crate::views::verify(&self.world)
+                .map_err(|e| format!("krok {}: průběžný pohled: {e}", self.tick))?;
         }
         if let Some(every) = self.config.checkpoint_every {
             if (year - self.world.start_year) % every < 1e-9 {

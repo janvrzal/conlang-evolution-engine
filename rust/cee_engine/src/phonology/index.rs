@@ -60,6 +60,7 @@ fn stamp_of(world: &World, group: GroupId) -> Stamp {
 
 /// Příznaky slovní zásoby kódu a čísla tvarů morfémů (vstup dorovnání indexu).
 fn group_vectors(world: &World, group: GroupId) -> (Vec<u8>, Vec<i32>) {
+    let _t = crate::timing::scope("views/group-vectors");
     let code = world.groups.main_code(group);
     let count = world.morphemes.len();
     let mut flags = vec![0_u8; count];
