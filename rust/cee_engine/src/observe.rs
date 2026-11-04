@@ -412,12 +412,15 @@ pub fn observe_world(
         }
     }
     let pairs = candidates(&linked, &slots, &xs, &ys);
-    let dialects = linkage(&features, &pairs, dialect_threshold, None);
     let hysteresis = Hysteresis {
         labels: &labels,
         margin: HYSTERESIS * language_threshold,
     };
-    let languages = linkage(&features, &pairs, language_threshold, Some(&hysteresis));
+    // Shlukování dialektů a jazyků je nezávislé (každé čte jen rysy a kandidáty): souběžně.
+    let (dialects, languages) = rayon::join(
+        || linkage(&features, &pairs, dialect_threshold, None),
+        || linkage(&features, &pairs, language_threshold, Some(&hysteresis)),
+    );
     Observed {
         spoken,
         dialects,
