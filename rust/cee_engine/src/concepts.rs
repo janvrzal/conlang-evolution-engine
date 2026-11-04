@@ -87,6 +87,37 @@ impl ConceptData {
             .unwrap_or(self.mean_borrowed)
     }
 
+    /// Kotva a normalizace váhy půjčitelnosti pojmu při síle `strength`
+    /// (`contact.reference` a `contact._normalizer`): průměr půjčitelnosti pojmů enginu a podíl
+    /// průměrné váhy pojmu vůči průměru `1 − frekvence`, aby síla nezměnila průměrnou míru výpůjček.
+    pub fn borrowing_scale(&self, strength: f64) -> (f64, f64) {
+        const BORROWED_FLOOR: f64 = 0.01;
+        let entries: Vec<(&String, &Value)> = self
+            .concepts
+            .as_object()
+            .map(|map| map.iter().collect())
+            .unwrap_or_default();
+        let scores: Vec<f64> = entries
+            .iter()
+            .filter_map(|(_, entry)| entry["borrowed"].as_f64())
+            .collect();
+        let mean = scores.iter().sum::<f64>() / scores.len().max(1) as f64;
+        let rarity = |name: &str| 1.0 - self.frequency(name).unwrap_or(0.0);
+        let rarities: f64 =
+            entries.iter().map(|(name, _)| rarity(name)).sum::<f64>() / entries.len().max(1) as f64;
+        let values: Vec<f64> = entries
+            .iter()
+            .filter_map(|(name, entry)| {
+                entry["borrowed"].as_f64().map(|borrowed| {
+                    rarity(name).powf((1.0 - strength).max(0.0))
+                        * (borrowed.max(BORROWED_FLOOR) / mean).powf(strength)
+                })
+            })
+            .collect();
+        let average = values.iter().sum::<f64>() / values.len().max(1) as f64;
+        (mean, average / rarities)
+    }
+
     /// Průměrná půjčitelnost významů katalogu WOLD.
     pub fn mean_borrowed(&self) -> f64 {
         self.mean_borrowed
