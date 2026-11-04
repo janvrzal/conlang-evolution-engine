@@ -377,6 +377,64 @@ pub fn validate(size: usize, custom: &[CustomConcept]) -> Vec<String> {
     problems
 }
 
+/// ID pojmů slovníku o `size` pojmech bez vlastních pojmů (v pořadí simulace).
+pub fn base_ids(size: usize) -> Vec<String> {
+    base(size.clamp(DEFAULT_SIZE, max_size()))
+        .into_iter()
+        .map(|b| b.0)
+        .collect()
+}
+
+/// Varování slovníku (cesta, zpráva): jiný slovník dá jiné výsledky než výchozí svět,
+/// vlastní pojem může zdvojit význam WOLD.
+pub fn warnings(size: usize, custom: &[CustomConcept]) -> Vec<(String, String)> {
+    let size = size.clamp(DEFAULT_SIZE, max_size());
+    let mut found = Vec::new();
+    if size != DEFAULT_SIZE {
+        found.push((
+            "vocabulary".to_owned(),
+            format!(
+                "slovník o {size} pojmech dá jiné výsledky než výchozí svět ({DEFAULT_SIZE} pojmů): slova \
+                 nových pojmů soutěží se stávajícími a kalibrace bran platí jen pro výchozí slovník"
+            ),
+        ));
+    }
+    if !custom.is_empty() {
+        found.push((
+            "concepts".to_owned(),
+            "vlastní pojmy dají jiné výsledky než výchozí svět: jejich slova soutěží se stávajícími \
+             a kalibrace bran platí jen pro výchozí slovník"
+                .to_owned(),
+        ));
+    }
+    let data = ConceptData::shared();
+    let mut meanings: HashMap<String, String> = HashMap::new();
+    for (concept, _) in base(size) {
+        let entry = data
+            .engine_item(&concept)
+            .or_else(|| data.catalog_item(&concept).cloned());
+        if let Some(item) = entry {
+            meanings.insert(item.wold_id, concept);
+        }
+    }
+    for (index, item) in custom.iter().enumerate() {
+        if let Some(linked) = link(item) {
+            if let Some(other) = meanings.get(&linked.wold_id) {
+                if other != &item.id {
+                    found.push((
+                        format!("concepts.{index}"),
+                        format!(
+                            "stejný význam WOLD ('{}') už má pojem '{other}'; slova obou pojmů budou soutěžit",
+                            linked.name
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+    found
+}
+
 /// Slovní druh pojmu z kategorie WOLD: jména a slovesa se ohýbají, ostatní ne.
 fn data_class(item: &CatalogItem) -> &'static str {
     match item.category.as_str() {

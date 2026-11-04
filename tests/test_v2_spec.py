@@ -1,4 +1,9 @@
-"""Popis světa pro UI (``cee.v2.spec``) a běh na pozadí (``cee.v2.runner``)."""
+"""Popis světa pro UI (``cee.v2.spec``): schéma, validace polí, přepisy parametrů a ověření v Rustu.
+
+Sémantiku (neznámé státy a regiony, slova, slovník) ověřuje Rust (``cee_engine_py.check_spec``,
+testy též v ``rust/cee_engine/tests/spec_check.rs``); sestavená vazba je potřeba, bez ní se
+modul přeskočí (``rust/README.md``).
+"""
 
 import json
 from importlib import resources
@@ -6,8 +11,14 @@ from importlib import resources
 import pytest
 
 from cee.v2 import runner
-from cee.v2.polity import State
-from cee.v2.spec import EVENT_KINDS, SpecError, WorldSpec, build, check, levels
+from cee.v2.spec import EVENT_KINDS, SpecError, WorldSpec, errors, levels, parse, vocabulary_options, warnings
+
+try:
+    binding = runner.native()
+except ImportError:
+    pytest.skip("vazba cee_engine_py není sestavená (rust/README.md)", allow_module_level=True)
+
+check = runner.check
 
 
 def small(**extra):
@@ -35,15 +46,8 @@ def test_priklad_sveta_je_platny_a_kazdy_druh_udalosti_ma_schema():
     schema = json.dumps(WorldSpec.model_json_schema())
     assert all(f'"{kind}"' in schema for kind in EVENT_KINDS)
     assert levels()["policy_levels"] == ["enforced", "promoted", "tolerant"]
-
-
-def test_stavba_sveta_z_popisu():
-    world, events, spec = build(small())
-    assert spec.end_year == 200
-    assert world.territories["x"].terrain == "hills"
-    assert world.territories["x"].native_language == "b"
-    assert len([g for g in world.group_ids() if g.startswith("x-")]) == 3
-    assert isinstance(events[0], State)
+    options = vocabulary_options(binding.vocabulary_max_size())
+    assert options["default"] == 149 and options["max"] > 1000 and 200 in options["presets"]
 
 
 def test_chyby_maji_cestu_a_ceskou_zpravu():
@@ -62,8 +66,8 @@ def test_chyby_maji_cestu_a_ceskou_zpravu():
     assert "aspoň 1" in issues["languages"]
     assert check(small(events=[{"kind": "war", "year": 0}]))[0].message.startswith("neznámý druh události")
     assert check(small(parameters={"nic": 1}))[0].path == "parameters.nic"
-    with pytest.raises(SpecError):
-        build(small(end_year=-5))
+    spec, issues = parse(small(end_year=-5))
+    assert spec is None and issues
 
 
 def test_prepisy_parametru_se_overi_podle_souboru():
@@ -86,9 +90,32 @@ def test_udalosti_se_overi_v_poradi_roku():
     assert check(late_state) == []
 
 
-def test_prepis_parametru_se_projevi():
-    world, _, _ = build(small(parameters={"capital_prestige": 3.0}))
-    assert world.params.capital_prestige == 3.0
+def test_vlastni_slova_se_overi():
+    data = small(languages=[{"id": "a", "words": {"xyz": "ka", "fire": "ʬ", "hand": " ", "eye": "kʷá",
+                                                   "ear": "ɐɾʡ"}}, {"id": "b"}])
+    issues = {issue.path: issue.message for issue in check(data)}
+    assert "neznámý pojem" in issues["languages.0.words.xyz"]
+    assert "hlásku" in issues["languages.0.words.fire"]
+    assert "prázdné" in issues["languages.0.words.hand"]
+    # tón diakritikou a hlásky, které PanPhon slévá, projdou
+    assert "languages.0.words.eye" not in issues and "languages.0.words.ear" not in issues
+
+
+def test_varovani_nezastavi_beh():
+    found = check(small(vocabulary=200))
+    assert not errors(found) and [issue.path for issue in warnings(found)] == ["vocabulary"]
+    assert [issue.path for issue in errors(check(small(vocabulary=200, background="zzz")))] == ["background"]
+
+
+def test_identita_prichod_cizincu_a_jmena_statu_v_popisu():
+    data = small(events=[
+        {"kind": "state", "year": 0, "id": "k", "name": "Království", "regions": ["c", "x"], "capital": "c"},
+        {"kind": "identity", "year": 50, "regions": ["x"], "identity": "strong"},
+        {"kind": "immigration", "year": 60, "regions": ["c"], "immigration": 0.2},
+    ])
+    assert check(data) == []
+    bad = small(events=[{"kind": "immigration", "year": 0, "regions": ["c"], "immigration": 2}])
+    assert any(issue.path.startswith("events.0") for issue in check(bad))
 
 
 def test_beh_dava_snimky_a_export_a_je_deterministicky():
@@ -106,53 +133,11 @@ def test_beh_dava_snimky_a_export_a_je_deterministicky():
     assert set(exported["census"]) == {"c", "x"}
 
 
-def test_zruseny_beh_skonci():
+def test_zruseny_beh_skonci_a_neplatny_popis_vyhodi_chybu():
     run = runner.prepare("test", small(end_year=2000))
     run.cancel()
     run.execute()
     assert run.status == "cancelled" and run.result is None
-
-
-def test_autor_muze_zadat_vlastni_slova_protojazyka():
-    from cee.v2 import export
-    from cee.v2.language.protoforms import protolanguage
-    from cee.v2.scenarios import DEFAULT_CONCEPTS
-    from cee.v2.simulation import Simulation
-
-    plain, _ = protolanguage(DEFAULT_CONCEPTS, seed=7)
-    fixed, _ = protolanguage(DEFAULT_CONCEPTS, seed=7, fixed={"hand": "ruka"})
-    assert fixed["hand"] == "ruka"
-    assert {c: f for c, f in fixed.items() if c != "hand" and f != "ruka"} == {
-        c: f for c, f in plain.items() if c != "hand" and f != "ruka"}
-    data = small(languages=[{"id": "a", "words": {"hand": "ruka", "water": "voda"}}, {"id": "b"}])
-    world, events, _ = build(data)
-    simulation = Simulation(world, events=events)
-    simulation.run(25.0)
-    lexicon = export.lexicon(simulation.world, "c-v0")
-    assert (lexicon["hand"]["form"], lexicon["water"]["form"]) == ("ruka", "voda")
-
-
-def test_vlastni_slova_se_overi():
-    data = small(languages=[{"id": "a", "words": {"xyz": "ka", "fire": "ʬ", "water": "q͡ǂa", "nose": "ʬa", "hand": " ",
-                                                   "eye": "kʷá", "ear": "ɐɾʡ"}}, {"id": "b"}])
-    issues = {issue.path: issue.message for issue in check(data)}
-    assert "neznámý pojem" in issues["languages.0.words.xyz"]
-    assert "hlásku" in issues["languages.0.words.fire"]
-    assert "zapsalo jako" in issues["languages.0.words.water"]
-    assert "zapsalo jako 'a'" in issues["languages.0.words.nose"]  # neznámý znak by se ztratil
-    assert "prázdné" in issues["languages.0.words.hand"]
-    # tón diakritikou a hlásky, které PanPhon slévá, projdou
-    assert "languages.0.words.eye" not in issues and "languages.0.words.ear" not in issues
-
-
-def test_identita_prichod_cizincu_a_jmena_statu_v_popisu():
-    data = small(events=[
-        {"kind": "state", "year": 0, "id": "k", "name": "Království", "regions": ["c", "x"], "capital": "c"},
-        {"kind": "identity", "year": 50, "regions": ["x"], "identity": "strong"},
-        {"kind": "immigration", "year": 60, "regions": ["c"], "immigration": 0.2},
-    ])
-    assert check(data) == []
-    world, events, _ = build(data)
-    assert [type(e).__name__ for e in events] == ["State", "Identity", "Immigration"]
-    bad = small(events=[{"kind": "immigration", "year": 0, "regions": ["c"], "immigration": 2}])
-    assert any(issue.path.startswith("events.0") for issue in check(bad))
+    with pytest.raises(SpecError) as error:
+        runner.prepare("test", small(regions=[]))
+    assert error.value.issues[0].path == "regions"

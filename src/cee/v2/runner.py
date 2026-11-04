@@ -1,14 +1,15 @@
-"""Běh simulace na pozadí pro UI: průběh, průběžné snímky, zrušení.
+"""Běh simulace na pozadí pro UI: ověření popisu, průběh, průběžné snímky, zrušení.
 
-:func:`start` ověří popis světa (:mod:`cee.v2.spec`, jen pydantic schéma), postaví
-svět v Rustu (vazba :mod:`cee_engine_py`, crate ``rust/cee_py``) a spustí běh ve
-vlákně. Každý krok běží v Rustu bez GIL, takže server mezitím odpovídá UI.
+:func:`check` ověří popis světa: schéma a přepisy parametrů v Pythonu (:mod:`cee.v2.spec`),
+zbytek v Rustu (``check_spec``: slovník, slova, stavba světa, zkušební provedení událostí).
+:func:`start` postaví svět v Rustu (vazba :mod:`cee_engine_py`, crate
+``rust/cee_py``) a spustí běh ve vlákně. Každý krok běží v Rustu bez GIL, takže server mezitím odpovídá UI.
 :class:`Run` průběžně ukládá lehké snímky (``Run.frame`` vazby) po každém
 pozorování, takže UI kreslí mapu, zatímco běh pokračuje, a na konci drží úplný
 export ``cee-v2/1``. Zrušení se projeví po dokončení rozpracovaného kroku.
 
 Běh je deterministický: stejný popis dá stejný výsledek bez ohledu na to,
-kolikrát a kdy se na průběh UI zeptá. Python engine v2 se tu nepoužívá.
+kolikrát a kdy se na průběh UI zeptá. Celý engine v2 je v Rustu; Python ho jen volá.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from cee.v2.spec import Issue, SpecError, WorldSpec, errors, parse
+from cee.v2.spec import Issue, SpecError, WorldSpec, check_parameters, errors, parse
 
 #: Kam `maturin` + `pip install --target` ukládá vazbu v repozitáři (viz ``rust/README.md``).
 _TARGET = Path(__file__).resolve().parents[3] / "rust" / "cee_py" / "target" / "py"
@@ -117,10 +118,27 @@ class Run:
             traceback.print_exc()
 
 
+def check(data: dict[str, Any] | WorldSpec) -> list[Issue]:
+    """Chyby a varování popisu světa s cestou k poli; bez chyb (:func:`errors`) jde svět postavit a spustit.
+
+    Chyby jdou před varováními. Varování svět nezastaví: například jiný slovník než výchozí
+    dá jiné výsledky než výchozí svět.
+    """
+    spec, issues = parse(data)
+    if spec is None:
+        return issues
+    issues = check_parameters(spec)
+    if issues:
+        return issues
+    found = native().check_spec(json.dumps(spec.model_dump(mode="json")))
+    return [Issue(item["path"], item["message"], item["severity"]) for item in found]
+
+
 def prepare(run_id: str, data: dict[str, Any] | WorldSpec) -> Run:
     """Běh z popisu světa; neplatný popis vyhodí ``SpecError``.
 
     Schéma ověří pydantic, zbytek (neznámé regiony, slova, parametry) ohlásí stavba světa v Rustu.
+    Úplné ověření s cestami k polím a varováními dává :func:`check` (``/api/v2/validate``).
     """
     spec, issues = parse(data)
     if spec is None:

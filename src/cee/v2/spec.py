@@ -1,65 +1,49 @@
-"""Popis světa pro UI: JSON, ze kterého engine postaví svět a události.
+"""Popis světa pro UI: schéma JSON, ze kterého engine v Rustu staví svět a události.
 
 Autor světa (a UI za něj) popisuje jen to, co zná: protojazyky, regiony
 (poloha, relativní hustota, sousedé, terén, identita, jazyk) a časovou osu
 událostí po regionech a státech se slovními úrovněmi. Čísla dynamiky jsou
-v ``Parameters`` a autor je smí přepsat v ``parameters``.
+metaparametry (``v2_parameters.json``) a autor je smí přepsat v ``parameters``.
 
-- :class:`WorldSpec` je pydantic model; ``WorldSpec.model_json_schema()``
-  dá UI schéma formuláře a :func:`levels` možnosti slovních úrovní.
-- :func:`check` vrátí seznam chyb a varování s cestou k poli (bez chyb = svět
-  jde postavit); události ověří zkušebním provedením na kopii světa v pořadí
-  roků. Varování (``Issue.severity == "warning"``) svět nezastaví, jen upozorní,
-  například že jiný slovník dá jiné výsledky než výchozí.
-- :func:`build` postaví svět a události, nebo vyhodí :class:`SpecError`.
-- Slovník: ``vocabulary`` (kolik pojmů) a ``concepts`` (vlastní pojmy),
-  viz :mod:`cee.v2.vocabulary`.
+Python tu drží jen **schéma a validaci polí**:
+
+- :class:`WorldSpec` je pydantic model; ``WorldSpec.model_json_schema()`` dá UI schéma
+  formuláře a :func:`levels` možnosti slovních úrovní.
+- :func:`parse` ověří pole podle schématu (české zprávy s cestou k poli),
+  :func:`check_parameters` přepisy metaparametrů podle ``v2_parameters.json``.
+- Sémantickou kontrolu (neznámé regiony, státy, slova, zkušební provedení událostí)
+  dělá Rust (``cee_engine::spec::check``); :func:`cee.v2.runner.check` spojí obojí.
+- Slovník: ``vocabulary`` (kolik pojmů) a ``concepts`` (vlastní pojmy).
 
 Formát má verzi ``FORMAT``; mění se jen přidáváním polí.
 """
 
 from __future__ import annotations
 
-import copy
+import re
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from cee.v2 import concept_data
-from cee.v2 import vocabulary as vocab
-from cee.v2.events import WorldEvent
-from cee.v2.history import History
-from cee.v2.parameters import LEVEL_TABLES, Parameters, check_override
-from cee.v2.polity import (
-    Annexation,
-    BorderPolicy,
-    Collapse,
-    Identity,
-    Immigration,
-    LanguagePolicy,
-    LinguaFranca,
-    Preserve,
-    Revival,
-    Schools,
-    Secession,
-    Standard,
-    State,
-)
-from cee.v2.scenarios import (
-    FULL_GRAMMAR,
-    SUBSTRATE_GRAMMAR,
-    SYNTAX_GRAMMAR,
-    ProtoLanguage,
-    Region,
-    region_world,
-)
-from cee.v2.world import World
+from cee.v2.parameters import check_override, default_levels
 
 FORMAT = "cee-v2-world/1"
 
-#: Profily gramatiky protojazyka, které autor vybírá jménem.
-GRAMMARS = {"default": SYNTAX_GRAMMAR, "substrate": SUBSTRATE_GRAMMAR, "full": FULL_GRAMMAR}
+#: Velikost výchozího slovníku (149 pojmů).
+DEFAULT_VOCABULARY = 149
+#: Velikosti slovníku, které UI nabízí jako předvolby (jiné čtení je povolené).
+PRESET_SIZES = (149, 200, 500, 1000)
+#: Domény pojmů a rozsah frekvence na stupnici enginu (shodně s ``rust/cee_engine/src/concepts.rs``).
+DOMAINS = ("core", "learned", "culture", "religion", "power")
+FREQUENCY_RANGE = (0.05, 0.9)
+WORD_CLASSES = ("noun", "verb", "uninflected")
+RELATION_KINDS = ("polysemy", "derivation", "colexification")
+RELATION_DIRECTIONS = ("to", "from", "both")
+#: Váha vztahu bez zadání ve stejných jednotkách jako data (počet rodin, resp. jazyků).
+DEFAULT_WEIGHT = {"polysemy": 2, "derivation": 2, "colexification": 9}
+#: ID vlastního pojmu: písmena, číslice, ``_``, ``.`` a ``-``; začíná písmenem nebo číslicí.
+ID_PATTERN = re.compile(r"^\w[\w.-]*$")
 
 
 class _Model(BaseModel):
@@ -127,7 +111,7 @@ class RelatedSpec(_Model):
 class ConceptSpec(_Model):
     """Vlastní pojem autora světa, vymyšlený nebo reálný (``vocabulary.CustomConcept``)."""
 
-    id: str = Field(min_length=1, pattern=vocab.ID_PATTERN.pattern)
+    id: str = Field(min_length=1, pattern=ID_PATTERN.pattern)
     #: Anglický glos. Shoduje-li se s glosem Concepticonu či názvem významu WOLD,
     #: převezmou se data jako při vazbě; jinak je to jen popisek.
     gloss: str | None = None
@@ -135,24 +119,18 @@ class ConceptSpec(_Model):
     #: S vazbou se doména, půjčitelnost, frekvence a slovní druh převezmou z dat.
     wold: str | None = None
     concepticon: int | None = Field(default=None, ge=1)
-    #: Doména (``concept_data.DOMAINS``); bez ní z vazby, jinak ``core``.
+    #: Doména (``DOMAINS``); bez ní z vazby, jinak ``core``.
     domain: Literal["core", "learned", "culture", "religion", "power"] | None = None
-    #: Frekvence na stupnici enginu (``concept_data.FREQUENCY_RANGE``); bez ní z vazby,
+    #: Frekvence na stupnici enginu (``FREQUENCY_RANGE``); bez ní z vazby,
     #: jinak průměr katalogu (domény pojmu, je-li zadaná).
-    frequency: float | None = Field(default=None, ge=concept_data.FREQUENCY_RANGE[0],
-                                    le=concept_data.FREQUENCY_RANGE[1])
+    frequency: float | None = Field(default=None, ge=FREQUENCY_RANGE[0],
+                                    le=FREQUENCY_RANGE[1])
     #: Slovní druh; bez něj z vazby (kategorie WOLD), jinak podstatné jméno.
     word_class: Literal["noun", "verb", "uninflected"] | None = None
     #: Půjčitelnost 0 až 1; bez ní z vazby, jinak průměr katalogu (domény pojmu).
     borrowed: float | None = Field(default=None, ge=0.0, le=1.0)
     related: list[RelatedSpec] = Field(default_factory=list)
 
-    def custom(self) -> vocab.CustomConcept:
-        return vocab.CustomConcept(
-            self.id, self.gloss, self.wold, self.concepticon, self.domain, self.frequency, self.word_class,
-            self.borrowed, tuple(vocab.Related(item.concept, item.kind, item.direction, item.weight)
-                                 for item in self.related),
-        )
 
 
 class _Event(_Model):
@@ -170,9 +148,6 @@ class StateSpec(_Event):
     policy: str = "tolerant"
     border: str = "normal"
 
-    def event(self) -> WorldEvent:
-        return State(self.year, self.id, tuple(self.regions), self.capital, self.centralization, self.policy,
-                     self.border, self.name)
 
 
 class LanguagePolicySpec(_Event):
@@ -180,8 +155,6 @@ class LanguagePolicySpec(_Event):
     state: str
     policy: str
 
-    def event(self) -> WorldEvent:
-        return LanguagePolicy(self.year, self.state, self.policy)
 
 
 class AnnexationSpec(_Event):
@@ -189,8 +162,6 @@ class AnnexationSpec(_Event):
     state: str
     regions: list[str] = Field(min_length=1)
 
-    def event(self) -> WorldEvent:
-        return Annexation(self.year, self.state, tuple(self.regions))
 
 
 class SecessionSpec(_Event):
@@ -203,17 +174,12 @@ class SecessionSpec(_Event):
     policy: str = "tolerant"
     border: str = "normal"
 
-    def event(self) -> WorldEvent:
-        return Secession(self.year, self.id, tuple(self.regions), self.capital, self.centralization,
-                         self.policy, self.border, self.name)
 
 
 class CollapseSpec(_Event):
     kind: Literal["collapse"]
     state: str
 
-    def event(self) -> WorldEvent:
-        return Collapse(self.year, self.state)
 
 
 class BorderPolicySpec(_Event):
@@ -221,8 +187,6 @@ class BorderPolicySpec(_Event):
     state: str
     border: str
 
-    def event(self) -> WorldEvent:
-        return BorderPolicy(self.year, self.state, self.border)
 
 
 class LinguaFrancaSpec(_Event):
@@ -233,8 +197,6 @@ class LinguaFrancaSpec(_Event):
     spread: str = "common"
     nativize: bool = False
 
-    def event(self) -> WorldEvent:
-        return LinguaFranca(self.year, self.source, tuple(self.regions), self.spread, self.nativize)
 
 
 class StandardSpec(_Event):
@@ -243,8 +205,6 @@ class StandardSpec(_Event):
     of: str
     literacy: str = "elite"
 
-    def event(self) -> WorldEvent:
-        return Standard(self.year, self.of, self.literacy)
 
 
 class SchoolsSpec(_Event):
@@ -254,8 +214,6 @@ class SchoolsSpec(_Event):
     printing: bool = True
     diglossic: bool = False
 
-    def event(self) -> WorldEvent:
-        return Schools(self.year, self.of, self.coverage, self.printing, self.diglossic)
 
 
 class RevivalSpec(_Event):
@@ -264,8 +222,6 @@ class RevivalSpec(_Event):
     language: str | None = None
     strength: str = "movement"
 
-    def event(self) -> WorldEvent:
-        return Revival(self.year, tuple(self.regions), self.language, self.strength)
 
 
 class PreserveSpec(_Event):
@@ -274,18 +230,14 @@ class PreserveSpec(_Event):
     language: str | None = None
     preserved: bool = True
 
-    def event(self) -> WorldEvent:
-        return Preserve(self.year, tuple(self.regions), self.language, self.preserved)
 
 
 class IdentitySpec(_Event):
     kind: Literal["identity"]
     regions: list[str] = Field(min_length=1)
-    #: ``shared``, ``distinct``, ``strong`` (``Parameters.identity_loyalty``).
+    #: ``shared``, ``distinct``, ``strong`` (tabulka ``identity_loyalty``).
     identity: str
 
-    def event(self) -> WorldEvent:
-        return Identity(self.year, tuple(self.regions), self.identity)
 
 
 class ImmigrationSpec(_Event):
@@ -294,8 +246,6 @@ class ImmigrationSpec(_Event):
     #: Podíl přistěhovalců za generaci; 0 příchod zastaví.
     immigration: float = Field(ge=0.0, le=1.0)
 
-    def event(self) -> WorldEvent:
-        return Immigration(self.year, tuple(self.regions), self.immigration)
 
 
 EventSpec = Annotated[
@@ -324,8 +274,8 @@ class WorldSpec(_Model):
     events: list[EventSpec] = Field(default_factory=list)
     #: Kolik pojmů se simuluje: 149 výchozích (beze změny výsledků) až celý katalog WOLD
     #: (``vocabulary.max_size()``); větší slovník = výchozí pojmy + další z katalogu v pořadí
-    #: ``concept_data.catalog_order``. Jiný slovník dá jiné výsledky (varování v ``check``).
-    vocabulary: int = Field(default=vocab.DEFAULT_SIZE, ge=vocab.DEFAULT_SIZE)
+    #: pořadí katalogu WOLD. Jiný slovník dá jiné výsledky (varování v ``runner.check``).
+    vocabulary: int = Field(default=DEFAULT_VOCABULARY, ge=DEFAULT_VOCABULARY)
     #: Vlastní pojmy autora (vymyšlené i reálné), navíc ke slovníku.
     concepts: list[ConceptSpec] = Field(default_factory=list)
     #: Posun významu slov (sémantický graf); vypnutí běh zrychlí.
@@ -333,9 +283,9 @@ class WorldSpec(_Model):
     #: Vzdálenost vesnic v regionu (km) a délka generace (roky).
     village_spacing: float = Field(default=10.0, gt=0.0)
     generation_years: float = Field(default=25.0, ge=25.0, le=1000.0)
-    #: Přepisy polí ``Parameters`` (kalibrační konstanty, tabulky úrovní).
+    #: Přepisy metaparametrů (kalibrační konstanty, tabulky úrovní).
     parameters: dict[str, Any] = Field(default_factory=dict)
-    #: Míra pozadí dějin (``Parameters.background_levels``): drobné události,
+    #: Míra pozadí dějin (tabulka ``background_levels``): drobné události,
     #: které svět generuje sám (mor, přesídlení, obchod, prestiž, cizí elita).
     background: str = "none"
 
@@ -374,10 +324,9 @@ class SpecError(ValueError):
         super().__init__("; ".join(f"{issue.path}: {issue.message}" for issue in issues))
 
 
-def levels(params: Parameters | None = None) -> dict[str, list[str]]:
-    """Možnosti slovních úrovní (pro výběr v UI) podle tabulek ``Parameters``."""
-    params = params or Parameters()
-    return {name: sorted(getattr(params, name)) for name in LEVEL_TABLES}
+def levels() -> dict[str, list[str]]:
+    """Možnosti slovních úrovní (pro výběr v UI) podle výchozích tabulek metaparametrů."""
+    return default_levels()
 
 
 def parse(data: dict[str, Any] | WorldSpec) -> tuple[WorldSpec | None, list[Issue]]:
@@ -427,171 +376,23 @@ def _czech(item: Any) -> str:
         return item["msg"]
 
 
-def _parameters(spec: WorldSpec) -> tuple[Parameters | None, list[Issue]]:
+def check_parameters(spec: WorldSpec) -> list[Issue]:
     """Přepisy parametrů ověřené podle ``v2_parameters.json`` (jméno, druh, meze)."""
-    issues = [
+    return [
         Issue(path, message)
         for name, value in spec.parameters.items()
         for path, message in check_override(name, value)
     ]
-    if issues:
-        return None, issues
-    try:
-        return Parameters(**spec.parameters), []
-    except (TypeError, ValueError) as error:
-        return None, [Issue("parameters", str(error))]
 
 
-def _world(spec: WorldSpec, params: Parameters) -> World:
-    languages = tuple(
-        ProtoLanguage(
-            language.id, grammar=dict(GRAMMARS[language.grammar]),
-            **({"consonants": tuple(language.consonants)} if language.consonants else {}),
-            **({"vowels": tuple(language.vowels)} if language.vowels else {}),
-            stress_rule=language.stress, stress_strength=language.stress_strength, words=dict(language.words),
-            endonym=tuple(language.endonym), tones=tuple(language.tones),
-        )
-        for language in spec.languages
-    )
-    regions = tuple(
-        Region(
-            region.id, tuple(region.position), density=region.density, neighbours=tuple(region.neighbours),
-            villages=region.villages, prestige=region.prestige, immigration=region.immigration,
-            language=region.language, terrain=region.terrain, identity=region.identity, preserve=region.preserve,
-        )
-        for region in spec.regions
-    )
-    world = region_world(
-        regions, seed=spec.seed, semantics=spec.semantics, village_spacing=spec.village_spacing,
-        generation_years=spec.generation_years, params=params, languages=languages,
-        vocabulary=vocab.resolve(spec.vocabulary, [item.custom() for item in spec.concepts]),
-    )
-    world.start_year = spec.start_year
-    return world
+def vocabulary_options(max_size: int) -> dict[str, Any]:
+    """Možnosti slovníku pro UI: výchozí a největší velikost, předvolby, domény, druhy vztahů.
 
-
-def _ordered(spec: WorldSpec) -> list[tuple[int, Any]]:
-    return sorted(enumerate(spec.events), key=lambda item: (item[1].year, item[0]))
-
-
-def check(data: dict[str, Any] | WorldSpec) -> list[Issue]:
-    """Chyby a varování popisu světa; bez chyb (:func:`errors`) se svět dá postavit a spustit.
-
-    Chyby jdou před varováními. Varování svět nezastaví: například jiný slovník
-    než výchozí (``vocabulary``, ``concepts``) dá jiné výsledky než výchozí svět.
+    ``max_size`` (výchozí pojmy a celý katalog WOLD) zná Rust: ``cee_engine_py.vocabulary_max_size()``.
     """
-    spec, issues = parse(data)
-    if spec is None:
-        return issues
-    params, issues = _parameters(spec)
-    if params is None:
-        return issues
-    found = _vocabulary(spec)
-    if errors(found):
-        return found
-    issues = _words(spec)
-    if issues:
-        return [*issues, *found]
-    try:
-        world = _world(spec, params)
-    except ValueError as error:
-        return [Issue("regions", str(error)), *found]
-    if spec.background not in params.background_levels:
-        issues.append(Issue("background", f"neznámá míra pozadí dějin '{spec.background}'; možnosti: "
-                            + ", ".join(sorted(params.background_levels))))
-    for index, item in enumerate(spec.events):
-        if not spec.start_year <= item.year <= spec.end_year:
-            issues.append(Issue(f"events.{index}.year", "událost leží mimo start_year až end_year"))
-    # Zkušební provedení událostí na kopii světa odhalí odkazy na neexistující
-    # státy a regiony, neznámé úrovně i pořadí (Collapse před State).
-    trial, history = copy.deepcopy(world), History()
-    for index, item in _ordered(spec):
-        try:
-            item.event().apply(trial, history, 0)
-        except KeyError as error:
-            issues.append(Issue(f"events.{index}", f"neznámé ID {error.args[0]!r}"))
-        except ValueError as error:
-            issues.append(Issue(f"events.{index}", str(error)))
-    if not spec.semantics and any(item.related for item in spec.concepts):
-        found.append(Issue("semantics", "příbuzné pojmy vlastních pojmů se bez sémantiky (semantics: false) "
-                           "nepoužijí", "warning"))
-    return [*issues, *found]
-
-
-def _vocabulary(spec: WorldSpec) -> list[Issue]:
-    """Chyby a varování slovníku: velikost, vlastní pojmy a jejich příbuzné pojmy."""
-    return [Issue(problem.path, problem.message, problem.severity)
-            for problem in vocab.validate(spec.vocabulary, [item.custom() for item in spec.concepts])]
-
-
-def vocabulary_options() -> dict[str, Any]:
-    """Možnosti slovníku pro UI: výchozí a největší velikost, předvolby, domény, druhy vztahů."""
     return {
-        "default": vocab.DEFAULT_SIZE, "max": vocab.max_size(), "presets": list(vocab.PRESET_SIZES),
-        "domains": list(concept_data.DOMAINS), "word_classes": list(vocab.WORD_CLASSES),
-        "relation_kinds": list(vocab.RELATION_KINDS), "relation_directions": list(vocab.RELATION_DIRECTIONS),
-        "default_weight": dict(vocab.DEFAULT_WEIGHT), "frequency_range": list(concept_data.FREQUENCY_RANGE),
+        "default": DEFAULT_VOCABULARY, "max": max_size, "presets": list(PRESET_SIZES),
+        "domains": list(DOMAINS), "word_classes": list(WORD_CLASSES),
+        "relation_kinds": list(RELATION_KINDS), "relation_directions": list(RELATION_DIRECTIONS),
+        "default_weight": dict(DEFAULT_WEIGHT), "frequency_range": list(FREQUENCY_RANGE),
     }
-
-
-def _words(spec: WorldSpec) -> list[Issue]:
-    """Slova zadaná autorem: známý pojem a hlásky, které engine umí."""
-    from cee.v2.language.constructions import GRAMMATICAL_SOURCES
-    from cee.v2.language.segments import TONE_CODES, default_table
-
-    known, table, issues = {*vocab.base_ids(spec.vocabulary), *GRAMMATICAL_SOURCES,
-                            *(item.id for item in spec.concepts)}, default_table(), []
-    for index, language in enumerate(spec.languages):
-        for position, tone in enumerate(language.tones):
-            if tone not in TONE_CODES:
-                issues.append(Issue(f"languages.{index}.tones.{position}",
-                                    f"neznámý tón '{tone}'; tón se píše tónovými značkami ˥ ˦ ˧ ˨ ˩ (např. ˥, ˧˥)"))
-        if len(set(language.tones)) != len(language.tones):
-            issues.append(Issue(f"languages.{index}.tones", "tóny se opakují"))
-        for position, concept in enumerate(language.endonym):
-            if concept not in known:
-                issues.append(Issue(f"languages.{index}.endonym.{position}", f"neznámý pojem '{concept}'"))
-        for concept, form in sorted(language.words.items()):
-            path = f"languages.{index}.words.{concept}"
-            if concept not in known:
-                issues.append(Issue(path, f"neznámý pojem '{concept}'"))
-            elif not form.strip():
-                issues.append(Issue(path, "slovo nesmí být prázdné"))
-            else:
-                try:
-                    parsed = table.parse(form)
-                except (KeyError, ValueError):
-                    issues.append(Issue(path, f"engine nezná některou hlásku ve slově '{form}'"))
-                    continue
-                if not table.lossless(form):
-                    issues.append(Issue(path, f"slovo '{form}' by se zapsalo jako '{table.render(parsed)}'"))
-    return issues
-
-
-def build(data: dict[str, Any] | WorldSpec) -> tuple[World, list[WorldEvent], WorldSpec]:
-    """Svět, události a ověřený popis; při chybě :class:`SpecError` se všemi chybami (varování nezastaví)."""
-    issues = errors(check(data))
-    if issues:
-        raise SpecError(issues)
-    spec, _ = parse(data)
-    assert spec is not None
-    params, _ = _parameters(spec)
-    assert params is not None
-    events = [item.event() for _, item in _ordered(spec)]
-    return _world(spec, params), events + background_events(spec, params), spec
-
-
-def background_events(spec: WorldSpec, params: Parameters) -> list[WorldEvent]:
-    """Události pozadí dějin pro popis světa (po událostech autora ve stejném roce)."""
-    from cee.v2.background import generate
-
-    first = spec.languages[0].id
-    near: dict[str, set[str]] = {region.id: set() for region in spec.regions}
-    for region in spec.regions:
-        for other in region.neighbours:
-            if other in near and other != region.id:
-                near[region.id].add(other)
-                near[other].add(region.id)
-    regions = [(region.id, sorted(near[region.id]), region.language or first) for region in spec.regions]
-    return generate(regions, start=spec.start_year, end=spec.end_year, level_name=spec.background,
-                    seed=spec.seed, params=params)
