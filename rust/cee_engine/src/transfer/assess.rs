@@ -241,11 +241,12 @@ fn assess_group(
     }
     let rule = world.groups.main_code(group).stress_rule.as_rule();
     let table = world.table.clone().ok_or("svět nemá tabulku hlásek")?;
-    let def = world
-        .process(process)
-        .cloned()
-        .ok_or_else(|| format!("proces č. {} nemá definici", process.0))?;
-    let shapes = shapes_vowels(&def, &table);
+    let shapes = {
+        let def = world
+            .process(process)
+            .ok_or_else(|| format!("proces č. {} nemá definici", process.0))?;
+        shapes_vowels(def, &table)
+    };
     let changed = loop {
         match world.bank.bank.results(row, rule, &sample.ids)? {
             Outcome::Done(changed) => break changed,
@@ -266,12 +267,15 @@ fn assess_group(
     for &(first, second) in &raw.pairs {
         merge += pair_cost(world, group, sample, first as usize, second as usize);
     }
+    let def = world
+        .process(process)
+        .ok_or_else(|| format!("proces č. {} nemá definici", process.0))?;
     Ok([
         raw.mass / sample.total,
         merge / sample.total,
         raw.short / raw.mass,
         raw.marked / raw.mass,
-        dispersion_gain(&def, &table, &raw.before, &raw.after),
+        dispersion_gain(def, &table, &raw.before, &raw.after),
     ])
 }
 
