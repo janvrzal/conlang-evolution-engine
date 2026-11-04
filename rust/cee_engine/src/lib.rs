@@ -9,6 +9,7 @@ pub mod background;
 pub mod changes;
 pub mod checkpoint;
 pub mod concepts;
+pub mod contact;
 pub mod data;
 pub mod edits;
 pub mod events;

@@ -87,6 +87,18 @@ impl ConceptData {
             .unwrap_or(self.mean_borrowed)
     }
 
+    /// Pojmy enginu z dat se skóre půjčitelnosti (`None` = bez skóre); kotva `contact::reference`.
+    pub fn engine_concepts(&self) -> Vec<(&str, Option<f64>)> {
+        self.concepts
+            .as_object()
+            .map(|map| {
+                map.iter()
+                    .map(|(name, entry)| (name.as_str(), entry["borrowed"].as_f64()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Průměrná půjčitelnost významů katalogu WOLD.
     pub fn mean_borrowed(&self) -> f64 {
         self.mean_borrowed
