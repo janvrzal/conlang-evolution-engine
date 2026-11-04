@@ -14,6 +14,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use cee_core::pools::Cells;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{GroupId, Numbering, VariableId, VariantId};
@@ -538,10 +539,11 @@ impl LivePools {
                     }
                 }
             }
-            // 2) jednotné ustálené řádky
+            // 2) jednotné ustálené řádky (řádky jsou nezávislé, hledají se souběžně a v pořadí řádků)
             let uniform: Vec<usize> = {
                 let block = &self.blocks[&capacity];
                 (0..block.len())
+                    .into_par_iter()
                     .filter(|&row| {
                         let mut leader = vec![-1_i64; block.groups];
                         let mut counts = vec![0_usize; block.groups];
