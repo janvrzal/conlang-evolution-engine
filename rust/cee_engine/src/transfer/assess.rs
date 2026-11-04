@@ -83,8 +83,9 @@ impl Assessments {
 /// a čísla aktuálních tvarů (podle verze kódu). Morfémy jsou v pořadí jmen.
 #[derive(Clone, Debug, Default)]
 pub struct Sample {
-    /// Pro co platí výběr: verze slovní zásoby, verze četností pojmů, počet morfémů.
-    selection: Option<(u64, u64, usize)>,
+    /// Pro co platí výběr: (pořadí drží průběžný pohled, verze jeho pořadí nebo verze slovní
+    /// zásoby, verze četností pojmů a počet morfémů; u průběžného pohledu jen první číslo).
+    selection: Option<(bool, u64, u64, usize)>,
     pub morphemes: Vec<MorphemeId>,
     pub weights: Vec<f64>,
     pub total: f64,
@@ -98,11 +99,18 @@ impl Sample {
     fn sync(&mut self, world: &World, group: GroupId) {
         let code = world.groups.main_code(group);
         let state = &code.phonology;
-        let key = (
-            state.lexicon_version,
-            world.concepts.version,
-            world.morphemes.len(),
-        );
+        let held = &state.grammar.sample;
+        let key = if held.is_built() {
+            // Vzorek je první slova průběžného pořadí; ta se mění jen s jeho verzí.
+            (true, held.version(), 0, 0)
+        } else {
+            (
+                false,
+                state.lexicon_version,
+                world.concepts.version,
+                world.morphemes.len(),
+            )
+        };
         if self.selection != Some(key) {
             let (morphemes, weights, total) = select(world, group);
             self.morphemes = morphemes;
