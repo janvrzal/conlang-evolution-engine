@@ -94,11 +94,11 @@ fn follow_one(ctx: &mut StepContext<'_>, crossing: &Crossing) -> Result<(), Stri
 /// Cizí kořen vstupuje do slovní zásoby skupiny: převzetí a adaptace tvaru
 /// (`contact.adopt`). **Vlastník: R1d** (kontakt).
 pub fn adopt(
-    _ctx: &mut StepContext<'_>,
-    _group: GroupId,
-    _morpheme: MorphemeId,
+    ctx: &mut StepContext<'_>,
+    group: GroupId,
+    morpheme: MorphemeId,
 ) -> Result<(), String> {
-    Ok(())
+    crate::contact::adopt(ctx.world, group, morpheme)
 }
 
 /// Proces nebo analogie překročila ve skupině práh aktivace a začne působit.

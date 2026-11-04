@@ -201,10 +201,12 @@ fn spec_se_postavi_a_odmitne_chybne() {
 }
 
 #[test]
-fn neprovedena_udalost_zastavi_beh_s_chybou() {
+fn udalost_se_provede() {
+    // Přechod jazyka (R1d) běží: skupiny `x` přejdou na kód `y0`.
     let (world, events) = scenarios::language_shift(2, 300.0).unwrap();
     let mut simulation = Simulation::new(world, SimulationConfig::default(), events).unwrap();
-    assert!(simulation.run(400.0).is_err());
+    simulation.run(400.0).unwrap();
+    assert!(simulation.history.of_kind("bilingualism").count() > 0);
 }
 
 #[test]

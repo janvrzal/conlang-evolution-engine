@@ -201,6 +201,16 @@ impl SegmentTable {
         self.ipa.len() as i32
     }
 
+    /// Všechny řádky rysů za sebou (`len() × width()`), pro editační vzdálenost tvarů.
+    pub fn vectors(&self) -> &[i8] {
+        &self.vectors
+    }
+
+    /// Počet rysů v řádku.
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
     pub fn row(&self, segment: usize) -> &[i8] {
         &self.vectors[segment * self.width..(segment + 1) * self.width]
     }
@@ -224,11 +234,6 @@ impl SegmentTable {
         form.iter()
             .map(|&s| self.ipa[s as usize].as_str())
             .collect()
-    }
-
-    /// Rysy všech hlásek za sebou (řádek po řádku, šířka `features.len()`).
-    pub fn vectors(&self) -> &[i8] {
-        &self.vectors
     }
 
     /// Zápisy tónů podle kódu (kód 1 je na pozici 0), jak je dává `TONES` v Pythonu.

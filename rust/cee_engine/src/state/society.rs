@@ -3,27 +3,54 @@
 //! Zrcadlo polí `World` z Pythonu, která patří událostem, politice, kontaktu
 //! a pozorování: `states`, `standards`, `border_factors`, `base_prestige`,
 //! `prestige_mirror`, `trade`, `edit_log`, `endonyms` a `LineageTracker`.
+//!
+//! Všechno je ve sloupcích a mapách podle čísel (`GroupId`, `TerritoryId`); jen stát
+//! a spisovná norma se jmenují podle textového ID (stát je vzácný a jméno zadává autor).
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{ConceptId, GroupId, LanguageId};
+use crate::edits::Edit;
+use crate::ids::{ConceptId, GroupId, LanguageId, TerritoryId};
+use crate::observe::LineageTracker;
 
-/// Záznam o změně světa provedené událostí (`cee.v2.edits`): tik, operace, argumenty.
+/// Stát ve světě (`polity.Polity`): území, sídlo a jazyková politika.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Edit {
-    pub tick: u32,
-    pub operation: String,
-    #[serde(with = "crate::json_string")]
-    pub arguments: serde_json::Value,
+pub struct Polity {
+    pub id: String,
+    /// Jméno státu pro autora a export; na dynamiku nemá vliv.
+    pub name: Option<String>,
+    pub regions: Vec<TerritoryId>,
+    pub capital: TerritoryId,
+    /// Skupina, jejíž řeč je úředním jazykem (největší vesnice hlavního města).
+    pub seat: GroupId,
+    pub language: LanguageId,
+    pub centralization: String,
+    pub policy: String,
+    pub border: String,
+    /// Vazby vesnic k sídlu, které stát vytvořil (centralizace): skupina → síla.
+    pub links: BTreeMap<GroupId, f64>,
+}
+
+/// Co se zapisuje do deníku změn světa.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JournalMode {
+    /// Nic (deník nemá vliv na dynamiku, jen na paměť).
+    Off,
+    /// Všechny změny událostí, států a pozadí dějin a ve fázi komunit jen změny struktury
+    /// (vznik a zánik skupin, vazby, obchod, hranice, prestiž, předávání jazyka).
+    /// Běžné každokrokové úpravy populace, podílu L2 a přistěhovalců se nezapisují.
+    #[default]
+    Structure,
+    /// Úplný deník jako v Pythonu (i každokrokové úpravy komunit).
+    All,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SocietyState {
-    /// Státy světa podle ID (obsah popíše R1d; zatím volný JSON se schématem exportu).
-    #[serde(with = "crate::json_string")]
-    pub states: BTreeMap<String, serde_json::Value>,
+    /// Státy světa podle ID (seřazené podle ID jako `sorted(world.states.values())`).
+    pub states: BTreeMap<String, Polity>,
     /// Spisovné jazyky států a regionů: ID státu či regionu → psaný kód (skupina).
     pub standards: BTreeMap<String, GroupId>,
     /// Pojmy, ze kterých se skládá vlastní jméno jazyka (jen pro export).
@@ -38,8 +65,10 @@ pub struct SocietyState {
     pub trade: BTreeMap<(GroupId, GroupId), f64>,
     /// Podíl lidí, kteří se za generaci přestěhují k sousedům (nula vypne migraci).
     pub migration: f64,
+    /// Co se zapisuje do deníku (viz [`JournalMode`]).
+    pub journal: JournalMode,
     /// Deník změn světa (na dynamiku nemá vliv).
     pub edit_log: Vec<Edit>,
-    /// Linie jazyků z posledního pozorování: jméno linie → skupiny (párování shluků).
-    pub lineages: BTreeMap<String, Vec<GroupId>>,
+    /// Linie jazyků z posledního pozorování (párování shluků mezi snímky).
+    pub lineages: LineageTracker,
 }

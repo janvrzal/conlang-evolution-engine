@@ -5,9 +5,8 @@
 //! Formát má verzi [`FORMAT`]; mění se jen přidáváním polí.
 //!
 //! **Hotové:** `WorldSpec` se stejnými poli, stavba světa včetně většího slovníku a vlastních
-//! pojmů (`vocabulary`, `concepts`; R1c, `vocabulary::resolve`).
-//! **Patří dál:** události pozadí dějin (`background`; R1d). Takový popis `build` odmítne chybou,
-//! místo aby tiše dal jiný svět.
+//! pojmů (`vocabulary`, `concepts`; R1c, `vocabulary::resolve`) a pozadí dějin (`background`,
+//! generuje `crate::background`; R1d).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -247,9 +246,7 @@ pub fn build(spec: &WorldSpec) -> Result<(World, Vec<Box<dyn WorldEvent>>), Stri
     if !params.background_levels.contains_key(&spec.background) {
         return Err(format!("neznámá míra pozadí dějin '{}'", spec.background));
     }
-    if spec.background != "none" && params.background_levels[&spec.background] > 0.0 {
-        return Err("Pozadí dějin (background) zatím nemá provedení v Rustu (patří R1d).".into());
-    }
+    let params_for_background = params.clone();
     let table = SegmentTable::default_table();
     let languages = spec
         .languages
@@ -313,5 +310,47 @@ pub fn build(spec: &WorldSpec) -> Result<(World, Vec<Box<dyn WorldEvent>>), Stri
             Value::Object(item.params.clone()),
         )));
     }
+    events.extend(background_events(spec, &params_for_background)?);
     Ok((world, events))
+}
+
+/// Události pozadí dějin pro popis světa (po událostech autora ve stejném roce).
+fn background_events(
+    spec: &WorldSpec,
+    params: &Parameters,
+) -> Result<Vec<Box<dyn WorldEvent>>, String> {
+    let first = spec.languages[0].id.clone();
+    let mut near: std::collections::BTreeMap<&str, std::collections::BTreeSet<&str>> = spec
+        .regions
+        .iter()
+        .map(|r| (r.id.as_str(), Default::default()))
+        .collect();
+    for region in &spec.regions {
+        for other in &region.neighbours {
+            if near.contains_key(other.as_str()) && other != &region.id {
+                near.get_mut(region.id.as_str()).map(|s| s.insert(other));
+                near.get_mut(other.as_str()).map(|s| s.insert(&region.id));
+            }
+        }
+    }
+    let regions: Vec<crate::background::BackgroundRegion> = spec
+        .regions
+        .iter()
+        .map(|r| crate::background::BackgroundRegion {
+            id: r.id.clone(),
+            neighbours: near[r.id.as_str()]
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect(),
+            language: r.language.clone().unwrap_or_else(|| first.clone()),
+        })
+        .collect();
+    crate::background::generate(
+        &regions,
+        spec.start_year,
+        spec.end_year,
+        &spec.background,
+        spec.seed,
+        params,
+    )
 }

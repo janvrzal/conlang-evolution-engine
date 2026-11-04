@@ -5,15 +5,16 @@
 //! s původem, gramatiku skupin. Server (`runner.py`) a UI proto fungují beze změny.
 //! Pořadí a jména polí se shodují s Pythonem; seřazení podle jmen (ne podle čísel).
 //!
-//! **Hotové v R0:** území, skupiny, vazby, snímky, slovník, gramatika, události a
-//! `frame`. **Zjednodušené (R1d):** `states`, `borders`, `census` regionů, `dialect_facts`,
-//! `lineages` (strom jazyků vznikne až z pozorování R1d) a `endonym` v rámu.
+//! `states`, `borders`, `census` počítá `polity`; `lineages`, `dialect_facts` a `endonym`
+//! vycházejí z pozorování (`observe`) a podkladů jmen (`naming`).
 
 use serde_json::{json, Map, Value};
 
 use crate::grammar::Catalog;
 use crate::ids::GroupId;
 use crate::model::repertoire::Payload;
+use crate::naming;
+use crate::polity;
 use crate::simulation::Simulation;
 use crate::world::World;
 
@@ -208,71 +209,113 @@ pub fn grammar(world: &World, group: GroupId) -> Map<String, Value> {
     result
 }
 
-/// Region → (obyvatelé podle jazyka doma, obyvatelé podle jazyka mimo domov).
-type Tally = std::collections::BTreeMap<
-    String,
-    (
-        std::collections::BTreeMap<String, f64>,
-        std::collections::BTreeMap<String, f64>,
-    ),
->;
-
-fn census(world: &World) -> Value {
-    let mut people: std::collections::BTreeMap<String, f64> = Default::default();
-    let mut tally: Tally = Default::default();
-    for group in world.group_ids() {
-        let at = group.index();
-        if world.groups.written[at] {
-            continue;
-        }
-        // Region = předek území na úrovni `region`.
-        let mut territory = world.groups.territory[at];
-        let region = loop {
-            if territory.is_none() {
-                break None;
+/// Strom jazyků: linie, jejich rodiče a doba trvání (z událostí pozorování).
+pub fn lineages(simulation: &Simulation) -> Vec<Value> {
+    let world = &simulation.world;
+    let mut found: std::collections::BTreeMap<String, Map<String, Value>> = Default::default();
+    for event in &simulation.history.events {
+        match event.get("kind").and_then(Value::as_str) {
+            Some("language_emerged" | "language_split") => {
+                let Some(id) = event.get("lineage").and_then(Value::as_str) else {
+                    continue;
+                };
+                let mut item = Map::new();
+                item.insert("id".into(), id.into());
+                item.insert(
+                    "parent".into(),
+                    event.get("parent").cloned().unwrap_or(Value::Null),
+                );
+                item.insert(
+                    "start_year".into(),
+                    event.get("year").cloned().unwrap_or(Value::Null),
+                );
+                item.insert("end_year".into(), Value::Null);
+                item.insert(
+                    "groups_at_start".into(),
+                    event.get("groups").cloned().unwrap_or_else(|| json!([])),
+                );
+                found.insert(id.to_owned(), item);
             }
-            let node = &world.territories[territory.index()];
-            if node.level == crate::model::territory::TerritoryLevel::Region {
-                break Some(world.registry.territories.name(territory.0).to_owned());
+            Some("language_ended") => {
+                if let Some(item) = event
+                    .get("lineage")
+                    .and_then(Value::as_str)
+                    .and_then(|id| found.get_mut(id))
+                {
+                    item.insert(
+                        "end_year".into(),
+                        event.get("year").cloned().unwrap_or(Value::Null),
+                    );
+                }
             }
-            territory = node.parent;
-        };
-        let Some(region) = region else { continue };
-        let language = world
-            .registry
-            .languages
-            .name(world.groups.main_code(group).language.0)
-            .to_owned();
-        let population = f64::from(world.groups.population[at]);
-        let entry = tally.entry(region.clone()).or_default();
-        if world.groups.domain[at] == crate::model::group::Domain::Home {
-            *entry.0.entry(language).or_insert(0.0) += population;
-            *people.entry(region).or_insert(0.0) += population;
-        } else {
-            *entry.1.entry(language).or_insert(0.0) += population;
+            _ => {}
         }
     }
-    let mut out = Map::new();
-    for (region, (home, public)) in tally {
-        let total = people
-            .get(&region)
-            .copied()
-            .filter(|&p| p != 0.0)
-            .unwrap_or(1.0);
-        let share = |counts: std::collections::BTreeMap<String, f64>| -> Value {
-            Value::Object(
-                counts
-                    .into_iter()
-                    .map(|(l, c)| (l, json!(c / total)))
-                    .collect(),
-            )
-        };
-        out.insert(
-            region,
-            json!({"home": share(home), "public": share(public), "state": Value::Null}),
+    let last = simulation.history.snapshots.last();
+    let mut out: Vec<Map<String, Value>> = found.into_values().collect();
+    for item in &mut out {
+        let id = item["id"].as_str().unwrap_or_default().to_owned();
+        let groups: Vec<String> = last
+            .and_then(|s| s.languages.get(&id))
+            .cloned()
+            .unwrap_or_default();
+        let at_start: Vec<String> = item["groups_at_start"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+        item.insert(
+            "endonym".into(),
+            if groups.is_empty() {
+                Value::Null
+            } else {
+                naming::endonym(world, &groups).map_or(Value::Null, Value::from)
+            },
         );
+        item.insert(
+            "origin_region".into(),
+            naming::origin_region(world, &at_start).map_or(Value::Null, Value::from),
+        );
+        item.insert("groups".into(), json!(groups));
     }
-    Value::Object(out)
+    out.sort_by(|a, b| {
+        let year = |m: &Map<String, Value>| m["start_year"].as_f64().unwrap_or(0.0);
+        year(a)
+            .partial_cmp(&year(b))
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a["id"].as_str().cmp(&b["id"].as_str()))
+    });
+    out.into_iter().map(Value::Object).collect()
+}
+
+/// Nářečí posledního pozorování s fakty pro jméno (`naming::dialects`).
+pub fn dialect_facts(simulation: &Simulation) -> Vec<Value> {
+    let Some(snapshot) = simulation.history.snapshots.last() else {
+        return Vec::new();
+    };
+    let world = &simulation.world;
+    let lineage_of: std::collections::BTreeMap<String, String> = snapshot
+        .languages
+        .iter()
+        .flat_map(|(l, groups)| groups.iter().map(move |g| (g.clone(), l.clone())))
+        .collect();
+    let alive = |name: &String| {
+        world
+            .registry
+            .groups
+            .get(name)
+            .is_some_and(|g| world.groups.contains(crate::ids::GroupId(g)))
+    };
+    let clusters: Vec<Vec<String>> = snapshot
+        .dialects
+        .iter()
+        .map(|c| c.iter().filter(|g| alive(g)).cloned().collect::<Vec<_>>())
+        .filter(|c| !c.is_empty())
+        .collect();
+    naming::dialects(world, &clusters, &lineage_of)
 }
 
 /// Stav a historie běhu jako JSON slovník (`export.export`).
@@ -331,14 +374,14 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
         "snapshots": history.snapshots.iter().map(|s| json!({
             "tick": s.tick, "year": s.year, "dialects": s.dialects, "languages": s.languages,
         })).collect::<Vec<_>>(),
-        "lineages": Vec::<Value>::new(),
+        "lineages": lineages(simulation),
         "lexicon": Value::Object(ids.iter().map(|&g| (world.group_name(g).to_owned(), Value::Object(lexicon(world, g)))).collect()),
         "grammar": Value::Object(ids.iter().map(|&g| (world.group_name(g).to_owned(), Value::Object(grammar(world, g)))).collect()),
-        "states": Vec::<Value>::new(),
-        "borders": Vec::<Value>::new(),
+        "states": polity::states(world),
+        "borders": polity::borders(world),
         "standards": Value::Object(standards),
-        "dialect_facts": Vec::<Value>::new(),
-        "census": census(world),
+        "dialect_facts": dialect_facts(simulation),
+        "census": polity::language_census(world),
         "events": events,
     })
 }
@@ -357,9 +400,15 @@ pub fn frame(simulation: &Simulation) -> Value {
         })).collect::<Vec<_>>(),
         "dialects": snapshot.map_or(Vec::new(), |s| s.dialects.clone()),
         "languages": snapshot.map_or(Default::default(), |s| s.languages.clone()),
-        "census": census(world),
-        "states": Vec::<Value>::new(),
-        "endonyms": Value::Object(Map::new()),
-        "dialect_facts": Vec::<Value>::new(),
+        "census": polity::language_census(world),
+        "states": polity::states(world).into_iter().map(|s| json!({
+            "id": s["id"], "name": s["name"], "regions": s["regions"],
+        })).collect::<Vec<_>>(),
+        "endonyms": Value::Object(
+            snapshot.map_or_else(Default::default, |s| s.languages.iter()
+                .map(|(l, groups)| (l.clone(), naming::endonym(world, groups).map_or(Value::Null, Value::from)))
+                .collect())
+        ),
+        "dialect_facts": dialect_facts(simulation),
     })
 }

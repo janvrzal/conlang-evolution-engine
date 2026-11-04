@@ -5,10 +5,13 @@
 //! stavba světa, historie a export, kostra smyčky a kontrolní body. Přehled architektury,
 //! rozhraní fází pro R1 a stav hotového: `docs/engine-v2/19-engine-v-rustu.md`.
 
+pub mod background;
 pub mod changes;
 pub mod checkpoint;
 pub mod concepts;
+pub mod contact;
 pub mod data;
+pub mod edits;
 pub mod events;
 pub mod export;
 pub mod grammar;
@@ -18,10 +21,13 @@ pub mod json_string;
 pub mod legacy_numpy;
 pub mod model;
 pub mod morphology;
+pub mod naming;
+pub mod observe;
 pub mod parallel;
 pub mod parameters;
 pub mod phases;
 pub mod phonology;
+pub mod polity;
 pub mod prosody;
 pub mod protoform;
 pub mod rng;

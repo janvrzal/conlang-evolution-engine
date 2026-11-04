@@ -75,6 +75,15 @@ impl Links {
         self.csr = None;
     }
 
+    /// Zruší jednosměrnou vazbu; vrací, zda existovala.
+    pub fn remove(&mut self, source: GroupId, target: GroupId) -> bool {
+        let found = self.map.remove(&(source, target)).is_some();
+        if found {
+            self.csr = None;
+        }
+        found
+    }
+
     pub fn remove_group(&mut self, group: GroupId) {
         self.map.retain(|&(a, b), _| a != group && b != group);
         self.csr = None;
