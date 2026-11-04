@@ -186,7 +186,10 @@ cee run <spec.json> -o export.json [--threads N]
 cee scenario <jméno> --until <rok> [-o export.json] [--checkpoint stav.bin]
 cee export-tick0 <scénář|spec.json> [-o tick0.json]
 cee scenarios
+cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]
 ```
+
+`cee gates` je audit bran na semínkách (viz [R2b](#r2b-brány-milníků-v-rustu)).
 
 Porovnání ticku 0 s Pythonem: `PYTHONPATH=src python scripts/v2_compare_tick0.py` (volitelně
 `--with-variation`, nebo cesta k `WorldSpec`). Vektory z Pythonu pro testy:
@@ -208,7 +211,7 @@ příkladu `WorldSpec` je **shodný s Pythonem** (viz výsledek v zprávě R0).
 | **R1b** | hotovo, viz [R1b](#r1b-fonologie-a-zvukové-změny); chybí jen hodnocení procesů tlaky (R1a, přes `phonology::row_of`) a `surface` (povrchový tvar slova) |
 | **R1c** | **hotovo** (viz [oddíl R1c](#r1c-morfologie-syntax-prozodie-sémantika-a-lexikon)): morfologie, syntax, prozodie, sémantické a lexikální změny, místa a návrh inovací, souběžná variabilita, větší slovník a vlastní pojmy; zbývá napojení na přenos a slovní zásobu (R1a/R1b) a porovnání s Pythonem (R2) |
 | **R1d** | hotovo kromě drobností v oddílu R1d (viz [R1d](#r1d-události-kontakt-společnost-a-pozorování)); chybí jen přenos výpůjček přes kanály v přenosu (R1a) a v morfologii (R1c), které čtou rozhraní `contact` |
-| **R2** | integrace, brány v Rustu, porovnání chování s Pythonem, vazba pro server (`runner.py` → Rust), smazání Pythonu v2, `Simulation::branch` |
+| **R2** | integrace (R2a), **brány v Rustu a audit na semínkách: hotovo, viz [R2b](#r2b-brány-milníků-v-rustu)**, porovnání chování s Pythonem, vazba pro server (`runner.py` → Rust), smazání Pythonu v2, `Simulation::branch` |
 
 ### Známá omezení a odchylky od Pythonu
 
@@ -441,3 +444,106 @@ Oblasti R1d se týkají metriky bran, které čtou: **snímky dialektů a jazyk�
 `revival`, M5, M6f), **populace a podíly L2** (`Groups`, `l2_share`) a **státy, normy a školy** (`state`, `standard`, `schools`, `census`, M6f).
 Pro R2 je připraveno: `SocietyState::edit_log` pro porovnání změn světa, `code_distances` pro metriky kontinua (M7), `export::{lineages,
 dialect_facts}`, a rozhraní `contact` pro přenos výpůjček. Brány samotné (jejich prahy, audit na semínkách) převede R2 po sloučení s přenosem.
+
+## R2b: brány milníků v Rustu
+
+Hotovo: všech 10 souborů bran M1 až M6c je převedených (52 stochastických bran auditu a deterministické
+zkoušky), nad nimi nástroj `cee gates` pro audit míry průchodu na semínkách. Python se nespouštěl.
+
+### Návrh
+
+| část | soubor | obsah |
+|---|---|---|
+| kontroly a běhy | `src/gates/m1.rs` … `m6c.rs` | `run_*` (scénář, semínko, délka jako v Pythonu), `check_*` (metriky a prahy Pythonu) a `batches()` (dávky pro audit) |
+| metriky | `src/gates/metrics.rs` | zrcadlo `cee.v2.metrics`: `logistic_r2`, `establishment_fraction`, `isolation_by_distance`, `lexicon_profile`, `retention`, `morphology_profile`, `morphological_complexity`, `spearman`, `distinctive_variants`, `trace_shares`, `code_distance`, `hellinger`, … z historie, snímků a stavu světa |
+| statistika | `src/gates/stats.rs` | `wilson_interval`, `binomial_cdf_lt`, `threshold_k`, `classify_rate`, `evaluate_seeds` (zrcadlo `tests/v2/gate_checks.py`, jednotkové testy proti tabulce z dokumentu 09) |
+| report | `src/gates/mod.rs` | `Report` je seznam metrik (jméno, hodnota, `Cmp`, práh, prošla); kontroly nevrací první neúspěšné tvrzení, ale všechny metriky, takže vznikne tabulka „brána, metrika, hodnota, práh, prošla“ |
+| audit | `src/gates/audit.rs`, `cee gates` | dávka = jeden běh scénáře a vyhodnocení bran, které z něj plynou (jako `BATCHES` v `scripts/v2_gate_rates.py`); tabulka průchodu, Wilsonův interval, zařazení, `k` pro `N = 10` a `N = 5`; chyba či pád enginu se počítá jako neúspěch semínka |
+| testy | `tests/gates/main.rs`, `m1.rs` … `m6c.rs`, `common.rs` | jeden soubor na milník, semínka a pravidla k z N jednotlivých testů, sdílené běhy (`OnceLock`) |
+
+Brány jsou v knihovně (ne v testech), aby je mohl spouštět i `cee gates`; testy mají semínka a pravidla k z N.
+Všechny testy bran jsou `#[ignore]` (jsou stochastické a dlouhé), `cargo test --release` je tedy nespouští:
+
+```
+cargo test --release --test gates -- --ignored --test-threads=1            # všechny brány
+cargo test --release --test gates -- --ignored --test-threads=1 m3b::      # jeden milník
+cargo run --release --bin cee -- gates --seeds 101..120 -o audit.jsonl     # audit jako v dokumentu 09
+cargo run --release --bin cee -- gates --seeds 1 --only m5 --metrics       # všechny metriky jednoho semínka
+cargo run --release --bin cee -- gates --list                              # registr 52 bran
+```
+
+`--only` bere milník (`m4b`), dávku (`m4b_no_case`) nebo bránu (`m4b::exaptace`). Dávky `m2_phonology_triplet`
+(`m2::metrika_6`, `m2::ruznost_seedu`) potřebují trojice semínek; audit je dělí na disjunktní trojice po sobě jdoucích semínek.
+Brána `m4b::clen_vznikne` se v auditu počítá jako „člen na tomto semínku vznikl“ (v testu 1 až N−1 z 50 semínek).
+
+### Odchylky od Pythonu
+
+- **Bez povrchového tvaru.** `phonology.surface` Rust zatím nemá, `lexicon_profile` (délka slov, inventář, homofonie, M2, M3,
+  M3b, M4) proto čte podkladové tvary dominantních kořenů. Pokud R2a doplní `surface`, stačí ho zavolat v
+  `metrics::lexicon_profile` a `metrics::lexicon_forms`.
+- **Počet mluvených skupin snímku** bez `keep_distances` Snapshot nemá (`group_ids` je prázdné); M6a a M6b ho berou ze součtu
+  velikostí nářečí.
+- **Přepsané zvukové změny** (`phonology.restructured`, M5 substrát) se čtou z příznaků `done` ve frontách kódu
+  (`SoundCodeState::queues`), proces se hledá podle `world.variables.process`.
+- **Dráhy inovací** mají čas v tiků, ne v letech; `logistic_r2` je na lineárním přeškálování času nezávislé.
+- **Jména a klíče**: `world.processes[v].key` v Pythonu je `world.variables.key[v]`; kategorie jazyků M6c jsou první písmena
+  jmen skupin jako v Pythonu.
+- **Výkonový test** `test_vykon_rezimu_udoli` (údolí do 5 s) se nepřevádí (zadání: nic neměřit).
+- **Negativní kontroly z dokumentu 09** (krok 5) se nepřevádějí kromě `bez_opisu_a_exaptace_clen_nevznikne`, která je
+  ve zdrojovém souboru testů. Mají být jednorázové měření vypnutého mechanismu; `Parameters` už má `interference_weight`,
+  `change_rates` a `taboo` jde nastavit na skupinách, takže převod je možný.
+- Kontroly vracejí všechny metriky, ne první neúspěšnou: u pole hodnot (inventáře, délky slov) je to minimum a maximum
+  přes skupiny; mezní tvrzení `a <= x <= b` je jedna metrika `Between`.
+- `m1::two_regions` staví svět zkoušky přiblížení (M1 a M2) a zkouška porovnává proměnné, které existují v obou světech
+  (zjemnění západu v Pythonu mohlo zakládat proměnné jen v jednom).
+
+### Stav bran na této větvi (R2a ještě neintegrovala)
+
+Jedno spuštění všech testů bran (`--ignored`, semínka dnešních testů): **50 prošlo, 12 neprošlo** (z 62 testů bran).
+Neprošlé a jejich metriky (hodnota v Rustu, práh):
+
+| test | metrika | Rust | práh |
+|---|---|---:|---|
+| `m1::velka_souhrnna_skupina_driftuje_mene_nez_mala_vesnice` | drift skupiny 1 000 000 (malá vesnice 200: 0,49) | 0,19 | < 0,01 |
+| `m2::metrika_6` | počet ustálených změn (3 semínka dohromady) | 13 | >= 30 |
+| `m2::zvukove_zmeny_se_siri` | medián počtu skupin na změnu / podíl reliktů | 1 až 1,5 / 0 až prázdný | >= 2 / 0,01 až 0,15 |
+| `m3::sturtevantuv_paradox` | alternace bez vyrovnání / bez − s vyrovnáním | 0,28 / 0,001 | > 0,3 / > 0,1 |
+| `m3::morfologizace` (k z 10) | prošla semínka 2/10 | 2 | >= 4 |
+| `m3::produktivni_vzor` | nejnižší podíl produktivní koncovky / častá − vzácná nepravidelnost | 0,68 / −0,04 | > 0,8 / > 0 |
+| `m3::analogie` | frekvence slov s analogií / průměr slovníku (semínko 1) | 1,10 | < 1 |
+| `m5::s2_mesto` | produktivní podíl město − ostrov / nepravidelnost vzácných slov město / (ostrov/2) | 0,02 až 0,03 / 1,8 | > 0,1 / < 1 |
+| `m5::s2_l2` | složitost města s L2 / (bez L2 / 2) | 2,0 (shodná) | < 1 |
+| `m5::metrika_11` | korelace složitosti s podílem L2 / s populací | −0,12 až 0,08 / −0,45 až 0,35 | < −0,6 |
+| `m6a::skola_zmrazena` | ustálení bez tisku / (s tiskem / 3), semínko 2 | 2,6 | < 1 |
+| `m6b::ferguson` | rozdíl lidové řeči od psané − rozdíl v roce 1475 | −0,034 | >= 0 |
+
+Ostatní brány (M1 kontinuum, hranice, metriky 7 a 8; M2 metriky 3 až 5; M3 zvukové metriky; celé M3b; M4 a M4b včetně
+exaptace a členu; M5 přechod, substrát a výpůjčky; M6a škola; M6b migrace, superstrát, trh, loajalita, náboženství; M6c)
+na semínkách dnešních testů prošly. Brány s `k` z `N` (exaptace, substrát S3, tabu) na jediném semínku někdy neprojdou
+(audit jednoho semínka `1`: tabu, člen, exaptace, substrát), což je podle pravidla k z N v pořádku.
+
+Co z toho plyne pro R2a (zjištěno čtením metrik, v enginu se nic neměnilo):
+
+- **Drift**: malá vesnice (200) se za 1 000 let skoro ustálí (0,49) a velká skupina (1 000 000) driftuje 0,19 místo méně než
+  0,01. Drift velké skupiny by měl být o dva řády nižší; podezření na zesílení šumu tlakem `conformity` nebo na škálu
+  driftu (`sigma / sqrt(kohorta)`).
+- **L2 nezjednodušuje morfologii**: složitost města s přistěhovalci je přesně stejná jako bez nich (poměr 2,0) a metrika 11
+  nekoreluje s podílem L2. Chybí zjednodušení tvarů dospělými učícími se (interference ve tvarech a koncovkách).
+- **Zvukové změny se ustalují málo a málo se šíří**: 13 ustálených změn na 3 jazyky (Python aspoň 30), medián 1 až 1,5 skupiny
+  na změnu (aspoň 2), žádné relikty u 2 ze 3 semínek.
+- **Alternace a analogie**: bez vyrovnání je alternací málo (0,28 místo > 0,3) a vyrovnání je nemění (rozdíl 0,001);
+  podíl produktivní koncovky 0,68 (aspoň 0,8); zmorfologizovaných buněk skoro nevzniká (2 z 10 semínek).
+- **Škola bez tisku** (semínko 2) zastavuje změnu méně než v Pythonu; diglosie (Ferguson) nechává lidovou řeč blíž psané
+  než před zavedením školy.
+
+### Co Rust zatím nemá v datech
+
+| metrika | co chybí | co doplnit |
+|---|---|---|
+| délka slov, inventáře, homofonie (M2, M3, M3b, M4) | povrchový tvar slova (`surface`) | funkce `phonology::surface(world, group, root)` (podkladový tvar + živé procesy s pravděpodobností slova >= 0,5, analogický tvar) a volání v `gates::metrics::lexicon_profile` / `lexicon_forms` |
+| počet mluvených skupin snímku (M6a, M6b) | `Snapshot::group_ids` bez `keep_distances` | vyplnit `group_ids` vždy (levné) nebo pole `spoken` |
+| čas drah inovací | tiky místo let | jen poznámka, metrika 7 to nepotřebuje |
+| negativní kontroly dokumentu 09 | přepínač `INTERFERENCE_WEIGHT` je v `Parameters`, ostatní (`SoundChange`, `Clarity`, `FunctionalLoad`) jde vynechat ze seznamu změn | jen převod měření, data jsou |
+
+Vlastnost, která v Pythonu je a v Rustu se v bránách nepoužívá: `World.concept_frequencies` jako slovník je v Rustu sloupec
+`ConceptColumns::frequency` s `NaN` pro nenastavené; brány berou pojmy s nenastavenou frekvencí za neexistující.
