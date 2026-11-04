@@ -2,20 +2,8 @@
 name = "cee_core"
 version = "0.1.0"
 edition = "2021"
-description = "Jádro enginu CEE v2 v Rustu: banka tvarů a tabulky procesů"
+description = "Jádra enginu CEE v2 v Rustu: banka tvarů, procesy, přenos, tlaky, indexy"
 publish = false
 
 [lib]
 name = "cee_core"
-crate-type = ["cdylib", "rlib"]
-
-[features]
-default = ["python"]
-# Vazba na Python; bez ní jde čisté jádro testovat samostatně (`cargo test --no-default-features`).
-python = ["dep:pyo3", "dep:numpy"]
-# Při sestavení přes maturin se rozšíření nelinkuje na libpython (viz pyproject.toml).
-extension-module = ["pyo3/extension-module"]
-
-[dependencies]
-pyo3 = { version = "0.30", optional = true }
-numpy = { version = "0.30", optional = true }
