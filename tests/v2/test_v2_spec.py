@@ -66,6 +66,18 @@ def test_chyby_maji_cestu_a_ceskou_zpravu():
         build(small(end_year=-5))
 
 
+def test_prepisy_parametru_se_overi_podle_souboru():
+    def issues(**parameters):
+        return [(item.path, item.message) for item in check(small(parameters=parameters))]
+
+    assert issues(capital_prestige=3.0, border_levels={"open": 1.0, "normal": 0.5, "closed": 0.1, "wall": 0.0}) == []
+    assert issues(nic=1) == [("parameters.nic", "neznámý parametr")]
+    assert issues(capital_prestige="x") == [("parameters.capital_prestige", "očekáváno číslo")]
+    assert issues(border_levels=2)[0][0] == "parameters.border_levels"
+    assert issues(channel_domains={"trade": {"power": -1}})[0][0] == "parameters.channel_domains.trade.power"
+    assert issues(channel_domains={"trade": {"nic": 1}})[0][0] == "parameters.channel_domains.trade.nic"
+
+
 def test_udalosti_se_overi_v_poradi_roku():
     late_state = small(events=[
         {"kind": "collapse", "year": 100, "state": "k"},

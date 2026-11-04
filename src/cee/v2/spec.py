@@ -21,7 +21,7 @@ Formát má verzi ``FORMAT``; mění se jen přidáváním polí.
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -30,7 +30,7 @@ from cee.v2 import concept_data
 from cee.v2 import vocabulary as vocab
 from cee.v2.events import WorldEvent
 from cee.v2.history import History
-from cee.v2.parameters import LEVEL_TABLES, Parameters
+from cee.v2.parameters import LEVEL_TABLES, Parameters, check_override
 from cee.v2.polity import (
     Annexation,
     BorderPolicy,
@@ -428,10 +428,14 @@ def _czech(item: Any) -> str:
 
 
 def _parameters(spec: WorldSpec) -> tuple[Parameters | None, list[Issue]]:
-    known = {item.name for item in fields(Parameters)}
-    unknown = sorted(set(spec.parameters) - known)
-    if unknown:
-        return None, [Issue(f"parameters.{name}", "neznámý parametr") for name in unknown]
+    """Přepisy parametrů ověřené podle ``v2_parameters.json`` (jméno, druh, meze)."""
+    issues = [
+        Issue(path, message)
+        for name, value in spec.parameters.items()
+        for path, message in check_override(name, value)
+    ]
+    if issues:
+        return None, issues
     try:
         return Parameters(**spec.parameters), []
     except (TypeError, ValueError) as error:
