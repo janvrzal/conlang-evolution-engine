@@ -107,7 +107,7 @@ stavy mají `Default`, `Clone` a `serde`.
   `events.rs` (rozhraní `WorldEvent`, nosič `PendingEvent`, převodník `from_pending`),
   `phases/{events,communities,observe}.rs`, `state/society.rs`, `export.rs` (`states`, `borders`,
   `census`, `lineages`, `dialect_facts`, `endonym`). Scénáře a `WorldSpec` už vytvářejí
-  `PendingEvent` se správným druhem a parametry; skutečné `State`, `Conquest`, … přidá R1d.
+  `PendingEvent` se správným druhem a parametry; skutečné provedení (`Scripted`, `State`, `Conquest`, …) přidala R1d.
 
 ### Smluvené body mezi fázemi (`phases/hooks.rs`)
 
@@ -206,7 +206,7 @@ příkladu `WorldSpec` je **shodný s Pythonem** (viz výsledek v zprávě R0).
 | **R1a** | přenos (`prepare`, `transmit`, míšení, selekce, drift), tlaky, aktivace procesů a analogií, záznamy milníků, sledování slovní zásoby po přenosu |
 | **R1b** | zvukové změny a kandidáti, index prostředí, přestavba (fonologizace), sledování slovní zásoby, banka tvarů a tabulky procesů (registrace, hodnocení) |
 | **R1c** | morfologie, syntax, prozodie, sémantické a lexikální změny, místa změn a návrh inovací (`Change`), souběžná variabilita protojazyka (`variation.rs`), větší slovník a vlastní pojmy (`vocabulary`) |
-| **R1d** | události (`State`, `Conquest`, … místo `PendingEvent`), kontakt a komunity, politika, pozadí dějin, instituce, pozorování (shluky, `LineageTracker`), `states`/`borders`/`census`/`dialect_facts`/`lineages` v exportu, `naming` |
+| **R1d** | hotovo kromě drobností v oddílu R1d (viz [R1d](#r1d-události-kontakt-společnost-a-pozorování)); chybí jen přenos výpůjček přes kanály v přenosu (R1a) a v morfologii (R1c), které čtou rozhraní `contact` |
 | **R2** | integrace, brány v Rustu, porovnání chování s Pythonem, vazba pro server (`runner.py` → Rust), smazání Pythonu v2, `Simulation::branch` |
 
 ### Známá omezení a odchylky od Pythonu
@@ -218,5 +218,71 @@ příkladu `WorldSpec` je **shodný s Pythonem** (viz výsledek v zprávě R0).
 - `gravity_pairs` používá `f64::hypot` místo `math.dist` (rozdíl v posledním bitu možný; porovnání ticku 0
   používá toleranci 1e-12).
 - Svět v Rustu nemá souběžnou variabilitu slovní zásoby (viz `variation.rs`); export ticku 0 jí není dotčen.
-- `WorldSpec` s větším slovníkem, vlastními pojmy nebo `background` ≠ `none` se odmítne chybou.
-- Události jsou nosiče bez provedení: běh, který na událost narazí, skončí chybou.
+- `WorldSpec` s větším slovníkem nebo vlastními pojmy se odmítne chybou (R1c/R2).
+- Pozadí dějin (`background`) generuje Rust z vlastního proudu náhody (`Stream`), ne z numpy: dějiny téhož semínka jsou jiné než v Pythonu, mají ale stejné rozdělení.
+
+## R1d: události, kontakt, společnost a pozorování
+
+Oblast R1d přepisuje `events.py`, `edits.py`, `polity.py`, `background.py`, `contact.py`
+(komunity, kanály, výpůjčky), `observe.py`, `naming.py` a část `export.py`.
+
+### Moduly a datový model
+
+| modul | obsah |
+|---|---|
+| `edits` | **jediná cesta, kterou se mění svět mimo přenos**: `Op` (`AddTerritory`, `AddGroup`, `RemoveGroup`, `SetGroup(Field)`, `SetCode`, `FixCode`, `Connect`, `SetLink`, `DropLink`, `SetTrade`, `SetBorderFactor`, `SetBasePrestige`, `SetPrestigeMirror`, `AddState`, `SetState`, `SetStateLink`, `RemoveState`, `SetStandard`), `apply(world, op)` a `Edits` (tik + fáze `Event`/`Community`). Operace nese čísla entit (`GroupId`, `TerritoryId`); jména jen u nových entit a států. Totéž `apply` se používá při běhu i při přehrání deníku (`Edits::replay`), takže deník nemůže popsat něco jiného, než co se stalo. |
+| `events` | `WorldEvent` (rozhraní beze změny), `PendingEvent` (nosič; teď se rozebere až při provedení), `Scripted` (rok, druh, původní popis, rozebraná `Action`). `from_pending` rozebere JSON parametry (přijímá i podoby scénářů: `first`/`second`, `elite`/`seat`/`regions`, `groups`). Druhy: `border`, `contact`, `language_shift`, `codification`, `printing`, `schooling`, `religious_change`, `refinement`, `migration`, `conquest`, `war`, `epidemic`, `state_collapse`. Neplatný popis vrátí chybu až při provedení. |
+| `polity` | `state`, `language_policy`, `annexation`, `secession`, `collapse`, `border_policy`, `lingua_franca`, `standard`, `schools`, `revival`, `preserve`, `identity`, `immigration`; `refresh` (hranice z `border_factors` a prestiž z `base_prestige`, hlavního města a normy); exporty `states`, `borders`, `language_census`. |
+| `background` | `Plague`, `Recovery`, `Resettlement`, `TradeShift`, `PrestigeShift`, `ForeignElite`, `EliteAssimilation` a generátor `generate` (z `Stream::new(seed, ["background"])`); `spec::build` ho volá a odmítnutí `background` zrušilo. |
+| `contact` | filtry výpůjček a interference, kanály, dárci a adaptace cizích slov (viz níže). |
+| `phases::communities` | `community_step`: přechod jazyka (`shift`, Abrams–Strogatz, obousměrný při `home_pull`/`revival`), pronikání veřejného kódu domů (`nativize`), druhý jazyk (`l2_share`), gravitační migrace (`migrate`). |
+| `observe`, `phases::observe` | skládání vstupu pro `cee_core::observe` z modelu světa, `observe_world` (shluky dialektů a jazyků), `code_distances`, `LineageTracker`. |
+| `naming` | endonym, původ jazyka, poloha nářečí (jen export). |
+| `state::society` | `SocietyState`: `Polity` (stát), `states`, `standards`, `endonyms`, `border_factors`, `base_prestige`, `prestige_mirror`, `trade`, `migration`, `journal` (`JournalMode`), `edit_log`, `lineages`. |
+
+**Deník změn.** `JournalMode::Structure` (výchozí) zapisuje všechny změny událostí, států a pozadí a ve fázi komunit jen změny
+struktury (vznik a zánik skupin, vazby, obchod, hranice, prestiž, předávání jazyka); každokrokové úpravy populace, `l2_share`
+a přistěhovalců se nezapisují, aby deník nerostl úměrně počtu skupin krát počet kroků. `All` zapisuje jako Python, `Off` nic.
+Deník na dynamiku nemá vliv. Změna, která nic nezměnila (stejná hodnota), se nezapíše.
+
+**Pozorování.** `ObserveInput::gather` skládá pohledy na bloky živých fondů (jen proměnné slov a konstrukcí), dominantní kořeny
+skupin a **jen tvary, které skupiny opravdu užívají** (tabulka tvarů se staví z použitých tvarů, ne z celé banky), vazby a polohy
+mluvených skupin. Nikde se nestaví tabulka dvojic hlásek ani matice všech dvojic skupin: `Costs` počítá cenu záměny hlásek z řádků
+rysů při každém dotazu a shlukování bere průměrnou vazbu ze součtů za shluk, takže čas i paměť rostou s počtem skupin lineárně.
+Čtvercová matice vzdáleností (`code_distances`) vzniká jen s `SimulationConfig::keep_distances` (do `Snapshot::distances`).
+
+### Rozhraní `contact` pro přenos (R1a) a morfologii (R1c)
+
+Pro výpůjčky a interferenci čtou přenos a změny tyto funkce (nic z nich nedrží stav, vše je čisté čtení světa):
+
+* `BorrowTable::build(&World)` jednou za krok spočítá přenositelnost každého pojmu; `table.factor(&world, variable, channel)` je
+  filtr výpůjček proměnné v kanálu (`NEIGHBOR`, `ELITE`, `TRADE`, `LITURGY`, `READING`, `SCHOOL` jsou čísla kanálů v pořadí
+  `parameters::CHANNELS`). Slova: `0,5 × přenositelnost pojmu × váha domény v kanálu`; procesy a konstrukce 0,1; tvary a prozodie 0.
+* `interference_factor(kind)`: slova 0,05, procesy a konstrukce 1, tvary a prozodie 0.
+* `distinct_channels(&params)`: které z `ELITE`, `TRADE` mají jiné váhy domén než obecný kontakt sousedů (jen ty se v přenosu
+  počítají zvlášť; kanál s týmiž vahami splyne se sousedy).
+* `channel_split(&world, učící_se, zdroj, &distinct)` → `ChannelSplit { neighbor, elite, trade }` se součtem 1: zdroj-elita je celý
+  kanál `elite`, z ostatních vazeb patří `trade` podíl síly z obchodní cesty (`World::trade_share`). Je **řídké po vazbě**; Python měl
+  čtvercové matice kanálů, tady se nestaví.
+* `adopt(&mut world, skupina, morfém)` (tělo `phases::hooks::adopt`): cizí kořen vstupuje do slovní zásoby; tvar se vezme od
+  nejbližšího dárce (`donor_form`: sousedé podle síly, pak `l1_source`, `standard`, `liturgy`) a cizí hlásky se nahradí
+  nejbližší hláskou příjemce podle rysů (`adapt`, `inventory`). Tvary buněk paradigmatu výpůjčky (podle produktivních koncovek
+  příjemce, `morphology.units_of`) dodá R1c.
+
+Filtry se zkoušejí proti Pythonu (`reference()`, `normalizer(s)`: hodnoty z `cee.v2.contact`).
+
+### Odchylky od Pythonu
+
+* **Pozadí dějin** má jiný generátor náhody (viz výše); `PendingEvent` se rozebírá při provedení, ne při sestavení.
+* **Pořadí sčítání** (`demographic_share`, migrace) je podle jmen skupin; součty se mohou lišit v posledním bitu.
+* `ReplayEdits` (přehrání deníku jako událost) není; `Edits::replay` a `edits::by_tick` ano (test `denik_zmen_se_prehraje_na_novem_svete`).
+* Matice vzdáleností a `group_ids` jsou ve `Snapshot` jen s `keep_distances`.
+* Vlastní jméno jazyka čte `SocietyState::endonyms`; scénáře ho zatím nenastavují (platí výchozí složenina pojmu `language`).
+
+### Brány milníků
+
+Oblasti R1d se týkají metriky bran, které čtou: **snímky dialektů a jazyků** (`History::snapshots`, `language_split`/`language_emerged`/
+`language_ended`, M4–M6, M7 strom jazyků), **přechod jazyka a dvojjazyčnost** (`bilingualism`, `language_shift`, `nativization`,
+`revival`, M5, M6f), **populace a podíly L2** (`Groups`, `l2_share`) a **státy, normy a školy** (`state`, `standard`, `schools`, `census`, M6f).
+Pro R2 je připraveno: `SocietyState::edit_log` pro porovnání změn světa, `code_distances` pro metriky kontinua (M7), `export::{lineages,
+dialect_facts}`, a rozhraní `contact` pro přenos výpůjček. Brány samotné (jejich prahy, audit na semínkách) převede R2 po sloučení s přenosem.

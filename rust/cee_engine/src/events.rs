@@ -25,6 +25,9 @@ use crate::model::territory::TerritoryLevel;
 use crate::polity::PolityAction;
 use crate::world::World;
 
+/// Sídlo zjemnění: jméno, podíl a poloha.
+pub type Settlement = (String, f64, Option<(f64, f64)>);
+
 /// Jak často se psaná norma reviduje, když sleduje řeč (let).
 pub const WRITTEN_GENERATION: f64 = 100.0;
 
@@ -119,7 +122,7 @@ pub enum Action {
     },
     RefineTerritory {
         territory: String,
-        settlements: Vec<(String, f64, Option<(f64, f64)>)>,
+        settlements: Vec<Settlement>,
         internal_strength: f64,
         child_level: TerritoryLevel,
     },
@@ -428,7 +431,9 @@ pub fn language_shift(
     };
     edit.set_group(world, source, Field::Community(community))?;
     let source_population = world.groups.population[source.index()];
-    let population = 1.max(py_round(f64::from(source_population) * options.initial_share)) as u32;
+    let population = 1.max(py_round(
+        f64::from(source_population) * options.initial_share,
+    )) as u32;
     if !options.public {
         edit.set_group(
             world,
@@ -625,13 +630,7 @@ pub fn schooling_event(
         ];
         let territory = world.groups.territory[group.index()];
         let high = edit.add_group(
-            world,
-            &high_name,
-            territory,
-            population,
-            standard,
-            false,
-            &fields,
+            world, &high_name, territory, population, standard, false, &fields,
         )?;
         edit.set_code(world, high, CodeChange::learned_from(group, 1.0))?;
         created.push((group, high));
@@ -709,7 +708,7 @@ fn refine_territory(
     tick: u32,
     year: f64,
     territory: &str,
-    settlements: &[(String, f64, Option<(f64, f64)>)],
+    settlements: &[Settlement],
     internal_strength: f64,
     child_level: TerritoryLevel,
 ) -> Result<(), String> {
@@ -913,7 +912,15 @@ pub(crate) fn conquest(
         Field::Openness(world.groups.openness[origin.index()]),
         Field::Elite(true),
     ];
-    let elite = edit.add_group(world, &elite_name, place, population, origin, false, &fields)?;
+    let elite = edit.add_group(
+        world,
+        &elite_name,
+        place,
+        population,
+        origin,
+        false,
+        &fields,
+    )?;
     for subject in subjects {
         let id = group_named(world, subject)?;
         edit.connect(world, elite, id, strength, LinkKind::Weak)?;

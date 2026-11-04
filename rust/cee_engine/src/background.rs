@@ -17,9 +17,9 @@ use crate::edits::{py_round, Edits, Field};
 use crate::events::{conquest, migration, sorted, Action, Params, Scripted};
 use crate::history::History;
 use crate::ids::{GroupId, TerritoryId};
+use crate::parameters::Parameters;
 use crate::polity::{check_regions, groups_in, refresh, region_of, seat_of};
 use crate::rng::{Part, Stream};
-use crate::parameters::Parameters;
 use crate::world::World;
 
 /// Krok generátoru v letech (jako krok simulace).
@@ -28,13 +28,36 @@ pub const STEP: f64 = 25.0;
 /// Druhy událostí pozadí.
 #[derive(Clone, Debug)]
 pub enum BackgroundAction {
-    Plague { regions: Vec<String>, mortality: f64 },
-    Recovery { regions: Vec<String>, factor: f64 },
-    Resettlement { source: String, target: String, share: f64 },
-    TradeShift { first: String, second: String, factor: f64 },
-    PrestigeShift { region: String, factor: f64 },
-    ForeignElite { conqueror: String, region: String },
-    EliteAssimilation { conqueror: String, region: String },
+    Plague {
+        regions: Vec<String>,
+        mortality: f64,
+    },
+    Recovery {
+        regions: Vec<String>,
+        factor: f64,
+    },
+    Resettlement {
+        source: String,
+        target: String,
+        share: f64,
+    },
+    TradeShift {
+        first: String,
+        second: String,
+        factor: f64,
+    },
+    PrestigeShift {
+        region: String,
+        factor: f64,
+    },
+    ForeignElite {
+        conqueror: String,
+        region: String,
+    },
+    EliteAssimilation {
+        conqueror: String,
+        region: String,
+    },
 }
 
 impl BackgroundAction {
@@ -58,10 +81,18 @@ impl BackgroundAction {
             BackgroundAction::Recovery { regions, factor } => {
                 json!({"regions": regions, "factor": factor})
             }
-            BackgroundAction::Resettlement { source, target, share } => {
+            BackgroundAction::Resettlement {
+                source,
+                target,
+                share,
+            } => {
                 json!({"source": source, "target": target, "share": share})
             }
-            BackgroundAction::TradeShift { first, second, factor } => {
+            BackgroundAction::TradeShift {
+                first,
+                second,
+                factor,
+            } => {
                 json!({"regions": [first, second], "factor": factor})
             }
             BackgroundAction::PrestigeShift { region, factor } => {
@@ -169,7 +200,11 @@ pub fn apply(
                 json!({"regions": sorted(regions), "factor": factor, "background": true}),
             );
         }
-        BackgroundAction::Resettlement { source, target, share } => {
+        BackgroundAction::Resettlement {
+            source,
+            target,
+            share,
+        } => {
             let source_regions = region_ids(world, std::slice::from_ref(source))?;
             let target_regions = region_ids(world, std::slice::from_ref(target))?;
             let sources: Vec<(String, f64)> = groups_in(world, &source_regions)
@@ -179,7 +214,9 @@ pub fn apply(
             if sources.is_empty() || groups_in(world, &target_regions).is_empty() {
                 return Ok(());
             }
-            let seat = world.group_name(seat_of(world, target_regions[0])?).to_owned();
+            let seat = world
+                .group_name(seat_of(world, target_regions[0])?)
+                .to_owned();
             migration(
                 world,
                 &mut History::default(),
@@ -198,7 +235,11 @@ pub fn apply(
                 json!({"source": source, "target": target, "share": share, "background": true}),
             );
         }
-        BackgroundAction::TradeShift { first, second, factor } => {
+        BackgroundAction::TradeShift {
+            first,
+            second,
+            factor,
+        } => {
             let (a_region, b_region) = (
                 region_ids(world, std::slice::from_ref(first))?[0],
                 region_ids(world, std::slice::from_ref(second))?[0],
@@ -311,13 +352,18 @@ pub fn apply(
                 return Ok(());
             };
             let language = world.groups.main_code(first).language;
-            let ended: Vec<GroupId> = groups_in(world, &region_ids(world, std::slice::from_ref(region))?)
-                .into_iter()
-                .filter(|&g| {
-                    world.group_name(g).contains('+') && world.groups.main_code(g).language == language
-                })
+            let ended: Vec<GroupId> =
+                groups_in(world, &region_ids(world, std::slice::from_ref(region))?)
+                    .into_iter()
+                    .filter(|&g| {
+                        world.group_name(g).contains('+')
+                            && world.groups.main_code(g).language == language
+                    })
+                    .collect();
+            let names: Vec<String> = ended
+                .iter()
+                .map(|&g| world.group_name(g).to_owned())
                 .collect();
-            let names: Vec<String> = ended.iter().map(|&g| world.group_name(g).to_owned()).collect();
             for group in ended {
                 edit.remove_group(world, group)?;
             }
@@ -397,7 +443,13 @@ pub fn generate(
             let mut near = region.neighbours.clone();
             near.sort();
             near.dedup();
-            for kind in ["plague", "resettlement", "trade", "prestige", "foreign_elite"] {
+            for kind in [
+                "plague",
+                "resettlement",
+                "trade",
+                "prestige",
+                "foreign_elite",
+            ] {
                 let rate = params.background_rates.get(kind).copied().unwrap_or(0.0);
                 let expected = rate * scale * STEP / 100.0;
                 if expected <= 0.0 || rng.poisson(expected) == 0 {
@@ -413,7 +465,8 @@ pub fn generate(
                                 mortality,
                             },
                         );
-                        let later = year + STEP * f64::from(steps(&mut rng, params, "recovery_steps")?);
+                        let later =
+                            year + STEP * f64::from(steps(&mut rng, params, "recovery_steps")?);
                         if later < end {
                             push(
                                 later,
@@ -452,7 +505,8 @@ pub fn generate(
                                 factor,
                             },
                         );
-                        let later = year + STEP * f64::from(steps(&mut rng, params, "trade_steps")?);
+                        let later =
+                            year + STEP * f64::from(steps(&mut rng, params, "trade_steps")?);
                         if later < end {
                             push(
                                 later,
@@ -485,7 +539,8 @@ pub fn generate(
                             })
                             .collect();
                         if !foreign.is_empty() {
-                            let conqueror = foreign[rng.integers(foreign.len() as u64) as usize].clone();
+                            let conqueror =
+                                foreign[rng.integers(foreign.len() as u64) as usize].clone();
                             push(
                                 year,
                                 BackgroundAction::ForeignElite {
@@ -493,7 +548,8 @@ pub fn generate(
                                     region: region.id.clone(),
                                 },
                             );
-                            let later = year + STEP * f64::from(steps(&mut rng, params, "elite_steps")?);
+                            let later =
+                                year + STEP * f64::from(steps(&mut rng, params, "elite_steps")?);
                             if later < end {
                                 push(
                                     later,

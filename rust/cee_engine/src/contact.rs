@@ -81,7 +81,7 @@ pub fn reference() -> f64 {
 
 /// Průměr váhy pojmu (bez normalizace) přes pojmy z dat vůči průměru `1 − frekvence`,
 /// aby `borrowability_strength` nezměnila průměrnou míru výpůjček výchozího slovníku.
-fn normalizer(strength: f64) -> f64 {
+pub fn normalizer(strength: f64) -> f64 {
     let data = ConceptData::shared();
     let mean = reference();
     let rarity = |name: &str| 1.0 - data.frequency(name).unwrap_or(0.0);
@@ -147,7 +147,13 @@ impl BorrowTable {
         let domain = (0..CHANNELS.len())
             .map(|channel| {
                 (0..size)
-                    .map(|c| domain_weight(&world.params, channel, world.concepts.domain.get(c).copied().unwrap_or(0)))
+                    .map(|c| {
+                        domain_weight(
+                            &world.params,
+                            channel,
+                            world.concepts.domain.get(c).copied().unwrap_or(0),
+                        )
+                    })
                     .collect()
             })
             .collect();
@@ -304,7 +310,10 @@ pub fn donor_form(world: &World, group: GroupId, morpheme: MorphemeId) -> Vec<i3
             return world.form_of(donor, morpheme).to_vec();
         }
     }
-    world.bank.form(world.morphemes.form[morpheme.index()]).to_vec()
+    world
+        .bank
+        .form(world.morphemes.form[morpheme.index()])
+        .to_vec()
 }
 
 /// Cizí kořen vstupuje do slovní zásoby: převezme a adaptuje jeho tvar. Tvary buněk

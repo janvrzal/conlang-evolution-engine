@@ -202,8 +202,10 @@ pub fn dialects(
             }
         }
     }
-    let centres: BTreeMap<&str, (f64, f64)> =
-        members.iter().map(|(l, g)| (*l, centre(world, g))).collect();
+    let centres: BTreeMap<&str, (f64, f64)> = members
+        .iter()
+        .map(|(l, g)| (*l, centre(world, g)))
+        .collect();
     let radius: BTreeMap<&str, f64> = members
         .iter()
         .map(|(l, groups)| {

@@ -330,7 +330,10 @@ fn background_events(
         .iter()
         .map(|r| crate::background::BackgroundRegion {
             id: r.id.clone(),
-            neighbours: near[r.id.as_str()].iter().map(|s| (*s).to_owned()).collect(),
+            neighbours: near[r.id.as_str()]
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect(),
             language: r.language.clone().unwrap_or_else(|| first.clone()),
         })
         .collect();

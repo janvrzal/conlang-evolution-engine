@@ -17,7 +17,9 @@ use std::collections::BTreeMap;
 use serde_json::{json, Value};
 
 use crate::edits::{group_named, neighbors, py_round, territory_named, Edits, Field, StateChange};
-use crate::events::{codification, language_shift, printing, schooling_event, Params, ShiftOptions};
+use crate::events::{
+    codification, language_shift, printing, schooling_event, Params, ShiftOptions,
+};
 use crate::history::History;
 use crate::ids::{GroupId, LanguageId, TerritoryId};
 use crate::model::group::Domain;
@@ -105,8 +107,12 @@ pub fn parse(kind: &str, p: &Params<'_>) -> Result<Option<PolityAction>, String>
             centralization: p
                 .opt_string(&["centralization"])?
                 .unwrap_or_else(|| "moderate".into()),
-            policy: p.opt_string(&["policy"])?.unwrap_or_else(|| "tolerant".into()),
-            border: p.opt_string(&["border"])?.unwrap_or_else(|| "normal".into()),
+            policy: p
+                .opt_string(&["policy"])?
+                .unwrap_or_else(|| "tolerant".into()),
+            border: p
+                .opt_string(&["border"])?
+                .unwrap_or_else(|| "normal".into()),
             name: p.opt_string(&["name"])?,
         })
     };
@@ -124,7 +130,9 @@ pub fn parse(kind: &str, p: &Params<'_>) -> Result<Option<PolityAction>, String>
         "lingua_franca" => PolityAction::LinguaFranca {
             source: p.string(&["source"])?,
             regions: p.strings(&["regions"])?,
-            spread: p.opt_string(&["spread"])?.unwrap_or_else(|| "common".into()),
+            spread: p
+                .opt_string(&["spread"])?
+                .unwrap_or_else(|| "common".into()),
             nativize: p.flag(&["nativize"], false)?,
         },
         "collapse" => PolityAction::Collapse {
@@ -156,11 +164,15 @@ pub fn parse(kind: &str, p: &Params<'_>) -> Result<Option<PolityAction>, String>
         },
         "standard" => PolityAction::Standard {
             of: p.string(&["of"])?,
-            literacy: p.opt_string(&["literacy"])?.unwrap_or_else(|| "elite".into()),
+            literacy: p
+                .opt_string(&["literacy"])?
+                .unwrap_or_else(|| "elite".into()),
         },
         "schools" => PolityAction::Schools {
             of: p.string(&["of"])?,
-            coverage: p.opt_string(&["coverage"])?.unwrap_or_else(|| "mass".into()),
+            coverage: p
+                .opt_string(&["coverage"])?
+                .unwrap_or_else(|| "mass".into()),
             printing: p.flag(&["printing"], true)?,
             diglossic: p.flag(&["diglossic"], false)?,
         },
@@ -189,7 +201,9 @@ pub fn apply(
             regions,
             spread,
             nativize,
-        } => lingua_franca(world, history, tick, year, source, regions, spread, *nativize),
+        } => lingua_franca(
+            world, history, tick, year, source, regions, spread, *nativize,
+        ),
         PolityAction::Secession(spec) => {
             let ids = check_regions(world, &spec.regions)?;
             take(world, tick, &ids, None)?;
@@ -231,7 +245,15 @@ pub fn apply(
             regions,
             language,
             preserved,
-        } => preserve(world, history, tick, year, regions, language.as_deref(), *preserved),
+        } => preserve(
+            world,
+            history,
+            tick,
+            year,
+            regions,
+            language.as_deref(),
+            *preserved,
+        ),
         PolityAction::Identity { regions, identity } => {
             identity_event(world, history, tick, year, regions, identity)
         }
@@ -243,7 +265,15 @@ pub fn apply(
             regions,
             language,
             strength,
-        } => revival(world, history, tick, year, regions, language.as_deref(), strength),
+        } => revival(
+            world,
+            history,
+            tick,
+            year,
+            regions,
+            language.as_deref(),
+            strength,
+        ),
         PolityAction::Standard { of, literacy } => {
             standard(world, history, tick, year, of, literacy)
         }
@@ -252,7 +282,9 @@ pub fn apply(
             coverage,
             printing,
             diglossic,
-        } => schools(world, history, tick, year, of, coverage, *printing, *diglossic),
+        } => schools(
+            world, history, tick, year, of, coverage, *printing, *diglossic,
+        ),
     }
 }
 
@@ -312,8 +344,8 @@ pub fn check_regions(world: &World, regions: &[String]) -> Result<Vec<TerritoryI
     regions
         .iter()
         .map(|name| {
-            let id = territory_named(world, name)
-                .map_err(|_| format!("'{name}' není region světa."))?;
+            let id =
+                territory_named(world, name).map_err(|_| format!("'{name}' není region světa."))?;
             if world.territories[id.index()].level == TerritoryLevel::Region {
                 Ok(id)
             } else {
@@ -377,7 +409,12 @@ pub fn reach(world: &World, group: GroupId, seat: GroupId, distance: bool) -> f6
     let terrain = region_of(world, group)
         .map(|r| world.territories[r.index()].terrain.as_str())
         .unwrap_or("plain");
-    let access = world.params.terrain_access.get(terrain).copied().unwrap_or(1.0);
+    let access = world
+        .params
+        .terrain_access
+        .get(terrain)
+        .copied()
+        .unwrap_or(1.0);
     if !distance {
         return access;
     }
@@ -442,7 +479,11 @@ fn public_bilingualism(
             edit.set_group(
                 world,
                 public,
-                Field::HomePull(if replace_pull { pull } else { current.max(pull) }),
+                Field::HomePull(if replace_pull {
+                    pull
+                } else {
+                    current.max(pull)
+                }),
             )?;
             let nativized_name = format!("{group_name}>{language}:home");
             if let Some(n) = world
@@ -481,8 +522,8 @@ fn public_bilingualism(
             let standard = world.groups.standard[source.index()];
             if !standard.is_none() {
                 edit.set_group(world, created, Field::Standard(standard))?;
-                let literacy = world.groups.literacy[group.index()]
-                    .max(world.groups.literacy[source.index()]);
+                let literacy =
+                    world.groups.literacy[group.index()].max(world.groups.literacy[source.index()]);
                 edit.set_group(world, created, Field::Literacy(literacy))?;
             }
             created
@@ -549,7 +590,10 @@ fn apply_policy(
 }
 
 fn names_of(world: &World, groups: &[GroupId]) -> Vec<String> {
-    groups.iter().map(|&g| world.group_name(g).to_owned()).collect()
+    groups
+        .iter()
+        .map(|&g| world.group_name(g).to_owned())
+        .collect()
 }
 
 /// Centralizace: vesnice státu se spojí se sídlem; vrací počet nových vazeb.
@@ -600,7 +644,9 @@ fn release(
     let mut linked: Vec<GroupId> = polity.links.keys().copied().collect();
     linked.sort_by(|a, b| world.group_name(*a).cmp(world.group_name(*b)));
     for group in linked {
-        if world.groups.contains(group) && region_of(world, group).is_some_and(|r| regions.contains(&r)) {
+        if world.groups.contains(group)
+            && region_of(world, group).is_some_and(|r| regions.contains(&r))
+        {
             for (source, target) in [(group, polity.seat), (polity.seat, group)] {
                 edit.drop_link(world, source, target)?;
                 edit.set_border_factor(world, source, target, None)?;
@@ -668,7 +714,11 @@ fn found_state(
         ));
     }
     let params = world.params.clone();
-    level_of(&params.centralization_levels, &spec.centralization, "úroveň centralizace")?;
+    level_of(
+        &params.centralization_levels,
+        &spec.centralization,
+        "úroveň centralizace",
+    )?;
     level2_of(&params.policy_levels, &spec.policy, "jazyková politika")?;
     level_of(&params.border_levels, &spec.border, "propustnost hranice")?;
     let seat = seat_of(world, capital)?;
@@ -826,7 +876,11 @@ fn lingua_franca(
     let share = level_of(&params.lingua_franca_levels, spread, "úroveň rozšíření")?;
     let source_id = source_group(world, source)?;
     let language = world.groups.main_code(source_id).language;
-    let pull = if nativize { params.lingua_franca_pull } else { 0.0 };
+    let pull = if nativize {
+        params.lingua_franca_pull
+    } else {
+        0.0
+    };
     let mut bilingual = Vec::new();
     for group in groups_in(world, &ids) {
         if world.groups.main_code(group).language == language {
@@ -1043,7 +1097,12 @@ fn revival(
 }
 
 /// Odkud se ztracený jazyk naučit: soused, který ho mluví, jinak jeho písmo.
-fn donor(world: &World, group: GroupId, language: LanguageId, region: TerritoryId) -> Option<GroupId> {
+fn donor(
+    world: &World,
+    group: GroupId,
+    language: LanguageId,
+    region: TerritoryId,
+) -> Option<GroupId> {
     let mut links = neighbors(world, group);
     links.sort_by(|a, b| {
         b.1.strength
@@ -1119,13 +1178,17 @@ fn revive(
         Field::Loyalty(world.groups.loyalty[g]),
         Field::Revival(pace),
         Field::Standard(written),
-        Field::Literacy(
-            world.groups.literacy[g].max(if written.is_none() { 0.0 } else { 0.5 }),
-        ),
+        Field::Literacy(world.groups.literacy[g].max(if written.is_none() { 0.0 } else { 0.5 })),
     ];
     let territory = world.groups.territory[g];
-    let created = edit.add_group(world, &new_name, territory, population, donor, false, &fields)?;
-    edit.set_code(world, created, crate::edits::CodeChange::learned_from(group, 1.0))?;
+    let created = edit.add_group(
+        world, &new_name, territory, population, donor, false, &fields,
+    )?;
+    edit.set_code(
+        world,
+        created,
+        crate::edits::CodeChange::learned_from(group, 1.0),
+    )?;
     edit.set_base_prestige(world, created, Some(world.groups.prestige[created.index()]))?;
     edit.connect(world, created, group, 0.8, LinkKind::Strong)?;
     for (target, link) in neighbors(world, group) {
@@ -1190,7 +1253,8 @@ pub fn refresh(world: &mut World, tick: u32) -> Result<(), String> {
             let (oh, ot) = (owner.get(&h), owner.get(&t));
             if oh != ot {
                 let open = |o: Option<&String>| {
-                    o.and_then(|id| openness.get(id.as_str()).copied()).unwrap_or(1.0)
+                    o.and_then(|id| openness.get(id.as_str()).copied())
+                        .unwrap_or(1.0)
                 };
                 factor = open(oh).min(open(ot));
             }
@@ -1204,12 +1268,22 @@ pub fn refresh(world: &mut World, tick: u32) -> Result<(), String> {
         if factor == old {
             continue;
         }
-        let link = world.links.get(first, second).copied().ok_or("vazba zmizela")?;
+        let link = world
+            .links
+            .get(first, second)
+            .copied()
+            .ok_or("vazba zmizela")?;
         changes.push((first, second, old, factor, link.kind));
     }
     for (first, second, old, factor, kind) in changes {
         let strength = world.links.get(first, second).map_or(0.0, |l| l.strength);
-        edit.set_link(world, first, second, (strength / old).min(1.0) * factor, kind)?;
+        edit.set_link(
+            world,
+            first,
+            second,
+            (strength / old).min(1.0) * factor,
+            kind,
+        )?;
         edit.set_border_factor(world, first, second, (factor != 1.0).then_some(factor))?;
     }
     let stale: Vec<(GroupId, GroupId)> = world
@@ -1303,7 +1377,11 @@ fn standard(
     literacy: &str,
 ) -> Result<(), String> {
     let (regions, seat, is_state) = scope(world, of)?;
-    let share = level_of(&world.params.literacy_levels, literacy, "úroveň gramotnosti")?;
+    let share = level_of(
+        &world.params.literacy_levels,
+        literacy,
+        "úroveň gramotnosti",
+    )?;
     let seat_name = world.group_name(seat).to_owned();
     let written_name = format!("written:{seat_name}");
     let exists = world
@@ -1327,13 +1405,19 @@ fn standard(
         let current = world.groups.standard[g];
         let has_current = !current.is_none() && world.groups.contains(current);
         if has_current
-            && (!own || world.groups.main_code(current).language == world.groups.main_code(group).language)
+            && (!own
+                || world.groups.main_code(current).language
+                    == world.groups.main_code(group).language)
         {
             continue;
         }
         edit.set_group(world, group, Field::Standard(written))?;
         let value = share * reach(world, group, seat, is_state);
-        edit.set_group(world, group, Field::Literacy(world.groups.literacy[g].max(value)))?;
+        edit.set_group(
+            world,
+            group,
+            Field::Literacy(world.groups.literacy[g].max(value)),
+        )?;
         readers.push(group);
     }
     refresh(world, tick)?;
@@ -1368,7 +1452,9 @@ fn schools(
         .copied()
         .ok_or_else(|| format!("'{of}' nemá spisovný jazyk; nejdřív událost Standard."))?;
     let written_name = world.group_name(written).to_owned();
-    let source = written_name.strip_prefix("written:").unwrap_or(&written_name);
+    let source = written_name
+        .strip_prefix("written:")
+        .unwrap_or(&written_name);
     // Dosah se měří od sídla normy.
     let seat = group_named(world, source).unwrap_or(state_seat);
     let share = level_of(&world.params.schooling_levels, coverage, "úroveň školství")?;
@@ -1383,7 +1469,11 @@ fn schools(
         }
         edit.set_group(world, group, Field::Standard(written))?;
         let value = share * reach(world, group, seat, is_state);
-        edit.set_group(world, group, Field::Literacy(world.groups.literacy[g].max(value)))?;
+        edit.set_group(
+            world,
+            group,
+            Field::Literacy(world.groups.literacy[g].max(value)),
+        )?;
         if world.groups.main_code(group).language != language {
             continue;
         }
@@ -1432,7 +1522,8 @@ pub fn borders(world: &World) -> Vec<Value> {
     let region_name = |r: TerritoryId| world.registry.territories.name(r.0);
     let mut found: BTreeMap<(&str, &str), f64> = BTreeMap::new();
     for (&(first, second), _) in world.links.iter() {
-        let (Some(Some(here)), Some(Some(there))) = (regions.get(&first), regions.get(&second)) else {
+        let (Some(Some(here)), Some(Some(there))) = (regions.get(&first), regions.get(&second))
+        else {
             continue;
         };
         let (h, t) = (region_name(*here), region_name(*there));
@@ -1526,9 +1617,17 @@ pub fn language_census(world: &World) -> Value {
     }
     let mut out = serde_json::Map::new();
     for (region, (entry, state)) in census {
-        let people = if entry.people == 0.0 { 1.0 } else { entry.people };
+        let people = if entry.people == 0.0 {
+            1.0
+        } else {
+            entry.people
+        };
         let share = |m: &BTreeMap<String, f64>| {
-            Value::Object(m.iter().map(|(k, v)| (k.clone(), json!(v / people))).collect())
+            Value::Object(
+                m.iter()
+                    .map(|(k, v)| (k.clone(), json!(v / people)))
+                    .collect(),
+            )
         };
         out.insert(
             region.to_owned(),

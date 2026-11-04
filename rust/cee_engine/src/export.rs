@@ -221,8 +221,14 @@ pub fn lineages(simulation: &Simulation) -> Vec<Value> {
                 };
                 let mut item = Map::new();
                 item.insert("id".into(), id.into());
-                item.insert("parent".into(), event.get("parent").cloned().unwrap_or(Value::Null));
-                item.insert("start_year".into(), event.get("year").cloned().unwrap_or(Value::Null));
+                item.insert(
+                    "parent".into(),
+                    event.get("parent").cloned().unwrap_or(Value::Null),
+                );
+                item.insert(
+                    "start_year".into(),
+                    event.get("year").cloned().unwrap_or(Value::Null),
+                );
                 item.insert("end_year".into(), Value::Null);
                 item.insert(
                     "groups_at_start".into(),
@@ -236,7 +242,10 @@ pub fn lineages(simulation: &Simulation) -> Vec<Value> {
                     .and_then(Value::as_str)
                     .and_then(|id| found.get_mut(id))
                 {
-                    item.insert("end_year".into(), event.get("year").cloned().unwrap_or(Value::Null));
+                    item.insert(
+                        "end_year".into(),
+                        event.get("year").cloned().unwrap_or(Value::Null),
+                    );
                 }
             }
             _ => {}
@@ -252,7 +261,11 @@ pub fn lineages(simulation: &Simulation) -> Vec<Value> {
             .unwrap_or_default();
         let at_start: Vec<String> = item["groups_at_start"]
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            })
             .unwrap_or_default();
         item.insert(
             "endonym".into(),

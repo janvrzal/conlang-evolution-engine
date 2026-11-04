@@ -491,7 +491,7 @@ impl Op {
             Op::AddState { polity } => (
                 "add_state",
                 json!({"state": polity.id,
-                       "regions": polity.regions.iter().map(|r| territory(r)).collect::<Vec<_>>(),
+                       "regions": polity.regions.iter().map(territory).collect::<Vec<_>>(),
                        "capital": territory(&polity.capital), "seat": group(&polity.seat),
                        "language": registry.languages.name(polity.language.0),
                        "centralization": polity.centralization, "policy": polity.policy,
@@ -501,7 +501,7 @@ impl Op {
                 let (field, value) = match change {
                     StateChange::Regions(regions) => (
                         "regions",
-                        json!(regions.iter().map(|r| territory(r)).collect::<Vec<_>>()),
+                        json!(regions.iter().map(territory).collect::<Vec<_>>()),
                     ),
                     StateChange::Policy(value) => ("policy", json!(value)),
                     StateChange::Border(value) => ("border", json!(value)),
@@ -520,10 +520,9 @@ impl Op {
                 json!({"state": state, "group": group(id), "strength": strength}),
             ),
             Op::RemoveState { state } => ("remove_state", json!({"state": state})),
-            Op::SetStandard { of, written } => (
-                "set_standard",
-                json!({"of": of, "written": group(written)}),
-            ),
+            Op::SetStandard { of, written } => {
+                ("set_standard", json!({"of": of, "written": group(written)}))
+            }
         }
     }
 
@@ -583,8 +582,8 @@ pub fn apply(world: &mut World, op: &Op) -> Result<bool, String> {
             let mut territory = Territory::new(*level);
             territory.position = *position;
             territory.refined_from_year = *refined_from_year;
-            let parent_name = (!parent.is_none())
-                .then(|| world.registry.territories.name(parent.0).to_owned());
+            let parent_name =
+                (!parent.is_none()).then(|| world.registry.territories.name(parent.0).to_owned());
             world.add_territory(name, parent_name.as_deref(), territory)?;
             Ok(true)
         }

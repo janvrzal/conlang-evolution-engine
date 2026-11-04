@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::rng::{stable_id, stable_int, Part};
 
@@ -189,7 +189,10 @@ impl ObserveInput {
                 .collect();
             for &row in &rows {
                 let name = world.registry.variables.name(block.variables[row].0);
-                keyed.push((stable_int(&[Part::Str("observe"), Part::Str(name)]), name.to_owned()));
+                keyed.push((
+                    stable_int(&[Part::Str("observe"), Part::Str(name)]),
+                    name.to_owned(),
+                ));
             }
             chosen.push((index, rows));
         }
@@ -220,7 +223,9 @@ impl ObserveInput {
                 .push(block.present.iter().flatten().copied().collect());
             input.capacity.push(block.capacity);
             input.rows.push(rows.iter().map(|&r| r as i64).collect());
-            input.ranks.push(rank_of[start..start + rows.len()].to_vec());
+            input
+                .ranks
+                .push(rank_of[start..start + rows.len()].to_vec());
             start += rows.len();
         }
         input.forms = FormsInput::gather(world);
@@ -247,7 +252,8 @@ impl FormsInput {
         world.table.as_ref()?;
         let mut local = vec![-1_i32; world.bank.len()];
         let (mut form_ptr, mut form_flat) = (vec![0_i64], Vec::new());
-        let (mut ptr, mut concept, mut root, mut form) = (vec![0_i64], Vec::new(), Vec::new(), Vec::new());
+        let (mut ptr, mut concept, mut root, mut form) =
+            (vec![0_i64], Vec::new(), Vec::new(), Vec::new());
         for &group in &world.live.group_ids {
             let dominant = &world.groups.main_code(group).phonology.dominant;
             for (number, &morpheme) in dominant.iter().enumerate() {
@@ -307,13 +313,24 @@ pub fn code_distances(world: &World) -> Vec<f64> {
     let input = ObserveInput::gather(world);
     let live = input.live;
     let count = input.lexical.max(1) as f64;
-    let mut total = distance_totals(&input.views(), live, DISTANCE_CHUNK, rayon::current_num_threads());
+    let mut total = distance_totals(
+        &input.views(),
+        live,
+        DISTANCE_CHUNK,
+        rayon::current_num_threads(),
+    );
     for value in &mut total {
         *value /= count;
     }
     if let (Some(forms), Some(table)) = (&input.forms, world.table.as_ref()) {
         let mut costs = Costs::new(table.vectors(), table.width(), FEATURE_SCALE);
-        let cognate = cognate_totals(&forms.dominant(), live, &forms.concept_rank, &forms.table(), &mut costs);
+        let cognate = cognate_totals(
+            &forms.dominant(),
+            live,
+            &forms.concept_rank,
+            &forms.table(),
+            &mut costs,
+        );
         for (value, add) in total.iter_mut().zip(&cognate) {
             *value += FORM_WEIGHT * add / count;
         }
@@ -361,7 +378,12 @@ pub fn observe_world(
                 .map_or(-1, |lineage| numbers[lineage])
         })
         .collect();
-    let mut features = embedded_features(&input.views(), &cols, input.lexical, rayon::current_num_threads());
+    let mut features = embedded_features(
+        &input.views(),
+        &cols,
+        input.lexical,
+        rayon::current_num_threads(),
+    );
     if let (Some(forms), Some(table)) = (&input.forms, world.table.as_ref()) {
         let mut costs = Costs::new(table.vectors(), table.width(), FEATURE_SCALE);
         let found = categories(&forms.dominant(), &cols, &forms.table(), &mut costs);
