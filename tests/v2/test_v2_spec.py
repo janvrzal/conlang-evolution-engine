@@ -94,8 +94,8 @@ def test_prepis_parametru_se_projevi():
 def test_beh_dava_snimky_a_export_a_je_deterministicky():
     results = []
     for _ in range(2):
-        run, simulation = runner.prepare("test", small())
-        run.execute(simulation)
+        run = runner.prepare("test", small())
+        run.execute()
         assert run.status == "done" and run.progress == 1.0
         view = run.status_view(since=1)
         assert view["frame_count"] >= 2 and len(view["frames"]) == view["frame_count"] - 1
@@ -107,9 +107,9 @@ def test_beh_dava_snimky_a_export_a_je_deterministicky():
 
 
 def test_zruseny_beh_skonci():
-    run, simulation = runner.prepare("test", small(end_year=2000))
+    run = runner.prepare("test", small(end_year=2000))
     run.cancel()
-    run.execute(simulation)
+    run.execute()
     assert run.status == "cancelled" and run.result is None
 
 
