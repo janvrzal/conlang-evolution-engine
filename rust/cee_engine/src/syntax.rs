@@ -22,7 +22,7 @@ use crate::ids::{CellId, ConceptId, GroupId, MorphemeId, VariableId, VariantId, 
 use crate::model::forms::UnitForm;
 use crate::model::lexicon::{unit_name, MorphemeInit, MorphemeKind, MorphemeMeta};
 use crate::model::repertoire::{variable_name, Payload, VariableKind};
-use crate::morphology::{self, class_stats, enter_vocabulary, requeue_all};
+use crate::morphology::{self, class_stats};
 use crate::phases::StepContext;
 use crate::rng::{stable_id, Part};
 use crate::world::World;
@@ -561,9 +561,9 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
             world.groups.main_code_mut(group).forms.set(unit, new);
             rewritten += 1;
             if exists {
-                requeue_all(world, group, unit);
+                crate::phonology::requeue_all(world, group, unit)?;
             } else {
-                enter_vocabulary(world, group, unit);
+                crate::phonology::enter_units(world, group, &[unit])?;
             }
         }
         world.groups.main_code_mut(group).phonology.version += 1;

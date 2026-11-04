@@ -154,11 +154,15 @@ fn slug_a_prumery_sedi_s_pythonem() {
 #[test]
 fn registr_zmen_ma_kanonicke_poradi() {
     let kinds: Vec<&str> = default_changes().iter().map(|c| c.kind()).collect();
-    assert_eq!(kinds.len(), 9 + 3 + 10 + 2);
+    // Pořadí jako `DEFAULT_CHANGES`: lexikální (9), zvukové (33), morfologické (3),
+    // syntaktické (10), prozodické (2).
+    assert_eq!(kinds.len(), 9 + 33 + 3 + 10 + 2);
     assert_eq!(kinds[0], "lexical_coinage");
     assert_eq!(kinds[8], "lexical_borrowing");
-    assert_eq!(kinds[9], "leveling");
-    assert_eq!(kinds[12], "periphrasis");
+    assert_eq!(kinds[9], cee_core::candidates::FAMILIES[0]);
+    assert_eq!(kinds[9 + 32], cee_core::candidates::FAMILIES[32]);
+    assert_eq!(kinds[42], "leveling");
+    assert_eq!(kinds[45], "periphrasis");
     assert_eq!(*kinds.last().unwrap(), "stress_strength");
     let unique: std::collections::BTreeSet<&&str> = kinds.iter().collect();
     assert_eq!(unique.len(), kinds.len());

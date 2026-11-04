@@ -1,7 +1,7 @@
 //! Přenos a tlaky (R1a): inovace se šíří, podíly se sčítají na 1, nic není NaN, běh je
 //! deterministický a nezávisí na počtu vláken.
 
-use cee_engine::changes::{Change, InnovationContext, NewVariant, Sites};
+use cee_engine::changes::{Change, InnovationContext, NewVariant, Sites, LEXICAL_PRESSURES};
 use cee_engine::ids::{VariableId, VariantId};
 use cee_engine::model::repertoire::{Origin, Payload, VariableKind};
 use cee_engine::rng::{stable_id, Part, Stream};
@@ -16,6 +16,14 @@ struct Attractive;
 impl Change for Attractive {
     fn kind(&self) -> &'static str {
         "attractive"
+    }
+
+    fn target(&self) -> VariableKind {
+        VariableKind::Lexical
+    }
+
+    fn pressures(&self) -> &'static [(u8, f64)] {
+        &LEXICAL_PRESSURES
     }
 
     fn weighted_sites(&self, world: &World, ctx: &InnovationContext) -> Sites {

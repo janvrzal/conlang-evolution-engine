@@ -1,6 +1,6 @@
 //! Kostra enginu: stavba světa, fáze kroku, determinismus nezávislý na vláknech, kontrolní body.
 
-use cee_engine::changes::{Change, InnovationContext, NewVariant, Sites};
+use cee_engine::changes::{Change, InnovationContext, NewVariant, Sites, LEXICAL_PRESSURES};
 use cee_engine::checkpoint::Checkpoint;
 use cee_engine::export;
 use cee_engine::ids::VariableId;
@@ -17,6 +17,14 @@ struct Toy;
 impl Change for Toy {
     fn kind(&self) -> &'static str {
         "toy"
+    }
+
+    fn target(&self) -> VariableKind {
+        VariableKind::Lexical
+    }
+
+    fn pressures(&self) -> &'static [(u8, f64)] {
+        &LEXICAL_PRESSURES
     }
 
     fn weighted_sites(&self, world: &World, ctx: &InnovationContext) -> Sites {

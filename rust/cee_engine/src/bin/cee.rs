@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! cee run <spec.json> -o export.json [--threads N]
-//! cee scenario <jméno> --until <rok> [-o export.json] [--threads N]
+//! cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--history log.jsonl]
 //! cee export-tick0 <scénář|spec.json> [-o tick0.json]
 //! cee scenarios
 //! cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]
@@ -18,7 +18,7 @@ use cee_engine::spec::{self, WorldSpec};
 use cee_engine::{Simulation, SimulationConfig};
 
 fn usage() -> String {
-    "Použití:\n  cee run <spec.json> -o export.json [--threads N]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios\n  cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]".to_owned()
+    "Použití:\n  cee run <spec.json> -o export.json [--threads N]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--history log.jsonl]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios\n  cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]".to_owned()
 }
 
 struct Options {
@@ -27,6 +27,7 @@ struct Options {
     until: Option<f64>,
     threads: Option<usize>,
     checkpoint: Option<String>,
+    history: Option<String>,
     seeds: Option<String>,
     only: Option<String>,
     metrics: bool,
@@ -40,6 +41,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         until: None,
         threads: None,
         checkpoint: None,
+        history: None,
         seeds: None,
         only: None,
         metrics: false,
@@ -69,6 +71,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
                 )
             }
             "--checkpoint" => options.checkpoint = Some(value("--checkpoint")?),
+            "--history" => options.history = Some(value("--history")?),
             "--seeds" => options.seeds = Some(value("--seeds")?),
             "--only" => options.only = Some(value("--only")?),
             "--metrics" => options.metrics = true,
@@ -97,6 +100,11 @@ fn run_simulation(mut simulation: Simulation, until: f64, options: &Options) -> 
         let bytes = simulation.checkpoint().to_bytes()?;
         std::fs::write(path, bytes).map_err(|e| format!("{path}: {e}"))?;
         let _ = Checkpoint::from_bytes(&std::fs::read(path).map_err(|e| e.to_string())?)?;
+    }
+    if let Some(path) = &options.history {
+        let mut text = simulation.history.lines().join("\n");
+        text.push('\n');
+        std::fs::write(path, text).map_err(|e| format!("{path}: {e}"))?;
     }
     eprintln!(
         "hotovo: rok {}, {} kroků, {} záznamů, otisk {}",

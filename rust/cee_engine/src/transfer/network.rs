@@ -7,6 +7,7 @@
 
 use cee_core::transmission::{Component, Links};
 
+use crate::contact::{self, BorrowTable};
 use crate::ids::GroupId;
 use crate::rng::{stable_int, Part};
 use crate::world::World;
@@ -80,10 +81,8 @@ pub struct StepInputs {
     pub loss_floor: Vec<f64>,
     pub row_keys: Vec<u64>,
     pub tick: u32,
-    /// Váha domény pojmu v kanálu: `[kanál podle `CHANNELS`][doména podle `DOMAINS`]`.
-    pub domains: [[f64; 5]; 6],
-    /// Kotva a normalizace váhy půjčitelnosti pojmu (`ConceptData::borrowing_scale`).
-    pub borrowing_scale: (f64, f64),
+    /// Filtry výpůjček a domén kanálů (rozhraní kontaktu R1d), spočtené jednou za krok.
+    pub borrow: BorrowTable,
 }
 
 /// Řídké míšení: pro každého učícího se (řádek) nenulové zdroje vzestupně podle sloupce.
@@ -195,16 +194,6 @@ fn component_links(
     }
 }
 
-/// Kanály vazeb mezi jazyky s jinými vahami domén než obecný kontakt sousedů (`distinct_channels`).
-pub fn distinct_channels(world: &World) -> Vec<FlowChannel> {
-    let table = &world.params.channel_domains;
-    let base = table.get("neighbor");
-    [FlowChannel::Elite, FlowChannel::Trade]
-        .into_iter()
-        .filter(|channel| table.get(channel.name()) != base)
-        .collect()
-}
-
 /// Vstupy kroku pro osu živých fondů světa.
 pub fn prepare(world: &World, params: &TransmissionParams, tick: u32) -> StepInputs {
     let axis: Vec<GroupId> = world.live.group_ids.clone();
@@ -247,41 +236,13 @@ pub fn prepare(world: &World, params: &TransmissionParams, tick: u32) -> StepInp
         .enumerate()
         .any(|(row, entries)| entries.iter().any(|&(column, _)| foreign(row, column)));
     if any_foreign {
-        let distinct = distinct_channels(world);
-        let is_elite: Vec<bool> = axis.iter().map(|&g| groups.elite[g.index()]).collect();
-        let elite_on = distinct.contains(&FlowChannel::Elite);
-        let trade_on = distinct.contains(&FlowChannel::Trade) && !world.society.trade.is_empty();
-        let mut trade: std::collections::HashMap<(usize, usize), f64> =
-            std::collections::HashMap::new();
-        if trade_on {
-            let mut place = vec![usize::MAX; groups.len()];
-            for (column, group) in axis.iter().enumerate() {
-                place[group.index()] = column;
-            }
-            for &(first, second) in world.society.trade.keys() {
-                let (a, b) = (
-                    place.get(first.index()).copied().unwrap_or(usize::MAX),
-                    place.get(second.index()).copied().unwrap_or(usize::MAX),
-                );
-                if a != usize::MAX && b != usize::MAX {
-                    trade.insert((a, b), world.trade_share(first, second));
-                    trade.insert((b, a), world.trade_share(second, first));
-                }
-            }
-        }
-        let elite_share = |_row: usize, column: usize| -> f64 {
-            if elite_on && is_elite[column] {
-                1.0
-            } else {
-                0.0
-            }
-        };
-        let trade_share = |row: usize, column: usize| -> f64 {
-            if trade_on {
-                trade.get(&(row, column)).copied().unwrap_or(0.0) * (1.0 - elite_share(row, column))
-            } else {
-                0.0
-            }
+        // Rozdělení vazby mezi kanály dává rozhraní kontaktu (`contact::channel_split`); vazby
+        // se nepočítají do čtvercových matic, jen po řádcích míšení.
+        let distinct = contact::distinct_channels(&world.params);
+        let elite_on = distinct.contains(&contact::ELITE);
+        let trade_on = distinct.contains(&contact::TRADE) && !world.society.trade.is_empty();
+        let split = |row: usize, column: usize| {
+            contact::channel_split(world, axis[row], axis[column], &distinct)
         };
         let separate = elite_on || trade_on;
         let mut channels = vec![FlowChannel::Neighbor];
@@ -299,19 +260,16 @@ pub fn prepare(world: &World, params: &TransmissionParams, tick: u32) -> StepInp
                         if !foreign(row, column) {
                             return None;
                         }
+                        if channel == FlowChannel::Neighbor && !separate {
+                            return Some(weight);
+                        }
+                        let share = split(row, column);
                         let fraction = match channel {
-                            FlowChannel::Neighbor if !separate => 1.0,
-                            FlowChannel::Neighbor => {
-                                1.0 - (elite_share(row, column) + trade_share(row, column))
-                            }
-                            FlowChannel::Elite => elite_share(row, column),
-                            FlowChannel::Trade => trade_share(row, column),
+                            FlowChannel::Neighbor => share.neighbor,
+                            FlowChannel::Elite => share.elite,
+                            FlowChannel::Trade => share.trade,
                         };
-                        Some(if channel == FlowChannel::Neighbor && !separate {
-                            weight
-                        } else {
-                            weight * fraction
-                        })
+                        Some(weight * fraction)
                     })
                 })
                 .collect();
@@ -343,20 +301,7 @@ pub fn prepare(world: &World, params: &TransmissionParams, tick: u32) -> StepInp
             ])
         })
         .collect();
-    let mut domains = [[1.0; 5]; 6];
-    for (channel, name) in crate::parameters::CHANNELS.iter().enumerate() {
-        for (domain, slot) in crate::parameters::DOMAINS.iter().zip(&mut domains[channel]) {
-            *slot = world
-                .params
-                .channel_domains
-                .get(*name)
-                .and_then(|row| row.get(*domain))
-                .copied()
-                .unwrap_or(1.0);
-        }
-    }
-    let borrowing_scale =
-        crate::concepts::ConceptData::shared().borrowing_scale(world.params.borrowability_strength);
+    let borrow = BorrowTable::build(world);
     StepInputs {
         axis,
         components,
@@ -369,8 +314,7 @@ pub fn prepare(world: &World, params: &TransmissionParams, tick: u32) -> StepInp
         loss_floor,
         row_keys,
         tick,
-        domains,
-        borrowing_scale,
+        borrow,
     }
 }
 

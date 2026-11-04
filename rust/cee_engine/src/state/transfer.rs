@@ -1,7 +1,7 @@
 //! Stav přenosu a tlaků (R1a).
 //!
-//! Sem patří vše, co přenos a tlaky drží mezi kroky. Do kontrolního bodu se ukládá jen
-//! počítadlo kroků; zbytek ([`Derived`]) je odvozený ze stavu světa a po obnově nebo kopii se
+//! Sem patří vše, co přenos a tlaky drží mezi kroky. Do kontrolního bodu se ukládá počítadlo
+//! kroků a uložená hodnocení procesů; zbytek ([`Derived`]) je odvozený ze stavu světa a po obnově nebo kopii se
 //! staví znovu (sloupce variant se dorovnají z tabulky variant, mapa proměnná → varianta
 //! „změna“ se doplní při prvním použití). Co se ukládá, aby výsledek nezávisel na kopii
 //! (uložená hodnocení procesů), přibude do [`TransferState`] s hodnocením zvukových procesů.
@@ -79,12 +79,17 @@ pub struct Derived {
     pub variants: VariantColumns,
     /// Proměnná → číslo varianty „změna“ procesu či analogie (`u32::MAX` = neznámé / žádná).
     pub changed: Vec<u32>,
+    /// Vzorky slov kódů pro hodnocení procesů podle čísla skupiny.
+    pub samples: Vec<crate::transfer::assess::Sample>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TransferState {
     /// Počet kroků přenosu, které svět provedl (jen pro ladění a statistiky).
     pub steps: u64,
+    /// Uložená hodnocení zvukových procesů podle skupin (platí nejvýš osm ticků, proto se ukládají).
+    #[serde(default)]
+    pub assessments: crate::transfer::assess::Assessments,
     /// Odvozený stav; neukládá se.
     #[serde(skip)]
     pub derived: Derived,

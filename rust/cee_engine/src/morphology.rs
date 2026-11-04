@@ -18,9 +18,9 @@
 //! kódu synchronizovaný přes deníky); tady je totéž přímo nad stavem kódu, protože
 //! přestavby jsou řídké (jen analogie, která ve skupině převážila).
 //!
-//! **Hotovo jinde (R1b).** Zařazení přepsaného tvaru do front fonologizace
-//! (`phonology.requeue_all`) a vstup tvaru do slovní zásoby (`enter_units`) patří R1b;
-//! tady jsou náhrady [`requeue_all`] a [`enter_vocabulary`], které R2 zamění za její funkce.
+//! **Fonologie (R1b).** Zařazení přepsaného tvaru do front fonologizace
+//! (`phonology::requeue_all`) a vstup tvaru do slovní zásoby (`phonology::enter_units`) volá
+//! morfologie a syntax přímo; dočasné náhrady z R1c odpadly.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -125,7 +125,7 @@ fn word_units(world: &World, group: GroupId) -> Vec<MorphemeId> {
 }
 
 /// Citační tvar lexému tvaru slova (číslo tvaru v bance).
-fn citation_id(world: &World, group: GroupId, unit: MorphemeId) -> u32 {
+pub(crate) fn citation_id(world: &World, group: GroupId, unit: MorphemeId) -> u32 {
     world.unit_of(group, world.morphemes.lexeme_id(unit)).form
 }
 
@@ -584,26 +584,6 @@ pub fn analogy_plan(world: &World, group: GroupId) -> AnalogyPlan {
         .collect()
 }
 
-// --- náhrady za oblast R1b -----------------------------------------------------------------
-
-/// Přepsaný tvar slova znovu projde živými procesy kódu (`phonology.requeue_all`).
-///
-/// **Náhrada:** fronty fonologizace patří R1b. R2 zamění tělo za její funkci; do té doby
-/// jen zneplatní verzi kódu, podle které si fonologie hlídá změny.
-pub fn requeue_all(world: &mut World, group: GroupId, _unit: MorphemeId) {
-    world.groups.main_code_mut(group).phonology.version += 1;
-}
-
-/// Tvar slova vstupuje do slovní zásoby kódu a projdou jím běžící procesy
-/// (`phonology.enter_vocabulary`). **Náhrada** za R1b, viz [`requeue_all`].
-pub fn enter_vocabulary(world: &mut World, group: GroupId, unit: MorphemeId) {
-    let state = &mut world.groups.main_code_mut(group).phonology;
-    if state.enter_vocabulary(unit) {
-        state.version += 1;
-        state.lexicon_version += 1;
-    }
-}
-
 // --- tvary slova nového lexému ----------------------------------------------------------------
 
 /// Založí morfém tvaru slova (buňku paradigmatu lexému) s výchozí podobou `form`.
@@ -806,7 +786,7 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
                 },
             );
             rewritten = true;
-            requeue_all(world, group, target);
+            crate::phonology::requeue_all(world, group, target)?;
         }
         if !rewritten {
             continue;

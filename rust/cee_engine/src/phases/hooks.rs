@@ -18,7 +18,7 @@ use crate::ids::{GroupId, MorphemeId, VariableId};
 use crate::model::repertoire::VariableKind;
 use crate::phases::StepContext;
 use crate::phonology;
-use crate::vocabulary::units_of;
+use crate::vocabulary::units_in;
 
 /// Přechod prahu dominance slova v jedné skupině (`simulation._follow_vocabulary`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,7 +36,8 @@ pub struct Crossing {
 /// a zařazení do front živých procesů. Přechody jsou v pořadí, v jakém je Python
 /// zpracuje (nejdřív všechny odchody, potom příchody).
 ///
-/// **Vlastník: R1b.** Pro slovo, které poprvé vstupuje do kódu, volá [`adopt`].
+/// **Vlastník: R1b.** Pro slovo, které poprvé vstupuje do kódu, volá [`adopt`]; tvary jeho buněk
+/// dodá `vocabulary::units_in` (R1c).
 pub fn follow_vocabulary(ctx: &mut StepContext<'_>, crossings: &[Crossing]) -> Result<(), String> {
     // Nejdřív odchody, potom příchody: kořen, který jeden pojem opouští a druhý (posunem)
     // přebírá, tak ze slovní zásoby na okamžik nevypadne.
@@ -80,7 +81,8 @@ fn follow_one(ctx: &mut StepContext<'_>, crossing: &Crossing) -> Result<(), Stri
     if enter {
         adopt(ctx, group, morpheme)?;
     }
-    let units = units_of(ctx.world, morpheme);
+    // Tvary buněk paradigmatu: nový lexém a výpůjčka je dostanou podle produktivních koncovek kódu.
+    let units = units_in(ctx.world, group, morpheme);
     if enter {
         phonology::enter_units(ctx.world, group, &units)
     } else {

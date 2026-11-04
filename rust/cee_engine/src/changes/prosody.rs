@@ -2,10 +2,10 @@
 //!
 //! Místem změny je jediná prozodická proměnná, pokud ji svět sleduje; míra je jednotná.
 
-use crate::changes::{Change, InnovationContext, NewVariant, Sites};
+use crate::changes::{Change, InnovationContext, NewVariant, Sites, PROSODY_PRESSURES};
 use crate::ids::VariableId;
 use crate::model::code::{StressRule, StressStrength};
-use crate::model::repertoire::Origin;
+use crate::model::repertoire::{Origin, VariableKind};
 use crate::prosody;
 use crate::rng::Stream;
 use crate::world::World;
@@ -84,6 +84,14 @@ impl Change for StressShift {
         true
     }
 
+    fn target(&self) -> VariableKind {
+        VariableKind::Prosody
+    }
+
+    fn pressures(&self) -> &'static [(u8, f64)] {
+        &PROSODY_PRESSURES
+    }
+
     fn weighted_sites(&self, world: &World, _ctx: &InnovationContext) -> Sites {
         sites_of(prosody::stress_rule_variable(world))
     }
@@ -123,6 +131,14 @@ impl Change for StressStrengthChange {
 
     fn rate_basis_generation(&self) -> bool {
         true
+    }
+
+    fn target(&self) -> VariableKind {
+        VariableKind::Prosody
+    }
+
+    fn pressures(&self) -> &'static [(u8, f64)] {
+        &PROSODY_PRESSURES
     }
 
     fn weighted_sites(&self, world: &World, _ctx: &InnovationContext) -> Sites {

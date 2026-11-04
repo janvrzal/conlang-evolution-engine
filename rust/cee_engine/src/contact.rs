@@ -163,6 +163,11 @@ impl BorrowTable {
         }
     }
 
+    /// Váha domény pojmu v kanálu (`1` u pojmu, který doména neodlišuje).
+    pub fn domain(&self, channel: usize, concept: ConceptId) -> f64 {
+        self.domain[channel][concept.index()]
+    }
+
     /// Filtr výpůjček proměnné v kanálu (`contact.borrowing_factor`).
     pub fn factor(&self, world: &World, variable: VariableId, channel: usize) -> f64 {
         let kind = world.variables.kind[variable.index()];

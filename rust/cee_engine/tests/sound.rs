@@ -16,6 +16,7 @@ use cee_engine::phases::StepContext;
 use cee_engine::phonology::{self, index::with_group};
 use cee_engine::rng::Stream;
 use cee_engine::scenarios::{self, SeedOptions};
+use cee_engine::transfer::seams;
 use cee_engine::world::World;
 use cee_engine::{Simulation, SimulationConfig};
 
@@ -184,11 +185,15 @@ fn fixed_process(sim: &mut Simulation) -> (GroupId, ProcessId, VariableId) {
         variant.payload,
         variant.origin,
     );
-    sim.world
-        .groups
-        .main_code_mut(group)
-        .repertoire
-        .set(variant.variable, Distribution::fixed(id));
+    // Změna je ve všech skupinách na 100 %: proměnná se tak nikde neliší, a proto není živá
+    // (rozdílná proměnná by po obnově z kontrolního bodu skončila ve fondech a přenos by ji míchal).
+    for other in sim.world.group_ids() {
+        sim.world
+            .groups
+            .main_code_mut(other)
+            .repertoire
+            .set(variant.variable, Distribution::fixed(id));
+    }
     phonology::activate(&mut sim.world, group, process).unwrap();
     (group, process, variant.variable)
 }
@@ -230,6 +235,14 @@ fn aktivace_naplni_frontu_a_fonologizace_prepise_tvary_a_proces_se_uzavre() {
     assert!(relics <= queued && relics + phonologized as usize <= queued + 1_000);
     let code = sim.world.groups.main_code(group);
     assert!(!code.phonology.sound.queues.state.procs[0].live);
+    // Uzavřený proces tlak `Norm` nevrací zpět (`seams::closed`); jiná proměnná není uzavřená.
+    assert!(seams::closed(&sim.world, group, variable));
+    assert!(!seams::closed(
+        &sim.world,
+        sim.world.group_ids()[1],
+        VariableId::new(0)
+    ));
+    let code = sim.world.groups.main_code(group);
     assert_eq!(
         code.phonology.sound.lifecycle_log,
         vec![(process, true), (process, false)]
@@ -248,7 +261,6 @@ fn aktivace_naplni_frontu_a_fonologizace_prepise_tvary_a_proces_se_uzavre() {
     // Žádná čísla nejsou NaN: sklony slov tohoto procesu jsou konečné.
     let biases = &sim.world.sound.runtime.biases[process.index()];
     assert!(biases.iter().filter(|b| !b.is_nan()).all(|b| b.is_finite()));
-    let _ = variable;
 }
 
 #[test]
@@ -341,6 +353,35 @@ fn kontrolni_bod_uprostred_fonologizace_da_stejny_beh() {
             .collect::<Vec<_>>()
     };
     assert_eq!(forms(&resumed), forms(&straight));
+}
+
+#[test]
+fn kontrolni_bod_za_behu_s_prirozenymi_inovacemi_da_stejny_beh() {
+    let mut straight = simulation();
+    for _ in 0..12 {
+        straight.step().unwrap();
+    }
+    let mut first = simulation();
+    for _ in 0..6 {
+        first.step().unwrap();
+    }
+    let restored = Checkpoint::from_bytes(&first.checkpoint().to_bytes().unwrap()).unwrap();
+    let config = SimulationConfig {
+        observe_every: 2,
+        ..SimulationConfig::default()
+    };
+    let mut resumed = Simulation::resume(
+        restored,
+        config,
+        Vec::new(),
+        cee_engine::changes::default_changes(),
+    )
+    .unwrap();
+    for _ in 0..6 {
+        resumed.step().unwrap();
+    }
+    assert!(straight.history.of_kind("innovation").count() > 0);
+    assert_eq!(resumed.history.digest(), straight.history.digest());
 }
 
 fn step_context<'a>(
@@ -522,4 +563,43 @@ fn cetnost_uziti_je_soucet_pojmu_korene() {
         let got = usage.frequency(root.index(), &inputs).expect("četnost");
         assert!((got - expected).abs() < 1e-12, "{got} != {expected}");
     }
+}
+
+#[test]
+fn povrchovy_tvar_prohani_zivym_procesem_jen_slova_co_si_zmenu_nezapsala() {
+    let mut sim = simulation();
+    let (group, _, _) = fixed_process(&mut sim);
+    let before = phonology::surface_lexicon(&sim.world, group).unwrap();
+    assert!(!before.is_empty());
+    let underlying = |sim: &Simulation, group: GroupId| {
+        let code = sim.world.groups.main_code(group);
+        let mut found: Vec<(String, Vec<i32>)> = code
+            .phonology
+            .dominant
+            .iter()
+            .enumerate()
+            .filter(|(_, root)| !root.is_none())
+            .map(|(concept, &root)| {
+                (
+                    sim.world.registry.concepts.name(concept as u32).to_owned(),
+                    sim.world.form_of(group, root).to_vec(),
+                )
+            })
+            .collect();
+        found.sort();
+        found
+    };
+    // Změna je na 100 %, ale nikdo si ji ještě nezapsal: povrch se od podkladu liší.
+    let base = underlying(&sim, group);
+    assert_eq!(before.len(), base.len());
+    let differing = before.iter().zip(&base).filter(|(a, b)| a.1 != b.1).count();
+    assert!(differing > 0, "živý proces mění povrchový tvar");
+    // Po uzavření procesu se zapsaná slova shodují s povrchem, relikty zůstávají podkladové.
+    for _ in 0..5 {
+        sim.step().unwrap();
+    }
+    let after = phonology::surface_lexicon(&sim.world, group).unwrap();
+    let base = underlying(&sim, group);
+    let differing_after = after.iter().zip(&base).filter(|(a, b)| a.1 != b.1).count();
+    assert!(differing_after < differing);
 }

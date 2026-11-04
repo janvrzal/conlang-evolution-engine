@@ -310,14 +310,15 @@ pub fn retention(world: &World, group: GroupId) -> f64 {
     }
 }
 
-/// Podkladové tvary dominantních kořenů skupiny: pojem → tvar (`phonology.lexicon`).
+/// Povrchové tvary dominantních kořenů skupiny: pojem → tvar (`phonology.lexicon`).
 pub fn lexicon_forms(world: &World, group: GroupId) -> BTreeMap<String, Vec<i32>> {
     let mut found = BTreeMap::new();
     for (variable, concept) in lexical_variables(world) {
         if let Some(root) = root_of(world, group, variable) {
             found.insert(
                 world.registry.concepts.name(concept.0).to_owned(),
-                world.form_of(group, root).to_vec(),
+                crate::phonology::surface(world, group, root)
+                    .unwrap_or_else(|_| world.form_of(group, root).to_vec()),
             );
         }
     }
@@ -330,7 +331,8 @@ pub fn lexicon_profile(world: &World, group: GroupId) -> LexiconProfile {
     let mut owners: HashMap<Vec<i32>, BTreeSet<MorphemeId>> = HashMap::new();
     for (variable, _) in lexical_variables(world) {
         if let Some(root) = root_of(world, group, variable) {
-            let form = world.form_of(group, root).to_vec();
+            let form = crate::phonology::surface(world, group, root)
+                .unwrap_or_else(|_| world.form_of(group, root).to_vec());
             owners.entry(form.clone()).or_default().insert(root);
             forms.push(form);
         }

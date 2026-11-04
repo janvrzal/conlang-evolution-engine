@@ -22,7 +22,9 @@ pub mod sound;
 pub mod syntax;
 
 use crate::ids::{GroupId, VariableId};
-use crate::model::repertoire::{Origin, Payload};
+use cee_core::pressures::id;
+
+use crate::model::repertoire::{Origin, Payload, VariableKind};
 use crate::rng::Stream;
 use crate::world::World;
 
@@ -50,9 +52,73 @@ pub struct NewVariant {
     pub origin: Origin,
 }
 
+/// Tlaky zvukových změn (`changes.sound.SOUND_PRESSURES`): (číslo tlaku z `cee_core::pressures::id`, váha).
+pub const SOUND_PRESSURES: [(u8, f64); 7] = [
+    (id::ARTICULATION, 1.0),
+    (id::CLARITY, 0.6),
+    (id::FUNCTIONAL_LOAD, 1.0),
+    (id::DISPERSION, 0.5),
+    (id::PHONOTACTICS, 0.4),
+    (id::CONFORMITY, 0.1),
+    (id::ACTUATION, 1.0),
+];
+
+/// Tlaky lexikálních změn (`changes.lexicon.LEXICAL_PRESSURES`).
+pub const LEXICAL_PRESSURES: [(u8, f64); 6] = [
+    (id::LEXICAL_CLARITY, 1.0),
+    (id::ENTRENCHMENT, 1.0),
+    (id::MOTIVATION, 1.0),
+    (id::TABOO, 1.0),
+    (id::LEXICAL_ACTUATION, 1.0),
+    (id::CONFORMITY, 0.1),
+];
+
+/// Tlaky expresivního tvoření slov: přitažlivost a tlaky lexikálních změn.
+pub const COINAGE_PRESSURES: [(u8, f64); 7] = [
+    (id::APPEAL, 1.0),
+    (id::CONFORMITY, 0.1),
+    (id::LEXICAL_CLARITY, 1.0),
+    (id::ENTRENCHMENT, 1.0),
+    (id::MOTIVATION, 1.0),
+    (id::TABOO, 1.0),
+    (id::LEXICAL_ACTUATION, 1.0),
+];
+
+/// Tlaky analogických změn tvarů (`changes.morphology.MORPH_PRESSURES`).
+pub const MORPH_PRESSURES: [(u8, f64); 6] = [
+    (id::UNIFORMITY, 1.0),
+    (id::CONSERVATION, 1.0),
+    (id::DISTINCTIVENESS, 1.0),
+    (id::TEACHABILITY, 1.0),
+    (id::CONFORMITY, 0.1),
+    (id::ACTUATION, 1.0),
+];
+
+/// Tlaky syntaktických změn (`changes.syntax.SYNTAX_PRESSURES`).
+pub const SYNTAX_PRESSURES: [(u8, f64); 7] = [
+    (id::EXPRESSIVITY, 1.0),
+    (id::ECONOMY, 1.0),
+    (id::FUSION, 1.0),
+    (id::AMBIGUITY, 1.0),
+    (id::LEARNABILITY, 1.0),
+    (id::CONFORMITY, 0.1),
+    (id::ACTUATION, 1.0),
+];
+
+/// Tlaky prozodických změn (`changes.prosody.PROSODY_PRESSURES`).
+pub const PROSODY_PRESSURES: [(u8, f64); 2] = [(id::CONFORMITY, 0.1), (id::ACTUATION, 1.0)];
+
 pub trait Change: Send + Sync {
     /// Druh změny (`sound`, `coinage`, …) – klíč náhody a záznamů.
     fn kind(&self) -> &'static str;
+
+    /// Cílový druh proměnné, jejíž varianty změna vyrábí (`Change.target`); varianty téhož druhu
+    /// se hodnotí společným plánem tlaků ([`crate::transfer::pressures::plan_for`]).
+    fn target(&self) -> VariableKind;
+
+    /// Tlaky, které hodnotí varianty cílového druhu, a jejich váhy (`Change.pressures`); tlak
+    /// deklarovaný víc změnami téhož cíle platí s nejvyšší váhou.
+    fn pressures(&self) -> &'static [(u8, f64)];
 
     /// Tempo podle obnovy generace (`true`), nebo podle délky kroku (`false`).
     fn rate_basis_generation(&self) -> bool {
