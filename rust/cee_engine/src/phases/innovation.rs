@@ -88,6 +88,7 @@ pub fn run(ctx: &mut StepContext<'_>, changes: &[Box<dyn Change>]) -> Result<(),
         .map(|&group| InnovationContext { group, tick, year })
         .collect();
 
+    let t = crate::timing::scope("innovation/rates");
     // Tempo se počítá ze stavu na začátku kroku pro všechny skupiny, než se uplatní první inovace.
     let rate_sums: Vec<Vec<f64>> = contexts
         .par_iter()
@@ -98,6 +99,7 @@ pub fn run(ctx: &mut StepContext<'_>, changes: &[Box<dyn Change>]) -> Result<(),
                 .collect()
         })
         .collect();
+    drop(t);
     let mut expected = vec![vec![0.0; changes.len()]; entries.len()];
     let mut shares = Vec::with_capacity(entries.len());
     for (g, &group) in entries.iter().enumerate() {
@@ -128,6 +130,7 @@ pub fn run(ctx: &mut StepContext<'_>, changes: &[Box<dyn Change>]) -> Result<(),
         }
     }
     // Místa inovací a jejich váhy závisejí jen na stavu na začátku kroku.
+    let t = crate::timing::scope("innovation/sites");
     let sites: Vec<Vec<Option<Sites>>> = contexts
         .par_iter()
         .enumerate()
@@ -138,6 +141,8 @@ pub fn run(ctx: &mut StepContext<'_>, changes: &[Box<dyn Change>]) -> Result<(),
         })
         .collect();
 
+    drop(t);
+    let _t = crate::timing::scope("innovation/apply");
     for (g, &group) in entries.iter().enumerate() {
         for (c, change) in changes.iter().enumerate() {
             let count = counts[g][c];

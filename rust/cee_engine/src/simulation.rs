@@ -159,14 +159,30 @@ impl Simulation {
                 tick,
                 year,
             };
-            phases::events::run(&mut ctx, &mut self.pending)?;
-            phases::innovation::run(&mut ctx, &self.changes)?;
-            phases::transmission::run(&mut ctx, &self.changes)?;
-            phases::rebuild::run(&mut ctx)?;
-            if phases::communities::run(&mut ctx)? {
-                ctx.world.sync_live_groups()?;
+            {
+                let _t = crate::timing::scope("events");
+                phases::events::run(&mut ctx, &mut self.pending)?;
+            }
+            {
+                let _t = crate::timing::scope("innovation");
+                phases::innovation::run(&mut ctx, &self.changes)?;
+            }
+            {
+                let _t = crate::timing::scope("transmission");
+                phases::transmission::run(&mut ctx, &self.changes)?;
+            }
+            {
+                let _t = crate::timing::scope("rebuild");
+                phases::rebuild::run(&mut ctx)?;
+            }
+            {
+                let _t = crate::timing::scope("communities");
+                if phases::communities::run(&mut ctx)? {
+                    ctx.world.sync_live_groups()?;
+                }
             }
             if observe_every > 0 && tick % observe_every == 0 {
+                let _t = crate::timing::scope("observe");
                 phases::observe::run(&mut ctx)?;
             }
         }
