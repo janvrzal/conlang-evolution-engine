@@ -12,6 +12,10 @@
 //! `dispersion`, `phonotactics`; `uniformity`, `conservation`, `teachability`,
 //! `distinctiveness`) čtou hodnocení nad vzorky slov; počítá je [`crate::transfer::assess`].
 
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
 use cee_core::pressures::id;
 use cee_core::transmission::{hash_normal_mixed, splitmix64};
 
@@ -213,6 +217,9 @@ impl Catalog {
 }
 
 /// Stav tlaků jednoho kroku: kontext světa a líně stavěné pomocné tabulky.
+///
+/// Tabulky jsou čistou funkcí stavu světa a staví se nejvýš jednou (`OnceLock`), takže je smějí
+/// číst souběžné kusy řádků a výsledek nezávisí na tom, který kus tabulku postavil.
 pub struct Pressures<'a> {
     world: &'a World,
     inputs: &'a StepInputs,
@@ -225,11 +232,13 @@ pub struct Pressures<'a> {
     any_taboo: bool,
     catalog: Catalog,
     /// Vlastníci tvarů podle sloupce osy: (tvar, pojem, kořen) seřazení; staví se líně.
-    owners: Vec<Option<Vec<(u32, u32, u32)>>>,
-    /// Slabost buňky podle (sloupec, funkce); `NaN` = ještě nespočtená.
-    weakness: Vec<f64>,
+    owners: Vec<OnceLock<Vec<(u32, u32, u32)>>>,
+    /// Slabost buňky podle (sloupec, funkce).
+    weakness: Vec<OnceLock<f64>>,
     /// Dominantní varianta konstrukční proměnné funkce podle (sloupec, funkce).
-    dominant: Vec<Option<Option<VariantId>>>,
+    dominant: Vec<OnceLock<Option<VariantId>>>,
+    /// Úhrny četností pojmů podle kořenů, podle sloupce osy (hodnocení analogií).
+    totals: Vec<OnceLock<HashMap<MorphemeId, f64>>>,
 }
 
 impl<'a> Pressures<'a> {
@@ -276,16 +285,18 @@ impl<'a> Pressures<'a> {
                 .iter()
                 .any(|&g| !groups.taboo[g.index()].is_empty()),
             catalog,
-            owners: vec![None; columns],
-            weakness: vec![f64::NAN; columns * functions],
-            dominant: vec![None; columns * functions],
+            owners: (0..columns).map(|_| OnceLock::new()).collect(),
+            weakness: (0..columns * functions).map(|_| OnceLock::new()).collect(),
+            dominant: (0..columns * functions).map(|_| OnceLock::new()).collect(),
+            totals: (0..columns).map(|_| OnceLock::new()).collect(),
         })
     }
 
     /// Fitness řádků `[first, first + count)` bloku do `out` (`count × skupiny × sloty`,
-    /// vynulované); `current` a `heard` mají týž tvar.
+    /// vynulované); `current` a `heard` mají týž tvar. Smí se volat souběžně z více vláken
+    /// (pomocné tabulky jsou za `OnceLock`); každé volání píše jen do svého `out`.
     pub fn fitness(
-        &mut self,
+        &self,
         block: &PoolBlock,
         first: usize,
         count: usize,
@@ -327,7 +338,7 @@ impl<'a> Pressures<'a> {
 
     #[allow(clippy::too_many_arguments)]
     fn apply(
-        &mut self,
+        &self,
         pressure: u8,
         weight: f64,
         variable: VariableId,
@@ -547,8 +558,15 @@ impl<'a> Pressures<'a> {
         if columns.is_empty() {
             return None;
         }
-        let values =
-            crate::transfer::seams::assess_cells(world, variable, &columns, self.inputs.tick);
+        let values = if kind == VariableKind::Form {
+            crate::transfer::assess::form_cells_with(world, variable, &columns, |column| {
+                Cow::Borrowed(self.totals[column].get_or_init(|| {
+                    crate::morphology::concept_totals(world, self.inputs.axis[column])
+                }))
+            })
+        } else {
+            crate::transfer::seams::assess_cells(world, variable, &columns, self.inputs.tick)
+        };
         Some(RowAssessment {
             slot,
             columns,
@@ -557,7 +575,7 @@ impl<'a> Pressures<'a> {
     }
 
     fn assessed_pressure(
-        &mut self,
+        &self,
         pressure: u8,
         weight: f64,
         variable: VariableId,
@@ -611,8 +629,8 @@ impl<'a> Pressures<'a> {
     // --- lexikální jasnost ---------------------------------------------------------------
 
     /// Tvary dominantních kořenů skupiny: (tvar, pojem, kořen) seřazené (vlastníci tvarů).
-    fn owners_of(&mut self, column: usize) -> &[(u32, u32, u32)] {
-        if self.owners[column].is_none() {
+    fn owners_of(&self, column: usize) -> &[(u32, u32, u32)] {
+        self.owners[column].get_or_init(|| {
             let world = self.world;
             let group = self.inputs.axis[column];
             let state = &world.groups.main_code(group).phonology;
@@ -624,14 +642,13 @@ impl<'a> Pressures<'a> {
                 list.push((world.unit_of(group, root).form, concept as u32, root.0));
             }
             list.sort_unstable();
-            self.owners[column] = Some(list);
-        }
-        self.owners[column].as_deref().unwrap_or(&[])
+            list
+        })
     }
 
     /// Skóre jasnosti dvojice (morfém, pojem) ve skupině: zkrácené slovo a homofon s nepříbuzným
     /// pojmem (`lexical_index.clarity_scores`).
-    fn lexical_clarity(&mut self, column: usize, morpheme: MorphemeId, concept: ConceptId) -> f64 {
+    fn lexical_clarity(&self, column: usize, morpheme: MorphemeId, concept: ConceptId) -> f64 {
         let world = self.world;
         let group = self.inputs.axis[column];
         let form = world.unit_of(group, morpheme).form;
@@ -663,17 +680,16 @@ impl<'a> Pressures<'a> {
 
     // --- tlaky na konstrukce -------------------------------------------------------------
 
-    fn dominant_construction(&mut self, column: usize, function: usize) -> Option<&Construction> {
+    fn dominant_construction(&self, column: usize, function: usize) -> Option<&Construction> {
         let slot = column * self.catalog.functions.len() + function;
-        if self.dominant[slot].is_none() {
-            let found = self.catalog.variable[function].and_then(|variable| {
+        let variant = *self.dominant[slot].get_or_init(|| {
+            self.catalog.variable[function].and_then(|variable| {
                 self.world
                     .dominant(self.inputs.axis[column], variable)
                     .map(|(variant, _)| variant)
-            });
-            self.dominant[slot] = Some(found);
-        }
-        let variant = self.dominant[slot].flatten()?;
+            })
+        });
+        let variant = variant?;
         match &self.world.variants.payload[variant.index()] {
             Payload::Construction(c) => Some(c),
             _ => None,
@@ -692,12 +708,9 @@ impl<'a> Pressures<'a> {
 
     /// Podíl tvarů buňky, které splynuly s citačním tvarem (`syntax.weakness`); funkce bez
     /// buňky má 0, bez třídy slova 1.
-    fn weakness(&mut self, column: usize, function: usize) -> f64 {
+    fn weakness(&self, column: usize, function: usize) -> f64 {
         let slot = column * self.catalog.functions.len() + function;
-        if !self.weakness[slot].is_nan() {
-            return self.weakness[slot];
-        }
-        let value = {
+        *self.weakness[slot].get_or_init(|| {
             let world = self.world;
             let group = self.inputs.axis[column];
             let entry = &self.catalog.functions[function];
@@ -734,9 +747,7 @@ impl<'a> Pressures<'a> {
                     f64::from(merged) / f64::from(total)
                 }
             }
-        };
-        self.weakness[slot] = value;
-        value
+        })
     }
 
     /// Je slovo pro pojem ve skupině zvukově zchátralé (`syntax.eroded`)?
@@ -758,7 +769,7 @@ impl<'a> Pressures<'a> {
     }
 
     /// Míra, do jaké roli funkce přebírají jiné dominantní konstrukce (`syntax.compensation`).
-    fn compensation(&mut self, column: usize, function: usize) -> f64 {
+    fn compensation(&self, column: usize, function: usize) -> f64 {
         let mut found: f64 = 0.0;
         for &other in self.catalog.compensated_by[function].clone().iter() {
             let coverage = self.catalog.functions[other].coverage;
@@ -772,7 +783,7 @@ impl<'a> Pressures<'a> {
     }
 
     /// Jak zřetelně konstrukce vyjadřuje svou funkci, 0 až 1 (`syntax.strength`).
-    fn strength(&mut self, column: usize, variant: VariantId, construction: &Construction) -> f64 {
+    fn strength(&self, column: usize, variant: VariantId, construction: &Construction) -> f64 {
         let Some(function) = self.catalog.index(&construction.function) else {
             return 0.0;
         };
@@ -817,7 +828,7 @@ impl<'a> Pressures<'a> {
 
     #[allow(clippy::too_many_arguments)]
     fn construction(
-        &mut self,
+        &self,
         pressure: u8,
         weight: f64,
         variable: VariableId,

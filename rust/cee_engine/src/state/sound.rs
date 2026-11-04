@@ -15,7 +15,7 @@
 //! (`PhonologyState::dominant_log`).
 
 use std::fmt;
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 use cee_core::code_state::{CodeState, Proc};
 use cee_core::index::SoundIndex;
@@ -27,7 +27,8 @@ use crate::ids::{ProcessId, VariableId, VariantId};
 /// délka deníku slovní zásoby, počet morfémů světa a pravidlo přízvuku.
 pub type Stamp = (u64, u64, usize, usize, u8);
 
-/// Stav indexu prostředí a opor, který smí číst souběžně víc vláken (za zámkem).
+/// Stav indexu prostředí a opor, který smí číst souběžně víc vláken (za zámkem pro čtení;
+/// dorovnání skupiny bere zámek pro zápis).
 ///
 /// Míry inovací se počítají přes skupiny souběžně a každá skupina si index dorovná sama
 /// (`phonology::index`); skupiny jsou nezávislé a výsledek nezáleží na pořadí zpracování,
@@ -56,7 +57,7 @@ pub struct Columns {
 /// Odvozený stav světa, který se při kopii zahazuje.
 #[derive(Default)]
 pub struct Runtime {
-    pub index: Mutex<IndexState>,
+    pub index: RwLock<IndexState>,
     /// Sklon slov vůči změně: `biases[proces][lexém]`, `NaN` = ještě nelosováno.
     pub biases: Vec<Vec<f64>>,
     /// Řádek procesu v bance tvarů podle čísla procesu (−1 = neregistrován).

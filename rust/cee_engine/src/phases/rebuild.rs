@@ -44,11 +44,23 @@ pub fn run(ctx: &mut StepContext<'_>) -> Result<(), String> {
         .into_iter()
         .filter(|g| !ctx.world.groups.written[g.index()])
         .collect();
-    phonology(ctx, &groups)?;
+    {
+        let _t = crate::timing::scope("rebuild/phonology");
+        phonology(ctx, &groups)?;
+    }
     for group in groups {
-        morphology(ctx, group)?;
-        syntax(ctx, group)?;
-        prosody(ctx, group)?;
+        {
+            let _t = crate::timing::scope("rebuild/morphology");
+            morphology(ctx, group)?;
+        }
+        {
+            let _t = crate::timing::scope("rebuild/syntax");
+            syntax(ctx, group)?;
+        }
+        {
+            let _t = crate::timing::scope("rebuild/prosody");
+            prosody(ctx, group)?;
+        }
     }
     Ok(())
 }

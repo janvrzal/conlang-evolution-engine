@@ -14,16 +14,22 @@
 //! `settle`) a `cee_core::pressures`; R1a je napojí na `PoolBlock` a `World`.
 //!
 //! Pořadí v kroku jako v Pythonu: příprava ([`crate::transfer::network::prepare`]) → přenos
-//! všech bloků ze starého stavu ([`crate::transfer::block::transmit_block`]) → zápis po
+//! všech bloků ze starého stavu ([`crate::transfer::block::transmit_rows`]) → zápis po
 //! blocích (smluvené body `record_grammar`, `follow_vocabulary`, pak uložení nových podílů)
 //! → aktivace seřazené podle jmen (skupina, proměnná) → záznamy `established`, `extinct`,
 //! `milestone` v kanonickém pořadí → [`release`].
 
+use rayon::prelude::*;
 use serde_json::json;
 
 use crate::ids::{GroupId, VariableId, VariantId};
+use crate::model::pools::PoolBlock;
+use crate::parallel;
 use crate::phases::{hooks, StepContext};
-use crate::transfer::block::{leaves_before_enters, transmit_block, BlockOutcome, MILESTONES};
+use crate::transfer::block::{
+    jobs, leaves_before_enters, transmit_rows, BlockOutcome, Job, MILESTONES,
+};
+use crate::transfer::factors::{block_factors, BlockFactors};
 use crate::transfer::network::{prepare, TransmissionParams};
 use crate::transfer::pressures::{plan_for, Pressures};
 
@@ -77,33 +83,65 @@ pub fn run(
         establish_threshold: ctx.config.establish_threshold,
     };
     // Dvouprůchodový návrh: nejdřív hodnocení procesů (mění banku tvarů), potom přenos nad `&World`.
+    let t = crate::timing::scope("transmission/prepare");
     let inputs = prepare(&*ctx.world, &params, ctx.tick);
+    drop(t);
+    let t = crate::timing::scope("transmission/assess");
     crate::transfer::assess::refresh(ctx.world, &inputs)?;
-    // Všechny bloky se počítají ze starého stavu; svět se zatím nemění.
+    drop(t);
+    let t = crate::timing::scope("transmission/blocks");
+    // Všechny bloky se počítají ze starého stavu; svět se zatím nemění. Bloky se dělí na úlohy
+    // (kusy řádků), které běží souběžně; výsledky se skládají v pořadí bloků a řádků.
     let outcomes: Vec<(usize, BlockOutcome)> = {
         let world = &*ctx.world;
         let pressure_plan = plan_for(changes, &world.params)?;
-        let mut pressures = Pressures::new(world, &inputs, &pressure_plan)?;
-        world
+        let pressures = Pressures::new(world, &inputs, &pressure_plan)?;
+        let blocks: Vec<(usize, &PoolBlock)> = world
             .live
             .blocks
             .iter()
             .filter(|(_, block)| !block.is_empty())
-            .map(|(&capacity, block)| {
-                (
-                    capacity,
-                    transmit_block(
-                        world,
-                        &inputs,
-                        &params,
-                        &mut pressures,
-                        block,
-                        ctx.config.record_trajectories,
-                    ),
-                )
-            })
-            .collect()
+            .map(|(&capacity, block)| (capacity, block))
+            .collect();
+        let factors: Vec<BlockFactors> = blocks
+            .iter()
+            .map(|(_, block)| block_factors(world, &inputs, block))
+            .collect();
+        let pools: Vec<&PoolBlock> = blocks.iter().map(|&(_, block)| block).collect();
+        let groups = inputs.axis.len();
+        let cells: usize = pools.iter().map(|b| b.len() * b.capacity * groups).sum();
+        let split = parallel::worth_splitting(cells);
+        let list = jobs(&pools, groups, split);
+        let trace = ctx.config.record_trajectories;
+        let run = |job: &Job| {
+            transmit_rows(
+                world,
+                &inputs,
+                &params,
+                &pressures,
+                pools[job.block],
+                &factors[job.block],
+                job.start,
+                job.count,
+                trace,
+            )
+        };
+        let results: Vec<BlockOutcome> = if split {
+            list.par_iter().map(run).collect()
+        } else {
+            list.iter().map(run).collect()
+        };
+        let mut merged: Vec<(usize, BlockOutcome)> = Vec::new();
+        for (job, result) in list.iter().zip(results) {
+            match merged.last_mut() {
+                Some((capacity, found)) if *capacity == blocks[job.block].0 => found.append(result),
+                _ => merged.push((blocks[job.block].0, result)),
+            }
+        }
+        merged
     };
+    drop(t);
+    let t = crate::timing::scope("transmission/write");
     let has_table = ctx.world.table.is_some();
     let mut records: Vec<Record> = Vec::new();
     let mut activations: Vec<(GroupId, VariableId)> = Vec::new();
@@ -147,6 +185,7 @@ pub fn run(
             hooks::record_grammar(ctx, group, variable)?;
         }
         if has_table {
+            let _tv = crate::timing::scope("w/vocab");
             leaves_before_enters(&mut outcome.crossings);
             hooks::follow_vocabulary(ctx, &outcome.crossings)?;
             activations.extend_from_slice(&outcome.activations);
@@ -178,11 +217,18 @@ pub fn run(
                 })
         });
     }
+    let ta = crate::timing::scope("w/activate");
     for (group, variable) in activations {
         hooks::activate(ctx, group, variable)?;
     }
+    drop(ta);
+    let ta = crate::timing::scope("w/records");
     write_records(ctx, records);
+    drop(ta);
+    let ta = crate::timing::scope("w/release");
     release(ctx);
+    drop(ta);
+    drop(t);
     Ok(())
 }
 

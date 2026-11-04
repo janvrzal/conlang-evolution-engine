@@ -15,6 +15,9 @@
 //! Vzorek (výběr slov, váhy a čísla jejich tvarů) je odvozený stav v [`Sample`]; je to čistá
 //! funkce stavu kódu a po obnově z kontrolního bodu se postaví znovu.
 
+use std::borrow::Cow;
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use cee_core::bank::Outcome;
@@ -428,6 +431,19 @@ pub fn form_cells(
     variable: VariableId,
     columns: &[usize],
 ) -> Vec<Option<Assessment>> {
+    form_cells_with(world, variable, columns, |column| {
+        Cow::Owned(concept_totals(world, world.live.group_ids[column]))
+    })
+}
+
+/// [`form_cells`] s úhrny pojmů skupin dodanými volajícím (`totals(sloupec)`), aby je tlaky
+/// nepočítaly znovu pro každý řádek.
+pub fn form_cells_with<'t>(
+    world: &World,
+    variable: VariableId,
+    columns: &[usize],
+    totals: impl Fn(usize) -> Cow<'t, HashMap<MorphemeId, f64>>,
+) -> Vec<Option<Assessment>> {
     let Some(change) = world.form_changes.get(&variable) else {
         return vec![None; columns.len()];
     };
@@ -450,7 +466,7 @@ pub fn form_cells(
                 stats.share(class, cell, change.exponent)
                     - stats.share(class, cell, current.exponent)
             };
-            let totals = concept_totals(world, group);
+            let totals = totals(column);
             let frequency = usage_frequency(world, &totals, world.morphemes.lexeme_id(change.unit));
             Some([
                 gain,

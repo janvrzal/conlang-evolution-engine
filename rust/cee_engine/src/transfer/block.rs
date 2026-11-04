@@ -17,7 +17,7 @@ use crate::ids::{GroupId, MorphemeId, VariableId, VariantId};
 use crate::model::pools::PoolBlock;
 use crate::model::repertoire::{Payload, VariableKind};
 use crate::phases::hooks::Crossing;
-use crate::transfer::factors::block_factors;
+use crate::transfer::factors::BlockFactors;
 use crate::transfer::network::{StepInputs, TransmissionParams};
 use crate::transfer::pressures::Pressures;
 use crate::world::World;
@@ -26,6 +26,9 @@ use crate::world::World;
 pub const MILESTONES: [f64; 3] = [0.1, 0.5, 0.9];
 /// Nejvíc buněk (proměnné × skupiny × sloty) jednoho kusu bloku.
 const CHUNK_CELLS: usize = 1 << 20;
+/// Cílová velikost úlohy při souběhu: dost malá na vyrovnání práce, dost velká, aby režie
+/// úlohy (pole, fronta) nebyla znát.
+const JOB_CELLS: usize = 1 << 12;
 /// Hladina, kterou slovo překračuje při vstupu do slovní zásoby a odchodu z ní.
 const DOMINANCE: f64 = 0.5;
 
@@ -74,140 +77,176 @@ fn tracked_slot(world: &World, block: &PoolBlock, row: usize) -> Option<usize> {
     block.slots[row].iter().position(|v| v.0 == changed)
 }
 
-/// Spočítá nový stav bloku a jeho události ze starého stavu světa.
-pub fn transmit_block(
+/// Kus řádků jednoho bloku, který se počítá jako jeden celek (úloha souběhu).
+#[derive(Clone, Copy, Debug)]
+pub struct Job {
+    /// Pořadí bloku v seznamu bloků kroku.
+    pub block: usize,
+    pub start: usize,
+    pub count: usize,
+}
+
+/// Rozdělí bloky na úlohy. S `split` jsou úlohy malé (`JOB_CELLS`), aby se práce dala
+/// vyrovnat mezi vlákna; bez něj jsou to kusy po `CHUNK_CELLS` jako dřív. Řádky jsou
+/// nezávislé, takže rozdělení výsledek nemění (jen mez paměti a rychlost).
+pub fn jobs(blocks: &[&PoolBlock], groups: usize, split: bool) -> Vec<Job> {
+    let mut out = Vec::new();
+    for (block, pool) in blocks.iter().enumerate() {
+        let stride = (groups * pool.capacity).max(1);
+        let cap = if split { JOB_CELLS } else { CHUNK_CELLS };
+        let step = (cap / stride).clamp(1, (CHUNK_CELLS / stride).max(1));
+        let mut start = 0;
+        while start < pool.len() {
+            let count = step.min(pool.len() - start);
+            out.push(Job {
+                block,
+                start,
+                count,
+            });
+            start += count;
+        }
+    }
+    out
+}
+
+impl BlockOutcome {
+    /// Připojí výsledek dalšího kusu téhož bloku (kusy v pořadí řádků).
+    pub fn append(&mut self, mut other: BlockOutcome) {
+        self.rows.append(&mut other.rows);
+        self.milestones.append(&mut other.milestones);
+        self.established.append(&mut other.established);
+        self.extinct.append(&mut other.extinct);
+        self.grammar.append(&mut other.grammar);
+        self.crossings.append(&mut other.crossings);
+        self.activations.append(&mut other.activations);
+        self.trace.append(&mut other.trace);
+    }
+}
+
+/// Spočítá nový stav řádků `[start, start + count)` bloku a jejich události ze starého stavu
+/// světa. Uvnitř úlohy je vše na jednom vlákně; souběh dělají úlohy.
+#[allow(clippy::too_many_arguments)]
+pub fn transmit_rows(
     world: &World,
     inputs: &StepInputs,
     params: &TransmissionParams,
-    pressures: &mut Pressures<'_>,
+    pressures: &Pressures<'_>,
     block: &PoolBlock,
+    factors: &BlockFactors,
+    start: usize,
+    count: usize,
     trace: bool,
 ) -> BlockOutcome {
     let groups = inputs.axis.len();
     let slots = block.capacity;
     let stride = groups * slots;
-    let factors = block_factors(world, inputs, block);
-    let threads = rayon::current_num_threads();
-    let step = (CHUNK_CELLS / stride.max(1)).max(1);
     let mut outcome = BlockOutcome::default();
     let mut scratch: Vec<HearScratch> = Vec::new();
     let activation_share = world.params.activation_share;
     let has_table = world.table.is_some();
-    let (mut start, rows) = (0, block.len());
-    while start < rows {
-        let count = step.min(rows - start);
-        let stop = start + count;
-        let mut current = vec![0.0; count * stride];
-        let mut previous = vec![0.0; count * stride];
-        let mut present = Vec::with_capacity(count * groups);
-        let mut slot_keys = Vec::with_capacity(count * slots);
-        for local in 0..count {
-            let row = start + local;
-            block.cells.row_dense(
-                row,
-                &mut current[local * stride..(local + 1) * stride],
-                &mut previous[local * stride..(local + 1) * stride],
-            );
-            present.extend_from_slice(&block.present[row]);
-            slot_keys.extend_from_slice(&block.keys[row]);
-        }
-        let shape = Shape {
-            variables: count,
+    let stop = start + count;
+    let mut current = vec![0.0; count * stride];
+    let mut previous = vec![0.0; count * stride];
+    let mut present = Vec::with_capacity(count * groups);
+    let mut slot_keys = Vec::with_capacity(count * slots);
+    for local in 0..count {
+        let row = start + local;
+        block.cells.row_dense(
+            row,
+            &mut current[local * stride..(local + 1) * stride],
+            &mut previous[local * stride..(local + 1) * stride],
+        );
+        present.extend_from_slice(&block.present[row]);
+        slot_keys.extend_from_slice(&block.keys[row]);
+    }
+    let shape = Shape {
+        variables: count,
+        groups,
+        slots,
+    };
+    let network = Network {
+        components: &inputs.components,
+        alone: &inputs.alone,
+        alone_weight: &inputs.alone_weight,
+    };
+    let flows: Vec<Flow<'_>> = inputs
+        .cross
+        .iter()
+        .zip(&factors.flows)
+        .map(|(flow, factor)| Flow {
+            factor: &factor[start..stop],
+            components: &flow.components,
+        })
+        .collect();
+    let channels: Vec<Channel<'_>> = inputs
+        .sides
+        .iter()
+        .zip(&factors.sides)
+        .map(|(side, factor)| Channel {
+            factor: &factor[start..stop],
+            learners: &side.learners,
+            sources: &side.sources,
+            weights: &side.weights,
+        })
+        .collect();
+    let mut heard = vec![0.0; count * stride];
+    hear(
+        shape,
+        &current,
+        &present,
+        &network,
+        &flows,
+        &channels,
+        &mut scratch,
+        1,
+        &mut heard,
+    );
+    let mut fitness = vec![0.0; count * stride];
+    pressures.fitness(block, start, count, &current, &heard, &mut fitness);
+    let cohorts = Cohorts {
+        drift_scale: &inputs.drift_scale,
+        renewal: &inputs.renewal,
+        loss_floor: &inputs.loss_floor,
+        row_keys: &inputs.row_keys,
+        selection: params.selection,
+        kappa: params.kappa,
+        adult_rate: params.adult_rate,
+        establish_threshold: params.establish_threshold,
+    };
+    let state = State {
+        current: &current,
+        previous: &previous,
+        present: &present,
+        heard: &heard,
+        fitness: Some(&fitness),
+        slot_keys: &slot_keys,
+    };
+    let mut updated = vec![0.0; count * stride];
+    let mut baseline = vec![0.0; count * stride];
+    settle(shape, &state, &cohorts, 1, &mut updated, &mut baseline);
+    for local in 0..count {
+        let row = start + local;
+        let before = &current[local * stride..(local + 1) * stride];
+        let after = &updated[local * stride..(local + 1) * stride];
+        events(
+            world,
+            inputs,
+            block,
+            row,
+            before,
+            after,
+            has_table,
+            activation_share,
+            trace,
+            &mut outcome,
+        );
+        outcome.rows.push(Row::from_dense(
+            after,
+            &baseline[local * stride..(local + 1) * stride],
             groups,
             slots,
-        };
-        let network = Network {
-            components: &inputs.components,
-            alone: &inputs.alone,
-            alone_weight: &inputs.alone_weight,
-        };
-        let flows: Vec<Flow<'_>> = inputs
-            .cross
-            .iter()
-            .zip(&factors.flows)
-            .map(|(flow, factor)| Flow {
-                factor: &factor[start..stop],
-                components: &flow.components,
-            })
-            .collect();
-        let channels: Vec<Channel<'_>> = inputs
-            .sides
-            .iter()
-            .zip(&factors.sides)
-            .map(|(side, factor)| Channel {
-                factor: &factor[start..stop],
-                learners: &side.learners,
-                sources: &side.sources,
-                weights: &side.weights,
-            })
-            .collect();
-        let mut heard = vec![0.0; count * stride];
-        hear(
-            shape,
-            &current,
-            &present,
-            &network,
-            &flows,
-            &channels,
-            &mut scratch,
-            threads,
-            &mut heard,
-        );
-        let mut fitness = vec![0.0; count * stride];
-        pressures.fitness(block, start, count, &current, &heard, &mut fitness);
-        let cohorts = Cohorts {
-            drift_scale: &inputs.drift_scale,
-            renewal: &inputs.renewal,
-            loss_floor: &inputs.loss_floor,
-            row_keys: &inputs.row_keys,
-            selection: params.selection,
-            kappa: params.kappa,
-            adult_rate: params.adult_rate,
-            establish_threshold: params.establish_threshold,
-        };
-        let state = State {
-            current: &current,
-            previous: &previous,
-            present: &present,
-            heard: &heard,
-            fitness: Some(&fitness),
-            slot_keys: &slot_keys,
-        };
-        let mut updated = vec![0.0; count * stride];
-        let mut baseline = vec![0.0; count * stride];
-        settle(
-            shape,
-            &state,
-            &cohorts,
-            threads,
-            &mut updated,
-            &mut baseline,
-        );
-        for local in 0..count {
-            let row = start + local;
-            let before = &current[local * stride..(local + 1) * stride];
-            let after = &updated[local * stride..(local + 1) * stride];
-            events(
-                world,
-                inputs,
-                block,
-                row,
-                before,
-                after,
-                has_table,
-                activation_share,
-                trace,
-                &mut outcome,
-            );
-            outcome.rows.push(Row::from_dense(
-                after,
-                &baseline[local * stride..(local + 1) * stride],
-                groups,
-                slots,
-                slots,
-            ));
-        }
-        start = stop;
+            slots,
+        ));
     }
     outcome
 }

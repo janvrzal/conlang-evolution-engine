@@ -58,19 +58,36 @@ fn stamp_of(world: &World, group: GroupId) -> Stamp {
 }
 
 /// Dorovná index na stav kódu skupiny, pokud se změnil, a předá ho funkci `read`
-/// (index a číslo skupiny v něm). Index je za zámkem: souběžné dotazy skupin se řadí
-/// za sebe, výsledek na pořadí nezávisí (opory jsou celá čísla).
+/// (index a číslo skupiny v něm). Index je za zámkem `RwLock`: dotazy na už dorovnané skupiny
+/// běží souběžně, dorovnání (zápis) se řadí za sebe; výsledek na pořadí nezávisí (opory jsou
+/// celá čísla).
 pub fn with_group<R>(
     world: &World,
     group: GroupId,
     read: impl FnOnce(&SoundIndex, i64) -> R,
 ) -> Result<R, String> {
     let stamp = stamp_of(world, group);
+    let at = group.index();
+    let token = i64::from(group.0);
+    // Běžný případ: skupina je dorovnaná, čte se souběžně pod zámkem pro čtení.
+    {
+        let guard = world
+            .sound
+            .runtime
+            .index
+            .read()
+            .map_err(|_| "zámek indexu zvukových změn je poškozený".to_owned())?;
+        if guard.synced.get(at).copied().flatten() == Some(stamp) {
+            if let Some(index) = guard.index.as_ref() {
+                return Ok(read(index, token));
+            }
+        }
+    }
     let mut guard = world
         .sound
         .runtime
         .index
-        .lock()
+        .write()
         .map_err(|_| "zámek indexu zvukových změn je poškozený".to_owned())?;
     let IndexState { index, synced } = &mut *guard;
     let index = index.get_or_insert_with(|| {
@@ -78,11 +95,9 @@ pub fn with_group<R>(
         index.set_table(snapshot().clone());
         index
     });
-    let at = group.index();
     if synced.len() <= at {
         synced.resize(at + 1, None);
     }
-    let token = i64::from(group.0);
     if synced[at] != Some(stamp) {
         let code = world.groups.main_code(group);
         let count = world.morphemes.len();

@@ -39,6 +39,7 @@ pub mod simulation;
 pub mod spec;
 pub mod state;
 pub mod syntax;
+pub mod timing;
 pub mod transfer;
 pub mod variation;
 pub mod vocabulary;
