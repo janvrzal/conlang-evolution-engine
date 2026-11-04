@@ -184,6 +184,7 @@ pub fn enter_units(world: &mut World, group: GroupId, units: &[MorphemeId]) -> R
     if entered.is_empty() {
         return Ok(());
     }
+    crate::views::refresh(world, group, &entered);
     queue_units(world, group, &entered)
 }
 
@@ -193,6 +194,7 @@ pub fn leave_vocabulary(world: &mut World, group: GroupId, unit: MorphemeId) {
     if state.leave_vocabulary(unit) {
         state.version += 1;
         state.lexicon_version += 1;
+        crate::views::refresh(world, group, &[unit]);
     }
 }
 
@@ -357,12 +359,14 @@ fn apply(
     let world = &mut *ctx.world;
     {
         let code = world.groups.main_code_mut(group);
+        let mut rewritten = Vec::with_capacity(out.rewrites.len());
         for rewrite in &out.rewrites {
             let exponent = if rewrite.exponent < 0 {
                 MorphemeId::NONE
             } else {
                 MorphemeId(rewrite.exponent as u32)
             };
+            rewritten.push(MorphemeId::new(rewrite.morpheme));
             code.forms.set(
                 MorphemeId::new(rewrite.morpheme),
                 UnitForm {
@@ -373,6 +377,8 @@ fn apply(
             );
             code.phonology.version += 1;
         }
+        // Pohledy kódu se dorovnají jednou po celé dávce (příspěvek slova je funkce jeho stavu).
+        crate::views::refresh(world, group, &rewritten);
     }
     let group_name = world.group_name(group).to_owned();
     let mut resume = None;

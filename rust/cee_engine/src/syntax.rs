@@ -558,7 +558,7 @@ pub fn restructure(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), Stri
                     id
                 }
             };
-            world.groups.main_code_mut(group).forms.set(unit, new);
+            crate::views::set_form(world, group, unit, new);
             rewritten += 1;
             if exists {
                 crate::phonology::requeue_all(world, group, unit)?;

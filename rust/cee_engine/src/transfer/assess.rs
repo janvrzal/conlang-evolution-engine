@@ -125,6 +125,7 @@ impl Sample {
 /// Výběr vzorku: nejčastější tvary slovní zásoby (shodu rozhodne jméno), v pořadí jmen,
 /// s váhami nejméně 0,01 (`top_words`, `clipped_frequencies`).
 fn select(world: &World, group: GroupId) -> (Vec<MorphemeId>, Vec<f64>, f64) {
+    let _t = crate::timing::scope("views/sample-select");
     let code = world.groups.main_code(group);
     let totals = concept_totals(world, group);
     let names = &world.registry.morphemes;

@@ -95,4 +95,8 @@ pub struct GrammarCodeState {
     /// Odvozené pohledy (místa změn, koncovky tříd); nikdy se neukládají.
     #[serde(skip)]
     pub cache: ViewCache,
+    /// Průběžně udržované pohledy slov kódu ([`crate::views`]); neukládají se, po obnově
+    /// z kontrolního bodu se postaví znovu.
+    #[serde(skip)]
+    pub index: crate::views::ClassIndex,
 }

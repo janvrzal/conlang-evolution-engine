@@ -47,6 +47,7 @@ fn lexical_variables(world: &World, group: GroupId) -> Arc<Vec<VariableId>> {
         .grammar
         .cache
         .get_or("lexical-variables", world.variables.len() as u64, || {
+            let _t = crate::timing::scope("views/lexical-variables");
             code.repertoire
                 .variable_ids_by_name(&world.registry.variables)
                 .into_iter()
@@ -542,6 +543,7 @@ impl SemanticChange {
             .grammar
             .cache
             .get_or(self.kind(), version, || {
+                let _t = crate::timing::scope("views/semantic-sites");
                 let mut view = View::default();
                 if !Self::enabled(world) {
                     return view;
@@ -568,6 +570,7 @@ fn derivations(world: &World, group: GroupId) -> Arc<Vec<Vec<(ConceptId, Morphem
         .grammar
         .cache
         .get_or("derivations", lexicon_version(world, group), || {
+            let _t = crate::timing::scope("views/derivations");
             let mut index: Vec<Vec<(ConceptId, MorphemeId)>> =
                 vec![Vec::new(); world.registry.concepts.len()];
             let mut items: Vec<(ConceptId, MorphemeId)> = code

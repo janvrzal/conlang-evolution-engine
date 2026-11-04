@@ -76,11 +76,12 @@ pub fn seed_vocabulary(world: &mut World, group: GroupId) -> Result<(), String> 
         let state = &mut world.groups.main_code_mut(group).phonology;
         state.set_dominant(concept, morpheme);
         state.adjust_uses(morpheme, 1, 0);
-        for unit in units {
+        for &unit in &units {
             state.enter_vocabulary(unit);
         }
         state.version += 1;
         state.lexicon_version += 1;
+        crate::views::refresh(world, group, &units);
     }
     Ok(())
 }

@@ -337,7 +337,9 @@ fn vyrovnani_prepise_kmen_podle_citacniho_tvaru() {
         table.id_of("k").unwrap()
     };
     let form = simulation.world.bank.id_of(&altered);
-    simulation.world.groups.main_code_mut(group).forms.set(
+    cee_engine::views::set_form(
+        &mut simulation.world,
+        group,
         unit,
         UnitForm {
             form,

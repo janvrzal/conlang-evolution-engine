@@ -42,6 +42,7 @@ pub mod syntax;
 pub mod timing;
 pub mod transfer;
 pub mod variation;
+pub mod views;
 pub mod vocabulary;
 pub mod world;
 
