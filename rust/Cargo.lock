@@ -64,6 +64,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cee_py"
+version = "0.1.0"
+dependencies = [
+ "cee_engine",
+ "pyo3",
+ "serde_json",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

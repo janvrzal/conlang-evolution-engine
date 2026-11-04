@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "cee_engine_py"
+version = "0.1.0"
+description = "Vazba na engine CEE v2 v Rustu pro server"
+requires-python = ">=3.11"
+
+[tool.maturin]
+module-name = "cee_engine_py"
+features = ["extension-module"]

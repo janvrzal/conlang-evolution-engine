@@ -208,7 +208,7 @@ příkladu `WorldSpec` je **shodný s Pythonem** (viz výsledek v zprávě R0).
 | **R1b** | hotovo, viz [R1b](#r1b-fonologie-a-zvukové-změny); chybí jen hodnocení procesů tlaky (R1a, přes `phonology::row_of`) a `surface` (povrchový tvar slova) |
 | **R1c** | **hotovo** (viz [oddíl R1c](#r1c-morfologie-syntax-prozodie-sémantika-a-lexikon)): morfologie, syntax, prozodie, sémantické a lexikální změny, místa a návrh inovací, souběžná variabilita, větší slovník a vlastní pojmy; zbývá napojení na přenos a slovní zásobu (R1a/R1b) a porovnání s Pythonem (R2) |
 | **R1d** | hotovo kromě drobností v oddílu R1d (viz [R1d](#r1d-události-kontakt-společnost-a-pozorování)); chybí jen přenos výpůjček přes kanály v přenosu (R1a) a v morfologii (R1c), které čtou rozhraní `contact` |
-| **R2** | integrace, brány v Rustu, porovnání chování s Pythonem, vazba pro server (`runner.py` → Rust), smazání Pythonu v2, `Simulation::branch` |
+| **R2** | integrace, brány v Rustu, porovnání chování s Pythonem, smazání Pythonu v2, `Simulation::branch`; **vazba pro server je hotová** (R2c, `rust/cee_py`, `runner.py` běží na Rustu; viz [R2c](#r2c-vazba-enginu-pro-server)) |
 
 ### Známá omezení a odchylky od Pythonu
 
@@ -441,3 +441,46 @@ Oblasti R1d se týkají metriky bran, které čtou: **snímky dialektů a jazyk�
 `revival`, M5, M6f), **populace a podíly L2** (`Groups`, `l2_share`) a **státy, normy a školy** (`state`, `standard`, `schools`, `census`, M6f).
 Pro R2 je připraveno: `SocietyState::edit_log` pro porovnání změn světa, `code_distances` pro metriky kontinua (M7), `export::{lineages,
 dialect_facts}`, a rozhraní `contact` pro přenos výpůjček. Brány samotné (jejich prahy, audit na semínkách) převede R2 po sloučení s přenosem.
+
+## R2c: vazba enginu pro server
+
+Crate `rust/cee_py` (PyO3, maturin, modul `cee_engine_py`, licence MIT) je tenká vazba nad `cee_engine`. Člen pracovního
+prostoru, ale ne `default-members`, takže `cargo test` a `clippy` v `rust/` ji nestaví (jako `cee_core`). Rozhraní:
+
+* `Run(spec_json)`: postaví svět z `WorldSpec` (text JSON); neplatný popis vyhodí `ValueError` se zprávou enginu.
+* `advance(steps=1) -> bool`: provede nejvýš `steps` kroků **bez GIL** (`Python::detach`), vrátí, zda je co krokovat;
+  chyba enginu je `RuntimeError`. `cancel()` nastaví příznak mimo zámek běhu (nečeká na rozpracovaný krok), `advance` se pak
+  zastaví; `cancelled`, `finished`.
+* Čtení: `start_year`, `end_year`, `year`, `tick`, `snapshots`, `frame()` (lehký snímek, text JSON), `export(timeline=True)`
+  (úplný export `cee-v2/1`, text JSON). Čtení jde mezi kroky, protože simulace je za `Mutex`.
+* `check_spec(spec_json) -> str | None`: zkušební stavba světa; `None` = jde postavit, jinak zpráva.
+
+`src/cee/v2/runner.py` už Python engine nepoužívá: `prepare` ověří schéma pydanticem (`spec.parse`), zbytek (neznámé regiony,
+slova, parametry, pořadí událostí) ohlásí stavba světa v Rustu a vrátí se jako `SpecError` s cestou `(svět)`. Vlákno běhu volá
+`advance(1)`, po každém pozorování uloží `frame()` a na konci `export()`. Zrušení nastaví `Event` i příznak v Rustu. Rozhraní
+`Run` (`status_view`, `frames`, `result`, `cancel`) a odpovědi `/api/v2` se nezměnily; testy `tests/test_api_v2.py` procházejí.
+
+**Odchylky.** Chyby ze zkušebního provedení událostí v Pythonu (`spec.check`) mají cestu `events.N`, stavba světa v Rustu
+ohlásí jen jednu zprávu s cestou `(svět)`; endpoint `/validate` dál používá `spec.check` (Python engine). Stav enginu v Rustu
+je zatím stejně neúplný jako v zbytku R2 (některé události běh ukončí chybou, viz omezení výše).
+
+### Co ze `src/cee/v2` server po přepnutí ještě importuje
+
+Server (`cee.api.v2`) importuje `cee.v2.runner`, `cee.v2.parameters` a `cee.v2.spec`. `runner` bere ze `spec` jen `WorldSpec`,
+`parse`, `Issue`, `SpecError`, `errors`. Jenže `spec.py` na úrovni modulu importuje `concept_data`, `vocabulary`, `events`,
+`history`, `parameters`, `polity`, `scenarios`, `world`, a tedy tahá celý Python engine (`world`, `language/*`, `phonology`,
+`transfer` …). `check` navíc staví svět a zkouší události v Pythonu (`_world`, `item.event().apply`), `_words` importuje
+`language.constructions` a `language.segments`, `build` a `background_events` jsou jen pro Python engine.
+
+**Návrh, co zůstane a co se smaže** (po přijetí bran, kód zatím nemažu a `spec.py` neměním):
+
+* **Zůstane** (jen schéma a validace, bez enginu): z `spec.py` modely pydantic (`WorldSpec`, `LanguageSpec`, `RegionSpec`, události,
+  `ConceptSpec`), `Issue`, `SpecError`, `parse`, `levels`, `EVENT_KINDS`, `FORMAT`, `errors`/`warnings`, `vocabulary_options`;
+  dále `parameters.py` (čistý dataclass s tabulkami úrovní), `concept_data.py` a `vocabulary.py` (data a `validate`), `runner.py`.
+  Z modelů událostí se musí odstranit metody `.event()` a `.custom()` (ty vytvářejí objekty Python enginu), `GRAMMARS` se nahradí
+  seznamem jmen profilů.
+* **Přesune se do Rustu:** sémantická část `check` (stavba světa, zkušební události, slova a hlásky). `check_spec` ji dnes vrací
+  jako jednu zprávu; pro `/validate` je potřeba vracet seznam `{path, message, severity}` (rozšíření R2 nebo následný krok),
+  tabulku hlásek a tóny pro `_words` už Rust má (`segments`).
+* **Smaže se:** `world`, `simulation`, `export`, `history`, `events`, `polity`, `scenarios`, `background`, `naming`, `checkpoint`,
+  `language/*`, `phonology`, `transfer`, `pressures` a ostatní moduly enginu, `build`, `background_events`, `_world`.
