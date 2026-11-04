@@ -530,7 +530,7 @@ Co z toho plyne pro R2a (zjištěno čtením metrik, v enginu se nic neměnilo):
 - **L2 nezjednodušuje morfologii**: složitost města s přistěhovalci je přesně stejná jako bez nich (poměr 2,0) a metrika 11
   nekoreluje s podílem L2. Chybí zjednodušení tvarů dospělými učícími se (interference ve tvarech a koncovkách).
 - **Zvukové změny se ustalují málo a málo se šíří**: 13 ustálených změn na 3 jazyky (Python aspoň 30), medián 1 až 1,5 skupiny
-  na změnu (aspoň 2), žádné relikty u 2 ze 3 semínek.
+  na změnu (aspoň 2), podíl reliktů je 0 (semínko 1) a u semínka 2 se neuzavřel žádný proces.
 - **Alternace a analogie**: bez vyrovnání je alternací málo (0,28 místo > 0,3) a vyrovnání je nemění (rozdíl 0,001);
   podíl produktivní koncovky 0,68 (aspoň 0,8); zmorfologizovaných buněk skoro nevzniká (2 z 10 semínek).
 - **Škola bez tisku** (semínko 2) zastavuje změnu méně než v Pythonu; diglosie (Ferguson) nechává lidovou řeč blíž psané
