@@ -184,7 +184,8 @@ fn apply_innovations(
         let Some(variant) = change.propose(ctx.world, context, site, &mut rng, index) else {
             continue;
         };
-        // Změna smí proměnnou založit až při návrhu (zvukové změny): platí proměnná varianty.
+        // Zvukové a formové změny zakládají proměnnou až při návrhu: místo je pořadí kandidáta,
+        // platí proměnná varianty.
         let site = variant.variable;
         let world = &mut *ctx.world;
         if world.live.contains(site) {

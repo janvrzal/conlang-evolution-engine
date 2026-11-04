@@ -4,23 +4,24 @@
 //! (pydantic); Rust přijme **stejný JSON** přes `serde` a postaví z něj svět a události.
 //! Formát má verzi [`FORMAT`]; mění se jen přidáváním polí.
 //!
-//! **Hotové v R0:** `WorldSpec` se stejnými poli, stavba světa pro výchozí slovník.
-//! **Patří dál:** větší slovník a vlastní pojmy (`vocabulary`, `concepts`; R1c/R2),
-//! události pozadí dějin (`background`; R1d). Takový popis `build` odmítne chybou,
+//! **Hotové:** `WorldSpec` se stejnými poli, stavba světa včetně většího slovníku a vlastních
+//! pojmů (`vocabulary`, `concepts`; R1c, `vocabulary::resolve`).
+//! **Patří dál:** události pozadí dějin (`background`; R1d). Takový popis `build` odmítne chybou,
 //! místo aby tiše dal jiný svět.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::concepts::{ConceptData, Defaults};
 use crate::events::{PendingEvent, WorldEvent};
 use crate::grammar::profile;
 use crate::model::code::{StressRule, StressStrength};
 use crate::parameters::Parameters;
 use crate::scenarios::{region_world, ProtoLanguage, Region, SeedOptions};
 use crate::segments::SegmentTable;
+use crate::vocabulary::{resolve, CustomConcept, DEFAULT_SIZE};
 use crate::world::World;
 
 pub const FORMAT: &str = "cee-v2-world/1";
@@ -229,13 +230,20 @@ fn proto_language(spec: &LanguageSpec, table: &SegmentTable) -> Result<ProtoLang
 /// Svět a události z popisu (`spec.build`); varování se nevrací, chyba zastaví stavbu.
 pub fn build(spec: &WorldSpec) -> Result<(World, Vec<Box<dyn WorldEvent>>), String> {
     let params = Parameters::from_overrides(&spec.parameters)?;
-    if spec.vocabulary != Defaults::shared().default_concepts.len() || !spec.concepts.is_empty() {
-        return Err(format!(
-            "Větší slovník ({} pojmů z {} možných) a vlastní pojmy zatím nejsou v Rustu (patří R1c/R2).",
-            spec.vocabulary,
-            Defaults::shared().default_concepts.len() + ConceptData::shared().catalog_len()
-        ));
-    }
+    let vocabulary = if spec.vocabulary == DEFAULT_SIZE && spec.concepts.is_empty() {
+        None
+    } else {
+        let custom = spec
+            .concepts
+            .iter()
+            .enumerate()
+            .map(|(index, item)| {
+                serde_json::from_value::<CustomConcept>(item.clone())
+                    .map_err(|e| format!("concepts.{index}: {e}"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Some(Arc::new(resolve(spec.vocabulary, &custom)?))
+    };
     if !params.background_levels.contains_key(&spec.background) {
         return Err(format!("neznámá míra pozadí dějin '{}'", spec.background));
     }
@@ -268,6 +276,7 @@ pub fn build(spec: &WorldSpec) -> Result<(World, Vec<Box<dyn WorldEvent>>), Stri
         .collect();
     let options = SeedOptions {
         semantics: spec.semantics,
+        vocabulary,
         ..SeedOptions::default()
     };
     let mut world = region_world(

@@ -139,19 +139,25 @@ pub fn activate_process(
 
 /// Aktivace analogie nebo jiné změny tvaru v kódu skupiny. **Vlastník: R1c.**
 pub fn activate_analogy(
-    _ctx: &mut StepContext<'_>,
-    _group: GroupId,
-    _variable: VariableId,
+    ctx: &mut StepContext<'_>,
+    group: GroupId,
+    variable: VariableId,
 ) -> Result<(), String> {
+    crate::morphology::activate(ctx.world, group, variable);
     Ok(())
 }
 
 /// Rozdělení konstrukční proměnné se ve skupině změnilo (`record_grammar`), vstup
 /// syntaktické přestavby. **Vlastník: R1c.**
 pub fn record_grammar(
-    _ctx: &mut StepContext<'_>,
-    _group: GroupId,
-    _variable: VariableId,
+    ctx: &mut StepContext<'_>,
+    group: GroupId,
+    variable: VariableId,
 ) -> Result<(), String> {
+    ctx.world
+        .groups
+        .main_code_mut(group)
+        .phonology
+        .record_grammar(variable);
     Ok(())
 }

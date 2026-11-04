@@ -206,7 +206,7 @@ příkladu `WorldSpec` je **shodný s Pythonem** (viz výsledek v zprávě R0).
 |---|---|
 | **R1a** | hodnocení procesů a analogií pro tlaky nad hodnocením (`transfer::seams::assess_cells`; čeká na banku tvarů s tabulkami procesů R1b a morfologický index R1c), stav `closed` pro tlak `Norm` (`transfer::seams::closed`, R1b); zbytek přenosu je hotový, viz oddíl R1a |
 | **R1b** | hotovo, viz [R1b](#r1b-fonologie-a-zvukové-změny); chybí jen hodnocení procesů tlaky (R1a, přes `phonology::row_of`) a `surface` (povrchový tvar slova) |
-| **R1c** | morfologie, syntax, prozodie, sémantické a lexikální změny, místa změn a návrh inovací (`Change`), souběžná variabilita protojazyka (`variation.rs`), větší slovník a vlastní pojmy (`vocabulary`) |
+| **R1c** | **hotovo** (viz [oddíl R1c](#r1c-morfologie-syntax-prozodie-sémantika-a-lexikon)): morfologie, syntax, prozodie, sémantické a lexikální změny, místa a návrh inovací, souběžná variabilita, větší slovník a vlastní pojmy; zbývá napojení na přenos a slovní zásobu (R1a/R1b) a porovnání s Pythonem (R2) |
 | **R1d** | události (`State`, `Conquest`, … místo `PendingEvent`), kontakt a komunity, politika, pozadí dějin, instituce, pozorování (shluky, `LineageTracker`), `states`/`borders`/`census`/`dialect_facts`/`lineages` v exportu, `naming` |
 | **R2** | integrace, brány v Rustu, porovnání chování s Pythonem, vazba pro server (`runner.py` → Rust), smazání Pythonu v2, `Simulation::branch` |
 
@@ -218,8 +218,8 @@ příkladu `WorldSpec` je **shodný s Pythonem** (viz výsledek v zprávě R0).
   vektorech sedí; vzácné nezvyklé kombinace značek vrací chybu.
 - `gravity_pairs` používá `f64::hypot` místo `math.dist` (rozdíl v posledním bitu možný; porovnání ticku 0
   používá toleranci 1e-12).
-- Svět v Rustu nemá souběžnou variabilitu slovní zásoby (viz `variation.rs`); export ticku 0 jí není dotčen.
-- `WorldSpec` s větším slovníkem, vlastními pojmy nebo `background` ≠ `none` se odmítne chybou.
+- Souběžná variabilita se v Rustu rozdává z proudu `Stream` (ne z numpy), takže po rozdání nesedí s Pythonem bit po bitu; tik 0 bez variability (`standing_variation = 0`) ano.
+- `WorldSpec` s `background` ≠ `none` se odmítne chybou (R1d); větší slovník a vlastní pojmy se staví (R1c).
 - Události jsou nosiče bez provedení: běh, který na událost narazí, skončí chybou.
 
 
@@ -302,3 +302,72 @@ zaregistrují v `default_changes()`, může se plán skládat z jejich deklarac�
 (jména `variable`, `variant`, `group`, `level`, seřazené stejně jako v Pythonu), dráhy inovací
 (`record_trajectories`), podíly ve skupinách (`World::distribution`) a šíření slov, procesů a konstrukcí.
 Tlaky nad hodnocením (zvukové procesy, analogie) jsou nulové, dokud R1b a R1c nedodají `seams::assess_cells`.
+
+## R1c: morfologie, syntax, prozodie, sémantika a lexikon
+
+Návrh stavu: `state/grammar.rs` (`GrammarWorldState`, `GrammarCodeState`) drží živé analogie
+(`morph_active`, `morph_closed`), zapsané konstrukce (`grammar_applied`) a **keš pohledů** (`ViewCache`):
+odvozené údaje kódu (kandidáti vyrovnání a rozšíření, koncovky tříd, místa sémantických změn, odvozeniny)
+se drží podle verze stavu kódu (`morphology::code_version`, `lexicon_version` a délka deníku dominantních
+kořenů), čtou je souběžné fáze (`rate_sum`, `weighted_sites`), proto jsou neměnné (`Arc`) za zámkem. Keš
+se do kontrolního bodu neukládá a kopie stavu začíná prázdná.
+
+| modul | obsah | zrcadlí |
+|---|---|---|
+| `morphology` | koncovky tříd (`class_stats`), slabost buněk, kandidáti vyrovnání, rozšíření a reanalýzy hranice, `register`, `apply_form_change`, `analogy_plan`, `restructure`, `units_of` | `morphology.py` |
+| `syntax` | katalog funkcí s přepisy, dominantní konstrukce, slabost a síla vyjádření, kompenzace, `new_affix`, `ready_constructions`, `restructure` | `syntax.py` |
+| `prosody` | pravidlo a síla přízvuku, `plan`, `restructure` | `prosody.py` |
+| `changes/lexicon` | expresivní tvoření, 7 sémantických změn (posun, konverze, odvození, složenina, opis za tabu, kontaminace, zpětné tvoření), výpůjčky | `changes/lexicon.py` |
+| `changes/morphology` | vyrovnání, rozšíření, reanalýza hranice | `changes/morphology.py` |
+| `changes/syntax` | deset syntaktických změn včetně zániku kategorie | `changes/syntax.py` |
+| `changes/prosody` | posun a síla přízvuku | `changes/prosody.py` |
+| `variation` | souběžná variabilita slovní zásoby protojazyka (graf vazeb, naměřený model vesnice, činitele hustoty a podílu) | `variation.py` |
+| `vocabulary` | větší slovník, vlastní pojmy, graf pojmů z katalogu (`resolve`, `Vocabulary::graph`), `units_in` | `vocabulary.py` |
+
+**Změny a místa.** `default_changes()` vrací změny v pořadí Pythonu (lexikální, *zvukové – místo pro R1b*,
+morfologické, syntaktické, prozodické). Sedm sémantických změn je jedna struktura `SemanticChange`
+s druhem; míra místa je `base × součet vah cest` (cesty jsou v grafu pojmů, dominantní kořeny z kódu),
+váhy výběru místa jsou míry dělené součtem. **Formové změny (analogie) vznikají až při návrhu**, protože
+jejich proměnná se zakládá při `register`; místa jsou proto pořadová čísla kandidátů a po návrhu platí
+`NewVariant::variable` (fáze inovací používá `variant.variable`, viz „Změny společných souborů“).
+Návrhy zaregistrovaných variant (analogie, konstrukce, prozodie) vracejí obsah a původ **první**
+registrace.
+
+**Přestavby.** `phases::rebuild::{morphology, syntax, prosody}` volají `morphology::restructure`,
+`syntax::restructure`, `prosody::restructure`; hooky `activate_analogy` (`morphology::activate`) a
+`record_grammar` (deník konstrukcí kódu). Jádra `cee_core::form_restructure` a `form_assess` se nepoužila:
+jsou psaná pro Python a drží vlastní index kódu přes deníky; přestavby jsou řídké, takže stačí počítat
+přímo nad stavem kódu. `cee_core::sites`, `morphology_index` a `semantic_index` se také nepoužily z
+téhož důvodu (místa se počítají nad čísly morfémů, pojmů a tříd s keší podle verze kódu).
+
+**Výpůjčky a kontakt.** Dárce čte `changes::lexicon::donors` přímo z vazeb a skupin (otevřenost × síla
+vazby × prestiž dárce, jen jiný jazyk, jen negramotné kódy), kanály `elite` a `trade` z
+`Parameters::channel_domains` a `World::trade_share`. Přenositelnost pojmu (`transfer`) má vlastní kopii
+vzorce s normalizací z dat (`ConceptData::borrowing_normalizer`, ověřeno proti Pythonu). Až R1d dodá stav
+kontaktu, stačí zaměnit `donors` a `channel_exposures`.
+
+**Větší slovník a vlastní pojmy.** `ConceptData` zná katalog WOLD (`catalog_ids`, `catalog_order`, `find`,
+průměry); `vocabulary::resolve(size, custom)` dá pojmy v pořadí Pythonu, `Vocabulary::graph` staví graf z
+jádra, z `v2_catalog_semantics.json` a z vlastních vztahů. `SeedOptions::vocabulary` ho předá stavbě světa
+(pojmy, třídy slov, známé frekvence, graf, doména a půjčitelnost vlastních pojmů). `WorldSpec` ho staví.
+
+**Změny společných souborů:** `phases/innovation.rs` (po `propose` platí `variant.variable` místo místa),
+`changes/mod.rs` (moduly a `default_changes`), `lib.rs` (moduly `morphology`, `syntax`, `prosody`),
+`scenarios.rs` (`SeedOptions::vocabulary`, parametr `seed_lineages`, třídy a graf z vocabulary),
+`spec.rs` (stavba slovníku místo odmítnutí), `concepts.rs` (katalog, `with_relations`), `phases/{rebuild,hooks}.rs`
+(jen těla R1c).
+
+**Co čekám od ostatních:** R1a: v `transmission` volat `hooks::record_grammar` pro konstrukce, které se
+ve skupině změnily, a `hooks::activate` pro dvojice nad prahem; tlaky potřebují od změn jen druh proměnné
+(cílový typ a váhy tlaků jednotlivých změn jsou v `changes::*` zatím nezapsané, přidá R1a/R2 do
+`Change`, stejně jako Python `target` a `pressures`). R1b: ve `follow_vocabulary` pro nové slovo volat
+`vocabulary::units_in` (tvary buněk nového lexému a výpůjčky) a místo mých náhrad `morphology::requeue_all`
+a `morphology::enter_vocabulary` použít fronty fonologizace; zvukové změny zaregistrovat v
+`default_changes()` mezi lexikální a morfologické.
+
+**Brány milníků a R1c.** Týkají se jí metriky M3b (lexikální změny: obměna slovníku, podíl cest vzniku
+slov), M4 a M4b (gramatikalizace: cykly opis, přiklonka, koncovka, zánik kategorie, zápor, slovosled),
+analogie (vyrovnání a rozšíření ve `morphology`) a prozodie. Pro R2 jsou připravené: `history` záznamy
+`innovation`, `analogy`, `stress_rule_changed`, `stress_strength_changed`, stavy `grammar_applied` a
+`morph_closed`, `Vocabulary` s pořadím pojmů a zkoušky v `tests/r1c.rs`. Nebyly spuštěné scénáře
+`v2_digests.py` v Pythonu; porovnání chování je na R2.
