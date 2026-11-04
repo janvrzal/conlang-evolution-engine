@@ -125,7 +125,7 @@ fn word_units(world: &World, group: GroupId) -> Vec<MorphemeId> {
 }
 
 /// Citační tvar lexému tvaru slova (číslo tvaru v bance).
-fn citation_id(world: &World, group: GroupId, unit: MorphemeId) -> u32 {
+pub(crate) fn citation_id(world: &World, group: GroupId, unit: MorphemeId) -> u32 {
     world.unit_of(group, world.morphemes.lexeme_id(unit)).form
 }
 

@@ -72,7 +72,13 @@ impl std::fmt::Debug for FormBank {
 
 impl FormBank {
     pub fn new(table: Arc<SegmentTable>) -> FormBank {
-        let bank = Bank::new(table.boundary(), table.vowel.clone()).expect("maska samohlásek");
+        let mut bank = Bank::new(table.boundary(), table.vowel.clone()).expect("maska samohlásek");
+        // Polosamohlásky (sonorita 3) patří k jádru slabiky v příznakovosti tvarů; hranice slova ne.
+        let mut glide: Vec<bool> = (0..table.len())
+            .map(|segment| table.sonority(segment as i32) == 3)
+            .collect();
+        glide.push(false);
+        bank.set_glide(glide).expect("maska polosamohlásek");
         FormBank { bank, table }
     }
 

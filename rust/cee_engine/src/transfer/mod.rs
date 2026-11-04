@@ -7,8 +7,10 @@
 //! | [`factors`] | filtry kanálů podle druhu proměnné, frekvence a domény pojmu | `contact.*_factors`, `institutions.*_factors` |
 //! | [`pressures`] | všech 23 tlaků, plán podle druhu proměnné | `cee.v2.pressures` |
 //! | [`block`] | přenos bloku (`hear`, tlaky, `settle`) a události z před/po | `transmission.transmit`, `simulation._plan` |
-//! | [`seams`] | místa, kde se čte stav jiné oblasti, který zatím chybí | – |
+//! | [`assess`] | hodnocení procesů nad vzorky slov a analogií nad stavem kódu | `assessment`, `morphology.assess` |
+//! | [`seams`] | místa, kde přenos čte stav jiné oblasti (hodnocení, uzavřené procesy) | – |
 
+pub mod assess;
 pub mod assessed;
 pub mod block;
 pub mod factors;

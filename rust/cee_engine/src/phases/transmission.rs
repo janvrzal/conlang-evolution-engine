@@ -73,10 +73,12 @@ pub fn run(ctx: &mut StepContext<'_>) -> Result<(), String> {
         loss_threshold: ctx.config.loss_threshold,
         establish_threshold: ctx.config.establish_threshold,
     };
+    // Dvouprůchodový návrh: nejdřív hodnocení procesů (mění banku tvarů), potom přenos nad `&World`.
+    let inputs = prepare(&*ctx.world, &params, ctx.tick);
+    crate::transfer::assess::refresh(ctx.world, &inputs)?;
     // Všechny bloky se počítají ze starého stavu; svět se zatím nemění.
     let outcomes: Vec<(usize, BlockOutcome)> = {
         let world = &*ctx.world;
-        let inputs = prepare(world, &params, ctx.tick);
         let pressure_plan = plan(&world.params)?;
         let mut pressures = Pressures::new(world, &inputs, &pressure_plan)?;
         world

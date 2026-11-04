@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! cee run <spec.json> -o export.json [--threads N]
-//! cee scenario <jméno> --until <rok> [-o export.json] [--threads N]
+//! cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--history log.jsonl]
 //! cee export-tick0 <scénář|spec.json> [-o tick0.json]
 //! cee scenarios
 //! ```
@@ -16,7 +16,7 @@ use cee_engine::spec::{self, WorldSpec};
 use cee_engine::{Simulation, SimulationConfig};
 
 fn usage() -> String {
-    "Použití:\n  cee run <spec.json> -o export.json [--threads N]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios".to_owned()
+    "Použití:\n  cee run <spec.json> -o export.json [--threads N]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--history log.jsonl]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios".to_owned()
 }
 
 struct Options {
@@ -25,6 +25,7 @@ struct Options {
     until: Option<f64>,
     threads: Option<usize>,
     checkpoint: Option<String>,
+    history: Option<String>,
 }
 
 fn parse(args: &[String]) -> Result<Options, String> {
@@ -34,6 +35,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
         until: None,
         threads: None,
         checkpoint: None,
+        history: None,
     };
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -59,6 +61,7 @@ fn parse(args: &[String]) -> Result<Options, String> {
                 )
             }
             "--checkpoint" => options.checkpoint = Some(value("--checkpoint")?),
+            "--history" => options.history = Some(value("--history")?),
             other if other.starts_with('-') => return Err(format!("neznámý přepínač {other}")),
             other => options.positional.push(other.to_owned()),
         }
@@ -83,6 +86,11 @@ fn run_simulation(mut simulation: Simulation, until: f64, options: &Options) -> 
         let bytes = simulation.checkpoint().to_bytes()?;
         std::fs::write(path, bytes).map_err(|e| format!("{path}: {e}"))?;
         let _ = Checkpoint::from_bytes(&std::fs::read(path).map_err(|e| e.to_string())?)?;
+    }
+    if let Some(path) = &options.history {
+        let mut text = simulation.history.lines().join("\n");
+        text.push('\n');
+        std::fs::write(path, text).map_err(|e| format!("{path}: {e}"))?;
     }
     eprintln!(
         "hotovo: rok {}, {} kroků, {} záznamů, otisk {}",
