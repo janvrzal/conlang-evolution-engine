@@ -66,6 +66,8 @@ def neighbour_distance(world, snapshot) -> float | None:
 def summarize(world, simulation) -> dict:
     history = simulation.history
     innovation_change = {e["variant"]: e["change"] for e in history.of_kind("innovation")}
+    #: Počet inovací = počet různých variant podle druhu změny (stejná varianta ve víc skupinách
+    #: se počítá jednou); Rust (`cee behavior`) počítá totéž.
     innovations = Counter(innovation_change.values())
     established = Counter(innovation_change[e["variant"]] for e in history.of_kind("established") if e["variant"] in innovation_change)
     extinct = Counter(innovation_change[e["variant"]] for e in history.of_kind("extinct") if e["variant"] in innovation_change)

@@ -75,11 +75,14 @@ pub fn summarize(simulation: &Simulation) -> Value {
         e.get(key).and_then(Value::as_str).unwrap_or("").to_owned()
     };
     let mut change_of: BTreeMap<String, String> = BTreeMap::new();
-    let mut innovations: BTreeMap<String, u64> = BTreeMap::new();
+    // Počet inovací = počet různých variant podle druhu změny (jako v Pythonu: stejná varianta
+    // ve víc skupinách nebo po zániku znovu se počítá jednou).
     for e in history.of_kind("innovation") {
-        let change = text(e, "change");
+        change_of.insert(text(e, "variant"), text(e, "change"));
+    }
+    let mut innovations: BTreeMap<String, u64> = BTreeMap::new();
+    for change in change_of.values() {
         *innovations.entry(change.clone()).or_default() += 1;
-        change_of.insert(text(e, "variant"), change);
     }
     let by_change = |kind: &str| {
         let mut found: BTreeMap<String, u64> = BTreeMap::new();
