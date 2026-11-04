@@ -340,11 +340,23 @@ fn normalize_cell(array: &[f64], fallback: &[f64], out: &mut [f64], sorted: &mut
             total += value;
         }
     } else {
-        sorted.copy_from_slice(array);
-        sorted.sort_by(|a, b| a.total_cmp(b));
-        total = sorted[0] + 0.0;
-        for &value in &sorted[1..] {
-            total += value;
+        // Nuly součet nemění, takže se řadí jen nenulové sloty (většina slotů je prázdná).
+        let mut count = 0;
+        for &value in array {
+            if value != 0.0 {
+                sorted[count] = value;
+                count += 1;
+            }
+        }
+        if count == 0 {
+            total = 0.0;
+        } else {
+            let live = &mut sorted[..count];
+            live.sort_by(|a, b| a.total_cmp(b));
+            total = live[0] + 0.0;
+            for &value in &live[1..] {
+                total += value;
+            }
         }
     }
     if total > 0.0 {
