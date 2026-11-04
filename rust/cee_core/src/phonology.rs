@@ -98,6 +98,7 @@ impl Units<'_> {
 }
 
 /// Jedna fronta, do které se může zařadit: živý proces kódu.
+#[derive(Clone, Copy)]
 pub struct Target<'a> {
     /// Řádek změny v bance. `SKIP` = fronta se přeskočí (tabulka s tímto
     /// pravidlem přízvuku neexistuje a nemá se zakládat); `NO_TABLE` = tabulka
@@ -220,15 +221,49 @@ fn needed(
     }
 }
 
-/// `_queue` pro jeden morfém s tvarem `form_id` a všechny fronty `targets`
-/// (kromě `skip`): kdo se nezapsal, nečeká a proces na tvar dopadne, ten se
-/// zařadí. Vrací zařazení; chybí-li něco, zapíše to do `needs`.
+/// Fronty rozdělené podle řádku změny v bance: zařazení morfému pak nemusí projít všechny
+/// živé procesy, jen ty, jejichž změna na tvar podle předfiltru banky sedí, a fronty bez
+/// tabulky (ty o ni žádají každý morfém). Staví se jednou na dávku zařazení, ne na morfém.
+#[derive(Default)]
+pub struct RowIndex {
+    /// Řádek změny → čísla front s touto tabulkou (vzestupně).
+    by_row: BTreeMap<usize, Vec<usize>>,
+    /// Fronty, jejichž tabulka v bance ještě není (`NO_TABLE`), vzestupně.
+    no_table: Vec<usize>,
+}
+
+impl RowIndex {
+    /// Index front `0..count`, `row(i)` je `Target::row` fronty `i`.
+    pub fn new(count: usize, row: impl Fn(usize) -> i64) -> RowIndex {
+        let mut index = RowIndex::default();
+        for at in 0..count {
+            match row(at) {
+                SKIP => {}
+                NO_TABLE => index.no_table.push(at),
+                found => index.by_row.entry(found as usize).or_default().push(at),
+            }
+        }
+        index
+    }
+
+    /// Index nad polem front.
+    pub fn of(targets: &[Target]) -> RowIndex {
+        RowIndex::new(targets.len(), |at| targets[at].row)
+    }
+}
+
+/// `_queue` pro jeden morfém s tvarem `form_id` a všechny fronty (kromě `skip`): kdo se
+/// nezapsal, nečeká a proces na tvar dopadne, ten se zařadí. `at(i)` dá frontu č. `i`;
+/// `index` musí být postavený nad týmiž frontami. Prochází se jen fronty bez tabulky a ty,
+/// jejichž řádek je v předfiltru tvaru, ve vzestupném pořadí čísel front (pořadí určuje
+/// čísla nových tvarů v bance). Vrací zařazení; chybí-li něco, zapíše to do `needs`.
 #[allow(clippy::too_many_arguments)]
-fn queue_into(
+fn queue_into<'t>(
     bank: &mut Bank,
     params: &Params,
     units: &Units,
-    targets: &[Target],
+    index: &RowIndex,
+    at: &impl Fn(usize) -> Target<'t>,
     skip: Option<usize>,
     morpheme: usize,
     form_id: usize,
@@ -236,30 +271,43 @@ fn queue_into(
     needs: &mut Needs,
 ) -> Result<Vec<Insert>, String> {
     let lexeme = units.lexeme_of(morpheme)?;
+    // Kandidáti: fronty bez tabulky a fronty, jejichž změna může tvar zasáhnout.
+    let mut candidates: Vec<usize> = index.no_table.clone();
+    if !index.by_row.is_empty() {
+        let bits = bank.rows_of(form_id)?;
+        for (word, &value) in bits.iter().enumerate() {
+            let mut rest = value;
+            while rest != 0 {
+                let row = word * 64 + rest.trailing_zeros() as usize;
+                rest &= rest - 1;
+                if let Some(list) = index.by_row.get(&row) {
+                    candidates.extend_from_slice(list);
+                }
+            }
+        }
+        candidates.sort_unstable();
+    }
     let mut found = Vec::new();
-    for (index, target) in targets.iter().enumerate() {
-        if Some(index) == skip || target.row == SKIP {
+    for position in candidates {
+        let target = at(position);
+        if Some(position) == skip {
             continue;
         }
         if flagged(target.restructured, morpheme) || flagged(target.queued, morpheme) {
             continue;
         }
         if target.row == NO_TABLE {
-            needs.tables.insert(index);
+            needs.tables.insert(position);
             continue;
         }
         let row = target.row as usize;
-        // Předfiltr banky (bity hlásek) je nutná podmínka výsledku tabulky.
-        if !bank.may_apply(form_id, row)? {
-            continue;
-        }
         match bank.lookup(row, params.rule, form_id, &mut needs.maps)? {
             Some(result) if result != UNCHANGED => {}
             _ => continue,
         }
-        if let Some(value) = needed(params, target, index, morpheme, lexeme, freq, needs) {
+        if let Some(value) = needed(params, &target, position, morpheme, lexeme, freq, needs) {
             found.push(Insert {
-                target: index,
+                target: position,
                 morpheme,
                 needed: value,
             });
@@ -269,12 +317,14 @@ fn queue_into(
 }
 
 /// `enter_vocabulary` a `requeue` pro všechny živé procesy: zařazení jednoho
-/// morfému do front. Při chybějících údajích vrací prázdný seznam a `needs`.
-pub fn queue_morpheme(
+/// morfému do front (`at(i)` dá frontu č. `i`, `index` je nad týmiž frontami). Při
+/// chybějících údajích vrací prázdný seznam a `needs`.
+pub fn queue_morpheme_with<'t>(
     bank: &mut Bank,
     params: &Params,
     units: &Units,
-    targets: &[Target],
+    index: &RowIndex,
+    at: &impl Fn(usize) -> Target<'t>,
     morpheme: usize,
     freq: &dyn Frequency,
 ) -> Result<(Vec<Insert>, Needs), String> {
@@ -284,13 +334,34 @@ pub fn queue_morpheme(
         return Ok((Vec::new(), needs));
     };
     let found = queue_into(
-        bank, params, units, targets, None, morpheme, unit.form, freq, &mut needs,
+        bank, params, units, index, at, None, morpheme, unit.form, freq, &mut needs,
     )?;
     Ok(if needs.is_empty() {
         (found, needs)
     } else {
         (Vec::new(), needs)
     })
+}
+
+/// [`queue_morpheme_with`] nad polem front.
+pub fn queue_morpheme(
+    bank: &mut Bank,
+    params: &Params,
+    units: &Units,
+    targets: &[Target],
+    morpheme: usize,
+    freq: &dyn Frequency,
+) -> Result<(Vec<Insert>, Needs), String> {
+    let index = RowIndex::of(targets);
+    queue_morpheme_with(
+        bank,
+        params,
+        units,
+        &index,
+        &|at| targets[at],
+        morpheme,
+        freq,
+    )
 }
 
 /// Výsledek kroku jednoho procesu.
@@ -322,6 +393,7 @@ pub fn step(
     freq: &dyn Frequency,
 ) -> Result<StepOut, String> {
     let mut out = StepOut::default();
+    let index = RowIndex::of(targets);
     while out.popped < queue_needed.len() && queue_needed[out.popped] < level {
         let morpheme = queue_morphemes[out.popped] as usize;
         let mut needs = Needs::default();
@@ -348,7 +420,8 @@ pub fn step(
             bank,
             params,
             units,
-            targets,
+            &index,
+            &|at| targets[at],
             Some(skip),
             morpheme,
             form,

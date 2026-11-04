@@ -53,7 +53,6 @@ fn stamp_of(world: &World, group: GroupId) -> Stamp {
         state.version,
         code.forms.version,
         state.vocabulary_log.len(),
-        world.morphemes.len(),
         code.stress_rule.as_rule(),
     )
 }

@@ -24,8 +24,9 @@ use serde::{Deserialize, Serialize};
 use crate::ids::{ProcessId, VariableId, VariantId};
 
 /// S jakým stavem kódu je skupina v indexu dorovnána: verze fonologie, verze tvarů,
-/// délka deníku slovní zásoby, počet morfémů světa a pravidlo přízvuku.
-pub type Stamp = (u64, u64, usize, usize, u8);
+/// délka deníku slovní zásoby a pravidlo přízvuku. Počet morfémů světa v něm není: nový morfém
+/// se do slovní zásoby skupiny dostane zápisem do deníku, který razítko už obsahuje.
+pub type Stamp = (u64, u64, usize, u8);
 
 /// Stav indexu prostředí a opor, který smí číst souběžně víc vláken (za zámkem pro čtení;
 /// dorovnání skupiny bere zámek pro zápis).

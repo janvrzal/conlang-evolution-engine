@@ -1039,11 +1039,19 @@ pub struct SampleIndex {
     members: HashMap<MorphemeId, Vec<MorphemeId>>,
     keys: HashMap<MorphemeId, SampleKey>,
     ordered: BTreeSet<SampleKey>,
+    /// Zvyšuje se při každé změně pořadí (a při stavbě od nuly); vzorek podle něj pozná, že
+    /// se má vybrat znovu, a nepotřebuje klíč z globálních čísel světa.
+    version: u64,
 }
 
 impl SampleIndex {
     pub fn is_built(&self) -> bool {
         self.built
+    }
+
+    /// Verze pořadí: dvě shodné verze téhož pohledu znamenají shodné pořadí.
+    pub fn version(&self) -> u64 {
+        self.version
     }
 
     /// Prvních `limit` slov v pořadí od nejčastějšího: (číslo, četnost).
@@ -1085,6 +1093,7 @@ impl SampleIndex {
                     if let Some(old) = self.keys.remove(&unit) {
                         self.ordered.remove(&old);
                     }
+                    self.version += 1;
                 }
                 if let Some((freq, unit)) = wanted {
                     let key = SampleKey {
@@ -1094,6 +1103,7 @@ impl SampleIndex {
                     };
                     self.ordered.insert(key.clone());
                     self.keys.insert(unit, key);
+                    self.version += 1;
                 }
             }
         }
@@ -1128,7 +1138,10 @@ pub fn vocabulary_changed(world: &mut World, group: GroupId, units: &[MorphemeId
                 index.update(world, group, totals, unit);
             }
         } else {
+            // Nová stavba pokračuje v číslování verzí, aby se nikdy neopakovala.
+            let version = index.version;
             index = SampleIndex::build(world, group, totals);
+            index.version += version + 1;
         }
     }
     let grammar = &mut world.groups.main_code_mut(group).phonology.grammar;

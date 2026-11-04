@@ -372,19 +372,25 @@ impl CodeState {
         for (&index, &flag) in live.iter().zip(reductive) {
             self.procs[index].reductive = flag;
         }
+        // Řádky front se v dávce nemění (mění se jen jejich obsah), index stačí postavit jednou.
+        let index = {
+            let procs = &self.procs;
+            phonology::RowIndex::new(live.len(), |at| {
+                target_of(&procs[live[at]], biases[at], false).row
+            })
+        };
         for (position, &morpheme) in morphemes.iter().enumerate() {
             let (found, needs) = {
-                let targets: Vec<Target> = live
-                    .iter()
-                    .zip(biases)
-                    .map(|(&index, &bias)| target_of(&self.procs[index], bias, false))
-                    .collect();
+                let procs = &self.procs;
+                let live = &live;
+                let at = |at: usize| target_of(&procs[live[at]], biases[at], false);
                 let source = LiveUsage::new(&mut self.usage, &ctx.usage);
-                phonology::queue_morpheme(
+                phonology::queue_morpheme_with(
                     bank,
                     &ctx.params,
                     &ctx.units,
-                    &targets,
+                    &index,
+                    &at,
                     morpheme as usize,
                     &source,
                 )?
