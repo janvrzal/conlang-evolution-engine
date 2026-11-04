@@ -60,6 +60,12 @@ pub struct History {
 impl History {
     /// Zapíše událost; `payload` je JSON objekt s obsahem záznamu.
     pub fn record(&mut self, kind: &str, tick: u32, year: f64, payload: Value) {
+        self.events.push(History::event(kind, tick, year, payload));
+    }
+
+    /// Záznam jako objekt (čistá funkce argumentů), aby se víc záznamů dalo sestavit souběžně
+    /// a zapsat potom po řadě (`record` nebo `events.extend`).
+    pub fn event(kind: &str, tick: u32, year: f64, payload: Value) -> Map<String, Value> {
         let mut event = Map::new();
         event.insert("kind".into(), kind.into());
         event.insert("tick".into(), tick.into());
@@ -69,7 +75,7 @@ impl History {
                 event.insert(key, round_value(value));
             }
         }
-        self.events.push(event);
+        event
     }
 
     pub fn of_kind<'a>(
