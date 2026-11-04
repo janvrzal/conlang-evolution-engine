@@ -6,8 +6,12 @@ výhradně to, co je v repozitáři implementované a kryté testy.
 
 ## Engine v2 (větev `engine-v2`)
 
-Nové simulační jádro `src/cee/v2/` podle `docs/engine-v2/`. Zatím není
-napojené na CLI, API ani UI; spouští se z testů a skriptů.
+> **Python engine v2 byl smazán.** Engine v2 běží celý v Rustu (`rust/cee_engine`, popis
+> `docs/engine-v2/19-engine-v-rustu.md`), server ho volá přes vazbu `rust/cee_py`; v `src/cee/v2` zůstalo jen
+> schéma popisu světa, metaparametry a běh na pozadí. Odkazy níže na `cee.v2.*`, `scripts/v2_*.py` a Python brány
+> popisují stav před smazáním (historie).
+
+Nové simulační jádro podle `docs/engine-v2/`. Napojené je na `/api/v2` a UI.
 
 | Milník | Stav |
 |---|---|
