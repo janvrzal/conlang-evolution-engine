@@ -22,6 +22,7 @@
 use rayon::prelude::*;
 use serde_json::json;
 
+use crate::history::History;
 use crate::ids::{GroupId, VariableId, VariantId};
 use crate::model::pools::PoolBlock;
 use crate::parallel;
@@ -244,8 +245,10 @@ fn write_records(ctx: &mut StepContext<'_>, mut records: Vec<Record>) {
             r.variant.map(|v| registry.variants.name(v.0)).unwrap_or(""),
         )
     };
-    records.sort_by(|a, b| key(a).cmp(&key(b)));
-    for record in &records {
+    records.par_sort_by(|a, b| key(a).cmp(&key(b)));
+    // Záznamy se sestavují souběžně (čistá funkce), do historie jdou po řadě v seřazeném pořadí.
+    let (tick, year) = (ctx.tick, ctx.year);
+    let build = |record: &Record| {
         let variable = registry.variables.name(record.variable.0);
         let variant = record.variant.map(|v| registry.variants.name(v.0));
         let payload = match record.kind {
@@ -262,6 +265,12 @@ fn write_records(ctx: &mut StepContext<'_>, mut records: Vec<Record>) {
             }),
             _ => json!({ "variable": variable, "variant": variant }),
         };
-        ctx.history.record(record.kind, ctx.tick, ctx.year, payload);
-    }
+        History::event(record.kind, tick, year, payload)
+    };
+    let events: Vec<_> = if parallel::worth_splitting(records.len() * 256) {
+        records.par_iter().map(build).collect()
+    } else {
+        records.iter().map(build).collect()
+    };
+    ctx.history.events.extend(events);
 }

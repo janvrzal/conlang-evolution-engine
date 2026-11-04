@@ -183,6 +183,51 @@ impl Bank {
         width: usize,
         want_vowels: bool,
     ) -> RowAssessment {
+        self.ensure_marked(ids, changed);
+        self.assess_row_ready(ids, changed, weights, width, want_vowels)
+    }
+
+    /// Je příznakovost všech tvarů, které hodnocení řádku potřebuje, už spočítaná?
+    pub fn all_marked(&self, ids: &[i64], changed: &[i64]) -> bool {
+        ids.iter().zip(changed).all(|(&id, &after)| {
+            after < 0 || (self.marked_known(id as usize) && self.marked_known(after as usize))
+        })
+    }
+
+    fn marked_known(&self, id: usize) -> bool {
+        self.marked.get(id).is_some_and(|value| !value.is_nan())
+    }
+
+    /// Příznakovost tvaru jen pro čtení: z mezipaměti, jinak spočítaná znovu (stejná hodnota).
+    fn marked_ro(&self, id: usize) -> f64 {
+        match self.marked.get(id) {
+            Some(value) if !value.is_nan() => *value,
+            _ => markedness(self.form(id), &self.vowel, &self.glide),
+        }
+    }
+
+    /// Spočítá příznakovost tvarů, které hodnocení řádku potřebuje (původní a změněné tvary
+    /// slov, kterých se změna týká), aby šel řádek vyhodnotit jen čtením banky
+    /// ([`Bank::assess_row_ready`]), třeba souběžně.
+    pub fn ensure_marked(&mut self, ids: &[i64], changed: &[i64]) {
+        for (&id, &after) in ids.iter().zip(changed) {
+            if after >= 0 {
+                self.marked_of(id as usize);
+                self.marked_of(after as usize);
+            }
+        }
+    }
+
+    /// [`Bank::assess_row`] nad bankou jen pro čtení: příznakovost, která chybí v mezipaměti, se
+    /// spočítá znovu (`ensure_marked` ji uloží). Výsledek je bit po bitu stejný.
+    pub fn assess_row_ready(
+        &self,
+        ids: &[i64],
+        changed: &[i64],
+        weights: &[f64],
+        width: usize,
+        want_vowels: bool,
+    ) -> RowAssessment {
         let length = ids.len();
         let mut mass_terms = vec![0.0_f64; width.max(length)];
         let mut short_terms = vec![0.0_f64; width.max(length)];
@@ -201,7 +246,7 @@ impl Bank {
             if new_length <= 2 && new_length < old_length {
                 short_terms[k] = weight;
             }
-            marked_terms[k] = weight * (self.marked_of(new) - self.marked_of(old));
+            marked_terms[k] = weight * (self.marked_ro(new) - self.marked_ro(old));
         }
         let mut result = RowAssessment::default();
         if any {

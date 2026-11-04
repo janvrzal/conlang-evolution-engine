@@ -7,6 +7,7 @@
 
 use cee_core::candidates::{self, SegTable};
 use cee_core::index::{GroupInput, SoundIndex};
+use rayon::prelude::*;
 
 use crate::changes::sound::scales;
 use crate::ids::GroupId;
@@ -57,6 +58,92 @@ fn stamp_of(world: &World, group: GroupId) -> Stamp {
     )
 }
 
+/// Příznaky slovní zásoby kódu a čísla tvarů morfémů (vstup dorovnání indexu).
+fn group_vectors(world: &World, group: GroupId) -> (Vec<u8>, Vec<i32>) {
+    let code = world.groups.main_code(group);
+    let count = world.morphemes.len();
+    let mut flags = vec![0_u8; count];
+    let mut forms = vec![-1_i32; count];
+    for member in code.phonology.vocabulary.iter() {
+        let number = member.index();
+        if number >= count {
+            continue;
+        }
+        flags[number] = 1;
+        let own = code.forms.form_id(member);
+        forms[number] = if own >= 0 {
+            own
+        } else {
+            world.morphemes.form[number] as i32
+        };
+    }
+    (flags, forms)
+}
+
+/// Dorovná index všech zadaných skupin najednou (před výpočtem měr inovací): vstupy se skládají
+/// souběžně, rozdíly tvarů se zapisují do indexu po skupinách a sady kandidátů pro nové inventáře
+/// se staví souběžně (`SoundIndex::sync`). Dotazy `with_group` pak najdou skupiny dorovnané.
+pub fn sync_groups(world: &World, groups: &[GroupId]) -> Result<(), String> {
+    let stale: Vec<(GroupId, Stamp)> = {
+        let guard = world
+            .sound
+            .runtime
+            .index
+            .read()
+            .map_err(|_| "zámek indexu zvukových změn je poškozený".to_owned())?;
+        groups
+            .iter()
+            .filter_map(|&group| {
+                let stamp = stamp_of(world, group);
+                let synced = guard.synced.get(group.index()).copied().flatten();
+                (guard.index.is_none() || synced != Some(stamp)).then_some((group, stamp))
+            })
+            .collect()
+    };
+    if stale.is_empty() {
+        return Ok(());
+    }
+    let vectors: Vec<(Vec<u8>, Vec<i32>)> = stale
+        .par_iter()
+        .map(|&(group, _)| group_vectors(world, group))
+        .collect();
+    let mut guard = world
+        .sound
+        .runtime
+        .index
+        .write()
+        .map_err(|_| "zámek indexu zvukových změn je poškozený".to_owned())?;
+    let IndexState { index, synced } = &mut *guard;
+    let index = index.get_or_insert_with(|| {
+        let mut index = SoundIndex::new(scales());
+        index.set_table(snapshot().clone());
+        index
+    });
+    let inputs: Vec<GroupInput<'_>> = stale
+        .iter()
+        .zip(&vectors)
+        .map(|(&(group, _), (flags, forms))| GroupInput {
+            token: i64::from(group.0),
+            rule: world.groups.main_code(group).stress_rule.as_rule(),
+            flags,
+            forms,
+        })
+        .collect();
+    let needs = index.sync(&world.bank.bank, &inputs)?;
+    if !needs.is_empty() {
+        return Err(format!(
+            "index zvukových změn si vyžádal údaje, které svět má mít v bance: {needs:?}"
+        ));
+    }
+    for &(group, stamp) in &stale {
+        if synced.len() <= group.index() {
+            synced.resize(group.index() + 1, None);
+        }
+        synced[group.index()] = Some(stamp);
+    }
+    Ok(())
+}
+
 /// Dorovná index na stav kódu skupiny, pokud se změnil, a předá ho funkci `read`
 /// (index a číslo skupiny v něm). Index je za zámkem `RwLock`: dotazy na už dorovnané skupiny
 /// běží souběžně, dorovnání (zápis) se řadí za sebe; výsledek na pořadí nezávisí (opory jsou
@@ -100,22 +187,7 @@ pub fn with_group<R>(
     }
     if synced[at] != Some(stamp) {
         let code = world.groups.main_code(group);
-        let count = world.morphemes.len();
-        let mut flags = vec![0_u8; count];
-        let mut forms = vec![-1_i32; count];
-        for member in code.phonology.vocabulary.iter() {
-            let number = member.index();
-            if number >= count {
-                continue;
-            }
-            flags[number] = 1;
-            let own = code.forms.form_id(member);
-            forms[number] = if own >= 0 {
-                own
-            } else {
-                world.morphemes.form[number] as i32
-            };
-        }
+        let (flags, forms) = group_vectors(world, group);
         let needs = index.sync(
             &world.bank.bank,
             &[GroupInput {

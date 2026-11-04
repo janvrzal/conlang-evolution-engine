@@ -171,20 +171,38 @@ přenos 1269 [bloky 765, zápis 390, hodnocení 107], přestavby 58, komunity 37
 | přenos: míšení, tlaky, výběr a drift, události řádků | **úlohy po kusech řádků** (`transfer::block::jobs`, `transmit_rows`), `par_iter` přes úlohy všech bloků najednou | jedna úloha = `hear` + tlaky + `settle` + události; výsledky se skládají v pořadí bloků a řádků |
 | pomocné tabulky tlaků (vlastníci tvarů, slabost buněk, dominantní konstrukce, úhrny pojmů) | `OnceLock` sdílený úlohami | čisté funkce stavu, takže nezáleží, která úloha je postaví |
 | uvolnění ustálených řádků (`LivePools::release`, hledání jednotných řádků) | `par_iter` přes řádky | |
-| pozorování (příznaky skupin, vzdálenosti) | `std::thread::scope` v jádře (už dřív) | shlukování (`linkage`) zůstává sériové |
+| pozorování (příznaky skupin, vzdálenosti) | `std::thread::scope` v jádře (už dřív) | |
+| pozorování: editační vzdálenosti tvarů téhož kořene (`categories`) | dvouprůchodově: v pořadí výskytu se vypíšou dvojice, které chybí v mezipaměti, `par_iter` je spočte, pak se výstup složí stejným průchodem | čisté funkce tvarů |
+| pozorování: shlukování dialektů a jazyků (`linkage`) | `rayon::join` (dvě nezávislá shlukování nad týmiž rysy) | jedno shlukování je sekvenční (halda sloučení) |
+| dorovnání indexu zvukových změn (`SoundIndex::sync`) | `Change::prepare` dorovná všechny skupiny najednou před výpočtem měr: (1) rozdíl tvarů a inventář po skupinách, (2) **sady kandidátů pro nové inventáře se staví souběžně** (čistá funkce tabulky hlásek a inventáře, zápis do tabulky sad v pořadí skupin), (3) opory kandidátů souběžně po skupinách, uložení v pořadí skupin | opory jsou celá čísla, sada je funkce inventáře, takže pořadí dorovnání výsledek nemění |
+| hodnocení procesů (`assess::refresh`) | dvouprůchodově: vzorky skupin souběžně; známé výsledky procesu čte `Bank::known_results` souběžně; zbytek (`Bank::results`, mění banku) sekvenčně v pořadí (proces, sloupec); `assess_row_ready` + ceny dvojic souběžně nad `&World`; uložení v témže pořadí | nové tvary vznikají jen v sekvenčním průchodu |
+| záznamy po přenosu | řazení `par_sort_by`, sestavení JSON objektů `par_iter` (`History::event`), zápis do historie po řadě | |
 
 Úlohy mají cílovou velikost 4096 buněk (`JOB_CELLS`), uvnitř úlohy je vše na jednom vlákně (dřívější vnořené
 `std::thread::scope` v `hear` a `settle` se pro úlohy nepoužívá, je to jedna fork-join hranice na krok místo
 ~30). Svět s méně než `MIN_PARALLEL_CELLS` (16384) buňkami bloků v kroku se nedělí (grid 4×1 a podobné běží
 jako dřív; práh jde pro test změnit `parallel::set_min_parallel_cells`).
 
-Zůstává sériové, protože zapisuje do sdílené banky tvarů nebo sdíleného indexu, kde na pořadí záleží (čísla
-nových tvarů a prostředí se přidělují v pořadí zápisu): dorovnání indexu zvukových změn (`SoundIndex::sync`),
-hodnocení procesů (`transfer/assess.rs::refresh`: `Bank::results` mění banku), návrh a zápis inovací
-(`propose` s `&mut World`), sledování slovní zásoby (`follow_vocabulary`, `contact::adopt`), aktivace, fonologizace
-a přestavby (`rebuild`), komunity, shlukování při pozorování. Souběh v nich by chtěl bankou sdílenou po
-skupinách (vlastní arény s pozdějším sloučením v kanonickém pořadí) nebo dvouprůchodový návrh (čtení souběžně,
-zápis sekvenčně); to je další krok.
+Zůstává sériové, protože zapisuje do sdílené banky tvarů, registru jmen nebo sdílených sad, kde na pořadí záleží
+(čísla nových tvarů a morfémů se přidělují v pořadí zápisu):
+
+- sledování slovní zásoby (`follow_vocabulary`, `contact::adopt`; ~170 ms valley-50, ~290 ms příklad): každý přechod
+  zakládá morfémy buněk (`morphology::units_of` → `make_unit`: jméno v registru, sloupce morfémů, tvar v bance) a
+  zařazuje slova do front procesů (`queue_units` → `bank.results` s přidělováním čísel a případným doplněním map
+  hlásek). Přechody téže skupiny na sobě závisejí (každý mění verzi kódu a tím neplatí pohled `class_stats`, který
+  další přechod staví znovu), přechody různých skupin sdílejí banku a registr. Dvouprůchodový návrh by tu chtěl
+  „zkušební“ svět nebo banku s přidělováním čísel až při slučování; to je další krok (nejvíc času je v `units_of`,
+  tedy v opakovaném sestavování `class_stats`, které by pomohlo spíš přírůstkové udržování než souběh);
+- aktivace procesů (`phonology::activate`, ~70 ms), fonologizace a morfologie v přestavbách (`rebuild`, ~190 ms),
+  komunity: totéž, zápis do banky skupina po skupině, na jejichž pořadí záleží;
+- návrh a zápis inovací (`propose` s `&mut World`, ~90 ms): zakládá proměnné, procesy a varianty v registru;
+- uvolnění řádků a shlukování samo (`linkage`), dorovnání indexu po skupinách (rozdíl tvarů zapisuje do sdílené
+  tabulky prostředí `Contexts`, jejichž čísla se přidělují v pořadí použití).
+
+Volba návrhu: u všech částí výše jsem zvolil **dvouprůchodový návrh** (čtení souběžně do vlastních výstupů, zápis
+sekvenčně v kanonickém pořadí), ne banku s čísly přidělovanými při slučování: nic v jednovláknovém výsledku se tak
+nemění (stejné otisky jako před úpravou) a souběh nepotřebuje žádnou novou synchronizaci banky. Bank s arénami po
+skupinách by se vyplatila až pro `follow_vocabulary`; stála by změnu číslování tvarů, a tím nové kalibrace.
 
 ### Výsledky (Apple M2, 4 výkonná + 4 úsporná jádra; medián ze 3 běhů, střídavě, s; stroj bez další zátěže kromě samotných měření)
 
@@ -204,6 +222,44 @@ Nad čtyři vlákna výkon neroste (Apple M2 má jen 4 výkonná jádra; 7 a 8 v
 sériových částí (viz výše) roste: u valley-50 při 8 vláknech zbývá z 1702 ms asi 350 ms na míry inovací (z toho
 ~300 ms sériové dorovnání indexu), 240 ms na hodnocení procesů, 370 ms na zápis přenosu, 190 ms na přestavby,
 125 ms na pozorování a 90 ms na zápis inovací; bloky přenosu spadly z 1589 ms na 329 ms.
+
+### Druhé kolo: zbylé sériové části (větev `engine-v2-threads-2`)
+
+Otisky historie jsou stejné jako před úpravou na všech scénářích `cee scenarios` (do roku 1200, village-400 do 300) i na
+příkladu `WorldSpec` při jednom vlákně, a stejné na 1, 2, 3, 4 a 8 vláknech (`tests/threads.rs`); brány milníků
+(`cargo test --release --test gates -- --ignored --test-threads=1`) prošly beze změny. Nové je jen to, že `Change::prepare`
+dorovná indexy před výpočtem měr (výchozí implementace nedělá nic) a `Bank` má čtecí varianty `known_results` a
+`assess_row_ready`.
+
+Čas po fázích při 8 vláknech, před (`engine-v2-dynamika`) a po (ms; `innovation/sync` je nově oddělená část dřívějšího
+`innovation/rates`):
+
+| fáze | valley-50 před | po | příklad před | po | village-400 před | po |
+|---|---|---|---|---|---|---|
+| innovation | 480 | 363 | 208 | 222 | 608 | 633 |
+| – sync + rates | 376 | 149 + 113 | 156 | 80 + 89 | 344 | 199 + 168 |
+| – apply | 90 | 87 | 44 | 45 | 252 | 253 |
+| transmission/assess | 239 | 145 | 106 | 69 | 307 | 110 |
+| transmission/blocks | 351 | 325 | 199 | 200 | 1532 | 1545 |
+| transmission/write | 388 | 372 | 387 | 397 | 465 | 432 |
+| – w/vocab | 169 | 167 | 288 | 283 | 220 | 217 |
+| rebuild | 191 | 187 | 59 | 58 | 86 | 84 |
+| observe | 127 | 101 | 38 | 31 | 449 | 351 |
+| celkem (fáze) | 1782 | 1499 | 1057 | 1038 | 3454 | 3162 |
+
+Wall-clock celého běhu (s; medián ze 3 běhů, střídavě před a po; Apple M2; stroj bez další zátěže):
+
+| scénář | před 1 | 2 | 4 | 8 | po 1 | 2 | 4 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| valley-50 (do 1500) | 2,92 | 2,20 | 1,92 | 1,99 | 2,88 | 2,08 | 1,72 | 1,79 |
+| příklad `WorldSpec` | 1,76 | 1,34 | 1,17 | 1,25 | 1,74 | 1,31 | 1,15 | 1,19 |
+| grid-5x5 (do 1500) | 1,03 | 0,78 | 0,74 | 0,82 | 1,00 | 0,75 | 0,67 | 0,72 |
+| village-400 (do 400) | 10,25 | 6,51 | 5,12 | 4,79 | 10,25 | 6,39 | 5,03 | 4,57 |
+
+Zrychlení proti stavu před touto úpravou při 8 vláknech: valley-50 1,11×, příklad 1,04×, grid-5x5 1,14×,
+village-400 1,05× (jednovláknový běh beze změny, v rámci šumu měření). Zisk je malý, protože podstatnou část
+sériového času drží právě části, které zůstaly sériové (hlavně `follow_vocabulary` a přestavby); `assess::refresh`
+a dorovnání indexu se zrychlily nejvíc (hodnocení 1,6× až 2,8× při 8 vláknech, dorovnání ~1,5×).
 
 ### Počet vláken
 

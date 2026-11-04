@@ -88,6 +88,12 @@ pub fn run(ctx: &mut StepContext<'_>, changes: &[Box<dyn Change>]) -> Result<(),
         .map(|&group| InnovationContext { group, tick, year })
         .collect();
 
+    let t = crate::timing::scope("innovation/sync");
+    // Indexy, které míry čtou, se dorovnají pro všechny skupiny najednou (souběžně).
+    for change in changes {
+        change.prepare(world, &entries)?;
+    }
+    drop(t);
     let t = crate::timing::scope("innovation/rates");
     // Tempo se počítá ze stavu na začátku kroku pro všechny skupiny, než se uplatní první inovace.
     let rate_sums: Vec<Vec<f64>> = contexts

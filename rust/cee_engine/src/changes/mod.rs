@@ -125,6 +125,13 @@ pub trait Change: Send + Sync {
         false
     }
 
+    /// Příprava sdíleného stavu, který míry a místa čtou (stav na začátku kroku): změna smí
+    /// dorovnat své indexy pro všechny skupiny najednou (souběžně) dřív, než se jednotlivé
+    /// skupiny začnou ptát. Výsledek nesmí záviset na tom, zda se volá; výchozí nedělá nic.
+    fn prepare(&self, _world: &World, _groups: &[GroupId]) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Místa změny ve skupině a jejich váhy (stav na začátku kroku).
     fn weighted_sites(&self, world: &World, ctx: &InnovationContext) -> Sites;
 

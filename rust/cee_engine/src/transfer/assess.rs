@@ -18,6 +18,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use cee_core::bank::Outcome;
@@ -28,6 +29,7 @@ use crate::model::repertoire::VariableKind;
 use crate::morphology::{
     apply_form_change, citation_id, class_stats, concept_totals, usage_frequency,
 };
+use crate::parallel;
 use crate::phonology::rows::{resolve_maps, row_of};
 use crate::segments::SegmentTable;
 use crate::transfer::assessed::Assessment;
@@ -229,34 +231,44 @@ fn pair_cost(world: &World, group: GroupId, sample: &Sample, first: usize, secon
     mass
 }
 
-/// Hodnocení procesu ve skupině nad jejím vzorkem (`assess`).
-fn assess_group(
+/// Hodnocení procesu ve skupině nad jejím vzorkem (`assess`), část první: výsledky procesu
+/// pro slova vzorku. Mění banku (nové tvary, mapy hlásek), proto běží sekvenčně v kanonickém
+/// pořadí; vrací tvary slov po změně.
+fn changed_forms(
     world: &mut World,
     sample: &Sample,
     group: GroupId,
     row: usize,
+) -> Result<Vec<i64>, String> {
+    let rule = world.groups.main_code(group).stress_rule.as_rule();
+    loop {
+        match world.bank.bank.results(row, rule, &sample.ids)? {
+            Outcome::Done(changed) => return Ok(changed),
+            Outcome::Needs(segments) => resolve_maps(world, &[(row, segments)])?,
+        }
+    }
+}
+
+/// Hodnocení procesu ve skupině, část druhá: jen čtení (svět i banka), proto může běžet
+/// souběžně pro víc dvojic (skupina, proces).
+fn assess_group(
+    world: &World,
+    sample: &Sample,
+    group: GroupId,
     process: ProcessId,
+    changed: &[i64],
 ) -> Result<Assessment, String> {
     if sample.ids.is_empty() {
         return Ok([0.0; 5]);
     }
-    let rule = world.groups.main_code(group).stress_rule.as_rule();
-    let table = world.table.clone().ok_or("svět nemá tabulku hlásek")?;
-    let shapes = {
-        let def = world
-            .process(process)
-            .ok_or_else(|| format!("proces č. {} nemá definici", process.0))?;
-        shapes_vowels(def, &table)
-    };
-    let changed = loop {
-        match world.bank.bank.results(row, rule, &sample.ids)? {
-            Outcome::Done(changed) => break changed,
-            Outcome::Needs(segments) => resolve_maps(world, &[(row, segments)])?,
-        }
-    };
-    let raw = world.bank.bank.assess_row(
+    let table = world.table.as_ref().ok_or("svět nemá tabulku hlásek")?;
+    let def = world
+        .process(process)
+        .ok_or_else(|| format!("proces č. {} nemá definici", process.0))?;
+    let shapes = shapes_vowels(def, table);
+    let raw = world.bank.bank.assess_row_ready(
         &sample.ids,
-        &changed,
+        changed,
         &sample.weights,
         sample.ids.len(),
         shapes,
@@ -268,15 +280,12 @@ fn assess_group(
     for &(first, second) in &raw.pairs {
         merge += pair_cost(world, group, sample, first as usize, second as usize);
     }
-    let def = world
-        .process(process)
-        .ok_or_else(|| format!("proces č. {} nemá definici", process.0))?;
     Ok([
         raw.mass / sample.total,
         merge / sample.total,
         raw.short / raw.mass,
         raw.marked / raw.mass,
-        dispersion_gain(def, &table, &raw.before, &raw.after),
+        dispersion_gain(def, table, &raw.before, &raw.after),
     ])
 }
 
@@ -366,10 +375,20 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
         return Ok(());
     }
     let tick = inputs.tick;
+    // Dvouprůchodový návrh: (1) sekvenčně v kanonickém pořadí (proces, sloupec) se vyberou dvojice,
+    // které je třeba přepočítat, a spočítají se výsledky procesu (mění banku, přidělují čísla
+    // nových tvarů); (2) souběžně se každá dvojice vyhodnotí jen čtením; (3) sekvenčně se
+    // hodnocení uloží v témže pořadí.
+    struct Item {
+        job: usize,
+        group: GroupId,
+        version: u64,
+        changed: Vec<i64>,
+    }
     let mut samples = std::mem::take(&mut world.transfer.derived.samples);
     let result = (|| -> Result<(), String> {
-        for job in &jobs {
-            let row = row_of(world, job.process)?;
+        let mut wanted: Vec<(usize, GroupId, u64)> = Vec::new();
+        for (at, job) in jobs.iter().enumerate() {
             for &column in &job.columns {
                 let group = inputs.axis[column];
                 let version = world.groups.main_code(group).phonology.version;
@@ -380,24 +399,105 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                     .is_some_and(|s| {
                         s.version == version || tick.saturating_sub(s.tick) < STALE_TICKS
                     });
-                if fresh {
-                    continue;
+                if !fresh {
+                    wanted.push((at, group, version));
                 }
-                if samples.len() <= group.index() {
-                    samples.resize(group.index() + 1, Sample::default());
-                }
-                samples[group.index()].sync(world, group);
-                let value = assess_group(world, &samples[group.index()], group, row, job.process)?;
-                world.transfer.assessments.put(
-                    group,
-                    Stored {
-                        variable: job.variable.0,
-                        version,
-                        tick,
-                        value,
-                    },
-                );
             }
+        }
+        // Vzorky skupin se dorovnají souběžně (každá skupina má vlastní vzorek, svět se jen čte).
+        let top = wanted.iter().map(|w| w.1.index() + 1).max().unwrap_or(0);
+        if samples.len() < top {
+            samples.resize(top, Sample::default());
+        }
+        let mut needed = vec![false; samples.len()];
+        for &(_, group, _) in &wanted {
+            needed[group.index()] = true;
+        }
+        {
+            let shared = &*world;
+            let sync = |(at, sample): (usize, &mut Sample)| {
+                if needed[at] {
+                    sample.sync(shared, GroupId(at as u32));
+                }
+            };
+            if parallel::worth_splitting(wanted.len() * SAMPLE_WORDS) {
+                samples.par_iter_mut().enumerate().for_each(sync);
+            } else {
+                samples.iter_mut().enumerate().for_each(sync);
+            }
+        }
+        let mut rows: Vec<usize> = Vec::with_capacity(jobs.len());
+        for job in &jobs {
+            rows.push(row_of(world, job.process)?);
+        }
+        // Už známé výsledky procesu se přečtou souběžně (jen čtení banky); zbytek sekvenčně v pořadí.
+        let known: Vec<Option<Vec<i64>>> = {
+            let bank = &world.bank.bank;
+            let samples = &samples;
+            let rows = &rows;
+            let find = |&(at, group, _): &(usize, GroupId, u64)| {
+                let ids = &samples[group.index()].ids;
+                if ids.is_empty() {
+                    return Some(Vec::new());
+                }
+                let rule = world.groups.main_code(group).stress_rule.as_rule();
+                bank.known_results(rows[at], rule, ids)
+            };
+            if parallel::worth_splitting(wanted.len() * SAMPLE_WORDS) {
+                wanted.par_iter().map(find).collect()
+            } else {
+                wanted.iter().map(find).collect()
+            }
+        };
+        let mut items: Vec<Item> = Vec::with_capacity(wanted.len());
+        for (&(at, group, version), known) in wanted.iter().zip(known) {
+            let changed = match known {
+                Some(changed) => changed,
+                None => changed_forms(world, &samples[group.index()], group, rows[at])?,
+            };
+            items.push(Item {
+                job: at,
+                group,
+                version,
+                changed,
+            });
+        }
+        let values: Vec<Result<Assessment, String>> = {
+            let shared = &*world;
+            let samples = &samples;
+            let jobs = &jobs;
+            let one = |item: &Item| {
+                assess_group(
+                    shared,
+                    &samples[item.group.index()],
+                    item.group,
+                    jobs[item.job].process,
+                    &item.changed,
+                )
+            };
+            if parallel::worth_splitting(items.len() * SAMPLE_WORDS) {
+                items.par_iter().map(one).collect()
+            } else {
+                items.iter().map(one).collect()
+            }
+        };
+        // Příznakovost tvarů, kterou souběh dopočítával, se uloží (v pořadí položek).
+        for item in &items {
+            let ids = &samples[item.group.index()].ids;
+            if !world.bank.bank.all_marked(ids, &item.changed) {
+                world.bank.bank.ensure_marked(ids, &item.changed);
+            }
+        }
+        for (item, value) in items.iter().zip(values) {
+            world.transfer.assessments.put(
+                item.group,
+                Stored {
+                    variable: jobs[item.job].variable.0,
+                    version: item.version,
+                    tick,
+                    value: value?,
+                },
+            );
         }
         Ok(())
     })();

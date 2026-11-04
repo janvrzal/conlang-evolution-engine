@@ -18,9 +18,9 @@
 use cee_core::candidates::FAMILIES;
 
 use crate::changes::{Change, InnovationContext, NewVariant, Sites, SOUND_PRESSURES};
-use crate::ids::{VariableId, VariantId};
+use crate::ids::{GroupId, VariableId, VariantId};
 use crate::model::repertoire::{Origin, Payload, VariableKind};
-use crate::phonology::index::with_group;
+use crate::phonology::index::{sync_groups, with_group};
 use crate::phonology::register;
 use crate::rng::Stream;
 use crate::world::World;
@@ -60,10 +60,14 @@ impl SoundChange {
 
     /// Má skupina hláskové tvary a neprázdnou slovní zásobu?
     fn live(world: &World, ctx: &InnovationContext) -> bool {
+        SoundChange::live_group(world, ctx.group)
+    }
+
+    fn live_group(world: &World, group: GroupId) -> bool {
         world.table.is_some()
             && !world
                 .groups
-                .main_code(ctx.group)
+                .main_code(group)
                 .phonology
                 .vocabulary
                 .is_empty()
@@ -92,6 +96,15 @@ impl Change for SoundChange {
 
     fn pressures(&self) -> &'static [(u8, f64)] {
         &SOUND_PRESSURES
+    }
+
+    fn prepare(&self, world: &World, groups: &[GroupId]) -> Result<(), String> {
+        let live: Vec<GroupId> = groups
+            .iter()
+            .copied()
+            .filter(|&group| SoundChange::live_group(world, group))
+            .collect();
+        sync_groups(world, &live)
     }
 
     fn weighted_sites(&self, world: &World, ctx: &InnovationContext) -> Sites {

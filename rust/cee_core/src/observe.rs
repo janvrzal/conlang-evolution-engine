@@ -170,6 +170,7 @@ impl Sparse {
 /// nejvýš 1. Cena se počítá při každém dotazu bez paměti: porovnání dvou řádků rysů
 /// je levnější než hledání v husté matici všech dvojic, která by u úplné tabulky
 /// (přes 23 000 hlásek) měla přes 4 GB.
+#[derive(Clone, Copy)]
 pub struct Costs<'a> {
     vectors: &'a [i8],
     width: usize,
@@ -356,19 +357,16 @@ pub fn categories(
         begin = end;
     }
     // Vzdálenosti tvarů téhož (pojem, kořen) se počítají jednou na dvojici; je symetrická.
+    // Dva průchody: nejdřív se v pořadí výskytu vypíšou dvojice tvarů, které je třeba spočítat
+    // (a místa v mezipaměti); editační vzdálenosti (čisté funkce tvarů) se spočtou souběžně;
+    // pak se výstup složí stejným průchodem jako dřív, už jen z hotových hodnot.
     let mut pair_cache: Vec<f64> = Vec::new();
     let mut cache_start = vec![usize::MAX; category_key.len()];
-    let mut scratch = Vec::new();
-    let mut out = Categories {
-        forms: Vec::with_capacity(groups.len()),
-        spread: Vec::with_capacity(groups.len()),
-    };
+    let mut wanted: Vec<(usize, usize, u32, u32)> = Vec::new(); // (místo, zrcadlo, tvar a, tvar b)
+    let mut listed: Vec<Vec<(usize, u32)>> = Vec::with_capacity(groups.len()); // (místo, kategorie)
     for group in 0..groups.len() {
-        let mut form_cols = Vec::new();
-        let mut spread_cols = Vec::new();
-        let mut spread_vals = Vec::new();
+        let mut visited: Vec<(usize, u32)> = Vec::new();
         for &category in &category_of[starts[group]..starts[group + 1]] {
-            form_cols.push(category);
             let (begin, end) = member_range[category as usize];
             if end - begin < 2 {
                 continue;
@@ -394,17 +392,58 @@ pub fn categories(
                     continue;
                 }
                 let slot = base + own * size + position;
-                let mut value = pair_cache[slot];
-                if value.is_nan() {
-                    let a = forms.get(category_key[category as usize].2 as usize);
-                    let b = forms.get(category_key[other as usize].2 as usize);
-                    value = form_distance(costs, a, b, &mut scratch);
-                    pair_cache[slot] = value;
-                    pair_cache[base + position * size + own] = value;
+                if pair_cache[slot].is_nan() {
+                    // Zatím neznámá hodnota: zadá se k výpočtu a místo se označí nulou, aby se
+                    // dvojice nezadala dvakrát (pravá hodnota se doplní po souběžném výpočtu).
+                    let mirror = base + position * size + own;
+                    pair_cache[slot] = 0.0;
+                    pair_cache[mirror] = 0.0;
+                    wanted.push((
+                        slot,
+                        mirror,
+                        category_key[category as usize].2 as u32,
+                        category_key[other as usize].2 as u32,
+                    ));
                 }
-                spread_cols.push(other);
-                spread_vals.push(value);
+                visited.push((slot, other));
             }
+        }
+        listed.push(visited);
+    }
+    let computed: Vec<f64> = {
+        let costs: &Costs<'_> = &*costs;
+        let distance = |&(_, _, first, second): &(usize, usize, u32, u32)| {
+            let mut own = *costs;
+            let mut scratch = Vec::new();
+            form_distance(
+                &mut own,
+                forms.get(first as usize),
+                forms.get(second as usize),
+                &mut scratch,
+            )
+        };
+        if wanted.len() >= 64 {
+            use rayon::prelude::*;
+            wanted.par_iter().map(distance).collect()
+        } else {
+            wanted.iter().map(distance).collect()
+        }
+    };
+    for (&(slot, mirror, _, _), &value) in wanted.iter().zip(&computed) {
+        pair_cache[slot] = value;
+        pair_cache[mirror] = value;
+    }
+    let mut out = Categories {
+        forms: Vec::with_capacity(groups.len()),
+        spread: Vec::with_capacity(groups.len()),
+    };
+    for group in 0..groups.len() {
+        let form_cols: Vec<u32> = category_of[starts[group]..starts[group + 1]].to_vec();
+        let mut spread_cols = Vec::new();
+        let mut spread_vals = Vec::new();
+        for &(slot, other) in &listed[group] {
+            spread_cols.push(other);
+            spread_vals.push(pair_cache[slot]);
         }
         let ones = vec![1.0; form_cols.len()];
         out.forms.push(Sparse::from_entries(form_cols, ones));

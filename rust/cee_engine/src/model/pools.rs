@@ -544,35 +544,39 @@ impl LivePools {
                 let block = &self.blocks[&capacity];
                 (0..block.len())
                     .into_par_iter()
-                    .filter(|&row| {
-                        let mut leader = vec![-1_i64; block.groups];
-                        let mut counts = vec![0_usize; block.groups];
-                        for cell in 0..block.cells.rows[row].len() {
+                    .map_init(
+                        || (vec![-1_i64; block.groups], vec![0_usize; block.groups]),
+                        |(leader, counts), row| {
+                            leader.fill(-1);
+                            counts.fill(0);
                             let r = &block.cells.rows[row];
-                            if r.freq[cell] > 0.0 {
-                                counts[r.group[cell] as usize] += 1;
-                            }
-                        }
-                        for (g, chosen) in leader.iter_mut().enumerate() {
-                            if !block.present[row][g] {
-                                continue;
-                            }
-                            let (mut best, mut best_f) = (0_i64, f64::NEG_INFINITY);
-                            for slot in 0..block.capacity {
-                                let f = block.cells.rows[row].value(g, slot);
-                                if f > best_f {
-                                    best_f = f;
-                                    best = slot as i64;
+                            for cell in 0..r.len() {
+                                if r.freq[cell] > 0.0 {
+                                    counts[r.group[cell] as usize] += 1;
                                 }
                             }
-                            *chosen = best;
-                        }
-                        let first = *leader.iter().max().unwrap_or(&-1);
-                        let single =
-                            (0..block.groups).all(|g| counts[g] <= 1 || !block.present[row][g]);
-                        let same = leader.iter().all(|&l| l == first || l == -1);
-                        single && same
-                    })
+                            for (g, chosen) in leader.iter_mut().enumerate() {
+                                if !block.present[row][g] {
+                                    continue;
+                                }
+                                let (mut best, mut best_f) = (0_i64, f64::NEG_INFINITY);
+                                for slot in 0..block.capacity {
+                                    let f = r.value(g, slot);
+                                    if f > best_f {
+                                        best_f = f;
+                                        best = slot as i64;
+                                    }
+                                }
+                                *chosen = best;
+                            }
+                            let first = *leader.iter().max().unwrap_or(&-1);
+                            let single =
+                                (0..block.groups).all(|g| counts[g] <= 1 || !block.present[row][g]);
+                            let same = leader.iter().all(|&l| l == first || l == -1);
+                            (single && same).then_some(row)
+                        },
+                    )
+                    .flatten()
                     .collect()
             };
             for &row in &uniform {
