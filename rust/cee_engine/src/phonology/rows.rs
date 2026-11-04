@@ -169,7 +169,7 @@ pub fn register(
 }
 
 /// Masky hlásek a parametry procesu pro banku tvarů (`FormBank._register_native`).
-fn proc_of(def: &ProcessDef, table: &SegmentTable) -> Proc {
+pub(crate) fn proc_of(def: &ProcessDef, table: &SegmentTable) -> Proc {
     let size = table.len() + 1;
     let side = |pattern: &Option<Pattern>| match pattern {
         Some(found) => found.mask.clone(),

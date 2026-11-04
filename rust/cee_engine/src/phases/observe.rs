@@ -70,11 +70,7 @@ pub fn run(ctx: &mut StepContext<'_>) -> Result<(), String> {
         year: ctx.year,
         dialects,
         languages: update.languages,
-        group_ids: if distances.is_some() {
-            names
-        } else {
-            Vec::new()
-        },
+        group_ids: names,
         distances,
     });
     for event in update.events {

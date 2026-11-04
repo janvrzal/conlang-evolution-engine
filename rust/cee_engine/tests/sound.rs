@@ -569,7 +569,7 @@ fn cetnost_uziti_je_soucet_pojmu_korene() {
 fn povrchovy_tvar_prohani_zivym_procesem_jen_slova_co_si_zmenu_nezapsala() {
     let mut sim = simulation();
     let (group, _, _) = fixed_process(&mut sim);
-    let before = phonology::surface_lexicon(&mut sim.world, group).unwrap();
+    let before = phonology::surface_lexicon(&sim.world, group).unwrap();
     assert!(!before.is_empty());
     let underlying = |sim: &Simulation, group: GroupId| {
         let code = sim.world.groups.main_code(group);
@@ -598,7 +598,7 @@ fn povrchovy_tvar_prohani_zivym_procesem_jen_slova_co_si_zmenu_nezapsala() {
     for _ in 0..5 {
         sim.step().unwrap();
     }
-    let after = phonology::surface_lexicon(&mut sim.world, group).unwrap();
+    let after = phonology::surface_lexicon(&sim.world, group).unwrap();
     let base = underlying(&sim, group);
     let differing_after = after.iter().zip(&base).filter(|(a, b)| a.1 != b.1).count();
     assert!(differing_after < differing);
