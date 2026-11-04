@@ -1,12 +1,13 @@
 # Rust: jádra a engine v2
 
-Pracovní prostor Cargo se dvěma crates. Přehled architektury a rozhraní fází:
+Pracovní prostor Cargo se třemi crates. Přehled architektury a rozhraní fází:
 [`docs/engine-v2/19-engine-v-rustu.md`](../docs/engine-v2/19-engine-v-rustu.md).
 
 | crate | obsah |
 |---|---|
 | `cee_core` | jádra výpočtů (banka tvarů, procesy, přenos, tlaky, indexy). Vazba na Python (PyO3) je za feature `python` (výchozí zapnutá; maturin ji zapíná sám). Bez ní je to čistá knihovna. |
 | `cee_engine` | engine v2 celý v Rustu (svět, náhoda, fáze kroku, export, kontrolní body) a binárka `cee`. Čistý Rust, na `cee_core` závisí bez feature `python`. |
+| `cee_py` | tenká vazba PyO3 nad `cee_engine` pro server (modul `cee_engine_py`): běh ze `WorldSpec`, krokování bez GIL, zrušení, snímky a export `cee-v2/1`. Mimo `default-members`. |
 
 Kořen `rust/` má `default-members = ["cee_engine"]`, takže `cargo test` a `cargo clippy` v `rust/` stavějí
 čistý Rust bez PyO3.
@@ -55,3 +56,26 @@ PYTHONPATH=src:.:rust/cee_core/target/py python scripts/v2_digests.py --quick
 
 Do sdíleného prostředí (venv) se nic neinstaluje; rozšíření se hledá přes `PYTHONPATH`
 (`rust/cee_core/target/py`, ten je mimo git).
+
+## Vazba enginu pro server (`cee_py`)
+
+Server (`src/cee/v2/runner.py`, endpointy `/api/v2`) spouští běhy v Rustu přes modul `cee_engine_py`. Sestavení a instalace
+jen do adresáře mimo git, **do sdíleného venv se nic neinstaluje**:
+
+```sh
+cd rust/cee_py
+/Users/janvrzal/Documents/CEE/.venv/bin/maturin build --release -i /Users/janvrzal/Documents/CEE/.venv/bin/python
+cd ../..
+mkdir -p rust/cee_py/target/py
+/Users/janvrzal/Documents/CEE/.venv/bin/python -m pip install --no-deps --upgrade --force-reinstall \
+    --target rust/cee_py/target/py rust/target/wheels/cee_engine_py-0.1.0-cp311-cp311-macosx_11_0_arm64.whl
+```
+
+Jak server vazbu najde: `runner.native()` zkusí `import cee_engine_py` a když selže, přidá do `sys.path`
+`rust/cee_py/target/py` (cesta od umístění `runner.py`, tedy od kořene repozitáře). Server tedy nepotřebuje `PYTHONPATH`;
+jiné umístění jde zadat přes `PYTHONPATH`. Bez sestavené vazby `POST /api/v2/runs` skončí chybou `ImportError` s odkazem sem.
+Po změně Rust kódu je potřeba vazbu znovu sestavit a nainstalovat. Test vazby se bez ní přeskočí:
+
+```sh
+PYTHONPATH=src:. python -m pytest tests/test_v2_rust_binding.py tests/test_api_v2.py
+```

@@ -1,0 +1,20 @@
+[package]
+name = "cee_py"
+version = "0.1.0"
+edition = "2021"
+description = "Vazba PyO3 na engine CEE v2 v Rustu pro server (běh, průběh, zrušení, export)"
+publish = false
+license = "MIT"
+
+[lib]
+name = "cee_engine_py"
+crate-type = ["cdylib"]
+
+[features]
+# Při sestavení přes maturin se rozšíření nelinkuje na libpython (viz pyproject.toml).
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+cee_engine = { path = "../cee_engine" }
+pyo3 = "0.30"
+serde_json = "1"
