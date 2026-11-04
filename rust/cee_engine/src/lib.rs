@@ -20,6 +20,7 @@ pub mod model;
 pub mod parallel;
 pub mod parameters;
 pub mod phases;
+pub mod phonology;
 pub mod protoform;
 pub mod rng;
 pub mod scenarios;

@@ -1,16 +1,18 @@
 //! Stav zvukových změn a fonologie (R1b).
 //!
 //! **Svět:** index prostředí a opor zvukových změn (`cee_core::index::SoundIndex`),
-//! sklony slov vůči procesům (`biases`), řádky procesů v bance tvarů a mezipaměť
-//! čísel proměnných a změněných variant procesů. To všechno je **odvozený stav**: při
-//! kopii světa (kontrolní bod, větev) a po obnově z disku se zahodí a postaví se znovu
-//! z toho, co svět nese (tvary kódů, slovní zásoba, registr, procesy). Výsledek je tentýž.
+//! sklony slov vůči procesům (`biases`), řádky procesů v bance tvarů, sloupce morfémů
+//! pro jádro fronty a paměť čísel proměnných a změněných variant procesů. To všechno je
+//! **odvozený stav** (`Runtime`): při kopii světa (kontrolní bod, větev) a po obnově
+//! z disku se zahodí a postaví se znovu z toho, co svět nese (tvary kódů, slovní zásoba,
+//! registr, procesy). Výsledek je tentýž, protože každá položka je čistá funkce stavu
+//! světa (sklon slova je funkce semínka, procesu a lexému).
 //!
 //! **Kód:** fronty fonologizace živých procesů (`cee_core::code_state::CodeState`: fronta
 //! čekajících slov podle potřebného logitu, přepsaná slova, kdy se proces ustálil),
-//! pořadí procesů, deník aktivací a uzavření a dominantní kořeny pro četnosti užití.
-//! Fronty se ukládají do kontrolního bodu; paměť četností užití se po obnově doplní
-//! z deníku dominantních kořenů (`PhonologyState::dominant_log`).
+//! pořadí procesů a deník aktivací a uzavření. Fronty se ukládají do kontrolního bodu;
+//! paměť četností užití (`Usage`) se po obnově doplní z deníku dominantních kořenů
+//! (`PhonologyState::dominant_log`).
 
 use std::fmt;
 use std::sync::Mutex;
@@ -21,6 +23,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::ids::{ProcessId, VariableId, VariantId};
 
+/// S jakým stavem kódu je skupina v indexu dorovnána: verze fonologie, verze tvarů,
+/// délka deníku slovní zásoby, počet morfémů světa a pravidlo přízvuku.
+pub type Stamp = (u64, u64, usize, usize, u8);
+
 /// Stav indexu prostředí a opor, který smí číst souběžně víc vláken (za zámkem).
 ///
 /// Míry inovací se počítají přes skupiny souběžně a každá skupina si index dorovná sama
@@ -29,9 +35,22 @@ use crate::ids::{ProcessId, VariableId, VariantId};
 #[derive(Default)]
 pub struct IndexState {
     pub index: Option<SoundIndex>,
-    /// Pro každou skupinu (podle čísla): s jakým stavem kódu je v indexu dorovnána
-    /// (verze tvarů, délka deníku slovní zásoby, počet slov, pravidlo přízvuku).
-    pub synced: Vec<Option<(u64, usize, usize, u8)>>,
+    /// Pro každou skupinu (podle čísla): s jakým stavem kódu je v indexu dorovnána.
+    pub synced: Vec<Option<Stamp>>,
+}
+
+/// Sloupce morfémů ve tvaru, který čeká jádro fronty (`i32`, −1 = žádný).
+#[derive(Default)]
+pub struct Columns {
+    /// Počet morfémů, počet obsazených čísel a počet paradigmat, pro které platí.
+    pub stamp: (usize, usize, usize),
+    /// Váha buňky paradigmatu tvaru slova, NaN = morfém váhu nemá.
+    pub weight: Vec<f64>,
+    /// Lexém morfému (u kořene a koncovky on sám, u neobsazeného čísla −1).
+    pub lexeme: Vec<i32>,
+    pub default_form: Vec<i32>,
+    pub default_cut: Vec<i32>,
+    pub default_exponent: Vec<i32>,
 }
 
 /// Odvozený stav světa, který se při kopii zahazuje.
@@ -46,6 +65,14 @@ pub struct Runtime {
     pub row_process: Vec<ProcessId>,
     /// Proměnná a změněná varianta podle čísla procesu (`NONE`, dokud se nenajde).
     pub info: Vec<(VariableId, VariantId)>,
+    pub columns: Columns,
+    /// Četnost každého pojmu (podle čísla pojmu) pro četnosti užití.
+    pub concept: Vec<f64>,
+    /// Verze četností pojmů a počet pojmů, pro které platí `concept`.
+    pub concept_stamp: (u64, usize),
+    /// Roste, kdykoli se změní vstup četností užití (pojmy, váhy buněk); kód podle něj
+    /// zahodí paměť četností. Začíná od nuly, kód od nuly „nikdy nesrovnáno“.
+    pub epoch: u64,
 }
 
 impl Clone for Runtime {
@@ -75,8 +102,27 @@ pub struct SoundWorldState {
 }
 
 /// Fronty fonologizace kódu: obal `cee_core::code_state::CodeState`, který se dá uložit.
-#[derive(Clone, Debug, Default)]
-pub struct Queues(pub CodeState);
+///
+/// `cursor` je počet záznamů `PhonologyState::dominant_log`, které už jsou v paměti
+/// četností užití (`state.usage`); `epoch` je verze vstupů četností, pro kterou paměť
+/// platí (`Runtime::epoch`). Kopie nese paměť, ale `epoch` nuluje, takže ji kód při
+/// prvním použití zkontroluje; uložený a obnovený kód začíná prázdnou pamětí.
+#[derive(Debug, Default)]
+pub struct Queues {
+    pub state: CodeState,
+    pub cursor: usize,
+    pub epoch: u64,
+}
+
+impl Clone for Queues {
+    fn clone(&self) -> Self {
+        Queues {
+            state: self.state.clone(),
+            cursor: self.cursor,
+            epoch: 0,
+        }
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 struct ProcRepr {
@@ -99,7 +145,7 @@ impl From<&Queues> for QueuesRepr {
     fn from(queues: &Queues) -> Self {
         QueuesRepr {
             procs: queues
-                .0
+                .state
                 .procs
                 .iter()
                 .map(|proc| ProcRepr {
@@ -135,10 +181,14 @@ impl From<QueuesRepr> for Queues {
                 fixed_since: proc.fixed_since,
             })
             .collect();
-        Queues(CodeState {
-            procs,
-            ..CodeState::default()
-        })
+        Queues {
+            state: CodeState {
+                procs,
+                ..CodeState::default()
+            },
+            cursor: 0,
+            epoch: 0,
+        }
     }
 }
 
@@ -163,11 +213,4 @@ pub struct SoundCodeState {
     pub queues: Queues,
     /// Deník životního cyklu procesů: (proces, `true` = aktivace, `false` = uzavření).
     pub lifecycle_log: Vec<(ProcessId, bool)>,
-    /// Kolik záznamů `PhonologyState::dominant_log` už je v paměti četností užití.
-    /// Po obnově z disku je nula a paměť se doplní z celého deníku.
-    #[serde(skip)]
-    pub usage_cursor: usize,
-    /// Verze četností pojmů, pro kterou platí paměť četností užití.
-    #[serde(skip)]
-    pub concept_version: u64,
 }

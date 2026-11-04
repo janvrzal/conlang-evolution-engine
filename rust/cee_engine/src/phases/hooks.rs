@@ -15,7 +15,10 @@
 //! 4. fáze přestaveb (`rebuild`).
 
 use crate::ids::{GroupId, MorphemeId, VariableId};
+use crate::model::repertoire::VariableKind;
 use crate::phases::StepContext;
+use crate::phonology;
+use crate::vocabulary::units_of;
 
 /// Přechod prahu dominance slova v jedné skupině (`simulation._follow_vocabulary`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,11 +37,58 @@ pub struct Crossing {
 /// zpracuje (nejdřív všechny odchody, potom příchody).
 ///
 /// **Vlastník: R1b.** Pro slovo, které poprvé vstupuje do kódu, volá [`adopt`].
-pub fn follow_vocabulary(
-    _ctx: &mut StepContext<'_>,
-    _crossings: &[Crossing],
-) -> Result<(), String> {
+pub fn follow_vocabulary(ctx: &mut StepContext<'_>, crossings: &[Crossing]) -> Result<(), String> {
+    // Nejdřív odchody, potom příchody: kořen, který jeden pojem opouští a druhý (posunem)
+    // přebírá, tak ze slovní zásoby na okamžik nevypadne.
+    for enter in [false, true] {
+        for crossing in crossings.iter().filter(|c| c.enter == enter) {
+            follow_one(ctx, crossing)?;
+        }
+    }
     Ok(())
+}
+
+fn follow_one(ctx: &mut StepContext<'_>, crossing: &Crossing) -> Result<(), String> {
+    let Crossing {
+        group,
+        variable,
+        morpheme,
+        enter,
+    } = *crossing;
+    if morpheme.is_none() {
+        return Ok(());
+    }
+    let concept = ctx.world.variables.concept[variable.index()];
+    {
+        let state = &mut ctx.world.groups.main_code_mut(group).phonology;
+        state.version += 1;
+        state.lexicon_version += 1;
+        if enter {
+            state.set_dominant(concept, morpheme);
+            if state.adjust_uses(morpheme, 1, 0) > 1 {
+                return Ok(());
+            }
+        } else {
+            if state.dominant_of(concept) == morpheme {
+                state.set_dominant(concept, MorphemeId::NONE);
+            }
+            if state.adjust_uses(morpheme, -1, 1) > 0 {
+                return Ok(());
+            }
+        }
+    }
+    if enter {
+        adopt(ctx, group, morpheme)?;
+    }
+    let units = units_of(ctx.world, morpheme);
+    if enter {
+        phonology::enter_units(ctx.world, group, &units)
+    } else {
+        for unit in units {
+            phonology::leave_vocabulary(ctx.world, group, unit);
+        }
+        Ok(())
+    }
 }
 
 /// Cizí kořen vstupuje do slovní zásoby skupiny: převzetí a adaptace tvaru
@@ -67,17 +117,24 @@ pub fn activate(
 }
 
 /// Je proměnná zvukový proces (ne změna tvaru)? **Vlastník: R1b.**
-pub fn is_sound_process(_ctx: &StepContext<'_>, _variable: VariableId) -> bool {
-    false
+pub fn is_sound_process(ctx: &StepContext<'_>, variable: VariableId) -> bool {
+    ctx.world.variables.kind.get(variable.index()) == Some(&VariableKind::Process)
 }
 
 /// Aktivace zvukového procesu v kódu skupiny. **Vlastník: R1b.**
 pub fn activate_process(
-    _ctx: &mut StepContext<'_>,
-    _group: GroupId,
-    _variable: VariableId,
+    ctx: &mut StepContext<'_>,
+    group: GroupId,
+    variable: VariableId,
 ) -> Result<(), String> {
-    Ok(())
+    let process = ctx.world.variables.process[variable.index()];
+    if process.is_none() {
+        return Err(format!(
+            "procesní proměnná {} nemá číslo procesu",
+            ctx.world.registry.variables.name(variable.0)
+        ));
+    }
+    phonology::activate(ctx.world, group, process)
 }
 
 /// Aktivace analogie nebo jiné změny tvaru v kódu skupiny. **Vlastník: R1c.**
