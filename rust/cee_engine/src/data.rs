@@ -22,3 +22,7 @@ pub const CATALOG_SEMANTICS_JSON: &str =
     include_str!("../../../src/cee/data/v2_catalog_semantics.json");
 pub const STANDING_VARIATION_JSON: &str =
     include_str!("../../../src/cee/data/v2_standing_variation.json");
+
+/// Metaparametry (výchozí hodnoty, druhy, popisy, skupiny, meze); jediný zdroj pro Rust,
+/// Python i UI. Formát popisuje `docs/engine-v2/19-engine-v-rustu.md`, oddíl „Metaparametry“.
+pub const PARAMETERS_JSON: &str = include_str!("../../../src/cee/data/v2_parameters.json");

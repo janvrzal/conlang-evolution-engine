@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from cee.v2 import runner
-from cee.v2.parameters import Parameters
+from cee.v2.parameters import Parameters, parameter_schema
 from cee.v2.spec import (
     EVENT_KINDS,
     FORMAT,
@@ -38,12 +38,13 @@ def _issues(issues: list[Any]) -> list[dict[str, str]]:
 
 @router.get("/schema")
 def schema():
-    """JSON schéma popisu světa, možnosti slovních úrovní a druhy událostí."""
+    """JSON schéma popisu světa, možnosti slovních úrovní, druhy událostí a metaparametry pro UI."""
     defaults = Parameters()
     return {
         "format": FORMAT,
         "json_schema": WorldSpec.model_json_schema(),
         "levels": levels(defaults),
+        "parameters": parameter_schema(),
         "event_kinds": list(EVENT_KINDS),
         "vocabulary": vocabulary_options(),
     }

@@ -43,7 +43,14 @@ def test_schema_a_overeni():
     schema = v2.schema()
     assert schema["format"] == "cee-v2-world/1"
     assert "state" in schema["event_kinds"] and "terrain_access" in schema["levels"]
+    parameters = {item["name"]: item for item in schema["parameters"]["items"]}
+    assert len(parameters) == 66 and schema["parameters"]["groups"]
+    assert parameters["capital_prestige"]["default"] == 2.0 and parameters["capital_prestige"]["kind"] == "number"
+    assert parameters["policy_levels"]["levels"] == ["enforced", "promoted", "tolerant"]
+    assert parameters["channel_domains"]["min"] == 0.0 and parameters["channel_domains"]["description"]
     assert v2.validate(SPEC) == {"ok": True, "issues": []}
+    bad_parameter = v2.validate({**SPEC, "parameters": {"capital_prestige": "x"}})
+    assert bad_parameter["issues"][0]["path"] == "parameters.capital_prestige"
     bad = v2.validate({**SPEC, "events": [{"kind": "collapse", "year": 0, "state": "z"}]})
     assert bad["ok"] is False and bad["issues"][0]["path"] == "events.0"
 

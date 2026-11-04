@@ -276,3 +276,48 @@ def test_change_rates_meni_tempo_jen_vybrane_zmeny():
     assert Parameters().change_rates == {}
     with pytest.raises(ValueError, match="neznámých změn"):
         Simulation(village_grid(2, seed=4, phonology=True, params=Parameters(change_rates={"neexistuje": 2.0})))
+
+
+def test_soubor_parametru_je_zdroj_vychozich_hodnot():
+    from dataclasses import fields
+
+    from cee.v2.parameters import GRAMMAR_FIELDS, KINDS, SPEC_BY_NAME, SPECS
+
+    assert SPECS["format"] == "cee-v2-parameters/1"
+    assert [item["name"] for item in SPECS["parameters"]] == [f.name for f in fields(Parameters)]
+    groups = {group["id"] for group in SPECS["groups"]}
+    params = Parameters()
+    for name, item in SPEC_BY_NAME.items():
+        assert item["kind"] in KINDS and item["group"] in groups and item["description"], name
+        assert repr(getattr(params, name)) == repr(type(getattr(params, name))(item["default"])) or (
+            getattr(params, name) == item["default"]
+        ), name
+    assert SPEC_BY_NAME["channel_domains"]["min"] == 0.0
+    assert set(SPEC_BY_NAME["grammar"]["inner_keys"]) == GRAMMAR_FIELDS
+
+
+def test_kontrola_prepisu_podle_souboru():
+    from cee.v2.parameters import check_override
+
+    assert check_override("capital_prestige", 3) == []
+    assert check_override("nic", 1) == [("parameters.nic", "neznámý parametr")]
+    assert check_override("capital_prestige", "x")[0][0] == "parameters.capital_prestige"
+    assert check_override("capital_prestige", True)[0][1] == "očekáváno číslo"
+    assert check_override("border_levels", {"open": 1.0, "wall": 0.0}) == []
+    assert check_override("border_levels", 3)[0][0] == "parameters.border_levels"
+    assert check_override("policy_levels", {"x": 1})[0][0] == "parameters.policy_levels.x"
+    assert check_override("channel_domains", {"nikde": {}})[0][0] == "parameters.channel_domains.nikde"
+    assert check_override("channel_domains", {"trade": {"nic": 1}})[0][0] == "parameters.channel_domains.trade.nic"
+    assert check_override("channel_domains", {"trade": {"power": -1}})[0][0] == "parameters.channel_domains.trade.power"
+    assert check_override("grammar", {"DEFINITE": {"context": 0.4}}) == []
+    assert check_override("grammar", {"DEFINITE": {"nic": 1}})[0][0] == "parameters.grammar.DEFINITE.nic"
+
+
+def test_schema_parametru_pro_ui():
+    from cee.v2.parameters import parameter_schema
+
+    schema = parameter_schema()
+    items = {item["name"]: item for item in schema["items"]}
+    assert len(items) == 66 and schema["groups"]
+    assert items["border_levels"]["levels"] == ["closed", "normal", "open"]
+    assert "levels" not in items["shift_rate"]
