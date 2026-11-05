@@ -239,7 +239,11 @@ pub fn establishment_fraction(history: &History) -> f64 {
 /// Souvislost jazykové a zeměpisné vzdálenosti (metrika 9, Séguyho zákon).
 #[derive(Clone, Copy, Debug)]
 pub struct DistanceFit {
+    /// Pearsonova korelace jazykové a přímé zeměpisné vzdálenosti.
     pub correlation: f64,
+    /// Pearsonova korelace jazykové vzdálenosti a logaritmu zeměpisné (jak ji uvádějí
+    /// Heeringa a Nerbonne 2001; jazyková vzdálenost roste se vzdáleností sublineárně).
+    pub correlation_log: f64,
     pub r2_linear: f64,
     pub r2_log: f64,
 }
@@ -273,8 +277,14 @@ pub fn isolation_by_distance(distances: &[f64], positions: &[(f64, f64)]) -> Dis
         0.0
     };
     let logs: Vec<f64> = geographic.iter().map(|d| d.ln()).collect();
+    let corr_log = if deviation > 0.0 {
+        correlation(&logs, &linguistic)
+    } else {
+        0.0
+    };
     DistanceFit {
         correlation: corr,
+        correlation_log: corr_log,
         r2_linear: r_squared(&geographic, &linguistic),
         r2_log: r_squared(&logs, &linguistic),
     }

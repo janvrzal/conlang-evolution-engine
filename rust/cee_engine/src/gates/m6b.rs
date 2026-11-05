@@ -68,6 +68,12 @@ pub fn check_metrika_9(simulation: &Simulation) -> Report {
         0.7,
     );
     report.check(
+        "korelace vzdálenosti jazyka a logaritmu polohy",
+        fit.correlation_log,
+        Cmp::Gt,
+        0.5,
+    );
+    report.check(
         "R² logaritmického − R² lineárního proložení",
         fit.r2_log - fit.r2_linear,
         Cmp::Ge,

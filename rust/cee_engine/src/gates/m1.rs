@@ -18,13 +18,30 @@ use crate::model::links::LinkKind;
 use crate::model::repertoire::{Distribution, Origin, Payload, Repertoire, VariableKind};
 use crate::model::territory::{Territory, TerritoryLevel};
 use crate::parameters::Parameters;
-use crate::scenarios::{seed_language, village_grid_default, SeedOptions};
+use crate::scenarios::{
+    default_concepts, seed_language, village_grid_default, village_grid_landscape, Landscape,
+    SeedOptions,
+};
 use crate::world::{Endings, World};
 use crate::{Simulation, SimulationConfig};
 
-/// S1: řada 20 vesnic, 3 000 let, s dráhami pro metriku 7.
+/// S1: řada 20 vesnic v nepravidelné krajině ([`Landscape::rural`]), 3 000 let, s dráhami pro
+/// metriku 7.
 pub fn run_continuum(seed: i64) -> Result<Simulation, String> {
-    let world = village_grid_default(20, 1, seed, &SeedOptions::default())?;
+    let world = village_grid_landscape(
+        20,
+        1,
+        seed,
+        &SeedOptions::default(),
+        &default_concepts(),
+        10.0,
+        500,
+        25.0,
+        0.1,
+        2.0,
+        Parameters::default(),
+        &Landscape::rural(),
+    )?;
     let config = SimulationConfig {
         record_trajectories: true,
         keep_distances: true,
@@ -102,6 +119,12 @@ pub fn check_s1_kontinuum(simulation: &Simulation) -> Report {
                 fit.correlation,
                 Cmp::Gt,
                 0.8,
+            );
+            report.check(
+                "korelace vzdálenosti jazyka a logaritmu polohy",
+                fit.correlation_log,
+                Cmp::Gt,
+                0.5,
             );
         }
         None => report.missing("poloha skupin snímku"),

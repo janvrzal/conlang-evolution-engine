@@ -1,7 +1,8 @@
 # 21. Statistické brány milníků
 
 Stav: **návrh**. Cílová pásma čekají na kontrolu uživatelem; do té doby jsou staré brány
-(`tests/gates/`, `cee gates`) beze změny vedle nových. Engine ani parametry se nezměnily.
+(`tests/gates/`, `cee gates`) beze změny vedle nových. Engine ani parametry se nezměnily; 5. 11. 2026 se změnil
+scénář S1 (nepravidelná krajina) a obě korelace se zeměpisem se měří s logaritmem vzdálenosti, viz níže.
 
 ## Proč
 
@@ -54,17 +55,26 @@ hodnoty všech metrik po semínkách.
 
 ## Výsledek na dnešním enginu (semínka 201 a dál)
 
-**51 z 52 bran prošlo, 1 neprošla** (po ověření zdrojů a opravě pásma `m2::zvukove_zmeny_se_siri`; před ním 50 z 52).
+**52 z 52 bran prošlo** (po ověření zdrojů, opravě pásma `m2::zvukove_zmeny_se_siri` a úpravě S1; před nimi 50 z 52).
 
 | brána | veličina | engine (medián, interval) | cílové pásmo | o kolik |
 |---|---|---|---|---|
-| `m1::s1_kontinuum` | korelace jazykové a zeměpisné vzdálenosti | 0,961 [0,956; 0,966] | [0,6; 0,9] | nad horní mezí o 0,056 |
+| `m1::s1_kontinuum` (do 5. 11.; po úpravě 0,837 [0,814; 0,856] a prošla) | korelace jazykové a zeměpisné vzdálenosti | 0,961 [0,956; 0,966] | [0,6; 0,9] | nad horní mezí o 0,056 |
 | `m2::zvukove_zmeny_se_siri` (původní pásmo; po opravě [2; 20] a prošla) | medián počtu skupin na změnu | 14 [10,5; 18,5] | [2; 10] | interval celý nad pásmem |
 
 Obě jsou informace, ne důvod ladit:
 
-- Korelace 0,96 je u přímé řady 20 vesnic bez šumu ideální. Heeringa a Nerbonne (2001) mají u 27 nizozemských obcí
-  asi 0,9 s logaritmem vzdálenosti, horní mez 0,9 má tedy oporu; brána zůstává neprošlá, pásmo jsem nezvyšoval.
+- Korelace 0,96 vznikla ze dvou věcí. Brána měřila korelaci s přímou vzdáleností, Heeringa a Nerbonne (2001)
+  ale uvádějí asi 0,9 s logaritmem vzdálenosti. A scénář byl dokonalá řada 20 stejných vesnic se stejně
+  silnými vazbami, takže jazyk mohl sledovat jen zeměpis. Samotné sjednocení měření nepomohlo (s logaritmem
+  0,953 [0,927; 0,967] na 30 semínkách). Proto má S1 nepravidelnou krajinu (`Landscape::rural` ve
+  `scenarios.rs`), hodnoty zvolené z věrohodnosti předem, ne laděním na bránu: posun vesnic až o 0,3 rozestupu
+  v obou osách, populace log-normálně kolem 500 (σ = 0,7, oříznutí 100 až 3000), činitel terénu u každé vazby
+  log-rovnoměrně 0,3 až 1,5 a dvě dálková spojení (aspoň 4 rozestupy, poloviční síla typické vazby). Výsledek:
+  s logaritmem 0,837 [0,814; 0,856] (jednotlivá semínka 0,69 až 0,94), s přímou vzdáleností 0,747; brána prošla.
+  Ostatní brány S1 (`m1::metrika_7`, `m1::metrika_8`) prošly i se šumem; `m1::s1_hranice` používá řadu bez
+  šumu jako dřív. Stejně se teď měří i `m6b::metrika_9` (mapa 5 × 5): s logaritmem 0,809 [0,763; 0,830], dříve
+  s přímou vzdáleností 0,778.
 - Horní mez 10 pásma vznikla chybou převodu: metrika počítá události „ustálila se“ na proces, ne skupiny,
   takže přesáhne počet skupin (10). Opraveno na [2; 20] (`návrh`), brána prošla.
 
@@ -88,7 +98,7 @@ a vypuštěná tvrzení jsou v poli `source`, `conversion` a `note` souboru cíl
 | `m1::metrika_7` | pásmo | 30 | medián R² logistické křivky ustálených změn 0.9–1.0 | návrh | neověřitelné | prošla | Vypuštěno „více než 50 drah“ (velikost vzorku, ne vlastnost jazyka). |
 | `m1::metrika_8` | pásmo | 30 | podíl inovací, které se ustálí 0.01–0.2 | návrh | – | prošla |  |
 | `m1::s1_hranice` | možnost | 20 | p_min 0.8 | návrh | – | prošla | Jev: vzdálenost přes hranici je větší než kterýkoli jiný skok mezi sousedy (stará brána chtěla dvojnásobek). |
-| `m1::s1_kontinuum` | pásmo | 30 | korelace jazykové a zeměpisné vzdálenosti 0.6–0.9; největší skok mezi sousedy / medián sousedů 1.0–4.0 | literatura/návrh | opraveno | neprošla | Vypuštěna tvrzení „krajní vesnice dál než sousedé“ a „víc než jedno nářečí“ (platí triviálně). |
+| `m1::s1_kontinuum` | pásmo | 30 | korelace jazykové vzdálenosti a logaritmu zeměpisné 0.6–0.9; největší skok mezi sousedy / medián sousedů 1.0–4.0 | literatura/návrh | opraveno | prošla | Vypuštěna tvrzení „krajní vesnice dál než sousedé“ a „víc než jedno nářečí“ (platí triviálně). |
 | `m1::velka_skupina_drift` | invariant | 3 | každý běh | literatura | ověřeno | prošla | Matematická vlastnost modelu, ne měření jazyka. |
 | `m2::metrika_3` | pásmo | 30 | nejkratší průměrná délka slova (skupiny) 3.5–5.5; nejdelší průměrná délka slova (skupiny) 4.5–7.0 | návrh | neověřitelné | prošla |  |
 | `m2::metrika_4` | pásmo | 30 | nejmenší inventář souhlásek 15.0–25.0; největší inventář souhlásek 19.0–33.0; nejmenší inventář samohlásek 4.0–7.0; největší inventář samohlásek 5.0–10.0 | literatura | opraveno/ověřeno | prošla |  |
@@ -131,7 +141,7 @@ a vypuštěná tvrzení jsou v poli `source`, `conversion` a `note` souboru cíl
 | `m6b::ferguson` | možnost | 20 | p_min 0.8 | literatura | ověřeno | prošla |  |
 | `m6b::jazyk_trhu` | možnost | 20 | p_min 0.8 | návrh | neověřitelné | prošla |  |
 | `m6b::loajalita` | možnost | 20 | p_min 0.8 | návrh | ověřeno | prošla |  |
-| `m6b::metrika_9` | pásmo | 20 | korelace jazykové a zeměpisné vzdálenosti (2D) 0.5–0.9; R² logaritmického − R² lineárního proložení 0.0–0.3 | literatura | opraveno | prošla |  |
+| `m6b::metrika_9` | pásmo | 20 | korelace jazykové vzdálenosti a logaritmu zeměpisné (2D) 0.5–0.9; R² logaritmického − R² lineárního proložení 0.0–0.3 | literatura | opraveno | prošla |  |
 | `m6b::migrace` | možnost | 20 | p_min 0.7 | návrh | ověřeno | prošla |  |
 | `m6b::nabozenstvi` | možnost | 20 | p_min 0.8 | návrh | neověřitelné | prošla |  |
 | `m6b::superstrat` | pásmo | 20 | l0: stavba elity 0.0–0.1; l3: stavba elity 0.0–0.1 | návrh | opraveno | prošla | Vypuštěno „aspoň 2 slova z jazyka dobyvatelů“ (velikost vzorku slovníku). |
@@ -179,7 +189,8 @@ Swadesh a Lees, Heeringa a Nerbonne, Maddieson, Ringe přes recenzi, WOLD přes 
 - **Korelace jazykové a zeměpisné vzdálenosti** (`m1::s1_kontinuum`, `m6b::metrika_9`): Heeringa a Nerbonne jsou
   z roku 2001, ne 2002. Mají 27 nizozemských obcí, zeměpis vysvětluje 65 až 81 % rozptylu a korelace s logaritmem
   vzdálenosti je asi 0,9. Rozsah „0,6 až 0,8“ jsem v Nerbonne (2010) nenašel. Pásma [0,6; 0,9] a [0,5; 0,9]
-  zůstala, horní mez má oporu, dolní je z věrohodnosti.
+  zůstala, horní mez má oporu, dolní je z věrohodnosti. Obě brány od 5. 11. 2026 měří korelaci s logaritmem
+  vzdálenosti jako zdroj (dříve s přímou vzdáleností, což se se zdrojem nedalo srovnat).
 - **Retence slovní zásoby** (`m3b::metrika_1`): Swadesh (1955) 86 % pro seznam 100, Lees (1953) 0,8048 pro seznam
   200; Bergsland a Vogt (1962): islandština asi 4 % ztráty za tisíciletí, tj. retence 0,96. Široké pásmo
   rozšířeno shora z 0,95 na 0,97.

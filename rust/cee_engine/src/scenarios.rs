@@ -21,9 +21,9 @@ use crate::model::repertoire::{Distribution, Origin, Repertoire};
 use crate::model::territory::{Territory, TerritoryLevel};
 use crate::parameters::Parameters;
 use crate::protoform::{protolanguage, ProtoSpec};
-use crate::rng::{stable_int, Part};
+use crate::rng::{stable_int, Part, Stream};
 use crate::vocabulary::Vocabulary;
-use crate::world::{gravity_links, Endings, World};
+use crate::world::{gravity_links, gravity_pairs, Endings, World};
 
 /// Odvozovací přípona protojazyka (jmenná, typ *-ka*).
 pub const DERIVATIONAL_SUFFIX: &str = "ka";
@@ -375,6 +375,140 @@ pub fn village_grid(
         }
     }
     gravity_links(&mut world, Some(spacing * link_reach), None)?;
+    Ok(world)
+}
+
+/// Nepravidelnost krajiny pro mřížku vesnic (S1 se šumem, dok. 21).
+///
+/// Skutečná nářečí sledují zeměpis jen zčásti (Heeringa a Nerbonne 2001: zeměpis vysvětluje
+/// 65 až 81 % rozptylu), zbytek dělá to, že kontakt není totéž co vzdálenost. Hodnoty
+/// [`Landscape::rural`] jsou zvolené z věrohodnosti předem, ne laděním na bránu.
+#[derive(Clone, Debug)]
+pub struct Landscape {
+    /// Posun polohy v každé ose, rovnoměrně v ±`jitter` × rozestup.
+    pub jitter: f64,
+    /// Směrodatná odchylka přirozeného logaritmu populace kolem zadané populace.
+    pub population_sigma: f64,
+    /// Populace se ořízne do tohoto rozsahu.
+    pub population_range: (u32, u32),
+    /// Činitel terénu u každé vazby, log-rovnoměrně v tomto rozsahu (řeka, kopec, cesta).
+    pub terrain: (f64, f64),
+    /// Počet dálkových vazeb (trh, pouť, stěhování).
+    pub long_links: usize,
+    /// Dálková vazba spojí vesnice aspoň tolik rozestupů od sebe.
+    pub long_min: f64,
+    /// Síla dálkové vazby jako násobek mediánu síly ostatních vazeb.
+    pub long_strength: f64,
+}
+
+impl Landscape {
+    /// Venkovská krajina: vesnice posunuté až o třetinu rozestupu, populace zhruba
+    /// 100 až 3000 (polovina mezi 300 a 800), terén mění sílu vazby 0,3× až 1,5×,
+    /// dvě dálková spojení poloviční síly.
+    pub fn rural() -> Landscape {
+        Landscape {
+            jitter: 0.3,
+            population_sigma: 0.7,
+            population_range: (100, 3000),
+            terrain: (0.3, 1.5),
+            long_links: 2,
+            long_min: 4.0,
+            long_strength: 0.5,
+        }
+    }
+}
+
+/// [`village_grid`] s nepravidelnou krajinou; náhoda z vlastního proudu semínka.
+#[allow(clippy::too_many_arguments)]
+pub fn village_grid_landscape(
+    columns: usize,
+    rows: usize,
+    seed: i64,
+    options: &SeedOptions,
+    concepts: &[String],
+    spacing: f64,
+    population: u32,
+    generation_years: f64,
+    openness: f64,
+    link_reach: f64,
+    params: Parameters,
+    landscape: &Landscape,
+) -> Result<World, String> {
+    let mut rng = Stream::new(seed as u64, &[Part::Str("landscape")]);
+    let mut world = World::new(seed, params);
+    world.add_territory("world", None, Territory::new(TerritoryLevel::World))?;
+    let mut valley = Territory::new(TerritoryLevel::Area);
+    valley.position = Some((
+        (columns as f64 - 1.0) * spacing / 2.0,
+        (rows as f64 - 1.0) * spacing / 2.0,
+    ));
+    world.add_territory("valley", Some("world"), valley)?;
+    let base = seed_language(&mut world, seed, concepts, options)?;
+    let language = world.language("proto");
+    let (low, high) = landscape.population_range;
+    for row in 0..rows {
+        for column in 0..columns {
+            let village = format!("v{row:02}-{column:02}");
+            let dx = (2.0 * rng.random() - 1.0) * landscape.jitter * spacing;
+            let dy = (2.0 * rng.random() - 1.0) * landscape.jitter * spacing;
+            let size = (f64::from(population) * rng.normal(0.0, landscape.population_sigma).exp())
+                .round()
+                .clamp(f64::from(low), f64::from(high)) as u32;
+            let mut settlement = Territory::new(TerritoryLevel::Settlement);
+            settlement.position = Some((column as f64 * spacing + dx, row as f64 * spacing + dy));
+            let territory = world.add_territory(&village, Some("valley"), settlement)?;
+            let code = new_code(
+                &mut world,
+                &base,
+                language,
+                options.stress_rule,
+                options.stress_strength,
+            );
+            let mut init = GroupInit::new(&village, territory, size, vec![code]);
+            init.generation_years = generation_years;
+            init.openness = openness;
+            world.add_group(init)?;
+        }
+    }
+    let pairs = gravity_pairs(&world, 1.0, 1_000.0, 10.0, Some(spacing * link_reach), None);
+    let (t_low, t_high) = (landscape.terrain.0.ln(), landscape.terrain.1.ln());
+    let mut strengths = Vec::with_capacity(pairs.len());
+    for &(first, second, strength) in &pairs {
+        let factor = (t_low + rng.random() * (t_high - t_low)).exp();
+        let value = (strength * factor).min(1.0);
+        strengths.push(value);
+        world.connect(first, second, value, LinkKind::Weak)?;
+    }
+    strengths.sort_by(f64::total_cmp);
+    let typical = strengths.get(strengths.len() / 2).copied().unwrap_or(0.0);
+    let ids = world.group_ids();
+    let far: Vec<(GroupId, GroupId)> = ids
+        .iter()
+        .enumerate()
+        .flat_map(|(i, &a)| ids[i + 1..].iter().map(move |&b| (a, b)))
+        .filter(
+            |&(a, b)| match (world.position_of(a), world.position_of(b)) {
+                (Some(p), Some(q)) => (p.0 - q.0).hypot(p.1 - q.1) >= landscape.long_min * spacing,
+                _ => false,
+            },
+        )
+        .collect();
+    let mut chosen: Vec<usize> = Vec::new();
+    while chosen.len() < landscape.long_links.min(far.len()) {
+        let index = rng.integers(far.len() as u64) as usize;
+        if !chosen.contains(&index) {
+            chosen.push(index);
+        }
+    }
+    for index in chosen {
+        let (first, second) = far[index];
+        world.connect(
+            first,
+            second,
+            typical * landscape.long_strength,
+            LinkKind::Weak,
+        )?;
+    }
     Ok(world)
 }
 

@@ -5,14 +5,14 @@
     {
       "id": "m1::s1_kontinuum", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "korelace jazykové a zeměpisné vzdálenosti", "metric": "korelace vzdálenosti jazyka a polohy", "band": [0.6, 0.9], "wide": [0.5, 0.95], "support": "literatura", "verification": "opraveno",
+        {"label": "korelace jazykové vzdálenosti a logaritmu zeměpisné", "metric": "korelace vzdálenosti jazyka a logaritmu polohy", "band": [0.6, 0.9], "wide": [0.5, 0.95], "support": "literatura", "verification": "opraveno",
          "source": "Heeringa a Nerbonne (2001), Dialect areas and dialect continua, Language Variation and Change 13(3), 375–400, doi:10.1017/S0954394501133041 (27 nizozemských obcí): zeměpis vysvětluje 65 až 81 % rozptylu výslovnostní vzdálenosti, korelace s logaritmem zeměpisné vzdálenosti asi 0,9 (údaj citován podle sekundárního přepisu s. 396). Rok byl v dřívější verzi uveden chybně jako 2002. Nerbonne (2010), Phil. Trans. R. Soc. B 365, 3821–3828, doi:10.1098/rstb.2010.0048, uvádí sublineární růst, ale pásmo 0,6 až 0,8 jsem v něm nenašel; sekundární zdroj mu přisuzuje 16 až 38 % vysvětleného rozptylu (neověřeno). Horní mez 0,9 odpovídá Nizozemsku (s logaritmem vzdálenosti, s lineární bude nižší); dolní mez 0,6 je z věrohodnosti",
-         "conversion": "Pearsonova korelace dvojic vesnic ve snímku, přímá hodnota metriky"},
+         "conversion": "Pearsonova korelace jazykové vzdálenosti a přirozeného logaritmu zeměpisné vzdálenosti přes dvojice vesnic ve snímku, stejně jako u Heeringy a Nerbonna; scénář S1 má nepravidelnou krajinu (Landscape::rural: posun poloh, různé populace, terén, dvě dálková spojení), protože dokonalá řada bez šumu dává 0,95"},
         {"label": "největší skok mezi sousedy / medián sousedů", "metric": "největší vzdálenost sousedů / (3 × medián)", "scale": 3.0, "band": [1.0, 4.0], "wide": [1.0, 5.0], "support": "návrh",
          "source": "literatura číslo nedává; kontinuum bez ostrých hranic (Chambers a Trudgill 1998, kap. 7) znamená, že žádný skok není řádově větší než typický",
          "conversion": "metrika × 3 = poměr největší vzdálenosti sousedů k mediánu sousedů"}
       ],
-      "note": "Vypuštěna tvrzení „krajní vesnice dál než sousedé“ a „víc než jedno nářečí“ (platí triviálně)."
+      "note": "Vypuštěna tvrzení „krajní vesnice dál než sousedé“ a „víc než jedno nářečí“ (platí triviálně). Do 5. 11. 2026 brána měřila korelaci s přímou vzdáleností v řadě bez šumu (0,961, neprošla); literatura uvádí korelaci s logaritmem vzdálenosti."
     },
     {
       "id": "m1::s1_hranice", "kind": "možnost", "n": 20, "p_min": 0.8,
@@ -347,9 +347,9 @@
     {
       "id": "m6b::metrika_9", "kind": "pásmo", "n": 20,
       "measures": [
-        {"label": "korelace jazykové a zeměpisné vzdálenosti (2D)", "metric": "korelace vzdálenosti jazyka a polohy", "band": [0.5, 0.9], "wide": [0.5, 0.95], "support": "literatura", "verification": "opraveno",
+        {"label": "korelace jazykové vzdálenosti a logaritmu zeměpisné (2D)", "metric": "korelace vzdálenosti jazyka a logaritmu polohy", "band": [0.5, 0.9], "wide": [0.5, 0.95], "support": "literatura", "verification": "opraveno",
          "source": "Heeringa a Nerbonne (2001), Dialect areas and dialect continua, Language Variation and Change 13(3), 375–400, doi:10.1017/S0954394501133041 (27 nizozemských obcí): zeměpis vysvětluje 65 až 81 % rozptylu výslovnostní vzdálenosti, korelace s logaritmem zeměpisné vzdálenosti asi 0,9 (údaj citován podle sekundárního přepisu s. 396). Rok byl v dřívější verzi uveden chybně jako 2002. Nerbonne (2010), Phil. Trans. R. Soc. B 365, 3821–3828, doi:10.1098/rstb.2010.0048, uvádí sublineární růst, ale pásmo 0,6 až 0,8 jsem v něm nenašel; sekundární zdroj mu přisuzuje 16 až 38 % vysvětleného rozptylu (neověřeno). Séguyův původní článek (1971, Revue de linguistique romane 35) jsem v databázích nenašel a cituji ho podle Nerbonne (2010). Pásmo 0,5 až 0,9 je z věrohodnosti uvnitř tohoto rozsahu",
-         "conversion": "Pearsonova korelace dvojic skupin mapy 5 × 5 po 2 500 letech"},
+         "conversion": "Pearsonova korelace jazykové vzdálenosti a přirozeného logaritmu zeměpisné vzdálenosti přes dvojice skupin mapy 5 × 5 po 2 500 letech (jako Heeringa a Nerbonne; do 5. 11. 2026 s přímou vzdáleností)"},
         {"label": "R² logaritmického − R² lineárního proložení", "metric": "R² logaritmického − R² lineárního proložení", "band": [0.0, 0.3], "wide": [0.0, 0.5], "support": "literatura", "verification": "opraveno",
          "source": "Nerbonne (2010), Measuring the diffusion of linguistic change, Phil. Trans. R. Soc. B 365, 3821–3828, doi:10.1098/rstb.2010.0048: růst agregované jazykové vzdálenosti se zeměpisnou je podlineární (Séguyho křivka; Séguy 1971 podle citace), v šesti oblastech (podle sekundárních zdrojů bantuské jazyky v Gabonu, bulharština, němčina, americká angličtina, nizozemština, norština; gaskoňštinu jsem nepotvrdil). Heeringa a Nerbonne (2001), doi:10.1017/S0954394501133041: logaritmus vzdálenosti předpovídá vzdálenost lépe. Velikost rozdílu R² (0 až 0,3) literatura nedává, pásmo je z věrohodnosti",
          "conversion": "rozdíl R² proložení vzdálenosti logaritmem a lineární funkcí zeměpisné vzdálenosti"}
