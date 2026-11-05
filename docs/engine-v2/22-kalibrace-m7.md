@@ -626,3 +626,31 @@ má jednu snadnost (0,15) pro všechny souhlásky.
 
 Gramatika (člen, futurum, slovosled) se v Romanii nepohne ani při trojnásobném tempu
 gramatikalizace; nejspíš tentýž důvod (ředění v síti obcí a impuls), ověří se po rozhodnutí výše.
+
+### M7.3c: impuls hlavní brzdou není (oprava rozboru M7.3b)
+
+Uživatel zvolil zmenšit impuls. Impuls je váha tlaku `actuation` (rozptyl 0,25 × N(0, 1)), takže jde
+zmenšit přes `pressure_weights` bez změny kódu. Na Romanii **nic nezměnil**, ani úplně vypnutý
+(váha 0,5, 0,25, 0; i s funkční zátěží 1): `-m` zůstane ve všech větvích. Rozbor M7.3b impuls
+přecenil; v obci s fitness +0,53 nerostl podíl kvůli ředění a driftu, ne kvůli impulsu.
+
+Brzdy jsou tři a působí **společně**:
+
+| varianta | podíl tvarů předmětu s `-m` v roce 1900 (medián: Itálie, Galie, Hispánie, Dácie) |
+|---|---|
+| výchozí | 1,00 / 1,00 / 1,00 / 1,00 |
+| otevřenost 0,1, funkční zátěž 0, srozumitelnost 0,3, impuls 0,25 | 1,00 / 1,00 / 1,00 / 1,00 (jednotlivá semínka až 0,03) |
+| totéž a ztráta kody ×10 | 1,00 / **0,16** / **0,20** / **0,16** |
+
+1. **Funkční zátěž** (−0,42) odmítne skoro každý návrh.
+2. **Ředění v síti obcí** (otevřenost 0,5): místní inovace dostane jen polovinu vstupu od svých.
+3. **Málo návrhů**: míra místa zvukové změny je `rozpočet · min(1, opora / 8) / počet míst rodiny`,
+   takže prostředí, které má každý akuzativ, se nenavrhuje častěji než prostředí v osmi slovech.
+   Teprve desetkrát častější návrhy ztráty kody dají `-m` šanci; i tak zmizí až po roce 1200, ne do
+   roku 400, a gramatika (pád, člen, futurum, slovosled) se nepohne.
+
+Každá z pák mění dynamiku celého modelu (otevřenost je kalibrovaná na nářeční kontinuum,
+dok. 14; tempo zvukových změn a funkční zátěž ovlivní brány M2 a typologii M7.2), proto se nic
+nezapsalo. Návrh: (a) míra místa úměrná opoře bez stropu 8 (častější prostředí, častější změna,
+Bybee 2001), (b) funkční zátěž kalibrovat podle Romanie, (c) otevřenost ponechat a ověřit, zda
+(a) a (b) stačí.
