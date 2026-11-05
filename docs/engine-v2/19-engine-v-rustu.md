@@ -984,13 +984,42 @@ v `cee gates --seeds 101..120`. Odlišné:
 
 Všech 62 testů bran (`cargo test --release --test gates -- --ignored --test-threads=1`) prošlo.
 
+### Slabé brány: exaptace, substrát S3, Jespersen (větev `engine-v2-weak-gates`)
+
+Rozdíl proti Pythonu **není chyba přepisu**. Reference „Python 15/20, 11/20, 8/20“ je audit z 29. 10. 2026 (`09-zpevneni-bran.md`,
+commity `35854f1`, `02493e7`); kalibrace a mechanismy, které Python dostal po něm, tam nejsou. Python se nespouštěl; Rust se
+vrací k hodnotám auditu, když se po auditu přidané věci vrátí (parametry `cee gates` / `Parameters` na semínkách 101..120).
+
+| brána | Rust dnes | Rust s hodnotami z doby auditu | Python (audit 29. 10.) | co se po auditu změnilo |
+|---|---:|---:|---:|---|
+| `m4b::exaptace` | 7/20 | **15/20** (`emergence_need_scale` 1,0, `context` členu 0,22) | 15/20 | M7a (31. 10., `9c1cb95`): `emergence_need_scale` 1,0 → 0,6 a `context` DEFINITE 0,22 → 0,16 |
+| `m5::s3_substrat` | 4/20 | **14/20** (`standing_variation` 0, `lexical_appeal_sd` 0) | 11/20 | stálá lexikální variabilita (1. 11., `0b64a42`, `1aa30bb`), náhodná přitažlivost inovací (3. 11., `a76611f`) |
+| `m4::jespersen` | 4/20 (80 semínek: 15/80) | | 8/20 | žádná změna syntaxe od auditu; rozdíl je v mezích výběru (Rust 15/80 = 19 %, Wilson [0,11; 0,29]; Python 8/20, [0,22; 0,61]) |
+
+Engine ani parametry se na této větvi nezměnily, proto je audit `cee gates --seeds 101..120` před i po stejný (všech 52 bran shodně s tabulkou výše: exaptace 7, S3 4, Jespersen 4, migrace 12, tabu 9, clen_vznikne 4, velký cyklus 17 z 20), `cee behavior` se nemění a všech 62 testů bran prošlo.
+
+**Exaptace.** Systém je uzavřený (konstrukce DEFINITE, OBJ, ORDER; stálá variabilita lexikonu na výsledek nemá vliv: stejná čísla
+s `standing_variation` 0 i 1). Kód je přepis beze změny: `applies`/`next` exaptace, `donors`, `compensation`, `residual_exponent`,
+`strength` i skóre tlaků jsou stejné (skóre `Expressivity` pro člen: nula 0,024, opis 0,15 − 0,15 `Economy`, exaptace 0,15; po
+M7a je čistá výhoda exaptace nad nulou asi 0,126 a `Conformity` ji u menšinové varianty z větší části vyruší, takže o úspěchu
+rozhoduje `Actuation`, ±0,25, a drift). Člen vznikl exaptací v Rustu v 7 z 20 běhů (v 23 ze 60 dalších semínek 121..180, tedy asi
+37 %); M7a to chtěla: člen má vznikat jen v části jazyků (audit 6/30, doc. 12), `clen_vznikne` dává 4/20. Hodnoty z doby auditu
+Rust reprodukuje přesně na 15/20, takže chování enginu před M7a odpovídá. Konstanty se neměnily: `emergence_need_scale` 0,6 je
+přijatá kalibrace M7a a její změna by vrátila člen do většiny jazyků.
+
+**Substrát S3.** Selhává „slovní stopa“ (podíl slov jazyka x ve skupinách x>y, práh < 0,05; Rust 0,055 v průměru, 0,037 bez stálé
+variability, 0,021 bez variability a bez náhodné přitažlivosti) a „podíl slov jazyka x“ (< 0,08); stavba a zvukové změny sedí.
+Stálá lexikální variabilita a náhodná přitažlivost přibyly po auditu (menšinová slova a pozvolná výměna slov nechávají slova
+jazyka x déle žít). Bez nich Rust dává 14/20 (Python 11/20), s `standing_variation` 0 jen 8/20, s `lexical_appeal_sd` 0 8/20.
+Konstanty se neměnily: obě patří ke kalibraci retence a nářečí (doc. 17); jejich vypnutí by změnilo ostatní brány a `cee behavior`, a to jsme pro úsudek o realismu nezkoušeli.
+
+**Jespersen.** Syntaktický kód `NEG` se od auditu nezměnil (M7a řeší jen nevyjádřené funkce a `context`; `NEG` jich nemá); porovnání kódu `NegationReinforcement`, `Reduction`, `Renewal` a `strength` s Pythonem nenašlo rozdíl.
+Vypnutí lexikálních novinek míru nezvedne (1/20 až 4/20). Rust na 80 semínkách (101..180) 15/80; interval se s Pythonovým
+(8/20) překrývá. Brána je závod mezi ustálením `embraced` (≥ 0,999 v nějaké skupině) a vznikem `post` od podílu 0,5
+(poznámka do M7 v testu). Příčina nenalezena, engine ani parametry se neměnily.
+
 ### Co zbývá
 
-- **Exaptace, substrát S3 a Jespersen** mají v Rustu znatelně nižší míru průchodu než v Pythonu, i když souhrnné metriky
-  výše sedí a kód `strength`, `residual_exponent`, `compensation` je přepis bez zjevné odchylky. Příčina nenalezena; podezření:
-  jiný proud náhody u stálé variability (`variation.rs` místo numpy) mění startovní stav těchto malých světů o šesti vesnicích
-  a dolní okraj brány (4 skupiny z 6) je citlivý, nebo odchylka v tlaku na konstrukce. Pro dohledání je potřeba referenční
-  běh Pythonu na `exaptace` (události `exapted` po skupinách) a `grammaticalized`, což tato kalibrace (jediný běh) neobsahovala.
 - Referenční skript Pythonu počítá různé varianty, ne události `innovation`; počty událostí z Pythonu se tedy nedají srovnat.
 - `village_grid` s otevřeností 0,5 (nebo kalibrace kontinua na `village_grid`) by vyžadovala nový audit bran M1 a nová semínka;
   neděláno (prahy a semínka se nemění).
