@@ -303,7 +303,7 @@ fn proto_language(spec: &LanguageSpec, table: &SegmentTable) -> Result<ProtoLang
                 table
                     .parse(form)
                     .map_err(|e| format!("languages.{}.endings.{key}: {e}", spec.id))?;
-                if !(*weight > 0.0) {
+                if !weight.is_finite() || *weight <= 0.0 {
                     return Err(format!(
                         "languages.{}.endings.{key}: váha musí být kladná",
                         spec.id
