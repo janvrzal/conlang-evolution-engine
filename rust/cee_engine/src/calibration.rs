@@ -489,7 +489,70 @@ fn typology(seed: i64) -> Result<Report, String> {
         .map(|s| s.languages.clone())
         .ok_or("chybí snímek po běhu")?;
     record_typology(&simulation, &end, "konec", &mut report);
+    record_erosion(&simulation, &mut report);
     Ok(report)
+}
+
+/// Rodiny zvukových změn konce slova, které mohou oslabit koncovku.
+const FINAL_FAMILIES: [&str; 2] = ["coda_loss", "apocope"];
+/// Funkce, jejichž syntetická koncovka může zeslábnout.
+const ERODIBLE: [&str; 5] = ["PL", "PAST", "OBJ", "FUTURE", "DEFINITE"];
+
+/// Diagnostika eroze koncovek (M7.2): kolik změn konce slova se navrhlo, ustálilo
+/// a zfonologizovalo, a průměrná slabost syntetických koncovek po běhu.
+fn record_erosion(simulation: &Simulation, report: &mut Report) {
+    let history = &simulation.history;
+    let mut family_of: BTreeMap<String, String> = BTreeMap::new();
+    for event in history.of_kind("innovation") {
+        let change = event.get("change").and_then(Value::as_str).unwrap_or("");
+        if FINAL_FAMILIES.contains(&change) {
+            *report_count(report, &format!("eroze návrhy {change}")) += 1.0;
+            if let Some(variant) = event.get("variant").and_then(Value::as_str) {
+                family_of.insert(variant.to_owned(), change.to_owned());
+            }
+        }
+    }
+    for event in history.of_kind("established") {
+        let variant = event.get("variant").and_then(Value::as_str).unwrap_or("");
+        if let Some(family) = family_of.get(variant) {
+            *report_count(report, &format!("eroze ustálené {family}")) += 1.0;
+        }
+    }
+    for event in history.of_kind("phonologized") {
+        let variable = event.get("variable").and_then(Value::as_str).unwrap_or("");
+        for family in FINAL_FAMILIES {
+            if variable.starts_with(&format!("process:{family}|")) {
+                *report_count(report, &format!("eroze zfonologizované {family}")) += 1.0;
+            }
+        }
+    }
+    let world = &simulation.world;
+    for function in ERODIBLE {
+        let values: Vec<f64> = world
+            .group_ids()
+            .into_iter()
+            .filter(|&g| {
+                syntax::dominant(world, g, function).is_some_and(|c| c.kind == "synthetic")
+            })
+            .map(|g| syntax::weakness(world, g, function))
+            .collect();
+        if !values.is_empty() {
+            info(report, &format!("eroze slabost {function}"), mean(&values));
+        }
+    }
+}
+
+/// Počítadlo v reportu (metrika se založí s nulou).
+fn report_count<'a>(report: &'a mut Report, name: &str) -> &'a mut f64 {
+    if !report.metrics.iter().any(|m| m.name == name) {
+        info(report, name, 0.0);
+    }
+    let metric = report
+        .metrics
+        .iter_mut()
+        .find(|m| m.name == name)
+        .expect("metrika");
+    &mut metric.value
 }
 
 fn lexicon(seed: i64) -> Result<Report, String> {

@@ -230,3 +230,49 @@ slabých vazeb** na přijetí nepřirozených změn a na jejich zjednodušení. 
 
 Další krok je tedy práce na modelu (M7.2), ne ladění: nejdřív eroze koncovek, protože na ní stojí
 tři ze čtyř nesplněných cílů.
+
+## M7.2a: diagnostika eroze koncovek
+
+Typologický běh dostal diagnostiku (`eroze …` v `-o values.jsonl`): kolik změn konce slova
+(`coda_loss`, `apocope`) se navrhlo, ustálilo a zfonologizovalo, a průměrná slabost syntetických
+koncovek po 5 000 letech (podíl tvarů buňky splynulých s citačním tvarem). Varianty jsou
+v `docs/engine-v2/kalibrace/m72-diagnostika.json`.
+
+**Eroze nastává, ale koncovky skoro nezeslábnou.** Ve výchozím stavu se za 5 000 let ve 40 jazycích
+ustálilo 665 ztrát kody a 13 apokop (990 a 68 zfonologizovaných slov), slabost plurálu je přesto
+0,05, předmětu 0,005 a minulého času 0. Proč, ukázaly tvary protojazyka (semínko 3):
+
+| slovo | citace | plurál | předmět (start → 1 000 let) |
+|---|---|---|---|
+| ‚bit‘ | bit | bit-i | bit-ne |
+| ‚su‘ | su | su-i | su-ne → su-m |
+| ‚kasepe‘ | kasepe | kasepe-i | kasepe-m |
+| ‚la‘ | la | la-i | la-ne → la-m |
+
+1. **Koncovka plurálu `-i` stojí většinou za samohláskou.** Apokopa maže samohlásku jen za
+   souhláskou (`/C_#`) a ztráta kody jen souhlásku, takže na `-i` za samohláskou nedosáhne žádná
+   změna. Reálné jazyky takový hiát řeší elizí jedné ze samohlásek (Casali 1997: nejčastěji první);
+   rodina pro elizi v hiátu v katalogu chybí.
+2. **Srozumitelnost brzdí změny konce slova nejvíc.** Se sníženou váhou `clarity` (0,3) se ustálí
+   4× víc ztrát kody a 25× víc apokop; s vypnutou funkční zátěží slabost předmětu stoupne
+   z 0,005 na 0,07, s obojím na 0,22 (plurál 0,11).
+3. **Ani zeslabená koncovka kategorii nezruší.** I ve variantě se slabostí předmětu 0,22 nezanikla
+   v žádném jazyce žádná kategorie. Zánik navrhuje `CategoryLoss` úměrně slabosti, ale výběr ho
+   odmítne, protože nevyjádřená funkce (`zero`) platí plnou cenu expresivity; analogie mezitím
+   zeslabené tvary opravuje rozšířením znějící koncovky (`-ne` → `-m` výše).
+
+| varianta | ustálené ztráty kody | ustálené apokopy | slabost PL | slabost OBJ | zániky kategorií |
+|---|---|---|---|---|---|
+| výchozí | 665 | 13 | 0,052 | 0,005 | 0 |
+| funkční zátěž 0 | 774 | 13 | 0,077 | 0,069 | 0 |
+| funkční zátěž 1 | 732 | 25 | 0,065 | 0,020 | 0 |
+| srozumitelnost 0,3 | 2 702 | 324 | 0,084 | 0,035 | 0 |
+| funkční zátěž 0 a srozumitelnost 0,3 | 3 526 | 440 | 0,109 | 0,222 | 0 |
+| tempo změn konce ×5 | 2 072 | 279 | 0,056 | 0,018 | 0 |
+
+**Člen (37A) je zvláštní případ.** Hromadí se ne kvůli chybějící erozi, ale protože vzniká
+rychle (všech 21 jazyků bez členu ho získalo) a zaniká jen tak, že se volné ukazovací zájmeno
+vypustí, což výběr odmítá. Ve skutečnosti se člen „ztrácí“ hlavně tím, že se dál
+gramatikalizuje na pouhý jmenný ukazatel bez určitosti (Greenberg 1978, stadium III), a WALS ho
+pak za člen nepočítá. Stacionarita 37A potřebuje vyvážit tempo vzniku a ztráty (Maslova 2000:
+stacionární rozložení = rovnováha přechodů), ne jen erozi.

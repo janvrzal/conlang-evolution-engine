@@ -1,0 +1,7 @@
+{
+  "fz_0": {"functional_load_scale": 0.0},
+  "fz_1": {"functional_load_scale": 1.0},
+  "jasnost_0.3": {"pressure_weights": {"clarity": 0.3}},
+  "fz_0_jasnost_0.3": {"functional_load_scale": 0.0, "pressure_weights": {"clarity": 0.3}},
+  "konec_x5": {"change_rates": {"apocope": 5.0, "coda_loss": 5.0}}
+}
