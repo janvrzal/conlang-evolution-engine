@@ -423,10 +423,11 @@ cee run <spec.json> -o export.json [--threads N] [--phase-times]
 cee scenario <jméno> --until <rok> [-o export.json] [--checkpoint stav.bin] [--threads N] [--phase-times]
 cee export-tick0 <scénář|spec.json> [-o tick0.json]
 cee scenarios
-cee gates [--seeds 101..120] [--only m4b,m5::s3_substrat] [--metrics] [--list] [-o audit.jsonl]
+cee gates [--seeds 201] [--only m4b,m5::s3_substrat] [--list] [-o values.jsonl]
 ```
 
-`cee gates` je audit bran na semínkách (viz [R2b](#r2b-brány-milníků-v-rustu)).
+`cee gates` vyhodnotí statistické brány proti zamčeným cílovým pásmům (dokument 21); když některá
+neprojde, skončí chybou.
 
 Porovnání ticku 0 s Pythonem (`scripts/v2_compare_tick0.py`) a vektory z Pythonu pro testy
 (`scripts/export_v2_rust_vectors.py`) zmizely se smazáním Pythonu; uložené vektory zůstaly v
@@ -759,6 +760,12 @@ Hotovo: tlaky nad hodnocením, švy mezi oblastmi, plán tlaků ze změn, `surfa
 Hotovo: všech 10 souborů bran M1 až M6c je převedených (52 stochastických bran auditu a deterministické
 zkoušky), nad nimi nástroj `cee gates` pro audit míry průchodu na semínkách. Python se nespouštěl.
 
+**Od 5. 11. 2026 platí statistické brány** ([dokument 21](21-statisticke-brany.md)): cílová pásma
+v `src/cee/data/v2_gate_targets.json` jsou zamčená, `cee gates` i testy `tests/gates/` vyhodnocují
+všech 52 bran na N semínkách proti nim. Starý audit (`src/gates/audit.rs`, `--metrics`, `--report`)
+a jednorázové testy s prahy z Pythonu zmizely. Tabulka níže popisuje stav převodu; řádky „audit“
+a „testy“ jsou historické.
+
 ### Návrh
 
 | část | soubor | obsah |
@@ -774,11 +781,11 @@ Brány jsou v knihovně (ne v testech), aby je mohl spouštět i `cee gates`; te
 Všechny testy bran jsou `#[ignore]` (jsou stochastické a dlouhé), `cargo test --release` je tedy nespouští:
 
 ```
-cargo test --release --test gates -- --ignored --test-threads=1            # všechny brány
-cargo test --release --test gates -- --ignored --test-threads=1 m3b::      # jeden milník
-cargo run --release --bin cee -- gates --seeds 101..120 -o audit.jsonl     # audit jako v dokumentu 09
-cargo run --release --bin cee -- gates --seeds 1 --only m5 --metrics       # všechny metriky jednoho semínka
-cargo run --release --bin cee -- gates --list                              # registr 52 bran
+cargo test --release --test gates -- --ignored --test-threads=1            # všechny brány (asi 10 minut)
+cargo test --release --test gates -- --ignored m3b::                       # jeden milník
+cargo run --release --bin cee -- gates -o values.jsonl                     # všechny brány, hodnoty po semínkách
+cargo run --release --bin cee -- gates --only m5                           # jeden milník
+cargo run --release --bin cee -- gates --list                              # druh, N a p_min 52 bran
 ```
 
 `--only` bere milník (`m4b`), dávku (`m4b_no_case`) nebo bránu (`m4b::exaptace`). Dávky `m2_phonology_triplet`

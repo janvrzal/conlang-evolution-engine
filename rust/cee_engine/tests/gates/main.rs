@@ -1,15 +1,16 @@
 //! Brány milníků M1 až M6c (zrcadlo `tests/v2/test_v2_m*_gate.py`).
 //!
-//! Brány jsou stochastické a dlouhé (tisíce let, desítky skupin), proto jsou všechny označené
-//! `#[ignore]`; spouštějí se po jednom milníku a vlákně:
+//! Každý milník má test `statisticke_brany`: všechny jeho brány na N semínkách (od 201) proti
+//! zamčeným cílovým pásmům (`src/cee/data/v2_gate_targets.json`, dokument 21), stejně jako
+//! `cee gates`. Vedle nich zůstaly deterministické kontroly (stejné semínko, stejný výsledek;
+//! přiblížení nemění nepropojenou oblast) a negativní kontrola členu. Testy jsou dlouhé, proto
+//! jsou označené `#[ignore]`:
 //!
 //! ```text
-//! cargo test --release --test gates -- --ignored --test-threads=1 m3b::
+//! cargo test --release --test gates -- --ignored m3b::
 //! ```
 //!
-//! Scénáře, semínka, prahy a metriky jsou v `cee_engine::gates` (sdílí je příkaz `cee gates`);
-//! tady jsou semínka a pravidla k z N jednotlivých testů. Běh jednoho semínka se v souboru
-//! milníku počítá jednou a sdílí ho všechny testy, které ho potřebují.
+//! Scénáře, kontroly a vyhodnocení jsou v `cee_engine::gates`; celý běh všech bran trvá asi 10 minut.
 
 mod common;
 mod m1;

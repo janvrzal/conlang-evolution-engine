@@ -1,8 +1,11 @@
 # 21. Statistické brány milníků
 
-Stav: **návrh**. Cílová pásma čekají na kontrolu uživatelem; do té doby jsou staré brány
-(`tests/gates/`, `cee gates`) beze změny vedle nových. Engine ani parametry se nezměnily; 5. 11. 2026 se změnil
-scénář S1 (nepravidelná krajina) a obě korelace se zeměpisem se měří s logaritmem vzdálenosti, viz níže.
+Stav: **zamčeno** (5. 11. 2026, schválil uživatel). Cílová pásma v `src/cee/data/v2_gate_targets.json`
+platí jako brány milníků a nahradila staré jednorázové brány: `cee gates` i testy `tests/gates/`
+(`statisticke_brany` v každém milníku) vyhodnocují všech 52 bran na N semínkách od 201 proti pásmům.
+Starý audit s prahy z Pythonu zmizel. Změna pásma chce zdůvodnění ze zdroje a záznam v tomto dokumentu.
+Engine ani parametry se kvůli branám nezměnily; 5. 11. 2026 se změnil scénář S1 (nepravidelná krajina)
+a obě korelace se zeměpisem se měří s logaritmem vzdálenosti, viz níže.
 
 ## Proč
 
@@ -44,9 +47,10 @@ s přirozenou podmínkou (u „možnosti“ bez zvláštní podmínky platí „
 ## Příkazy
 
 ```
-cargo run --release --bin cee -- gates --report --list                  # druh, N a p_min 52 bran
-cargo run --release --bin cee -- gates --report --seeds 201 -o values.jsonl   # všechno, asi 9 minut
-cargo run --release --bin cee -- gates --report --only m4b,m6b::metrika_9     # výběr
+cargo run --release --bin cee -- gates --list                           # druh, N a p_min 52 bran
+cargo run --release --bin cee -- gates --seeds 201 -o values.jsonl      # všechno, asi 9 minut
+cargo run --release --bin cee -- gates --only m4b,m6b::metrika_9        # výběr
+cargo test --release --test gates -- --ignored --test-threads=1         # totéž jako testy, po milnících
 ```
 
 `--seeds 201` je první semínko; vzorky používají `201, 202, …` (trojice po třech). Výpis má sloupce brána,
@@ -264,6 +268,9 @@ Dryer (WALS kap. 81–87), Jespersen (1917), Kümmel (2007), Sapir (1921), Sturt
 
 ## Brány ke sloučení nebo zrušení
 
+Při zamčení (5. 11. 2026) se nic nesloučilo ani nezrušilo; registr má dál 52 bran. Body níže jsou
+otevřený návrh.
+
 - `m3::zvukove_metriky`, `m3b::zvukove_metriky` a zvukové metriky v `m4::bez_eroze` zdvojují
   `m2::metrika_3` a `m2::metrika_5` (délka slova, homofonie) s přidanou vrstvou. Navrhuji jednu bránu
   „zvukové metriky“ vyhodnocenou v každé dávce jako vedlejší kontrola, ne tři brány.
@@ -286,5 +293,5 @@ Dryer (WALS kap. 81–87), Jespersen (1917), Kümmel (2007), Sapir (1921), Sturt
   Hyman, Meillet, Gumperz a Wilson, Siewierska a další zůstaly nepotvrzeny.
 - Stará brána není pouze stochastická: u `m2::metrika_6` a `m2::ruznost_seedu` je vzorek trojice semínek,
   takže `N` = 12 trojic znamená 36 běhů.
-- Nové brány se nenapojily na `cargo test`; jsou jen v `cee gates --report` (nespouštějí se v CI) a mají
-  jednotkové testy statistiky a úplnosti registru.
+- Od zamčení jsou brány v `cargo test` (test `statisticke_brany` v každém milníku, `#[ignore]` kvůli délce);
+  `cee gates` skončí chybou, když některá veličina neprojde.

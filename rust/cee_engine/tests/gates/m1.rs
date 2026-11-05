@@ -1,54 +1,12 @@
 //! M1: dialektové kontinuum S1, metriky 7, 8 a 12, velká souhrnná skupina, přiblížení.
 
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
 
 use cee_engine::gates::m1;
 use cee_engine::scenarios::{village_grid_default, SeedOptions};
 use cee_engine::{Simulation, SimulationConfig};
 
-use crate::common::{assert_passed, cached};
-
-fn continuum() -> &'static Simulation {
-    static CELL: OnceLock<Result<Simulation, String>> = OnceLock::new();
-    cached(&CELL, || m1::run_continuum(2))
-}
-
-fn bordered() -> &'static Simulation {
-    static CELL: OnceLock<Result<Simulation, String>> = OnceLock::new();
-    cached(&CELL, || m1::run_bordered(2))
-}
-
-#[test]
-#[ignore = "brána milníku (3 000 let, 20 vesnic)"]
-fn s1_kontinuum_je_plynule_a_vzdalenost_roste_se_vzdalenosti() {
-    assert_passed(&m1::check_s1_kontinuum(continuum()));
-}
-
-#[test]
-#[ignore = "brána milníku (3 000 let, 20 vesnic)"]
-fn s1_hranice_vytvori_svazek_izoglos() {
-    assert_passed(&m1::check_s1_hranice(bordered()));
-}
-
-#[test]
-#[ignore = "brána milníku (3 000 let, 20 vesnic)"]
-fn metrika_7_usalene_zmeny_se_siri_po_s_krivce() {
-    assert_passed(&m1::check_metrika_7(continuum()));
-}
-
-#[test]
-#[ignore = "brána milníku (3 000 let, 20 vesnic)"]
-fn metrika_8_vetsina_inovaci_zanikne() {
-    assert_passed(&m1::check_metrika_8(continuum()));
-}
-
-#[test]
-#[ignore = "brána milníku"]
-fn velka_souhrnna_skupina_driftuje_mene_nez_mala_vesnice() {
-    let (large, small) = m1::run_drift_pair(3).expect("běh driftu");
-    assert_passed(&m1::check_velka_souhrnna_skupina(large, small));
-}
+use crate::common::assert_statistical;
 
 // Metrika 9 (Séguyho zákon) se ověřuje v plném modelu na mapě: `m6b`.
 
@@ -122,4 +80,11 @@ fn priblizeni_nezmeni_historii_nepropojene_oblasti() {
     for key in shared {
         assert_eq!(coarse_state[key], fine_state[key], "{key:?}");
     }
+}
+
+/// Všechny brány milníku proti zamčeným cílovým pásmům (dokument 21), semínka od 201.
+#[test]
+#[ignore = "statistické brány milníku (S1 3 000 let, 30 semínek)"]
+fn statisticke_brany() {
+    assert_statistical("m1");
 }

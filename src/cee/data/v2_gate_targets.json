@@ -1,6 +1,6 @@
 {
-  "status": "návrh",
-  "popis": "Cílová pásma a druhy 52 bran milníků (docs/engine-v2/21-statisticke-brany.md). Stav „návrh“: pásma čekají na kontrolu uživatelem, než se zamknou. Pole support: „literatura“ = číslo nebo rozsah nalezen v citovaném zdroji (viz verification), „návrh“ = literatura číslo nedává nebo ho nešlo ověřit, pásmo je z věrohodnosti. Pole verification: ověřeno / opraveno / nahrazeno / neověřitelné, stav kontroly zdroje webem (listopad 2026).",
+  "status": "zamčeno",
+  "popis": "Cílová pásma a druhy 52 bran milníků (docs/engine-v2/21-statisticke-brany.md). Stav „zamčeno“ (5. 11. 2026, schválil uživatel): pásma platí jako brány milníků a nahradila staré prahy; změna pásma chce zdůvodnění ze zdroje a záznam v dokumentu 21. Pole support: „literatura“ = číslo nebo rozsah nalezen v citovaném zdroji (viz verification), „návrh“ = literatura číslo nedává nebo ho nešlo ověřit, pásmo je z věrohodnosti. Pole verification: ověřeno / opraveno / nahrazeno / neověřitelné, stav kontroly zdroje webem (listopad 2026).",
   "gates": [
     {
       "id": "m1::s1_kontinuum", "kind": "pásmo", "n": 30,

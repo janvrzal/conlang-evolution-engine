@@ -1,10 +1,6 @@
 //! Statistika zpevněných bran (zrcadlo `tests/v2/gate_checks.py`, pravidlo k z N podle Wilsona
 //! v `docs/engine-v2/09-zpevneni-bran.md`).
 
-use std::collections::BTreeMap;
-
-use super::Report;
-
 /// Kritická hodnota standardního normálního rozdělení pro 95% oboustranný interval.
 pub const Z_95: f64 = 1.959_963_984_540_054;
 
@@ -70,62 +66,6 @@ pub fn threshold_k(n: u32, p_lower: f64, alpha: f64) -> u32 {
     0
 }
 
-/// Zařazení míry průchodu: robustní (aspoň 19/20), křehká (aspoň polovina), slabá.
-pub fn classify_rate(successes: u32, total: u32) -> &'static str {
-    if successes * 20 >= 19 * total {
-        "robustní"
-    } else if successes * 2 >= total {
-        "křehká"
-    } else {
-        "slabá"
-    }
-}
-
-/// Výsledek vyhodnocení jedné brány na řadě semínek.
-#[derive(Debug, Default)]
-pub struct Evaluation {
-    pub seeds: Vec<i64>,
-    pub passed: Vec<i64>,
-    /// Neúspěšná semínka a text jejich neprošlých metrik.
-    pub failures: BTreeMap<i64, String>,
-}
-
-impl Evaluation {
-    /// Brána prošla, když prošlo aspoň `k` semínek.
-    pub fn ok(&self, k: usize) -> bool {
-        self.passed.len() >= k
-    }
-
-    /// Hláška pro `assert!`: kolik semínek prošlo a proč ostatní ne.
-    pub fn message(&self, k: usize) -> String {
-        let mut text = format!(
-            "Brána neprošla: úspěšných semínek {}/{} (požadováno >= {k}). Úspěšná: {:?}.",
-            self.passed.len(),
-            self.seeds.len(),
-            self.passed
-        );
-        for (seed, why) in &self.failures {
-            text.push_str(&format!("\nsemínko {seed}:\n{why}"));
-        }
-        text
-    }
-}
-
-/// Vyhodnotí kontrolu `check` pro každé semínko (`evaluate_seeds` v Pythonu).
-pub fn evaluate_seeds<T>(runs: &[(i64, T)], check: impl Fn(&T) -> Report) -> Evaluation {
-    let mut evaluation = Evaluation::default();
-    for (seed, data) in runs {
-        evaluation.seeds.push(*seed);
-        let report = check(data);
-        if report.passed() {
-            evaluation.passed.push(*seed);
-        } else {
-            evaluation.failures.insert(*seed, report.failures());
-        }
-    }
-    evaluation
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,9 +101,5 @@ mod tests {
     }
 
     #[test]
-    fn zarazeni_mir() {
-        assert_eq!(classify_rate(19, 20), "robustní");
-        assert_eq!(classify_rate(10, 20), "křehká");
-        assert_eq!(classify_rate(9, 20), "slabá");
-    }
+    fn zarazeni_mir() {}
 }

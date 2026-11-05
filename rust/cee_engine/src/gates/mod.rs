@@ -1,17 +1,15 @@
 //! Brány milníků M1 až M6c v Rustu (zrcadlo `tests/v2/test_v2_m*_gate.py`).
 //!
-//! Každý milník má modul `m1` až `m6c` se čtyřmi druhy věcí: **běhy** (`run_*`: scénář,
-//! semínko, délka), **kontroly** (`check_*`: metriky a prahy Pythonu) a **dávky** pro audit
-//! (`batches()`: běh jednoho semínka a vyhodnocení všech bran, které z něj plynou). Kontroly
-//! nevrací první neúspěšné tvrzení, ale celé [`Report`]: každá metrika má hodnotu, práh
-//! a výsledek, takže jde vypsat tabulku „brána, metrika, hodnota, práh, prošla“.
+//! Každý milník má modul `m1` až `m6c` se třemi druhy věcí: **běhy** (`run_*`: scénář,
+//! semínko, délka), **kontroly** (`check_*`: metriky jednoho běhu jako [`Report`]) a **dávky**
+//! (`batches()`: běh jednoho semínka a vyhodnocení všech bran, které z něj plynou).
 //!
-//! Integrační testy (`tests/gates/`) a příkaz `cee gates` (audit míry průchodu na semínkách,
-//! `scripts/v2_gate_rates.py` v Pythonu) volají totéž. Metriky ([`metrics`]) se počítají
+//! Verdikt brány dává [`statistical`]: metriky z `N` semínek proti zamčenému cílovému pásmu
+//! (`src/cee/data/v2_gate_targets.json`, dokument 21). Prahy v `Report` jsou jen definice jevu
+//! u bran typu „možnost“. Integrační testy (`tests/gates/`) i příkaz `cee gates` volají totéž. Metriky ([`metrics`]) se počítají
 //! z historie, snímků a stavu světa v Rustu; co Rust zatím v datech nemá, je v dokumentu
 //! `docs/engine-v2/19-engine-v-rustu.md` (oddíl R2b).
 
-pub mod audit;
 pub mod m1;
 pub mod m2;
 pub mod m3;
@@ -203,11 +201,10 @@ pub fn parse_seeds(text: &str) -> Result<Vec<i64>, String> {
     Ok(seeds)
 }
 
-/// Brána v registru auditu: jméno, soubor milníku a kolik semínek má dnes v Pythonu.
+/// Brána v registru (cílové pásmo má v `v2_gate_targets.json`).
 #[derive(Clone, Copy, Debug)]
 pub struct GateInfo {
     pub id: &'static str,
-    pub seeds_today: &'static str,
 }
 
 /// Běh a vyhodnocení bran pro jedno semínko (nebo trojici semínek).
@@ -248,210 +245,146 @@ pub fn batches() -> Vec<Batch> {
 pub const GATES: [GateInfo; 52] = [
     GateInfo {
         id: "m1::s1_kontinuum",
-        seeds_today: "1",
     },
     GateInfo {
         id: "m1::s1_hranice",
-        seeds_today: "1",
     },
     GateInfo {
         id: "m1::metrika_7",
-        seeds_today: "1",
     },
     GateInfo {
         id: "m1::metrika_8",
-        seeds_today: "1",
     },
     GateInfo {
         id: "m1::velka_skupina_drift",
-        seeds_today: "1",
     },
     GateInfo {
         id: "m2::metrika_3",
-        seeds_today: "3",
     },
     GateInfo {
         id: "m2::metrika_4",
-        seeds_today: "3",
     },
     GateInfo {
         id: "m2::metrika_5",
-        seeds_today: "3",
     },
     GateInfo {
         id: "m2::metrika_6",
-        seeds_today: "3 (soubor)",
     },
     GateInfo {
         id: "m2::ruznost_seedu",
-        seeds_today: "3 (soubor)",
     },
     GateInfo {
         id: "m2::zvukove_zmeny_se_siri",
-        seeds_today: "3",
     },
     GateInfo {
         id: "m3::sturtevantuv_paradox",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m3::morfologizace",
-        seeds_today: "10 (aspoň 4)",
     },
     GateInfo {
         id: "m3::produktivni_vzor",
-        seeds_today: "2",
     },
-    GateInfo {
-        id: "m3::analogie",
-        seeds_today: "2",
-    },
+    GateInfo { id: "m3::analogie" },
     GateInfo {
         id: "m3::zvukove_metriky",
-        seeds_today: "10 (aspoň 5)",
     },
     GateInfo {
         id: "m3b::metrika_1",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m3b::metrika_2",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m3b::nova_slova",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m3b::erodovana_slova",
-        seeds_today: "1",
     },
-    GateInfo {
-        id: "m3b::tabu",
-        seeds_today: "12 (aspoň 1)",
-    },
+    GateInfo { id: "m3b::tabu" },
     GateInfo {
         id: "m3b::zvukove_metriky",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m4::analytizace",
-        seeds_today: "1",
     },
     GateInfo {
         id: "m4::velky_cyklus",
-        seeds_today: "10 (aspoň 2)",
     },
     GateInfo {
         id: "m4::jespersen",
-        seeds_today: "19 (aspoň 1)",
     },
     GateInfo {
         id: "m4::bez_eroze",
-        seeds_today: "1",
     },
     GateInfo {
         id: "m4b::clen_vznikne",
-        seeds_today: "50 (1 až N-1 s členem)",
     },
     GateInfo {
         id: "m4b::bez_padu",
-        seeds_today: "3",
     },
     GateInfo {
         id: "m4b::exaptace",
-        seeds_today: "10 (aspoň 2)",
     },
     GateInfo {
         id: "m4b::jazyk_bez_kategorie",
-        seeds_today: "1",
     },
-    GateInfo {
-        id: "m5::s2_mesto",
-        seeds_today: "2",
-    },
-    GateInfo {
-        id: "m5::s2_l2",
-        seeds_today: "2",
-    },
+    GateInfo { id: "m5::s2_mesto" },
+    GateInfo { id: "m5::s2_l2" },
     GateInfo {
         id: "m5::s3_prechod",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m5::s3_substrat",
-        seeds_today: "12 (aspoň 1)",
     },
-    GateInfo {
-        id: "m5::vypujcky",
-        seeds_today: "2",
-    },
+    GateInfo { id: "m5::vypujcky" },
     GateInfo {
         id: "m5::bez_dvojjazycnosti",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m5::metrika_11",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m6a::s4_skola",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m6a::s4_bez_skoly",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m6a::skola_sjednoti",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m6a::skola_zmrazena",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m6a::psany_kod_stoji",
-        seeds_today: "1",
     },
     GateInfo {
         id: "m6b::metrika_9",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m6b::elita_prejde",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m6b::superstrat",
-        seeds_today: "10 (aspoň 2)",
     },
     GateInfo {
         id: "m6b::jazyk_trhu",
-        seeds_today: "10 (aspoň 2)",
     },
     GateInfo {
         id: "m6b::loajalita",
-        seeds_today: "1",
     },
-    GateInfo {
-        id: "m6b::migrace",
-        seeds_today: "10 (aspoň 2)",
-    },
+    GateInfo { id: "m6b::migrace" },
     GateInfo {
         id: "m6b::ferguson",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m6b::nabozenstvi",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m6c::strom_odpovida",
-        seeds_today: "2",
     },
     GateInfo {
         id: "m6c::strom_stabilni",
-        seeds_today: "2",
     },
 ];

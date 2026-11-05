@@ -1,9 +1,9 @@
-//! Statistické brány: tři druhy bran nad rozdělením přes N semínek (`cee gates --report`).
+//! Statistické brány: tři druhy bran nad rozdělením přes N semínek (`cee gates`).
 //!
-//! Staré brány (`m1` až `m6c`) jsou jednorázové: jedno až tři semínka a práh, který se
-//! nastavil podle toho, jak často jev nastával v tehdejším enginu. Tady se každá z 52 bran
+//! Do 5. 11. 2026 byly brány (`m1` až `m6c`) jednorázové: jedno až tři semínka a práh, který se
+//! nastavil podle toho, jak často jev nastával v tehdejším enginu. Od té doby se každá z 52 bran
 //! vyhodnotí jako statistický test proti **cílovému pásmu z literatury** (soubor
-//! `src/cee/data/v2_gate_targets.json`, stav „návrh“, dokud ho uživatel neschválí):
+//! `src/cee/data/v2_gate_targets.json`, stav „zamčeno“):
 //!
 //! - **invariant**: podmínka musí platit v každém běhu (jeden až několik semínek);
 //! - **možnost jevu**: jev nastal aspoň na `k` z `N` semínkách; `k` plyne z binomického
@@ -13,8 +13,8 @@
 //!   brána projde, když se interval překrývá s cílovým pásmem, nebo když medián leží
 //!   v širším pásmu.
 //!
-//! Hodnoty bere z reportů starých bran (`Report` jedné dávky na jednom semínku), žádný běh
-//! ani parametr enginu se nemění. Popis je v `docs/engine-v2/21-statisticke-brany.md`.
+//! Hodnoty bere z reportů kontrol `check_*` (`Report` jedné dávky na jednom semínku); prahy
+//! v reportech slouží jen jako definice jevu u „možnosti“, verdikt dává cílové pásmo. Popis je v `docs/engine-v2/21-statisticke-brany.md`.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
