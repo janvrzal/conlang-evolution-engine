@@ -672,3 +672,39 @@ všechny souhlásky. Řešení je katalogové: snadnost a prior ztráty kody (a 
 (nosovky, sykavky, zbytek) se zdroji o četnosti změn (např. Kümmel 2007, *Konsonantenwandel*;
 Blevins 2004, *Evolutionary Phonology*). Gramatika Romanie (člen, futurum, slovosled) se nepohne
 ani při trojnásobném tempu gramatikalizace; to je samostatný problém k rozboru.
+
+### M7.3e: ztráta kody podle třídy hlásek (zapsáno)
+
+Schválil uživatel 5. 11. 2026. Kandidát zvukové změny má nově **relativní četnost návrhu**
+(`Candidate.weight`, výchozí 1): rozpočet rodiny se mezi místa dělí úměrně, takže součet rodiny se
+nemění a rodiny s váhami 1 se chovají přesně jako dřív. Ztráta kody (`coda_loss`) má snadnost
+a váhu podle třídy (`candidates::coda_class`):
+
+| třída | snadnost | váha návrhu | proč |
+|---|---|---|---|
+| nosovky | 0,25 | 3 | nejslabší kody; nosové samohlásky vznikají skoro vždy ztrátou koncové nosovky (Ferguson 1963, cit. podle studií v [ICPhS 1991](https://www.coli.uni-saarland.de/Phonetics/icphs/ICPhS1991/12_ICPhS_1991_Vol_5/p12.5_106.pdf); Ohala 1975) |
+| frikativy | 0,2 | 2 | koncové *s* slábne přes *h* a mizí |
+| okluzivy, likvidy | 0,15 | 1 | beze změny |
+
+Hodnoty jsou autorský odhad podle směru v literatuře (čísla literatura nedává). **Brány 47 z 47,
+dřívějších 12 cílů kalibrace dál splněno, testy prošly.**
+
+**Romania** (podíl tvarů předmětu s `-m` v roce 1900; Itálie / Galie / Hispánie / Dácie):
+
+| funkční zátěž | 1900 | do roku 600 |
+|---|---|---|
+| 5 (výchozí) | 1,00 / 1,00 / 1,00 / 1,00 | beze změny |
+| 1 | 1,00 / 1,00 / 1,00 / 1,00 | beze změny |
+| 0,5 | 1,00 / 0,91 / 1,00 / 0,18 | beze změny |
+| 0,25 | 1,00 / 0,41 / 0,99 / 0,14 | beze změny |
+| 0 | 1,00 / 0,16 / 0,27 / 0,14 | beze změny |
+
+Rozlišení tříd samo nestačí; rozhoduje funkční zátěž, a i bez ní se `-m` ztratí **až po roce 600**
+(doloženo do ~100 n. l.) a v Itálii vůbec. Model tuto změnu prosazuje asi o řád pomaleji, než je
+doloženo. Itálie má hustotu 2 (vesnice o 1 000 obyvatelích), takže ji brzdí i populační koeficient
+artikulace (M7.2e) a menší drift.
+
+**Otevřené rozhodnutí:** (a) snížit funkční zátěž (5 → ≤ 0,5; ověřit brány M2, homofonii
+a typologii), (b) zrychlit prosazení přirozených změn (síla výběru `selection`, váha `articulation`),
+nebo (c) přijmout pomalejší tempo modelu a cíle Romanie přepočítat na relativní pořadí změn místo
+letopočtů.

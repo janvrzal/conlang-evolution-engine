@@ -443,6 +443,9 @@ pub struct Candidate {
     pub allow: Vec<String>,
     pub right2: Option<Pat>,
     pub tone: Option<i32>,
+    /// Relativní četnost návrhu uvnitř rodiny (přirozenost změny podle třídy hlásek); rozpočet
+    /// rodiny se dělí úměrně, takže se součet nemění. Do klíče procesu nepatří.
+    pub weight: f64,
 }
 
 impl Candidate {
@@ -465,7 +468,13 @@ impl Candidate {
             allow: Vec::new(),
             right2: None,
             tone: None,
+            weight: 1.0,
         }
+    }
+
+    fn weight(mut self, weight: f64) -> Candidate {
+        self.weight = weight;
+        self
     }
 
     fn changes(mut self, changes: &[(&str, &str)]) -> Candidate {
@@ -978,18 +987,32 @@ fn final_devoicing(m: &Maker<'_>, f: usize) -> Found {
     .clarity(-0.1)])
 }
 
+/// Snadnost a relativní četnost ztráty kody podle třídy (M7.3e, dok. 22): koncové nosovky jsou
+/// nejslabší kody a nosové samohlásky vznikají skoro vždy jejich ztrátou (Ferguson 1963; Ohala
+/// 1975), koncové sykavky a frikativy slábnou přes *h* (s → h → ∅); okluzivy a likvidy zůstávají.
+/// Hodnoty jsou autorský odhad podle směru v literatuře, literatura čísla nedává.
+fn coda_class(name: &str) -> (f64, f64) {
+    match name {
+        "nazály" => (0.25, 3.0),
+        "frikativy" => (0.2, 2.0),
+        _ => (0.15, 1.0),
+    }
+}
+
 fn coda_loss(m: &Maker<'_>, f: usize) -> Found {
     let mut found = Vec::new();
     for (name, features) in CONSONANT_CLASSES {
         let pattern = m.pattern(features)?;
         let present = m.present(&pattern);
+        let (ease, weight) = coda_class(name);
         let make = |target: Pat, label: String| {
             Candidate::new(f, label, target, Operation::Delete)
                 .left(Pat::Vowel)
                 .right(Pat::Boundary)
-                .ease(0.15)
+                .ease(ease)
                 .clarity(-0.3)
                 .reductive()
+                .weight(weight)
         };
         if !present.is_empty() {
             found.push(make(pattern, format!("{name} → ∅ /V_#")));

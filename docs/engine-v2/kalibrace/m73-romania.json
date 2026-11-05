@@ -135,5 +135,20 @@
   "change_rates": {
    "coda_loss": 10.0
   }
+ },
+ "tridy_fz_2": {
+  "functional_load_scale": 2.0
+ },
+ "tridy_fz_1": {
+  "functional_load_scale": 1.0
+ },
+ "tridy_fz_0": {
+  "functional_load_scale": 0.0
+ },
+ "tridy_fz_0.5": {
+  "functional_load_scale": 0.5
+ },
+ "tridy_fz_0.25": {
+  "functional_load_scale": 0.25
  }
 }

@@ -894,12 +894,24 @@ impl SoundIndex {
                 }
             }
             let sites = state.sites.len();
+            // Relativní četnost kandidátů (přirozenost změny); rovnoměrně, když je všude 1.
+            let weight_of = |site: u32| {
+                set.built
+                    .as_ref()
+                    .and_then(|b| b.candidates.get(begin + site as usize))
+                    .map_or(1.0, |c| c.weight)
+            };
+            let weight_sum: f64 = state.sites.iter().map(|&site| weight_of(site)).sum();
             for &site in &state.sites {
                 let support = group.supports[begin + site as usize] as f64;
                 let share = (support / FULL_SUPPORT as f64).min(1.0);
-                state
-                    .rates
-                    .push((self.scales[family] * share) / sites as f64);
+                let weight = weight_of(site);
+                let rate = if weight_sum == sites as f64 {
+                    (self.scales[family] * share) / sites as f64
+                } else {
+                    self.scales[family] * share * weight / weight_sum
+                };
+                state.rates.push(rate);
             }
             state.total = if sites == 0 {
                 0.0
