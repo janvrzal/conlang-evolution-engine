@@ -490,3 +490,56 @@ Validace přijímá jakýkoli známý tlak, i takový, který daný svět nemá 
 i ve světě bez fonologie, kde jen nepůsobí). Varianty: `kalibrace/m72-populacni-koeficient.json`.
 
 **Výsledek: kalibrace 12 z 12, brány 47 z 47, testy prošly.**
+
+## M7.3: zpětný test latina → románské jazyky (návrh)
+
+Stav: **návrh k potvrzení uživatelem** (5. 11. 2026). Nic se zatím nestavělo. Cíl: dát síle eroze
+koncovek a tempu cyklů (zápor, futurum, člen) doložená čísla místo stacionarity samotné.
+
+### Co je potřeba v modelu
+
+1. **Vlastní gramatika a koncovky v popisu světa.** `LanguageSpec` dnes zná jen pojmenované profily
+   (`default`, `substrate`, `full`) a koncovky jsou pro všechny jazyky stejné (`syntax_endings`).
+   Latina potřebuje: předmět syntetický `-m` (akuzativ *lupu-m*), plurál syntetický, minulý čas
+   syntetický (perfektum), futurum syntetické `-b-` (*canta-bo*), bez členu, zápor před slovesem
+   (*non*), slovosled volný se sklonem k SOV, přízvuk na předposlední (zjednodušení latinského
+   pravidla podle délky slabiky). Doplnit `grammar` jako objekt konstrukcí a `endings` podle
+   (třída, buňka) do `LanguageSpec`.
+2. **Latinský slovník.** 149 výchozích pojmů v IPA, citační tvar = šikmý kmen bez koncovky
+   (*lupu*, *rosa*, *homine*), protože románské jazyky pokračují z akuzativu. Zdroj: IE-CoR
+   (Heggarty a kol. 2025, Scientific Data 12, 1541, doi:10.1038/s41597-025-05445-3, CC BY 4.0;
+   170 významů, ověřit, že obsahuje latinu a románské jazyky) a standardní slovníky (de Vaan 2008,
+   *Etymological Dictionary of Latin and the other Italic Languages*) pro pojmy mimo IE-CoR.
+   IE-CoR dá zároveň skutečnou retenci latina → románské jazyky jako cíl.
+3. **Scénář Romania** (`region_world`): Itálie, Hispánie, Galie, Dácie (případně Raetie), start
+   kolem roku 100 př. n. l., prestiž Říma do roku 476, pak hranice; germánská elita v Galii
+   a Hispánii (pozadí `elite`), slovanský kontakt v Dácii. Odečty po 250 letech do roku 1500.
+4. **Měřidla po dceřiných jazycích**: stav a slabost předmětu (pád), přítomnost `-m` v koncovce
+   předmětu, člen, druh futura (syntetické, opis, znovu syntetické), minulý čas, slovosled,
+   zápor, retence slovníku vůči latině, ztráta koncových samohlásek.
+
+### Cíle (návrh; všechny jako okna, model je hrubý)
+
+| jev | doloženo | cíl v modelu | zdroj (stav) |
+|---|---|---|---|
+| ztráta koncového *-m* | v nápisech z Pompejí (do 79 n. l.) a hojně v císařské době; přesné datování sporné | koncovka předmětu ztratí `-m` ve většině dceřiných jazyků do roku 400 | Adamik 2019 (Pompeje, Väänänen); Gaeng (chronologie sporná) — nalezeno |
+| zánik pádu (předmět) | západorománské jazyky do zhruba 800; stará francouzština dvoupádová do ~1300; rumunština drží genitiv-dativ | pád zanikne v ≥ 3 ze 4 větví do roku 1200, v jedné smí zůstat | Ledgeway a Maiden (eds.) 2016, *Oxford Guide to the Romance Languages* — ověřit |
+| vznik členu z *ille* | „articloidy“ *ille*/*ipse* už u Egerie (konec 4. st.), plně gramatikalizovaný později | člen ve všech větvích do roku 1100 | Keturakis 2022, Kalbotyra (Egeria) — nalezeno; plné datum ověřit |
+| futurum | *cantabo* nepřežilo; opis *cantare habeo* se šíří ve 2.–4. st., srůstá ve středověku (katalánština 13. st.) | syntetické futurum zanikne do roku 600, opis převládne, ve ≥ 2 větvích znovu srůstá do roku 1300 | studie o katalánštině (ZfK), Languages 2023 — nalezeno |
+| slovosled | volný/SOV → pevný SVO | pevný SVO ve ≥ 3 větvích do roku 1300 | Ledgeway 2012, *From Latin to Romance* — ověřit |
+| zápor | *non* před slovesem zůstává; francouzské *ne … pas* od 13.–16. st. | zápor před slovesem ve všech větvích do roku 1000; stadium II smí vzniknout v jedné | Jespersen 1917; Breitbarth 2009 — ověřit pro francouzštinu |
+| retence slovníku | latina → románské jazyky ze skutečných dat | retence vůči latině v pásmu z IE-CoR (spočítat) | IE-CoR — spočítat |
+| koncové samohlásky | francouzština ztratí koncové samohlásky mimo *-a* (~700), italština je drží | aspoň jedna větev ztratí většinu koncových samohlásek, aspoň jedna je udrží | Ledgeway a Maiden 2016 — ověřit |
+
+Ladí se jen to, co cíle určují: síla `clarity` u změn konce slova (dnes autorský odhad), tempo
+slábnutí záporových částic a vyblednutí. Stacionarita typologie (M7.2) a brány musí dál projít.
+
+### Odhad práce
+
+Rozšíření `LanguageSpec` a koncovek (malé), latinský slovník (střední: data a převod do IPA),
+scénář a měřidla (střední), ověření zdrojů cílů (střední), kalibrace (podle výsledku).
+
+### Navazuje: Evropa (M8, nápad uživatele)
+
+Scénář Romanie je první kus Evropy. Po M7.3 se dá rozšířit o germánskou, slovanskou a keltskou
+větev s kontaktem (germánská elita v Galii, Slované na Balkáně) a o jazyky států.
