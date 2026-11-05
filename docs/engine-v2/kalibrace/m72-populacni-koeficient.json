@@ -1,0 +1,46 @@
+{
+ "konf_-0.5": {
+  "population_pressure_exponents": {
+   "conformity": -0.5
+  }
+ },
+ "konf_-1": {
+  "population_pressure_exponents": {
+   "conformity": -1.0
+  }
+ },
+ "artik_-0.5": {
+  "population_pressure_exponents": {
+   "articulation": -0.5
+  }
+ },
+ "artik_-0.5_konf_-0.5": {
+  "population_pressure_exponents": {
+   "articulation": -0.5,
+   "conformity": -0.5
+  }
+ },
+ "konf_-0.5_unif_0.5": {
+  "population_pressure_exponents": {
+   "conformity": -0.5,
+   "uniformity": 0.5
+  }
+ },
+ "artik_-0.5_konf_-0.5_unif_0.5": {
+  "population_pressure_exponents": {
+   "articulation": -0.5,
+   "conformity": -0.5,
+   "uniformity": 0.5
+  }
+ },
+ "artik_-0.75": {
+  "population_pressure_exponents": {
+   "articulation": -0.75
+  }
+ },
+ "artik_-1": {
+  "population_pressure_exponents": {
+   "articulation": -1.0
+  }
+ }
+}

@@ -638,6 +638,13 @@
    "group": "tuning"
   },
   {
+   "name": "population_pressure_exponents",
+   "kind": "table",
+   "default": {"articulation": -0.75},
+   "description": "Populační koeficient tlaků: váha tlaku ``name`` se ve skupině násobí (populace / 500) ** exponent (např. ``{\"conformity\": -0.5}``: malá skupina drží normu silněji). Trudgillova sociolingvistická typologie (Trudgill 2011): malá hustá komunita udrží neobvyklé tvary, velká s volnými vazbami vyrovnává. Prázdné = tlaky na velikosti skupiny nezávisí. Neznámý tlak je chyba. Výchozí ``articulation`` −0,75 (M7.2e, 5. 11. 2026): v malé komunitě se sdílí víc kontextu, takže se zrychlené výslovnostní zkratky (asimilace, redukce) snáz ustálí a vznikne morfofonologická složitost (Trudgill 2011, kap. 4); nejmenší kulatá hodnota, při níž alternace kmene spolehlivě klesá s velikostí (−0,5 dá −0,07 s intervalem přes nulu), docs/engine-v2/22-kalibrace-m7.md.",
+   "group": "tuning"
+  },
+  {
    "name": "change_rates",
    "kind": "table",
    "default": {},

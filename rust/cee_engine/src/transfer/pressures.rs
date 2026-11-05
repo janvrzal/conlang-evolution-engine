@@ -117,6 +117,15 @@ pub fn plan_for(
         names.push(NAMES[id::NORM as usize]);
         names
     };
+    // Proti všem tlakům, ne jen aktivním: výchozí koeficient (artikulace) platí i ve světě
+    // bez fonologie, kde tlak jen nepůsobí.
+    for name in params.population_pressure_exponents.keys() {
+        if !NAMES.contains(&name.as_str()) {
+            return Err(format!(
+                "Neznámé tlaky v population_pressure_exponents: [{name}]."
+            ));
+        }
+    }
     for name in params.pressure_weights.keys() {
         if !known.contains(&name.as_str()) {
             let mut sorted = known.clone();
@@ -349,6 +358,31 @@ impl<'a> Pressures<'a> {
                 if weight == 0.0 {
                     continue;
                 }
+                let exponent = self
+                    .world
+                    .params
+                    .population_pressure_exponents
+                    .get(NAMES[pressure as usize])
+                    .copied()
+                    .unwrap_or(0.0);
+                if exponent == 0.0 {
+                    self.apply(
+                        pressure,
+                        weight,
+                        variable,
+                        variants,
+                        now,
+                        heard,
+                        cells,
+                        assessed.as_ref(),
+                        live,
+                        slots,
+                    );
+                    continue;
+                }
+                // Populační koeficient (Trudgill; dok. 22, M7.2e): příspěvek tlaku zvlášť,
+                // pak násobený (populace / 500) ** exponent podle skupiny.
+                let mut part = vec![0.0; cells.len()];
                 self.apply(
                     pressure,
                     weight,
@@ -356,11 +390,19 @@ impl<'a> Pressures<'a> {
                     variants,
                     now,
                     heard,
-                    cells,
+                    &mut part,
                     assessed.as_ref(),
                     live,
                     slots,
                 );
+                for (at, &value) in part.iter().enumerate() {
+                    if value != 0.0 {
+                        let group = self.inputs.axis[at / slots];
+                        let size = f64::from(self.world.groups.population[group.index()])
+                            / POPULATION_REFERENCE;
+                        add(&mut cells[at], value * size.powf(exponent));
+                    }
+                }
             }
         }
     }
@@ -931,6 +973,9 @@ impl<'a> Pressures<'a> {
         }
     }
 }
+
+/// Populace, při které populační koeficient tlaků nic nemění (vesnice výchozích scénářů).
+const POPULATION_REFERENCE: f64 = 500.0;
 
 /// Pořadí na škále gramatikalizace (`Construction.rank`).
 fn rank_of(construction: &Construction) -> u32 {

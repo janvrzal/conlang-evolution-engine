@@ -274,6 +274,7 @@ pub struct Parameters {
     pub terrain_access: Table,
     pub identity_loyalty: Table,
     pub pressure_weights: Table,
+    pub population_pressure_exponents: Table,
     pub change_rates: Table,
     pub grammar: Table2,
 }

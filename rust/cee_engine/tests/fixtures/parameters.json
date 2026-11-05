@@ -164,6 +164,9 @@
   }
  },
  "population_per_density": 500.0,
+ "population_pressure_exponents": {
+  "articulation": -0.75
+ },
  "pressure_weights": {},
  "reading_core_resistance": 1.0,
  "reading_weight": 0.1,

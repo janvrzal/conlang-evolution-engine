@@ -457,3 +457,36 @@ přidal neúčinnou složitost) a cíl zůstává nesplněný. Patří k vnitřn
 nebo pozdější), ne ke kalibraci čísel. Varianty pokusů: `kalibrace/m72-trudgill.json`.
 
 **Stav kalibrace: 11 z 12 cílů, brány 47 z 47.** Nesplněný zůstává jen Trudgill.
+
+## M7.2e: populační koeficient tlaků (Trudgill)
+
+Na návrh uživatele (5. 11. 2026: „řešil bych to nějakým populačním koeficientem, ne podsítí“).
+Nový parametr `population_pressure_exponents` (tabulka podle jména tlaku, výchozí `{}` dřív, nyní
+`{"articulation": -0.75}`): váha tlaku se ve skupině násobí `(populace / 500) ** exponent`. Při
+populaci 500 (vesnice výchozích scénářů) se nic nemění. Implementace: příspěvek tlaku se spočítá
+zvlášť a vynásobí podle skupiny (`transfer::pressures`, jen pro tlaky v tabulce).
+
+Proč artikulace: Trudgill (2011, kap. 4) vysvětluje morfofonologickou složitost malých komunit tím,
+že jejich mluvčí sdílejí hodně kontextu, takže se zrychlené výslovnostní zkratky (asimilace,
+redukce) snáz ustálí do normy. V modelu je to tlak `articulation` (snadnost výslovnosti), který je
+v malé skupině silnější a ve velké slabší. Velká skupina zvukové změny pořád vybírá účinněji
+(drift je menší), jen méně tlačí na zkratky.
+
+| varianta (exponent) | Trudgill (cíl ≤ 0) | interval 95 % | L2 | populace |
+|---|---|---|---|---|
+| výchozí (žádný) | +0,39 | [0,18; 0,49] | −0,82 | −1,00 |
+| konformita −0,5 | +0,84 | | −0,92 | |
+| konformita −1 | +0,85 | | −0,92 | |
+| konformita −0,5, uniformita +0,5 | +0,75 | | −0,87 | |
+| artikulace −0,5 | −0,07 | [−0,40; 0,17] | −0,82 | |
+| **artikulace −0,75** | **−0,24** | **[−0,50; −0,20]** | −0,82 | −1,00 |
+| artikulace −1 | −0,50 | [−0,66; −0,29] | −0,84 | −1,00 |
+
+Konformita působí opačně, než se čekalo: silnější norma v malé skupině drží výchozí stav, který má
+málo alternace, takže vztah s populací ještě zesílí. Zvolena je artikulace −0,75, nejmenší kulatá
+hodnota, při níž interval celý leží pod nulou (−0,5 dá medián v pásmu, ale interval přes nulu).
+
+Validace přijímá jakýkoli známý tlak, i takový, který daný svět nemá (výchozí artikulace platí
+i ve světě bez fonologie, kde jen nepůsobí). Varianty: `kalibrace/m72-populacni-koeficient.json`.
+
+**Výsledek: kalibrace 12 z 12, brány 47 z 47, testy prošly.**
