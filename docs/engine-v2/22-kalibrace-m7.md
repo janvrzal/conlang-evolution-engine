@@ -822,3 +822,30 @@ je v Itálii pomalejší a v provinciích rychlejší než doklady.
 dvojitý zápor). Nesplněno: člen (0 větví), nové syntetické futurum (0), pevné SVO (1), retence 0,557,
 rozdíl koncových samohlásek 0,11. Kalibrace celkem 17 z 22, dřívějších 12 cílů splněno, testy
 prošly, brány M1 a M2 10 z 10.
+
+## M7.3i: cíle Romanie jako profil rodinné podobnosti
+
+Uživatel 5. 11. 2026: „Cílem není 1:1 kopie, ale něco, co s nudgenutím vyprodukuje ‚podobné‘
+jazyky.“ Cíle `m7::latina_*` proto už nejsou letopočty, ale **profil rodinné podobnosti**: pořadí
+a směr změn, rozmanitost větví a široká pásma. Nudge jsou podmínky scénáře (slabé `-m` na startu,
+romanizace přes dvojjazyčnost, úřední latina po roce 476), ne globální konstanty.
+
+Kalibrace dostala druh cíle **„možnost“** (`kind: "možnost"`, `p_min`, `event`): jev nastal aspoň
+v `k` z `N` běhů, `k` z `p_min` stejně jako u bran (falešný poplach ≤ 1 %).
+
+| cíl | co tvrdí | výsledek | splněno |
+|---|---|---|---|
+| `poradi` | koncovka zeslábne dřív, než zanikne pád (podíl větví ≥ 0,75) | 0,75 | ano |
+| `pady` | rodina ztratí pád (≥ 3 ze 4 větví do 1900, `p_min` 0,8) | 20/20 | ano |
+| `futurum` | latinské futurum zanikne (≥ 3 větve, `p_min` 0,8) | 8/20 | ne |
+| `obnova_futura` | aspoň jedna větev obnoví futurum (`p_min` 0,5) | 1/20 | ne |
+| `clen` | aspoň dvě větve získají člen (`p_min` 0,5) | 1/20 | ne |
+| `slovosled` | aspoň dvě větve ustálí slovosled (`p_min` 0,5) | 20/20 | ano |
+| `konzervativni` | aspoň jedna větev drží pád v roce 1200 (`p_min` 0,3) | 3/20 | ano |
+| `zapor` | zápor zůstane před slovesem (≥ 3 větve v roce 1200, `p_min` 0,8) | 20/20 | ano |
+| `retence` | retence vůči latině [0,55; 0,85] | 0,557 | ano (těsně) |
+| `rozmanitost` | větve se liší podílem slov na samohlásku (≥ 0,1) | 0,113 | ano (těsně) |
+
+**Romania 7 z 10.** Chybí jen **gramatikalizace**: člen z *ille*, zánik a obnova futura. Zvuk,
+pády, slovosled a slovník už dávají rodinu podobnou románské; retence a rozmanitost jsou těsně
+u mezí (substrát přepisuje dost slov, větve se liší málo).

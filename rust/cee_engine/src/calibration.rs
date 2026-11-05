@@ -60,6 +60,9 @@ pub enum Kind {
     Typology,
     #[serde(rename = "informace")]
     Info,
+    /// Jev nastal aspoň v `k` z `N` běhů (`k` z `p_min` jako u bran, falešný poplach ≤ 1 %).
+    #[serde(rename = "možnost")]
+    Possibility,
 }
 
 impl Kind {
@@ -68,6 +71,7 @@ impl Kind {
             Kind::Band => "pásmo",
             Kind::Typology => "typologie",
             Kind::Info => "informace",
+            Kind::Possibility => "možnost",
         }
     }
 }
@@ -104,6 +108,37 @@ pub struct Target {
     pub source: String,
     #[serde(default)]
     pub note: String,
+    /// U „možnosti“: nejnižší skutečná míra jevu, při které cíl ještě nemá selhat.
+    #[serde(default)]
+    pub p_min: f64,
+    /// U „možnosti“: jev = metrika reportu ve vztahu `op` k hodnotě (`>=`, `<=`, `>`, `<`, `==`).
+    #[serde(default)]
+    pub event: Option<Event>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Event {
+    pub label: String,
+    pub metric: String,
+    pub op: String,
+    pub value: f64,
+    pub support: String,
+    pub source: String,
+}
+
+impl Event {
+    fn holds(&self, report: &Report) -> bool {
+        let v = metric_value(report, &self.metric);
+        match self.op.as_str() {
+            ">=" => v >= self.value,
+            "<=" => v <= self.value,
+            ">" => v > self.value,
+            "<" => v < self.value,
+            "==" => v == self.value,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -136,6 +171,11 @@ impl Targets {
                 }
                 Kind::Band if target.measures.iter().any(|m| m.band.is_none()) => {
                     return Err(format!("{}: pásmo bez meze", target.id));
+                }
+                Kind::Possibility
+                    if target.event.is_none() || !(target.p_min > 0.0 && target.p_min < 1.0) =>
+                {
+                    return Err(format!("{}: možnost chce event a 0 < p_min < 1", target.id));
                 }
                 _ => {}
             }
@@ -748,6 +788,11 @@ fn record_branch(simulation: &Simulation, branch: &str, year: f64, report: &mut 
             c.kind == "fixed" && c.order.as_deref() == Some("SVO")
         }))),
     );
+    info(
+        report,
+        &format!("{tag} pevný slovosled"),
+        f64::from(u8::from(order.as_ref().is_some_and(|c| c.kind == "fixed"))),
+    );
     let negation = kind("NEG");
     info(
         report,
@@ -870,6 +915,61 @@ fn romania(seed: i64) -> Result<Report, String> {
     for (name, value) in summary {
         info(&mut report, name, value);
     }
+    // Profil rodinné podobnosti (M7.3i): stav rodiny v roce 1900 a pořadí změn.
+    let profile = [
+        (
+            "větve bez pádu v roce 1900",
+            count(&report, 1900.0, "pád", &|v| v < 0.5),
+        ),
+        (
+            "větve bez latinského futura v roce 1900",
+            count(&report, 1900.0, "futurum", &|v| v != 0.0),
+        ),
+        (
+            "větve s obnoveným futurem v roce 1900",
+            count(&report, 1900.0, "futurum", &|v| v >= 1.0),
+        ),
+        (
+            "větve se členem v roce 1900",
+            count(&report, 1900.0, "člen", &|v| v > 0.5),
+        ),
+        (
+            "větve s pevným slovosledem v roce 1900",
+            count(&report, 1900.0, "pevný slovosled", &|v| v > 0.5),
+        ),
+        (
+            "větve s pádem v roce 1200",
+            count(&report, 1200.0, "pád", &|v| v > 0.5),
+        ),
+    ];
+    for (name, value) in profile {
+        info(&mut report, name, value);
+    }
+    // Pořadí: koncovka předmětu zeslábne (méně než polovina tvarů s -m) nejpozději v odečtu,
+    // kdy zanikne pád; podíl takových větví mezi větvemi, které pád ztratily.
+    let first = |branch: &str, what: &str, test: &dyn Fn(f64) -> bool| {
+        ROMANIA_YEARS
+            .iter()
+            .position(|&y| test(metric_value(&report, &format!("{branch} {y:.0} {what}"))))
+    };
+    let (mut lost, mut ordered) = (0, 0);
+    for branch in ROMANIA_BRANCHES {
+        if let Some(case) = first(branch, "pád", &|v| v < 0.5) {
+            lost += 1;
+            if first(branch, "tvary předmětu s -m", &|v| v < 0.5).is_some_and(|m| m <= case) {
+                ordered += 1;
+            }
+        }
+    }
+    info(
+        &mut report,
+        "podíl větví, kde koncovka zeslábla dřív, než zanikl pád",
+        if lost == 0 {
+            f64::NAN
+        } else {
+            f64::from(ordered) / f64::from(lost)
+        },
+    );
     let retention: Vec<f64> = ROMANIA_BRANCHES
         .iter()
         .map(|b| metric_value(&report, &format!("{b} 1900 retence")))
@@ -995,6 +1095,32 @@ fn evaluate(target: &Target, variant: &str, reports: &[&Report]) -> Vec<Row> {
         met: None,
     };
     match target.kind {
+        Kind::Possibility => {
+            let event = target.event.as_ref().expect("zkontrolováno");
+            let n = reports.len();
+            let occurred = reports.iter().filter(|r| event.holds(r)).count() as u32;
+            let k = crate::gates::statistical::required_successes(n, target.p_min);
+            let mut row = base(&event.label);
+            row.n = n;
+            row.estimate = if n == 0 {
+                f64::NAN
+            } else {
+                f64::from(occurred) / n as f64
+            };
+            if let Ok((low, high)) = crate::gates::stats::wilson_interval(occurred, n as u32) {
+                row.low = low;
+                row.high = high;
+            }
+            row.goal = format!(
+                "{} {} {} v ≥ {k} z {n} běhů (p_min {})",
+                event.metric,
+                event.op,
+                fmt(event.value),
+                fmt(target.p_min)
+            );
+            row.met = Some(occurred >= k);
+            vec![row]
+        }
         Kind::Band | Kind::Info => target
             .measures
             .iter()
@@ -1230,6 +1356,11 @@ pub fn list() -> Result<String, String> {
     );
     for target in &targets.targets {
         let measures: Vec<String> = match target.kind {
+            Kind::Possibility => target
+                .event
+                .iter()
+                .map(|e| format!("{} (p_min {})", e.label, fmt(target.p_min)))
+                .collect(),
             Kind::Typology => vec![format!(
                 "rys WALS {}",
                 target.feature.as_deref().unwrap_or("")
