@@ -654,3 +654,21 @@ dok. 14; tempo zvukových změn a funkční zátěž ovlivní brány M2 a typolo
 nezapsalo. Návrh: (a) míra místa úměrná opoře bez stropu 8 (častější prostředí, častější změna,
 Bybee 2001), (b) funkční zátěž kalibrovat podle Romanie, (c) otevřenost ponechat a ověřit, zda
 (a) a (b) stačí.
+
+### M7.3d: míra návrhů úměrná opoře nepomohla (nezapsáno)
+
+Pokus: rozpočet rodiny zvukových změn rozdělit mezi místa úměrně `opora ** γ` bez stropu 8 (součet
+rodiny stejný; Bybee 2001). Při γ = 1 a γ = 0,5, s funkční zátěží 0 nebo 1, se `-m` v Romanii
+neztratilo. Počet návrhů `m → ∅` se skoro nezměnil (5 → 4 v jednom běhu): rozpočet celé rodiny ztráty
+kody je jen asi 0,02 návrhu na skupinu a generaci (prior 0,5 ze součtu 14,2, `INNOVATIONS_PER_GENERATION`
+0,6), takže v 16 skupinách za 80 generací vznikne kolem 25 návrhů ztráty kody celkem, ať se mezi místa
+dělí jakkoli. Úprava vrácena.
+
+**Skutečná příčina:** ztráta koncové nosovky po samohlásce je v modelu jedna z mnoha stovek stejně
+pravděpodobných zvukových změn. Ve skutečnosti je to jedna z typologicky nejčastějších změn
+(nosovka se rozplyne v nosovou samohlásku a zmizí: latina, francouzština, portugalština). Model nemá
+**přirozenost změny podle třídy hlásek**: ztráta kody má jednu snadnost (0,15) a jeden prior pro
+všechny souhlásky. Řešení je katalogové: snadnost a prior ztráty kody (a apokopy) podle třídy
+(nosovky, sykavky, zbytek) se zdroji o četnosti změn (např. Kümmel 2007, *Konsonantenwandel*;
+Blevins 2004, *Evolutionary Phonology*). Gramatika Romanie (člen, futurum, slovosled) se nepohne
+ani při trojnásobném tempu gramatikalizace; to je samostatný problém k rozboru.
