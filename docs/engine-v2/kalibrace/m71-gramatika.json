@@ -1,0 +1,12 @@
+{
+  "zanik_x10": {"change_rates": {"category_loss": 10.0}},
+  "zanik_x30": {"change_rates": {"category_loss": 30.0}},
+  "vznik_0.2": {"emergence_need_scale": 0.2},
+  "vznik_0": {"emergence_need_scale": 0.0},
+  "eroze": {"coda_tolerance_scale": 1.0, "functional_load_scale": 1.0},
+  "expresivita_0.3": {"pressure_weights": {"expressivity": 0.3}},
+  "ekonomie_x3": {"pressure_weights": {"economy": 3.0}},
+  "opis_x0.25": {"change_rates": {"periphrasis": 0.25, "exaptation": 0.25}},
+  "roh_zanik": {"emergence_need_scale": 0.2, "change_rates": {"category_loss": 10.0, "periphrasis": 0.25, "exaptation": 0.25}, "coda_tolerance_scale": 1.0, "functional_load_scale": 1.0, "pressure_weights": {"expressivity": 0.5}},
+  "roh_extremni": {"emergence_need_scale": 0.0, "change_rates": {"category_loss": 30.0, "periphrasis": 0.1, "exaptation": 0.1}, "coda_tolerance_scale": 1.0, "functional_load_scale": 0.5, "pressure_weights": {"expressivity": 0.2, "economy": 3.0}}
+}

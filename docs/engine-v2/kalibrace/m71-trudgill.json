@@ -1,0 +1,9 @@
+{
+  "analogie_x4": {"change_rates": {"leveling": 4.0, "extension": 4.0}},
+  "analogie_x0.25": {"change_rates": {"leveling": 0.25, "extension": 0.25}},
+  "prah_analogie_0.6": {"analogy_threshold": 0.6},
+  "konformita_x5": {"pressure_weights": {"conformity": 5.0}},
+  "konformita_x0.2": {"pressure_weights": {"conformity": 0.2}},
+  "uciteln_x3": {"pressure_weights": {"learnability": 3.0, "teachability": 3.0}},
+  "artikulace_x3": {"pressure_weights": {"articulation": 3.0}}
+}

@@ -709,9 +709,52 @@ fn evaluate(target: &Target, variant: &str, reports: &[&Report]) -> Vec<Row> {
                 }
                 rows.push(row);
             }
+            let (gained, lost, changed) = transitions(reports, feature);
+            let mut row = base(&format!(
+                "{feature} přechody jazyků za {} let (vznik / zánik / jiná změna stavu)",
+                TYPOLOGY_YEARS
+            ));
+            row.estimate = (gained + lost + changed) as f64;
+            row.goal = format!("+{gained} / −{lost} / ~{changed} (informace)");
+            rows.push(row);
             rows
         }
     }
+}
+
+/// Je stav rysu „kategorie vyjádřená“ (33A, 37A, 66A přítomné, 67A inflexní)? `None` u rysů,
+/// které nejsou přítomnost/nepřítomnost (81A, 143A, 14A).
+fn expressed(feature: &str, state: &str) -> Option<bool> {
+    match feature {
+        "33A" | "37A" | "66A" => Some(state.ends_with("_present")),
+        "67A" => Some(state == "67A-1"),
+        _ => None,
+    }
+}
+
+/// Přechody jazyků od startu semínka (jeden protojazyk) ke konci: kolik jazyků kategorii
+/// získalo, ztratilo a (u vícestavových rysů) změnilo stav. Stacionární rozložení může vzniknout
+/// rovnováhou vzniku a zániku, nebo tím, že se nic neděje; počty přechodů je rozliší.
+fn transitions(reports: &[&Report], feature: &str) -> (usize, usize, usize) {
+    let (mut gained, mut lost, mut changed) = (0, 0, 0);
+    for report in reports {
+        let start = pooled(&[report], "start", feature);
+        let Some(origin) = start.iter().find(|(_, &n)| n > 0.0).map(|(s, _)| s.clone()) else {
+            continue;
+        };
+        for (state, count) in pooled(&[report], "konec", feature) {
+            let count = count.round() as usize;
+            if state == origin {
+                continue;
+            }
+            match (expressed(feature, &origin), expressed(feature, &state)) {
+                (Some(false), Some(true)) => gained += count,
+                (Some(true), Some(false)) => lost += count,
+                _ => changed += count,
+            }
+        }
+    }
+    (gained, lost, changed)
 }
 
 fn fmt(value: f64) -> String {
