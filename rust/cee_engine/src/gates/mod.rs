@@ -23,6 +23,7 @@ pub mod m6a;
 pub mod m6b;
 pub mod m6c;
 pub mod metrics;
+pub mod statistical;
 pub mod stats;
 
 use std::fmt::Write as _;
