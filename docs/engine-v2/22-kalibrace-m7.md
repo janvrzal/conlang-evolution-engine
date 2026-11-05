@@ -447,7 +447,7 @@ vyrovná i častá nepravidelná slova. Brána `m5::s2_mesto` ale hlídá dolož
 analogie velikostí je dvojí započtení, protože počet inovací už roste s počtem mluvčích
 (`innovation_scale`, Kimura). Alternace v modelu roste s velikostí hlavně proto, že velká skupina
 účinněji vybere snadno vyslovitelné zvukové změny (váha `articulation` 0,3 vztah oslabí na +0,16):
-to je populační genetika výběru (Bromham a kol. 2015, Nature Communications 6, 6089: větší
+to je populační genetika výběru (Bromham, Hua, Fitzpatrick a Greenhill 2015, Rate of language evolution is affected by population size, PNAS 112, 2097–2102: větší
 populace mění slovní zásobu rychleji), ne chyba.
 
 Trudgillův mechanismus podle něj stojí na **vnitřní struktuře komunity** (hustá síť silných vazeb,
