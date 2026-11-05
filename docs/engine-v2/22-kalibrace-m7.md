@@ -276,3 +276,64 @@ vypustí, což výběr odmítá. Ve skutečnosti se člen „ztrácí“ hlavně
 gramatikalizuje na pouhý jmenný ukazatel bez určitosti (Greenberg 1978, stadium III), a WALS ho
 pak za člen nepočítá. Stacionarita 37A potřebuje vyvážit tempo vzniku a ztráty (Maslova 2000:
 stacionární rozložení = rovnováha přechodů), ne jen erozi.
+
+## M7.2b: mechanismy eroze a cyklu členu
+
+Na základě M7.2a (5. 11. 2026, schválil uživatel). Výchozí hodnoty parametrů se **nezměnily**; nové
+jsou dvě změny modelu.
+
+1. **Eliza v hiátu** (`hiatus_elision`, `cee_core::candidates`, prior 0,5 jako apokopa a synkopa):
+   nepřízvučná samohláska zmizí před jinou samohláskou (`V → ∅ /_V`) nebo za ní na konci slova
+   (`V → ∅ /V_#`). Hiát řeší většina jazyků, nejčastěji elizí (Casali 1997, Vowel elision in hiatus
+   contexts, Language 73, 493–533). Dosáhne na koncovky za samohláskou (`la-i` → `la`), na které
+   apokopa (`/C_#`) ani ztráta kody nedosáhnou. Rodina je v rozpočtu netónových zvukových inovací,
+   takže tempo ostatních rodin kleslo asi o 3 % (součet priorů 15,3 → 15,8).
+2. **Vyblednutí členu** (`bleaching`, `changes::syntax::Step::Bleaching`, základní míra 0,01 jako
+   obnova záporu): vázaný člen (klitika nebo koncovka) ztratí určitost a stane se ukazatelem jména
+   (Greenberg 1978, How does a language acquire gender markers?, v Universals of Human Language 3,
+   stadium III). Konstrukce je `zero` se stadiem `marker`: funkce je nevyjádřená (WALS 37A ji počítá
+   jako bez členu) a může se znovu obnovit opisem z ukazovacího zájmena, takže cyklus je uzavřený.
+   Na škále gramatikalizace je o stupeň za koncovkou (`rank` 4), takže tlak `Fusion` vyblednutí mírně
+   podporuje (jednosměrnost gramatikalizace). Jen u funkcí s `bleaches: true` v katalogu
+   (`v2_grammar.yaml` a `.json`): dnes `DEFINITE`.
+
+**Třetí navržený mechanismus už v modelu byl.** Expresivita syntetické koncovky je `1 − slabost`
+a nevyjádřená funkce dostává `context`, takže zánik vyhraje, jakmile slabost přesáhne `1 − context`
+(plurál 0,7, předmět 0,9, minulý čas 0,75). Návrh v M7.2a („cena podle spolehlivosti“) vycházel
+z chybného předpokladu; nic se neměnilo.
+
+### Výsledek (typologie, 40 jazyků, 5 000 let)
+
+| | dřív | eliza a vyblednutí |
+|---|---|---|
+| ustálené elize v hiátu | – | 2 599 (4 967 zfonologizovaných slov) |
+| slabost plurálu po 5 000 letech | 0,05 | 0,13 |
+| člen: vznik / zánik | +21 / −0 | +19 / −2 |
+| člen: Hellinger od WALS | 0,469 | 0,250 |
+| plurál, minulý a budoucí čas | beze změny | beze změny (zánik 0) |
+| brány milníků | 47 z 47 | **47 z 47** (délka slova, homofonie a inventáře beze změny) |
+
+Varianty tempa vzniku s novými mechanismy (`docs/engine-v2/kalibrace/m72-vznik.json`):
+
+| varianta | 33A plurál | 37A člen | 66A minulý | 67A budoucí |
+|---|---|---|---|---|
+| výchozí (potřeba 0,6) | +5 / −0, H 0,251 ne | +19 / −2, H 0,250 ne | +3 / −0 ano | +5 / −0, H 0,184 ne |
+| potřeba 0,4 | +5 / −0 ne | +18 / −3, H 0,197 ne | +2 / −0 ano | +2 / −0, H 0,123 ne |
+| potřeba 0,3 | +5 / −0 ne | +17 / −3, H 0,173 ne | +1 / −0 ano | +1 / −0 ano |
+| potřeba 0,2 | +1 / −0 ano | **+13 / −5, H 0,050 ano** | +0 / −0 ano | +1 / −0 ano |
+| vyblednutí ×3 | +5 / −0 ne | +18 / −4, H 0,173 ne | +3 / −0 ano | +5 / −0 ne |
+| potřeba 0,3 a vyblednutí ×3 | +5 / −0 ne | **+13 / −5, H 0,050 ano** | +1 / −0 ano | +1 / −0 ano |
+
+**Člen má skutečný cyklus**: při potřebě 0,2 (nebo 0,3 s rychlejším vyblednutím) člen ve 13 jazycích
+vznikne a v 5 zanikne a rozložení drží u WALS v rámci šumu. To je stacionarita z rovnováhy
+přechodů (Maslova 2000), ne ze zamrznutí.
+
+**Plurál, minulý a budoucí čas projdou jen zamrznutím.** Při nižší potřebě vznikají vzácněji, ale
+nezaniká žádný: slabost plurálu 0,13 je daleko od prahu 0,7, protože analogie zeslabené tvary
+opravuje. Pro skutečný cyklus u nich chybí silnější eroze: tempo a srozumitelnost změn konce slova.
+Literatura pro ně dává cíl až ve zpětném testu latina → románské jazyky (M7.3: ztráta koncového
+*-m* a koncových samohlásek, zánik pádů), proto se váha `clarity` zatím neladí.
+
+**Rozhodnutí pro uživatele**: tempo vzniku (`emergence_need_scale`) je od M7a jen předběžné (0,6).
+Hodnota 0,2 až 0,3 dává stacionární typologii všech čtyř rysů, u členu skutečným cyklem. Změna
+výchozí hodnoty zatím neproběhla.

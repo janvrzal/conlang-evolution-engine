@@ -16,7 +16,7 @@
 use std::collections::HashMap;
 
 /// Pořadí rodin (`SOUND_CHANGES`) a jejich druhy.
-pub const FAMILIES: [&str; 33] = [
+pub const FAMILIES: [&str; 34] = [
     "voicing",
     "spirantization",
     "debuccalization",
@@ -45,6 +45,7 @@ pub const FAMILIES: [&str; 33] = [
     "labialization",
     "delabialization",
     "labial_shift",
+    "hiatus_elision",
     "tonogenesis_onset",
     "tonogenesis_coda",
     "tone_merger",
@@ -1122,6 +1123,63 @@ fn apocope(m: &Maker<'_>, f: usize) -> Found {
     Ok(found)
 }
 
+/// Eliza v hiátu: z dvou samohlásek vedle sebe zmizí jedna nepřízvučná. Hiát řeší většina
+/// jazyků a nejčastěji elizí (Casali 1997, Vowel elision in hiatus contexts, Language 73,
+/// 493–533). V1 (`V → ∅ /_V`) i V2 na konci slova (`V → ∅ /V_#`); přízvučná samohláska
+/// se drží, takže v `la-i` s přízvukem na `la` zmizí koncové `i`. Na rozdíl od apokopy
+/// (`/C_#`) dosáhne na koncovky za samohláskou.
+fn hiatus_elision(m: &Maker<'_>, f: usize) -> Found {
+    let schwa = m.t.id("ə")?;
+    let clarity = |v: u32| {
+        if v == schwa {
+            CLARITY_DELETE_SCHWA
+        } else {
+            CLARITY_DELETE_FULL
+        }
+    };
+    let before = |target: Pat, label: String, clarity: f64| {
+        Candidate::new(f, label, target, Operation::Delete)
+            .right(Pat::Vowel)
+            .stress(Stress::Unstressed)
+            .ease(0.15)
+            .clarity(clarity)
+            .reductive()
+    };
+    let after = |target: Pat, label: String, clarity: f64| {
+        Candidate::new(f, label, target, Operation::Delete)
+            .left(Pat::Vowel)
+            .right(Pat::Boundary)
+            .stress(Stress::Unstressed)
+            .ease(0.15)
+            .clarity(clarity)
+            .reductive()
+    };
+    let mut found = Vec::new();
+    for v in m.vowels() {
+        found.push(before(
+            m.single(v),
+            format!("{} → ∅ /_V nepřízvučně", m.ipa(v)),
+            clarity(v),
+        ));
+        found.push(after(
+            m.single(v),
+            format!("{} → ∅ /V_# nepřízvučně", m.ipa(v)),
+            clarity(v),
+        ));
+    }
+    found.push(before(
+        Pat::Vowel,
+        "vokály → ∅ /_V nepřízvučně".into(),
+        CLARITY_DELETE_FULL,
+    ));
+    found.push(after(
+        Pat::Vowel,
+        "vokály → ∅ /V_# nepřízvučně".into(),
+        CLARITY_DELETE_FULL,
+    ));
+    Ok(found)
+}
+
 fn vowel_shift(m: &Maker<'_>, f: usize) -> Found {
     let mut space = Vec::new();
     for symbol in VOWEL_SPACE {
@@ -1580,7 +1638,7 @@ fn tone_dissimilation(m: &Maker<'_>, f: usize) -> Found {
 
 type Family = for<'a> fn(&Maker<'a>, usize) -> Found;
 
-const BUILDERS: [Family; 33] = [
+const BUILDERS: [Family; 34] = [
     voicing,
     spirantization,
     debuccalization,
@@ -1609,6 +1667,7 @@ const BUILDERS: [Family; 33] = [
     labialization,
     delabialization,
     labial_shift,
+    hiatus_elision,
     tone_from_onset,
     tone_from_coda,
     tone_merger,

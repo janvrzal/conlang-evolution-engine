@@ -46,6 +46,9 @@ pub struct GrammaticalFunction {
     pub orders: Vec<String>,
     #[serde(default)]
     pub donors: Vec<String>,
+    /// Vázaný výraz funkce může vyblednout v ukazatel bez významu (člen, Greenberg 1978).
+    #[serde(default)]
+    pub bleaches: bool,
 }
 
 fn default_weight() -> f64 {

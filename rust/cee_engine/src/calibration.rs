@@ -494,7 +494,7 @@ fn typology(seed: i64) -> Result<Report, String> {
 }
 
 /// Rodiny zvukových změn konce slova, které mohou oslabit koncovku.
-const FINAL_FAMILIES: [&str; 2] = ["coda_loss", "apocope"];
+const FINAL_FAMILIES: [&str; 3] = ["coda_loss", "apocope", "hiatus_elision"];
 /// Funkce, jejichž syntetická koncovka může zeslábnout.
 const ERODIBLE: [&str; 5] = ["PL", "PAST", "OBJ", "FUTURE", "DEFINITE"];
 

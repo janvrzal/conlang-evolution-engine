@@ -937,6 +937,8 @@ fn rank_of(construction: &Construction) -> u32 {
     match construction.kind.as_str() {
         "periphrastic" => 1 + u32::from(construction.stage.as_deref() == Some("clitic")),
         "synthetic" if construction.exponent.is_some() => 3,
+        // Vyblednutý člen (ukazatel jména) je o stupeň dál než koncovka.
+        "zero" if construction.stage.as_deref() == Some("marker") => 4,
         _ => 0,
     }
 }

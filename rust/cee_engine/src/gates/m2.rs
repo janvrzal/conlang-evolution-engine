@@ -16,7 +16,7 @@ use crate::scenarios::{village_grid_default, SeedOptions};
 use crate::{Simulation, SimulationConfig};
 
 /// Doména každé rodiny zvukových změn v pořadí `FAMILIES` (`SoundChange.domain` v Pythonu).
-pub const DOMAINS: [&str; 33] = [
+pub const DOMAINS: [&str; 34] = [
     "consonant",
     "consonant",
     "consonant",
@@ -45,6 +45,7 @@ pub const DOMAINS: [&str; 33] = [
     "consonant",
     "consonant",
     "consonant",
+    "vowel",
     "vowel",
     "vowel",
     "vowel",

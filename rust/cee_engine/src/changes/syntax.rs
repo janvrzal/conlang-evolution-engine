@@ -28,6 +28,9 @@ pub enum Step {
     NegationRenewal,
     OrderFixation,
     OrderRelaxation,
+    /// Vázaný člen ztratí určitost a stane se pouhým ukazatelem jména (Greenberg 1978,
+    /// stadium III); funkce zůstane nevyjádřená a může se obnovit opisem.
+    Bleaching,
 }
 
 pub struct SyntacticChange {
@@ -61,6 +64,7 @@ impl SyntacticChange {
             Step::NegationRenewal => 0.01,
             Step::OrderFixation => 0.03,
             Step::OrderRelaxation => 0.01,
+            Step::Bleaching => 0.01,
         }
     }
 
@@ -111,6 +115,10 @@ impl SyntacticChange {
                     && syntax::entry(world, &current.function).is_some_and(|e| !e.orders.is_empty())
             }
             Step::OrderRelaxation => current.kind == "fixed",
+            Step::Bleaching => {
+                syntax::bound(current)
+                    && syntax::entry(world, &current.function).is_some_and(|e| e.bleaches)
+            }
         }
     }
 
@@ -207,6 +215,12 @@ impl SyntacticChange {
                 Some(Construction::new(function, "fixed").with_order(&order))
             }
             Step::OrderRelaxation => Some(Construction::new(function, "free")),
+            Step::Bleaching => {
+                let mut c = Construction::new(function, "zero");
+                c.source = current.source.clone();
+                c.stage = Some("marker".into());
+                Some(c)
+            }
         }
     }
 }
@@ -272,6 +286,7 @@ impl Change for SyntacticChange {
             Step::NegationRenewal => "negation_renewal",
             Step::OrderFixation => "order_fixation",
             Step::OrderRelaxation => "order_relaxation",
+            Step::Bleaching => "bleaching",
         }
     }
 
@@ -351,6 +366,7 @@ pub fn changes() -> Vec<Box<dyn Change>> {
         Step::NegationRenewal,
         Step::OrderFixation,
         Step::OrderRelaxation,
+        Step::Bleaching,
     ]
     .into_iter()
     .map(|step| Box::new(SyntacticChange::new(step)) as Box<dyn Change>)

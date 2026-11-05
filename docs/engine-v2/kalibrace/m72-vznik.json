@@ -1,0 +1,7 @@
+{
+  "vznik_0.4": {"emergence_need_scale": 0.4},
+  "vznik_0.3": {"emergence_need_scale": 0.3},
+  "vznik_0.2": {"emergence_need_scale": 0.2},
+  "vybledani_x3": {"change_rates": {"bleaching": 3.0}},
+  "vznik_0.3_vybledani_x3": {"emergence_need_scale": 0.3, "change_rates": {"bleaching": 3.0}}
+}

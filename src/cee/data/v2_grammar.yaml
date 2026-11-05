@@ -65,6 +65,9 @@ functions:
     template: inflection
     domain: noun
     cell: DEF
+    # Vázaný člen může vyblednout v ukazatel jména bez určitosti (Greenberg 1978,
+    # How does a language acquire gender markers?, stadium III); změna `bleaching`.
+    bleaches: true
     weight: 0.6
     need: 0.25
     context: 0.16
