@@ -849,3 +849,26 @@ v `k` z `N` běhů, `k` z `p_min` stejně jako u bran (falešný poplach ≤ 1 %
 **Romania 7 z 10.** Chybí jen **gramatikalizace**: člen z *ille*, zánik a obnova futura. Zvuk,
 pády, slovosled a slovník už dávají rodinu podobnou románské; retence a rozmanitost jsou těsně
 u mezí (substrát přepisuje dost slov, větve se liší málo).
+
+### M7.3j: gramatikalizace v Romanii (rozbor, nezapsáno)
+
+V jednom běhu Romanie se člen z *ille* navrhl 19×, obnova futura opisem 7× a vid opisem 30×; **neustálilo
+se nic**. Důvod je rovnováha tlaků: nový opis stojí `Economy` −0,15 (slovo navíc) a funkce, kterou jazyk
+nevyjadřuje, dostane jen díl potřeby (`emergence_need_scale` 0,4): člen 0,25 × 0,4 × (1 − 0,16) ≈ +0,08,
+obnova futura 0,4 × 0,4 × (1 − 0,44) ≈ +0,09. Opis tak v každé skupině prohraje. **Gramatikalizace je
+v modelu poháněná driftem**: v malých typologických světech (6 vesnic po 500) člen a futurum vznikají
+náhodou, ve velkých propojených regionech Romanie ne.
+
+Pokus (vrácen): funkce, kterou jazyk vyjadřoval a ztratil (`category_loss` → stadium `lost`) nebo která
+vybledla (`marker`), dostává při obnově plnou potřebu (Hopper a Traugott: obnova zeslabeného výrazu).
+Obnova futura pak v Romanii nastala (aspoň jedna větev ve 25 % běhů), ale **typologie 33A, 37A a 67A
+přestala být stacionární** (zánik plurálu 1 → 0, členu 4 → 1, futura 3 → 1 ze 40 jazyků): se starým tvarem
+od sousedů vyhraje plná potřeba nad zánikem a kategorie se vrátí. V Romanii se tak latinské futurum do roku
+1200 vrátí z Itálie do Galie a Hispánie, kde zaniklo během dvojjazyčnosti; Itálie ho nikdy neztratí
+(koncovka `-bo` neeroduje, nejsou tam L2 mluvčí). Historicky *cantabo* padlo i v Itálii, protože hláskově
+splynulo s perfektem a konjunktivem.
+
+**Co by gramatikalizaci rozhýbalo bez driftu:** tah nového výrazu, který na potřebě nezávisí (Haspelmath
+1999, *Why is grammaticalization irreversible?*: „extravagance“ mluvčích; Detges a Waltereit 2002), tedy
+přitažlivost čerstvého opisu, která slábne, jak opis zevšední. To je změna rovnováhy celého modelu
+(vznik, vyblednutí a stacionarita M7.2 by se musely znovu proměřit).
