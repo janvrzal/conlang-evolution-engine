@@ -295,6 +295,8 @@ pub fn check_jazyk_bez_kategorie(tenseless: &Simulation, zero: &Simulation) -> R
         .group_ids()
         .into_iter()
         .filter_map(|group| syntax::dominant(zero_world, group, "PAST"))
+        // Jen vyjádřený minulý čas má zdroj; skupina, která ho (zatím) nevyvinula, nemá žádný.
+        .filter(|c| c.kind != "zero")
         .filter(|c| !c.source.as_ref().is_some_and(|s| sources.contains(s)))
         .count();
     report.check(
