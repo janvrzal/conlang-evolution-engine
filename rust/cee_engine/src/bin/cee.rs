@@ -112,10 +112,11 @@ fn run_simulation(mut simulation: Simulation, until: f64, options: &Options) -> 
     }
     eprint!("{}", cee_engine::timing::report());
     eprintln!(
-        "hotovo: rok {}, {} kroků, {} záznamů, otisk {}",
+        "hotovo: rok {}, {} kroků, {} záznamů, {} tvarů v bance, otisk {}",
         simulation.year(),
         simulation.tick,
         simulation.history.events.len(),
+        simulation.world.bank.bank.len(),
         simulation.history.digest()
     );
     write(&options.output, &export::export(&simulation, true))

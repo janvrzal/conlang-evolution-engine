@@ -3,7 +3,7 @@
 //! **Zvukové procesy** se hodnotí nad vzorkem nejčastějších slov kódu (`SAMPLE_WORDS`): kolik
 //! slovní zásoby změna zasáhne, kolik nových homofonů vyrobí, jestli slova nezkrátí a jak změní
 //! příznakovost a rozptyl samohlásek. K tomu je potřeba banka tvarů s tabulkami procesů, kterou
-//! výpočet **mění** (nové tvary, mapy hlásek), a proto jde přenos dvěma průchody: nejdřív
+//! výpočet **mění** (mapy hlásek, hypotetické tvary v dočasné aréně mimo banku), a proto jde přenos dvěma průchody: nejdřív
 //! [`refresh`] (má `&mut World`) spočítá hodnocení všech buněk, ke kterým změna dolehne, a uloží
 //! je do [`Assessments`]; potom tlaky čtou uložené hodnoty ze `&World` (`seams::assess_cells`).
 //! Hodnocení platí, dokud se nezmění verze kódu, nejvýš `STALE_TICKS` ticků (jako v Pythonu);
@@ -257,8 +257,8 @@ fn pair_cost(world: &World, group: GroupId, sample: &Sample, first: usize, secon
 }
 
 /// Hodnocení procesu ve skupině nad jejím vzorkem (`assess`), část první: výsledky procesu
-/// pro slova vzorku. Mění banku (nové tvary, mapy hlásek), proto běží sekvenčně v kanonickém
-/// pořadí; vrací tvary slov po změně.
+/// pro slova vzorku. Mění banku (mapy hlásek, hypotetické tvary v dočasné aréně, ne v bance),
+/// proto běží sekvenčně v kanonickém pořadí; vrací tvary slov po změně.
 fn changed_forms(
     world: &mut World,
     sample: &Sample,
@@ -267,7 +267,7 @@ fn changed_forms(
 ) -> Result<Vec<i64>, String> {
     let rule = world.groups.main_code(group).stress_rule.as_rule();
     loop {
-        match world.bank.bank.results(row, rule, &sample.ids)? {
+        match world.bank.bank.hypo_results(row, rule, &sample.ids)? {
             Outcome::Done(changed) => return Ok(changed),
             Outcome::Needs(segments) => resolve_maps(world, &[(row, segments)])?,
         }
@@ -399,10 +399,11 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
     if jobs.is_empty() {
         return Ok(());
     }
+    // Hypotetické tvary hodnocení žijí v dočasné aréně; přeroste-li, vyprázdní se.
+    world.bank.bank.trim_hypo();
     let tick = inputs.tick;
     // Dvouprůchodový návrh: (1) sekvenčně v kanonickém pořadí (proces, sloupec) se vyberou dvojice,
-    // které je třeba přepočítat, a spočítají se výsledky procesu (mění banku, přidělují čísla
-    // nových tvarů); (2) souběžně se každá dvojice vyhodnotí jen čtením; (3) sekvenčně se
+    // které je třeba přepočítat, a spočítají se výsledky procesu (mění banku, hypotetické tvary jdou do arény); (2) souběžně se každá dvojice vyhodnotí jen čtením; (3) sekvenčně se
     // hodnocení uloží v témže pořadí.
     struct Item {
         job: usize,
@@ -466,7 +467,7 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                     return Some(Vec::new());
                 }
                 let rule = world.groups.main_code(group).stress_rule.as_rule();
-                bank.known_results(rows[at], rule, ids)
+                bank.known_hypo_results(rows[at], rule, ids)
             };
             if parallel::worth_splitting(wanted.len() * SAMPLE_WORDS) {
                 wanted.par_iter().map(find).collect()

@@ -132,7 +132,7 @@ fn vowel_counts(
     sign: i64,
 ) {
     for id in forms {
-        for &segment in bank.form(id) {
+        for &segment in bank.form_any(id) {
             if bank.vowel[segment as usize] {
                 *counts.entry(segment).or_insert(0) += sign;
             }
@@ -195,11 +195,17 @@ impl Bank {
     }
 
     fn marked_known(&self, id: usize) -> bool {
+        if id >= crate::bank::HYPO {
+            return true;
+        }
         self.marked.get(id).is_some_and(|value| !value.is_nan())
     }
 
     /// Příznakovost tvaru jen pro čtení: z mezipaměti, jinak spočítaná znovu (stejná hodnota).
     fn marked_ro(&self, id: usize) -> f64 {
+        if id >= crate::bank::HYPO {
+            return self.hypo_marked(id);
+        }
         match self.marked.get(id) {
             Some(value) if !value.is_nan() => *value,
             _ => markedness(self.form(id), &self.vowel, &self.glide),
@@ -213,7 +219,9 @@ impl Bank {
         for (&id, &after) in ids.iter().zip(changed) {
             if after >= 0 {
                 self.marked_of(id as usize);
-                self.marked_of(after as usize);
+                if (after as usize) < crate::bank::HYPO {
+                    self.marked_of(after as usize);
+                }
             }
         }
     }
@@ -242,7 +250,7 @@ impl Bank {
             let (old, new) = (ids[k] as usize, after as usize);
             let weight = weights[k];
             mass_terms[k] = weight;
-            let (old_length, new_length) = (self.form(old).len(), self.form(new).len());
+            let (old_length, new_length) = (self.form_any(old).len(), self.form_any(new).len());
             if new_length <= 2 && new_length < old_length {
                 short_terms[k] = weight;
             }
