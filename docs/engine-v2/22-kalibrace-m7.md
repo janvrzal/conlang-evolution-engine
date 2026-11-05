@@ -405,3 +405,55 @@ vzácný, Präteritumschwund nahrazuje minulý čas perfektem, který 66A počí
   zápor vydrží staletí (francouzské *ne … pas*, afrikánština). Brána byla na hraně už ve výchozím
   stavu (0,146 proti 0,147).
 - **Trudgill** (alternace kmene s populací +0,39): chybí vliv hustoty sítě (M7.1).
+
+## M7.2d: zápor a Trudgill
+
+Schválil uživatel 5. 11. 2026 („Udělej oba“).
+
+### Zápor 143A: stadium II trvá, dokud nezeslábne první část
+
+Obemknutý zápor (`embraced`, Jespersenovo stadium II) se zkracoval na samotnou druhou část
+(`NegationReduction`) stálým tempem a výběr to vždy přijal, protože `Economy` trestá dvě slova
+záporu a výraznost obou podob je stejná. Stadium II tak bylo jen přechodné a ve 40 jazycích
+zmizelo. Ve skutečnosti obemknutý zápor trvá staletí a zkracuje se, až první část fonologicky
+zeslábne (francouzské *ne* → *n'*, pak vypadne; Jespersen 1917, *Negation in English and Other
+Languages*; Breitbarth 2009). Zkrácení se proto navrhuje jen tehdy, když je zdroj první části
+erodovaný (`syntax::eroded`), stejně jako posílení prvního stadia stojí na slabosti částice.
+
+| | dřív | nyní |
+|---|---|---|
+| 143A Hellinger (limit 0,147) | 0,256, neprošla | **0,063, prošla** |
+| obemknutý zápor po 5 000 letech | 0 ze 40 | zachovaný |
+| brána `m4::jespersen` | prošla | prošla (30 % běhů, `k` = 1 z 30) |
+
+Dynamika záporu je ale pomalá: za 5 000 let změnil zápor stadium jen v 1 ze 40 jazyků (dřív ve 4).
+Jespersenův cyklus má podle literatury stadia trvající staletí, takže za 5 000 let by změn mělo být
+víc; tempo zeslabení částic je úkol pro M7.3 (zvukové tempo podle latiny).
+
+### Trudgill: tři pokusy, žádný nevyšel, nic se nezapsalo
+
+Cíl: alternace kmene má klesat s velikostí komunity (Trudgill 2011); dnes +0,39. Zkoušel jsem
+parametr, kterým velikost komunity (`(populace / 500) ** exponent`) zesiluje vyrovnávání paradigmat:
+
+| podoba | Trudgill | brány |
+|---|---|---|
+| tempo návrhů analogie i tlak `uniformity`, exponent 0,75 | **−0,19** (cíl splněn) | **44 ze 47**: neprošly `m5::s2_mesto`, `m5::s2_l2`, `m5::metrika_11` |
+| jen tlak `uniformity`, exponent 0,75 | +0,23 | `m5::s2_mesto` neprošla |
+| `uniformity` jen u řídce užívaných slov (frekvenčně vážená), exponent 1 | +0,21 | `m5::s2_mesto` neprošla |
+
+Proč to nejde: obrátit vztah umí jen tak silné vyrovnávání ve velkých komunitách, že město
+vyrovná i častá nepravidelná slova. Brána `m5::s2_mesto` ale hlídá doložený vliv frekvence
+(častá slova si nepravidelnost drží, Bybee 2006; angl. *went*, *was*). Navíc násobit tempo návrhů
+analogie velikostí je dvojí započtení, protože počet inovací už roste s počtem mluvčích
+(`innovation_scale`, Kimura). Alternace v modelu roste s velikostí hlavně proto, že velká skupina
+účinněji vybere snadno vyslovitelné zvukové změny (váha `articulation` 0,3 vztah oslabí na +0,16):
+to je populační genetika výběru (Bromham a kol. 2015, Nature Communications 6, 6089: větší
+populace mění slovní zásobu rychleji), ne chyba.
+
+Trudgillův mechanismus podle něj stojí na **vnitřní struktuře komunity** (hustá síť silných vazeb,
+děti jako jediní učící se, málo dospělých nováčků), kterou model nemá: skupina je jeden uzel
+s velikostí a podílem L2, bez vnitřní sítě. Mechanismus jsem proto nezapsal (parametr by jen
+přidal neúčinnou složitost) a cíl zůstává nesplněný. Patří k vnitřní síti skupin (M7.2 společnost
+nebo pozdější), ne ke kalibraci čísel. Varianty pokusů: `kalibrace/m72-trudgill.json`.
+
+**Stav kalibrace: 11 z 12 cílů, brány 47 z 47.** Nesplněný zůstává jen Trudgill.

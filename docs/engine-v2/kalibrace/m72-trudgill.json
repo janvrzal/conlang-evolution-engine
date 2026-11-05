@@ -1,0 +1,37 @@
+{
+ "uniformita_x5": {
+  "pressure_weights": {
+   "uniformity": 5.0
+  }
+ },
+ "uniformita_x5_exp1": {
+  "pressure_weights": {
+   "uniformity": 5.0
+  },
+  "analogy_population_exponent": 1.0
+ },
+ "ucitelnost_x5": {
+  "pressure_weights": {
+   "teachability": 5.0
+  }
+ },
+ "jasnost_x0.3": {
+  "pressure_weights": {
+   "clarity": 0.3
+  }
+ },
+ "artikulace_x0.3": {
+  "pressure_weights": {
+   "articulation": 0.3
+  }
+ },
+ "exp_0.5": {
+  "paradigm_population_exponent": 0.5
+ },
+ "exp_0.75": {
+  "paradigm_population_exponent": 0.75
+ },
+ "exp_1": {
+  "paradigm_population_exponent": 1.0
+ }
+}

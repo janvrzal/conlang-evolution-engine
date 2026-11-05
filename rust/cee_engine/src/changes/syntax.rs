@@ -109,7 +109,12 @@ impl SyntacticChange {
             Step::NegationReinforcement => {
                 current.kind == "pre" && !sources(world, group, &current.function).is_empty()
             }
-            Step::NegationReduction => current.kind == "embraced",
+            // Stadium II se zkrátí, až zeslábne předslovesná část (fr. *ne* → *n'*, pak vypadne);
+            // bez eroze je obemknutý zápor stabilní (Jespersen 1917; Breitbarth 2009). Dok. 22, M7.2d.
+            Step::NegationReduction => {
+                current.kind == "embraced"
+                    && syntax::eroded(world, group, current.source.as_deref())
+            }
             Step::NegationRenewal => current.kind == "post",
             Step::OrderFixation => {
                 current.kind == "free"
