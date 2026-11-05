@@ -220,26 +220,32 @@ fn dispersion_gain(def: &ProcessDef, table: &SegmentTable, before: &[i32], after
     }
 }
 
-/// Je buňka paradigmatu morfému nahrazena jinou konstrukcí (`_redundant_cell`)?
-fn redundant_cell(world: &World, group: GroupId, morpheme: MorphemeId) -> bool {
+/// Jak moc je funkce buňky morfému nadbytečná (0 až 1): kolik ji nese kontext (`context`)
+/// nebo jiná konstrukce (`coverage` kompenzující funkce). Splynutí tvarů funkce, kterou nese
+/// něco jiného, skoro nic nestojí (lat. -m: role nesly předložky a kontext). Dok. 22, M7.3f.
+fn redundancy(world: &World, group: GroupId, morpheme: MorphemeId) -> f64 {
     let (class, cell) = (
         world.morphemes.word_class[morpheme.index()],
         world.morphemes.cell[morpheme.index()],
     );
     if cell.is_none() {
-        return false;
+        return 0.0;
     }
-    crate::syntax::catalog(world).iter().any(|f| {
-        let same_class =
-            f.word_class().and_then(|n| world.registry.word_class_of(n)) == Some(class);
-        let same_cell = f
-            .cell
-            .as_deref()
-            .and_then(|c| world.registry.cells.get(c))
-            .map(crate::ids::CellId)
-            == Some(cell);
-        same_class && same_cell && crate::syntax::compensated(world, group, &f.id)
-    })
+    crate::syntax::catalog(world)
+        .iter()
+        .filter(|f| {
+            f.word_class().and_then(|n| world.registry.word_class_of(n)) == Some(class)
+                && f.cell
+                    .as_deref()
+                    .and_then(|c| world.registry.cells.get(c))
+                    .map(crate::ids::CellId)
+                    == Some(cell)
+        })
+        .map(|f| {
+            f.context
+                .max(crate::syntax::compensation(world, group, &f.id))
+        })
+        .fold(0.0, f64::max)
 }
 
 /// Cena dvojice nových homofonů (`_pair`): geometrický průměr frekvencí, u tvarů téhož lexému
@@ -249,9 +255,9 @@ fn pair_cost(world: &World, group: GroupId, sample: &Sample, first: usize, secon
     let (a, b) = (sample.morphemes[first], sample.morphemes[second]);
     if world.morphemes.lexeme_id(a) == world.morphemes.lexeme_id(b) {
         mass *= world.params.paradigm_merge_weight;
-        if redundant_cell(world, group, a) || redundant_cell(world, group, b) {
-            mass *= world.params.redundant_merge_weight;
-        }
+        // Plynule: plně nadbytečná funkce stojí `redundant_merge_weight`, nenesená nic jiného 1.
+        let redundant = redundancy(world, group, a).max(redundancy(world, group, b));
+        mass *= 1.0 - (1.0 - world.params.redundant_merge_weight) * redundant;
     }
     mass
 }

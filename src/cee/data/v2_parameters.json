@@ -389,7 +389,7 @@
    "name": "redundant_merge_weight",
    "kind": "number",
    "default": 0.3,
-   "description": "Splynutí buňky s jiným tvarem téhož slova, když roli její funkce už nese jiná konstrukce (pád vedle pevného slovosledu): funkce je nadbytečná a její ztráta skoro nic nestojí.",
+   "description": "Cena splynutí buňky s jiným tvarem téhož slova, když je funkce buňky plně nadbytečná. Od M7.3f plynule: cena je 1 − (1 − tato váha) × nadbytečnost, kde nadbytečnost = větší z `context` funkce (kolik ji nese kontext) a `coverage` konstrukce, která roli přebírá (pevný slovosled za pád). Latinské -m zaniklo i proto, že roli předmětu nesly předložky a kontext (dok. 22).",
    "group": "morphology"
   },
   {

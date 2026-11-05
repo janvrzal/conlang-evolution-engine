@@ -708,3 +708,52 @@ artikulace (M7.2e) a menší drift.
 a typologii), (b) zrychlit prosazení přirozených změn (síla výběru `selection`, váha `articulation`),
 nebo (c) přijmout pomalejší tempo modelu a cíle Romanie přepočítat na relativní pořadí změn místo
 letopočtů.
+
+## M7.3f: Romania reaguje na podmínky
+
+Uživatel (5. 11. 2026): „Měli bychom jen umět reagovat na podmínky.“ Místo ladění konstant podle
+letopočtů dostal model a scénář podmínky, ze kterých latinské `-m` historicky zaniklo:
+
+1. **Funkční zátěž podle skutečné práce koncovky** (`transfer::assess::redundancy`, zapsáno): cena
+   splynutí dvou tvarů téhož slova je `1 − (1 − redundant_merge_weight) × nadbytečnost`, kde
+   nadbytečnost je větší z `context` funkce buňky a `coverage` konstrukce, která roli přebírá.
+   Dřív to byl přepínač (plně převzatá role → 0,3, jinak 1). Roli předmětu tak méně chrání
+   koncovka, když ji nese pevný slovosled nebo kontext.
+2. **Romanizace** ve scénáři (zapsáno): Galie, Hispánie a Dácie mají vlastní jazyky (galština,
+   iberština, dáčtina; generované slovníky, vlastní inventáře), Řím podporuje latinu politikou
+   `enforced`. Provincie přecházejí na latinu přes dvojjazyčnost a L2 mluvčí, kteří koncovky
+   oslabují (`Learnability`, `category_loss_l2_boost`). Měřidlo bere ve větvi jen latinsky mluvící
+   skupiny a měří i podíl mluvčích latiny.
+
+**Brány 47 z 47, dřívějších 12 cílů kalibrace splněno, testy prošly.**
+
+### Co přechod dělá s `-m` (podíl tvarů předmětu s `-m`, medián 20 semínek)
+
+| `shift_rate` | podíl mluvčích latiny v Galii (400 → 1900) | Galie `-m` 600 / 1200 / 1900 | Hispánie `-m` 400 / 600 / 1200 | Dácie `-m` 1900 |
+|---|---|---|---|---|
+| 1 (výchozí) | 1,0 → 1,0 | 1,00 / 1,00 / 1,00 | 1,00 / 1,00 / 1,00 | 0,15 |
+| 0,3 | 1,0 → 1,0 | 1,00 / 1,00 / 1,00 | 1,00 / 1,00 / 1,00 | – |
+| 0,1 | 0,70 → 0,73 | 1,00 / 0,32 / 0,02 | 0,96 / 0,88 / 0,07 | – |
+| 0,05 | 0,47 → 0,50 | 0,98 / 0,03 / 0,06 | 0,62 / 0,51 / 0,07 | – |
+
+**`-m` zaniká tam, kde trvá fáze L2 mluvčích**: v Dácii (napůl latinská, dlouho dvojjazyčná) i ve
+výchozím stavu, v Galii a Hispánii, když přechod trvá staletí. Při výchozím tempu přejdou Galie
+a Hispánie na latinu skoro hned (do roku 400 celé), fáze L2 chybí a `-m` zůstane. To odpovídá
+historii obráceně: galsky se mluvilo do 5.–6. století a provinční latina se od normy vzdalovala
+právě přes dvojjazyčnost.
+
+Pomalejší přechod ale odhalil dvě zkreslení:
+
+- **Přechod se zastaví** (Galie 0,7, Hispánie 0,5 mluvčích latiny až do roku 1900): po odtržení
+  (476) zmizí tah římské politiky a dvojjazyčnost zůstane. Ve skutečnosti přechod dokončila prestiž
+  latiny bez Říma (církev, Frankové a Vizigóti latinu přijali).
+- **Substrát přepíše příliš mnoho slovníku** (retence vůči latině 0,40 proti 0,68–0,73 z IE-CoR;
+  i ve výchozím stavu 0,58 kvůli Dácii). Románské jazyky mají ze substrátu jen desítky až stovky
+  slov (brána `m5::s3_substrat` totéž tvrdí pro přechod S3).
+
+Výsledek Romanie ve výchozím stavu: 3 z 10 (zápor, dvojitý zápor, rozdíl koncových samohlásek);
+retence 0,575 neprošla.
+
+**Další krok:** (a) prestiž latiny po roce 476 (církev, psaná norma, přijetí elitou), aby přechod
+doběhl, (b) proč slovník L2 latiny tolik přejímá ze substrátu (srovnat s bránou S3), (c) pak tempo
+přechodu podle doložené délky dvojjazyčnosti (Galie: ~500 let).

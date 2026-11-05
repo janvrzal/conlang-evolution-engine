@@ -627,8 +627,8 @@ pub const ROMANIA_JSON: &str = include_str!("../../../src/cee/data/scenarios/rom
 pub const ROMANIA_BRANCHES: [&str; 4] = ["italia", "gallia", "hispania", "dacia"];
 pub const ROMANIA_YEARS: [f64; 5] = [400.0, 600.0, 1200.0, 1300.0, 1900.0];
 
-/// Skupiny větve (vesnice regionu; region je rodič území vesnice).
-fn branch_groups(world: &crate::world::World, branch: &str) -> Vec<crate::ids::GroupId> {
+/// Všechny skupiny větve (vesnice regionu; region je rodič území vesnice).
+fn region_groups(world: &crate::world::World, branch: &str) -> Vec<crate::ids::GroupId> {
     world
         .group_ids()
         .into_iter()
@@ -637,6 +637,23 @@ fn branch_groups(world: &crate::world::World, branch: &str) -> Vec<crate::ids::G
             let parent = world.territories[territory.index()].parent;
             !parent.is_none() && world.registry.territories.name(parent.0) == branch
         })
+        .collect()
+}
+
+/// Je hlavní kód skupiny z linie latiny?
+fn latin_speaking(world: &crate::world::World, group: crate::ids::GroupId) -> bool {
+    world
+        .registry
+        .languages
+        .name(world.groups.main_code(group).language.0)
+        == "latin"
+}
+
+/// Latinsky mluvící skupiny větve (v provincii ty, které na latinu přešly).
+fn branch_groups(world: &crate::world::World, branch: &str) -> Vec<crate::ids::GroupId> {
+    region_groups(world, branch)
+        .into_iter()
+        .filter(|&g| latin_speaking(world, g))
         .collect()
 }
 
@@ -663,12 +680,27 @@ fn branch_construction(
 /// retence a koncové samohlásky.
 fn record_branch(simulation: &Simulation, branch: &str, year: f64, report: &mut Report) {
     let world = &simulation.world;
+    let tag = format!("{branch} {year:.0}");
+    let everyone = region_groups(world, branch);
+    let population = |list: &[crate::ids::GroupId]| -> f64 {
+        list.iter()
+            .map(|&g| f64::from(world.groups.population[g.index()]))
+            .sum()
+    };
     let groups = branch_groups(world, branch);
+    let total = population(&everyone);
+    info(
+        report,
+        &format!("{tag} podíl mluvčích latiny"),
+        if total > 0.0 {
+            population(&groups) / total
+        } else {
+            f64::NAN
+        },
+    );
     if groups.is_empty() {
-        report.missing(&format!("větev {branch}"));
         return;
     }
-    let tag = format!("{branch} {year:.0}");
     let mean_of = |f: &dyn Fn(crate::ids::GroupId) -> f64| {
         let values: Vec<f64> = groups
             .iter()

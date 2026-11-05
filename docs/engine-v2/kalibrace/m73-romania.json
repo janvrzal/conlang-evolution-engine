@@ -150,5 +150,14 @@
  },
  "tridy_fz_0.25": {
   "functional_load_scale": 0.25
+ },
+ "romanizace_prechod_0.3": {
+  "shift_rate": 0.3
+ },
+ "romanizace_prechod_0.1": {
+  "shift_rate": 0.1
+ },
+ "romanizace_prechod_0.05": {
+  "shift_rate": 0.05
  }
 }
