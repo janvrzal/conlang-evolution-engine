@@ -301,7 +301,7 @@ fn queue_into<'t>(
             continue;
         }
         let row = target.row as usize;
-        match bank.lookup(row, params.rule, form_id, &mut needs.maps)? {
+        match bank.hypo_lookup(row, params.rule, form_id, &mut needs.maps)? {
             Some(result) if result != UNCHANGED => {}
             _ => continue,
         }
@@ -483,7 +483,7 @@ pub fn activate(
     if !out.needs.is_empty() {
         return Ok(out);
     }
-    let found = match bank.results(row, params.rule, &form_ids)? {
+    let found = match bank.hypo_results(row, params.rule, &form_ids)? {
         Outcome::Needs(segments) => {
             out.needs.maps.entry(row).or_default().extend(segments);
             return Ok(out);

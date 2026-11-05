@@ -354,6 +354,8 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
     if world.table.is_none() {
         return Ok(());
     }
+    // Hypotetické tvary žijí v dočasné aréně (hodnocení i fronty procesů); přeroste-li, vyprázdní se.
+    world.bank.bank.trim_hypo();
     // Sledované procesy a sloupce, kam dolehnou.
     struct Job {
         variable: VariableId,
@@ -399,8 +401,6 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
     if jobs.is_empty() {
         return Ok(());
     }
-    // Hypotetické tvary hodnocení žijí v dočasné aréně; přeroste-li, vyprázdní se.
-    world.bank.bank.trim_hypo();
     let tick = inputs.tick;
     // Dvouprůchodový návrh: (1) sekvenčně v kanonickém pořadí (proces, sloupec) se vyberou dvojice,
     // které je třeba přepočítat, a spočítají se výsledky procesu (mění banku, hypotetické tvary jdou do arény); (2) souběžně se každá dvojice vyhodnotí jen čtením; (3) sekvenčně se

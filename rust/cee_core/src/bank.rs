@@ -92,7 +92,9 @@ struct Table {
 pub const HYPO: usize = 1 << 40;
 
 /// Nejvíc tvarů v aréně, než se při dalším hodnocení vyprázdní.
-const HYPO_LIMIT: usize = 20_000;
+const HYPO_LIMIT: usize = 100_000;
+/// Nejvíc uložených hypotetických výsledků, než se aréna při dalším hodnocení vyprázdní.
+const HYPO_ENTRY_LIMIT: usize = 1_000_000;
 
 /// Dočasná aréna tvarů, které by vznikly změnou slova, ale model je (zatím) nepoužil:
 /// hodnocení procesů je tvoří tady, aby banka rostla jen o tvary, které se skutečně použijí.
@@ -182,6 +184,8 @@ pub struct Bank {
     scratch: Scratch,
     /// Hypotetické tvary hodnocení procesů (nejsou v bance ani v kontrolním bodu).
     hypo: Arena,
+    /// Počet uložených hypotetických výsledků v tabulkách.
+    hypo_entries: usize,
     /// Jména morfémů podle čísla z registru (jen přibývají; Python je doplňuje po
     /// kusech). Fronty fonologizace s nimi řadí shodné logity jako řetězce.
     pub names: Vec<String>,
@@ -210,6 +214,7 @@ impl Bank {
             rows: Vec::new(),
             scratch: Scratch::default(),
             hypo: Arena::default(),
+            hypo_entries: 0,
             names: Vec::new(),
         })
     }
@@ -271,10 +276,11 @@ impl Bank {
 
     /// Před hodnocením: přerostla-li aréna mez, vyprázdní se i s výsledky, které na ni odkazují.
     pub fn trim_hypo(&mut self) {
-        if self.hypo.len() <= HYPO_LIMIT {
+        if self.hypo.len() <= HYPO_LIMIT && self.hypo_entries <= HYPO_ENTRY_LIMIT {
             return;
         }
         self.hypo.clear();
+        self.hypo_entries = 0;
         for table in self.tables.iter_mut().flatten() {
             table.hypo.clear();
         }
@@ -741,7 +747,9 @@ impl Bank {
             };
             let slot = row * RULE_COUNT + rule as usize;
             if let Some(Some(table)) = self.tables.get_mut(slot) {
-                table.hypo.insert(id as u32, value);
+                if table.hypo.insert(id as u32, value).is_none() {
+                    self.hypo_entries += 1;
+                }
             }
         }
         let out = form_ids
@@ -800,6 +808,66 @@ impl Bank {
         };
         self.store(row, rule, form_id, value);
         Ok(if self.len() > before { CREATED } else { value })
+    }
+
+    /// Jako [`Bank::lookup`], ale tvar, který by změnou vznikl, se nezařadí do banky (viz
+    /// [`Bank::hypo_results`]); volající smí z výsledku zjistit jen to, zda se tvar mění.
+    pub fn hypo_lookup(
+        &mut self,
+        row: usize,
+        rule: u8,
+        form_id: usize,
+        needs: &mut MapNeeds,
+    ) -> Result<Option<i64>, String> {
+        if form_id >= self.len() {
+            return Err(format!("tvar č. {form_id} neexistuje"));
+        }
+        if row >= self.procs.len() || rule as usize >= RULE_COUNT {
+            return Err("neznámá změna nebo pravidlo přízvuku".into());
+        }
+        let found = self.hypo_stored(row, rule, form_id);
+        if found != UNKNOWN {
+            return Ok(Some(found));
+        }
+        self.grow_results(row, rule, form_id)?;
+        if !has_site(&self.procs[row], self.form(form_id), self.boundary) {
+            self.store(row, rule, form_id, UNCHANGED);
+            return Ok(Some(UNCHANGED));
+        }
+        let (start, length) = (self.starts[form_id], self.lengths[form_id] as usize);
+        let mut missing = BTreeSet::new();
+        missing_map(
+            &self.procs[row],
+            &self.flat[start..start + length],
+            &self.vowel,
+            self.boundary,
+            rule,
+            &mut self.scratch,
+            &mut missing,
+        );
+        if !missing.is_empty() {
+            needs.entry(row).or_default().extend(missing);
+            return Ok(None);
+        }
+        let changed = apply(
+            &self.procs[row],
+            &self.flat[start..start + length],
+            &self.vowel,
+            self.boundary,
+            rule,
+            &mut self.scratch,
+        );
+        let value = match changed {
+            None => UNCHANGED,
+            Some(form) => self.hypo_intern(&form),
+        };
+        let slot = row * RULE_COUNT + rule as usize;
+        if let Some(Some(table)) = self.tables.get_mut(slot) {
+            if table.hypo.insert(form_id as u32, value).is_none() {
+                self.hypo_entries += 1;
+            }
+        }
+        Ok(Some(value))
     }
 
     /// Výsledek procesu pro jeden tvar jako `result`, ale nevrací kódy chyb:
