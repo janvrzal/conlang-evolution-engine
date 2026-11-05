@@ -3,7 +3,7 @@
 //! **Zvukové procesy** se hodnotí nad vzorkem nejčastějších slov kódu (`SAMPLE_WORDS`): kolik
 //! slovní zásoby změna zasáhne, kolik nových homofonů vyrobí, jestli slova nezkrátí a jak změní
 //! příznakovost a rozptyl samohlásek. K tomu je potřeba banka tvarů s tabulkami procesů, kterou
-//! výpočet **mění** (nové tvary, mapy hlásek), a proto jde přenos dvěma průchody: nejdřív
+//! výpočet **mění** (mapy hlásek, hypotetické tvary v dočasné aréně mimo banku), a proto jde přenos dvěma průchody: nejdřív
 //! [`refresh`] (má `&mut World`) spočítá hodnocení všech buněk, ke kterým změna dolehne, a uloží
 //! je do [`Assessments`]; potom tlaky čtou uložené hodnoty ze `&World` (`seams::assess_cells`).
 //! Hodnocení platí, dokud se nezmění verze kódu, nejvýš `STALE_TICKS` ticků (jako v Pythonu);
@@ -257,8 +257,8 @@ fn pair_cost(world: &World, group: GroupId, sample: &Sample, first: usize, secon
 }
 
 /// Hodnocení procesu ve skupině nad jejím vzorkem (`assess`), část první: výsledky procesu
-/// pro slova vzorku. Mění banku (nové tvary, mapy hlásek), proto běží sekvenčně v kanonickém
-/// pořadí; vrací tvary slov po změně.
+/// pro slova vzorku. Mění banku (mapy hlásek, hypotetické tvary v dočasné aréně, ne v bance),
+/// proto běží sekvenčně v kanonickém pořadí; vrací tvary slov po změně.
 fn changed_forms(
     world: &mut World,
     sample: &Sample,
@@ -267,7 +267,7 @@ fn changed_forms(
 ) -> Result<Vec<i64>, String> {
     let rule = world.groups.main_code(group).stress_rule.as_rule();
     loop {
-        match world.bank.bank.results(row, rule, &sample.ids)? {
+        match world.bank.bank.hypo_results(row, rule, &sample.ids)? {
             Outcome::Done(changed) => return Ok(changed),
             Outcome::Needs(segments) => resolve_maps(world, &[(row, segments)])?,
         }
@@ -354,6 +354,8 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
     if world.table.is_none() {
         return Ok(());
     }
+    // Hypotetické tvary žijí v dočasné aréně (hodnocení i fronty procesů); přeroste-li, vyprázdní se.
+    world.bank.bank.trim_hypo();
     // Sledované procesy a sloupce, kam dolehnou.
     struct Job {
         variable: VariableId,
@@ -401,8 +403,7 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
     }
     let tick = inputs.tick;
     // Dvouprůchodový návrh: (1) sekvenčně v kanonickém pořadí (proces, sloupec) se vyberou dvojice,
-    // které je třeba přepočítat, a spočítají se výsledky procesu (mění banku, přidělují čísla
-    // nových tvarů); (2) souběžně se každá dvojice vyhodnotí jen čtením; (3) sekvenčně se
+    // které je třeba přepočítat, a spočítají se výsledky procesu (mění banku, hypotetické tvary jdou do arény); (2) souběžně se každá dvojice vyhodnotí jen čtením; (3) sekvenčně se
     // hodnocení uloží v témže pořadí.
     struct Item {
         job: usize,
@@ -429,6 +430,7 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                 }
             }
         }
+        let _t = crate::timing::scope("assess/sync");
         // Vzorky skupin se dorovnají souběžně (každá skupina má vlastní vzorek, svět se jen čte).
         let top = wanted.iter().map(|w| w.1.index() + 1).max().unwrap_or(0);
         if samples.len() < top {
@@ -451,6 +453,8 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                 samples.iter_mut().enumerate().for_each(sync);
             }
         }
+        drop(_t);
+        let _t = crate::timing::scope("assess/results");
         let mut rows: Vec<usize> = Vec::with_capacity(jobs.len());
         for job in &jobs {
             rows.push(row_of(world, job.process)?);
@@ -466,7 +470,7 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                     return Some(Vec::new());
                 }
                 let rule = world.groups.main_code(group).stress_rule.as_rule();
-                bank.known_results(rows[at], rule, ids)
+                bank.known_hypo_results(rows[at], rule, ids)
             };
             if parallel::worth_splitting(wanted.len() * SAMPLE_WORDS) {
                 wanted.par_iter().map(find).collect()
@@ -487,6 +491,8 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                 changed,
             });
         }
+        drop(_t);
+        let _t = crate::timing::scope("assess/groups");
         let values: Vec<Result<Assessment, String>> = {
             let shared = &*world;
             let samples = &samples;
@@ -506,6 +512,7 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                 items.iter().map(one).collect()
             }
         };
+        drop(_t);
         // Příznakovost tvarů, kterou souběh dopočítával, se uloží (v pořadí položek).
         for item in &items {
             let ids = &samples[item.group.index()].ids;
