@@ -430,6 +430,7 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                 }
             }
         }
+        let _t = crate::timing::scope("assess/sync");
         // Vzorky skupin se dorovnají souběžně (každá skupina má vlastní vzorek, svět se jen čte).
         let top = wanted.iter().map(|w| w.1.index() + 1).max().unwrap_or(0);
         if samples.len() < top {
@@ -452,6 +453,8 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                 samples.iter_mut().enumerate().for_each(sync);
             }
         }
+        drop(_t);
+        let _t = crate::timing::scope("assess/results");
         let mut rows: Vec<usize> = Vec::with_capacity(jobs.len());
         for job in &jobs {
             rows.push(row_of(world, job.process)?);
@@ -488,6 +491,8 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                 changed,
             });
         }
+        drop(_t);
+        let _t = crate::timing::scope("assess/groups");
         let values: Vec<Result<Assessment, String>> = {
             let shared = &*world;
             let samples = &samples;
@@ -507,6 +512,7 @@ pub fn refresh(world: &mut World, inputs: &StepInputs) -> Result<(), String> {
                 items.iter().map(one).collect()
             }
         };
+        drop(_t);
         // Příznakovost tvarů, kterou souběh dopočítával, se uloží (v pořadí položek).
         for item in &items {
             let ids = &samples[item.group.index()].ids;
