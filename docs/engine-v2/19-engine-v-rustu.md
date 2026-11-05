@@ -762,7 +762,7 @@ zkoušky), nad nimi nástroj `cee gates` pro audit míry průchodu na semínkác
 
 **Od 5. 11. 2026 platí statistické brány** ([dokument 21](21-statisticke-brany.md)): cílová pásma
 v `src/cee/data/v2_gate_targets.json` jsou zamčená, `cee gates` i testy `tests/gates/` vyhodnocují
-všech 52 bran na N semínkách proti nim. Starý audit (`src/gates/audit.rs`, `--metrics`, `--report`)
+všech 47 bran (52 do sloučení téhož dne, dok. 21) na N semínkách proti nim. Starý audit (`src/gates/audit.rs`, `--metrics`, `--report`)
 a jednorázové testy s prahy z Pythonu zmizely. Tabulka níže popisuje stav převodu; řádky „audit“
 a „testy“ jsou historické.
 
@@ -785,7 +785,7 @@ cargo test --release --test gates -- --ignored --test-threads=1            # vš
 cargo test --release --test gates -- --ignored m3b::                       # jeden milník
 cargo run --release --bin cee -- gates -o values.jsonl                     # všechny brány, hodnoty po semínkách
 cargo run --release --bin cee -- gates --only m5                           # jeden milník
-cargo run --release --bin cee -- gates --list                              # druh, N a p_min 52 bran
+cargo run --release --bin cee -- gates --list                              # druh, N a p_min 47 bran
 ```
 
 `--only` bere milník (`m4b`), dávku (`m4b_no_case`) nebo bránu (`m4b::exaptace`). Dávky `m2_phonology_triplet`

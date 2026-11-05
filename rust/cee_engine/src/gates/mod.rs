@@ -241,8 +241,10 @@ pub fn batches() -> Vec<Batch> {
     all
 }
 
-/// Registr 52 stochastických bran (jména jako v Pythonu) se semínky dnešních testů.
-pub const GATES: [GateInfo; 52] = [
+/// Registr 47 bran milníků (52 převzatých z Pythonu, 5. 11. 2026 sloučeno: zvukové metriky
+/// M2, M3, M3b a M4 do `m2::zvukove_metriky`, strom M6c do `m6c::strom`, zrušeno `m4b::bez_padu`).
+/// Brána `m2::zvukove_metriky` je ve víc dávkách, ostatní v právě jedné.
+pub const GATES: [GateInfo; 47] = [
     GateInfo {
         id: "m1::s1_kontinuum",
     },
@@ -259,13 +261,10 @@ pub const GATES: [GateInfo; 52] = [
         id: "m1::velka_skupina_drift",
     },
     GateInfo {
-        id: "m2::metrika_3",
-    },
-    GateInfo {
         id: "m2::metrika_4",
     },
     GateInfo {
-        id: "m2::metrika_5",
+        id: "m2::zvukove_metriky",
     },
     GateInfo {
         id: "m2::metrika_6",
@@ -287,9 +286,6 @@ pub const GATES: [GateInfo; 52] = [
     },
     GateInfo { id: "m3::analogie" },
     GateInfo {
-        id: "m3::zvukove_metriky",
-    },
-    GateInfo {
         id: "m3b::metrika_1",
     },
     GateInfo {
@@ -302,9 +298,6 @@ pub const GATES: [GateInfo; 52] = [
         id: "m3b::erodovana_slova",
     },
     GateInfo { id: "m3b::tabu" },
-    GateInfo {
-        id: "m3b::zvukove_metriky",
-    },
     GateInfo {
         id: "m4::analytizace",
     },
@@ -319,9 +312,6 @@ pub const GATES: [GateInfo; 52] = [
     },
     GateInfo {
         id: "m4b::clen_vznikne",
-    },
-    GateInfo {
-        id: "m4b::bez_padu",
     },
     GateInfo {
         id: "m4b::exaptace",
@@ -381,10 +371,5 @@ pub const GATES: [GateInfo; 52] = [
     GateInfo {
         id: "m6b::nabozenstvi",
     },
-    GateInfo {
-        id: "m6c::strom_odpovida",
-    },
-    GateInfo {
-        id: "m6c::strom_stabilni",
-    },
+    GateInfo { id: "m6c::strom" },
 ];

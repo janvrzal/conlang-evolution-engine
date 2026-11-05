@@ -1,7 +1,7 @@
 //! Statistické brány: tři druhy bran nad rozdělením přes N semínek (`cee gates`).
 //!
 //! Do 5. 11. 2026 byly brány (`m1` až `m6c`) jednorázové: jedno až tři semínka a práh, který se
-//! nastavil podle toho, jak často jev nastával v tehdejším enginu. Od té doby se každá z 52 bran
+//! nastavil podle toho, jak často jev nastával v tehdejším enginu. Od té doby se každá brána registru
 //! vyhodnotí jako statistický test proti **cílovému pásmu z literatury** (soubor
 //! `src/cee/data/v2_gate_targets.json`, stav „zamčeno“):
 //!
@@ -137,7 +137,7 @@ impl Targets {
         Ok(targets)
     }
 
-    /// Soubor pokrývá právě registr 52 bran.
+    /// Soubor pokrývá právě registr bran.
     pub fn check(&self) -> Result<(), String> {
         for gate in GATES {
             let found = self.gates.iter().filter(|t| t.id == gate.id).count();
@@ -404,15 +404,19 @@ pub struct ReportOptions {
     pub jsonl: Option<String>,
 }
 
+/// Milník dávky (`m3b_lexicon` → `m3b`).
+fn milestone(batch: &Batch) -> &str {
+    batch.id.split('_').next().unwrap_or(batch.id)
+}
+
+/// Vyhodnocení brány v dávce se spustí pro bránu, dávku nebo milník dávky. Brána ve víc
+/// dávkách (`m2::zvukove_metriky`) patří při výběru milníku k milníku dávky, takže
+/// `--only m3` vezme její vyhodnocení na běhu M3, ne na běhu M2.
 fn wanted(only: &[String], batch: &Batch, gate: &str) -> bool {
     only.is_empty()
-        || only.iter().any(|item| {
-            item == gate
-                || item == batch.id
-                || gate
-                    .strip_prefix(item.as_str())
-                    .is_some_and(|rest| rest.starts_with("::"))
-        })
+        || only
+            .iter()
+            .any(|item| item == gate || item == batch.id || item == milestone(batch))
 }
 
 fn execute(runner: Runner, seeds: &[i64]) -> Result<Vec<(&'static str, Report)>, String> {
@@ -426,7 +430,8 @@ fn execute(runner: Runner, seeds: &[i64]) -> Result<Vec<(&'static str, Report)>,
     }
 }
 
-/// Spustí dávky, vyhodnotí všech 52 bran a vrátí řádky.
+/// Spustí dávky, vyhodnotí brány registru a vrátí řádky (brána ve víc dávkách má řádky
+/// pro každou dávku, s jejím jménem v hranatých závorkách).
 pub fn run_rows(options: &ReportOptions) -> Result<Vec<Row>, String> {
     let targets = Targets::shared()?;
     targets.check()?;
@@ -434,14 +439,14 @@ pub fn run_rows(options: &ReportOptions) -> Result<Vec<Row>, String> {
         Some(path) => Some(std::fs::File::create(path).map_err(|e| format!("{path}: {e}"))?),
         None => None,
     };
-    let mut collected: BTreeMap<String, Vec<SeedResult>> = BTreeMap::new();
-    for batch in batches() {
+    // Brána → dávka → výsledky semínek (brána může být ve víc dávkách).
+    let mut collected: BTreeMap<String, Vec<(&'static str, Vec<SeedResult>)>> = BTreeMap::new();
+    let all = batches();
+    for batch in &all {
         let chosen: Vec<&Target> = targets
             .gates
             .iter()
-            .filter(|t| {
-                batch.gates.contains(&t.id.as_str()) && wanted(&options.only, &batch, &t.id)
-            })
+            .filter(|t| batch.gates.contains(&t.id.as_str()) && wanted(&options.only, batch, &t.id))
             .collect();
         let Some(count) = chosen.iter().map(|t| t.n).max() else {
             continue;
@@ -477,14 +482,32 @@ pub fn run_rows(options: &ReportOptions) -> Result<Vec<Row>, String> {
                     let line = json!({"gate": target.id, "seeds": seeds, "metrics": metrics});
                     writeln!(file, "{line}").map_err(|e| e.to_string())?;
                 }
-                collected.entry(target.id.clone()).or_default().push(result);
+                let per_batch = collected.entry(target.id.clone()).or_default();
+                match per_batch.iter_mut().find(|(id, _)| *id == batch.id) {
+                    Some((_, results)) => results.push(result),
+                    None => per_batch.push((batch.id, vec![result])),
+                }
             }
         }
     }
     let mut rows = Vec::new();
     for target in &targets.gates {
-        if let Some(results) = collected.get(&target.id) {
-            rows.extend(evaluate(target, results));
+        let Some(per_batch) = collected.get(&target.id) else {
+            continue;
+        };
+        let shared = all
+            .iter()
+            .filter(|b| b.gates.contains(&target.id.as_str()))
+            .count()
+            > 1;
+        for (batch, results) in per_batch {
+            let mut evaluated = evaluate(target, results);
+            if shared {
+                for row in &mut evaluated {
+                    row.label = format!("{} [{batch}]", row.label);
+                }
+            }
+            rows.extend(evaluated);
         }
     }
     Ok(rows)

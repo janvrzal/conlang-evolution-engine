@@ -264,10 +264,11 @@ pub fn check_zvukove_zmeny_se_siri(run: &PhonologyRun) -> Report {
 pub fn batches() -> Vec<Batch> {
     fn phonology(seed: i64) -> Result<Vec<(&'static str, Report)>, String> {
         let run = run_phonology(seed)?;
+        let mut sound = check_metrika_3(&run);
+        sound.extend("", check_metrika_5(&run));
         Ok(vec![
-            ("m2::metrika_3", check_metrika_3(&run)),
+            ("m2::zvukove_metriky", sound),
             ("m2::metrika_4", check_metrika_4(&run)),
-            ("m2::metrika_5", check_metrika_5(&run)),
             (
                 "m2::zvukove_zmeny_se_siri",
                 check_zvukove_zmeny_se_siri(&run),
@@ -289,9 +290,8 @@ pub fn batches() -> Vec<Batch> {
         Batch {
             id: "m2_phonology",
             gates: &[
-                "m2::metrika_3",
+                "m2::zvukove_metriky",
                 "m2::metrika_4",
-                "m2::metrika_5",
                 "m2::zvukove_zmeny_se_siri",
             ],
             run: Runner::Single(phonology),

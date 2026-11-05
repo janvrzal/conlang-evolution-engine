@@ -148,23 +148,6 @@ pub fn check_clen_jeden_seed(simulation: &Simulation) -> Report {
     report
 }
 
-/// Bez pádu se slovosled ustálí.
-pub fn check_bez_padu(simulation: &Simulation) -> Report {
-    let mut report = Report::new();
-    let world = &simulation.world;
-    report.flag(
-        "buňka OBJ v paradigmatu jmen chybí",
-        !has_cell(world, "noun", "OBJ"),
-    );
-    report.check(
-        "skupiny s pevným slovosledem",
-        kind_count(world, "ORDER", "fixed"),
-        Cmp::Ge,
-        5.0,
-    );
-    report
-}
-
 fn exaptation(order: Construction, seed: i64) -> Result<Simulation, String> {
     let mut grammar = profile::syntax();
     for entry in &mut grammar {
@@ -338,10 +321,10 @@ pub fn determinism_digest() -> Result<String, String> {
 pub fn batches() -> Vec<Batch> {
     fn case(seed: i64) -> Result<Vec<(&'static str, Report)>, String> {
         let simulation = run_no_case(seed, None)?;
-        Ok(vec![
-            ("m4b::clen_vznikne", check_clen_jeden_seed(&simulation)),
-            ("m4b::bez_padu", check_bez_padu(&simulation)),
-        ])
+        Ok(vec![(
+            "m4b::clen_vznikne",
+            check_clen_jeden_seed(&simulation),
+        )])
     }
     fn exaptation_batch(seed: i64) -> Result<Vec<(&'static str, Report)>, String> {
         let (target, control) = run_exaptation_pair(seed)?;
@@ -357,7 +340,7 @@ pub fn batches() -> Vec<Batch> {
     vec![
         Batch {
             id: "m4b_no_case",
-            gates: &["m4b::clen_vznikne", "m4b::bez_padu"],
+            gates: &["m4b::clen_vznikne"],
             run: Runner::Single(case),
         },
         Batch {

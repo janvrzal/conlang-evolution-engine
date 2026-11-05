@@ -115,14 +115,14 @@ pub fn check_strom_stabilni(simulation: &Simulation) -> Report {
 pub fn batches() -> Vec<Batch> {
     fn tree(seed: i64) -> Result<Vec<(&'static str, Report)>, String> {
         let simulation = run_known_tree(seed)?;
-        Ok(vec![
-            ("m6c::strom_odpovida", check_strom_odpovida(&simulation)),
-            ("m6c::strom_stabilni", check_strom_stabilni(&simulation)),
-        ])
+        // Jeden jev: rekonstruovaný strom odpovídá vloženému rozpadu a nemá nepravá rozštěpení.
+        let mut tree = check_strom_odpovida(&simulation);
+        tree.extend("", check_strom_stabilni(&simulation));
+        Ok(vec![("m6c::strom", tree)])
     }
     vec![Batch {
         id: "m6c_known_tree",
-        gates: &["m6c::strom_odpovida", "m6c::strom_stabilni"],
+        gates: &["m6c::strom"],
         run: Runner::Single(tree),
     }]
 }

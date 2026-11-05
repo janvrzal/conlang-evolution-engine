@@ -294,9 +294,13 @@ pub fn batches() -> Vec<Batch> {
     fn control_eroded(seed: i64) -> Result<Vec<(&'static str, Report)>, String> {
         let control = run_control(seed)?;
         let eroded = run_obj_eroded(seed)?;
+        // Kontrola bez eroze nese i zvukové metriky; ty vyhodnotí sdílená brána
+        // `m2::zvukove_metriky` (veličiny se berou podle jména metriky).
+        let stable = check_bez_eroze(&control);
         Ok(vec![
             ("m4::analytizace", check_analytizace(&eroded, &control)),
-            ("m4::bez_eroze", check_bez_eroze(&control)),
+            ("m4::bez_eroze", stable.clone()),
+            ("m2::zvukove_metriky", stable),
         ])
     }
     fn big_cycle(seed: i64) -> Result<Vec<(&'static str, Report)>, String> {
@@ -314,7 +318,7 @@ pub fn batches() -> Vec<Batch> {
     vec![
         Batch {
             id: "m4_control_eroded",
-            gates: &["m4::analytizace", "m4::bez_eroze"],
+            gates: &["m4::analytizace", "m4::bez_eroze", "m2::zvukove_metriky"],
             run: Runner::Single(control_eroded),
         },
         Batch {

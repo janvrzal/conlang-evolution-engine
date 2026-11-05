@@ -26,13 +26,25 @@ mod m6c;
 
 use cee_engine::gates::{batches, GATES};
 
-/// Registr auditu je úplný: každá z 52 bran je v právě jedné dávce a žádná dávka nemá cizí bránu.
+/// Ve víc dávkách smí být jen tyto brány (vyhodnotí se zvlášť v každé).
+const SHARED: [&str; 1] = ["m2::zvukove_metriky"];
+
+/// Registr je úplný: každá ze 47 bran je v právě jedné dávce (sdílené aspoň ve dvou) a žádná
+/// dávka nemá cizí bránu.
 #[test]
 fn registr_bran_je_uplny() {
     let all = batches();
     for gate in GATES {
         let owners = all.iter().filter(|b| b.gates.contains(&gate.id)).count();
-        assert_eq!(owners, 1, "brána {} je v {owners} dávkách", gate.id);
+        if SHARED.contains(&gate.id) {
+            assert!(
+                owners >= 2,
+                "sdílená brána {} je v {owners} dávkách",
+                gate.id
+            );
+        } else {
+            assert_eq!(owners, 1, "brána {} je v {owners} dávkách", gate.id);
+        }
     }
     for batch in &all {
         for gate in batch.gates {
@@ -43,5 +55,5 @@ fn registr_bran_je_uplny() {
             );
         }
     }
-    assert_eq!(GATES.len(), 52);
+    assert_eq!(GATES.len(), 47);
 }

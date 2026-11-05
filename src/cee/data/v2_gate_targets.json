@@ -1,6 +1,6 @@
 {
   "status": "zamčeno",
-  "popis": "Cílová pásma a druhy 52 bran milníků (docs/engine-v2/21-statisticke-brany.md). Stav „zamčeno“ (5. 11. 2026, schválil uživatel): pásma platí jako brány milníků a nahradila staré prahy; změna pásma chce zdůvodnění ze zdroje a záznam v dokumentu 21. Pole support: „literatura“ = číslo nebo rozsah nalezen v citovaném zdroji (viz verification), „návrh“ = literatura číslo nedává nebo ho nešlo ověřit, pásmo je z věrohodnosti. Pole verification: ověřeno / opraveno / nahrazeno / neověřitelné, stav kontroly zdroje webem (listopad 2026).",
+  "popis": "Cílová pásma a druhy 47 bran milníků (docs/engine-v2/21-statisticke-brany.md; do sloučení 5. 11. 2026 jich bylo 52). Stav „zamčeno“ (5. 11. 2026, schválil uživatel): pásma platí jako brány milníků a nahradila staré prahy; změna pásma chce zdůvodnění ze zdroje a záznam v dokumentu 21. Pole support: „literatura“ = číslo nebo rozsah nalezen v citovaném zdroji (viz verification), „návrh“ = literatura číslo nedává nebo ho nešlo ověřit, pásmo je z věrohodnosti. Pole verification: ověřeno / opraveno / nahrazeno / neověřitelné, stav kontroly zdroje webem (listopad 2026).",
   "gates": [
     {
       "id": "m1::s1_kontinuum", "kind": "pásmo", "n": 30,
@@ -45,15 +45,19 @@
       "note": "Matematická vlastnost modelu, ne měření jazyka."
     },
     {
-      "id": "m2::metrika_3", "kind": "pásmo", "n": 30,
+      "id": "m2::zvukove_metriky", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "nejkratší průměrná délka slova (skupiny)", "metric": "nejkratší průměrná délka slova", "band": [3.5, 5.5], "wide": [3.0, 6.5], "support": "návrh", "verification": "neověřitelné",
+        {"label": "nejkratší průměrná délka slova", "metric": "nejkratší průměrná délka slova", "band": [3.5, 5.5], "wide": [3.0, 6.5], "support": "návrh", "verification": "neověřitelné",
          "source": "nejkratší průměr přes skupiny: rozsah průměrné délky slova v seznamech ASJP o 40 pojmech je ve světě od 1,93 do 7,73 segmentu (anglický seznam 3,35); Wichmann (2023), Tone and word length across languages, Frontiers in Psychology 14, 1128461, doi:10.3389/fpsyg.2023.1128461 (ASJP, 40 pojmů, 5 044 jazyků v analýze). Průměr ani kvantily v textu uvedeny nejsou, pásmo uvnitř tohoto rozsahu je z věrohodnosti. Původní odkaz na Wichmann et al. (2013) nahrazen",
          "conversion": "průměrný počet segmentů povrchového tvaru slova ve skupině, minimum přes skupiny"},
-        {"label": "nejdelší průměrná délka slova (skupiny)", "metric": "nejdelší průměrná délka slova", "band": [4.5, 7.0], "wide": [4.0, 8.0], "support": "návrh", "verification": "neověřitelné",
+        {"label": "nejdelší průměrná délka slova", "metric": "nejdelší průměrná délka slova", "band": [4.5, 7.0], "wide": [4.0, 8.0], "support": "návrh", "verification": "neověřitelné",
          "source": "nejdelší průměr přes skupiny: rozsah průměrné délky slova v seznamech ASJP o 40 pojmech je ve světě od 1,93 do 7,73 segmentu (anglický seznam 3,35); Wichmann (2023), Tone and word length across languages, Frontiers in Psychology 14, 1128461, doi:10.3389/fpsyg.2023.1128461 (ASJP, 40 pojmů, 5 044 jazyků v analýze). Průměr ani kvantily v textu uvedeny nejsou, pásmo uvnitř tohoto rozsahu je z věrohodnosti. Původní odkaz na Wichmann et al. (2013) nahrazen",
-         "conversion": "maximum přes skupiny"}
-      ]
+         "conversion": "maximum přes skupiny"},
+        {"label": "nejvyšší podíl homofonních slov", "metric": "nejvyšší homofonie", "band": [0.0, 0.05], "wide": [0.0, 0.08], "support": "návrh",
+         "source": "Dautriche et al. (2018, Cognitive Psychology) měří homofony v angličtině, nizozemštině, francouzštině a němčině; číslo pro základní slovník jsem neověřil, jazyky mají homofonů málo (jednotky procent)",
+         "conversion": "podíl povrchových tvarů slovníku sdílených víc pojmy, maximum přes skupiny"}
+      ],
+      "note": "Sloučeno 5. 11. 2026 z m2::metrika_3, m2::metrika_5, m3::zvukove_metriky, m3b::zvukove_metriky a zvukových metrik m4::bez_eroze. Vyhodnocuje se zvlášť v každé dávce, kde se metriky počítají (m2_phonology, m3_morphology, m3b_lexicon, m4_control_eroded): délka slova a homofonie mají zůstat v pásmu s každou přidanou vrstvou modelu."
     },
     {
       "id": "m2::metrika_4", "kind": "pásmo", "n": 30,
@@ -68,14 +72,6 @@
          "conversion": "počet samohlásek skupiny, minimum přes skupiny"},
         {"label": "největší inventář samohlásek", "metric": "nejvíc samohlásek", "band": [5.0, 10.0], "wide": [2.0, 14.0], "support": "literatura", "verification": "ověřeno",
          "source": "Maddieson (2013), WALS Online kap. 2 (viz nejmenší inventář samohlásek); maximum přes skupiny je odvozeno z tohoto rozdělení", "conversion": "maximum přes skupiny"}
-      ]
-    },
-    {
-      "id": "m2::metrika_5", "kind": "pásmo", "n": 30,
-      "measures": [
-        {"label": "nejvyšší podíl homofonních slov", "metric": "nejvyšší homofonie", "band": [0.0, 0.05], "wide": [0.0, 0.08], "support": "návrh",
-         "source": "Dautriche et al. (2018, Cognitive Psychology) měří homofony v angličtině, nizozemštině, francouzštině a němčině; číslo pro základní slovník jsem neověřil, jazyky mají homofonů málo (jednotky procent)",
-         "conversion": "podíl povrchových tvarů slovníku sdílených víc pojmy, maximum přes skupiny"}
       ]
     },
     {
@@ -137,15 +133,6 @@
       ]
     },
     {
-      "id": "m3::zvukove_metriky", "kind": "pásmo", "n": 30,
-      "measures": [
-        {"label": "nejkratší průměrná délka slova", "metric": "nejkratší průměrná délka slova", "band": [3.5, 5.5], "wide": [3.0, 6.5], "support": "návrh", "verification": "neověřitelné", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
-        {"label": "nejdelší průměrná délka slova", "metric": "nejdelší průměrná délka slova", "band": [4.5, 7.0], "wide": [4.0, 8.0], "support": "návrh", "verification": "neověřitelné", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
-        {"label": "nejvyšší homofonie", "metric": "nejvyšší homofonie", "band": [0.0, 0.05], "wide": [0.0, 0.08], "support": "návrh", "source": "viz m2::metrika_5", "conversion": "viz m2::metrika_5"}
-      ],
-      "note": "Zdvojuje m2::metrika_3 a metrika_5 s paradigmaty; kandidát na sloučení."
-    },
-    {
       "id": "m3b::metrika_1", "kind": "pásmo", "n": 30,
       "measures": [
         {"label": "retence základní slovní zásoby za tisíciletí", "metric": "retence slovní zásoby za tisíciletí", "band": [0.8, 0.87], "wide": [0.7, 0.97], "support": "literatura", "verification": "opraveno",
@@ -187,15 +174,6 @@
       "source": "Allan a Burridge (2006), Forbidden Words: Taboo and the Censoring of Language, Cambridge University Press, doi:10.1017/CBO9780511617881: tabu vyvolává koloběh eufemismů (existence a téma ověřeny, text nečten). Citaci Meillet (1906) a Pinker (2002) jako zdroje „euphemism treadmill“ jsem nepotvrdil a odstranil. Četnost za 2 500 let literatura nedává, p_min 0,25 je návrh"
     },
     {
-      "id": "m3b::zvukove_metriky", "kind": "pásmo", "n": 30,
-      "measures": [
-        {"label": "nejkratší průměrná délka slova", "metric": "nejkratší průměrná délka slova", "band": [3.5, 5.5], "wide": [3.0, 6.5], "support": "návrh", "verification": "neověřitelné", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
-        {"label": "nejdelší průměrná délka slova", "metric": "nejdelší průměrná délka slova", "band": [4.5, 7.0], "wide": [4.0, 8.0], "support": "návrh", "verification": "neověřitelné", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
-        {"label": "nejvyšší homofonie", "metric": "nejvyšší homofonie", "band": [0.0, 0.05], "wide": [0.0, 0.08], "support": "návrh", "source": "viz m2::metrika_5", "conversion": "viz m2::metrika_5"}
-      ],
-      "note": "Zdvojuje m2::metrika_3 a metrika_5 s lexikální změnou; kandidát na sloučení."
-    },
-    {
       "id": "m4::analytizace", "kind": "pásmo", "n": 30,
       "measures": [
         {"label": "podíl skupin s pevným slovosledem po ztrátě pádu", "metric": "skupiny s pevným slovosledem po erozi pádu", "scale": 0.16666666666666666, "band": [0.5, 1.0], "wide": [0.5, 1.0], "support": "návrh", "verification": "opraveno",
@@ -235,7 +213,7 @@
          "source": "tamtéž (Dahl 1979, Dryer WALS kap. 143: pozice záporky je stabilní rys)",
          "conversion": "skupiny se záporkou před slovesem / 6"}
       ],
-      "note": "Zvukové metriky v této bráně zdvojují m2::metrika_3 a metrika_5; kandidát na sloučení."
+      "note": "Zvukové metriky této kontroly vyhodnocuje m2::zvukove_metriky (dávka m4_control_eroded)."
     },
     {
       "id": "m4b::clen_vznikne", "kind": "možnost", "n": 50, "p_min": 0.1,
@@ -244,16 +222,6 @@
       "support": "literatura", "verification": "ověřeno",
       "source": "Dryer (2013), Definite Articles, WALS Online kap. 37, https://wals.info/chapter/37: ze 620 jazyků má určitý člen (slovo, příklonka nebo ukazovací zájmeno v roli členu) 377, tedy 61 %, 243 jich nemá; Heine a Kuteva (2006), The Changing Languages of Europe, Oxford University Press, doi:10.1093/acprof:oso/9780199297337.001.0001 (členy vznikají z ukazovacích zájmen; existence ověřena). Míru vzniku za 3 000 let literatura nedává, p_min 0,1 je návrh",
       "note": "Člen smí vznikat jen v části jazyků; invariant: zdroj členu je v katalogu."
-    },
-    {
-      "id": "m4b::bez_padu", "kind": "pásmo", "n": 30,
-      "require": ["buňka OBJ v paradigmatu jmen chybí"],
-      "measures": [
-        {"label": "podíl skupin s pevným slovosledem bez pádu", "metric": "skupiny s pevným slovosledem", "scale": 0.16666666666666666, "band": [0.5, 1.0], "wide": [0.5, 1.0], "support": "návrh", "verification": "opraveno",
-         "source": "jako m4::analytizace: typologická souvislost případ × volnost slovosledu doložena (Fedzechkina, Newport a Jaeger 2017, Cognitive Science 41, 416–446, doi:10.1111/cogs.12346), historická souvislost zpochybněna; Siewierska (1998) a Dryer (WALS kap. 81 až 87) nepotvrzeny; pásmo je z věrohodnosti",
-         "conversion": "skupiny s pevným slovosledem / 6 po 3 000 letech jazyka bez pádu"}
-      ],
-      "note": "Zdvojuje m4::analytizace; kandidát na sloučení."
     },
     {
       "id": "m4b::exaptace", "kind": "možnost", "n": 30, "p_min": 0.15,
@@ -400,14 +368,10 @@
       "source": "Haspelmath a Tadmor (eds., 2009), Loanwords in the World’s Languages, De Gruyter Mouton, doi:10.1515/9783110218442 (existence ověřena); konkrétní tvrzení o kulturních výpůjčkách z náboženství (latina, arabština, sanskrt) jsem v textu nenašel; p_min 0,8 je návrh"
     },
     {
-      "id": "m6c::strom_odpovida", "kind": "možnost", "n": 20, "p_min": 0.85,
+      "id": "m6c::strom", "kind": "možnost", "n": 20, "p_min": 0.85,
       "support": "návrh",
-      "source": "rekonstrukce stromu ze simulované historie: shoda s vloženým rozpadem; kvalitu rekonstrukce literatura udává jen pro metody, ne pro vývoj samotný"
-    },
-    {
-      "id": "m6c::strom_stabilni", "kind": "možnost", "n": 20, "p_min": 0.85,
-      "support": "návrh",
-      "source": "strom bez nepravých rozštěpení a zániků; stejný důvod jako m6c::strom_odpovida"
+      "source": "rekonstrukce stromu ze simulované historie: shoda s vloženým rozpadem; kvalitu rekonstrukce literatura udává jen pro metody, ne pro vývoj samotný; strom bez nepravých rozštěpení a zániků",
+      "note": "Sloučeno 5. 11. 2026 z m6c::strom_odpovida a m6c::strom_stabilni (týž jev); jev nastal, když prošly obě kontroly."
     }
   ]
 }

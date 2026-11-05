@@ -297,7 +297,7 @@ pub fn batches() -> Vec<Batch> {
             ("m3b::metrika_1", check_metrika_1(&simulation)),
             ("m3b::metrika_2", check_metrika_2(&[&simulation])),
             ("m3b::nova_slova", check_nova_slova(&[&simulation])),
-            ("m3b::zvukove_metriky", check_zvukove_metriky(&simulation)),
+            ("m2::zvukove_metriky", check_zvukove_metriky(&simulation)),
         ])
     }
     fn eroded(seed: i64) -> Result<Vec<(&'static str, Report)>, String> {
@@ -318,7 +318,7 @@ pub fn batches() -> Vec<Batch> {
                 "m3b::metrika_1",
                 "m3b::metrika_2",
                 "m3b::nova_slova",
-                "m3b::zvukove_metriky",
+                "m2::zvukove_metriky",
             ],
             run: Runner::Single(lexicon),
         },

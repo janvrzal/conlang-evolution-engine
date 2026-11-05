@@ -198,7 +198,7 @@ pub fn batches() -> Vec<Batch> {
                 check_produktivni_vzor(&[&simulation]),
             ),
             ("m3::analogie", check_analogie(&simulation)),
-            ("m3::zvukove_metriky", check_zvukove_metriky(&simulation)),
+            ("m2::zvukove_metriky", check_zvukove_metriky(&simulation)),
         ])
     }
     vec![Batch {
@@ -208,7 +208,7 @@ pub fn batches() -> Vec<Batch> {
             "m3::morfologizace",
             "m3::produktivni_vzor",
             "m3::analogie",
-            "m3::zvukove_metriky",
+            "m2::zvukove_metriky",
         ],
         run: Runner::Single(morphology),
     }]
