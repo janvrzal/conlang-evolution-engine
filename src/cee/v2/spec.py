@@ -50,6 +50,16 @@ class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ConstructionSpec(_Model):
+    """Konstrukce gramatické funkce (druh, zdrojové slovo, stadium, pořadí, posila)."""
+
+    kind: str = Field(min_length=1)
+    source: str | None = None
+    stage: str | None = None
+    order: str | None = None
+    reinforcer: str | None = None
+
+
 class LanguageSpec(_Model):
     """Protojazyk jedné linie."""
 
@@ -69,6 +79,10 @@ class LanguageSpec(_Model):
     endonym: list[str] = Field(default_factory=list)
     #: Tóny tónového jazyka jako tónové značky (``["˥", "˧", "˩"]``); prázdné = bez tónů.
     tones: list[str] = Field(default_factory=list)
+    #: Přepisy konstrukcí profilu podle funkce: ``{"FUTURE": {"kind": "synthetic"}}``.
+    constructions: dict[str, ConstructionSpec] = Field(default_factory=dict)
+    #: Vlastní koncovky podle ``třída:buňka``: ``{"noun:OBJ": [["m", 1.0]]}``.
+    endings: dict[str, list[tuple[str, float]]] = Field(default_factory=dict)
 
 
 class RegionSpec(_Model):

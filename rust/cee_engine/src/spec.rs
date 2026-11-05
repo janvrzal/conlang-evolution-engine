@@ -113,6 +113,29 @@ pub struct LanguageSpec {
     pub endonym: Vec<String>,
     #[serde(default)]
     pub tones: Vec<String>,
+    /// Přepisy konstrukcí profilu podle funkce (`{"FUTURE": {"kind": "synthetic"}}`); funkce,
+    /// kterou profil nemá, se přidá.
+    #[serde(default)]
+    pub constructions: std::collections::BTreeMap<String, ConstructionSpec>,
+    /// Vlastní koncovky podle `třída:buňka` (`{"noun:OBJ": [["m", 1.0]]}`): možnosti s vahami;
+    /// buňky, které tu nejsou, mají výchozí koncovky.
+    #[serde(default)]
+    pub endings: std::collections::BTreeMap<String, Vec<(String, f64)>>,
+}
+
+/// Konstrukce gramatické funkce v popisu jazyka (`Construction` bez stavu vývoje).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConstructionSpec {
+    pub kind: String,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub stage: Option<String>,
+    #[serde(default)]
+    pub order: Option<String>,
+    #[serde(default)]
+    pub reinforcer: Option<String>,
 }
 
 /// Region jako síť vesnic.
@@ -225,6 +248,72 @@ fn proto_language(spec: &LanguageSpec, table: &SegmentTable) -> Result<ProtoLang
     language.words = spec.words.clone();
     language.endonym = spec.endonym.clone();
     language.tones = spec.tones.clone();
+    for (function, given) in &spec.constructions {
+        let name = crate::grammar::FUNCTIONS
+            .iter()
+            .copied()
+            .find(|f| f == function)
+            .ok_or_else(|| {
+                format!(
+                    "languages.{}.constructions: neznámá funkce '{function}'",
+                    spec.id
+                )
+            })?;
+        const KINDS: [&str; 7] = [
+            "synthetic",
+            "periphrastic",
+            "zero",
+            "pre",
+            "post",
+            "embraced",
+            "fixed",
+        ];
+        if !KINDS.contains(&given.kind.as_str()) && given.kind != "free" {
+            return Err(format!(
+                "languages.{}.constructions.{function}: neznámý druh '{}'",
+                spec.id, given.kind
+            ));
+        }
+        let mut construction = crate::grammar::Construction::new(name, &given.kind);
+        construction.source = given.source.clone();
+        construction.stage = given.stage.clone();
+        construction.order = given.order.clone();
+        construction.reinforcer = given.reinforcer.clone();
+        match language.grammar.iter_mut().find(|(f, _)| *f == name) {
+            Some(slot) => slot.1 = construction,
+            None => language.grammar.push((name, construction)),
+        }
+    }
+    if !spec.endings.is_empty() {
+        let mut endings = crate::scenarios::syntax_endings();
+        for (key, options) in &spec.endings {
+            let (class, cell) = key.split_once(':').ok_or_else(|| {
+                format!(
+                    "languages.{}.endings.{key}: klíč má tvar třída:buňka",
+                    spec.id
+                )
+            })?;
+            if !matches!(class, "noun" | "verb") || options.is_empty() {
+                return Err(format!(
+                    "languages.{}.endings.{key}: třída noun nebo verb a aspoň jedna koncovka",
+                    spec.id
+                ));
+            }
+            for (form, weight) in options {
+                table
+                    .parse(form)
+                    .map_err(|e| format!("languages.{}.endings.{key}: {e}", spec.id))?;
+                if !(*weight > 0.0) {
+                    return Err(format!(
+                        "languages.{}.endings.{key}: váha musí být kladná",
+                        spec.id
+                    ));
+                }
+            }
+            endings.insert((class.to_owned(), cell.to_owned()), options.clone());
+        }
+        language.endings = Some(endings);
+    }
     Ok(language)
 }
 

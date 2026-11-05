@@ -619,9 +619,256 @@ fn complexity(seed: i64) -> Result<Report, String> {
     Ok(report)
 }
 
+// --- Romania (M7.3) -------------------------------------------------------------------------
+
+/// Popis světa Romanie: latina ve čtyřech větvích od roku 100 př. n. l. (dok. 22, M7.3).
+pub const ROMANIA_JSON: &str = include_str!("../../../src/cee/data/scenarios/romania.json");
+/// Větve (regiony) Romanie a roky odečtu.
+pub const ROMANIA_BRANCHES: [&str; 4] = ["italia", "gallia", "hispania", "dacia"];
+pub const ROMANIA_YEARS: [f64; 5] = [400.0, 600.0, 1200.0, 1300.0, 1900.0];
+
+/// Skupiny větve (vesnice regionu; region je rodič území vesnice).
+fn branch_groups(world: &crate::world::World, branch: &str) -> Vec<crate::ids::GroupId> {
+    world
+        .group_ids()
+        .into_iter()
+        .filter(|&g| {
+            let territory = world.groups.territory[g.index()];
+            let parent = world.territories[territory.index()].parent;
+            !parent.is_none() && world.registry.territories.name(parent.0) == branch
+        })
+        .collect()
+}
+
+/// Převládající konstrukce funkce ve větvi (vážená mluvčími).
+fn branch_construction(
+    world: &crate::world::World,
+    groups: &[crate::ids::GroupId],
+    function: &str,
+) -> Option<Construction> {
+    let mut votes: BTreeMap<String, (f64, Construction)> = BTreeMap::new();
+    for &g in groups {
+        if let Some(c) = syntax::dominant(world, g, function) {
+            let entry = votes.entry(c.key()).or_insert((0.0, c));
+            entry.0 += f64::from(world.groups.population[g.index()]);
+        }
+    }
+    votes
+        .into_values()
+        .max_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, c)| c)
+}
+
+/// Odečet jedné větve v jednom roce: stav pádu, `-m`, člen, futurum, slovosled, zápor,
+/// retence a koncové samohlásky.
+fn record_branch(simulation: &Simulation, branch: &str, year: f64, report: &mut Report) {
+    let world = &simulation.world;
+    let groups = branch_groups(world, branch);
+    if groups.is_empty() {
+        report.missing(&format!("větev {branch}"));
+        return;
+    }
+    let tag = format!("{branch} {year:.0}");
+    let mean_of = |f: &dyn Fn(crate::ids::GroupId) -> f64| {
+        let values: Vec<f64> = groups
+            .iter()
+            .map(|&g| f(g))
+            .filter(|v| !v.is_nan())
+            .collect();
+        mean(&values)
+    };
+    let kind = |function: &str| branch_construction(world, &groups, function);
+    // Pád: předmět vyjádřený koncovkou a jeho slabost (splynutí s citačním tvarem).
+    let obj = kind("OBJ");
+    info(
+        report,
+        &format!("{tag} pád"),
+        f64::from(u8::from(
+            obj.as_ref().is_some_and(|c| c.kind == "synthetic"),
+        )),
+    );
+    info(
+        report,
+        &format!("{tag} slabost předmětu"),
+        mean_of(&|g| syntax::weakness(world, g, "OBJ")),
+    );
+    // Koncové -m: podíl tvarů buňky OBJ, které končí na m.
+    let m_share = mean_of(&|g| final_m_share(world, g));
+    info(report, &format!("{tag} tvary předmětu s -m"), m_share);
+    info(
+        report,
+        &format!("{tag} člen"),
+        f64::from(u8::from(kind("DEFINITE").is_some_and(|c| c.kind != "zero"))),
+    );
+    let future = kind("FUTURE");
+    let future_state = match &future {
+        Some(c) if c.kind == "synthetic" && c.exponent.is_none() && c.donor.is_none() => 0.0,
+        Some(c) if c.kind == "synthetic" => 2.0,
+        Some(c) if c.kind == "periphrastic" => 1.0,
+        _ => -1.0,
+    };
+    info(report, &format!("{tag} futurum"), future_state);
+    let order = kind("ORDER");
+    info(
+        report,
+        &format!("{tag} pevné SVO"),
+        f64::from(u8::from(order.as_ref().is_some_and(|c| {
+            c.kind == "fixed" && c.order.as_deref() == Some("SVO")
+        }))),
+    );
+    let negation = kind("NEG");
+    info(
+        report,
+        &format!("{tag} zápor před slovesem"),
+        f64::from(u8::from(negation.as_ref().is_some_and(|c| c.kind == "pre"))),
+    );
+    info(
+        report,
+        &format!("{tag} dvojitý zápor"),
+        f64::from(u8::from(
+            negation.as_ref().is_some_and(|c| c.kind == "embraced"),
+        )),
+    );
+    info(
+        report,
+        &format!("{tag} retence"),
+        mean_of(&|g| crate::gates::metrics::retention(world, g)),
+    );
+    info(
+        report,
+        &format!("{tag} slova na samohlásku"),
+        mean_of(&|g| vowel_final_share(world, g)),
+    );
+}
+
+/// Podíl tvarů buňky OBJ (slova třídy noun), které končí na `m`.
+fn final_m_share(world: &crate::world::World, group: crate::ids::GroupId) -> f64 {
+    let (Some(table), Some(cell)) = (world.table.as_ref(), world.registry.cells.get("OBJ")) else {
+        return f64::NAN;
+    };
+    let Ok(m) = table.parse("m") else {
+        return f64::NAN;
+    };
+    let code = world.groups.main_code(group);
+    let (mut total, mut with_m) = (0usize, 0usize);
+    for unit in code.phonology.vocabulary.iter() {
+        if world.morphemes.cell[unit.index()].0 != cell {
+            continue;
+        }
+        let form = world.form_of(group, unit);
+        total += 1;
+        with_m += usize::from(form.last() == m.first());
+    }
+    if total == 0 {
+        f64::NAN
+    } else {
+        with_m as f64 / total as f64
+    }
+}
+
+/// Podíl citačních tvarů slovníku, které končí samohláskou.
+fn vowel_final_share(world: &crate::world::World, group: crate::ids::GroupId) -> f64 {
+    let Some(table) = world.table.as_ref() else {
+        return f64::NAN;
+    };
+    let forms = lexicon_forms(world, group);
+    if forms.is_empty() {
+        return f64::NAN;
+    }
+    let vowel_final = forms
+        .values()
+        .filter(|f| f.last().is_some_and(|&s| table.is_vowel(s)))
+        .count();
+    vowel_final as f64 / forms.len() as f64
+}
+
+fn romania(seed: i64) -> Result<Report, String> {
+    let mut spec = crate::spec::WorldSpec::from_json(ROMANIA_JSON)?;
+    spec.seed = seed;
+    let (world, events) = crate::spec::build(&spec)?;
+    let mut simulation = Simulation::new(world, SimulationConfig::default(), events)?;
+    let mut report = Report::new();
+    for year in ROMANIA_YEARS {
+        simulation.run(year)?;
+        for branch in ROMANIA_BRANCHES {
+            record_branch(&simulation, branch, year, &mut report);
+        }
+    }
+    // Souhrny přes větve (počty větví), na které míří cíle.
+    let count = |report: &Report, year: f64, what: &str, test: &dyn Fn(f64) -> bool| {
+        ROMANIA_BRANCHES
+            .iter()
+            .filter(|b| test(metric_value(report, &format!("{b} {year:.0} {what}"))))
+            .count() as f64
+    };
+    let summary = [
+        (
+            "větve bez -m do roku 400",
+            count(&report, 400.0, "tvary předmětu s -m", &|v| v < 0.5),
+        ),
+        (
+            "větve bez pádu v roce 1200",
+            count(&report, 1200.0, "pád", &|v| v < 0.5),
+        ),
+        (
+            "větve se členem v roce 1200",
+            count(&report, 1200.0, "člen", &|v| v > 0.5),
+        ),
+        (
+            "větve bez původního futura v roce 600",
+            count(&report, 600.0, "futurum", &|v| v != 0.0),
+        ),
+        (
+            "větve s novým syntetickým futurem v roce 1300",
+            count(&report, 1300.0, "futurum", &|v| v == 2.0),
+        ),
+        (
+            "větve s pevným SVO v roce 1300",
+            count(&report, 1300.0, "pevné SVO", &|v| v > 0.5),
+        ),
+        (
+            "větve se záporem před slovesem v roce 1200",
+            count(&report, 1200.0, "zápor před slovesem", &|v| v > 0.5),
+        ),
+        (
+            "větve s dvojitým záporem v roce 1900",
+            count(&report, 1900.0, "dvojitý zápor", &|v| v > 0.5),
+        ),
+    ];
+    for (name, value) in summary {
+        info(&mut report, name, value);
+    }
+    let retention: Vec<f64> = ROMANIA_BRANCHES
+        .iter()
+        .map(|b| metric_value(&report, &format!("{b} 1900 retence")))
+        .collect();
+    info(
+        &mut report,
+        "retence vůči latině v roce 1900 (průměr větví)",
+        mean(&retention),
+    );
+    let vowels: Vec<f64> = ROMANIA_BRANCHES
+        .iter()
+        .map(|b| metric_value(&report, &format!("{b} 1900 slova na samohlásku")))
+        .collect();
+    let spread = vowels.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+        - vowels.iter().cloned().fold(f64::INFINITY, f64::min);
+    info(
+        &mut report,
+        "rozdíl podílu slov na samohlásku mezi větvemi v roce 1900",
+        spread,
+    );
+    Ok(report)
+}
+
 /// Všechny kalibrační běhy.
 pub fn runs() -> Vec<Run> {
     vec![
+        Run {
+            id: "romania",
+            description: "latina ve čtyřech větvích (Itálie, Galie, Hispánie, Dácie), −100 až 1900",
+            measure: romania,
+        },
         Run {
             id: "typologie",
             description: "village_grid 6 vesnic, start gramatiky a přízvuku z WALS, 5 000 let",

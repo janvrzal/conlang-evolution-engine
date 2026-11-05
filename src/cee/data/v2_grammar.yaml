@@ -47,7 +47,9 @@ functions:
     weight: 0.3
     need: 0.4
     context: 0.44
-    sources: [go, want]
+    # „mít“: futurum z vlastnictví a povinnosti (lat. cantare habeo; Bybee, Perkins a Pagliuca
+    # 1994), přidáno v M7.3.
+    sources: [go, want, have]
   PL:
     template: inflection
     domain: noun

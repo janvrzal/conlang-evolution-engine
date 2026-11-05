@@ -128,6 +128,11 @@ impl Catalog {
 
 /// Pořadí funkcí profilu `syntax`/`substrate` (pořadí vložení do slovníku v Pythonu).
 const PROFILE_ORDER: [&str; 5] = ["PAST", "PL", "OBJ", "NEG", "ORDER"];
+
+/// Všechny gramatické funkce katalogu (statická jména pro profily a popis světa).
+pub const FUNCTIONS: [&str; 8] = [
+    "PAST", "FUTURE", "PL", "OBJ", "DEFINITE", "ASPECT", "NEG", "ORDER",
+];
 /// Pojmy navíc k základní slovní zásobě, aby cesty gramatikalizace existovaly.
 pub const GRAMMATICAL_SOURCES: [&str; 6] = ["have", "finish", "go", "want", "thing", "step"];
 

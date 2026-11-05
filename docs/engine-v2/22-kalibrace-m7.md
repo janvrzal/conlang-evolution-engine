@@ -543,3 +543,46 @@ scénář a měřidla (střední), ověření zdrojů cílů (střední), kalibr
 
 Scénář Romanie je první kus Evropy. Po M7.3 se dá rozšířit o germánskou, slovanskou a keltskou
 větev s kontaktem (germánská elita v Galii, Slované na Balkáně) a o jazyky států.
+
+### M7.3a: postaveno (5. 11. 2026)
+
+- **Popis jazyka umí vlastní gramatiku a koncovky**: `LanguageSpec.constructions` (přepis konstrukce
+  podle funkce: `kind`, `source`, `stage`, `order`, `reinforcer`) a `LanguageSpec.endings`
+  (`{"noun:OBJ": [["m", 1.0]]}`), v Rustu i ve schématu `src/cee/v2/spec.py`.
+- **Zdroj futura „mít“** (`FUTURE.sources` + `have`): futurum z vlastnictví a povinnosti, lat.
+  *cantare habeo* (Bybee, Perkins a Pagliuca 1994). Brány i ostatní cíle beze změny.
+- **Scénář** `src/cee/data/scenarios/romania.json`: latina (16 souhlásek, 5 samohlásek bez délky,
+  přízvuk na předposlední), 149 pojmů jako kmen akuzativu bez `-m` (*lupu*, *homine*), koncovky
+  předmět `-m`, plurál `-s`/`-i`, perfektum `-wi`/`-i`, futurum `-bo`/`-am`; čtyři regiony (Itálie,
+  Galie, Hispánie, Dácie), říše od −100, odtržení Dácie 271, Galie a Hispánie 476; −100 až 1900.
+  Slova pro 100 pojmů podle latinských lemmat IE-CoR, ostatní ze standardního slovníku.
+- **Retence z IE-CoR** (100 shodných významů, latinský kognát v moderním jazyce): katalánština 0,69,
+  francouzština 0,71, italština 0,72, ladinština 0,73, portugalština 0,71, rumunština 0,68, sardinština
+  0,71, španělština 0,73, valonština 0,72.
+- **Měřidlo** `cee calibrate --only romania` (20 semínek, 6 s): po větvích a v letech 400, 600, 1200,
+  1300 a 1900 pád, slabost předmětu, podíl tvarů předmětu s `-m`, člen, futurum (původní, opis, nové
+  syntetické), pevné SVO, zápor, retence, podíl slov na samohlásku; cíle `m7::latina_*`.
+
+### Výchozí stav Romanie: 3 z 10
+
+| cíl | výsledek | cíl | splněno |
+|---|---|---|---|
+| ztráta `-m` do 400 | 0 větví | 3–4 | ne |
+| zánik pádu do 1200 | 0 | 3–4 | ne |
+| člen do 1200 | 0 | 4 | ne |
+| zánik latinského futura do 600 | 0 | 3–4 | ne |
+| nové syntetické futurum do 1300 | 0 | 2–4 | ne |
+| pevné SVO do 1300 | 0 | 3–4 | ne |
+| zápor před slovesem 1200 | 4 | 4 | ano |
+| dvojitý zápor 1900 | 0 | 0–1 | ano |
+| retence 1900 | 0,774 | 0,62–0,80 | ano |
+| rozdíl koncových samohlásek | 0,006 | ≥ 0,3 | ne |
+
+Slovník se mění realisticky (retence 0,77 proti 0,68–0,73 z IE-CoR), ale **gramatika ani konce slov
+se za 2 000 let nepohnou**: `-m` drží ve všech větvích na 100 %, podíl slov na samohlásku 0,92 beze
+změny. Ztráta `m → ∅ /V_#` se navrhuje (9× v jednom běhu, nosovky jako třída 19×), ale ani jednou se
+neustálí, a to ani bez funkční zátěže (`functional_load_scale` 0), se srozumitelností 0,3 a pětkrát
+rychlejšími změnami konce slova; zrychlení gramatikalizace (×3) také nic nezmění
+(`kalibrace/m73-romania.json`). Brzdí tedy něco, co tyto páky nezasáhnou. **Další krok: rozpad
+fitness návrhu `m → ∅` podle tlaků** (artikulace s populačním koeficientem, srozumitelnost
+a krátká slova, konformita, šíření mezi 16 skupinami), pak podobně pro člen a futurum.

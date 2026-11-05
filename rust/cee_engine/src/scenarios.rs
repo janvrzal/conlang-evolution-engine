@@ -582,6 +582,8 @@ pub struct ProtoLanguage {
     pub words: HashMap<String, String>,
     pub endonym: Vec<String>,
     pub tones: Vec<String>,
+    /// Vlastní koncovky jazyka (`None` = výchozí `syntax_endings`).
+    pub endings: Option<Endings>,
 }
 
 impl ProtoLanguage {
@@ -597,6 +599,7 @@ impl ProtoLanguage {
             words: HashMap::new(),
             endonym: Vec::new(),
             tones: Vec::new(),
+            endings: None,
         }
     }
 
@@ -690,7 +693,7 @@ pub fn seed_lineages(
             Some(&forms),
             Some(&frequencies),
             Some(&classes),
-            &used,
+            language.endings.as_ref().unwrap_or(&used),
             &language.id,
             Some(&cells[&language.id]),
         )?;

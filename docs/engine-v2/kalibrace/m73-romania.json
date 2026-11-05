@@ -1,0 +1,60 @@
+{
+ "jasnost_0.3": {
+  "pressure_weights": {
+   "clarity": 0.3
+  }
+ },
+ "konec_x5": {
+  "change_rates": {
+   "coda_loss": 5.0,
+   "apocope": 5.0
+  }
+ },
+ "jasnost_0.3_konec_x5": {
+  "pressure_weights": {
+   "clarity": 0.3
+  },
+  "change_rates": {
+   "coda_loss": 5.0,
+   "apocope": 5.0
+  }
+ },
+ "gram_x3": {
+  "change_rates": {
+   "periphrasis": 3.0,
+   "cliticization": 3.0,
+   "affixation": 3.0,
+   "bleaching": 3.0,
+   "order_fixation": 3.0
+  }
+ },
+ "vse": {
+  "pressure_weights": {
+   "clarity": 0.3
+  },
+  "change_rates": {
+   "coda_loss": 5.0,
+   "apocope": 5.0,
+   "periphrasis": 3.0,
+   "cliticization": 3.0,
+   "affixation": 3.0,
+   "bleaching": 3.0,
+   "order_fixation": 3.0
+  }
+ },
+ "fz_2": {
+  "functional_load_scale": 2.0
+ },
+ "fz_1": {
+  "functional_load_scale": 1.0
+ },
+ "fz_0": {
+  "functional_load_scale": 0.0
+ },
+ "fz_1_jasnost_0.5": {
+  "functional_load_scale": 1.0,
+  "pressure_weights": {
+   "clarity": 0.5
+  }
+ }
+}
