@@ -337,3 +337,27 @@ Literatura pro ně dává cíl až ve zpětném testu latina → románské jazy
 **Rozhodnutí pro uživatele**: tempo vzniku (`emergence_need_scale`) je od M7a jen předběžné (0,6).
 Hodnota 0,2 až 0,3 dává stacionární typologii všech čtyř rysů, u členu skutečným cyklem. Změna
 výchozí hodnoty zatím neproběhla.
+
+### Tempo vzniku 0,2 naráží na bránu členu (5. 11. 2026)
+
+Uživatel schválil snížit `emergence_need_scale` na 0,2. Kalibrace pak splní 11 z 12 cílů (chybí jen
+Trudgill), ale **brána `m4b::clen_vznikne` neprojde**: ve scénáři M4b (jazyk bez pádu, 3 000 let)
+člen nevznikne v žádném z 50 běhů (brána chce aspoň 1, `p_min` 0,1). Změna proto zatím **není
+zapsaná**; výchozí hodnota zůstává 0,6. Měření (vyblednutí se základní mírou 0,03 u 0,3 až 0,5,
+jinak 0,01):
+
+| potřeba | člen v M4b (běhy z 50) | 33A plurál | 37A člen | 66A minulý | 67A budoucí |
+|---|---|---|---|---|---|
+| 0,6 | 5, prošla | ne (+5 / −0) | ne (+19 / −2) | ano | ne |
+| 0,5 | 1, prošla | ne | ne (+16 / −4) | ano | ne |
+| 0,4 | 1, prošla | ne (+5 / −0) | **ano (+15 / −5)** | ano | ne (+2 / −0) |
+| 0,3 | 0, neprošla | ne | ano | ano | ano |
+| 0,2 | 0, neprošla | ano (+1 / −0) | ano (+13 / −5) | ano (+0 / −0) | ano (+1 / −0) |
+
+Žádná hodnota nesplní obojí. Plurál a budoucí čas projdou jen tam, kde skoro nevznikají
+(zamrznutí), protože zatím nezanikají; tentýž nízký vznik pak nedovolí člen v brány M4b. Pravým
+řešením je zánik plurálu a budoucího času erozí (M7.3), ne tempo vzniku.
+
+Při té příležitosti se našla chyba v kontrole invariantu `m4b::jazyk_bez_kategorie`: „zdroj minulého
+času je z katalogu“ počítala jako cizí zdroj i skupinu, která minulý čas nevyvinula. Opraveno
+(4aa34bc); brána prochází při všech hodnotách.
