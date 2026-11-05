@@ -241,7 +241,14 @@
         "want": "wole",
         "thing": "re",
         "step": "passu"
-      }
+      },
+      "processes": [
+        {
+          "family": "coda_loss",
+          "label": "m → ∅ /V_#",
+          "share": 0.3
+        }
+      ]
     },
     {
       "id": "gaulish",

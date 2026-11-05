@@ -60,6 +60,14 @@ class ConstructionSpec(_Model):
     reinforcer: str | None = None
 
 
+class InitialProcessSpec(_Model):
+    """Zvuková změna rozběhnutá na startu (rodina, popis kandidáta, podíl mluvčích)."""
+
+    family: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    share: float = Field(gt=0.0, lt=1.0)
+
+
 class LanguageSpec(_Model):
     """Protojazyk jedné linie."""
 
@@ -83,6 +91,9 @@ class LanguageSpec(_Model):
     constructions: dict[str, ConstructionSpec] = Field(default_factory=dict)
     #: Vlastní koncovky podle ``třída:buňka``: ``{"noun:OBJ": [["m", 1.0]]}``.
     endings: dict[str, list[tuple[str, float]]] = Field(default_factory=dict)
+    #: Zvukové změny rozběhnuté na startu: ``[{"family": "coda_loss", "label": "m → ∅ /V_#",
+    #: "share": 0.3}]``.
+    processes: list[InitialProcessSpec] = Field(default_factory=list)
 
 
 class RegionSpec(_Model):

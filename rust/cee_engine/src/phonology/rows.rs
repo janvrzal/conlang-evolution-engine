@@ -168,6 +168,69 @@ pub fn register(
     })
 }
 
+/// Rozdá zvukové změny rozběhnuté na startu (`LanguageSpec.processes`): kandidát rodiny
+/// s daným popisem z inventáře jazyka se zaregistruje jako běžná procesní proměnná a každá
+/// skupina jazyka ji dostane s počátečním podílem. Dok. 22, M7.3h.
+pub fn seed_initial(world: &mut World) -> Result<(), String> {
+    let seeds = std::mem::take(&mut world.initial_processes);
+    for item in seeds {
+        let Some(number) = world.registry.languages.get(&item.language) else {
+            return Err(format!("processes: neznámý jazyk '{}'", item.language));
+        };
+        let groups: Vec<GroupId> = world
+            .group_ids()
+            .into_iter()
+            .filter(|&g| world.groups.main_code(g).language.0 == number)
+            .collect();
+        let Some(&first) = groups.first() else {
+            continue;
+        };
+        let built = cee_core::candidates::build(snapshot(), &item.inventory)?;
+        let family = cee_core::candidates::FAMILIES
+            .iter()
+            .position(|f| *f == item.family)
+            .ok_or_else(|| format!("processes: neznámá rodina '{}'", item.family))?;
+        let candidate = built
+            .candidates
+            .iter()
+            .find(|c| c.family == family && c.label == item.label)
+            .cloned()
+            .ok_or_else(|| {
+                let labels: Vec<&str> = built
+                    .candidates
+                    .iter()
+                    .filter(|c| c.family == family)
+                    .map(|c| c.label.as_str())
+                    .collect();
+                format!(
+                    "processes: rodina '{}' nemá v inventáři jazyka '{}' kandidáta '{}'; možnosti: {labels:?}",
+                    item.family, item.language, item.label
+                )
+            })?;
+        let year = world.start_year;
+        let found = register(world, &candidate, &item.family, 0, year, first)?;
+        let name = world.registry.variables.name(found.variable.0).to_owned();
+        let none = world
+            .registry
+            .variants
+            .get(&none_name(&name))
+            .map(VariantId)
+            .ok_or_else(|| format!("proměnná {name} nemá výchozí variantu"))?;
+        for group in groups {
+            let distribution = crate::model::repertoire::Distribution::from_pairs(
+                vec![(none, 1.0 - item.share), (found.changed, item.share)],
+                &world.registry.variants,
+            );
+            world
+                .groups
+                .main_code_mut(group)
+                .repertoire
+                .set(found.variable, distribution);
+        }
+    }
+    Ok(())
+}
+
 /// Masky hlásek a parametry procesu pro banku tvarů (`FormBank._register_native`).
 pub(crate) fn proc_of(def: &ProcessDef, table: &SegmentTable) -> Proc {
     let size = table.len() + 1;

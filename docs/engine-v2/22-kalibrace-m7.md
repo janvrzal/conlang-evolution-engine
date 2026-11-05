@@ -792,3 +792,33 @@ změnu napůl provedenou.
 
 **Zbývá:** (a) počáteční variabilita protojazyka (zvuková změna rozběhnutá na startu, např. `m → ∅ /V_#`
 s podílem 0,3), (b) přejímání slov ze substrátu při přechodu.
+
+### M7.3h: změny rozběhnuté na startu; `-m` a pád podle podmínek
+
+Schválil uživatel 5. 11. 2026. **Popis jazyka umí změnu napůl provedenou na startu**
+(`LanguageSpec.processes`: rodina, popis kandidáta a podíl mluvčích, např.
+`{"family": "coda_loss", "label": "m → ∅ /V_#", "share": 0.3}`; Rust i `spec.py`). Při startu
+simulace (`phonology::rows::seed_initial`, hned po souběžné variabilitě slovníku) se kandidát rodiny
+z inventáře jazyka zaregistruje jako běžná procesní proměnná a každá skupina jazyka ji dostane
+s daným podílem; neznámý popis vrátí chybu se seznamem možností. Světy bez `processes` se nemění.
+
+Latina začíná se ztrátou `-m` u 30 % mluvčích (autorský odhad: v klasické latině se `-m`
+vyslovovalo jako nosovost samohlásky, v poezii se elidovalo, nápisy ho vynechávají od 3. st.
+př. n. l.).
+
+| větev | podíl mluvčích latiny 100 / 400 / 600 | tvary předmětu s `-m` 100 / 400 / 600 / 1200 / 1900 | pád zanikne |
+|---|---|---|---|
+| Itálie | 1,00 / 1,00 / 1,00 | 0,99 / 0,96 / 0,96 / 0,67 / 0,15 | do 1200 |
+| Galie | 0,51 / 0,95 / 1,00 | 0,57 / 0,30 / 0,18 / 0,14 / 0,08 | do 600 |
+| Hispánie | 0,34 / 0,59 / 0,77 | 0,55 / 0,46 / 0,24 / 0,11 / 0,08 | do 600 |
+| Dácie | 0,10 trvale | 0,58 / 0,12 / 0,09 / 0,06 / 0,03 | do 600 |
+
+`-m` mizí nejrychleji tam, kde se slabé `-m` potká s dvojjazyčností (provincie), pomaleji v jádru
+(Itálie: velké vesnice, žádní L2 mluvčí, prestiž). Pád pak zaniká jako následek, ne jako cíl.
+Ve skutečnosti ztratila `-m` i Itálie brzy a stará francouzština držela dva pády do ~1300; model
+je v Itálii pomalejší a v provinciích rychlejší než doklady.
+
+**Romania 5 z 10** (`-m` do 400 ve 3 větvích, pád do 1200 ve 4, latinské futurum do 600 ve 3, zápor,
+dvojitý zápor). Nesplněno: člen (0 větví), nové syntetické futurum (0), pevné SVO (1), retence 0,557,
+rozdíl koncových samohlásek 0,11. Kalibrace celkem 17 z 22, dřívějších 12 cílů splněno, testy
+prošly, brány M1 a M2 10 z 10.

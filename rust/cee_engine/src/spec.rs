@@ -121,6 +121,20 @@ pub struct LanguageSpec {
     /// buňky, které tu nejsou, mají výchozí koncovky.
     #[serde(default)]
     pub endings: std::collections::BTreeMap<String, Vec<(String, f64)>>,
+    /// Zvukové změny rozběhnuté už na startu: jazyk v historickém okamžiku má změny napůl
+    /// provedené (lat. -m vyslovované jen jako nosovost samohlásky).
+    #[serde(default)]
+    pub processes: Vec<InitialProcess>,
+}
+
+/// Zvuková změna rozběhnutá na startu: rodina, popis kandidáta (`m → ∅ /V_#`) a podíl
+/// mluvčích, kteří ji už mají.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InitialProcess {
+    pub family: String,
+    pub label: String,
+    pub share: f64,
 }
 
 /// Konstrukce gramatické funkce v popisu jazyka (`Construction` bez stavu vývoje).
@@ -377,6 +391,55 @@ fn make_world(spec: &WorldSpec, params: Parameters) -> Result<World, String> {
         &languages,
     )?;
     world.start_year = spec.start_year;
+    for language in &spec.languages {
+        for item in &language.processes {
+            if !(item.share > 0.0 && item.share < 1.0) {
+                return Err(format!(
+                    "languages.{}.processes: podíl musí být mezi 0 a 1",
+                    language.id
+                ));
+            }
+            if !cee_core::candidates::FAMILIES.contains(&item.family.as_str()) {
+                return Err(format!(
+                    "languages.{}.processes: neznámá rodina '{}'",
+                    language.id, item.family
+                ));
+            }
+            let mut inventory: Vec<u32> = Vec::new();
+            for segment in language
+                .consonants
+                .clone()
+                .unwrap_or_else(|| {
+                    crate::concepts::Defaults::shared()
+                        .default_consonants
+                        .clone()
+                })
+                .iter()
+                .chain(
+                    language
+                        .vowels
+                        .clone()
+                        .unwrap_or_else(|| {
+                            crate::concepts::Defaults::shared().default_vowels.clone()
+                        })
+                        .iter(),
+                )
+            {
+                inventory.extend(table.parse(segment)?.into_iter().map(|s| s as u32));
+            }
+            inventory.sort_unstable();
+            inventory.dedup();
+            world
+                .initial_processes
+                .push(crate::world::InitialProcessSeed {
+                    language: language.id.clone(),
+                    family: item.family.clone(),
+                    label: item.label.clone(),
+                    share: item.share,
+                    inventory,
+                });
+        }
+    }
     Ok(world)
 }
 

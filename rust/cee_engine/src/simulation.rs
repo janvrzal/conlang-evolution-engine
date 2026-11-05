@@ -112,6 +112,7 @@ impl Simulation {
             world.varied = true;
             variation::seed(&mut world)?;
         }
+        crate::phonology::rows::seed_initial(&mut world)?;
         world.load_differing()?;
         let described = events.iter().map(|e| e.describe()).collect();
         let mut sorted: Vec<(usize, Box<dyn WorldEvent>)> =

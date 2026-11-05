@@ -65,6 +65,17 @@ mod table_serde {
 /// Koncovky buněk: (třída slova, buňka) → možnosti s vahami.
 pub type Endings = BTreeMap<(String, String), Vec<(String, f64)>>;
 
+/// Zvuková změna rozběhnutá na startu: jazyk (linie), rodina, popis kandidáta, podíl mluvčích
+/// a inventář jazyka, ze kterého se kandidáti staví.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InitialProcessSeed {
+    pub language: String,
+    pub family: String,
+    pub label: String,
+    pub share: f64,
+    pub inventory: Vec<u32>,
+}
+
 /// Svět simulace.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct World {
@@ -99,6 +110,10 @@ pub struct World {
     pub derivational_suffix: Form,
     /// Protojazyky už dostaly souběžnou variabilitu (`variation::seed`).
     pub varied: bool,
+    /// Zvukové změny rozběhnuté na startu (`LanguageSpec.processes`), rozdají se při startu
+    /// simulace a pak se seznam vyprázdní.
+    #[serde(default)]
+    pub initial_processes: Vec<InitialProcessSeed>,
     pub transfer: TransferState,
     pub sound: SoundWorldState,
     pub grammar: GrammarWorldState,
@@ -138,6 +153,7 @@ impl World {
             live: LivePools::default(),
             derivational_suffix: Vec::new(),
             varied: false,
+            initial_processes: Vec::new(),
             transfer: TransferState::default(),
             sound: SoundWorldState::default(),
             grammar: GrammarWorldState::default(),
