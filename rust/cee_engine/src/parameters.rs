@@ -156,9 +156,31 @@ impl ParameterSpec {
     }
 }
 
-impl Default for Parameters {
-    /// Výchozí hodnoty ze souboru `v2_parameters.json` (sestaví se jednou).
-    fn default() -> Self {
+thread_local! {
+    /// Výchozí parametry podstrčené kalibrací (`with_defaults`); `None` = soubor.
+    static OVERRIDE: std::cell::RefCell<Option<Parameters>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Spustí `run` tak, že `Parameters::default()` na tomto vlákně vrací `params` (varianta
+/// kalibrace `cee calibrate`). Scénáře berou výchozí parametry při stavbě světa; běh pak čte
+/// jen parametry světa, takže vnořená vlákna simulace přepis nepotřebují. Po návratu (i při
+/// panice) platí předchozí stav, takže vnoření a kradení práce rayonem jsou bezpečné.
+pub fn with_defaults<T>(params: Option<&Parameters>, run: impl FnOnce() -> T) -> T {
+    struct Restore(Option<Parameters>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let previous = self.0.take();
+            OVERRIDE.with(|cell| *cell.borrow_mut() = previous);
+        }
+    }
+    let previous = OVERRIDE.with(|cell| cell.replace(params.cloned()));
+    let _restore = Restore(previous);
+    run()
+}
+
+impl Parameters {
+    /// Výchozí hodnoty ze souboru `v2_parameters.json` bez přepisu kalibrace.
+    pub fn file_default() -> Parameters {
         static DEFAULT: OnceLock<Parameters> = OnceLock::new();
         DEFAULT
             .get_or_init(|| {
@@ -171,6 +193,16 @@ impl Default for Parameters {
                     .expect("výchozí hodnoty v2_parameters.json odpovídají Parameters")
             })
             .clone()
+    }
+}
+
+impl Default for Parameters {
+    /// Výchozí hodnoty ze souboru `v2_parameters.json` (sestaví se jednou), nebo varianta
+    /// kalibrace nastavená [`with_defaults`] na tomto vlákně.
+    fn default() -> Self {
+        OVERRIDE
+            .with(|cell| cell.borrow().clone())
+            .unwrap_or_else(Parameters::file_default)
     }
 }
 

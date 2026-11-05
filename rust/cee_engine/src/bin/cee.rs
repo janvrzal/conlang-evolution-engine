@@ -7,6 +7,7 @@
 //! cee scenarios
 //! cee behavior [scénář ...] [--seeds 1..3] [-o behavior.json]
 //! cee gates [--seeds 201] [--only m4b,m5::s3_substrat] [--list] [-o values.jsonl]
+//! cee calibrate [--seeds 1] [--only typologie,m7::retence] [--set jméno=hodnota ...] [--variants varianty.json] [--list] [-o values.jsonl]
 //! ```
 
 use std::process::ExitCode;
@@ -19,7 +20,7 @@ use cee_engine::spec::{self, WorldSpec};
 use cee_engine::{Simulation, SimulationConfig};
 
 fn usage() -> String {
-    "Použití:\n  cee run <spec.json> -o export.json [--threads N] [--phase-times]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--phase-times] [--history log.jsonl]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios\n  cee behavior [scénář ...] [--seeds 1..3] [-o behavior.json]\n  cee gates [--seeds 201] [--only m4b,m5::s3_substrat] [--list] [-o values.jsonl]".to_owned()
+    "Použití:\n  cee run <spec.json> -o export.json [--threads N] [--phase-times]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--phase-times] [--history log.jsonl]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios\n  cee behavior [scénář ...] [--seeds 1..3] [-o behavior.json]\n  cee gates [--seeds 201] [--only m4b,m5::s3_substrat] [--list] [-o values.jsonl]\n  cee calibrate [--seeds 1] [--only typologie,m7::retence] [--set jméno=hodnota ...] [--variants varianty.json] [--list] [-o values.jsonl]".to_owned()
 }
 
 struct Options {
@@ -32,6 +33,8 @@ struct Options {
     seeds: Option<String>,
     only: Option<String>,
     list: bool,
+    sets: Vec<String>,
+    variants: Option<String>,
     phase_times: bool,
 }
 
@@ -46,6 +49,8 @@ fn parse(args: &[String]) -> Result<Options, String> {
         seeds: None,
         only: None,
         list: false,
+        sets: Vec::new(),
+        variants: None,
         phase_times: false,
     };
     let mut iter = args.iter();
@@ -76,12 +81,48 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "--seeds" => options.seeds = Some(value("--seeds")?),
             "--only" => options.only = Some(value("--only")?),
             "--list" => options.list = true,
+            "--set" => options.sets.push(value("--set")?),
+            "--variants" => options.variants = Some(value("--variants")?),
             "--phase-times" => options.phase_times = true,
             other if other.starts_with('-') => return Err(format!("neznámý přepínač {other}")),
             other => options.positional.push(other.to_owned()),
         }
     }
     Ok(options)
+}
+
+/// Varianty kalibrace: výchozí, `--set` (jedna varianta „přepis“) a `--variants` (soubor
+/// `{"jméno": {"parametr": hodnota}}`). Hodnota `--set` je JSON, jinak text.
+fn calibration_variants(
+    options: &Options,
+) -> Result<Vec<cee_engine::calibration::Variant>, String> {
+    use cee_engine::calibration::Variant;
+    let mut variants = vec![Variant::base()];
+    if !options.sets.is_empty() {
+        let mut overrides = serde_json::Map::new();
+        for item in &options.sets {
+            let (name, text) = item
+                .split_once('=')
+                .ok_or_else(|| format!("--set chce jméno=hodnota, ne {item}"))?;
+            let value = serde_json::from_str(text)
+                .unwrap_or_else(|_| serde_json::Value::String(text.to_owned()));
+            overrides.insert(name.trim().to_owned(), value);
+        }
+        variants.push(Variant::new("přepis", overrides)?);
+    }
+    if let Some(path) = &options.variants {
+        let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+        let file: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))?;
+        for (name, overrides) in file {
+            let overrides = overrides
+                .as_object()
+                .cloned()
+                .ok_or_else(|| format!("{path}: varianta {name} chce objekt přepisů"))?;
+            variants.push(Variant::new(&name, overrides)?);
+        }
+    }
+    Ok(variants)
 }
 
 fn write(path: &Option<String>, value: &serde_json::Value) -> Result<(), String> {
@@ -183,6 +224,25 @@ fn main() -> ExitCode {
                 if failed > 0 {
                     return Err(format!("{failed} veličin bran neprošlo"));
                 }
+                Ok(())
+            }
+            "calibrate" => {
+                if options.list {
+                    print!("{}", cee_engine::calibration::list()?);
+                    return Ok(());
+                }
+                let start = gates::parse_seeds(options.seeds.as_deref().unwrap_or("1"))?[0];
+                let rows = cee_engine::calibration::run_rows(&cee_engine::calibration::Options {
+                    start,
+                    only: options
+                        .only
+                        .as_deref()
+                        .map(|text| text.split(',').map(|s| s.trim().to_owned()).collect())
+                        .unwrap_or_default(),
+                    variants: calibration_variants(&options)?,
+                    jsonl: options.output.clone(),
+                })?;
+                print!("{}", cee_engine::calibration::render(&rows));
                 Ok(())
             }
             "behavior" => {

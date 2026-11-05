@@ -424,7 +424,10 @@ cee scenario <jméno> --until <rok> [-o export.json] [--checkpoint stav.bin] [--
 cee export-tick0 <scénář|spec.json> [-o tick0.json]
 cee scenarios
 cee gates [--seeds 201] [--only m4b,m5::s3_substrat] [--list] [-o values.jsonl]
+cee calibrate [--seeds 1] [--only typologie,m7::retence] [--set jméno=hodnota ...] [--variants varianty.json] [--list] [-o values.jsonl]
 ```
+
+`cee calibrate` měří cíle kalibrace M7 a porovná varianty metaparametrů ([dokument 22](22-kalibrace-m7.md)).
 
 `cee gates` vyhodnotí statistické brány proti zamčeným cílovým pásmům (dokument 21); když některá
 neprojde, skončí chybou.

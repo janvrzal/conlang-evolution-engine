@@ -202,7 +202,7 @@ pub fn square_world(seed: i64) -> Result<crate::world::World, String> {
 
 /// Průměrné vzdálenosti kódů: sousedé v regionu, přes hranici, vzdálené regiony
 /// (`_measure` ve `scripts/v2_region_continuum.py`).
-fn region_measure(simulation: &Simulation) -> Value {
+pub fn region_measure(simulation: &Simulation) -> Value {
     use std::collections::BTreeSet;
     let world = &simulation.world;
     let ids = world.live.group_ids.clone();

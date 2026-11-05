@@ -163,7 +163,7 @@ impl Targets {
     }
 }
 
-fn metric_value(report: &Report, name: &str) -> f64 {
+pub fn metric_value(report: &Report, name: &str) -> f64 {
     report
         .metrics
         .iter()
