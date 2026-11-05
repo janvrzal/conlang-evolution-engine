@@ -1,12 +1,12 @@
 {
   "status": "návrh",
-  "popis": "Cílová pásma a druhy 52 bran milníků (docs/engine-v2/21-statisticke-brany.md). Stav „návrh“: pásma čekají na kontrolu uživatelem, než se zamknou. Pole support: „literatura“ = zdroj a číslo ověřené při psaní, „literatura*“ = zdroj a řádová hodnota z paměti, před zamčením ověřit v originále, „návrh“ = literatura nic nedává, pásmo je z věrohodnosti.",
+  "popis": "Cílová pásma a druhy 52 bran milníků (docs/engine-v2/21-statisticke-brany.md). Stav „návrh“: pásma čekají na kontrolu uživatelem, než se zamknou. Pole support: „literatura“ = číslo nebo rozsah nalezen v citovaném zdroji (viz verification), „návrh“ = literatura číslo nedává nebo ho nešlo ověřit, pásmo je z věrohodnosti. Pole verification: ověřeno / opraveno / nahrazeno / neověřitelné, stav kontroly zdroje webem (listopad 2026).",
   "gates": [
     {
       "id": "m1::s1_kontinuum", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "korelace jazykové a zeměpisné vzdálenosti", "metric": "korelace vzdálenosti jazyka a polohy", "band": [0.6, 0.9], "wide": [0.5, 0.95], "support": "literatura*",
-         "source": "Heeringa a Nerbonne (2002) a Nerbonne (2010): korelace jazykové (Levenshteinovy) a zeměpisné vzdálenosti nářečí bývá řádově 0,6 až 0,8",
+        {"label": "korelace jazykové a zeměpisné vzdálenosti", "metric": "korelace vzdálenosti jazyka a polohy", "band": [0.6, 0.9], "wide": [0.5, 0.95], "support": "literatura", "verification": "opraveno",
+         "source": "Heeringa a Nerbonne (2001), Dialect areas and dialect continua, Language Variation and Change 13(3), 375–400, doi:10.1017/S0954394501133041 (27 nizozemských obcí): zeměpis vysvětluje 65 až 81 % rozptylu výslovnostní vzdálenosti, korelace s logaritmem zeměpisné vzdálenosti asi 0,9 (údaj citován podle sekundárního přepisu s. 396). Rok byl v dřívější verzi uveden chybně jako 2002. Nerbonne (2010), Phil. Trans. R. Soc. B 365, 3821–3828, doi:10.1098/rstb.2010.0048, uvádí sublineární růst, ale pásmo 0,6 až 0,8 jsem v něm nenašel; sekundární zdroj mu přisuzuje 16 až 38 % vysvětleného rozptylu (neověřeno). Horní mez 0,9 odpovídá Nizozemsku (s logaritmem vzdálenosti, s lineární bude nižší); dolní mez 0,6 je z věrohodnosti",
          "conversion": "Pearsonova korelace dvojic vesnic ve snímku, přímá hodnota metriky"},
         {"label": "největší skok mezi sousedy / medián sousedů", "metric": "největší vzdálenost sousedů / (3 × medián)", "scale": 3.0, "band": [1.0, 4.0], "wide": [1.0, 5.0], "support": "návrh",
          "source": "literatura číslo nedává; kontinuum bez ostrých hranic (Chambers a Trudgill 1998, kap. 7) znamená, že žádný skok není řádově větší než typický",
@@ -24,8 +24,8 @@
     {
       "id": "m1::metrika_7", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "medián R² logistické křivky ustálených změn", "metric": "medián R² logistické křivky", "band": [0.9, 1.0], "wide": [0.85, 1.0], "support": "literatura*",
-         "source": "Kroch (1989): změny v čase sledují logistickou křivku (S-křivku); Blythe a Croft (2012) ukazují, že tvar nemají všechny změny, proto široké pásmo",
+        {"label": "medián R² logistické křivky ustálených změn", "metric": "medián R² logistické křivky", "band": [0.9, 1.0], "wide": [0.85, 1.0], "support": "návrh", "verification": "neověřitelné",
+         "source": "Kroch (1989), Reflexes of grammar in patterns of language change, Language Variation and Change 1, 199–244, doi:10.1017/S0954394500000168, modeluje změny logistickou křivkou (existence a téma ověřeny); Blythe a Croft (2012), S-curves and the mechanisms of propagation in language change, Language 88(2), 269–304, doi:10.1353/lan.2012.0027, S-křivku zkoumají, ale hodnotu R² (0,9 až 1,0) ani podíl změn s tvarem S-křivky jsem v žádném nenašel; pásmo je z věrohodnosti",
          "conversion": "R² proložení logistické funkce dráhou frekvence ustálené inovace, medián přes dráhy jednoho běhu"}
       ],
       "note": "Vypuštěno „více než 50 drah“ (velikost vzorku, ne vlastnost jazyka)."
@@ -40,34 +40,34 @@
     },
     {
       "id": "m1::velka_skupina_drift", "kind": "invariant", "n": 3,
-      "support": "literatura",
-      "source": "Wright–Fisher: směrodatná odchylka driftu klesá s 1/√N, velká souhrnná skupina (10^6) driftuje zanedbatelně (Kimura 1964)",
+      "support": "literatura", "verification": "ověřeno",
+      "source": "Wright–Fisher: směrodatná odchylka driftu klesá s 1/√N, velká souhrnná skupina (10^6) driftuje zanedbatelně; Kimura (1964), Diffusion models in population genetics, Journal of Applied Probability 1, 177–232, doi:10.2307/3211856 (existence ověřena; jde o matematickou vlastnost modelu)",
       "note": "Matematická vlastnost modelu, ne měření jazyka."
     },
     {
       "id": "m2::metrika_3", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "nejkratší průměrná délka slova (skupiny)", "metric": "nejkratší průměrná délka slova", "band": [3.5, 5.5], "wide": [3.0, 6.5], "support": "literatura*",
-         "source": "průměrná délka slov v základních seznamech (ASJP, 40 pojmů) je v jazycích světa řádově 4 až 6 segmentů (Wichmann et al. 2013; Wichmann 2023)",
+        {"label": "nejkratší průměrná délka slova (skupiny)", "metric": "nejkratší průměrná délka slova", "band": [3.5, 5.5], "wide": [3.0, 6.5], "support": "návrh", "verification": "neověřitelné",
+         "source": "nejkratší průměr přes skupiny: rozsah průměrné délky slova v seznamech ASJP o 40 pojmech je ve světě od 1,93 do 7,73 segmentu (anglický seznam 3,35); Wichmann (2023), Tone and word length across languages, Frontiers in Psychology 14, 1128461, doi:10.3389/fpsyg.2023.1128461 (ASJP, 40 pojmů, 5 044 jazyků v analýze). Průměr ani kvantily v textu uvedeny nejsou, pásmo uvnitř tohoto rozsahu je z věrohodnosti. Původní odkaz na Wichmann et al. (2013) nahrazen",
          "conversion": "průměrný počet segmentů povrchového tvaru slova ve skupině, minimum přes skupiny"},
-        {"label": "nejdelší průměrná délka slova (skupiny)", "metric": "nejdelší průměrná délka slova", "band": [4.5, 7.0], "wide": [4.0, 8.0], "support": "literatura*",
-         "source": "tamtéž",
+        {"label": "nejdelší průměrná délka slova (skupiny)", "metric": "nejdelší průměrná délka slova", "band": [4.5, 7.0], "wide": [4.0, 8.0], "support": "návrh", "verification": "neověřitelné",
+         "source": "nejdelší průměr přes skupiny: rozsah průměrné délky slova v seznamech ASJP o 40 pojmech je ve světě od 1,93 do 7,73 segmentu (anglický seznam 3,35); Wichmann (2023), Tone and word length across languages, Frontiers in Psychology 14, 1128461, doi:10.3389/fpsyg.2023.1128461 (ASJP, 40 pojmů, 5 044 jazyků v analýze). Průměr ani kvantily v textu uvedeny nejsou, pásmo uvnitř tohoto rozsahu je z věrohodnosti. Původní odkaz na Wichmann et al. (2013) nahrazen",
          "conversion": "maximum přes skupiny"}
       ]
     },
     {
       "id": "m2::metrika_4", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "nejmenší inventář souhlásek", "metric": "nejmíň souhlásek", "band": [15.0, 25.0], "wide": [6.0, 40.0], "support": "literatura*",
-         "source": "Maddieson (2013), WALS kap. 1: průměrné inventáře 19 až 25 souhlásek, střední jazyk asi 22, rozsah 6 až přes 100 (rozdělení hranic z paměti)",
+        {"label": "nejmenší inventář souhlásek", "metric": "nejmíň souhlásek", "band": [15.0, 25.0], "wide": [6.0, 40.0], "support": "literatura", "verification": "opraveno",
+         "source": "Maddieson (2013), Consonant Inventories, WALS Online kap. 1, https://wals.info/chapter/1: třídy 6–14, 15–18, 19–25, 26–33, 34 a více souhlásek; průměr 22,7, medián 21 (v dřívější verzi „střední asi 22“), rozsah 6 (Rotokas) až 122 (!Xóõ), 563 jazyků v tabulce (text uvádí také 562 a 566). Minimum přes deset skupin jednoho protojazyka je odvozeno z tohoto rozdělení",
          "conversion": "počet souhlásek skupiny na konci běhu, minimum přes skupiny"},
-        {"label": "největší inventář souhlásek", "metric": "nejvíc souhlásek", "band": [19.0, 33.0], "wide": [6.0, 40.0], "support": "literatura*",
-         "source": "tamtéž", "conversion": "maximum přes skupiny"},
-        {"label": "nejmenší inventář samohlásek", "metric": "nejmíň samohlásek", "band": [4.0, 7.0], "wide": [2.0, 14.0], "support": "literatura*",
-         "source": "Maddieson (2013), WALS kap. 2: 2 až 4 malý, 5 až 6 průměrný (nejčastější), 7 až 14 velký inventář kvalit samohlásek (564 jazyků)",
+        {"label": "největší inventář souhlásek", "metric": "nejvíc souhlásek", "band": [19.0, 33.0], "wide": [6.0, 40.0], "support": "literatura", "verification": "opraveno",
+         "source": "Maddieson (2013), WALS Online kap. 1 (viz nejmenší inventář souhlásek): 26–33 souhlásek je „moderately large“, 34 a více „large“; maximum přes deset skupin je odvozeno z tohoto rozdělení", "conversion": "maximum přes skupiny"},
+        {"label": "nejmenší inventář samohlásek", "metric": "nejmíň samohlásek", "band": [4.0, 7.0], "wide": [2.0, 14.0], "support": "literatura", "verification": "ověřeno",
+         "source": "Maddieson (2013), Vowel Quality Inventories, WALS Online kap. 2, https://wals.info/chapter/2: 2–4 kvality malý inventář (93 jazyků), 5–6 průměrný (287, nejčastější), 7–14 velký (184), celkem 564, rozsah 2 až 14. Minimum přes skupiny je odvozeno z tohoto rozdělení",
          "conversion": "počet samohlásek skupiny, minimum přes skupiny"},
-        {"label": "největší inventář samohlásek", "metric": "nejvíc samohlásek", "band": [5.0, 10.0], "wide": [2.0, 14.0], "support": "literatura*",
-         "source": "tamtéž", "conversion": "maximum přes skupiny"}
+        {"label": "největší inventář samohlásek", "metric": "nejvíc samohlásek", "band": [5.0, 10.0], "wide": [2.0, 14.0], "support": "literatura", "verification": "ověřeno",
+         "source": "Maddieson (2013), WALS Online kap. 2 (viz nejmenší inventář samohlásek); maximum přes skupiny je odvozeno z tohoto rozdělení", "conversion": "maximum přes skupiny"}
       ]
     },
     {
@@ -81,8 +81,8 @@
     {
       "id": "m2::metrika_6", "kind": "pásmo", "n": 12,
       "measures": [
-        {"label": "ustálených zvukových změn na jazyk za 3 000 let", "metric": "počet ustálených změn", "scale": 0.3333333333333333, "band": [10.0, 40.0], "wide": [5.0, 60.0], "support": "literatura*",
-         "source": "Ringe (2006), From Proto-Indo-European to Proto-Germanic, vypisuje několik desítek pravidelných zvukových změn za dvě až tři tisíciletí; Pope (1934) o latině a francouzštině řádově víc",
+        {"label": "ustálených zvukových změn na jazyk za 3 000 let", "metric": "počet ustálených změn", "scale": 0.3333333333333333, "band": [10.0, 40.0], "wide": [5.0, 60.0], "support": "literatura", "verification": "ověřeno",
+         "source": "Ringe (2006), From Proto-Indo-European to Proto-Germanic (A Linguistic History of English 1), Oxford University Press: podle recenze (LINGUIST List 20.2558, cituje s. 67) lze rekonstruovat „some forty regular sound changes“ mezi praindoevropštinou (kolem 4000 př. n. l.) a pragermánštinou (kolem 500 př. n. l. podle obecných dat, v recenzi neuvedeno); počet 40 odpovídá horní mezi pásma. Původní odkaz na Pope (1934) „řádově víc“ nepotvrzen a odstraněn; originál Ringeho jsem nečetl, počet je z recenze",
          "conversion": "součet ustálených změn ve třech semínkách (jedna trojice = jeden vzorek) / 3"},
         {"label": "podíl souhláskových změn", "metric": "podíl souhláskových změn", "band": [0.25, 0.75], "wide": [0.2, 0.8], "support": "návrh",
          "source": "literatura vyváženost nedává (Kümmel 2007 sbírá změny podle druhu, bez podílu); pásmo z věrohodnosti: ani souhlásky ani samohlásky nemají tvořit většinu přes tři čtvrtiny",
@@ -99,9 +99,9 @@
     {
       "id": "m2::zvukove_zmeny_se_siri", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "medián počtu skupin na změnu", "metric": "medián počtu skupin na změnu", "band": [2.0, 10.0], "wide": [2.0, 10.0], "support": "literatura*",
-         "source": "zvukové změny se šíří areálně a zasahují víc nářečí (Labov 1994, Principles of Linguistic Change I; Chambers a Trudgill 1998)",
-         "conversion": "pro každou ustálenou změnu počet skupin, kde se ustálila; medián přes změny"},
+        {"label": "medián počtu skupin na změnu", "metric": "medián počtu skupin na změnu", "band": [2.0, 20.0], "wide": [2.0, 30.0], "support": "návrh", "verification": "opraveno",
+         "source": "areálové šíření zvukových změn je kvalitativní poznatek (Labov 1994, Principles of Linguistic Change I: Internal Factors, Blackwell; Chambers a Trudgill 1998, Dialectology, Cambridge University Press; existence ověřena), žádné číslo v nich ani jinde nenašlo. Dřívější horní mez 10 byla převod chyby jednotek (počet skupin ve vesnicích), ne literatura; metrika počítá události „ustálila se“ na proces a může přesáhnout počet skupin (pozorováno 14). Dolní mez 2 (změna zasáhne víc než jednu skupinu) je kvalitativní tvrzení literatury, horní mez 20 je jen strop věrohodnosti",
+         "conversion": "pro každý proces počet událostí „ustálila se“ (ne počet skupin; může přesáhnout 10); medián přes procesy"},
         {"label": "podíl reliktů mezi zasaženými slovy", "metric": "podíl reliktů (horní)", "band": [0.01, 0.15], "wide": [0.0, 0.2], "support": "návrh",
          "source": "pravidelnost změny s nepatrným zbytkem výjimek (neogramatici; Wang 1969 lexikální difuze): číslo literatura nedává, pásmo odpovídá starému",
          "conversion": "relikty / (relikty + přepsaná slova) přes uzavřené procesy"}
@@ -114,17 +114,17 @@
     },
     {
       "id": "m3::morfologizace", "kind": "možnost", "n": 20, "p_min": 0.3,
-      "support": "literatura*",
-      "source": "Hyman (1975), Hopper a Traugott (2003): zvuková změna mění koncovku v alternaci kmene (germánský přehlásek, plurál Maus/Mäuse); nastává v části jazyků, p_min 0,3 je návrh"
+      "support": "návrh", "verification": "nahrazeno",
+      "source": "Hopper a Traugott (2003), Grammaticalization, 2. vyd., Cambridge University Press: zvuková změna mění koncovku v alternaci kmene (germánský přehlásek, plurál Maus/Mäuse); existence ověřena, text nečten. Hyman (1975) jsem nedohledal a z citace odstranil. Podíl jazyků, kde k tomu dojde, literatura nedává, p_min 0,3 je návrh"
     },
     {
       "id": "m3::produktivni_vzor", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "podíl produktivní koncovky (nejnižší přes běh)", "metric": "nejnižší podíl produktivní koncovky", "band": [0.8, 1.0], "wide": [0.7, 1.0], "support": "literatura*",
-         "source": "Pinker (1999), Words and Rules: pravidelné sloveso je v angličtině drtivá většina typů; Lieberman et al. (2007): ze 177 staroanglických nepravidelných sloves jich dnes zůstává 98",
+        {"label": "podíl produktivní koncovky (nejnižší přes běh)", "metric": "nejnižší podíl produktivní koncovky", "band": [0.8, 1.0], "wide": [0.7, 1.0], "support": "návrh", "verification": "opraveno",
+         "source": "Lieberman et al. (2007), Quantifying the evolutionary dynamics of language, Nature 449, 713–716, doi:10.1038/nature06137: ze 177 nepravidelných sloves před 1 200 lety jich dnes zůstává 98 (ověřeno); to ale není podíl pravidelných sloves v celé slovní zásobě. Pinker (1999), Words and Rules, Basic Books (existence ověřena): číslo podílu jsem nenašel. Pásmo 0,8 až 1,0 je z věrohodnosti (98 nepravidelných z tisíců sloves)",
          "conversion": "podíl buněk s produktivní koncovkou ve skupině, minimum přes skupiny běhu"},
-        {"label": "nepravidelnost častých − vzácných slov", "metric": "nepravidelnost častých − vzácných slov", "band": [0.02, 1.0], "wide": [0.0, 1.0], "support": "literatura",
-         "source": "Lieberman et al. (2007), Nature 449: poločas nepravidelného slovesa roste s odmocninou frekvence (sklonu 0,50 v log-log proložení)",
+        {"label": "nepravidelnost častých − vzácných slov", "metric": "nepravidelnost častých − vzácných slov", "band": [0.02, 1.0], "wide": [0.0, 1.0], "support": "literatura", "verification": "ověřeno",
+         "source": "Lieberman et al. (2007), Nature 449, 713–716, doi:10.1038/nature06137: poločas nepravidelného slovesa roste s odmocninou frekvence (sklon 0,50 až 0,51 v log-log proložení); sloveso 100krát méně časté se zregularizuje 10krát rychleji",
          "conversion": "podíl nepravidelných mezi častými slovy minus mezi vzácnými, přes všechny skupiny běhu"}
       ]
     },
@@ -139,8 +139,8 @@
     {
       "id": "m3::zvukove_metriky", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "nejkratší průměrná délka slova", "metric": "nejkratší průměrná délka slova", "band": [3.5, 5.5], "wide": [3.0, 6.5], "support": "literatura*", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
-        {"label": "nejdelší průměrná délka slova", "metric": "nejdelší průměrná délka slova", "band": [4.5, 7.0], "wide": [4.0, 8.0], "support": "literatura*", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
+        {"label": "nejkratší průměrná délka slova", "metric": "nejkratší průměrná délka slova", "band": [3.5, 5.5], "wide": [3.0, 6.5], "support": "návrh", "verification": "neověřitelné", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
+        {"label": "nejdelší průměrná délka slova", "metric": "nejdelší průměrná délka slova", "band": [4.5, 7.0], "wide": [4.0, 8.0], "support": "návrh", "verification": "neověřitelné", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
         {"label": "nejvyšší homofonie", "metric": "nejvyšší homofonie", "band": [0.0, 0.05], "wide": [0.0, 0.08], "support": "návrh", "source": "viz m2::metrika_5", "conversion": "viz m2::metrika_5"}
       ],
       "note": "Zdvojuje m2::metrika_3 a metrika_5 s paradigmaty; kandidát na sloučení."
@@ -148,16 +148,16 @@
     {
       "id": "m3b::metrika_1", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "retence základní slovní zásoby za tisíciletí", "metric": "retence slovní zásoby za tisíciletí", "band": [0.8, 0.87], "wide": [0.7, 0.95], "support": "literatura",
-         "source": "Swadesh (1952, 1955): 81 % (seznam 200) a 86 % (seznam 100) za tisíciletí; Lees (1953): 80,5 %; Bergsland a Vogt (1962): rychlosti se mezi jazyky liší (islandština téměř nemění, norština až 20 % ztráty), proto široké pásmo",
+        {"label": "retence základní slovní zásoby za tisíciletí", "metric": "retence slovní zásoby za tisíciletí", "band": [0.8, 0.87], "wide": [0.7, 0.97], "support": "literatura", "verification": "opraveno",
+         "source": "Swadesh (1955), Towards greater accuracy in lexicostatistic dating, International Journal of American Linguistics 21, 121–137, doi:10.1086/464321: 86 % za tisíciletí pro seznam 100; Lees (1953), The basis of glottochronology, Language 29, 113–127, doi:10.2307/410164: 0,8048 ± 0,0176 (90% interval) pro seznam 200 na 13 dvojicích jazyků (údaj „81 %“ z dřívější verze je zaokrouhlení téhož); Bergsland a Vogt (1962), On the validity of glottochronology, Current Anthropology 3, 115–153, doi:10.1086/200264: islandština asi 4 % ztráty za tisíciletí (retence 0,96), norština až 20 %. Široké pásmo proto rozšířeno shora z 0,95 na 0,97",
          "conversion": "podíl pojmů s původním slovem po 3 000 letech, průměr přes skupiny, třetí odmocnina (konstantní míra za tisíciletí)"}
       ]
     },
     {
       "id": "m3b::metrika_2", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "podíl nahrazených častých / vzácných pojmů", "metric": "podíl nahrazených častých / (0,85 × podíl nahrazených vzácných)", "scale": 0.85, "band": [0.3, 0.9], "wide": [0.2, 1.0], "support": "literatura*",
-         "source": "Pagel, Atkinson a Meade (2007), Nature 449: častá slova se nahrazují pomaleji, frekvence vysvětluje asi polovinu rozptylu rychlostí; Lieberman et al. (2007): poločas ∝ √frekvence. Přepočet na poměr nahrazených podílů je odhad",
+        {"label": "podíl nahrazených častých / vzácných pojmů", "metric": "podíl nahrazených častých / (0,85 × podíl nahrazených vzácných)", "scale": 0.85, "band": [0.3, 0.9], "wide": [0.2, 1.0], "support": "návrh", "verification": "opraveno",
+         "source": "Pagel, Atkinson a Meade (2007), Frequency of word-use predicts rates of lexical evolution throughout Indo-European history, Nature 449, 717–720, doi:10.1038/nature06176 (200 pojmů, 87 indoevropských jazyků): frekvence vysvětluje asi 50 % rozptylu rychlostí nahrazování; Lieberman et al. (2007), Nature 449, 713–716: poločas ∝ √frekvence. Poměr nahrazených podílů 0,3 až 0,9 žádný z nich neuvádí, je to přepočet (odhad) a pásmo je z věrohodnosti",
          "conversion": "metrika × 0,85 = podíl nahrazených v horních 30 % pojmů podle frekvence / podíl nahrazených v ostatních"}
       ]
     },
@@ -183,14 +183,14 @@
     },
     {
       "id": "m3b::tabu", "kind": "možnost", "n": 30, "p_min": 0.25,
-      "support": "literatura*",
-      "source": "Allan a Burridge (2006), Forbidden Words: tabu vyvolává koloběh eufemismů; Meillet (1906), Pinker (2002) o „euphemism treadmill“; četnost za 2 500 let literatura nedává, p_min 0,25 je návrh"
+      "support": "návrh", "verification": "opraveno",
+      "source": "Allan a Burridge (2006), Forbidden Words: Taboo and the Censoring of Language, Cambridge University Press, doi:10.1017/CBO9780511617881: tabu vyvolává koloběh eufemismů (existence a téma ověřeny, text nečten). Citaci Meillet (1906) a Pinker (2002) jako zdroje „euphemism treadmill“ jsem nepotvrdil a odstranil. Četnost za 2 500 let literatura nedává, p_min 0,25 je návrh"
     },
     {
       "id": "m3b::zvukove_metriky", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "nejkratší průměrná délka slova", "metric": "nejkratší průměrná délka slova", "band": [3.5, 5.5], "wide": [3.0, 6.5], "support": "literatura*", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
-        {"label": "nejdelší průměrná délka slova", "metric": "nejdelší průměrná délka slova", "band": [4.5, 7.0], "wide": [4.0, 8.0], "support": "literatura*", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
+        {"label": "nejkratší průměrná délka slova", "metric": "nejkratší průměrná délka slova", "band": [3.5, 5.5], "wide": [3.0, 6.5], "support": "návrh", "verification": "neověřitelné", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
+        {"label": "nejdelší průměrná délka slova", "metric": "nejdelší průměrná délka slova", "band": [4.5, 7.0], "wide": [4.0, 8.0], "support": "návrh", "verification": "neověřitelné", "source": "viz m2::metrika_3", "conversion": "viz m2::metrika_3"},
         {"label": "nejvyšší homofonie", "metric": "nejvyšší homofonie", "band": [0.0, 0.05], "wide": [0.0, 0.08], "support": "návrh", "source": "viz m2::metrika_5", "conversion": "viz m2::metrika_5"}
       ],
       "note": "Zdvojuje m2::metrika_3 a metrika_5 s lexikální změnou; kandidát na sloučení."
@@ -198,8 +198,8 @@
     {
       "id": "m4::analytizace", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "podíl skupin s pevným slovosledem po ztrátě pádu", "metric": "skupiny s pevným slovosledem po erozi pádu", "scale": 0.16666666666666666, "band": [0.5, 1.0], "wide": [0.5, 1.0], "support": "literatura*",
-         "source": "latina na románské jazyky a stará angličtina na střední: ztráta pádů provází pevný slovosled (Sapir 1921 o driftu; Siewierska 1998; Dryer, WALS kap. 81–87); souvislost je tendence, ne zákon",
+        {"label": "podíl skupin s pevným slovosledem po ztrátě pádu", "metric": "skupiny s pevným slovosledem po erozi pádu", "scale": 0.16666666666666666, "band": [0.5, 1.0], "wide": [0.5, 1.0], "support": "návrh", "verification": "opraveno",
+         "source": "typologická souvislost mezi pádem a volností slovosledu je doložena (Fedzechkina, Newport a Jaeger 2017, Balancing effort and information transmission during language acquisition, Cognitive Science 41, 416–446, doi:10.1111/cogs.12346, cituje Siewierska 1998 a Blake 2001), ale tamtéž se uvádí, že historická souvislost ztráty pádu a ztráty volného slovosledu byla zpochybněna (Detges 2009; Pintzuk 2002). Siewierska (1998) a Dryer (WALS kap. 81 až 87) jsem v originále nenašel. Pásmo 0,5 až 1,0 je tendence z věrohodnosti, ne číslo z literatury",
          "conversion": "skupiny s pevným slovosledem / 6 skupin po 1 500 letech od oslabení pádové koncovky"},
         {"label": "podíl skupin s volným slovosledem v kontrole", "metric": "skupiny s volným slovosledem v kontrole", "scale": 0.16666666666666666, "band": [0.5, 1.0], "wide": [0.5, 1.0], "support": "návrh",
          "source": "jazyk s pádem a volným slovosledem drží stav stovky let (Dryer, WALS kap. 81); číslo literatura nedává",
@@ -210,8 +210,8 @@
       "id": "m4::velky_cyklus", "kind": "možnost", "n": 20, "p_min": 0.3,
       "require": ["gramatikalizace z cizího zdroje"],
       "event": [{"metric": "skupiny, kde opis srostl v koncovku", "op": ">=", "value": 2.0}],
-      "support": "literatura*",
-      "source": "Givón (1971) „dnešní morfologie je včerejší syntax“; Hopper a Traugott (2003): cyklus eroze, opis, přiklonka, koncovka (latinské habere, románské futurum); četnost za 2 500 let literatura nedává, p_min 0,3 je návrh",
+      "support": "návrh", "verification": "ověřeno",
+      "source": "Givón (1971), Historical syntax and synchronic morphology: an archaeologist’s field trip, Chicago Linguistic Society 7 (přetištěno v Givón 2015, The Diachrony of Grammar, Benjamins, doi:10.1075/z.192.c1); Hopper a Traugott (2003), Grammaticalization, 2. vyd., Cambridge University Press (existence a téma ověřeny, text nečten). Četnost za 2 500 let literatura nedává, p_min 0,3 je návrh",
       "note": "Jev: opis srostl v koncovku aspoň ve dvou skupinách; zdroj musí být z katalogu v každém případě."
     },
     {
@@ -221,8 +221,8 @@
         {"metric": "ustálila se koncová záporka (post)", "op": "==", "value": 1.0},
         {"metric": "embraced se ustálila dřív než post", "op": "==", "value": 1.0}
       ],
-      "support": "literatura*",
-      "source": "Jespersen (1917), Dahl (1979), Willis, Lucas a Breitbarth (2013), The History of Negation in the Languages of Europe and the Mediterranean: cyklus doložen ve francouzštině, angličtině, nizozemštině, arabštině, berberštině; podíl jazyků za 3 000 let neznámý, p_min 0,15 je návrh",
+      "support": "návrh", "verification": "ověřeno",
+      "source": "Dahl (1979), Typology of sentence negation, Linguistics 17, 79–106, doi:10.1515/ling.1979.17.1-2.79; Willis, Lucas a Breitbarth (eds., 2013), The History of Negation in the Languages of Europe and the Mediterranean, Oxford University Press, doi:10.1093/acprof:oso/9780199602537.001.0001 (existence ověřena, seznam jazyků s doloženým cyklem jsem nezkoumal). Jespersen (1917, Negation in English and other languages, Kodaň) jsem online nenašel. Podíl jazyků za 3 000 let neznámý, p_min 0,15 je návrh",
       "note": "Stará brána chtěla navíc aspoň 4 z 6 skupin s koncovou záporkou; to je míra šíření, ne možnost."
     },
     {
@@ -241,16 +241,16 @@
       "id": "m4b::clen_vznikne", "kind": "možnost", "n": 50, "p_min": 0.1,
       "require": ["členy s cizím zdrojem"],
       "event": [{"metric": "člen vznikl (nejvýš dvě skupiny s nulovým členem)", "op": "==", "value": 1.0}],
-      "support": "literatura",
-      "source": "Dryer (2013), WALS kap. 37: ze 620 jazyků má určitý člen (slovo, příklonka nebo ukazovací zájmeno v roli členu) 377, tedy 61 %, 243 jich nemá; Heine a Kuteva (2006): členy vznikají z ukazovacích zájmen. Míru vzniku za 3 000 let literatura nedává, p_min 0,1 je návrh",
+      "support": "literatura", "verification": "ověřeno",
+      "source": "Dryer (2013), Definite Articles, WALS Online kap. 37, https://wals.info/chapter/37: ze 620 jazyků má určitý člen (slovo, příklonka nebo ukazovací zájmeno v roli členu) 377, tedy 61 %, 243 jich nemá; Heine a Kuteva (2006), The Changing Languages of Europe, Oxford University Press, doi:10.1093/acprof:oso/9780199297337.001.0001 (členy vznikají z ukazovacích zájmen; existence ověřena). Míru vzniku za 3 000 let literatura nedává, p_min 0,1 je návrh",
       "note": "Člen smí vznikat jen v části jazyků; invariant: zdroj členu je v katalogu."
     },
     {
       "id": "m4b::bez_padu", "kind": "pásmo", "n": 30,
       "require": ["buňka OBJ v paradigmatu jmen chybí"],
       "measures": [
-        {"label": "podíl skupin s pevným slovosledem bez pádu", "metric": "skupiny s pevným slovosledem", "scale": 0.16666666666666666, "band": [0.5, 1.0], "wide": [0.5, 1.0], "support": "literatura*",
-         "source": "jako m4::analytizace: jazyky bez pádů mají převážně pevný slovosled (Siewierska 1998; Dryer, WALS kap. 81–87)",
+        {"label": "podíl skupin s pevným slovosledem bez pádu", "metric": "skupiny s pevným slovosledem", "scale": 0.16666666666666666, "band": [0.5, 1.0], "wide": [0.5, 1.0], "support": "návrh", "verification": "opraveno",
+         "source": "jako m4::analytizace: typologická souvislost případ × volnost slovosledu doložena (Fedzechkina, Newport a Jaeger 2017, Cognitive Science 41, 416–446, doi:10.1111/cogs.12346), historická souvislost zpochybněna; Siewierska (1998) a Dryer (WALS kap. 81 až 87) nepotvrzeny; pásmo je z věrohodnosti",
          "conversion": "skupiny s pevným slovosledem / 6 po 3 000 letech jazyka bez pádu"}
       ],
       "note": "Zdvojuje m4::analytizace; kandidát na sloučení."
@@ -259,8 +259,8 @@
       "id": "m4b::exaptace", "kind": "možnost", "n": 30, "p_min": 0.15,
       "require": ["exaptace jen DEFINITE z OBJ", "exaptace v kontrole se slovosledem volným", "kontrola nemá buňku DEF"],
       "event": [{"metric": "skupiny s exaptací", "op": ">=", "value": 2.0}],
-      "support": "literatura*",
-      "source": "Lass (1990), „How to do things with junk: exaptation in language evolution“: zbytková koncovka dostane novou funkci; Norde (2001); četnost literatura nedává, p_min 0,15 je návrh",
+      "support": "návrh", "verification": "opraveno",
+      "source": "Lass (1990), How to do things with junk: exaptation in language evolution, Journal of Linguistics 26, 79–102, doi:10.1017/S0022226700014432: zbytková koncovka dostane novou funkci (ověřeno). Norde (2001, Language Sciences 23, 231–264) pojednává o deflexi, ne o exaptaci, a z citace je odstraněna. Četnost literatura nedává, p_min 0,15 je návrh",
       "note": "Jev: exaptace aspoň ve dvou skupinách; invarianty (jen DEFINITE z OBJ, kontrola bez exaptace) musí platit tam, kde jev nastal."
     },
     {
@@ -272,13 +272,13 @@
     },
     {
       "id": "m5::s2_mesto", "kind": "možnost", "n": 20, "p_min": 0.8,
-      "support": "literatura*",
-      "source": "Trudgill (2011), Sociolinguistic Typology: velká a promíchaná společenství zjednodušují morfologii; Lupyan a Dale (2010), PLoS ONE: složitost klesá s velikostí populace; směr doložený, míra malá"
+      "support": "návrh", "verification": "ověřeno",
+      "source": "Lupyan a Dale (2010), Language structure is partly determined by social structure, PLoS ONE 5(1), e8559, doi:10.1371/journal.pone.0008559: morfologická složitost souvisí s počtem mluvčích, zeměpisným rozšířením a kontaktem (přes 2 000 jazyků); Trudgill (2011), Sociolinguistic Typology, Oxford University Press (existence ověřena). Pozor: Bentz a Winter (2013) podle sekundárního zdroje nacházejí souvislost s podílem mluvčích L2, ne s velikostí populace. Směr doložený, míra ne; p_min 0,8 je návrh"
     },
     {
       "id": "m5::s2_l2", "kind": "možnost", "n": 20, "p_min": 0.8,
-      "support": "literatura*",
-      "source": "Bentz a Winter (2013), Language Dynamics and Change: víc dospělých mluvčích L2 znamená méně pádů; Lupyan a Dale (2010)"
+      "support": "návrh", "verification": "ověřeno",
+      "source": "Bentz a Winter (2013), Languages with more second language learners tend to lose nominal case, Language Dynamics and Change 3(1), 1–27, doi:10.1163/22105832-13030105 (název i souvislost s podílem L2 ověřeny); Lupyan a Dale (2010), PLoS ONE 5(1), e8559, doi:10.1371/journal.pone.0008559. Směr doložený, míra ne; p_min 0,8 je návrh"
     },
     {
       "id": "m5::s3_prechod", "kind": "invariant", "n": 3,
@@ -288,10 +288,10 @@
     {
       "id": "m5::s3_substrat", "kind": "pásmo", "n": 30,
       "measures": [
-        {"label": "x0>y: podíl slov jazyka x", "metric": "x0>y: podíl slov jazyka x", "band": [0.0, 0.05], "wide": [0.0, 0.08], "support": "literatura*",
-         "source": "Thomason a Kaufman (1988): při přechodu se přenáší hlavně výslovnost a stavba, slovní stopa substrátu je malá (galská slova ve francouzštině asi 150 až 200 lexémů, keltská v angličtině jednotky desítek)",
+        {"label": "x0>y: podíl slov jazyka x", "metric": "x0>y: podíl slov jazyka x", "band": [0.0, 0.05], "wide": [0.0, 0.08], "support": "návrh", "verification": "neověřitelné",
+         "source": "Thomason a Kaufman (1988), University of California Press, doi:10.1525/9780520912793: při přechodu se přenáší hlavně výslovnost a stavba. Čísla „galská slova ve francouzštině 150 až 200 lexémů“ a „keltská v angličtině jednotky desítek“ jsem nenašel (webový zdroj uvádí jen „několik set“ galských slov ve francouzštině); pásmo 0 až 0,05 je z věrohodnosti",
          "conversion": "podíl dominantních kořenů skupiny, které jsou z původního jazyka x"},
-        {"label": "x1>y: podíl slov jazyka x", "metric": "x1>y: podíl slov jazyka x", "band": [0.0, 0.05], "wide": [0.0, 0.08], "support": "literatura*", "source": "tamtéž", "conversion": "tamtéž"},
+        {"label": "x1>y: podíl slov jazyka x", "metric": "x1>y: podíl slov jazyka x", "band": [0.0, 0.05], "wide": [0.0, 0.08], "support": "návrh", "verification": "neověřitelné", "source": "tamtéž", "conversion": "tamtéž"},
         {"label": "stavba substrátu (menší z x0>y a x1>y)", "metric": "stavba substrátu v x0>y a x1>y (menší z nich)", "band": [0.2, 1.0], "wide": [0.4, 1.0], "support": "návrh",
          "source": "Thomason a Kaufman (1988): shift-induced interference přenáší stavbu; podíl substrátní stavby literatura nedává",
          "conversion": "podíl rozlišujících variant stavby, které skupina z původního jazyka drží"}
@@ -302,37 +302,37 @@
       "id": "m5::vypujcky", "kind": "pásmo", "n": 30,
       "require": ["a2: výpůjčky s hláskou mimo inventář příjemce", "b0: výpůjčky s hláskou mimo inventář příjemce"],
       "measures": [
-        {"label": "a2: podíl výpůjček ve slovní zásobě", "metric": "a2: počet výpůjček", "scale": 0.006711409395973154, "band": [0.05, 0.25], "wide": [0.02, 0.5], "support": "literatura*",
-         "source": "Haspelmath a Tadmor (2009), WOLD: v 41 jazycích je mezi 1 % a 70 % slov přejatých, průměr řádově čtvrtina z 1 460 pojmů, v základním slovníku méně; pásmo je zvolené s tím, že kontakt trval 1 500 let a jde o dvě vesnice",
+        {"label": "a2: podíl výpůjček ve slovní zásobě", "metric": "a2: počet výpůjček", "scale": 0.006711409395973154, "band": [0.05, 0.25], "wide": [0.02, 0.5], "support": "literatura", "verification": "opraveno",
+         "source": "Haspelmath a Tadmor (eds., 2009), Loanwords in the World’s Languages, De Gruyter Mouton, doi:10.1515/9783110218442, a World Loanword Database (https://wold.clld.org): 41 jazyků (ne 40 ani 30), 1 460 pojmů; průměr přibližně 24,2 % slovní zásoby podle sekundárního citování (arXiv 2510.26254), rozsah od asi 1 % (mandarínština) po asi 60 % (selická romština) podle předběžných údajů (Language Log); tvrzení „1 až 70 %“ jsem nepotvrdil. Procento se vztahuje k celé slovní zásobě, základní slovník má méně. Pásmo je zvolené pro 149 slov a 1 500 let kontaktu (věrohodnost)",
          "conversion": "počet výpůjček / 149 výchozích pojmů"},
-        {"label": "b0: podíl výpůjček ve slovní zásobě", "metric": "b0: počet výpůjček", "scale": 0.006711409395973154, "band": [0.05, 0.25], "wide": [0.02, 0.5], "support": "literatura*", "source": "tamtéž", "conversion": "tamtéž"}
+        {"label": "b0: podíl výpůjček ve slovní zásobě", "metric": "b0: počet výpůjček", "scale": 0.006711409395973154, "band": [0.05, 0.25], "wide": [0.02, 0.5], "support": "literatura", "verification": "opraveno", "source": "tamtéž", "conversion": "tamtéž"}
       ],
       "note": "Invariant: výpůjčka obsahuje jen hlásky inventáře příjemce."
     },
     {
       "id": "m5::bez_dvojjazycnosti", "kind": "invariant", "n": 3,
-      "support": "literatura*",
-      "source": "Thomason a Kaufman (1988), škála výpůjček: bez dvojjazyčnosti se stavba nepůjčuje"
+      "support": "návrh", "verification": "ověřeno",
+      "source": "Thomason a Kaufman (1988), Language Contact, Creolization, and Genetic Linguistics, University of California Press, doi:10.1525/9780520912793 (škála výpůjček; existence ověřena, text nečten). Jde o vlastnost modelu (invariant)"
     },
     {
       "id": "m5::metrika_11", "kind": "možnost", "n": 20, "p_min": 0.8,
-      "support": "literatura*",
-      "source": "Lupyan a Dale (2010): morfologická složitost klesá s velikostí populace a podílem L2; Bentz a Winter (2013); v reálných datech jsou korelace slabé (|r| asi 0,1 až 0,3), v modelu se vynucenou změnou jediné veličiny čeká silný, proto zůstávají staré prahy −0,6"
+      "support": "návrh", "verification": "neověřitelné",
+      "source": "Lupyan a Dale (2010), PLoS ONE 5(1), e8559, doi:10.1371/journal.pone.0008559; Bentz a Winter (2013), Language Dynamics and Change 3(1), 1–27, doi:10.1163/22105832-13030105: směr doložený. Velikost korelací (|r| asi 0,1 až 0,3) jsem nenašel; prahy −0,6 jsou z modelu a jsou návrh"
     },
     {
       "id": "m6a::s4_skola", "kind": "možnost", "n": 20, "p_min": 0.8,
-      "support": "literatura*",
-      "source": "Ferguson (1959), Haugen (1966): psaná norma stojí, mluvená se vzdaluje, škola rozdíl zmenšuje; směr doložený"
+      "support": "návrh", "verification": "ověřeno",
+      "source": "Ferguson (1959), Diglossia, Word 15, 325–340, doi:10.1080/00437956.1959.11659702; Haugen (1966), Dialect, language, nation, American Anthropologist 68, 922–935, doi:10.1525/aa.1966.68.4.02a00040 (existence a téma ověřeny, text nečten). Směr doložený, míra ne; p_min 0,8 je návrh"
     },
     {
       "id": "m6a::s4_bez_skoly", "kind": "možnost", "n": 20, "p_min": 0.8,
-      "support": "literatura*",
-      "source": "Ferguson (1959): bez vyrovnávající instituce se mluvená řeč od psané vzdaluje dál"
+      "support": "návrh", "verification": "ověřeno",
+      "source": "Ferguson (1959), Diglossia, Word 15, 325–340, doi:10.1080/00437956.1959.11659702 (existence a téma ověřeny, text nečten). Směr doložený, míra ne; p_min 0,8 je návrh"
     },
     {
       "id": "m6a::skola_sjednoti", "kind": "možnost", "n": 20, "p_min": 0.8,
-      "support": "literatura*",
-      "source": "Haugen (1966), Milroy a Milroy (1985): standardizace sjednocuje nářečí, jazyk se mění dál"
+      "support": "návrh", "verification": "opraveno",
+      "source": "Haugen (1966), Dialect, language, nation, American Anthropologist 68, 922–935, doi:10.1525/aa.1966.68.4.02a00040; standardizaci řeší Milroy a Milroy (1985), Authority in Language, Routledge, doi:10.4324/9780203267424. V dřívější verzi byl Milroy a Milroy (1985) veden bez titulu; článek Linguistic change, social network and speaker innovation (Journal of Linguistics 21, 339–384, doi:10.1017/S0022226700010306) je o šíření inovací, ne o standardizaci. Směr doložený, míra ne; p_min 0,8 je návrh"
     },
     {
       "id": "m6a::skola_zmrazena", "kind": "možnost", "n": 20, "p_min": 0.8,
@@ -341,17 +341,17 @@
     },
     {
       "id": "m6a::psany_kod_stoji", "kind": "invariant", "n": 3,
-      "support": "literatura*",
-      "source": "Ferguson (1959): psaný kód bez tisku po kodifikaci stojí (vlastnost modelu kodifikace)"
+      "support": "návrh", "verification": "ověřeno",
+      "source": "Ferguson (1959), Diglossia, Word 15, 325–340, doi:10.1080/00437956.1959.11659702 (existence a téma ověřeny, text nečten). Jde o vlastnost modelu kodifikace (invariant)"
     },
     {
       "id": "m6b::metrika_9", "kind": "pásmo", "n": 20,
       "measures": [
-        {"label": "korelace jazykové a zeměpisné vzdálenosti (2D)", "metric": "korelace vzdálenosti jazyka a polohy", "band": [0.5, 0.9], "wide": [0.5, 0.95], "support": "literatura*",
-         "source": "Nerbonne (2010), „Measuring the diffusion of linguistic change“ a Séguy (1971): korelace agregované jazykové vzdálenosti se zeměpisnou řádově 0,5 až 0,8",
+        {"label": "korelace jazykové a zeměpisné vzdálenosti (2D)", "metric": "korelace vzdálenosti jazyka a polohy", "band": [0.5, 0.9], "wide": [0.5, 0.95], "support": "literatura", "verification": "opraveno",
+         "source": "Heeringa a Nerbonne (2001), Dialect areas and dialect continua, Language Variation and Change 13(3), 375–400, doi:10.1017/S0954394501133041 (27 nizozemských obcí): zeměpis vysvětluje 65 až 81 % rozptylu výslovnostní vzdálenosti, korelace s logaritmem zeměpisné vzdálenosti asi 0,9 (údaj citován podle sekundárního přepisu s. 396). Rok byl v dřívější verzi uveden chybně jako 2002. Nerbonne (2010), Phil. Trans. R. Soc. B 365, 3821–3828, doi:10.1098/rstb.2010.0048, uvádí sublineární růst, ale pásmo 0,6 až 0,8 jsem v něm nenašel; sekundární zdroj mu přisuzuje 16 až 38 % vysvětleného rozptylu (neověřeno). Séguyův původní článek (1971, Revue de linguistique romane 35) jsem v databázích nenašel a cituji ho podle Nerbonne (2010). Pásmo 0,5 až 0,9 je z věrohodnosti uvnitř tohoto rozsahu",
          "conversion": "Pearsonova korelace dvojic skupin mapy 5 × 5 po 2 500 letech"},
-        {"label": "R² logaritmického − R² lineárního proložení", "metric": "R² logaritmického − R² lineárního proložení", "band": [0.0, 0.3], "wide": [0.0, 0.5], "support": "literatura",
-         "source": "Séguy (1971) a Nerbonne (2010): růst jazykové vzdálenosti se zeměpisnou je podlineární (Séguyho křivka, logaritmický tvar), doloženo v gaskoňštině, nizozemštině, němčině, norštině, bulharštině a dalších",
+        {"label": "R² logaritmického − R² lineárního proložení", "metric": "R² logaritmického − R² lineárního proložení", "band": [0.0, 0.3], "wide": [0.0, 0.5], "support": "literatura", "verification": "opraveno",
+         "source": "Nerbonne (2010), Measuring the diffusion of linguistic change, Phil. Trans. R. Soc. B 365, 3821–3828, doi:10.1098/rstb.2010.0048: růst agregované jazykové vzdálenosti se zeměpisnou je podlineární (Séguyho křivka; Séguy 1971 podle citace), v šesti oblastech (podle sekundárních zdrojů bantuské jazyky v Gabonu, bulharština, němčina, americká angličtina, nizozemština, norština; gaskoňštinu jsem nepotvrdil). Heeringa a Nerbonne (2001), doi:10.1017/S0954394501133041: logaritmus vzdálenosti předpovídá vzdálenost lépe. Velikost rozdílu R² (0 až 0,3) literatura nedává, pásmo je z věrohodnosti",
          "conversion": "rozdíl R² proložení vzdálenosti logaritmem a lineární funkcí zeměpisné vzdálenosti"}
       ]
     },
@@ -359,45 +359,45 @@
       "id": "m6b::elita_prejde", "kind": "pásmo", "n": 20,
       "require": ["přešla právě skupina l0+e0", "skupiny mimo domovinu dobyvatelů s cizím jazykem"],
       "measures": [
-        {"label": "doba do přechodu elity (roky)", "metric": "doba do přechodu elity (roky)", "band": [100.0, 400.0], "wide": [100.0, 500.0], "support": "literatura*",
-         "source": "Normané v Anglii 1066 → anglicky jako mateřský jazyk elity do 13. až 14. století (Short 2007; Ingham 2012: dvě až čtyři generace i delší); Franky v Galii a Langobardy v Itálii asi tři až pět století; Prabulhaři několik generací (údaje z paměti)",
+        {"label": "doba do přechodu elity (roky)", "metric": "doba do přechodu elity (roky)", "band": [100.0, 400.0], "wide": [100.0, 500.0], "support": "návrh", "verification": "neověřitelné",
+         "source": "Short (2007) jsem nenašel. Ingham (2012), The Transmission of Anglo-Norman, Benjamins (existence ověřena), tvrdí, že anglonormanština v pozdní době byla učený druhý jazyk, ne mateřský; webové přehledy (nikoli odborné) uvádějí přechod angličtiny od poloviny 13. století do konce 14. století, tedy zhruba 180 až 330 let po roce 1066. Údaje o Francích v Galii, Langobardech a Prabulharech jsem nepotvrdil a odstranil. Pásmo 100 až 400 let je z věrohodnosti",
          "conversion": "rok přechodu skupiny l0+e0 minus rok dobytí (1100)"}
       ]
     },
     {
       "id": "m6b::superstrat", "kind": "pásmo", "n": 20,
       "measures": [
-        {"label": "l0: stavba elity", "metric": "l0: stavba elity", "band": [0.0, 0.1], "wide": [0.0, 0.15], "support": "literatura*",
-         "source": "Thomason a Kaufman (1988); Baugh a Cable: francouzský superstrát dal angličtině přes 10 000 slov, stavbu skoro neměnil",
+        {"label": "l0: stavba elity", "metric": "l0: stavba elity", "band": [0.0, 0.1], "wide": [0.0, 0.15], "support": "návrh", "verification": "opraveno",
+         "source": "Baugh: francouzských slov přijala angličtina přes 10 000 (údaj podle Baugh, A History of the English Language, 2. vyd. 1951, s. 215, citováno v LINGUIST List; vydání Baugh a Cable jsem nezkoumal); Thomason a Kaufman (1988), University of California Press, doi:10.1525/9780520912793. Tvrzení, že francouzský superstrát stavbu skoro neměnil, a hodnotu 0 až 0,1 jsem v textu nepotvrdil; pásmo je z věrohodnosti",
          "conversion": "podíl rozlišujících variant stavby, které skupina přebrala od elity"},
-        {"label": "l3: stavba elity", "metric": "l3: stavba elity", "band": [0.0, 0.1], "wide": [0.0, 0.15], "support": "literatura*", "source": "tamtéž", "conversion": "tamtéž"}
+        {"label": "l3: stavba elity", "metric": "l3: stavba elity", "band": [0.0, 0.1], "wide": [0.0, 0.15], "support": "návrh", "verification": "opraveno", "source": "tamtéž", "conversion": "tamtéž"}
       ],
       "note": "Vypuštěno „aspoň 2 slova z jazyka dobyvatelů“ (velikost vzorku slovníku)."
     },
     {
       "id": "m6b::jazyk_trhu", "kind": "možnost", "n": 20, "p_min": 0.8,
-      "support": "literatura*",
-      "source": "Gumperz a Wilson (1971) o Kupwaru, Sorensen (1967) o Vaupés: stabilní vícejazyčnost trvá staletí; Gal (1979); míra literatura nedává"
+      "support": "návrh", "verification": "neověřitelné",
+      "source": "Sorensen (1967), Multilingualism in the Northwest Amazon, American Anthropologist 69, 670–684, doi:10.1525/aa.1967.69.6.02a00030, a Gal (1979), Language Shift, Academic Press (existence ověřena); Gumperz a Wilson (1971) jsem nedohledal. Tvrzení, že stabilní vícejazyčnost trvá staletí, jsem nepotvrdil; míra literatura nedává, p_min 0,8 je návrh"
     },
     {
       "id": "m6b::loajalita", "kind": "možnost", "n": 20, "p_min": 0.8,
-      "support": "literatura*",
-      "source": "Fishman (1991), Reversing Language Shift; Gal (1979): jazyková loajalita zpomaluje přechod; směr doložený, míra ne"
+      "support": "návrh", "verification": "ověřeno",
+      "source": "Fishman (1991), Reversing Language Shift, Multilingual Matters, doi:10.21832/9781800418097; Gal (1979), Language Shift, Academic Press (existence a téma ověřeny, text nečten). Směr doložený, míra ne; p_min 0,8 je návrh"
     },
     {
       "id": "m6b::migrace", "kind": "možnost", "n": 20, "p_min": 0.7,
-      "support": "literatura*",
-      "source": "Lupyan a Dale (2010); Bentz a Winter (2013): větší populace má víc mluvčích L2 a jednodušší morfologii; v datech slabé korelace, proto p_min jen 0,7"
+      "support": "návrh", "verification": "ověřeno",
+      "source": "Lupyan a Dale (2010), PLoS ONE 5(1), e8559, doi:10.1371/journal.pone.0008559; Bentz a Winter (2013), Language Dynamics and Change 3(1), 1–27, doi:10.1163/22105832-13030105: větší podíl mluvčích L2 znamená jednodušší morfologii (směr). Velikost korelací nepotvrzena, p_min 0,7 je návrh"
     },
     {
       "id": "m6b::ferguson", "kind": "možnost", "n": 20, "p_min": 0.8,
-      "support": "literatura",
-      "source": "Ferguson (1959), „Diglossia“, Word 15: vysoká varieta stojí, lidová řeč se od ní vzdaluje"
+      "support": "literatura", "verification": "ověřeno",
+      "source": "Ferguson (1959), Diglossia, Word 15(2), 325–340, doi:10.1080/00437956.1959.11659702: vysoká varieta stojí, lidová řeč se od ní vzdaluje (existence a téma ověřeny)"
     },
     {
       "id": "m6b::nabozenstvi", "kind": "možnost", "n": 20, "p_min": 0.8,
-      "support": "literatura*",
-      "source": "latina v západní Evropě, arabština v perštině a turečtině, sanskrt v jihovýchodní Asii: náboženství přináší učená slova (Haspelmath a Tadmor 2009 o kulturních výpůjčkách)"
+      "support": "návrh", "verification": "neověřitelné",
+      "source": "Haspelmath a Tadmor (eds., 2009), Loanwords in the World’s Languages, De Gruyter Mouton, doi:10.1515/9783110218442 (existence ověřena); konkrétní tvrzení o kulturních výpůjčkách z náboženství (latina, arabština, sanskrt) jsem v textu nenašel; p_min 0,8 je návrh"
     },
     {
       "id": "m6c::strom_odpovida", "kind": "možnost", "n": 20, "p_min": 0.85,
