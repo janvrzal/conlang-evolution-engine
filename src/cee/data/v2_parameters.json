@@ -91,8 +91,8 @@
   {
    "name": "emergence_need_scale",
    "kind": "number",
-   "default": 0.6,
-   "description": "Jakou část potřeby funkce (``need``) uplatní `Expressivity`, když jazyk funkci nevyjadřuje (``zero``). Tlak podle potřeby je doložený pro obnovu zeslabeného výrazu (Hopper & Traugott 2003); nová kategorie vzniká hlavně z častého užívání a expresivních inovací mluvčích (Bybee 2003; Haspelmath 1999), ne z potřeby. 1,0 = model před M7a (potřeba táhne i vznik). 0,6 z kalibrace M7a (stacionarita WALS a obrat uvnitř rodiny, docs/engine-v2/12-kalibrace-m7a.md); tempo je předběžné, dokud ho neurčí kalibrace z prajazyků.",
+   "default": 0.4,
+   "description": "Jakou část potřeby funkce (``need``) uplatní `Expressivity`, když jazyk funkci nevyjadřuje (``zero``). Tlak podle potřeby je doložený pro obnovu zeslabeného výrazu (Hopper & Traugott 2003); nová kategorie vzniká hlavně z častého užívání a expresivních inovací mluvčích (Bybee 2003; Haspelmath 1999), ne z potřeby. 1,0 = model před M7a (potřeba táhne i vznik). 0,6 z kalibrace M7a (docs/engine-v2/12-kalibrace-m7a.md). 0,4 od M7.2b (5. 11. 2026, schválil uživatel): s vyblednutím členu drží start z WALS po 5 000 letech u 37A rovnováhou vzniku a zániku a brána m4b::clen_vznikne ještě projde (0,2 až 0,3 by ji porušily; docs/engine-v2/22-kalibrace-m7.md). Tempo je předběžné, dokud ho neověří zpětný test latina → románské jazyky (M7.3).",
    "group": "morphology"
   },
   {

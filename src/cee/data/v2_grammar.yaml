@@ -41,6 +41,9 @@ functions:
     template: inflection
     domain: verb
     cell: FUT
+    # Futurum vybledne do modálního nebo epistémického významu a obnoví se opisem
+    # (Bybee, Perkins a Pagliuca 1994, The Evolution of Grammar; lat. cantabo → cantare habeo).
+    bleaches: true
     weight: 0.3
     need: 0.4
     context: 0.44
@@ -51,7 +54,9 @@ functions:
     cell: PL
     weight: 0.4
     need: 0.6
-    context: 0.30
+    # Plurál je povinný u všech jmen jen asi u 46 % jazyků (WALS 34A, Haspelmath 2013,
+    # Occurrence of Nominal Plurality); jinde plurálnost často nese kontext. 0,3 → 0,5 v M7.2b.
+    context: 0.50
     sources: [many, all]
   OBJ:
     template: inflection

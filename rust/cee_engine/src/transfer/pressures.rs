@@ -883,7 +883,7 @@ impl<'a> Pressures<'a> {
                 let score = match pressure {
                     id::ECONOMY => -params.economy_word_cost * f64::from(construction.words()),
                     id::FUSION => {
-                        let rank = self.dominant_construction(g, function).map(rank_of);
+                        let rank = self.dominant_construction(g, function).map(current_rank);
                         match rank {
                             Some(current)
                                 if current != 0 && rank_of(construction) == current + 1 =>
@@ -940,6 +940,17 @@ fn rank_of(construction: &Construction) -> u32 {
         // Vyblednutý člen (ukazatel jména) je o stupeň dál než koncovka.
         "zero" if construction.stage.as_deref() == Some("marker") => 4,
         _ => 0,
+    }
+}
+
+/// Stupeň dnešní konstrukce pro bonus `Fusion`: jako [`rank_of`], ale zděděná syntetická
+/// koncovka (bez zapsaného exponentu) je také koncovka (stupeň 3). Ovlivní jen krok o stupeň
+/// dál, tedy vyblednutí v ukazatel (dok. 22, M7.2b); nová koncovka má exponent vždy.
+fn current_rank(construction: &Construction) -> u32 {
+    if construction.kind == "synthetic" {
+        3
+    } else {
+        rank_of(construction)
     }
 }
 

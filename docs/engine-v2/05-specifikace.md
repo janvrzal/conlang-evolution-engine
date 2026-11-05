@@ -1135,7 +1135,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3; aktualizováno po části D (proz�
 | Délka samohlásek, kompenzační prodloužení (Kavitskaya 2002) a přízvuk podle váhy slabiky (WALS 15A), tónová perturbace → tonogeneze | M7 (kalibrace modelu) |
 | Sporadické změny: metateze, disimilace, nepravidelné zkracování velmi častých slov | doplněk M2 |
 | ~~Hiát na konci slova je mimo dosah změn konce slova~~: od 2026-11-05 rodina `hiatus_elision` (Casali 1997), dok. 22 | vyřešeno v M7.2b |
-| ~~Člen nezaniká~~: od 2026-11-05 vyblednutí vázaného členu v ukazatel jména (`bleaching`, Greenberg 1978, stadium III); člen má cyklus vzniku a zániku, dok. 22. Plurál, minulý a budoucí čas zatím nezanikají (eroze koncovek nedosáhne prahu `1 − context`) | M7.2b, zbytek M7.3 |
+| ~~Člen nezaniká~~: od 2026-11-05 vyblednutí vázaného členu v ukazatel jména (`bleaching`, Greenberg 1978, stadium III); člen má cyklus vzniku a zániku, dok. 22. Od M7.2c (`emergence_need_scale` 0,4, vyblednutí futura, `PL.context` 0,5) mají cyklus i plurál a futurum; minulý čas jen vzniká | M7.2b, M7.2c |
 | Nové změny aspirace, ejektivity a glotalizace (sekundární palatalizace, labializace a vokalická nazalizace mají vlastní doplněk v části B typologie) | další doplněk M2, mimo rozsah B |
 | ~~Frekvence užití se nevyvíjí~~ | vyřešeno v M3b |
 | ~~Rodokmen slova (původ)~~ | původ slova je v exportu (M6c); historie tvarů viz níže |

@@ -64,7 +64,8 @@ impl SyntacticChange {
             Step::NegationRenewal => 0.01,
             Step::OrderFixation => 0.03,
             Step::OrderRelaxation => 0.01,
-            Step::Bleaching => 0.01,
+            // Jako připojení koncovky (0,03): dok. 22, M7.2b.
+            Step::Bleaching => 0.03,
         }
     }
 

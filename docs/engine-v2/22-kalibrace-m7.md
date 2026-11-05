@@ -361,3 +361,47 @@ jinak 0,01):
 Při té příležitosti se našla chyba v kontrole invariantu `m4b::jazyk_bez_kategorie`: „zdroj minulého
 času je z katalogu“ počítala jako cizí zdroj i skupinu, která minulý čas nevyvinula. Opraveno
 (4aa34bc); brána prochází při všech hodnotách.
+
+## M7.2c: tempo vzniku 0,4, cyklus futura a kontext plurálu
+
+Schválil uživatel 5. 11. 2026 („Zapiš 0,4 a pokračuj v kalibraci, vyřeš ten plurál a budoucí čas“).
+Zapsané změny:
+
+| změna | dřív | nyní | zdůvodnění |
+|---|---|---|---|
+| `emergence_need_scale` | 0,6 | **0,4** | nejnižší hodnota, při níž brána `m4b::clen_vznikne` projde a člen má cyklus (tabulka výše) |
+| základní míra `bleaching` | 0,01 | **0,03** | jako připojení koncovky; s 0,01 je vyblednutí vzácnější než vznik a člen se hromadí |
+| `FUTURE.bleaches` | – | **ano** | futurum vybledne do modálního nebo epistémického významu a obnoví se opisem (Bybee, Perkins a Pagliuca 1994, *The Evolution of Grammar*, University of Chicago Press; lat. *cantabo* → *cantare habeo*) |
+| bonus `Fusion` ze zděděné koncovky | stupeň 0 | **stupeň 3** | zděděná syntetická konstrukce nemá zapsaný exponent, ale je to koncovka; bez opravy se vyblednutí futura nikdy neprosadilo (`transfer::pressures::current_rank`) |
+| `PL.context` | 0,3 | **0,5** | plurál je povinný u všech jmen jen asi u 46 % jazyků (WALS 34A, Haspelmath 2013, Occurrence of Nominal Plurality); jinde plurálnost často nese kontext |
+
+`PL.context` určuje oba směry cyklu: jak silně se plurál prosazuje do jazyka, který ho nemá, a od
+jaké slabosti koncovky zaniká (`1 − context`, nyní 0,5). Varianty: `kalibrace/m72-plural.json`
+(kontext 0,45 dal +5 / −1 a neprošel, 0,6 dal +1 / −1).
+
+### Výsledek
+
+**Kalibrace 10 z 12, brány 47 z 47, testy prošly.**
+
+| rys | vznik / zánik | Hellinger | cíl | splněno |
+|---|---|---|---|---|
+| 33A plurál | +4 / −1 | 0,092 | ≤ 0,098 | ano (těsně) |
+| 37A člen | +14 / −4 | 0,088 | ≤ 0,112 | ano |
+| 66A minulý čas | +2 / −0 | 0,018 | ≤ 0,110 | ano |
+| 67A budoucí čas | +2 / −3 | 0,067 | ≤ 0,111 | ano |
+| 81A slovosled | ~3 změny | 0,211 | ≤ 0,245 | ano |
+| **143A zápor** | ~4 změny | **0,256** | ≤ 0,147 | **ne** |
+| 14A přízvuk | ~13 změn | 0,122 | ≤ 0,205 | ano |
+
+Plurál, člen a futurum mají skutečný cyklus vzniku i zániku. Minulý čas jen vzniká; ve 40 jazycích
+nezanikl, ale je stacionární v rámci šumu (zánik minulého času bez náhrady je i ve skutečnosti
+vzácný, Präteritumschwund nahrazuje minulý čas perfektem, který 66A počítá jako přítomný).
+
+**Zbývá:**
+
+- **Zápor 143A.** Obemknutý zápor (Jespersenovo stadium II, `embraced`, ve WALS 13 %) ve 40
+  jazycích zmizí (start 3, konec 0; při 0,6 jeden). Stadium II je v modelu příliš krátké: tlak
+  `Economy` trestá dvě slova záporu a výraznost je u obou podob stejná. Ve skutečnosti obemknutý
+  zápor vydrží staletí (francouzské *ne … pas*, afrikánština). Brána byla na hraně už ve výchozím
+  stavu (0,146 proti 0,147).
+- **Trudgill** (alternace kmene s populací +0,39): chybí vliv hustoty sítě (M7.1).
