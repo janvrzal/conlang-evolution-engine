@@ -159,5 +159,85 @@
  },
  "romanizace_prechod_0.05": {
   "shift_rate": 0.05
+ },
+ "politika_tah_0.3": {
+  "policy_levels": {
+   "enforced": {
+    "pull": 0.3,
+    "share": 0.6
+   },
+   "promoted": {
+    "pull": 0.1,
+    "share": 0.3
+   },
+   "tolerant": {
+    "pull": 0.0,
+    "share": 0.1
+   }
+  }
+ },
+ "politika_tah_0.1": {
+  "policy_levels": {
+   "enforced": {
+    "pull": 0.1,
+    "share": 0.6
+   },
+   "promoted": {
+    "pull": 0.1,
+    "share": 0.3
+   },
+   "tolerant": {
+    "pull": 0.0,
+    "share": 0.1
+   }
+  }
+ },
+ "politika_tah_0.1_podil_0.3": {
+  "policy_levels": {
+   "enforced": {
+    "pull": 0.1,
+    "share": 0.3
+   },
+   "promoted": {
+    "pull": 0.1,
+    "share": 0.3
+   },
+   "tolerant": {
+    "pull": 0.0,
+    "share": 0.1
+   }
+  }
+ },
+ "politika_tah_0.15": {
+  "policy_levels": {
+   "enforced": {
+    "pull": 0.15,
+    "share": 0.6
+   },
+   "promoted": {
+    "pull": 0.1,
+    "share": 0.3
+   },
+   "tolerant": {
+    "pull": 0.0,
+    "share": 0.1
+   }
+  }
+ },
+ "politika_tah_0.2": {
+  "policy_levels": {
+   "enforced": {
+    "pull": 0.2,
+    "share": 0.6
+   },
+   "promoted": {
+    "pull": 0.1,
+    "share": 0.3
+   },
+   "tolerant": {
+    "pull": 0.0,
+    "share": 0.1
+   }
+  }
  }
 }

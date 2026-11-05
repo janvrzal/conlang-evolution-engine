@@ -95,6 +95,10 @@ pub struct StateSpec {
     pub policy: String,
     pub border: String,
     pub name: Option<String>,
+    /// Úřední jazyk (jméno linie); `None` = jazyk největší vesnice hlavního regionu. Sídlem je
+    /// pak největší skupina hlavního regionu, která tímto jazykem mluví (franská říše úřadovala
+    /// latinsky, i když venkov ještě mluvil galsky).
+    pub language: Option<String>,
 }
 
 /// Rozebere druh události státu; `None`, když druh sem nepatří.
@@ -114,6 +118,7 @@ pub fn parse(kind: &str, p: &Params<'_>) -> Result<Option<PolityAction>, String>
                 .opt_string(&["border"])?
                 .unwrap_or_else(|| "normal".into()),
             name: p.opt_string(&["name"])?,
+            language: p.opt_string(&["language"])?,
         })
     };
     Ok(Some(match kind {
@@ -721,7 +726,30 @@ fn found_state(
     )?;
     level2_of(&params.policy_levels, &spec.policy, "jazyková politika")?;
     level_of(&params.border_levels, &spec.border, "propustnost hranice")?;
-    let seat = seat_of(world, capital)?;
+    let seat = match &spec.language {
+        None => seat_of(world, capital)?,
+        Some(name) => {
+            let number = world
+                .registry
+                .languages
+                .get(name)
+                .ok_or_else(|| format!("Neznámý úřední jazyk '{name}'."))?;
+            groups_in(world, &[capital])
+                .into_iter()
+                .filter(|&g| world.groups.main_code(g).language.0 == number)
+                .max_by(|&a, &b| {
+                    world.groups.population[a.index()]
+                        .cmp(&world.groups.population[b.index()])
+                        .then(world.group_name(b).cmp(world.group_name(a)))
+                })
+                .ok_or_else(|| {
+                    format!(
+                        "V hlavním regionu '{}' nikdo nemluví úředním jazykem '{name}'.",
+                        spec.capital
+                    )
+                })?
+        }
+    };
     let polity = Polity {
         id: spec.id.clone(),
         name: spec.name.clone(),

@@ -161,6 +161,8 @@ class StateSpec(_Event):
     centralization: str = "moderate"
     policy: str = "tolerant"
     border: str = "normal"
+    #: Úřední jazyk (jméno linie); ``None`` = jazyk největší vesnice hlavního regionu.
+    language: str | None = None
 
 
 
@@ -187,6 +189,8 @@ class SecessionSpec(_Event):
     centralization: str = "moderate"
     policy: str = "tolerant"
     border: str = "normal"
+    #: Úřední jazyk (jméno linie); ``None`` = jazyk největší vesnice hlavního regionu.
+    language: str | None = None
 
 
 

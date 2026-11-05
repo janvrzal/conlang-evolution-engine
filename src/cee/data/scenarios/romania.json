@@ -370,7 +370,7 @@
         "dacia"
       ],
       "capital": "italia",
-      "policy": "enforced"
+      "policy": "romanization"
     },
     {
       "kind": "secession",
@@ -388,7 +388,9 @@
       "regions": [
         "gallia"
       ],
-      "capital": "gallia"
+      "capital": "gallia",
+      "language": "latin",
+      "policy": "promoted"
     },
     {
       "kind": "secession",
@@ -397,7 +399,29 @@
       "regions": [
         "hispania"
       ],
-      "capital": "hispania"
+      "capital": "hispania",
+      "language": "latin",
+      "policy": "promoted"
     }
-  ]
+  ],
+  "parameters": {
+    "policy_levels": {
+      "enforced": {
+        "pull": 1.0,
+        "share": 0.6
+      },
+      "promoted": {
+        "pull": 0.1,
+        "share": 0.3
+      },
+      "tolerant": {
+        "pull": 0.0,
+        "share": 0.1
+      },
+      "romanization": {
+        "pull": 0.15,
+        "share": 0.6
+      }
+    }
+  }
 }

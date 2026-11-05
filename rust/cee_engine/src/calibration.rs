@@ -625,7 +625,7 @@ fn complexity(seed: i64) -> Result<Report, String> {
 pub const ROMANIA_JSON: &str = include_str!("../../../src/cee/data/scenarios/romania.json");
 /// Větve (regiony) Romanie a roky odečtu.
 pub const ROMANIA_BRANCHES: [&str; 4] = ["italia", "gallia", "hispania", "dacia"];
-pub const ROMANIA_YEARS: [f64; 5] = [400.0, 600.0, 1200.0, 1300.0, 1900.0];
+pub const ROMANIA_YEARS: [f64; 7] = [100.0, 250.0, 400.0, 600.0, 1200.0, 1300.0, 1900.0];
 
 /// Všechny skupiny větve (vesnice regionu; region je rodič území vesnice).
 fn region_groups(world: &crate::world::World, branch: &str) -> Vec<crate::ids::GroupId> {

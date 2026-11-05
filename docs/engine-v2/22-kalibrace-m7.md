@@ -757,3 +757,38 @@ retence 0,575 neprošla.
 **Další krok:** (a) prestiž latiny po roce 476 (církev, psaná norma, přijetí elitou), aby přechod
 doběhl, (b) proč slovník L2 latiny tolik přejímá ze substrátu (srovnat s bránou S3), (c) pak tempo
 přechodu podle doložené délky dvojjazyčnosti (Galie: ~500 let).
+
+### M7.3g: romanizace doběhne; `-m` drží slabost latiny samotné
+
+Schválil uživatel 5. 11. 2026 („Ano, opravit“). Zapsáno:
+
+- **Úřední jazyk státu** (`language` v událostech `state` a `secession`, Rust i `spec.py`): úřední
+  jazyk je zadaná linie a sídlem největší skupina hlavního regionu, která jí mluví. Bez pole jako
+  dřív (jazyk největší vesnice). Nástupnické státy Galie a Hispánie (476) mají úřední latinu
+  s politikou `promoted` (franská a vizigótská říše úřadovaly latinsky).
+- **Úroveň politiky `romanization`** jen ve scénáři (`parameters.policy_levels`: tah domů 0,15,
+  veřejné užívání 0,6; výchozí tabulka beze změny). Měřidlo má odečty i v letech 100 a 250.
+
+Přechod v modelu nekončí sám od sebe: ustálí se v rovnováze danou tahem politiky a odlišností
+jazyků. Tah 0,1 dá trvalou dvojjazyčnost (Galie 0,73), tah 0,3 až 1 okamžitý přechod (Galie celá
+do roku 100), tah 0,15 dá doložený průběh:
+
+| tah politiky | Galie: podíl mluvčích latiny 100 / 250 / 400 / 600 | Hispánie 100 / 400 / 600 / 1200 |
+|---|---|---|
+| 1 (`enforced`) | 1,00 / 1,00 / 1,00 / 1,00 | 1,00 / 1,00 / 1,00 / 1,00 |
+| 0,2 | 0,59 / 0,86 / 1,00 / 1,00 | 0,39 / 0,72 / 1,00 / 1,00 |
+| **0,15** | **0,51 / 0,71 / 0,95 / 1,00** | **0,34 / 0,59 / 0,77 / 1,00** |
+| 0,1 | 0,70 trvale | 0,48 trvale |
+
+Při realistické romanizaci ale `-m` zůstane v Galii, Hispánii i Itálii a ztratí se jen v Dácii (latinská
+menšina, 10 % mluvčích, dlouhá dvojjazyčnost): fáze L2 v Galii (asi 500 let) na erozi nestačí. Historicky
+ztratila `-m` i Itálie bez L2 mluvčích: rozhodlo, že **`-m` bylo slabé už v latině samotné**
+(vyslovovalo se jako nosovost samohlásky, v poezii se elidovalo, nápisy ho vynechávají od 3. st.
+př. n. l.). Scénář začíná s plným `-m`; model zatím neumí zadat, že protojazyk má na startu
+změnu napůl provedenou.
+
+**Romania: 3 z 10** (latinské futurum zanikne do 600 ve 3 větvích, zápor, dvojitý zápor); retence
+0,557 (substrát dál přepisuje moc slov), `-m`, pád, člen, nové futurum, SVO a koncové samohlásky ne.
+
+**Zbývá:** (a) počáteční variabilita protojazyka (zvuková změna rozběhnutá na startu, např. `m → ∅ /V_#`
+s podílem 0,3), (b) přejímání slov ze substrátu při přechodu.
