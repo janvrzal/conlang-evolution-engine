@@ -287,7 +287,7 @@ jsou dvě změny modelu.
    (`V → ∅ /V_#`). Hiát řeší většina jazyků, nejčastěji elizí (Casali 1997, Vowel elision in hiatus
    contexts, Language 73, 493–533). Dosáhne na koncovky za samohláskou (`la-i` → `la`), na které
    apokopa (`/C_#`) ani ztráta kody nedosáhnou. Rodina je v rozpočtu netónových zvukových inovací,
-   takže tempo ostatních rodin kleslo asi o 3 % (součet priorů 15,3 → 15,8).
+   takže tempo ostatních rodin kleslo asi o 3,5 % (součet priorů 13,7 → 14,2).
 2. **Vyblednutí členu** (`bleaching`, `changes::syntax::Step::Bleaching`, základní míra 0,01 jako
    obnova záporu): vázaný člen (klitika nebo koncovka) ztratí určitost a stane se ukazatelem jména
    (Greenberg 1978, How does a language acquire gender markers?, v Universals of Human Language 3,
