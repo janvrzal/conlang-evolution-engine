@@ -586,3 +586,43 @@ rychlejšími změnami konce slova; zrychlení gramatikalizace (×3) také nic n
 (`kalibrace/m73-romania.json`). Brzdí tedy něco, co tyto páky nezasáhnou. **Další krok: rozpad
 fitness návrhu `m → ∅` podle tlaků** (artikulace s populačním koeficientem, srozumitelnost
 a krátká slova, konformita, šíření mezi 16 skupinami), pak podobně pro člen a futurum.
+
+### M7.3b: proč se `-m` neztratí (rozbor fitness)
+
+Dočasný výpis příspěvků tlaků (do kódu nezapsán) pro proměnnou `process:coda_loss|{m}|delete|||V|#||`
+ve výchozí Romanii, průměr přes hodnocení nové varianty:
+
+| tlak | příspěvek |
+|---|---|
+| `functional_load` (akuzativ splyne s citačním tvarem u všech jmen) | **−0,42** |
+| `clarity` | −0,18 |
+| `conformity` (nová varianta je vzácná) | −0,10 |
+| `articulation` (s populačním koeficientem) | +0,10 |
+| `phonotactics` (zmizí koda) | +0,16 |
+| `actuation` (náhodný impuls skupiny) | ±0,5 |
+
+Součet kolem −0,34: varianta vždy vymře. Bez funkční zátěže a se srozumitelností 0,3 je součet
+kladný (+0,1 bez impulsu), a přesto se `-m` neztratí: například v obci `italia-v0` má nová varianta
+fitness +0,53, ale její podíl jen kolísá kolem 1 %. Obce regionu mají otevřenost 0,5 (polovina vstupu
+od sousedů), sousedé variantu jen slyší a náhodný impuls je u nich často záporný (−0,5 až −1,3);
+místní inovace se tak ředí rychleji, než ji výběr zesílí. Snížit otevřenost (0,1 nebo 0,2) ani
+s funkční zátěží 1 nepomohlo (`-m` zůstane), jen se zvýší obměna slovníku (retence 0,72, blíž IE-CoR).
+
+Další důvod: v Romanii (16 skupin, 80 generací) se změna `m → ∅ /V_#` navrhne jen asi devětkrát.
+Míra místa zvukové změny je `rozpočet rodiny · min(1, opora / 8) / počet míst rodiny`, takže prostředí,
+které má každé jméno v akuzativu, se nenavrhuje častěji než prostředí v osmi slovech, a ztráta kody
+má jednu snadnost (0,15) pro všechny souhlásky.
+
+**Co z toho plyne (k rozhodnutí):**
+
+1. **Funkční zátěž 5 je příliš silná** proti doloženému: latinské `-m` zaniklo přes splynutí pádů
+   (popis parametru to sám uvádí). Kandidát na kalibraci podle Romanie.
+2. **Ztráta kody nerozlišuje souhlásky.** Koncové nosovky a `s` jsou typologicky nejslabší kody
+   (přechod v nosovou samohlásku, *s* → *h* → ∅), model jim dává stejnou snadnost jako ostatním.
+   Rozlišení podle třídy by byla změna katalogu zvukových změn se zdroji.
+3. **Náhodný impuls (±0,5) přebíjí systematické tlaky** (desetiny). V síti obcí s otevřeností 0,5 se
+   pak prosadí jen změny, které jsou výhodné skoro všude. Velikost impulsu (`ACTUATION_SPREAD`) je
+   autorská konstanta; zmenšit ji by zrychlilo všechny změny a muselo by se znovu proměřit celé M7.
+
+Gramatika (člen, futurum, slovosled) se v Romanii nepohne ani při trojnásobném tempu
+gramatikalizace; nejspíš tentýž důvod (ředění v síti obcí a impuls), ověří se po rozhodnutí výše.

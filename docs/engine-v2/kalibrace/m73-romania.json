@@ -56,5 +56,44 @@
   "pressure_weights": {
    "clarity": 0.5
   }
+ },
+ "fz_0_jas_0.3": {
+  "functional_load_scale": 0.0,
+  "pressure_weights": {
+   "clarity": 0.3
+  }
+ },
+ "fz_1_jas_0.3": {
+  "functional_load_scale": 1.0,
+  "pressure_weights": {
+   "clarity": 0.3
+  }
+ },
+ "fz_1_jas_0.3_bez_koef": {
+  "functional_load_scale": 1.0,
+  "pressure_weights": {
+   "clarity": 0.3
+  },
+  "population_pressure_exponents": {}
+ },
+ "fz_2_jas_0.3_konec_x5": {
+  "functional_load_scale": 2.0,
+  "pressure_weights": {
+   "clarity": 0.3
+  },
+  "change_rates": {
+   "coda_loss": 5.0,
+   "apocope": 5.0
+  }
+ },
+ "otevrenost_0.1": {
+  "village_openness": 0.1
+ },
+ "otevrenost_0.2": {
+  "village_openness": 0.2
+ },
+ "otevrenost_0.1_fz_1": {
+  "village_openness": 0.1,
+  "functional_load_scale": 1.0
  }
 }
