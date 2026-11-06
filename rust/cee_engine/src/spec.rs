@@ -487,9 +487,9 @@ pub fn build(spec: &WorldSpec) -> Result<(World, Vec<Box<dyn WorldEvent>>), Stri
         }
         match item.kind.as_str() {
             "settlement" | "elite" => {
-                for (kind, params) in region_event(spec, item)
-                    .map_err(|e| format!("events.{index} ({}): {e}", item.kind))?
-                {
+                for (kind, params) in region_event(spec, item).map_err(|(field, message)| {
+                    format!("events.{index}.{field} ({}): {message}", item.kind)
+                })? {
                     events.push(crate::events::from_pending(PendingEvent::new(
                         item.year, kind, params,
                     )));
@@ -518,37 +518,72 @@ fn villages_of(spec: &WorldSpec, region: &str) -> Result<Vec<String>, String> {
         .collect())
 }
 
+/// Chyba pole události po regionech: jméno pole (`from`, `subjects.1` …) a zpráva.
+type FieldError = (String, String);
+
 /// Události po regionech přeložené na události skupin enginu (dok. 23, M8):
 ///
 /// - `settlement` (`from`, `to`, `share`, volitelně `settlements` a `prestige`): podíl `share`
 ///   obyvatel vesnic regionu `from` se usadí v regionu `to` v nových osadách (`to+from-0` …);
 ///   osady patří do regionu `to` a jejich lidé mluví jazykem odkud přišli (migrace).
-/// - `elite` (`from`, `seat`, `subjects`, volitelně `population`, `prestige`, `strength`): elita
-///   z největší vesnice regionu `from` se usadí v regionu `seat` s vazbami na vesnice regionů
-///   `subjects` (dobytí, superstrát).
-fn region_event(spec: &WorldSpec, item: &EventSpec) -> Result<Vec<(&'static str, Value)>, String> {
+/// - `elite` (`from`, `seat`, `subjects`, volitelně `language`, `population`, `prestige`,
+///   `strength`, `homeland`): elita z největší vesnice regionu `from` (s `language` z největší
+///   skupiny toho jazyka) se usadí v regionu `seat` s vazbami na vesnice regionů `subjects`
+///   (dobytí, superstrát).
+///
+/// Stavba běhu (`build`) i ověření (`check`) jdou přes tuto funkci, takže obě ověří pole
+/// stejně: regiony musí existovat, jazyk elity musí být jazyk popisu, čísla v mezích schématu.
+fn region_event(
+    spec: &WorldSpec,
+    item: &EventSpec,
+) -> Result<Vec<(&'static str, Value)>, FieldError> {
     let p = &item.params;
-    let text = |key: &str| -> Result<String, String> {
-        p.get(key)
-            .and_then(Value::as_str)
-            .map(str::to_owned)
-            .ok_or_else(|| format!("chybí pole '{key}'"))
+    let fail = |field: &str, message: String| (field.to_owned(), message);
+    let text = |key: &str| -> Result<String, FieldError> {
+        match p.get(key) {
+            None | Some(Value::Null) => Err(fail(key, format!("chybí pole '{key}'"))),
+            Some(Value::String(s)) if !s.is_empty() => Ok(s.clone()),
+            Some(_) => Err(fail(key, format!("pole '{key}' musí být neprázdný text"))),
+        }
     };
-    let number = |key: &str, default: f64| p.get(key).and_then(Value::as_f64).unwrap_or(default);
+    let number = |key: &str, default: f64| -> Result<f64, FieldError> {
+        match p.get(key) {
+            None | Some(Value::Null) => Ok(default),
+            Some(value) => value
+                .as_f64()
+                .ok_or_else(|| fail(key, format!("pole '{key}' musí být číslo"))),
+        }
+    };
+    let region = |key: &str| -> Result<String, FieldError> {
+        let id = text(key)?;
+        villages_of(spec, &id).map_err(|e| fail(key, e))?;
+        Ok(id)
+    };
     match item.kind.as_str() {
         "settlement" => {
-            let (from, to) = (text("from")?, text("to")?);
-            let share = number("share", 0.2);
+            let (from, to) = (region("from")?, region("to")?);
+            let share = number("share", 0.2)?;
             if !(share > 0.0 && share < 1.0) {
-                return Err("share musí být mezi 0 a 1".into());
+                return Err(fail("share", "share musí být mezi 0 a 1".into()));
             }
-            let count = number("settlements", 1.0).max(1.0) as usize;
+            let count = number("settlements", 1.0)?;
+            if count < 1.0 || count.fract() != 0.0 {
+                return Err(fail(
+                    "settlements",
+                    "počet osad musí být celé číslo alespoň 1".into(),
+                ));
+            }
+            let count = count as usize;
+            let prestige = match p.get("prestige") {
+                None | Some(Value::Null) => None,
+                Some(_) => Some(number("prestige", 0.0)?),
+            };
             let target = spec
                 .regions
                 .iter()
                 .find(|r| r.id == to)
-                .ok_or_else(|| format!("neznámý region '{to}'"))?;
-            let sources = villages_of(spec, &from)?;
+                .expect("region `to` ověřen výše");
+            let sources = villages_of(spec, &from).map_err(|e| fail("from", e))?;
             let mut out = Vec::new();
             for n in 0..count {
                 let angle = std::f64::consts::TAU * (n as f64 + 0.5) / count as f64;
@@ -570,39 +605,84 @@ fn region_event(spec: &WorldSpec, item: &EventSpec) -> Result<Vec<(&'static str,
                 params.insert("position".into(), json!(position));
                 params.insert("region".into(), json!(to));
                 params.insert("reach".into(), json!(spec.village_spacing * 2.5));
-                if let Some(prestige) = p.get("prestige").filter(|v| !v.is_null()) {
-                    params.insert("prestige".into(), prestige.clone());
+                if let Some(prestige) = prestige {
+                    params.insert("prestige".into(), json!(prestige));
                 }
                 out.push(("migration", Value::Object(params)));
             }
             Ok(out)
         }
         "elite" => {
-            let (from, seat) = (text("from")?, text("seat")?);
-            villages_of(spec, &from)?;
+            let (from, seat) = (region("from")?, region("seat")?);
             // S jazykem (`language`) se elita vybere až v roce události podle jazyka.
-            let conqueror = match p.get("language").and_then(Value::as_str) {
-                Some(language) => format!("{from}:{language}"),
-                None => format!("{from}-v0"),
+            let conqueror = match p.get("language") {
+                None | Some(Value::Null) => format!("{from}-v0"),
+                Some(_) => {
+                    let language = text("language")?;
+                    if !spec.languages.iter().any(|l| l.id == language) {
+                        return Err(fail(
+                            "language",
+                            format!(
+                                "neznámý jazyk elity '{language}'; možnosti: {}",
+                                spec.languages
+                                    .iter()
+                                    .map(|l| l.id.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ),
+                        ));
+                    }
+                    format!("{from}:{language}")
+                }
             };
             // Poddané regiony se dohledají až v roce události (`@region`).
             let subjects: Vec<String> = match p.get("subjects") {
+                None | Some(Value::Null) => vec![format!("@{seat}")],
                 Some(Value::Array(items)) => items
                     .iter()
-                    .filter_map(Value::as_str)
-                    .map(|r| villages_of(spec, r).map(|_| format!("@{r}")))
-                    .collect::<Result<Vec<_>, _>>()?,
-                _ => vec![format!("@{seat}")],
+                    .enumerate()
+                    .map(|(n, value)| {
+                        let field = format!("subjects.{n}");
+                        let id = value
+                            .as_str()
+                            .ok_or_else(|| fail(&field, "poddaný region musí být text".into()))?;
+                        villages_of(spec, id).map_err(|e| fail(&field, e))?;
+                        Ok(format!("@{id}"))
+                    })
+                    .collect::<Result<Vec<_>, FieldError>>()?,
+                Some(_) => {
+                    return Err(fail(
+                        "subjects",
+                        "pole 'subjects' musí být seznam regionů".into(),
+                    ))
+                }
             };
+            let population = number("population", 100.0)?;
+            if population <= 0.0 {
+                return Err(fail("population", "počet elity musí být kladný".into()));
+            }
+            let strength = number("strength", 0.5)?;
+            if strength <= 0.0 {
+                return Err(fail("strength", "síla vazeb elity musí být kladná".into()));
+            }
             let mut params = Map::new();
             params.insert("conqueror".into(), json!(conqueror));
             params.insert("territory".into(), json!(seat));
             params.insert("subjects".into(), json!(subjects));
-            params.insert("population".into(), json!(number("population", 100.0)));
-            params.insert("prestige".into(), json!(number("prestige", 2.0)));
-            params.insert("strength".into(), json!(number("strength", 0.5)));
-            if let Some(homeland) = p.get("homeland").and_then(Value::as_f64) {
+            params.insert("population".into(), json!(population));
+            params.insert("prestige".into(), json!(number("prestige", 2.0)?));
+            params.insert("strength".into(), json!(strength));
+            if let Some(Value::Number(_)) = p.get("homeland") {
+                let homeland = number("homeland", 0.0)?;
+                if homeland < 0.0 {
+                    return Err(fail(
+                        "homeland",
+                        "vazba k domovině nesmí být záporná".into(),
+                    ));
+                }
                 params.insert("homeland".into(), json!(homeland));
+            } else if !matches!(p.get("homeland"), None | Some(Value::Null)) {
+                return Err(fail("homeland", "pole 'homeland' musí být číslo".into()));
             }
             Ok(vec![("conquest", Value::Object(params))])
         }
@@ -855,13 +935,45 @@ pub fn check(spec: &WorldSpec) -> Vec<Issue> {
                     ));
                     continue;
                 }
-                let event = crate::events::from_pending(PendingEvent::new(
-                    item.year,
-                    &item.kind,
-                    Value::Object(item.params.clone()),
-                ));
-                if let Err(message) = event.apply(&mut trial.world, &mut history, 0) {
-                    issues.push(Issue::error(format!("events.{index}"), message));
+                // Události po regionech se zkouší přeložené stejně jako při stavbě běhu.
+                let translated: Vec<(String, Value)> = match item.kind.as_str() {
+                    "settlement" | "elite" => match region_event(spec, item) {
+                        Ok(found) => found
+                            .into_iter()
+                            .map(|(kind, params)| (kind.to_owned(), params))
+                            .collect(),
+                        Err((field, message)) => {
+                            issues.push(Issue::error(format!("events.{index}.{field}"), message));
+                            continue;
+                        }
+                    },
+                    _ => vec![(item.kind.clone(), Value::Object(item.params.clone()))],
+                };
+                for (kind, params) in translated {
+                    // Elita podle jazyka se vybírá až v roce události; jazyk se do regionu může
+                    // dostat během běhu (posun, osídlení), proto jen varování.
+                    if let Some((region, language)) = params
+                        .get("conqueror")
+                        .and_then(Value::as_str)
+                        .and_then(|c| c.split_once(':'))
+                    {
+                        if crate::events::largest_speaking(&trial.world, region, language).is_err()
+                        {
+                            found.push(Issue::warning(
+                                format!("events.{index}.language"),
+                                format!(
+                                    "v regionu '{region}' zatím nikdo nemluví jazykem '{language}'; \
+                                     pokud tomu tak bude i v roce události, běh skončí chybou"
+                                ),
+                            ));
+                            continue;
+                        }
+                    }
+                    let event =
+                        crate::events::from_pending(PendingEvent::new(item.year, &kind, params));
+                    if let Err(message) = event.apply(&mut trial.world, &mut history, 0) {
+                        issues.push(Issue::error(format!("events.{index}"), message));
+                    }
                 }
             }
         }

@@ -949,7 +949,11 @@ fn groups_of_region(world: &World, region: &str) -> Result<Vec<GroupId>, String>
 }
 
 /// Největší skupina regionu (vesnice regionu), jejíž hlavní kód je z linie `language`.
-fn largest_speaking(world: &World, region: &str, language: &str) -> Result<GroupId, String> {
+pub(crate) fn largest_speaking(
+    world: &World,
+    region: &str,
+    language: &str,
+) -> Result<GroupId, String> {
     let number = world
         .registry
         .languages

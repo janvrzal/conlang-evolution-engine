@@ -1,6 +1,7 @@
 //! Ověření popisu světa (`spec::check`): chyby s cestou, česká zpráva, varování.
 
 use cee_engine::spec::{self, Issue, WorldSpec};
+use cee_engine::{Simulation, SimulationConfig};
 use serde_json::{json, Value};
 
 fn small(extra: Value) -> Value {
@@ -118,4 +119,102 @@ fn neznamy_region_a_protojazyk() {
     let issues = check(small(json!({"events": [
         {"kind": "state", "year": 0, "id": "k", "regions": ["c", "zz"], "capital": "c"}]})));
     assert!(message(&issues, "events.0").contains("zz"));
+}
+
+/// Usazení a elita po regionech: v `small` mluví region `c` jazykem `a`, region `x` jazykem `b`.
+fn settlement_and_elite(settlement: Value, elite: Value) -> Value {
+    let mut first = json!({"kind": "settlement", "year": 50, "from": "x", "to": "c", "share": 0.25,
+                           "settlements": 1});
+    let mut second = json!({"kind": "elite", "year": 100, "from": "x", "seat": "c",
+                            "subjects": ["c", "x"], "population": 120, "prestige": 2.0,
+                            "strength": 0.6});
+    for (key, value) in settlement.as_object().unwrap() {
+        first[key] = value.clone();
+    }
+    for (key, value) in elite.as_object().unwrap() {
+        second[key] = value.clone();
+    }
+    small(json!({"events": [first, second]}))
+}
+
+#[test]
+fn usazeni_a_elita_projdou_overenim_i_behem() {
+    let spec_json = settlement_and_elite(json!({}), json!({"language": "b"}));
+    assert!(check(spec_json.clone()).is_empty());
+    // Co ověření pustí, to se postaví a proběhne: vznikne migrace a dobytí.
+    let world_spec = WorldSpec::from_json(&spec_json.to_string()).unwrap();
+    let (world, events) = spec::build(&world_spec).unwrap();
+    let mut simulation = Simulation::new(world, SimulationConfig::default(), events).unwrap();
+    simulation.run(120.0).unwrap();
+    assert_eq!(simulation.history.of_kind("migration").count(), 1);
+    assert_eq!(simulation.history.of_kind("conquest").count(), 1);
+}
+
+#[test]
+fn poloostrov_s_usazenim_a_elitou_nema_chyby() {
+    let text = include_str!("../../../desktop/static/projects/poloostrov.cee.json");
+    let mut spec_json: Value = serde_json::from_str(text).unwrap();
+    let events = spec_json["events"].as_array_mut().unwrap();
+    events.insert(
+        0,
+        json!({"kind": "settlement", "year": 350, "from": "bal", "to": "lisk", "share": 0.25,
+               "settlements": 1}),
+    );
+    events.insert(
+        1,
+        json!({"kind": "elite", "year": 525, "from": "pelna", "seat": "kaar",
+               "subjects": ["kaar", "dorn"], "population": 120, "prestige": 2.0, "strength": 0.6}),
+    );
+    let issues = check(spec_json);
+    assert!(issues.is_empty(), "{issues:?}");
+}
+
+#[test]
+fn usazeni_a_elita_overi_pole() {
+    let issues = check(settlement_and_elite(
+        json!({"to": "nikde"}),
+        json!({"language": "zz", "seat": "c"}),
+    ));
+    assert!(message(&issues, "events.0.to").contains("neznámý region 'nikde'"));
+    assert!(message(&issues, "events.1.language").contains("neznámý jazyk elity 'zz'"));
+
+    let issues = check(settlement_and_elite(
+        json!({"from": "nikde", "share": 1.5}),
+        json!({"seat": "nikde"}),
+    ));
+    assert!(message(&issues, "events.0.from").contains("nikde"));
+    assert!(message(&issues, "events.1.seat").contains("nikde"));
+
+    let issues = check(settlement_and_elite(
+        json!({"share": 1.5}),
+        json!({"subjects": ["c", "nikde"]}),
+    ));
+    assert!(message(&issues, "events.0.share").contains("mezi 0 a 1"));
+    assert!(message(&issues, "events.1.subjects.1").contains("nikde"));
+
+    let issues = check(settlement_and_elite(
+        json!({"settlements": 0}),
+        json!({"population": "hodně"}),
+    ));
+    assert!(message(&issues, "events.0.settlements").contains("alespoň 1"));
+    assert!(message(&issues, "events.1.population").contains("číslo"));
+
+    let issues = check(settlement_and_elite(json!({}), json!({"from": null})));
+    assert!(message(&issues, "events.1.from").contains("chybí"));
+    assert!(issues.iter().all(|i| i.severity == "error"));
+    // Stavba běhu odmítne totéž se stejnou cestou.
+    let spec_json = settlement_and_elite(json!({"to": "nikde"}), json!({}));
+    let error = spec::build(&WorldSpec::from_json(&spec_json.to_string()).unwrap())
+        .err()
+        .unwrap();
+    assert!(error.starts_with("events.0.to"), "{error}");
+}
+
+#[test]
+fn elita_jazyka_ktery_v_regionu_chybi_je_varovani() {
+    // Jazykem `a` v regionu `x` na začátku nikdo nemluví; může se tam dostat během běhu.
+    let issues = check(settlement_and_elite(json!({}), json!({"language": "a"})));
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].path, "events.1.language");
+    assert_eq!(issues[0].severity, "warning");
 }
