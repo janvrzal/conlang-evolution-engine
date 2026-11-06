@@ -33,6 +33,9 @@ functions:
     template: inflection
     domain: verb
     cell: PAST
+    # Minulý čas vybledne do kontrafaktuálu a irreálu (angl. if I had; Bybee, Perkins a Pagliuca
+    # 1994) a funkci převezme nový opis (perfektum → minulý čas); M7.3l.
+    bleaches: true
     weight: 0.5
     need: 1.0
     context: 0.25
@@ -54,6 +57,9 @@ functions:
     template: inflection
     domain: noun
     cell: PL
+    # Plurálová koncovka vybledne v kolektiv nebo ukazatel jmenné třídy (Corbett 2000, Number;
+    # Greenberg 1978); M7.3l.
+    bleaches: true
     weight: 0.4
     need: 0.6
     # Plurál je povinný u všech jmen jen asi u 46 % jazyků (WALS 34A, Haspelmath 2013,

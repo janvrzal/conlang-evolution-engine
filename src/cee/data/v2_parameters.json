@@ -91,17 +91,17 @@
   {
    "name": "emergence_need_scale",
    "kind": "number",
-   "default": 0.4,
-   "description": "Jakou část potřeby funkce (``need``) uplatní `Expressivity`, když jazyk funkci nevyjadřuje (``zero``). Tlak podle potřeby je doložený pro obnovu zeslabeného výrazu (Hopper & Traugott 2003); nová kategorie vzniká hlavně z častého užívání a expresivních inovací mluvčích (Bybee 2003; Haspelmath 1999), ne z potřeby. 1,0 = model před M7a (potřeba táhne i vznik). 0,6 z kalibrace M7a (docs/engine-v2/12-kalibrace-m7a.md). 0,4 od M7.2b (5. 11. 2026, schválil uživatel): s vyblednutím členu drží start z WALS po 5 000 letech u 37A rovnováhou vzniku a zániku a brána m4b::clen_vznikne ještě projde (0,2 až 0,3 by ji porušily; docs/engine-v2/22-kalibrace-m7.md). Tempo je předběžné, dokud ho neověří zpětný test latina → románské jazyky (M7.3).",
+   "default": 0.2,
+   "description": "Jakou část potřeby funkce (``need``) uplatní `Expressivity`, když jazyk funkci nevyjadřuje (``zero``). Tlak podle potřeby je doložený pro obnovu zeslabeného výrazu (Hopper & Traugott 2003); nová kategorie vzniká hlavně z častého užívání a expresivních inovací mluvčích (Bybee 2003; Haspelmath 1999), ne z potřeby. 1,0 = model před M7a (potřeba táhne i vznik). 0,6 z kalibrace M7a (docs/engine-v2/12-kalibrace-m7a.md). 0,4 od M7.2b (5. 11. 2026, schválil uživatel); 0,2 od M7.3l (6. 11. 2026): vznik nové kategorie pohání hlavně `extravagance`: s vyblednutím členu drží start z WALS po 5 000 letech u 37A rovnováhou vzniku a zániku a brána m4b::clen_vznikne ještě projde (0,2 až 0,3 by ji porušily; docs/engine-v2/22-kalibrace-m7.md). Tempo je předběžné, dokud ho neověří zpětný test latina → románské jazyky (M7.3).",
    "group": "morphology"
   },
   {
    "name": "extravagance",
    "kind": "number",
-   "default": 0.0,
+   "default": 0.1,
    "min": 0.0,
    "max": 1.0,
-   "description": "Přitažlivost čerstvého volného opisu (`Expressivity`): mluvčí sahají po výraznějším vyjádření, aby byli slyšet (Haspelmath 1999, Why is grammaticalization irreversible?; Detges a Waltereit 2002). Přičte se k expresivitě opisu krát (1 − jeho podíl ve skupině), takže slábne, jak opis zevšední. Pohání gramatikalizaci i ve velkých skupinách, kde drift nestačí. 0 = bez přitažlivosti.",
+   "description": "Přitažlivost čerstvého volného opisu (`Expressivity`): mluvčí sahají po výraznějším vyjádření, aby byli slyšet (Haspelmath 1999, Why is grammaticalization irreversible?; Detges a Waltereit 2002). Přičte se k expresivitě opisu krát (1 − jeho podíl ve skupině), takže slábne, jak opis zevšední. Pohání gramatikalizaci i ve velkých skupinách, kde drift nestačí. 0 = bez přitažlivosti. 0,1 od M7.3l (6. 11. 2026, se škálou vzniku 0,2 a vyblednutím plurálu a minulého času): plurál, člen, minulý a budoucí čas mají ve 40 jazycích za 5 000 let vyvážený vznik i zánik a Romania dostane zánik i obnovu futura (docs/engine-v2/22-kalibrace-m7.md).",
    "group": "morphology"
   },
   {

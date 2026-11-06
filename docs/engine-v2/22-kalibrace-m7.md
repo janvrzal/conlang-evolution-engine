@@ -897,3 +897,39 @@ a futurum se proto při 0,15 a nulové škále vzniku vyrovnají, plurál a minu
 **Co by bylo potřeba pro zapnutí:** cesta zániku i pro plurál a minulý čas (minulý čas vytlačený
 videm nebo perfektem a pak vyblednutý; plurál jako volitelný, jen u živých jmen, WALS 34A) a nové
 vyvážení vzniku a zániku celé typologie M7.2.
+
+## M7.3l: cesty zániku plurálu a minulého času; extravagance zapnuta
+
+Schválil uživatel 6. 11. 2026. Zapsáno:
+
+- **Plurál a minulý čas mohou vyblednout** (`bleaches: true` v katalogu, stejná změna `bleaching` jako
+  člen a futurum): minulý čas do kontrafaktuálu a irreálu (angl. *if I had*; Bybee, Perkins
+  a Pagliuca 1994), plurálová koncovka v kolektiv nebo ukazatel jmenné třídy (Corbett 2000,
+  *Number*; Greenberg 1978). Funkce zůstane nevyjádřená a může se obnovit opisem.
+- **`extravagance` 0,1** (dřív 0) a **`emergence_need_scale` 0,2** (dřív 0,4): vznik nové kategorie
+  pohání hlavně přitažlivost čerstvého opisu, ne potřeba.
+
+Hodnoty z mřížky 18 kombinací (`kalibrace/m73-mrizka.json`: extravagance 0,1 / 0,15 / 0,2 × škála
+vzniku 0 / 0,2 / 0,4 × vyblednutí ×1 / ×2) na typologii a Romanii; nejlepší 16 ze 17 cílů
+(extravagance 0,1, škála 0,2, vyblednutí ×1 i ×2, a extravagance 0,15 se škálou 0). Zvoleno
+s výchozím tempem vyblednutí. Samotné zapnutí vyblednutí bez extravagance minulý čas jen ubírá
+(66A +1 / −7, neprošla).
+
+### Výsledek
+
+**Brány 47 z 47** (i `m4b::clen_vznikne`, kterou škála 0,2 dřív porušila), **kalibrace 21 z 22**, testy
+prošly.
+
+| rys (40 jazyků, 5 000 let) | dřív vznik / zánik | nyní vznik / zánik |
+|---|---|---|
+| 33A plurál | +4 / −1 | +5 / −3 |
+| 37A člen | +14 / −4 | +14 / −7 |
+| 66A minulý čas | +2 / −0 | +4 / −5 |
+| 67A budoucí čas | +2 / −3 | +8 / −8 |
+
+Všechny čtyři flexivní rysy mají poprvé **vyvážený cyklus** vzniku i zániku a drží se u WALS.
+
+Romania 9 z 10: nově zánik latinského futura (≥ 3 větve) a jeho obnova (aspoň jedna větev). Chybí
+**člen** (`m7::latina_clen`, 0 z 20 běhů): potřebuje silnější extravaganci (0,15 se škálou 0,4 nebo
+0,2), a ta rozbije stacionaritu typologie. Člen v Romanii nejspíš brzdí něco specifického pro latinu
+(zdroj *ille* = `that`, potřeba členu 0,25 a kontext 0,16 jsou nejnižší v katalogu); rozbor zbývá.
