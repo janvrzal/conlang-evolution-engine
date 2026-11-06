@@ -20,7 +20,7 @@ use crate::model::links::LinkKind;
 use crate::model::repertoire::{Distribution, Origin, Repertoire};
 use crate::model::territory::{Territory, TerritoryLevel};
 use crate::parameters::Parameters;
-use crate::protoform::{protolanguage, ProtoSpec};
+use crate::protoform::{protolanguage, ProtoSpec, SyllableType};
 use crate::rng::{stable_int, Part, Stream};
 use crate::vocabulary::Vocabulary;
 use crate::world::{gravity_links, gravity_pairs, Endings, World};
@@ -296,6 +296,7 @@ pub fn seed_language(
             fixed: &fixed,
             tones: &[],
             known_frequencies: known.as_ref(),
+            syllables: None,
         },
         ConceptData::shared(),
     )?;
@@ -601,6 +602,8 @@ pub struct ProtoLanguage {
     pub endings: Option<Endings>,
     /// Odvozovací přípony (IPA); prázdné = vylosují se z inventáře ([`generated_suffixes`]).
     pub suffixes: Vec<String>,
+    /// Slabičná stavba generovaných slov; `None` = vylosuje se (WALS 12A).
+    pub syllables: Option<SyllableType>,
 }
 
 impl ProtoLanguage {
@@ -618,6 +621,7 @@ impl ProtoLanguage {
             tones: Vec::new(),
             endings: None,
             suffixes: Vec::new(),
+            syllables: None,
         }
     }
 
@@ -740,6 +744,7 @@ pub fn seed_lineages(
                 fixed: &language.words,
                 tones: &language.tones,
                 known_frequencies: known.as_ref(),
+                syllables: language.syllables,
             },
             ConceptData::shared(),
         )?;

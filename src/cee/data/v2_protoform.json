@@ -1,0 +1,714 @@
+{
+ "description": "Data generátoru protojazyka (dok. 25): četnost tříd hlásek ASJP podle pozice ve slově (za podmínky, že jazyk třídu má), slabičné typy WALS 12A s měřením na slovech ASJP, Zipfův zákon zkracování, dětská slova pro rodiče a zvuková symbolika (Blasi a kol. 2016). Vytváří scripts/build_v2_protoform.py.",
+ "sources": [
+  {
+   "name": "ASJP Database (lexibank/asjp, CLDF)",
+   "citation": "Wichmann, Søren, Holman, Eric W. & Brown, Cecil H. (eds.) The ASJP Database. https://asjp.clld.org",
+   "license": "CC BY 4.0",
+   "url": "https://github.com/lexibank/asjp/tree/cf4bf0d13c95256b1b48f440d07c5c098500a770/cldf",
+   "sha256": {
+    "forms.csv": "4ee30b771a2cba59e7e904587f7f60dc3d823824a7b9aae9dd6f73a960139321",
+    "languages.csv": "647174df2eb812eff370355b02b6843d76bfb2b082147bc263e5ccd4cc628be5",
+    "parameters.csv": "2ed306c24552ea61e48ad6dc067859d8b70029abfc1d36668246214a5a1183ec"
+   }
+  },
+  {
+   "name": "WALS 12A Syllable Structure",
+   "citation": "Maddieson, Ian 2013. Syllable Structure. In Dryer & Haspelmath (eds.), WALS Online (v2020.3).",
+   "license": "CC BY 4.0",
+   "url": "https://github.com/cldf-datasets/wals/tree/81298aa26d01fdc11b769bcc7fa87ad9e43d7ccd/cldf",
+   "sha256": {
+    "values.csv": "2d672f80dbe8cf1839061af0301650bde60c326bbb486835c93ab7304b5b06cd",
+    "languages.csv": "10e0742f158dadd4ef9484797ef7606a337306ee49a110a58c8e658826d3290e",
+    "codes.csv": "88c402d840ddeaf08545aea8395b593e9a1c44fe18353306a01dc839ea6a49b9"
+   }
+  },
+  {
+   "name": "Blasi et al. 2016",
+   "citation": "Blasi, Damián E., Wichmann, Søren, Hammarström, Harald, Stadler, Peter F. & Christiansen, Morten H. 2016. Sound–meaning association biases evidenced across thousands of languages. PNAS 113(39): 10818–10823, tab. S2–S3.",
+   "license": "převzatá čísla (poměry rizik) s citací"
+  },
+  {
+   "name": "Murdock 1959",
+   "citation": "Murdock, George P. 1959. Cross-language parallels in parental kin terms. Anthropological Linguistics 1(9): 1–5; Jakobson, Roman 1962. Why 'mama' and 'papa'? Selected Writings I: 538–545.",
+   "license": "převzatá čísla s citací"
+  },
+  {
+   "name": "WOLD (kontrola dětských slov)",
+   "citation": "Haspelmath, Martin & Tadmor, Uri (eds.) 2009. World Loanword Database.",
+   "license": "CC BY 4.0"
+  }
+ ],
+ "ipa_to_asjp": {
+  "p": "p",
+  "b": "b",
+  "f": "f",
+  "ɸ": "f",
+  "v": "v",
+  "β": "v",
+  "m": "m",
+  "ɱ": "m",
+  "w": "w",
+  "ʋ": "w",
+  "θ": "8",
+  "ð": "8",
+  "t": "t",
+  "ʈ": "t",
+  "d": "d",
+  "ɖ": "d",
+  "s": "s",
+  "ʂ": "s",
+  "z": "z",
+  "ʐ": "z",
+  "ts": "c",
+  "dz": "c",
+  "n": "n",
+  "ɳ": "n",
+  "r": "r",
+  "ɾ": "r",
+  "ɽ": "r",
+  "ɹ": "r",
+  "ɻ": "r",
+  "ʀ": "r",
+  "l": "l",
+  "ɭ": "l",
+  "ʃ": "S",
+  "ɕ": "S",
+  "ʒ": "Z",
+  "ʑ": "Z",
+  "tʃ": "C",
+  "tɕ": "C",
+  "dʒ": "j",
+  "dʑ": "j",
+  "c": "T",
+  "ɟ": "T",
+  "ɲ": "5",
+  "j": "y",
+  "k": "k",
+  "ɡ": "g",
+  "g": "g",
+  "x": "x",
+  "ɣ": "x",
+  "ŋ": "N",
+  "q": "q",
+  "ɢ": "G",
+  "χ": "X",
+  "ʁ": "X",
+  "ħ": "X",
+  "ʕ": "X",
+  "h": "h",
+  "ɦ": "h",
+  "ʔ": "7",
+  "ɬ": "L",
+  "ɮ": "L",
+  "ʎ": "L",
+  "ʟ": "L",
+  "ɫ": "l",
+  "ç": "S",
+  "ʝ": "y",
+  "ɰ": "w",
+  "ʙ": "r",
+  "i": "i",
+  "ɪ": "i",
+  "y": "i",
+  "e": "e",
+  "ø": "e",
+  "ɛ": "E",
+  "æ": "E",
+  "œ": "E",
+  "ə": "3",
+  "ɨ": "3",
+  "ʉ": "3",
+  "ɜ": "3",
+  "ɘ": "3",
+  "ɵ": "3",
+  "ɐ": "3",
+  "a": "a",
+  "ɑ": "a",
+  "ɒ": "o",
+  "u": "u",
+  "ʊ": "u",
+  "ɯ": "u",
+  "o": "o",
+  "ɔ": "o",
+  "ɤ": "o",
+  "ʌ": "o"
+ },
+ "segment_weights": {
+  "consonants": {
+   "final": {
+    "!": 0.0133,
+    "4": 0.0185,
+    "5": 0.0312,
+    "7": 0.1622,
+    "8": 0.0209,
+    "C": 0.0305,
+    "G": 0.0052,
+    "L": 0.0358,
+    "N": 0.1221,
+    "S": 0.0387,
+    "T": 0.0261,
+    "X": 0.0372,
+    "Z": 0.0092,
+    "b": 0.0145,
+    "c": 0.0201,
+    "d": 0.0229,
+    "f": 0.0151,
+    "g": 0.0263,
+    "h": 0.0445,
+    "j": 0.0162,
+    "k": 0.0838,
+    "l": 0.0913,
+    "m": 0.0805,
+    "n": 0.1711,
+    "p": 0.043,
+    "q": 0.0404,
+    "r": 0.0983,
+    "s": 0.0622,
+    "t": 0.0734,
+    "v": 0.0193,
+    "w": 0.029,
+    "x": 0.0484,
+    "y": 0.0468,
+    "z": 0.0172
+   },
+   "initial": {
+    "!": 0.2377,
+    "4": 0.0196,
+    "5": 0.0276,
+    "7": 0.0168,
+    "8": 0.0364,
+    "C": 0.0529,
+    "G": 0.0355,
+    "L": 0.0466,
+    "N": 0.0361,
+    "S": 0.043,
+    "T": 0.0451,
+    "X": 0.0306,
+    "Z": 0.0277,
+    "b": 0.0631,
+    "c": 0.0431,
+    "d": 0.0578,
+    "f": 0.0381,
+    "g": 0.0508,
+    "h": 0.0669,
+    "j": 0.0313,
+    "k": 0.1339,
+    "l": 0.0379,
+    "m": 0.1085,
+    "n": 0.0952,
+    "p": 0.0581,
+    "q": 0.063,
+    "r": 0.0229,
+    "s": 0.0644,
+    "t": 0.1069,
+    "v": 0.0359,
+    "w": 0.0534,
+    "x": 0.0434,
+    "y": 0.0539,
+    "z": 0.0272
+   },
+   "medial": {
+    "!": 0.0473,
+    "4": 0.0233,
+    "5": 0.0227,
+    "7": 0.0525,
+    "8": 0.0477,
+    "C": 0.0353,
+    "G": 0.0293,
+    "L": 0.0422,
+    "N": 0.0432,
+    "S": 0.0361,
+    "T": 0.0343,
+    "X": 0.0332,
+    "Z": 0.0219,
+    "b": 0.0586,
+    "c": 0.0339,
+    "d": 0.059,
+    "f": 0.0272,
+    "g": 0.0607,
+    "h": 0.0411,
+    "j": 0.0241,
+    "k": 0.0988,
+    "l": 0.0882,
+    "m": 0.0775,
+    "n": 0.1134,
+    "p": 0.0507,
+    "q": 0.0493,
+    "r": 0.1172,
+    "s": 0.0542,
+    "t": 0.0833,
+    "v": 0.0357,
+    "w": 0.0581,
+    "x": 0.0429,
+    "y": 0.043,
+    "z": 0.0272
+   }
+  },
+  "vowels": {
+   "final": {
+    "3": 0.0833,
+    "E": 0.0852,
+    "a": 0.3137,
+    "e": 0.1437,
+    "i": 0.2626,
+    "o": 0.1255,
+    "u": 0.1367
+   },
+   "initial": {
+    "3": 0.0623,
+    "E": 0.0765,
+    "a": 0.3692,
+    "e": 0.1001,
+    "i": 0.2517,
+    "o": 0.142,
+    "u": 0.1223
+   },
+   "medial": {
+    "3": 0.1286,
+    "E": 0.087,
+    "a": 0.3329,
+    "e": 0.1269,
+    "i": 0.2042,
+    "o": 0.1472,
+    "u": 0.1511
+   }
+  },
+  "language_spread": 0.724
+ },
+ "syllable_types": {
+  "moderate": {
+   "syllables_1": 0.298,
+   "syllables_2": 0.481,
+   "syllables_3": 0.174,
+   "syllables_4": 0.047,
+   "vowel_initial": 0.194,
+   "consonant_final": 0.357,
+   "initial_cluster": 0.035,
+   "medial_cluster": 0.158,
+   "final_cluster": 0.017,
+   "segments": 4.445,
+   "wals_languages": 274,
+   "asjp_doculects": 913
+  },
+  "complex": {
+   "syllables_1": 0.384,
+   "syllables_2": 0.46,
+   "syllables_3": 0.124,
+   "syllables_4": 0.033,
+   "vowel_initial": 0.19,
+   "consonant_final": 0.535,
+   "initial_cluster": 0.077,
+   "medial_cluster": 0.19,
+   "final_cluster": 0.066,
+   "segments": 4.404,
+   "wals_languages": 151,
+   "asjp_doculects": 301
+  },
+  "simple": {
+   "syllables_1": 0.219,
+   "syllables_2": 0.497,
+   "syllables_3": 0.213,
+   "syllables_4": 0.071,
+   "vowel_initial": 0.296,
+   "consonant_final": 0.054,
+   "initial_cluster": 0.049,
+   "medial_cluster": 0.05,
+   "final_cluster": 0.004,
+   "segments": 4.41,
+   "wals_languages": 61,
+   "asjp_doculects": 153
+  }
+ },
+ "abbreviation": {
+  "spearman_mean": -0.135,
+  "spearman_family_quartiles": [
+   -0.245,
+   -0.13,
+   -0.04
+  ],
+  "negative_share_of_families": 0.827,
+  "length_per_log10_frequency": -0.274,
+  "doculects": 9597,
+  "families": 508
+ },
+ "parental_check": {
+  "languages": 41,
+  "mother_nasal": 0.707,
+  "father_nasal": 0.146,
+  "father_labial_dental_stop": 0.732,
+  "mother_labial_dental_stop": 0.22
+ },
+ "symbolism": [
+  {
+   "concept": "ash",
+   "symbol": "u",
+   "risk_ratio": 1.91
+  },
+  {
+   "concept": "bite",
+   "symbol": "k",
+   "risk_ratio": 1.69
+  },
+  {
+   "concept": "bone",
+   "symbol": "k",
+   "risk_ratio": 1.39
+  },
+  {
+   "concept": "breasts",
+   "symbol": "u",
+   "risk_ratio": 1.46
+  },
+  {
+   "concept": "breasts",
+   "symbol": "m",
+   "risk_ratio": 1.63
+  },
+  {
+   "concept": "dog",
+   "symbol": "s",
+   "risk_ratio": 1.76
+  },
+  {
+   "concept": "ear",
+   "symbol": "k",
+   "risk_ratio": 1.42
+  },
+  {
+   "concept": "fish",
+   "symbol": "a",
+   "risk_ratio": 1.17
+  },
+  {
+   "concept": "full",
+   "symbol": "p",
+   "risk_ratio": 2.11
+  },
+  {
+   "concept": "full",
+   "symbol": "b",
+   "risk_ratio": 1.91
+  },
+  {
+   "concept": "hear",
+   "symbol": "N",
+   "risk_ratio": 1.57
+  },
+  {
+   "concept": "horn",
+   "symbol": "k",
+   "risk_ratio": 1.53
+  },
+  {
+   "concept": "horn",
+   "symbol": "r",
+   "risk_ratio": 1.75
+  },
+  {
+   "concept": "i",
+   "symbol": "5",
+   "risk_ratio": 2.06
+  },
+  {
+   "concept": "knee",
+   "symbol": "u",
+   "risk_ratio": 1.84
+  },
+  {
+   "concept": "knee",
+   "symbol": "o",
+   "risk_ratio": 1.7
+  },
+  {
+   "concept": "knee",
+   "symbol": "p",
+   "risk_ratio": 1.81
+  },
+  {
+   "concept": "knee",
+   "symbol": "k",
+   "risk_ratio": 1.66
+  },
+  {
+   "concept": "knee",
+   "symbol": "q",
+   "risk_ratio": 2.3
+  },
+  {
+   "concept": "leaf",
+   "symbol": "p",
+   "risk_ratio": 1.94
+  },
+  {
+   "concept": "leaf",
+   "symbol": "b",
+   "risk_ratio": 1.48
+  },
+  {
+   "concept": "leaf",
+   "symbol": "l",
+   "risk_ratio": 1.75
+  },
+  {
+   "concept": "name",
+   "symbol": "i",
+   "risk_ratio": 1.25
+  },
+  {
+   "concept": "nose",
+   "symbol": "u",
+   "risk_ratio": 1.38
+  },
+  {
+   "concept": "nose",
+   "symbol": "n",
+   "risk_ratio": 1.47
+  },
+  {
+   "concept": "one",
+   "symbol": "t",
+   "risk_ratio": 1.49
+  },
+  {
+   "concept": "one",
+   "symbol": "n",
+   "risk_ratio": 1.29
+  },
+  {
+   "concept": "red",
+   "symbol": "r",
+   "risk_ratio": 2.24
+  },
+  {
+   "concept": "round",
+   "symbol": "r",
+   "risk_ratio": 2.48
+  },
+  {
+   "concept": "sand",
+   "symbol": "s",
+   "risk_ratio": 2.58
+  },
+  {
+   "concept": "small",
+   "symbol": "i",
+   "risk_ratio": 1.58
+  },
+  {
+   "concept": "small",
+   "symbol": "C",
+   "risk_ratio": 5.12
+  },
+  {
+   "concept": "star",
+   "symbol": "z",
+   "risk_ratio": 2.52
+  },
+  {
+   "concept": "stone",
+   "symbol": "t",
+   "risk_ratio": 1.32
+  },
+  {
+   "concept": "tongue",
+   "symbol": "e",
+   "risk_ratio": 1.54
+  },
+  {
+   "concept": "tongue",
+   "symbol": "E",
+   "risk_ratio": 1.73
+  },
+  {
+   "concept": "tongue",
+   "symbol": "l",
+   "risk_ratio": 2.77
+  },
+  {
+   "concept": "we",
+   "symbol": "n",
+   "risk_ratio": 1.54
+  },
+  {
+   "concept": "bone",
+   "symbol": "y",
+   "risk_ratio": 0.54
+  },
+  {
+   "concept": "breasts",
+   "symbol": "a",
+   "risk_ratio": 0.81
+  },
+  {
+   "concept": "breasts",
+   "symbol": "h",
+   "risk_ratio": 0.62
+  },
+  {
+   "concept": "breasts",
+   "symbol": "r",
+   "risk_ratio": 0.47
+  },
+  {
+   "concept": "dog",
+   "symbol": "t",
+   "risk_ratio": 0.58
+  },
+  {
+   "concept": "drink",
+   "symbol": "a",
+   "risk_ratio": 0.79
+  },
+  {
+   "concept": "eye",
+   "symbol": "a",
+   "risk_ratio": 0.8
+  },
+  {
+   "concept": "i",
+   "symbol": "u",
+   "risk_ratio": 0.44
+  },
+  {
+   "concept": "i",
+   "symbol": "p",
+   "risk_ratio": 0.18
+  },
+  {
+   "concept": "i",
+   "symbol": "b",
+   "risk_ratio": 0.24
+  },
+  {
+   "concept": "i",
+   "symbol": "t",
+   "risk_ratio": 0.44
+  },
+  {
+   "concept": "i",
+   "symbol": "s",
+   "risk_ratio": 0.27
+  },
+  {
+   "concept": "i",
+   "symbol": "l",
+   "risk_ratio": 0.19
+  },
+  {
+   "concept": "i",
+   "symbol": "r",
+   "risk_ratio": 0.35
+  },
+  {
+   "concept": "name",
+   "symbol": "o",
+   "risk_ratio": 0.67
+  },
+  {
+   "concept": "name",
+   "symbol": "p",
+   "risk_ratio": 0.4
+  },
+  {
+   "concept": "nose",
+   "symbol": "a",
+   "risk_ratio": 0.75
+  },
+  {
+   "concept": "skin",
+   "symbol": "m",
+   "risk_ratio": 0.53
+  },
+  {
+   "concept": "skin",
+   "symbol": "n",
+   "risk_ratio": 0.66
+  },
+  {
+   "concept": "tongue",
+   "symbol": "u",
+   "risk_ratio": 0.62
+  },
+  {
+   "concept": "tongue",
+   "symbol": "k",
+   "risk_ratio": 0.72
+  },
+  {
+   "concept": "tooth",
+   "symbol": "b",
+   "risk_ratio": 0.43
+  },
+  {
+   "concept": "tooth",
+   "symbol": "m",
+   "risk_ratio": 0.63
+  },
+  {
+   "concept": "water",
+   "symbol": "t",
+   "risk_ratio": 0.36
+  },
+  {
+   "concept": "we",
+   "symbol": "p",
+   "risk_ratio": 0.43
+  },
+  {
+   "concept": "we",
+   "symbol": "l",
+   "risk_ratio": 0.4
+  },
+  {
+   "concept": "we",
+   "symbol": "s",
+   "risk_ratio": 0.6
+  },
+  {
+   "concept": "you",
+   "symbol": "u",
+   "risk_ratio": 0.58
+  },
+  {
+   "concept": "you",
+   "symbol": "o",
+   "risk_ratio": 0.67
+  },
+  {
+   "concept": "you",
+   "symbol": "p",
+   "risk_ratio": 0.37
+  },
+  {
+   "concept": "you",
+   "symbol": "t",
+   "risk_ratio": 0.4
+  },
+  {
+   "concept": "you",
+   "symbol": "d",
+   "risk_ratio": 0.35
+  },
+  {
+   "concept": "you",
+   "symbol": "q",
+   "risk_ratio": 0.29
+  },
+  {
+   "concept": "you",
+   "symbol": "s",
+   "risk_ratio": 0.37
+  },
+  {
+   "concept": "you",
+   "symbol": "r",
+   "risk_ratio": 0.29
+  },
+  {
+   "concept": "you",
+   "symbol": "l",
+   "risk_ratio": 0.19
+  }
+ ]
+}

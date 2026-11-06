@@ -19,6 +19,7 @@ use crate::grammar::profile;
 use crate::history::History;
 use crate::model::code::{StressRule, StressStrength};
 use crate::parameters::Parameters;
+use crate::protoform::SyllableType;
 use crate::scenarios::{region_world, ProtoLanguage, Region, SeedOptions};
 use crate::segments::SegmentTable;
 use crate::vocabulary::{resolve, CustomConcept, DEFAULT_SIZE};
@@ -130,6 +131,10 @@ pub struct LanguageSpec {
     /// Odvozovací přípony (IPA); prázdné = engine je vylosuje z inventáře hlásek jazyka.
     #[serde(default)]
     pub suffixes: Vec<String>,
+    /// Slabičná stavba generovaných slov (WALS 12A): `simple`, `moderate`, `complex`;
+    /// `None` = vylosuje se podle podílů typů ve WALS.
+    #[serde(default)]
+    pub syllables: Option<String>,
 }
 
 /// Zvuková změna rozběhnutá na startu: rodina, popis kandidáta (`m → ∅ /V_#`) a podíl
@@ -271,6 +276,14 @@ fn proto_language(spec: &LanguageSpec, table: &SegmentTable) -> Result<ProtoLang
             .map_err(|e| format!("languages.{}.suffixes: {e}", spec.id))?;
     }
     language.suffixes = spec.suffixes.clone();
+    if let Some(name) = &spec.syllables {
+        language.syllables = Some(SyllableType::parse(name).ok_or_else(|| {
+            format!(
+                "languages.{}.syllables: neznámá slabičná stavba '{name}' (simple, moderate, complex)",
+                spec.id
+            )
+        })?);
+    }
     language.endonym = spec.endonym.clone();
     language.tones = spec.tones.clone();
     for (function, given) in &spec.constructions {
@@ -707,6 +720,16 @@ fn word_issues(spec: &WorldSpec, known: &HashSet<String>) -> Vec<Issue> {
                 format!("languages.{index}.tones"),
                 "tóny se opakují",
             ));
+        }
+        if let Some(name) = &language.syllables {
+            if SyllableType::parse(name).is_none() {
+                issues.push(Issue::error(
+                    format!("languages.{index}.syllables"),
+                    format!(
+                        "neznámá slabičná stavba '{name}'; možnosti: simple, moderate, complex"
+                    ),
+                ));
+            }
         }
         for (position, concept) in language.endonym.iter().enumerate() {
             if !known.contains(concept) {

@@ -76,6 +76,18 @@ fn vlastni_slova_se_overi() {
 }
 
 #[test]
+fn slabicna_stavba_se_overi() {
+    let ok = check(small(json!({"languages": [
+        {"id": "a", "syllables": "complex"}, {"id": "b", "syllables": "simple"},
+    ]})));
+    assert!(ok.is_empty(), "{ok:?}");
+    let issues = check(small(json!({"languages": [
+        {"id": "a", "syllables": "CVC"}, {"id": "b"},
+    ]})));
+    assert!(message(&issues, "languages.0.syllables").contains("slabičná stavba"));
+}
+
+#[test]
 fn parametry_slovnik_a_varovani() {
     let issues = check(small(json!({"parameters": {"nic": 1}})));
     assert_eq!(issues[0].path, "parameters.nic");

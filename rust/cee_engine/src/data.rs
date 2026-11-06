@@ -20,6 +20,9 @@ pub const CONCEPT_FREQUENCIES_JSON: &str =
 pub const CORE_SEMANTICS_JSON: &str = include_str!("../../../src/cee/data/v2_core_semantics.json");
 pub const CATALOG_SEMANTICS_JSON: &str =
     include_str!("../../../src/cee/data/v2_catalog_semantics.json");
+/// Data generátoru protojazyka (četnost hlásek ASJP, slabičné typy WALS 12A, zvuková
+/// symbolika); vyrábí `scripts/build_v2_protoform.py`, popis v dok. 25.
+pub const PROTOFORM_JSON: &str = include_str!("../../../src/cee/data/v2_protoform.json");
 pub const STANDING_VARIATION_JSON: &str =
     include_str!("../../../src/cee/data/v2_standing_variation.json");
 
