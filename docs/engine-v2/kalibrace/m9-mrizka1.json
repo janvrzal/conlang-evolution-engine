@@ -1,0 +1,26 @@
+{
+ "a2.0_o0.5": {
+  "sound_actuation": 2.0,
+  "village_openness": 0.5
+ },
+ "a2.0_o0.7": {
+  "sound_actuation": 2.0,
+  "village_openness": 0.7
+ },
+ "a2.0_o0.9": {
+  "sound_actuation": 2.0,
+  "village_openness": 0.9
+ },
+ "a2.5_o0.5": {
+  "sound_actuation": 2.5,
+  "village_openness": 0.5
+ },
+ "a2.5_o0.7": {
+  "sound_actuation": 2.5,
+  "village_openness": 0.7
+ },
+ "a2.5_o0.9": {
+  "sound_actuation": 2.5,
+  "village_openness": 0.9
+ }
+}

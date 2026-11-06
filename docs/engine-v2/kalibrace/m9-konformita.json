@@ -1,0 +1,54 @@
+{
+ "a2.5_o0.75_c0.3": {
+  "sound_actuation": 2.5,
+  "village_openness": 0.75,
+  "population_pressure_exponents": {
+   "articulation": -0.75,
+   "actuation": -0.5
+  },
+  "pressure_weights": {
+   "conformity": 0.3
+  }
+ },
+ "a2.5_o0.75_c0.6": {
+  "sound_actuation": 2.5,
+  "village_openness": 0.75,
+  "population_pressure_exponents": {
+   "articulation": -0.75,
+   "actuation": -0.5
+  },
+  "pressure_weights": {
+   "conformity": 0.6
+  }
+ },
+ "a3.0_o0.9_c0.1": {
+  "sound_actuation": 3.0,
+  "village_openness": 0.9,
+  "population_pressure_exponents": {
+   "articulation": -0.75,
+   "actuation": -0.5
+  }
+ },
+ "a3.0_o0.9_c0.3": {
+  "sound_actuation": 3.0,
+  "village_openness": 0.9,
+  "population_pressure_exponents": {
+   "articulation": -0.75,
+   "actuation": -0.5
+  },
+  "pressure_weights": {
+   "conformity": 0.3
+  }
+ },
+ "a3.5_o0.9_c0.3": {
+  "sound_actuation": 3.5,
+  "village_openness": 0.9,
+  "population_pressure_exponents": {
+   "articulation": -0.75,
+   "actuation": -0.5
+  },
+  "pressure_weights": {
+   "conformity": 0.3
+  }
+ }
+}

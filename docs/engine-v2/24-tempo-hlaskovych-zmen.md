@@ -108,3 +108,59 @@ v řádu minut: rekalibrace se proto ladí na rychlé sadě a Romanii, Evropa je
 
 Při dnešní váze 1,0 jsou úpravy časově neutrální (brány m5 32,7 / 32,1 s, m6b 70,4 / 69,5 s před a po).
 Pozor: `cee calibrate --seeds N` nastavuje **první** semínko, ne jejich počet.
+
+## Rekalibrace tempa: konflikt cílů (6. 11. 2026)
+
+Uživatel: „Ano“ (rekalibrace na pozadí). Parametr `sound_actuation` (násobek váhy `actuation`
+jen u hláskových procesů, výchozí 1,0) umožní ladit tempo přes `--variants`. Varianty jsou
+v `docs/engine-v2/kalibrace/m9-*.json`; každý běh po 12 semínkách (Romania 20, typologie 40).
+
+**Rychlé běhy** (tempo bez kontaktu / zrychlení kontaktem; kontinuum = sousední vesnice po 3 000
+letech, pásmo 0,05–0,15; Trudgill = Spearman kořenové alternace × populace, má být ≤ 0):
+
+| `sound_actuation` / `village_openness` | tempo | kontakt | kontinuum | Trudgill |
+|---|---|---|---|---|
+| 1,0 / 0,5 (dnes) | 0,060 ✗ | 2,45 ✗ | ✓ | ✓ |
+| 2,0 / 0,5 | 0,339 | 1,78 | 0,174 ✗ | 0,363 ✗ |
+| 2,0 / 0,7 | 0,245 ✗ | 2,35 ✗ | 0,124 | 0,363 ✗ |
+| 2,5 / 0,5 | 0,513 | 1,53 | 0,269 ✗ | 0,500 ✗ |
+| 2,5 / 0,75 | 0,378 | 1,79 | 0,185 ✗ | 0,500 ✗ |
+| 2,5 / 0,9 | 0,291 ✗ | 2,50 ✗ | 0,154 ✗ | 0,500 ✗ |
+| 3,0 / 0,9 | 0,450 | 2,13 ✗ | 0,220 ✗ | |
+
+- **Trudgill** vyřeší populační koeficient ocenění (`population_pressure_exponents.actuation` −0,5:
+  malé komunity oceňují změny silněji, Nettle 1999): −0,45 při 2,5 a −0,55 při 2,0; tempo v sadě
+  (vesnice po 500 lidech, koeficient 1) se nemění.
+- **Kontinuum a tempo jdou spolu:** vzdálenost sousedů vychází zhruba 0,5 × tempo. Otevřenost vesnic
+  sousedy přiblíží, ale stejnou měrou tempo zpomalí a zvedne zrychlení kontaktem; konformita
+  (0,3 a víc) zmrazí obojí (tempo 0,04, kontinuum 0,02). Prototyp společného ocenění změny v celém
+  regionu (sdílený šum `actuation` podle regionu, podíl 0,5 a 0,8; nezapsán) kontinuum nezlepšil
+  (0,21–0,22): sousedé se rozcházejí, protože každá vesnice navrhuje vlastní inovace rychleji, než
+  se rozšíří, ne kvůli hodnocení.
+- **Kompromis 2,0 / 0,6** (s koeficientem −0,5): tempo 0,309 ✓, kontinuum 0,144 ✓, Trudgill −0,55 ✓,
+  konzervativní větev Romanie ✓, zrychlení kontaktem 2,16 (těsně nad 2).
+
+**Typologie (stálost rozložení WALS po 5 000 letech, `village_grid`) se rozpadne při každém zvýšení:**
+
+| varianta | 33A | 37A | 66A | 67A | 81A | 143A | 14A |
+|---|---|---|---|---|---|---|---|
+| dnes (1,0) | 0,056 | 0,088 | 0,018 | 0,123 ✗ | 0,208 | 0,062 | 0,122 |
+| 1,5 / 0,5 | | 0,192 ✗ | 0,109 ✗ | 0,129 ✗ | 0,227 ✗ | | |
+| 2,0 / 0,6 | 0,073 ✗ | 0,155 ✗ | 0,074 ✗ | 0,067 | 0,217 ✗ | 0,202 ✗ | 0,155 ✗ |
+| 2,5 / 0,75 | 0,040 | 0,279 ✗ | 0,070 ✗ | 0,003 | 0,214 ✗ | 0,206 ✗ | 0,151 ✗ |
+| + extravagance 0,05 / 0,2 | ✗ | ✗ | ✗ | | ✗ | ✗ | ✗ |
+| + potřeba vzniku 0,4; zánik kategorie ×0,5; vyblednutí ×0,5 | ✗ | ✗ | ✗ | | ✗ | ✗ | ✗ |
+
+Slovosled (81A), zápor (143A) a pevný přízvuk (14A) se posunou skoro stejně v každé gramatické
+variantě (0,21 / 0,21 / 0,14–0,16): táhne je samo rychlejší hláskové tempo (eroze tvarů → slovosled,
+zápor, přízvuk), ne rovnováha vzniku a zániku kategorií. Gramatika M7 je vyvážená na pomalé
+hláskové změny. Romania s 2,5 / 0,75: 9 z 10 (konzervativní větev 0 z 20; obnova futura a člen
+se zlepší), lexikon 0,848.
+
+**Výchozí hodnoty se nemění** (`sound_actuation` 1,0, otevřenost 0,5). **Doporučení:** realistické
+tempo přijmout jako samostatný projekt M9b: (1) rozebrat, kudy hláskové tempo posouvá slovosled,
+zápor a přízvuk (kontrolovaný pokus jako u tempa: jedna gramatika, různé tempo, sledovat přechody
+konstrukcí a pravidla přízvuku); (2) pak společně kalibrovat tempo (výchozí bod 2,0 / 0,6 s
+koeficientem −0,5) s gramatikou; (3) pásmo kontinua znovu podložit daty (dnes odhad bez ověřeného
+atlasu), protože při skutečném tempu je spojené s tempem. Do té doby zůstává známé omezení: tvary se
+mění asi 5× pomaleji než ve skutečnosti a změny pohání hlavně kontakt.
