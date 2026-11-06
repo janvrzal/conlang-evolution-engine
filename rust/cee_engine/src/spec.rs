@@ -950,24 +950,9 @@ pub fn check(spec: &WorldSpec) -> Vec<Issue> {
                     _ => vec![(item.kind.clone(), Value::Object(item.params.clone()))],
                 };
                 for (kind, params) in translated {
-                    // Elita podle jazyka se vybírá až v roce události; jazyk se do regionu může
-                    // dostat během běhu (posun, osídlení), proto jen varování.
-                    if let Some((region, language)) = params
-                        .get("conqueror")
-                        .and_then(Value::as_str)
-                        .and_then(|c| c.split_once(':'))
-                    {
-                        if crate::events::largest_speaking(&trial.world, region, language).is_err()
-                        {
-                            found.push(Issue::warning(
-                                format!("events.{index}.language"),
-                                format!(
-                                    "v regionu '{region}' zatím nikdo nemluví jazykem '{language}'; \
-                                     pokud tomu tak bude i v roce události, běh skončí chybou"
-                                ),
-                            ));
-                            continue;
-                        }
+                    let (params, warning) = defer_language(&trial.world, &kind, params);
+                    if let Some(message) = warning {
+                        found.push(Issue::warning(format!("events.{index}.language"), message));
                     }
                     let event =
                         crate::events::from_pending(PendingEvent::new(item.year, &kind, params));
@@ -986,6 +971,46 @@ pub fn check(spec: &WorldSpec) -> Vec<Issue> {
     }
     issues.extend(found);
     issues
+}
+
+/// Jazyk, podle kterého se skupina vybírá až v roce události (elita `region:jazyk`, úřední
+/// jazyk státu a odtržení). Zkušební svět v [`check`] se nevyvíjí, takže jazyk, který se do
+/// regionu dostane až během běhu (romanizace, posun, osídlení), v něm ještě chybí. Pak vrátí
+/// varování a parametry bez výběru podle jazyka, aby zkouška pokračovala a pozdější události
+/// (spisovný jazyk, zánik státu) našly, na co odkazují.
+fn defer_language(world: &World, kind: &str, mut params: Value) -> (Value, Option<String>) {
+    let text = |key: &str| params.get(key).and_then(Value::as_str).map(str::to_owned);
+    let warning = match kind {
+        "conquest" => match text("conqueror").as_deref().and_then(|c| c.split_once(':')) {
+            Some((region, language))
+                if crate::events::largest_speaking(world, region, language).is_err() =>
+            {
+                let message = format!(
+                    "v regionu '{region}' zatím nikdo nemluví jazykem '{language}'; \
+                     pokud tomu tak bude i v roce události, běh skončí chybou"
+                );
+                params["conqueror"] = json!(format!("{region}-v0"));
+                Some(message)
+            }
+            _ => None,
+        },
+        "state" | "secession" => match (text("capital"), text("language")) {
+            (Some(capital), Some(language))
+                if crate::polity::capital_speaks(world, &capital, &language) == Some(false) =>
+            {
+                if let Some(map) = params.as_object_mut() {
+                    map.remove("language");
+                }
+                Some(format!(
+                    "v hlavním regionu '{capital}' zatím nikdo nemluví úředním jazykem \
+                     '{language}'; pokud tomu tak bude i v roce události, běh skončí chybou"
+                ))
+            }
+            _ => None,
+        },
+        _ => None,
+    };
+    (params, warning)
 }
 
 fn custom_related(custom: &[CustomConcept]) -> bool {

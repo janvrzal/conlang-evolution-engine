@@ -213,8 +213,47 @@ fn usazeni_a_elita_overi_pole() {
 #[test]
 fn elita_jazyka_ktery_v_regionu_chybi_je_varovani() {
     // Jazykem `a` v regionu `x` na začátku nikdo nemluví; může se tam dostat během běhu.
+    // Zkouška pokračuje s elitou z první vesnice regionu.
     let issues = check(settlement_and_elite(json!({}), json!({"language": "a"})));
     assert_eq!(issues.len(), 1, "{issues:?}");
     assert_eq!(issues[0].path, "events.1.language");
     assert_eq!(issues[0].severity, "warning");
+}
+
+#[test]
+fn uredni_jazyk_ktery_v_hlavnim_regionu_chybi_je_varovani() {
+    // V `c` se mluví jazykem `a`; úřední `b` se tam může dostat až během běhu. Stát se přesto
+    // zkusí založit, takže pozdější spisovný jazyk státu chybu nedá.
+    let issues = check(small(json!({"events": [
+        {"kind": "state", "year": 0, "id": "k", "regions": ["c", "x"], "capital": "c", "language": "b"},
+        {"kind": "standard", "year": 100, "of": "k"},
+    ]})));
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].path, "events.0.language");
+    assert_eq!(issues[0].severity, "warning");
+    // Neznámý jazyk zůstává chybou.
+    let issues = check(small(json!({"events": [
+        {"kind": "state", "year": 0, "id": "k", "regions": ["c", "x"], "capital": "c", "language": "zz"},
+    ]})));
+    assert!(message(&issues, "events.0").contains("Neznámý úřední jazyk"));
+}
+
+#[test]
+fn scenare_evropa_a_romania_nemaji_chyby() {
+    // Latina se do Hispánie a Galie dostane romanizací během běhu: státy a odtržení s úřední
+    // latinou jsou jen varování.
+    for (text, warned) in [
+        (
+            include_str!("../../../src/cee/data/scenarios/evropa.json"),
+            "events.8.language",
+        ),
+        (
+            include_str!("../../../src/cee/data/scenarios/romania.json"),
+            "events.2.language",
+        ),
+    ] {
+        let issues = spec::check(&WorldSpec::from_json(text).unwrap());
+        assert!(issues.iter().all(|i| i.severity == "warning"), "{issues:?}");
+        assert!(issues.iter().any(|i| i.path == warned), "{issues:?}");
+    }
 }

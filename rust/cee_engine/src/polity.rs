@@ -373,6 +373,18 @@ pub fn groups_in(world: &World, regions: &[TerritoryId]) -> Vec<GroupId> {
         .collect()
 }
 
+/// Mluví v hlavním regionu státu někdo jazykem `language` (jako výběr sídla v `found_state`)?
+/// `None`, když region nebo jazyk neexistuje.
+pub(crate) fn capital_speaks(world: &World, capital: &str, language: &str) -> Option<bool> {
+    let capital = territory_named(world, capital).ok()?;
+    let number = world.registry.languages.get(language)?;
+    Some(
+        groups_in(world, &[capital])
+            .into_iter()
+            .any(|g| world.groups.main_code(g).language.0 == number),
+    )
+}
+
 /// Mluvené skupiny regionů včetně veřejné domény (čtou a chodí do školy).
 fn readers_in(world: &World, regions: &[TerritoryId]) -> Vec<GroupId> {
     world
