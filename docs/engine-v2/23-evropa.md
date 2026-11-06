@@ -139,3 +139,55 @@ asi 8 s, měření 12 semínek 31 s.
 **Slabá místa:** balkánský svaz jen ve 3 z 12 běhů (pád ztracen, člen nevznikne nikdy: řečtina
 přejde na slovanštinu a člen se nepřenese); latina v Dácii jen 7 % (rumunština nevznikne, Dácie
 mluví dáčtinou a slovanštinou); slovník prajazyků kromě latiny je generovaný.
+
+## M8c: vesnice regionu se liší (6. 11. 2026)
+
+Podnět uživatele: „jazyky se až příliš snadno nahrazují a malé, lokální jazyky těžko přežívají; nejde
+o 1:1 repliku, ale něco uvěřitelného.“ Rozbor:
+
+- **Malé jazyky přežít umějí, když mají důvod.** Zkouška s Vaskonií (hory, silná identita, uvnitř
+  římské Hispánie) dala 92 % baskičtiny, Řecko s vlastním státem (395) 100 % řečtiny. Velkou část
+  nahrazování způsobil scénář, který takové regiony neměl.
+- **Přechod jazyka byl deterministický.** Za generaci přejde očekávaný podíl (Abrams a Strogatz 2003)
+  bez náhody a vesnice regionu byly totožné kopie (stejná loajalita i velikost), takže podíly jazyků
+  vyšly ve všech semínkách stejně; semínko řídilo jen hláskové, slovní a gramatické změny.
+- **Víc vesnic samo nepomůže** (3× víc při stejné populaci regionu: téměř beze změny), kopie dají totéž.
+  Rozptyl loajality se 4 vesnicemi také ne. Teprve obojí dá první ostrůvky.
+
+Zapsáno (schválil uživatel: „loajalita by měla být nějaká distribuce okolo střední hodnoty“,
+„Ano, zapsat“, „Oříznutí, retence zvlášť“):
+
+1. **`loyalty_spread` 0,25** (nový parametr, skupina `society`): loajalita vesnice = hodnota regionu
+   (`identity_loyalty`) + odchylka z N(0; 0,25) podle semínka a jména vesnice, oříznutá do [0; 0,95]
+   (`scenarios::village_loyalty`). Totéž platí při události `identity` (stejná vesnice dostane stejnou
+   odchylku). Oříznutí zvedne průměr regionu se sdílenou identitou (0) asi na 0,1: i v takovém regionu
+   se vesnice liší a některé drží jazyk déle.
+2. **Evropa má 3× víc vesnic** (12 na region, Armorika a Skandinávie 9) i osad přistěhovalců; velikost
+   vesnice zůstala.
+3. **Měřidlo přežití původních jazyků**: podíl původního jazyka regionu v roce 1900, počet ostrůvků
+   (původní jazyk drží 2 až 50 %) a přeživších původních jazyků; cíl `m8::ostruvky` (aspoň jeden
+   ostrůvek, `p_min` 0,2).
+
+### Výsledek (12 semínek)
+
+| veličina | M8b | M8c |
+|---|---|---|
+| podíly jazyků mezi semínky | totožné | liší se |
+| ostrůvky původních jazyků | 0 | 3 z 12 běhů (keltština v Británii 2–4 %, iberština v Hispánii 8 %) |
+| přechod Galie na latinu (vesnice) | 350–475 | 375–575 |
+| počet jazyků v roce 1900 | 21,5 | 44,5 |
+| románské větve bez pádu ≥ 3 | 12/12 | 8/12 (cíl splněn) |
+| balkánský svaz | 3/12 | 7/12 |
+| měření Evropy | 31 s | asi 7 min |
+
+**Evropa 11 z 11, brány 47 z 47, testy prošly, kalibrace 31 z 33.** Neprošly dva cíle Romanie, které
+byly na hraně už předtím: retence vůči latině 0,557 → **0,536** (pásmo od 0,55) a obnova futura
+5 → **4 z 20** (potřeba 5). S `loyalty_spread` 0 se obě vrátí přesně. Příčina: vesnice provincií
+s vyšší loajalitou přecházejí na latinu později, latina má déle dvojjazyčné mluvčí a přejme víc
+ze substrátu. Skutečná retence je 0,68–0,73 (IE-CoR), model byl nízko už bez rozptylu; řeší se
+samostatně (uživatel: „retence zvlášť“).
+
+**Mez mechanismu:** v modelu Abramse a Strogatze slabší jazyk zanikne vždy, loajalita přechod jen
+zpomalí. Ostrůvky jsou proto malé (pod 10 %). Přežití po tisíciletí (velština, bretonština,
+baskičtina) potřebuje stabilizaci: odlehlost (málo kontaktů s jazykem většiny) nebo identitu, která
+sílí s menšinovostí (Mira a Paredes 2005, dvojjazyční mluvčí a koexistence). Další krok.

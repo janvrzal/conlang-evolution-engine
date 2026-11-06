@@ -1000,7 +1000,8 @@ fn identity_event(
     let groups = groups_in(world, &ids);
     let edit = Edits::new(tick);
     for &group in &groups {
-        edit.set_group(world, group, Field::Loyalty(loyalty))?;
+        let value = crate::scenarios::village_loyalty(world, loyalty, world.group_name(group));
+        edit.set_group(world, group, Field::Loyalty(value))?;
     }
     history.record(
         "identity",

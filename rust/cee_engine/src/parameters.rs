@@ -220,6 +220,7 @@ pub struct Parameters {
     pub emergence_need_scale: f64,
     pub extravagance: f64,
     pub population_per_density: f64,
+    pub loyalty_spread: f64,
     pub village_openness: f64,
     pub border_link_scale: f64,
     pub category_loss_l2_boost: f64,

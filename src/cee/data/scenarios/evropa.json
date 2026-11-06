@@ -401,7 +401,8 @@
       ],
       "language": "latin",
       "density": 2.0,
-      "prestige": 1.0
+      "prestige": 1.0,
+      "villages": 12
     },
     {
       "id": "gallia",
@@ -417,7 +418,8 @@
         "germania",
         "britannia"
       ],
-      "language": "gaulish"
+      "language": "gaulish",
+      "villages": 12
     },
     {
       "id": "hispania",
@@ -429,7 +431,8 @@
       "neighbours": [
         "gallia"
       ],
-      "language": "iberian"
+      "language": "iberian",
+      "villages": 12
     },
     {
       "id": "britannia",
@@ -442,7 +445,8 @@
         "gallia",
         "armorica"
       ],
-      "language": "gaulish"
+      "language": "gaulish",
+      "villages": 12
     },
     {
       "id": "armorica",
@@ -456,7 +460,7 @@
         "britannia"
       ],
       "language": "gaulish",
-      "villages": 3,
+      "villages": 9,
       "density": 0.7
     },
     {
@@ -472,7 +476,8 @@
         "scandinavia",
         "slavia"
       ],
-      "language": "germanic"
+      "language": "germanic",
+      "villages": 12
     },
     {
       "id": "scandinavia",
@@ -485,7 +490,7 @@
         "germania"
       ],
       "language": "germanic",
-      "villages": 3,
+      "villages": 9,
       "density": 0.6
     },
     {
@@ -500,7 +505,8 @@
         "dacia",
         "balkan"
       ],
-      "language": "slavic"
+      "language": "slavic",
+      "villages": 12
     },
     {
       "id": "dacia",
@@ -515,7 +521,8 @@
       ],
       "language": "dacian",
       "density": 0.7,
-      "terrain": "mountains"
+      "terrain": "mountains",
+      "villages": 12
     },
     {
       "id": "balkan",
@@ -529,7 +536,8 @@
         "dacia",
         "slavia"
       ],
-      "language": "greek"
+      "language": "greek",
+      "villages": 12
     }
   ],
   "events": [
@@ -595,7 +603,7 @@
       "from": "germania",
       "to": "britannia",
       "share": 0.15,
-      "settlements": 2
+      "settlements": 6
     },
     {
       "kind": "secession",
@@ -635,7 +643,7 @@
       "from": "slavia",
       "to": "balkan",
       "share": 0.2,
-      "settlements": 2
+      "settlements": 6
     },
     {
       "kind": "collapse",
@@ -648,7 +656,7 @@
       "from": "slavia",
       "to": "dacia",
       "share": 0.15,
-      "settlements": 1
+      "settlements": 3
     },
     {
       "kind": "state",

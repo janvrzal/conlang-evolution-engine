@@ -1160,6 +1160,7 @@ Sepsáno 2026-10-28 při revizi plánu po M3; aktualizováno po části D (proz�
 | Příbuzné jazyky se po rozpadu mísí bez filtru, protože mají stejnou linii; filtr by měl záviset na pozorované vzdálenosti | M6 (linie jazyků) |
 | Konstanty kontaktu (filtry, váha interference, rychlost přechodu) jsou odhad | M7 |
 | Úrovně státu a jazykové politiky (`capital_prestige`, `policy_levels`, `terrain_access`, `identity_loyalty`…) jsou autorské odhady; přechod začne až od jednoho mluvčího za generaci (práh, ne rozložení) | M7 (tempo přechodu, francouzština 1794–1950, přežití v Baskicku a Walesu) |
+| Přechod jazyka je očekávaný tok bez náhody (Abrams a Strogatz 2003) a slabší jazyk vždy zanikne, loajalita ho jen zpomalí. Od M8c (2026-11-06) se vesnice regionu liší loajalitou (`loyalty_spread` 0,25), přechod jde vesnici po vesnici a vzniknou malé ostrůvky (3 z 12 běhů Evropy); stabilní přežití menšinového jazyka (odlehlost, identita sílící s menšinovostí) chybí | další krok M8 (`23-evropa.md`) |
 | Lingua franca se zadává, nevzniká sama z obchodní sítě | další krok M6f |
 | Města nerostou (urbanizace jako motor přechodu chybí); přechod mezi dialekty téže linie (spisovný jazyk jako „střecha“) chybí; pidžiny a kreoly nevznikají | další kroky M6f |
 | ~~Stabilní diglosie (Ferguson 1959)~~ | vyřešeno v M6b (`Schooling(diglossic=True)`) |

@@ -640,6 +640,15 @@
    "group": "society"
   },
   {
+   "name": "loyalty_spread",
+   "kind": "number",
+   "default": 0.25,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Rozptyl loajality vesnic kolem hodnoty regionu (`identity_loyalty`, scénář `region_world`): každá vesnice si podle semínka vylosuje odchylku z normálního rozdělení s touto směrodatnou odchylkou, výsledek se ořízne do [0; 0,95]. Přechod jazyka pak postupuje vesnici po vesnici a odolnější vesnice ho drží déle, jako ostrůvky starých jazyků (bretonština, ladinština). Oříznutí zvedne průměr regionu se sdílenou identitou (0) asi na 0,1. 0 = všechny vesnice regionu stejné (model před M8c). 0,25 od M8c (6. 11. 2026, schválil uživatel; docs/engine-v2/23-evropa.md).",
+   "group": "society"
+  },
+  {
    "name": "pressure_weights",
    "kind": "table",
    "default": {},

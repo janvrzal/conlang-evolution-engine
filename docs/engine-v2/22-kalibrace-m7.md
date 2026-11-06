@@ -982,3 +982,7 @@ typologický rys).
 podobnosti (10 z 10): slabé `-m` před zánikem pádu, rodina ztratí pád, latinské futurum zanikne
 a obnoví se, aspoň dvě větve získají člen (7 z 20 běhů) a ustálí slovosled, jedna větev drží pád déle,
 zápor zůstane před slovesem, retence a rozmanitost v pásmu.
+
+**Stav po M8c (6. 11. 2026):** rozptyl loajality vesnic (`loyalty_spread` 0,25, dokument 23) shodil
+dva cíle Romanie, které byly na hraně: retence 0,536 (pásmo od 0,55) a obnova futura 4 z 20 (potřeba 5).
+Kalibrace 31 z 33; retence se řeší samostatně.

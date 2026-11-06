@@ -28,6 +28,21 @@ use crate::world::{gravity_links, gravity_pairs, Endings, World};
 /// Odvozovací přípona protojazyka (jmenná, typ *-ka*).
 pub const DERIVATIONAL_SUFFIX: &str = "ka";
 /// Citační buňka každé třídy slov.
+/// Loajalita vesnice `name`: hodnota regionu `level` s odchylkou z normálního rozdělení
+/// (`loyalty_spread`), oříznutá do [0; [`LOYALTY_MAX`]]. Tah závisí jen na semínku světa
+/// a jménu skupiny, takže stejná vesnice dostane při změně identity stejnou odchylku.
+pub fn village_loyalty(world: &World, level: f64, name: &str) -> f64 {
+    let spread = world.params.loyalty_spread;
+    if spread <= 0.0 {
+        return level;
+    }
+    let mut draw = Stream::new(world.seed as u64, &[Part::Str("loyalty"), Part::Str(name)]);
+    (level + draw.normal(0.0, spread)).clamp(0.0, LOYALTY_MAX)
+}
+
+/// Horní mez vylosované loajality vesnice: úplná loajalita by přechod zastavila navždy.
+const LOYALTY_MAX: f64 = 0.95;
+
 pub const CITATION_CELLS: [(&str, &str); 2] = [("noun", "SG"), ("verb", "PRES")];
 
 /// Řádek tabulky koncovek: třída, buňka, možnosti s vahami.
@@ -864,7 +879,11 @@ pub fn region_world(
             init.openness = region.openness.unwrap_or(world.params.village_openness);
             init.prestige = region.prestige;
             init.immigration = region.immigration;
-            init.loyalty = world.params.identity_loyalty[&region.identity];
+            init.loyalty = village_loyalty(
+                &world,
+                world.params.identity_loyalty[&region.identity],
+                &village,
+            );
             init.preserved = region.preserve;
             members.push(world.add_group(init)?);
         }

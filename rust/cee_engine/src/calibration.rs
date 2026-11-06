@@ -998,6 +998,9 @@ fn romania(seed: i64) -> Result<Report, String> {
 /// Popis světa Evropy (dok. 23, M8).
 pub const EVROPA_JSON: &str = include_str!("../../../src/cee/data/scenarios/evropa.json");
 
+/// Nejmenší podíl původního jazyka v regionu, který se počítá jako přežití (ostrůvek).
+const ISLAND_MIN: f64 = 0.02;
+
 /// Skupiny regionu, které mluví jazykem z linie `lineage`.
 fn lineage_groups(
     world: &crate::world::World,
@@ -1097,6 +1100,27 @@ fn evropa(seed: i64) -> Result<Report, String> {
     grammar("slavia", "slavic");
     grammar("balkan", "slavic");
     grammar("dacia", "slavic");
+    // Přežití původních jazyků regionů: ostrůvek = původní jazyk drží menšinu (2 až 50 %).
+    let (mut islands, mut survivors) = (0.0, std::collections::BTreeSet::new());
+    for region in &spec.regions {
+        let Some(native) = region.language.as_deref() else {
+            continue;
+        };
+        let share = lineage_share(world, &region.id, native);
+        info(&mut report, &format!("{} původní jazyk", region.id), share);
+        if share > ISLAND_MIN && share < 0.5 {
+            islands += 1.0;
+        }
+        if share > ISLAND_MIN {
+            survivors.insert(native.to_owned());
+        }
+    }
+    info(&mut report, "ostrůvky původních jazyků", islands);
+    info(
+        &mut report,
+        "přeživší původní jazyky",
+        survivors.len() as f64,
+    );
     let v = |name: &str| metric_value(&report, name);
     let latin_caseless = ["italia", "gallia", "hispania", "dacia"]
         .iter()

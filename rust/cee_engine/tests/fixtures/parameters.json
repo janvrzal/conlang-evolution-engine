@@ -148,6 +148,7 @@
   "towns": 0.2
  },
  "liturgy_weight": 0.1,
+ "loyalty_spread": 0.25,
  "order_rigidity": 0.05,
  "paradigm_merge_weight": 1.0,
  "policy_levels": {
