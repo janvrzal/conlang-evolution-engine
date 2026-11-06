@@ -138,7 +138,7 @@ asi 8 s, měření 12 semínek 31 s.
 
 **Slabá místa:** balkánský svaz jen ve 3 z 12 běhů (pád ztracen, člen nevznikne nikdy: řečtina
 přejde na slovanštinu a člen se nepřenese); latina v Dácii jen 7 % (rumunština nevznikne, Dácie
-mluví dáčtinou a slovanštinou); slovník prajazyků kromě latiny je generovaný.
+mluví dáčtinou a slovanštinou); slovník prajazyků kromě latiny je generovaný (od M8e z IE-CoR).
 
 ## M8c: vesnice regionu se liší (6. 11. 2026)
 
@@ -191,3 +191,55 @@ samostatně (uživatel: „retence zvlášť“).
 zpomalí. Ostrůvky jsou proto malé (pod 10 %). Přežití po tisíciletí (velština, bretonština,
 baskičtina) potřebuje stabilizaci: odlehlost (málo kontaktů s jazykem většiny) nebo identitu, která
 sílí s menšinovostí (Mira a Paredes 2005, dvojjazyční mluvčí a koexistence). Další krok.
+
+## M8e: skutečné slovníky prajazyků z IE-CoR (6. 11. 2026)
+
+Uživatel: „Reálné slovníky“. Dosud měla skutečný slovník jen latina (dok. 22). IE-CoR (Heggarty,
+Anderson a Scarborough 2024, verze 1.1, CC BY 4.0) obsahuje i staré doložené jazyky ve fonemickém
+zápisu: starořečtinu (170 významů), staroslověnštinu (168), staroirštinu (169), staroislandštinu
+a staroangličtinu (170), gótštinu (123) a galštinu (71, jen pravopis).
+
+**Zapsáno:** skript `scripts/build_v2_iecor_words.py` (data v `~/.cee/data/iecor`) vybere pro pojmy
+enginu (párování přes Concepticon) první slovo významu a uloží `src/cee/data/v2_iecor_words.json`;
+scénář Evropy z něj bere slova a inventář hlásek (seřazený podle četnosti, z něj engine dogeneruje
+pojmy, které IE-CoR nemá).
+
+| jazyk scénáře | zdroj | pojmů z IE-CoR |
+|---|---|---|
+| `germanic` | gótština (nejstarší doložená germánština, 4. st.) | 70 |
+| `slavic` | staroslověnština (9. st., blízko pozdní praslovanštině) | 89 |
+| `greek` | starořečtina (attická) | 89 |
+| `gaulish` (Galie, Británie, Armorika) | galština, pravopis převedený pravidly | 58 |
+| `iberian`, `dacian` | zůstávají generované (iberštině nerozumíme, dáčtina má jen pár slov) | 0 |
+| `latin` | beze změny (dok. 22) | 100 |
+
+Převod: přízvuk, délka a melodický přízvuk se zahodí (jako u latiny; čárka by se četla jako tón,
+řecký cirkumflex je v IE-CoR vlnovka, ne nosovost), afrikáty dostanou spojovací oblouček tabulky
+hlásek (NFD), u jmen a sloves se odstraní koncovka slovníkového tvaru (gótské `-s`, `-an`; staroslověnský
+koncový jer a `-ti`; řecké `-os`, `-on`, `-ō`, `-mi`, `-omai`; galské `-os`, `-on`), protože engine
+přidává koncovky sám. Seznam koncovek je náš úsudek. Gótština tak dá *hund*, *wato*, *naht͡s*,
+staroslověnština *voda*, *rõka*, *sr̩dɪt͡se*, starořečtina *kardia*, *hydor*, galština *kuno*, *derko*.
+
+**Výsledek:** Evropa 11 z 11, testy prošly (brány ani Romanii scénář Evropy neovlivňuje). Profil
+podobnosti řídí gramatika a podmínky, takže se čísla skoro nemění (balkánská slovanština ztratí pád
+v 8 z 12 běhů místo 4 z 12).
+
+Potomci v roce 1900 (semínko 1, `*` = nové slovo):
+
+| pojem | gótština → Germánie / Skandinávie | staroslověnština → pravlast / Balkán | galština → Armorika |
+|---|---|---|---|
+| voda | *wato* → wato / waðo | *voda* → voda / voðə | *dubr* → duβør |
+| ruka | *handu* → hadu / haðu | *rõka* → rõɡa / rõɣə | *lama* → lama |
+| pes | *hund* → hunød / hunød | *pɪs* → pɪs / silɛ̃n | *kuno* → kuno |
+| dva | *twɛ* → twæ / twæ | *dʊva* → dʊva / dʊvə | *wodui* → wowe |
+| srdce | *hɛrto* → jækurka\* / maxa\* | *sr̩dɪt͡se* → jẽrɪd͡zəɡa\* / jəɣʷurkə\* | *kridio* → jɨɣuɣa\* |
+
+Hláskové změny působí věrohodně (oslabení souhlásek mezi samohláskami v Balkánu a Skandinávii). **Slabé
+místo, které skutečný slovník ukázal:** nová slova vznikají napříč rodinami podobně. Všechny rodiny
+tvoří „srdce“ odvozeninou se stejnou příponou (engine má jednu odvozovací příponu `-ka` pro všechny
+jazyky, `scenarios::DERIVATIONAL_SUFFIX`) a některé posuny a složeniny jsou nepravděpodobné (lat.
+„noc“ ze „slunce“, „pes“ ze složeniny „noc + slunce“). Řešení je samostatný úkol: přípony podle jazyka
+a věrohodnost zdrojů posunů a složenin.
+
+**Další možnost:** se skutečným výchozím slovníkem jde měřit retenci i mimo latinu, například
+staroslověnština → slovanské jazyky nebo starořečtina → novořečtina proti IE-CoR.
