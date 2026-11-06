@@ -218,6 +218,7 @@ pub struct Parameters {
     pub fusion_bonus: f64,
     pub order_rigidity: f64,
     pub emergence_need_scale: f64,
+    pub extravagance: f64,
     pub population_per_density: f64,
     pub village_openness: f64,
     pub border_link_scale: f64,

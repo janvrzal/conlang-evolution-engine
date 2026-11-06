@@ -1,0 +1,31 @@
+{
+ "extr_0.1": {
+  "extravagance": 0.1
+ },
+ "extr_0.2": {
+  "extravagance": 0.2
+ },
+ "extr_0.3": {
+  "extravagance": 0.3
+ },
+ "e0.2_v0.1": {
+  "extravagance": 0.2,
+  "emergence_need_scale": 0.1
+ },
+ "e0.2_v0": {
+  "extravagance": 0.2,
+  "emergence_need_scale": 0.0
+ },
+ "e0.15_v0": {
+  "extravagance": 0.15,
+  "emergence_need_scale": 0.0
+ },
+ "e0.2_v0_vybl_x2": {
+  "extravagance": 0.2,
+  "emergence_need_scale": 0.0,
+  "change_rates": {
+   "bleaching": 2.0,
+   "category_loss": 2.0
+  }
+ }
+}

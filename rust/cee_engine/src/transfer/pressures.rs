@@ -584,9 +584,10 @@ impl<'a> Pressures<'a> {
                     self.assessed_pressure(pressure, weight, variable, assessed, cells, slots);
                 }
             }
-            id::AMBIGUITY | id::ECONOMY | id::EXPRESSIVITY | id::FUSION | id::LEARNABILITY => {
-                self.construction(pressure, weight, variable, variants, cells, live, slots)
-            }
+            id::AMBIGUITY | id::ECONOMY | id::EXPRESSIVITY | id::FUSION | id::LEARNABILITY => self
+                .construction(
+                    pressure, weight, variable, variants, current, cells, live, slots,
+                ),
             _ => {}
         }
     }
@@ -892,12 +893,14 @@ impl<'a> Pressures<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     fn construction(
         &self,
         pressure: u8,
         weight: f64,
         variable: VariableId,
         variants: &[VariantId],
+        current: &[f64],
         cells: &mut [f64],
         live: Live<'_>,
         slots: usize,
@@ -950,7 +953,17 @@ impl<'a> Pressures<'a> {
                             if unexpressed {
                                 need *= params.emergence_need_scale;
                             }
-                            need * self.strength(g, variant, construction)
+                            // Extravagance (Haspelmath 1999; Detges a Waltereit 2002): čerstvý volný opis
+                            // přitahuje sám o sobě, přitažlivost slábne, jak opis zevšední
+                            // (podíl ve skupině). Dok. 22, M7.3k.
+                            let fresh = if construction.kind == "periphrastic"
+                                && construction.stage.as_deref() == Some("free")
+                            {
+                                params.extravagance * (1.0 - current[g * slots + slot])
+                            } else {
+                                0.0
+                            };
+                            need * self.strength(g, variant, construction) + fresh
                         }
                     }
                     _ => {

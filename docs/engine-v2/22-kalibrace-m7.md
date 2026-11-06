@@ -872,3 +872,28 @@ splynulo s perfektem a konjunktivem.
 1999, *Why is grammaticalization irreversible?*: „extravagance“ mluvčích; Detges a Waltereit 2002), tedy
 přitažlivost čerstvého opisu, která slábne, jak opis zevšední. To je změna rovnováhy celého modelu
 (vznik, vyblednutí a stacionarita M7.2 by se musely znovu proměřit).
+
+### M7.3k: extravagance (parametr zapsán s hodnotou 0)
+
+Schválil uživatel 6. 11. 2026. Nový parametr `extravagance`: k expresivitě volného opisu se přičte
+`extravagance × (1 − podíl opisu ve skupině)`, tedy přitažlivost čerstvého výrazu, která slábne, jak
+opis zevšední (Haspelmath 1999; Detges a Waltereit 2002). **Výchozí hodnota 0**, chování modelu se
+nemění; varianty v `kalibrace/m73-extravagance.json`.
+
+| varianta | Romania: člen / zánik lat. futura / obnova futura (běhy z 20) | typologie: splněno z 33A, 37A, 66A, 67A |
+|---|---|---|
+| 0 (výchozí) | 1 / 8 / 1 | 4 |
+| 0,1 | 3 / 8 / 7 | 0 |
+| 0,15, `emergence_need_scale` 0 | 0 / 15 / 5 | 2 (37A, 67A) |
+| 0,2 | **18 / 15 / 20** | 0 |
+| 0,2, `emergence_need_scale` 0 | 2 / 18 / 12 | 0 |
+| 0,3 | 20 / 19 / 20 | 1 |
+
+Extravagance gramatikalizaci ve velkých regionech rozhýbe (při 0,2 Romania splní člen i futurum),
+ale v typologii pak **plurál a minulý čas jen přibývají** (+5 a až +21 ze 40 jazyků, žádný zánik):
+pro ně model nemá cestu zániku mimo silnou erozi, kdežto člen a futurum mají vyblednutí. Člen
+a futurum se proto při 0,15 a nulové škále vzniku vyrovnají, plurál a minulý čas ne.
+
+**Co by bylo potřeba pro zapnutí:** cesta zániku i pro plurál a minulý čas (minulý čas vytlačený
+videm nebo perfektem a pak vyblednutý; plurál jako volitelný, jen u živých jmen, WALS 34A) a nové
+vyvážení vzniku a zániku celé typologie M7.2.

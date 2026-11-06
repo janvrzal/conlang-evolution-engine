@@ -96,6 +96,15 @@
    "group": "morphology"
   },
   {
+   "name": "extravagance",
+   "kind": "number",
+   "default": 0.0,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Přitažlivost čerstvého volného opisu (`Expressivity`): mluvčí sahají po výraznějším vyjádření, aby byli slyšet (Haspelmath 1999, Why is grammaticalization irreversible?; Detges a Waltereit 2002). Přičte se k expresivitě opisu krát (1 − jeho podíl ve skupině), takže slábne, jak opis zevšední. Pohání gramatikalizaci i ve velkých skupinách, kde drift nestačí. 0 = bez přitažlivosti.",
+   "group": "morphology"
+  },
+  {
    "name": "population_per_density",
    "kind": "number",
    "default": 500.0,
