@@ -131,16 +131,21 @@ impl Row {
 
     /// Sloty s kladným podílem u jedné skupiny: (slot, podíl, základna) vzestupně podle slotu.
     pub fn cell(&self, column: usize) -> Vec<(usize, f64, f64)> {
-        (0..self.len())
-            .filter(|&index| self.group[index] as usize == column && self.freq[index] > 0.0)
-            .map(|index| {
-                (
-                    self.slot[index] as usize,
-                    self.freq[index],
-                    self.prev[index],
-                )
-            })
-            .collect()
+        // Úsek každého slotu je seřazený podle skupiny: binární hledání místo průchodu celým
+        // řádkem (dotaz na všechny skupiny byl kvadratický v počtu skupin).
+        let mut found = Vec::new();
+        for slot in 0..self.starts.len().saturating_sub(1) {
+            let (start, stop) = self.span(slot);
+            let groups = &self.group[start..stop];
+            let at = groups.partition_point(|&group| (group as usize) < column);
+            if at < groups.len() && groups[at] as usize == column {
+                let index = start + at;
+                if self.freq[index] > 0.0 {
+                    found.push((slot, self.freq[index], self.prev[index]));
+                }
+            }
+        }
+        found
     }
 
     /// Mapa rozšíření varianty: sloupce skupin s kladným podílem a ty podíly.

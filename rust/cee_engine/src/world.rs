@@ -333,17 +333,33 @@ impl World {
         if ids == self.live.group_ids {
             return Ok(false);
         }
-        for group in self.live.group_ids.clone() {
-            if self.groups.contains(group) {
-                self.materialize(group);
-            }
-        }
+        // Rozdělení pro novou osu: zachovaná skupina ze živého fondu (jako by se zapsala do
+        // repertoáru a znovu načetla), nová skupina z repertoáru. Repertoáry zachovaných skupin
+        // se nepřepisují: živou proměnnou čte každý přes živý fond (`World::distribution`)
+        // a do repertoárů ji zapíše `release` nebo `materialize` před větvením kódu. Dřív se
+        // zapisovaly všechny skupiny × všechny živé proměnné při každé změně osy (24 % běhu
+        // Evropy při realistickém tempu hláskových změn).
+        let variables = self.live.variable_ids();
+        let names = &self.registry.variants;
+        let dists: Vec<Vec<Option<Distribution>>> = variables
+            .iter()
+            .map(|&variable| {
+                ids.iter()
+                    .map(|&g| {
+                        if self.live.column(g).is_some() && self.groups.contains(g) {
+                            self.live
+                                .get(g, variable, names)
+                                .or_else(|| self.stored(g, variable))
+                        } else {
+                            self.stored(g, variable)
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
         let mut live = std::mem::take(&mut self.live);
-        let variables = live.variable_ids();
         live.set_axis(ids.clone());
-        for variable in variables {
-            let dists: Vec<Option<Distribution>> =
-                ids.iter().map(|&g| self.stored(g, variable)).collect();
+        for (variable, dists) in variables.into_iter().zip(dists) {
             live.load(variable, &dists, &self.registry.variants)?;
         }
         self.live = live;

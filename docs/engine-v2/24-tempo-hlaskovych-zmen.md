@@ -84,3 +84,27 @@ fonologie 22 %, komunity 21 %, události 11 % — žádné jedno úzké hrdlo.
 **Další kroky:** (1) výkon při realistickém tempu (banka tvarů, přestavba fonologie, komunity);
 (2) společná rekalibrace provázaných parametrů (`actuation` hláskových změn, otevřenost vesnic pro
 kontinuum, další podle cílů) přes všechny rychlé běhy najednou; Evropa a typologie jen na potvrzení.
+
+## Výkon při realistickém tempu (6. 11. 2026)
+
+Uživatel: „Nejdřív výkon.“ Měřeno s dočasnou váhou `actuation` 2,5 u hláskových změn (nezapsána),
+běh Evropy do roku 800 a vzorkování zásobníku (`sample`, jedno vlákno). Tři úpravy, **výsledky bit po
+bitu totožné** (otisk běhu Evropy stejný; při dnešní váze 1,0 kalibrace 116 z 116 záznamů a brány 47
+ze 47 shodné s předchozím během, testy prošly):
+
+| úprava | příčina | Evropa do roku 800 |
+|---|---|---|
+| výchozí stav | | 44 s |
+| `cee_core::pools::Row::cell` binárním hledáním v úseku slotu | dotaz na jednu skupinu procházel celý řádek (kvadratické v počtu skupin) | 35,5 s |
+| `World::sync_live_groups` bez zápisu do repertoárů | každá změna osy skupin zapisovala všechny skupiny × všechny živé proměnné (24 % běhu) | 30,9 s |
+| rejstřík proměnná → řádek v `PoolBlock` | `row_of` hledal lineárně přes tisíce proměnných bloku | 27,6 s |
+
+Celá Evropa do roku 1900 pak trvá 81 s (přenos 42 %, přestavba fonologie 37 %), Romania 42 s místo 50 s
+na 20 semínek. Zbývá přenos (vlastní výpočet modelu) a **přestavba fonologie, která běží po skupinách
+sekvenčně**, protože zapisuje do sdílené banky tvarů; paralelizace by potřebovala rozdělit přestavbu na
+souběžný výpočet a zápis v pořadí skupin. Paměť jednoho běhu Evropy je kolem 3 GB (banka tvarů asi
+460 MB, z toho tabulky výsledků procesů 395 MB). Kalibrace Evropy (12 semínek) zůstane i tak
+v řádu minut: rekalibrace se proto ladí na rychlé sadě a Romanii, Evropa jen na potvrzení.
+
+Při dnešní váze 1,0 jsou úpravy časově neutrální (brány m5 32,7 / 32,1 s, m6b 70,4 / 69,5 s před a po).
+Pozor: `cee calibrate --seeds N` nastavuje **první** semínko, ne jejich počet.

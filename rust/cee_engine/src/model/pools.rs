@@ -50,6 +50,10 @@ pub struct PoolBlock {
     pub cells: Cells,
     /// Roste s každou změnou řádků a slotů; podle něj si fáze zneplatňují popisy řádků.
     pub layout: u64,
+    /// Řádek proměnné (rejstřík k `variables`); po načtení ze zálohy prázdný, pak se hledá
+    /// lineárně.
+    #[serde(skip)]
+    rows: HashMap<VariableId, usize>,
 }
 
 mod cells_serde {
@@ -99,6 +103,7 @@ impl PoolBlock {
             keys: Vec::new(),
             cells: Cells::new(groups, capacity),
             layout: 0,
+            rows: HashMap::new(),
         }
     }
 
@@ -111,6 +116,9 @@ impl PoolBlock {
     }
 
     pub fn row_of(&self, variable: VariableId) -> Option<usize> {
+        if self.rows.len() == self.variables.len() {
+            return self.rows.get(&variable).copied();
+        }
         self.variables.iter().position(|&v| v == variable)
     }
 
@@ -130,6 +138,9 @@ impl PoolBlock {
         slots.resize(self.capacity, VariantId::NONE);
         let mut keys = row.keys;
         keys.resize(self.capacity, 0);
+        if self.rows.len() == self.variables.len() {
+            self.rows.insert(row.variable, self.variables.len());
+        }
         self.variables.push(row.variable);
         self.slots.push(slots);
         self.present.push(row.present);
@@ -158,7 +169,16 @@ impl PoolBlock {
         }
         let mut order = rows.to_vec();
         order.sort_unstable_by(|a, b| b.cmp(a));
+        let indexed = self.rows.len() == self.variables.len();
         for row in order {
+            if indexed {
+                self.rows.remove(&self.variables[row]);
+                if let Some(&last) = self.variables.last() {
+                    if row + 1 < self.variables.len() {
+                        self.rows.insert(last, row);
+                    }
+                }
+            }
             self.variables.swap_remove(row);
             self.slots.swap_remove(row);
             self.present.swap_remove(row);
