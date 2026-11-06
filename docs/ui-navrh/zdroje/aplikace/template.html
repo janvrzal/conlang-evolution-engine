@@ -1,0 +1,1257 @@
+<meta charset="utf-8">
+<title>CEE Poloostrov</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Piazzolla:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+/* Kostra: lišta se dvěma polovinami práce (Zadání | Výsledek), plátno, vpravo karta; ve Výsledku dole společný čas. Papír a inkoust, červený inkoust jen pro změnu a ruku autora. */
+:root {
+  --sea: #bccad0; --sea-line: #eef3f4; --land: #fbfbf9;
+  --ink: #1b2830; --ink-2: #56656e; --ink-3: #8d9aa1; --rule: #d1d9dc;
+  --panel: #eef1f2; --field: #f7f9f9; --halo: rgba(251, 251, 249, 0.9);
+  --red: #ae2a1f; --tint: rgba(174, 42, 31, 0.08); --warn: #9a6a12;
+  --l0: #2a6fc9; --l1: #c48a12; --l2: #16956a; --l3: #7d4fc0; --l4: #8a9a12; --l5: #c4508a;
+  --shade: rgba(27, 40, 48, 0.25);
+  --f-ui: "Piazzolla", Georgia, serif;
+  --f-ipa: "Charis CEE", "Charis SIL", "Gentium Plus", "Doulos SIL", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --ink-3: #66727c; --rule: #26323d;
+    --panel: #111a22; --field: #16212b; --halo: rgba(23, 32, 42, 0.86); --red: #e8806f; --tint: rgba(232, 128, 111, 0.1); --warn: #d9a54a;
+    --l0: #4f8de0; --l1: #b47e18; --l2: #22a074; --l3: #9a72dc; --l4: #869217; --l5: #d05f98; --shade: rgba(0, 0, 0, 0.5); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --ink-3: #66727c; --rule: #26323d;
+  --panel: #111a22; --field: #16212b; --halo: rgba(23, 32, 42, 0.86); --red: #e8806f; --tint: rgba(232, 128, 111, 0.1); --warn: #d9a54a;
+  --l0: #4f8de0; --l1: #b47e18; --l2: #22a074; --l3: #9a72dc; --l4: #869217; --l5: #d05f98; --shade: rgba(0, 0, 0, 0.5); color-scheme: dark;
+}
+@font-face { font-family: "Charis CEE"; src: url("fonts/Charis-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Charis CEE"; src: url("fonts/Charis-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Charis CEE"; src: url("fonts/Charis-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+
+html, body { height: 100%; }
+body { margin: 0; background: var(--panel); color: var(--ink); font-family: var(--f-ui); font-size: 15px; line-height: 1.4; }
+* { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.caps { text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; font-weight: 700; color: var(--ink-2); }
+.why { font-size: 13px; color: var(--ink-2); font-style: italic; line-height: 1.38; }
+.ipa { font-family: var(--f-ipa); font-style: normal; }
+.num { font-variant-numeric: tabular-nums; }
+.red { color: var(--red); }
+a { color: inherit; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* lišta */
+@media (max-width: 1500px) { .project small { display: none; } }
+.bar { display: flex; align-items: baseline; gap: 8px 18px; flex-wrap: wrap; padding-block: 10px 8px; border-bottom: 1px solid var(--ink); position: relative; }
+.project { font-size: 22px; font-style: italic; white-space: nowrap; }
+.project small { font-style: normal; font-size: 12px; color: var(--ink-2); margin-left: 6px; }
+.half { display: flex; align-items: baseline; gap: 2px 4px; flex-wrap: wrap; }
+.half > .caps { margin-right: 6px; font-size: 10px; }
+.half a { color: var(--ink-2); text-decoration: none; padding: 2px 5px; font-size: 15px; }
+.half a:hover { color: var(--ink); }
+.half a[aria-current="page"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--red); }
+.half a .stale { font-size: 11px; font-style: italic; color: var(--red); margin-left: 3px; }
+.sep { width: 1px; align-self: stretch; background: var(--rule); }
+.status { margin-left: auto; display: flex; align-items: baseline; gap: 10px; font-size: 13px; font-style: italic; color: var(--ink-2); }
+.status b { font-style: normal; font-weight: 500; color: var(--ink); }
+.status.stale { color: var(--red); }
+.progress { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--red); width: 0; }
+.btn { background: var(--field); border: 1px solid var(--rule); border-radius: 2px; padding: 4px 12px; cursor: pointer; font-size: 14px; font-style: normal; }
+.btn:hover { border-color: var(--ink-2); }
+.btn.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.btn.quiet { background: none; border-color: transparent; color: var(--ink-2); padding-inline: 6px; }
+.btn.quiet:hover { color: var(--ink); }
+.btn[disabled] { opacity: 0.45; cursor: default; }
+
+/* obrazovka */
+.screen { min-height: 0; display: grid; gap: 12px 16px; padding-block: 12px; }
+.screen.map3 { grid-template-columns: 210px minmax(0, 1fr) 340px; }
+.screen.map2 { grid-template-columns: minmax(0, 1fr) 360px; }
+.screen.doc { grid-template-columns: 220px minmax(0, 1fr); }
+.side, .card { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 4px; }
+.stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--sea); border-radius: 2px; }
+.stage canvas { position: absolute; inset: 0; }
+.overlay { position: absolute; left: 14px; top: 10px; pointer-events: none; }
+.overlay .big { font-size: 34px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1; }
+.overlay .sub { font-size: 13px; font-style: italic; color: var(--ink-2); }
+.legend { position: absolute; left: 12px; bottom: 12px; background: var(--halo); padding: 8px 10px; border-radius: 2px; display: grid; gap: 3px; font-size: 12px; max-width: calc(100% - 24px); }
+.legend i { display: inline-block; width: 18px; height: 10px; vertical-align: middle; margin-right: 6px; border-radius: 1px; }
+.tip { position: absolute; pointer-events: none; background: var(--halo); border: 1px solid var(--rule); padding: 5px 9px; border-radius: 2px; font-size: 13px; max-width: 280px; }
+.layers { position: absolute; right: 10px; top: 10px; display: flex; flex-wrap: wrap; gap: 0; background: var(--halo); border-radius: 2px; padding: 2px 4px; max-width: calc(100% - 20px); }
+.seg { display: flex; flex-wrap: wrap; gap: 0; }
+.seg button { background: none; border: 0; padding: 3px 9px 4px; cursor: pointer; font-size: 14px; color: var(--ink-2); border-bottom: 2px solid transparent; }
+.seg button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--red); }
+.seg button:hover { color: var(--ink); }
+.seg.small button { font-size: 13px; padding: 2px 7px 3px; }
+
+h1 { font-size: 26px; font-weight: 700; margin: 0; line-height: 1.15; }
+h2 { font-size: 17px; font-weight: 500; margin: 0; }
+h3 { margin: 0; }
+.ledger { display: grid; margin: 0; }
+.ledger > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.ledger dt { color: var(--ink-2); }
+.ledger dd { margin: 0; }
+.field { display: grid; gap: 4px; padding: 9px 0; border-bottom: 1px solid var(--rule); }
+.field > label, .field > .caps { display: flex; justify-content: space-between; gap: 8px; }
+.field .why { margin: 0; }
+select, input[type="text"], input[type="number"], input[type="search"] { background: var(--field); border: 1px solid var(--rule); border-radius: 2px; padding: 4px 6px; width: 100%; }
+input[type="range"], input[type="checkbox"] { accent-color: var(--ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.chip { border: 1px solid var(--rule); border-radius: 2px; padding: 1px 7px; font-size: 13px; background: var(--field); }
+.chip.on { border-color: var(--ink); }
+table.t { border-collapse: collapse; width: 100%; font-size: 14px; }
+table.t th { text-align: left; font-weight: 500; color: var(--ink-2); font-size: 12px; padding: 4px 6px; border-bottom: 1px solid var(--ink); position: sticky; top: 0; background: var(--panel); }
+table.t td { padding: 4px 6px; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+table.t tr.sel td { background: var(--tint); }
+table.t tr[data-k] { cursor: pointer; }
+table.t tr[data-k]:hover td { background: var(--field); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 1px; margin-right: 6px; vertical-align: baseline; }
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { padding: 5px 4px; border-bottom: 1px solid var(--rule); cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+.list li:hover { background: var(--field); }
+.list li[aria-selected="true"] { background: var(--tint); box-shadow: inset 2px 0 0 var(--red); }
+.list li small { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.bars { display: grid; gap: 4px; }
+.bars .row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 46px; gap: 8px; align-items: center; font-size: 13px; }
+.bars .track { height: 9px; background: var(--field); border-radius: 1px; overflow: hidden; display: flex; }
+.bars .track span { display: block; height: 100%; }
+.scroll { min-height: 0; overflow: auto; }
+
+/* čas */
+.time { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding-block: 8px 10px; border-top: 1px solid var(--rule); }
+.play { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--ink-2); background: none; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.play svg { fill: var(--ink); }
+.clock b { font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; display: block; line-height: 1; }
+.clock small { font-size: 12px; color: var(--ink-2); font-style: italic; }
+.track { position: relative; height: 44px; cursor: pointer; touch-action: none; }
+.track svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.track .tk { font-size: 10px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+.tsum { font-size: 13px; color: var(--ink-2); max-width: 300px; }
+.tsum b { color: var(--ink); font-weight: 500; }
+
+/* pata zadání */
+.foot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-block: 8px 10px; border-top: 1px solid var(--rule); font-size: 13px; color: var(--ink-2); }
+.foot .spacer { flex: 1; }
+.spec { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: 60px; width: min(520px, calc(100% - 32px)); max-height: 60vh; overflow: auto; z-index: 15; background: var(--land); border: 1px solid var(--ink); box-shadow: 0 8px 30px var(--shade); padding: 12px 14px; }
+.spec pre { margin: 6px 0 0; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+
+/* protojazyk */
+.tabs { display: flex; gap: 18px; flex-wrap: wrap; border-bottom: 1px solid var(--rule); }
+.tabs button { background: none; border: 0; padding: 4px 0 6px; cursor: pointer; font-size: 16px; color: var(--ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--red); }
+.ipa-chart { border-collapse: collapse; font-size: 13px; }
+.ipa-chart th { font-weight: 400; color: var(--ink-2); font-size: 11px; padding: 3px 6px; text-align: center; }
+.ipa-chart th[scope="row"] { text-align: right; }
+.ipa-chart td { border: 1px solid var(--rule); min-width: 38px; height: 34px; text-align: center; font-family: var(--f-ipa); font-size: 19px; }
+.ipa-chart td span { display: inline-block; padding: 0 3px; color: var(--ink-3); cursor: pointer; border-radius: 2px; }
+.ipa-chart td span.on { color: var(--ink); background: var(--field); box-shadow: inset 0 -2px 0 var(--ink); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px 28px; align-items: start; }
+.doc-main { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 6px; }
+
+/* kronika */
+.cent { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 0 18px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.cent > .y { font-size: 22px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.cent .sum { font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
+.cent ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.cent li { display: grid; grid-template-columns: 44px 14px minmax(0, 1fr); gap: 6px; font-size: 14px; cursor: pointer; padding: 1px 2px; border-radius: 2px; }
+.cent li:hover { background: var(--field); }
+.cent li .yy { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+.mk { width: 9px; height: 9px; align-self: center; display: inline-block; }
+.mk.author { background: var(--ink); }
+.mk.bg { border: 1px solid var(--ink-2); border-radius: 50%; }
+.mk.lang { background: var(--red); transform: rotate(45deg); width: 8px; height: 8px; }
+.mk.soc { border: 1.5px solid var(--ink); }
+
+/* větve */
+.branch-maps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 0; }
+.branch-maps > div { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 6px; min-height: 0; }
+
+/* poznámky */
+.notes { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100%); z-index: 20; overflow-y: auto; background: var(--land); border-left: 1px solid var(--ink); box-shadow: -10px 0 30px var(--shade); padding-block: calc(18px + env(safe-area-inset-top, 0px)) 24px; padding-left: 24px; padding-right: max(24px, env(safe-area-inset-right, 0px)); }
+.notes h2 { font-size: 22px; font-style: italic; font-weight: 400; margin: 2px 0 6px; }
+.notes ol { padding-left: 20px; display: grid; gap: 9px; }
+.notes li p { margin: 2px 0 0; font-size: 14px; color: var(--ink-2); }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 30; background: var(--ink); color: var(--panel); padding: 6px 14px; border-radius: 2px; font-size: 13px; font-style: italic; max-width: calc(100% - 32px); }
+
+@media (max-width: 1100px) {
+  .screen.map3 { grid-template-columns: minmax(0, 1fr) 320px; }
+  .screen.map3 > .side { display: none; }
+}
+@media (max-width: 800px) {
+  .screen.map3, .screen.map2, .screen.doc { grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(360px, auto); overflow-y: auto; }
+  .screen.map3 > .side { display: flex; }
+  .branch-maps { grid-template-columns: 1fr; }
+  .time { grid-template-columns: auto auto minmax(0, 1fr); }
+  .tsum { display: none; }
+  .status { margin-left: 0; width: 100%; }
+}
+</style>
+
+<div class="app" id="app">
+  <header class="bar gutter">
+    <div class="project">Poloostrov<small>seed 4417 · 0–2000 · 20 krajů</small></div>
+    <nav class="half" aria-label="Zadání"><span class="caps">Zadání</span>
+      <a href="#svet">Svět</a><a href="#protojazyky">Protojazyky</a><a href="#pojmy">Pojmy</a><a href="#dejiny">Dějiny</a>
+    </nav>
+    <span class="sep" aria-hidden="true"></span>
+    <nav class="half" aria-label="Výsledek"><span class="caps">Výsledek</span>
+      <a href="#atlas">Atlas<span class="stale" data-stale></span></a><a href="#jazyky">Jazyky<span class="stale" data-stale></span></a><a href="#slova">Slova<span class="stale" data-stale></span></a><a href="#kronika">Kronika<span class="stale" data-stale></span></a><a href="#vetve">Větve</a>
+    </nav>
+    <div class="status" id="status" aria-live="polite"></div>
+    <button class="btn quiet" id="notes-open" aria-expanded="false" aria-controls="notes">O návrhu</button>
+    <div class="progress" id="progress" aria-hidden="true"></div>
+  </header>
+  <main id="main" class="gutter" style="min-height:0;display:grid"></main>
+  <footer id="footer" class="gutter"></footer>
+</div>
+
+<aside class="notes" id="notes" hidden aria-labelledby="h-notes">
+  <button class="btn quiet" id="notes-close" style="position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:max(14px,env(safe-area-inset-right,0px))">Zavřít</button>
+  <span class="caps">Návrh aplikace CEE · 6. 11. 2026</span>
+  <h2 id="h-notes">Dvě poloviny a jeden čas</h2>
+  <p class="why">Všechno na stránce je ze dvou skutečných běhů enginu v2 v Rustu: Poloostrov, seed 4417, 2000 let, 20 krajů, dva protojazyky, pozadí dějin „běžné“. Větev B je stejný svět bez připojení tří krajů v roce 1300. Běh trval 3 minuty.</p>
+  <ol>
+    <li><b>Zadání a Výsledek.</b><p>Vlevo v liště je to, co autor píše (svět, protojazyky, pojmy, dějiny), vpravo to, co engine spočítal. Změna v zadání označí výsledky jako zastaralé a lišta nabídne přepočet.</p></li>
+    <li><b>Jeden čas.</b><p>Ve Výsledku je dole společná osa po 100 letech, protože tak často engine pozoruje jazyky. Rok se nese mezi Atlasem, Jazyky, Slovy, Kronikou i Větvemi. Na ose jsou události: plné čtverečky autor, kroužky pozadí dějin, červené kosočtverce jazyky.</p></li>
+    <li><b>Atlas</b> ukazuje ves po vsi: jazyk doma, nářečí, státy a hranice, řeč na veřejnosti (lingua franca, druhý jazyk), písmo a školu, věrnost a obrození. Klik na kraj dá sčítání.</li>
+    <li><b>Jazyky</b> jsou linie, které engine sám pozoroval: vznik, rozštěpení, zánik, vlastní jméno a jeho vývoj, nářečí se jmény, mluvnice proti protojazyku, zvukové změny se skutečnými pravidly a analogie.</li>
+    <li><b>Slova</b>: srovnávací slovník s etymologií (zděděné, výpůjčka, nové slovo), slovo na mapě s izoglosami a vrt jednoho místa po stoletích.</li>
+    <li><b>Kronika</b> skládá dohromady dějiny autora, pozadí, které generuje engine (mor, obchod, přesídlení, prestiž), a co se stalo s jazyky. Drobné změny jsou souhrnem po stoletích.</li>
+    <li><b>Zadání</b> mapuje celé <span class="ipa">cee-v2-world/1</span>: kraje, svět (seed, generace, pozadí dějin, posun významu), protojazyky (hlásky, tóny, přízvuk, mluvnice po funkcích, rozběhnuté změny, slova a vlastní jméno), pojmy (velikost slovníku, vlastní pojmy) a všech 15 druhů událostí.</li>
+  </ol>
+  <span class="caps">Co engine zatím nedává a návrh s tím počítá</span>
+  <ol>
+    <li><b>Slovník ve snímku.</b><p>API vrací slovník jen na konci běhu; mapu slova v čase tu umožnil export po každém pozorování. API by ho mělo dávat ve snímku nebo na požádání.</p></li>
+    <li><b>Přepočet od roku.</b><p>Engine umí kontrolní body, API je zatím nenabízí; větev se proto počítá celá.</p></li>
+    <li><b>Jména osob, míst a pravopis</b> engine nemá.</li>
+  </ol>
+</aside>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script type="application/json" id="cee-data">__DATA__</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+/*NAMING*/
+</script>
+<script>
+(() => {
+const D = JSON.parse(document.getElementById('cee-data').textContent);
+const W = D.world, C = D.concepts, GL = D.gloss;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = (n) => Math.round(n).toLocaleString('cs-CZ');
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// ---------- svět a běhy ----------
+const REG = W.regions, RI = Object.fromEntries(REG.map((r, i) => [r.id, i]));
+const regionName = (id) => REG[RI[id]]?.name ?? id;
+const LANG0 = W.languages;
+const KIND = {
+  state: 'Vznik státu', language_policy: 'Jazyková politika', annexation: 'Připojení krajů', secession: 'Odtržení',
+  collapse: 'Rozpad státu', border_policy: 'Hranice státu', lingua_franca: 'Lingua franca', standard: 'Spisovná norma',
+  schools: 'Školy', revival: 'Obrození', preserve: 'Ochrana jazyka', identity: 'Svébytnost', immigration: 'Obchodní město',
+  settlement: 'Osídlení', elite: 'Cizí elita',
+};
+const KIND_GROUP = {
+  'Státy': ['state', 'annexation', 'secession', 'collapse', 'language_policy', 'border_policy'],
+  'Jazyk ve společnosti': ['standard', 'schools', 'lingua_franca', 'revival', 'preserve'],
+  'Lidé a místa': ['settlement', 'elite', 'immigration', 'identity'],
+};
+const LEVEL = {
+  policy: { tolerant: 'snášenlivá', promoted: 'podporuje jazyk', enforced: 'vynucuje jazyk' },
+  border: { open: 'otevřená', normal: 'běžná', closed: 'zavřená' },
+  centralization: { none: 'žádná', weak: 'volná', moderate: 'běžná', strong: 'pevná' },
+  identity: { shared: 'sdílená', distinct: 'svébytná', strong: 'silná' },
+  terrain: { plain: 'rovina', hills: 'pahorkatina', mountains: 'hory', island: 'ostrov' },
+  literacy: { elite: 'jen elita', towns: 'města', mass: 'všichni' },
+  coverage: { towns: 'města', mass: 'všude' },
+  spread: { rare: 'vzácně', common: 'běžně', universal: 'všichni' },
+  strength: { movement: 'hnutí', national: 'národní' },
+  background: { none: 'žádné', calm: 'klidné', normal: 'běžné', turbulent: 'bouřlivé' },
+};
+
+function runOf(key) {
+  const R = D[key];
+  R.key = key;
+  R.forms = R.forms;
+  R.years = R.frames.map((f) => f.y);
+  R.villageOfGroup = R.groups.map((g) => g[1]);
+  R.domainOfGroup = R.groups.map((g) => g[2]);
+  R.lin = R.lineages;
+  R.linBy = Object.fromEntries(R.lin.map((l) => [l.i, l]));
+  // jména jazyků: v pořadí vzniku, rodič dřív než dítě
+  const facts = [...R.lin].sort((a, b) => a.start - b.start || a.i - b.i)
+    .map((l) => ({ id: l.i, parent: l.parent, endonym: l.endonym, origin: l.origin ? regionName(l.origin) : null }));
+  R.names = NAMING.languageNames(facts);
+  return R;
+}
+const A = runOf('a'), B = runOf('b');
+
+// Barvy jazyků: šest odstínů; znovu jen pro jazyky, které nežijí současně.
+function assignColors(R) {
+  const order = [...R.lin].sort((a, b) => a.start - b.start || a.i - b.i), used = [];
+  R.color = {};
+  for (const l of order) {
+    const end = l.end ?? 1e9;
+    const busy = new Set(used.filter((u) => u.start < end && (u.end ?? 1e9) > l.start).map((u) => u.c));
+    const parent = l.parent != null ? R.color[l.parent] : null;
+    let c = [0, 1, 2, 3, 4, 5].find((k) => !busy.has(k) && k !== parent);
+    if (c === undefined) c = used.length % 6;
+    R.color[l.i] = c; used.push({ start: l.start, end: l.end, c });
+  }
+}
+assignColors(A); assignColors(B);
+const lcolor = (R, li) => (li == null ? css('--ink-3') : css('--l' + R.color[li]));
+
+// ---------- stav ----------
+const state = { route: 'atlas', year: 1300, layer: 'lang', region: null, lineage: null, concept: 'stone', place: null,
+  results: 'fresh', progress: 0, ranAt: 'dnes 20:50', proto: LANG0[0].id, ptab: 'hlasky', world: structuredClone(W),
+  sel: { region: 'vardun', event: null }, filters: new Set(['author', 'bg', 'lang', 'soc']), cursor: 1300, specOpen: false };
+
+const frameAt = (R, y) => { let k = 0; for (let i = 0; i < R.years.length; i++) if (R.years[i] <= y) k = i; return R.frames[k]; };
+
+// ---------- geografie ----------
+const VILLAGES = D.villages.map((t) => ({ id: t.id, region: t.parent, x: t.position[0], y: t.position[1], island: REG[RI[t.parent]]?.terrain === 'island' }));
+const VI = Object.fromEntries(VILLAGES.map((v, i) => [v.id, i]));
+function hash(i, j) { let h = Math.imul(i, 374761393) + Math.imul(j, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+function vnoise(x, y) {
+  const i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+  const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1);
+  return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
+}
+const GP = VILLAGES.filter((v) => !v.id.includes('+')).map((v) => [v.x, v.y, v.island]);
+function landField(x, y) {
+  let main = Infinity, island = Infinity;
+  for (const [px, py, isl] of GP) { const d = (px - x) ** 2 + (py - y) ** 2; if (isl) { if (d < island) island = d; } else if (d < main) main = d; }
+  const noise = vnoise(x / 24, y / 24) * 8 + vnoise(x / 8 + 40, y / 8) * 2.6;
+  const fm = 34 - Math.sqrt(main) + noise, fi = 34 - Math.sqrt(island) + noise;
+  if (fm > -14 && fi > -14) return Math.min(Math.max(fm, fi), -3 - Math.min(Math.abs(fm - fi), 6));
+  return Math.max(fm, fi);
+}
+const MOUNT = REG.filter((r) => r.terrain === 'mountains').map((r) => r.position), HILL = REG.filter((r) => r.terrain === 'hills').map((r) => r.position);
+
+// Mapa: plátno s pevninou, buňkami vsí a krajů. Kreslení dodá obrazovka.
+function makeMap(stage, opts = {}) {
+  const cv = document.createElement('canvas'); stage.prepend(cv);
+  const m = { stage, cv, ctx: cv.getContext('2d'), draw: opts.draw || (() => {}), onPick: opts.onPick, onHover: opts.onHover };
+  m.layout = () => {
+    const Wd = stage.clientWidth, H = stage.clientHeight; if (!Wd || !H) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(Wd * dpr); cv.height = Math.round(H * dpr); cv.style.width = Wd + 'px'; cv.style.height = H + 'px';
+    const minx = -12, maxx = 345, miny = 48, maxy = 338;
+    const k = Math.min((Wd - 20) / (maxx - minx), (H - 20) / (maxy - miny));
+    const ox = (Wd - k * (maxx - minx)) / 2 - k * minx, oy = (H - k * (maxy - miny)) / 2 - k * miny;
+    Object.assign(m, { W: Wd, H, dpr, k, ox, oy });
+    m.P = (x, y) => [ox + k * x, oy + k * y];
+    m.inv = (px, py) => [(px - ox) / k, (py - oy) / k];
+    const g = 3, nx = Math.ceil(Wd / g) + 1, ny = Math.ceil(H / g) + 1, values = new Float64Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) values[j * nx + i] = landField((i * g - ox) / k, (j * g - oy) / k);
+    const path = d3.geoPath(d3.geoTransform({ point(x, y) { this.stream.point(x * g, y * g); } }));
+    const cs = d3.contours().size([nx, ny]).thresholds([0, -5, -11, -18])(values).sort((a, b) => b.value - a.value);
+    m.land = new Path2D(path(cs[0])); m.rings = cs.slice(1).map((c) => new Path2D(path(c)));
+    const vp = VILLAGES.map((v) => m.P(v.x, v.y)), vdel = d3.Delaunay.from(vp), vvor = vdel.voronoi([0, 0, Wd, H]);
+    m.vcells = VILLAGES.map((_, i) => poly(vvor.cellPolygon(i)));
+    m.vdel = vdel; m.vvor = vvor; m.vpts = vp;
+    const rp = REG.map((r) => m.P(...r.position)), rdel = d3.Delaunay.from(rp), rvor = rdel.voronoi([0, 0, Wd, H]);
+    m.rcells = REG.map((_, i) => poly(rvor.cellPolygon(i)));
+    m.rdel = rdel; m.rvor = rvor; m.rpts = rp;
+    m.redges = edgesOf(rdel, rvor); m.vedges = edgesOf(vdel, rvor === null ? null : vvor);
+    m.render();
+  };
+  function poly(pg) { const p = new Path2D(); if (!pg) return p; pg.forEach(([x, y], n) => (n ? p.lineTo(x, y) : p.moveTo(x, y))); p.closePath(); return p; }
+  function edgesOf(del, vor) {
+    const out = [], { halfedges, triangles } = del, cc = vor.circumcenters;
+    for (let e = 0; e < halfedges.length; e++) {
+      const o = halfedges[e]; if (o < e) continue;
+      const a = triangles[e], b = triangles[e % 3 === 2 ? e - 2 : e + 1];
+      const t1 = Math.floor(e / 3), t2 = o >= 0 ? Math.floor(o / 3) : -1;
+      if (t2 < 0) continue;
+      out.push({ a, b, x1: cc[2 * t1], y1: cc[2 * t1 + 1], x2: cc[2 * t2], y2: cc[2 * t2 + 1] });
+    }
+    return out;
+  }
+  m.render = () => {
+    if (!m.W) return;
+    const c = m.ctx; c.setTransform(m.dpr, 0, 0, m.dpr, 0, 0);
+    c.fillStyle = css('--sea'); c.fillRect(0, 0, m.W, m.H);
+    c.strokeStyle = css('--sea-line'); c.lineWidth = 1;
+    for (const r of m.rings) c.stroke(r);
+    c.fillStyle = css('--land'); c.fill(m.land);
+    c.save(); c.clip(m.land); m.draw(c, m); c.restore();
+    c.strokeStyle = css('--ink'); c.lineWidth = 1.1; c.stroke(m.land);
+    if (m.after) m.after(c, m);
+  };
+  m.village = (px, py) => m.vdel.find(px, py);
+  m.regionAt = (px, py) => m.rdel.find(px, py);
+  cv.addEventListener('click', (e) => { const r = cv.getBoundingClientRect(); m.onPick && m.onPick(e.clientX - r.left, e.clientY - r.top); });
+  cv.addEventListener('mousemove', (e) => { const r = cv.getBoundingClientRect(); m.onHover && m.onHover(e.clientX - r.left, e.clientY - r.top); });
+  cv.addEventListener('mouseleave', () => m.onHover && m.onHover(null));
+  new ResizeObserver(() => m.layout()).observe(stage);
+  return m;
+}
+function relief(c, m) {
+  c.strokeStyle = css('--ink-2'); c.lineWidth = 0.8; c.globalAlpha = 0.45;
+  for (const [x, y] of MOUNT) for (let n = 0; n < 5; n++) { const [px, py] = m.P(x + (n - 2) * 7, y + ((n * 37) % 11) - 5); const s = 5 * Math.min(1.4, m.k / 2); c.beginPath(); c.moveTo(px - s, py + s * 0.6); c.lineTo(px, py - s * 0.6); c.lineTo(px + s, py + s * 0.6); c.stroke(); }
+  for (const [x, y] of HILL) for (let n = 0; n < 4; n++) { const [px, py] = m.P(x + (n - 1.5) * 8, y + ((n * 29) % 9) - 4); const s = 4 * Math.min(1.4, m.k / 2); c.beginPath(); c.arc(px, py + s * 0.5, s, Math.PI * 1.15, Math.PI * 1.85); c.stroke(); }
+  c.globalAlpha = 1;
+}
+function label(c, text, x, y, opts = {}) {
+  c.font = opts.font || `600 10px ${css('--f-ui')}`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  if (opts.spacing) c.letterSpacing = opts.spacing;
+  c.lineWidth = opts.halo ?? 3.5; c.strokeStyle = css('--land'); c.lineJoin = 'round'; c.strokeText(text, x, y);
+  c.fillStyle = opts.color || css('--ink'); c.fillText(text, x, y);
+  c.letterSpacing = '0px';
+}
+function hatch(c, path, angle, color, gap = 7, width = 0.8) {
+  c.save(); c.clip(path); c.strokeStyle = color; c.lineWidth = width; c.beginPath();
+  const d = Math.hypot(c.canvas.width, c.canvas.height), s = Math.sin(angle), co = Math.cos(angle);
+  for (let t = -d; t < d; t += gap) { c.moveTo(t * co - d * s, t * s + d * co); c.lineTo(t * co + d * s, t * s - d * co); }
+  c.stroke(); c.restore();
+}
+
+// ---------- data snímku ----------
+function homeGroups(R, f) {
+  // ves → největší domácí skupina a její jazyk
+  const best = {};
+  for (const [gi, [pop, l2, lin]] of Object.entries(f.g)) {
+    const v = R.villageOfGroup[gi]; if (!(v in VI)) continue;
+    const dom = R.domainOfGroup[gi];
+    if (dom !== 'h') continue;
+    if (!best[v] || pop > best[v].pop) best[v] = { gi: +gi, pop, l2, lin };
+  }
+  return best;
+}
+function publicGroups(R, f) {
+  const out = {};
+  for (const [gi, [pop, l2, lin]] of Object.entries(f.g)) {
+    const v = R.villageOfGroup[gi]; if (!(v in VI) || R.domainOfGroup[gi] !== 'p') continue;
+    (out[v] ||= []).push({ gi: +gi, pop, l2, lin });
+  }
+  return out;
+}
+function dialectIndex(f) {
+  const out = {};
+  f.facts.forEach((d, n) => d.g.forEach((g) => { out[g] = n; }));
+  return out;
+}
+function statesAt(f) { const s = {}; f.states.forEach((st, n) => st.regions.forEach((r) => { s[r] = { ...st, n }; })); return s; }
+function speakers(R, f) {
+  const out = {};
+  for (const [gi, [pop, , lin]] of Object.entries(f.g)) if (lin != null && R.domainOfGroup[gi] === 'h') out[lin] = (out[lin] || 0) + pop;
+  return out;
+}
+const formOf = (R, f, gi, ci) => { const row = f.lex && f.lex[gi]; return row ? R.forms[row[ci]] : ''; };
+const originOf = (f, gi, ci) => (f.org && f.org[gi] && f.org[gi][ci]) || null;
+function regionHome(R, f, region) {
+  let best = null;
+  for (const [gi, [pop]] of Object.entries(f.g)) {
+    const v = R.villageOfGroup[gi]; if (!v || R.domainOfGroup[gi] !== 'h') continue;
+    const reg = VILLAGES[VI[v]]?.region; if (reg !== region) continue;
+    if (!best || pop > best.pop) best = { gi: +gi, pop };
+  }
+  return best;
+}
+
+// ---------- běh a stav ----------
+function renderStatus() {
+  const s = $('status');
+  s.classList.toggle('stale', state.results === 'stale');
+  $('progress').style.width = state.results === 'running' ? (state.progress * 100).toFixed(1) + '%' : '0';
+  for (const el of document.querySelectorAll('[data-stale]')) el.textContent = state.results === 'stale' ? '·' : '';
+  if (state.results === 'running') s.innerHTML = `<span>Počítá se, rok <b>${Math.round(state.progress * 20) * 100}</b> z 2000</span><button class="btn" id="run-stop">Zastavit</button>`;
+  else if (state.results === 'stale') s.innerHTML = `<span>Zadání se od běhu změnilo, výsledky jsou zastaralé</span><button class="btn primary" id="run-go">Přepočítat 2000 let</button>`;
+  else s.innerHTML = `<span>Výsledky odpovídají zadání · běh <b>2000</b> let, ${esc(state.ranAt)}, 3 min</span>`;
+}
+let runTimer = null;
+function run() {
+  clearInterval(runTimer); state.results = 'running'; state.progress = 0; renderStatus();
+  const t0 = performance.now();
+  runTimer = setInterval(() => {
+    state.progress = Math.min(1, (performance.now() - t0) / 6000);
+    if (state.progress >= 1) { clearInterval(runTimer); state.results = 'fresh'; state.ranAt = 'právě teď'; toast('Hotovo. V návrhu se ukazuje stejný běh; aplikace kreslí mapu průběžně ze snímků.'); go('atlas'); }
+    renderStatus();
+  }, 150);
+}
+function edited() { if (state.results === 'fresh') { state.results = 'stale'; renderStatus(); } }
+$('status').addEventListener('click', (e) => { if (e.target.id === 'run-go') run(); if (e.target.id === 'run-stop') { clearInterval(runTimer); state.results = 'stale'; renderStatus(); } });
+let toastTimer = null;
+function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 3200); }
+
+// ---------- časová osa (Výsledek) ----------
+const EV_CLASS = (e) => {
+  if (e.background) return 'bg';
+  if (['language_split', 'language_emerged', 'language_ended', 'language_shift', 'transmission_stopped', 'transmission_resumed', 'nativization', 'bilingualism', 'stress_rule_changed', 'stress_strength_changed'].includes(e.kind)) return 'lang';
+  if (['codification', 'printing', 'migration', 'conquest', 'revival_movement'].includes(e.kind)) return 'soc';
+  return 'author';
+};
+let playTimer = null;
+function timeBar(R = A) {
+  const f = $('footer');
+  f.innerHTML = `<div class="time"><button class="play" id="play" aria-label="Přehrát"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path id="play-icon" d="M4 2l10 6-10 6z"/></svg></button>
+    <div class="clock"><b id="clock">${state.year}</b><small>rok</small></div>
+    <div class="track" id="track" role="slider" aria-label="Rok" aria-valuemin="100" aria-valuemax="2000" tabindex="0"><svg id="track-svg"></svg></div>
+    <div class="tsum" id="tsum"></div></div>`;
+  const track = $('track');
+  const draw = () => {
+    const w = track.clientWidth, svg = $('track-svg'); if (!w) return;
+    const x = (y) => 6 + (y / 2000) * (w - 12);
+    let s = `<line x1="${x(0)}" x2="${x(2000)}" y1="22" y2="22" stroke="${css('--ink-2')}" stroke-width="1"/>`;
+    for (let y = 0; y <= 2000; y += 100) s += `<line x1="${x(y)}" x2="${x(y)}" y1="${y % 500 ? 19 : 16}" y2="25" stroke="${css('--ink-2')}"/>` + (y % 500 ? '' : `<text class="tk" x="${x(y)}" y="40" text-anchor="middle">${y}</text>`);
+    for (const e of R.events) {
+      const cl = EV_CLASS(e), X = x(e.year).toFixed(1);
+      if (cl === 'author') s += `<rect x="${X - 2.5}" y="6" width="5" height="5" fill="${css('--ink')}"><title>${esc(e.year + ' ' + describe(e, R).title)}</title></rect>`;
+      else if (cl === 'bg') s += `<circle cx="${X}" cy="9" r="2.2" fill="none" stroke="${css('--ink-2')}"><title>${esc(e.year + ' ' + describe(e, R).title)}</title></circle>`;
+      else if (cl === 'lang') s += `<rect x="${X - 2.5}" y="27" width="5" height="5" transform="rotate(45 ${X} 29.5)" fill="${css('--red')}"><title>${esc(e.year + ' ' + describe(e, R).title)}</title></rect>`;
+    }
+    s += `<line x1="${x(state.year)}" x2="${x(state.year)}" y1="0" y2="34" stroke="${css('--red')}" stroke-width="2"/>`;
+    svg.innerHTML = s;
+    const fr = frameAt(R, state.year), sp = speakers(R, fr), living = Object.keys(fr.langs).length;
+    $('tsum').innerHTML = `<b>${living}</b> ${living === 1 ? 'jazyk' : living < 5 ? 'jazyky' : 'jazyků'}, <b>${fr.facts.length}</b> nářečí, <b>${fmt(Object.values(sp).reduce((a, b) => a + b, 0))}</b> mluvčích doma` + (fr.states.length ? `, ${fr.states.length} ${fr.states.length === 1 ? 'stát' : fr.states.length < 5 ? 'státy' : 'států'}` : '');
+    $('clock').textContent = state.year;
+    track.setAttribute('aria-valuenow', state.year);
+  };
+  const setFrom = (ev) => { const r = track.getBoundingClientRect(); setYear(Math.round(((ev.clientX - r.left - 6) / (r.width - 12)) * 20) * 100); };
+  let drag = false;
+  track.addEventListener('pointerdown', (e) => { drag = true; track.setPointerCapture(e.pointerId); setFrom(e); });
+  track.addEventListener('pointermove', (e) => { if (drag) setFrom(e); });
+  track.addEventListener('pointerup', () => { drag = false; });
+  track.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') setYear(state.year + 100); if (e.key === 'ArrowLeft') setYear(state.year - 100); });
+  $('play').addEventListener('click', () => setPlaying(!playTimer));
+  new ResizeObserver(draw).observe(track);
+  timeBar.draw = draw; draw();
+}
+function setYear(y) { state.year = Math.max(100, Math.min(2000, y)); timeBar.draw && timeBar.draw(); screens[state.route]?.update?.(); }
+function setPlaying(on) {
+  clearInterval(playTimer); playTimer = null;
+  const icon = $('play-icon'); if (icon) icon.setAttribute('d', on ? 'M4 2h3v12H4zM9 2h3v12H9z' : 'M4 2l10 6-10 6z');
+  if (!on) return;
+  if (state.year >= 2000) setYear(100);
+  playTimer = setInterval(() => { if (state.year >= 2000) setPlaying(false); else setYear(state.year + 100); }, 700);
+}
+
+// ---------- popis událostí (čeština) ----------
+const lname = (R, li) => (li == null ? 'jazyk' : R.names.get(li) ?? 'jazyk');
+const regs = (list) => (list || []).map(regionName).join(', ');
+function stateName(id) { const s = [...A.frames.at(-1).states, ...W.events.filter((e) => e.kind === 'state' || e.kind === 'secession')].find((x) => x.id === id); return s?.name ?? id; }
+function describe(e, R = A) {
+  const g = (k) => e[k];
+  switch (e.kind) {
+    case 'state': return { title: `Vzniká ${g('name') || 'stát'}`, text: `Hlavní město ${regionName(g('capital') || g('seat'))}; ${LEVEL.policy[g('policy')] || ''}, hranice ${LEVEL.border[g('border')] || ''}. Kraje: ${regs(g('regions'))}.` };
+    case 'annexation': return { title: `${stateName(g('state'))} připojuje ${regs(g('regions'))}`, text: g('bilingual') ? `${g('bilingual')} skupin začíná mluvit úředním jazykem na veřejnosti.` : '' };
+    case 'secession': return { title: `Odtržení: ${stateName(g('state') || g('id'))}`, text: `Kraje ${regs(g('regions'))} vytvářejí vlastní stát.` };
+    case 'collapse': return { title: `Rozpad státu ${stateName(g('state'))}`, text: `Kraje ${regs(g('regions'))} zůstávají bez vlády.` };
+    case 'language_policy': return { title: `${stateName(g('state'))}: jazyková politika ${LEVEL.policy[g('policy')]}`, text: '' };
+    case 'border_policy': return { title: `${stateName(g('state'))}: hranice ${LEVEL.border[g('border')]}`, text: '' };
+    case 'lingua_franca': return { title: `Lingua franca z kraje ${regionName(g('source'))}`, text: `Šíří se do krajů ${regs(g('regions'))}; ${g('bilingual') || 0} skupin se ji učí jako druhý jazyk.` };
+    case 'standard': return { title: `Spisovná norma (${stateName(g('of'))})`, text: `Čte ${LEVEL.literacy[g('literacy')] || g('literacy')}.` };
+    case 'codification': return { title: `Pravopis ustálen ve ${regionName((g('source') || '').split('-')[0])}`, text: 'Psaná podoba jazyka se od teď mění pomaleji než mluvená.' };
+    case 'printing': return { title: 'Knihtisk', text: 'Psaná norma se šíří rychleji.' };
+    case 'schools': return { title: `Školy (${stateName(g('of'))})`, text: `Pokrytí ${LEVEL.coverage[g('coverage')]}${g('printing') ? ', s tiskem' : ''}${g('diglossic') ? ', diglosie' : ''}.` };
+    case 'preserve': return { title: `Ochrana jazyka: ${regs(g('regions'))}`, text: 'Místní řeč se brání výpůjčkám a přechodu k jinému jazyku.' };
+    case 'identity': return { title: `Svébytnost: ${regs(g('regions'))}`, text: `Identita ${LEVEL.identity[g('identity')]}; lidé se drží své řeči.` };
+    case 'immigration': return { title: `Obchodní město: ${regs(g('regions'))}`, text: `Přichází ${Math.round(g('immigration') * 100)} % lidí za generaci.` };
+    case 'revival': case 'revival_movement': return { title: `Obrození v krajích ${regs(g('regions'))}`, text: `Síla ${LEVEL.strength[g('strength')] || g('strength')}; ${g('speakers') || 0} skupin, ${g('revived') || 0} se vrátilo k předávání.` };
+    case 'migration': return { title: `Osídlení: nová ves v kraji ${regionName((g('target') || '').split('+')[0])}`, text: `Přicházejí lidé z kraje ${regionName((g('target') || '').split('+')[1]?.split('-')[0])}.` };
+    case 'conquest': return { title: `Cizí elita z kraje ${regionName((g('conqueror') || '').split('-')[0])} ovládá ${regs((g('subjects') || []).map((s) => s.replace('@', '')))}`, text: 'Elita mluví svým jazykem; poddaní přejímají slova moci a správy.' };
+    case 'trade': return { title: `Obchod mezi kraji ${regs(g('regions'))}`, text: `Spojení zesílilo ${g('factor')}×.` };
+    case 'resettlement': return { title: `Přesídlení z kraje ${regionName(g('source'))} do kraje ${regionName(g('target'))}`, text: `Odešlo ${Math.round(g('share') * 100)} % lidí.` };
+    case 'plague': return { title: `Mor v kraji ${regs(g('regions'))}`, text: `Zemřelo ${Math.round(g('mortality') * 100)} % lidí.` };
+    case 'recovery': return { title: `Obnova po moru: ${regs(g('regions'))}`, text: `Populace roste ${g('factor')}× rychleji.` };
+    case 'prestige': return { title: `${g('factor') > 1 ? 'Rostoucí' : 'Klesající'} prestiž kraje ${regionName(g('region'))}`, text: `Prestiž ×${g('factor')}.` };
+    case 'foreign_elite': return { title: 'Cizí elita', text: '' };
+    case 'elite_assimilation': return { title: 'Elita splývá s poddanými', text: '' };
+    case 'bilingualism': return { title: `${lname(R, null)} na veřejnosti: ${regionName((g('group') || '').split(/[-+]/)[0])}`, text: `${g('population')} lidí mluví na veřejnosti druhým jazykem.` };
+    case 'nativization': return { title: `Druhý jazyk se stává mateřským (${regionName((g('group') || '').split(/[-+]/)[0])})`, text: 'Děti se jako první učí jazyk, kterým rodiče mluví na veřejnosti.' };
+    case 'transmission_stopped': return { title: `Jazyk se přestal předávat dětem (${regionName((g('group') || '').split(/[-+]/)[0])})`, text: '' };
+    case 'transmission_resumed': return { title: 'Jazyk se znovu předává dětem', text: '' };
+    case 'language_shift': return { title: `Přechod k jinému jazyku (${regionName((g('group') || '').split(/[-+]/)[0])})`, text: '' };
+    case 'language_emerged': return { title: `Pozorován jazyk ${lname(R, g('lineage'))}`, text: `${g('groups') || 0} vsí.` };
+    case 'language_split': return { title: `${lname(R, g('lineage'))} se odděluje od jazyka ${lname(R, g('parent'))}`, text: `${g('groups') || 0} vsí si už s ostatními nerozumí.` };
+    case 'language_ended': return { title: `${lname(R, g('lineage'))} zaniká`, text: 'Splynul s příbuzným jazykem nebo ho mluvčí opustili.' };
+    case 'stress_rule_changed': return { title: `Přízvuk se přesouvá (${regionName((g('group') || '').split(/[-+>]/)[0])})`, text: `${STRESS[g('old')] || g('old')} → ${STRESS[g('new')] || g('new')}.` };
+    case 'stress_strength_changed': return { title: `Přízvuk ${g('new') === 'strong' ? 'zesiluje' : 'slábne'} (${regionName((g('group') || '').split(/[-+>]/)[0])})`, text: '' };
+    case 'settlement': return { title: `Osídlení: z kraje ${regionName(e.from)} do kraje ${regionName(e.to)}`, text: `${Math.round((e.share || 0.2) * 100)} % lidí, ${e.settlements || 1} nová ves.` };
+    case 'elite': return { title: `Cizí elita z kraje ${regionName(e.from)} v kraji ${regionName(e.seat)}`, text: `Poddaní: ${regs(e.subjects)}; síla ${e.strength}, prestiž ${e.prestige}.` };
+    default: return { title: e.kind.replace(/_/g, ' '), text: '' };
+  }
+}
+const STRESS = { initial: 'na první slabice', second: 'na druhé slabice', antepenult: 'na třetí od konce', penult: 'na předposlední', final: 'na poslední' };
+
+// ---------- obrazovky ----------
+const screens = {};
+const main = $('main');
+const RESULT = new Set(['atlas', 'jazyky', 'slova', 'kronika', 'vetve']);
+
+function show(route) {
+  if (!screens[route]) route = 'atlas';
+  state.route = route; setPlaying(false); state.specOpen = false;
+  for (const a of document.querySelectorAll('.half a')) {
+    if (a.getAttribute('href') === '#' + route) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  }
+  main.innerHTML = ''; $('footer').innerHTML = ''; timeBar.draw = null;
+  screens[route].mount();
+  if (RESULT.has(route)) timeBar(route === 'vetve' ? A : A);
+  document.title = `${screens[route].title} · CEE Poloostrov`;
+}
+function go(r) { if (location.hash !== '#' + r) location.hash = r; else show(r); }
+window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+
+// ===== Atlas =====
+const LAYERS = [['lang', 'Jazyky'], ['state', 'Státy'], ['public', 'Řeč na veřejnosti'], ['write', 'Písmo a škola'], ['loyal', 'Věrnost']];
+screens.atlas = {
+  title: 'Atlas',
+  mount() {
+    main.innerHTML = `<div class="screen map2"><div class="stage" id="st"><div class="overlay"><div class="big" id="ov-y"></div><div class="sub" id="ov-s"></div></div>
+      <div class="layers seg small" id="layers">${LAYERS.map(([k, t]) => `<button data-l="${k}" aria-pressed="${state.layer === k}">${t}</button>`).join('')}</div>
+      <div class="legend" id="legend"></div><div class="tip" id="tip" hidden></div></div>
+      <aside class="card" id="card" aria-live="polite"></aside></div>`;
+    $('layers').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.layer = b.dataset.l; for (const x of $('layers').children) x.setAttribute('aria-pressed', String(x === b)); this.update(); });
+    this.map = makeMap($('st'), {
+      draw: (c, m) => this.draw(c, m),
+      onPick: (x, y) => { const r = REG[m().regionAt(x, y)]; state.region = state.region === r.id ? null : r.id; this.update(); },
+      onHover: (x, y) => this.hover(x, y),
+    });
+    const m = () => this.map;
+    requestAnimationFrame(() => this.map.layout()); this.card();
+  },
+  update() { this.map.render(); this.card(); },
+  draw(c, m) {
+    const f = frameAt(A, state.year), home = homeGroups(A, f), dial = dialectIndex(f), st = statesAt(f), pub = publicGroups(A, f);
+    $('ov-y').textContent = state.year; $('ov-s').textContent = ({ lang: 'jazyk doma ve vsích, nářečí světlostí', state: 'státy a jejich hranice', public: 'čím se mluví na veřejnosti', write: 'kdo čte a kdo chodí do školy', loyal: 'kdo se drží své řeči' })[state.layer];
+    const linCells = {};
+    VILLAGES.forEach((v, i) => {
+      const h = home[v.id]; if (!h) return;
+      const cell = m.vcells[i];
+      if (state.layer === 'lang' || state.layer === 'public') {
+        c.fillStyle = lcolor(A, h.lin);
+        const d = dial[h.gi]; c.globalAlpha = state.layer === 'public' ? 0.22 : 0.42 + ((d ?? 0) % 3) * 0.13;
+        c.fill(cell); c.globalAlpha = 1;
+      } else if (state.layer === 'write') {
+        const s = f.s[h.gi]; const lit = s ? s[1] : 0, sch = s ? s[2] : 0;
+        c.fillStyle = css('--ink'); c.globalAlpha = 0.06 + lit * 0.6; c.fill(cell); c.globalAlpha = 1;
+        if (sch > 0.05) hatch(c, cell, Math.PI / 4, css('--ink'), 5, 0.7);
+      } else if (state.layer === 'loyal') {
+        const s = f.s[h.gi]; const loy = s ? s[3] : 0;
+        c.fillStyle = css('--l1'); c.globalAlpha = 0.08 + Math.min(1, loy) * 0.7; c.fill(cell); c.globalAlpha = 1;
+        if (s && s[6]) { c.strokeStyle = css('--ink'); c.lineWidth = 1.6; c.setLineDash([2, 3]); c.stroke(cell); c.setLineDash([]); }
+        if (s && s[7] > 0.01) hatch(c, cell, -Math.PI / 4, css('--red'), 6, 0.9);
+      } else if (state.layer === 'state') {
+        const sr = st[v.region]; c.fillStyle = css('--land'); c.fill(cell);
+        if (sr) hatch(c, cell, [0.6, -0.6, 1.4, 0.2][sr.n % 4], css('--ink-2'), 6, 0.7);
+      }
+      (linCells[h.lin] ||= []).push(i);
+    });
+    if (state.layer === 'public') {
+      for (const [v, list] of Object.entries(pub)) {
+        const i = VI[v]; const g = list.sort((a, b) => b.pop - a.pop)[0];
+        c.strokeStyle = lcolor(A, A.frames.at(-1) && g.lin != null ? g.lin : homeGroups(A, f)[v]?.lin); c.lineWidth = 2.4; c.setLineDash([5, 3]);
+        c.save(); c.clip(m.vcells[i]); c.stroke(m.vcells[i]); c.restore(); c.setLineDash([]);
+      }
+    }
+    relief(c, m);
+    // hranice: jazyk plnou, nářečí tečkovaně, stát čerchovaně
+    const homeLin = (i) => home[VILLAGES[i].id]?.lin, homeDial = (i) => dial[home[VILLAGES[i].id]?.gi];
+    for (const e of m.vedges) {
+      const la = homeLin(e.a), lb = homeLin(e.b);
+      if (la !== lb && (state.layer === 'lang' || state.layer === 'public')) { c.strokeStyle = css('--ink'); c.lineWidth = 1.5; c.setLineDash([]); }
+      else if (state.layer === 'lang' && homeDial(e.a) !== homeDial(e.b)) { c.strokeStyle = css('--ink-2'); c.lineWidth = 0.8; c.setLineDash([1.5, 2.5]); }
+      else continue;
+      c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke();
+    }
+    c.setLineDash([]);
+    for (const e of m.redges) {
+      const sa = st[REG[e.a].id]?.id, sb = st[REG[e.b].id]?.id; if (sa === sb || (!sa && !sb)) continue;
+      c.strokeStyle = css('--ink'); c.lineWidth = state.layer === 'state' ? 1.8 : 1.1; c.setLineDash([8, 3, 1.5, 3]);
+      c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke();
+    }
+    c.setLineDash([]);
+    // vsi
+    VILLAGES.forEach((v, i) => { const [x, y] = m.vpts[i]; c.fillStyle = css('--ink'); c.beginPath(); c.arc(x, y, v.id.includes('+') ? 2.6 : 1.6, 0, 7); c.fill(); });
+    // výběr kraje
+    if (state.region != null) { const i = RI[state.region]; c.save(); c.clip(m.land); c.strokeStyle = css('--red'); c.lineWidth = 2.4; c.stroke(m.rcells[i]); c.restore(); }
+    // popisky jazyků a států
+    m.after = (cc) => {
+      if (state.layer === 'state') {
+        f.states.forEach((s) => { const pts = s.regions.map((r) => m.rpts[RI[r]]); const x = d3.mean(pts, (p) => p[0]), y = d3.mean(pts, (p) => p[1]); label(cc, s.name.toUpperCase(), x, y + 14, { font: `600 11px ${css('--f-ui')}`, spacing: '2px' }); });
+        f.states.forEach((s) => { const cap = W.events.find((e) => (e.kind === 'state' || e.kind === 'secession') && e.id === s.id)?.capital; if (!cap) return; const [x, y] = m.rpts[RI[cap]]; cc.fillStyle = css('--ink'); cc.fillRect(x - 3.5, y - 3.5, 7, 7); });
+      } else if (state.layer === 'lang' || state.layer === 'public') {
+        for (const [lin, cells] of Object.entries(linCells)) {
+          if (cells.length < 2 && !VILLAGES[cells[0]].id.includes('+')) continue;
+          const x = d3.mean(cells, (i) => m.vpts[i][0]), y = d3.mean(cells, (i) => m.vpts[i][1]);
+          label(cc, (A.names.get(+lin) || '').toUpperCase(), x, y, { font: `700 11px ${css('--f-ui')}`, spacing: '2.5px', halo: 4 });
+        }
+      } else {
+        REG.forEach((r, i) => { const [x, y] = m.rpts[i]; label(cc, r.name.toUpperCase(), x, y - 9, { font: `600 8.5px ${css('--f-ui')}`, spacing: '1.5px', color: css('--ink-2') }); });
+      }
+    };
+    this.legend(f);
+  },
+  legend(f) {
+    const L = $('legend'); if (!L) return;
+    if (state.layer === 'lang') {
+      const sp = speakers(A, f);
+      L.innerHTML = Object.keys(f.langs).sort((a, b) => (sp[b] || 0) - (sp[a] || 0)).map((li) => `<div><i style="background:${lcolor(A, +li)}"></i>${esc(A.names.get(+li))}</div>`).join('') +
+        `<div class="why">plná čára hranice jazyka, tečkovaná nářečí, čerchovaná státu</div>`;
+    } else if (state.layer === 'public') L.innerHTML = `<div><i style="border:2px dashed var(--ink)"></i>ves mluví na veřejnosti i jiným jazykem (barva toho jazyka)</div><div class="why">výplň slabě: jazyk doma</div>`;
+    else if (state.layer === 'write') L.innerHTML = `<div><i style="background:var(--ink);opacity:.6"></i>gramotnost (sytost)</div><div><i style="background:repeating-linear-gradient(45deg,var(--ink) 0 1px,transparent 1px 5px)"></i>školy</div>`;
+    else if (state.layer === 'loyal') L.innerHTML = `<div><i style="background:var(--l1)"></i>věrnost vlastní řeči</div><div><i style="border:1.5px dotted var(--ink)"></i>chráněný jazyk</div><div><i style="background:repeating-linear-gradient(-45deg,var(--red) 0 1px,transparent 1px 6px)"></i>obrození</div>`;
+    else L.innerHTML = f.states.map((s) => `<div>${esc(s.name)}</div>`).join('') + `<div class="why">■ hlavní město · čerchovaně hranice</div>`;
+  },
+  hover(x, y) {
+    const tip = $('tip'); if (x == null) { tip.hidden = true; return; }
+    const m = this.map, v = VILLAGES[m.village(x, y)], f = frameAt(A, state.year), h = homeGroups(A, f)[v.id];
+    if (!h) { tip.hidden = true; return; }
+    const s = f.s[h.gi] || [];
+    tip.innerHTML = `<b>${esc(regionName(v.region))}</b> · ves ${esc(v.id.split('-').pop())}<br>${esc(A.names.get(h.lin) ?? '—')}, ${fmt(h.pop)} lidí${s[1] ? `, čte ${Math.round(s[1] * 100)} %` : ''}`;
+    tip.hidden = false; tip.style.left = Math.min(x + 14, m.W - 240) + 'px'; tip.style.top = (y + 12) + 'px';
+  },
+  card() {
+    const f = frameAt(A, state.year), el = $('card'); if (!el) return;
+    if (state.region) { el.innerHTML = regionCard(A, f, state.region); el.querySelector('[data-close]')?.addEventListener('click', () => { state.region = null; this.update(); }); return; }
+    const sp = speakers(A, f), total = Object.values(sp).reduce((a, b) => a + b, 0);
+    const langs = Object.keys(f.langs).map(Number).sort((a, b) => (sp[b] || 0) - (sp[a] || 0));
+    el.innerHTML = `<div><span class="caps">Poloostrov v roce ${state.year}</span><h1>${langs.length} ${langs.length < 5 ? 'jazyky' : 'jazyků'}</h1><p class="why" style="margin:4px 0 0">Klikni na kraj: sčítání, skupiny a slova místa.</p></div>
+      <div class="bars">${langs.map((l) => `<div class="row"><span>${esc(A.names.get(l))}</span><span class="track"><span style="width:${(100 * (sp[l] || 0) / total).toFixed(1)}%;background:${lcolor(A, l)}"></span></span><span class="num" style="text-align:right">${fmt(sp[l] || 0)}</span></div>`).join('')}</div>
+      <div><span class="caps">Státy</span><dl class="ledger">${f.states.length ? f.states.map((s) => `<div><dt>${esc(s.name)}</dt><dd>${s.regions.length} krajů</dd></div>`).join('') : '<div><dt>—</dt><dd>bez státu</dd></div>'}</dl></div>
+      <div><span class="caps">Co se v tomto století stalo</span>${centurySummary(A, Math.floor((state.year - 1) / 100) * 100)}</div>`;
+  },
+};
+function regionCard(R, f, region) {
+  const census = f.census[region] || { home: {}, public: {} }, langCode = (l) => (l === LANG0[0].id ? LANG0[0].name : LANG0.find((x) => x.id === l)?.name || l);
+  const groups = Object.entries(f.g).filter(([gi]) => VILLAGES[VI[R.villageOfGroup[gi]]]?.region === region);
+  const rows = groups.sort((a, b) => b[1][0] - a[1][0]).map(([gi, [pop, l2, lin]]) => {
+    const s = f.s[gi] || []; const pub = R.domainOfGroup[gi] === 'p';
+    return `<tr><td>${esc(R.groups[gi][0].replace(region + '-', '').replace(/^.*?\+/, '+'))}</td><td>${pub ? 'veřejná' : 'doma'}</td><td><span class="sw" style="background:${lcolor(R, lin)}"></span>${esc(lin != null ? R.names.get(lin) : (s[5] ? langCode(s[5]) + ' (2. jazyk)' : '—'))}</td><td class="num">${fmt(pop)}</td><td class="num">${s[1] ? Math.round(s[1] * 100) + ' %' : '—'}</td></tr>`;
+  }).join('');
+  const bar = (obj) => { const tot = Object.values(obj).reduce((a, b) => a + b, 0) || 1; return Object.entries(obj).map(([l, v]) => `<span title="${esc(langCode(l))} ${Math.round(v * 100)} %" style="width:${(100 * v / tot).toFixed(1)}%;background:${l === LANG0[0].id ? css('--l0') : css('--l1')}"></span>`).join(''); };
+  const hg = regionHome(R, f, region), words = ['water', 'fire', 'stone', 'person', 'language', 'king'].filter((c) => C.includes(c)).slice(0, 5);
+  return `<div><button class="btn quiet" data-close style="float:right">Zpět na přehled</button><span class="caps">Kraj · ${LEVEL.terrain[REG[RI[region]].terrain]}</span><h1>${esc(regionName(region))}</h1>
+    <p class="why" style="margin:4px 0 0">${esc(census.state ? 'Patří státu ' + (f.states.find((s) => s.id === census.state)?.name ?? census.state) : 'Bez státu')} v roce ${state.year}.</p></div>
+    <div><span class="caps">Sčítání: jazyk doma a na veřejnosti</span><div class="bars" style="margin-top:6px">
+      <div class="row"><span>doma</span><span class="track">${bar(census.home)}</span><span></span></div>
+      <div class="row"><span>na veřejnosti</span><span class="track">${Object.keys(census.public || {}).length ? bar(census.public) : ''}</span><span></span></div></div>
+      <p class="why" style="margin:4px 0 0">Modře ${esc(LANG0[0].name)}, okrově ${esc(LANG0[1].name)} (podle protojazyka, jak to sčítá engine).</p></div>
+    <div><span class="caps">Skupiny mluvčích</span><table class="t"><thead><tr><th>ves</th><th>doména</th><th>jazyk</th><th>lidí</th><th>čte</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${hg ? `<div><span class="caps">Slova místa</span><dl class="ledger">${words.map((c) => `<div><dt>${esc(GL[c])}</dt><dd class="ipa">${esc(formOf(R, f, hg.gi, C.indexOf(c)))}</dd></div>`).join('')}</dl></div>` : ''}`;
+}
+function centurySummary(R, c) {
+  const s = R.century[c] || {}, evs = R.events.filter((e) => e.year > c && e.year <= c + 100);
+  const parts = Object.entries(s).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${fmt(v)}`).join(' · ');
+  return `<p class="why" style="margin:4px 0">${parts || 'nic'}</p><ul class="list">${evs.slice(0, 8).map((e) => `<li><span>${esc(describe(e, R).title)}</span><small>${e.year}</small></li>`).join('')}</ul>`;
+}
+
+// ===== Jazyky =====
+screens.jazyky = {
+  title: 'Jazyky',
+  mount() {
+    main.innerHTML = `<div class="screen map2"><div style="display:grid;grid-template-rows:minmax(0,1fr) auto;gap:10px;min-height:0">
+      <div class="stage" style="background:var(--land)" id="river"><svg id="river-svg" style="position:absolute;inset:0;width:100%;height:100%"></svg></div>
+      <p class="why" style="margin:0">Řeka jazyků: šířka je počet mluvčích doma, nový proud je rozštěpení, které engine pozoroval. Klikni na jazyk.</p></div>
+      <aside class="card" id="card"></aside></div>`;
+    if (state.lineage == null) state.lineage = A.lin[0].i;
+    new ResizeObserver(() => this.river()).observe($('river'));
+    $('river-svg').addEventListener('click', (e) => { const p = e.target.closest('[data-l]'); if (p) { state.lineage = +p.dataset.l; this.update(); } });
+    this.card();
+  },
+  update() { this.river(); this.card(); },
+  river() {
+    const el = $('river'), w = el.clientWidth, h = el.clientHeight; if (!w) return;
+    const order = [...A.lin].sort((a, b) => a.start - b.start || a.i - b.i).map((l) => l.i);
+    const rows = A.frames.map((f) => { const sp = speakers(A, f); return Object.fromEntries([['y', f.y], ...order.map((l) => [l, sp[l] || 0])]); });
+    const stack = d3.stack().keys(order).offset(d3.stackOffsetSilhouette).order(d3.stackOrderNone)(rows);
+    const x = d3.scaleLinear([100, 2000], [40, w - 150]), max = d3.max(stack, (s) => d3.max(s, (d) => d[1])), min = d3.min(stack, (s) => d3.min(s, (d) => d[0]));
+    const y = d3.scaleLinear([min, max], [h - 30, 16]);
+    const area = d3.area().x((d) => x(d.data.y)).y0((d) => y(d[0])).y1((d) => y(d[1])).curve(d3.curveMonotoneX);
+    let s = '';
+    for (let yy = 500; yy <= 2000; yy += 500) s += `<line x1="${x(yy)}" x2="${x(yy)}" y1="10" y2="${h - 24}" stroke="${css('--rule')}"/><text x="${x(yy)}" y="${h - 8}" font-size="11" text-anchor="middle" fill="${css('--ink-2')}">${yy}</text>`;
+    const labels = [];
+    stack.forEach((layer) => {
+      const li = +layer.key, sel = li === state.lineage;
+      s += `<path data-l="${li}" d="${area(layer)}" fill="${lcolor(A, li)}" fill-opacity="${sel ? 0.95 : 0.6}" stroke="${sel ? css('--red') : css('--land')}" stroke-width="${sel ? 2 : 0.8}" style="cursor:pointer"><title>${esc(A.names.get(li))}${A.linBy[li].end ? ' (zanikl ' + A.linBy[li].end + ')' : ''}</title></path>`;
+      const end = layer[layer.length - 1];
+      if (end[1] - end[0] > 0) labels.push({ li, y: y((end[0] + end[1]) / 2), sel });
+      else {
+        // vymřelý jazyk: popisek v nejširším místě, jen když se tam vejde
+        const widest = layer.reduce((a, d) => (d[1] - d[0] > a[1] - a[0] ? d : a), layer[0]);
+        if (y(widest[0]) - y(widest[1]) > 15) s += `<text data-l="${li}" x="${x(widest.data.y)}" y="${y((widest[0] + widest[1]) / 2) + 4}" text-anchor="middle" font-size="11.5" font-style="italic" fill="${css('--ink')}" style="cursor:pointer">${esc(A.names.get(li))} †${A.linBy[li].end}</text>`;
+      }
+    });
+    labels.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labels.length; i++) labels[i].y = Math.max(labels[i].y, labels[i - 1].y + 15);
+    for (const l of labels) s += `<text data-l="${l.li}" x="${x(2000) + 8}" y="${l.y + 4}" font-size="12.5" fill="${css('--ink')}" style="cursor:pointer;font-weight:${l.sel ? 700 : 400}">${esc(A.names.get(l.li))}</text>`;
+    s += `<line x1="${x(state.year)}" x2="${x(state.year)}" y1="8" y2="${h - 26}" stroke="${css('--red')}" stroke-width="1.5"/>`;
+    $('river-svg').innerHTML = s;
+  },
+  card() {
+    const l = A.linBy[state.lineage], f = frameAt(A, state.year), el = $('card'); if (!l || !el) return;
+    const alive = String(l.i) in f.langs, sp = speakers(A, f)[l.i] || 0;
+    const endoHist = []; let last = null;
+    for (const fr of A.frames) { const n = fr.endo[l.i]; if (n && n !== last) { endoHist.push([fr.y, n]); last = n; } }
+    const facts = f.facts.filter((d) => d.l === l.i), dn = NAMING.dialectNames(facts, regionName);
+    // mluvnice: největší ves jazyka proti protojazyku
+    const groups = f.langs[l.i] || []; let big = null;
+    for (const g of groups) { const p = f.g[g]?.[0] || 0; if (A.domainOfGroup[g] === 'h' && (!big || p > big.p)) big = { g, p }; }
+    const gram = big ? f.gram[big.g] || {} : {};
+    const protoLang = LANG0.find((x) => x.id === (A.groups[big?.g] ? f.s[big.g]?.[5] : null)) || LANG0[0];
+    const pg = D.proto[protoLang.id]?.grammar || {};
+    const FN = { PAST: 'minulý čas', FUTURE: 'budoucí čas', PL: 'množné číslo', OBJ: 'předmět', DEFINITE: 'určitost', ASPECT: 'vid', NEG: 'zápor', ORDER: 'slovosled' };
+    const KINDS = { synthetic: 'koncovkou', analytic: 'opisem', pre: 'před slovesem', post: 'za slovesem', free: 'volný', SOV: 'SOV', SVO: 'SVO', zero: 'nevyjadřuje', periphrastic: 'opisem', clitic: 'příklonkou', affix: 'předponou/příponou', particle: 'částicí' };
+    const sound = (A.sound[l.i] || []).slice(0, 14), an = A.analogy[l.i];
+    const stressEv = A.events.filter((e) => e.kind.startsWith('stress_') && groups.includes(A.groups.findIndex((g) => g[0] === e.group)));
+    el.innerHTML = `<div><span class="caps">${l.parent == null ? 'Jazyk z protojazyka' : 'Dceřiný jazyk'}</span><h1><span class="sw" style="background:${lcolor(A, l.i)};width:14px;height:14px"></span>${esc(A.names.get(l.i))}</h1>
+      ${l.endonym ? `<p style="margin:4px 0 0">sami říkají <i>${esc(NAMING.romanize(l.endonym))}</i> <span class="ipa">/${esc(l.endonym)}/</span></p>` : ''}</div>
+      <dl class="ledger">
+        <div><dt>Původ</dt><dd>${l.parent == null ? `pozorován od ${l.start}` : `oddělil se ${l.start} od jazyka ${esc(A.names.get(l.parent))}`}${l.origin ? `, kraj ${esc(regionName(l.origin))}` : ''}</dd></div>
+        <div><dt>V roce ${state.year}</dt><dd>${alive ? `${fmt(sp)} mluvčích doma, ${groups.length} skupin` : l.end && l.end <= state.year ? `zanikl ${l.end}` : 'ještě nevznikl'}</dd></div>
+        <div><dt>Vlastní jméno</dt><dd>${endoHist.map(([y, n]) => `<span class="num" style="color:var(--ink-2)">${y}</span> <span class="ipa">${esc(n)}</span>`).join(' → ') || '—'}</dd></div>
+      </dl>
+      ${facts.length ? (() => { const big = facts.map((d, n) => [d, dn[n]]).filter(([d]) => d.g.length > 1).sort((a, b) => b[0].g.length - a[0].g.length), single = facts.length - big.length;
+        return `<div><span class="caps">Nářečí v roce ${state.year}</span><ul class="list">${big.map(([d, n]) => `<li style="cursor:default"><span>${esc(n)}</span><small>${d.g.length} vsí</small></li>`).join('')}${single ? `<li style="cursor:default"><span class="why">${single} ${single < 5 ? 'vsi mají' : 'vsí má'} vlastní nářečí</span><small>po 1 vsi</small></li>` : ''}</ul></div>`; })() : ''}
+      <div><span class="caps">Mluvnice proti protojazyku</span><table class="t"><thead><tr><th>funkce</th><th>na počátku</th><th>v roce ${state.year}</th></tr></thead><tbody>
+        ${D.grammar_catalog.order.map((fn) => { const now = gram[fn]?.[0], was = pg[fn]; const ch = now && was !== now; return `<tr><td>${FN[fn]}</td><td>${esc(KINDS[was] || was || '—')}</td><td class="${ch ? 'red' : ''}">${esc(KINDS[now] || now || '—')}${gram[fn]?.[2] ? ` <span class="ipa">-${esc(gram[fn][2])}</span>` : ''}${gram[fn]?.[1] ? ` <span class="why">(${esc(gram[fn][1])})</span>` : ''}</td></tr>`; }).join('')}
+      </tbody></table></div>
+      <div><span class="caps">Zvukové změny</span><p class="why" style="margin:2px 0 6px">Pravidla, která se v jazyce ustálila; v kolika vsích a od kdy.</p><table class="t"><tbody>${sound.map((s) => `<tr><td class="num">${s.first}</td><td><b style="font-weight:500">${esc(s.family)}</b><br><span class="ipa">${esc(s.rule)}</span></td><td class="num">${s.groups}</td></tr>`).join('') || '<tr><td>—</td></tr>'}</tbody></table></div>
+      ${an ? `<div><span class="caps">Analogie</span><p class="why" style="margin:2px 0 6px">${fmt(an.ops.level || 0)}× vyrovnání, ${fmt(an.ops.extend || 0)}× rozšíření koncovky${an.ops.prepend ? `, ${an.ops.prepend}× předpona` : ''}.</p><div class="chips">${an.examples.slice(0, 12).map(([y, c, cell, op]) => `<span class="chip">${esc(GL[c] || c)} · ${esc(cell)}</span>`).join('')}</div></div>` : ''}
+      ${stressEv.length ? `<div><span class="caps">Přízvuk</span><ul class="list">${stressEv.map((e) => `<li><span>${esc(describe(e).title)} ${esc(describe(e).text)}</span><small>${e.year}</small></li>`).join('')}</ul></div>` : ''}`;
+  },
+};
+
+// ===== Slova =====
+screens.slova = {
+  title: 'Slova',
+  mount() {
+    main.innerHTML = `<div class="screen map3"><nav class="side" aria-label="Pojmy"><input type="search" id="q" placeholder="Hledat význam nebo tvar"><ul class="list" id="clist"></ul></nav>
+      <div class="stage" id="st"><div class="overlay"><div class="big" id="hw"></div><div class="sub" id="hw-sub"></div></div><div class="legend" id="legend"></div><div class="tip" id="tip" hidden></div></div>
+      <aside class="card" id="card"></aside></div>`;
+    $('q').addEventListener('input', () => this.list());
+    $('clist').addEventListener('click', (e) => { const li = e.target.closest('li'); if (li) { state.concept = li.dataset.c; this.update(); } });
+    this.map = makeMap($('st'), { draw: (c, m) => this.draw(c, m), onPick: (x, y) => { state.place = REG[this.map.regionAt(x, y)].id; this.update(); } });
+    if (!state.place) {
+      // výchozí vrt: kraj, kde se slovo za 2000 let měnilo nejčastěji
+      const ci = C.indexOf(state.concept); let best = REG[0].id, most = -1;
+      for (const r of REG) { const seen = new Set(A.frames.map((fr) => { const h = regionHome(A, fr, r.id); return h ? formOf(A, fr, h.gi, ci) : ''; })); if (seen.size > most) { most = seen.size; best = r.id; } }
+      state.place = best;
+    }
+    requestAnimationFrame(() => this.map.layout()); this.list(); this.card();
+  },
+  update() { this.list(); this.map.render(); this.card(); },
+  regionForms(f) {
+    const out = {};
+    for (const r of REG) { const h = regionHome(A, f, r.id); if (h) out[r.id] = { form: formOf(A, f, h.gi, C.indexOf(state.concept)), lin: f.g[h.gi][2], gi: h.gi }; }
+    return out;
+  },
+  list() {
+    const f = frameAt(A, state.year), q = ($('q')?.value || '').toLowerCase();
+    const items = C.map((c, ci) => { const set = new Set(REG.map((r) => { const h = regionHome(A, f, r.id); return h ? formOf(A, f, h.gi, ci) : null; }).filter(Boolean)); return { c, n: set.size }; })
+      .filter((x) => !q || (GL[x.c] || x.c).toLowerCase().includes(q) || x.c.includes(q)).sort((a, b) => (GL[a.c] || a.c).localeCompare(GL[b.c] || b.c, 'cs'));
+    $('clist').innerHTML = items.map((x) => `<li data-c="${x.c}" aria-selected="${x.c === state.concept}"><span>${esc(GL[x.c] || x.c)}</span><small>${x.n}</small></li>`).join('');
+  },
+  draw(c, m) {
+    const f = frameAt(A, state.year), rf = this.regionForms(f), ci = C.indexOf(state.concept);
+    $('hw').textContent = (GL[state.concept] || state.concept).toUpperCase();
+    $('hw-sub').innerHTML = LANG0.map((l) => `<span class="ipa">*${esc(D.proto[l.id].lex[ci])}</span> ${esc(l.name)}`).join(' · ') + ` · rok ${state.year}`;
+    const forms = [...new Set(Object.values(rf).map((x) => x.form))];
+    REG.forEach((r, i) => { const x = rf[r.id]; if (!x) return; c.fillStyle = lcolor(A, x.lin); c.globalAlpha = 0.12 + (forms.indexOf(x.form) % 4) * 0.06; c.fill(m.rcells[i]); c.globalAlpha = 1; });
+    relief(c, m);
+    // izoglosy: hrana mezi kraji s jiným tvarem
+    c.strokeStyle = css('--red'); c.lineWidth = 2;
+    for (const e of m.redges) { const a = rf[REG[e.a].id]?.form, b = rf[REG[e.b].id]?.form; if (!a || !b || a === b) continue; c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke(); }
+    if (state.place) { c.strokeStyle = css('--ink'); c.lineWidth = 2.4; c.stroke(m.rcells[RI[state.place]]); }
+    m.after = (cc) => REG.forEach((r, i) => {
+      const x = rf[r.id]; if (!x) return; const [px, py] = m.rpts[i];
+      label(cc, r.name.toUpperCase(), px, py - 15, { font: `600 8px ${css('--f-ui')}`, spacing: '1.5px', color: css('--ink-2') });
+      const o = originOf(f, x.gi, ci);
+      label(cc, x.form, px, py + 2, { font: `${o && o[1] !== LANG0[0].id && o[1] !== LANG0[1].id ? 'italic ' : ''}19px ${css('--f-ipa')}`, halo: 4, color: o && o[0] !== 'inherited' ? css('--red') : css('--ink') });
+    });
+    $('legend').innerHTML = `<div><svg width="26" height="6" aria-hidden="true"><line x1="0" x2="26" y1="3" y2="3" stroke="var(--red)" stroke-width="2.2"/></svg> izoglosa: za čarou se slovo říká jinak</div><div class="why">červený tvar: výpůjčka nebo nové slovo · ${forms.length} tvarů v ${Object.keys(rf).length} krajích</div>`;
+  },
+  card() {
+    const el = $('card'); if (!el) return;
+    const ci = C.indexOf(state.concept), f = frameAt(A, state.year), h = regionHome(A, f, state.place);
+    const ORIGIN = { inherited: 'zděděné', coinage: 'nové slovo', loan: 'výpůjčka', derivation: 'odvozené', compound: 'složenina', borrowing: 'výpůjčka' };
+    const strata = []; let prev = null;
+    for (const fr of A.frames) { const hh = regionHome(A, fr, state.place); if (!hh) continue; const w = formOf(A, fr, hh.gi, ci); if (w !== prev) { strata.push({ y: fr.y, w, o: originOf(fr, hh.gi, ci) }); prev = w; } }
+    const langs = Object.keys(f.langs).map(Number);
+    const rows = langs.map((l) => { const gs = f.langs[l]; let big = null; for (const g of gs) { const p = f.g[g]?.[0] || 0; if (A.domainOfGroup[g] === 'h' && (!big || p > big.p)) big = { g, p }; } if (!big) return ''; const o = originOf(f, big.g, ci); return `<tr><td><span class="sw" style="background:${lcolor(A, l)}"></span>${esc(A.names.get(l))}</td><td class="ipa" style="font-size:17px">${esc(formOf(A, f, big.g, ci))}</td><td class="why">${o ? esc((ORIGIN[o[0]] || o[0]) + (o[1] && !LANG0.some((x) => x.id === o[1]) ? '' : o[1] && o[1] !== (f.s[big.g]?.[5]) ? ' z ' + LANG0.find((x) => x.id === o[1])?.name : '')) : 'zděděné'}</td></tr>`; }).join('');
+    el.innerHTML = `<div><span class="caps">Slovo</span><h1>‘${esc(GL[state.concept] || state.concept)}’</h1><p style="margin:4px 0 0">${LANG0.map((l) => `<span class="ipa" style="font-size:18px">*${esc(D.proto[l.id].lex[ci])}</span> <span class="why">${esc(l.name)}</span>`).join('<br>')}</p></div>
+      <div><span class="caps">V jazycích roku ${state.year}</span><table class="t"><tbody>${rows}</tbody></table></div>
+      <div><span class="caps">Vrt: ${esc(regionName(state.place))}</span><p class="why" style="margin:2px 0 6px">Co se tu za 2000 let říkalo; klikni na mapu pro jiné místo.</p>
+        <ol class="list">${strata.reverse().map((s) => `<li style="cursor:default"><span class="ipa" style="font-size:18px">${esc(s.w)}</span><small>od ${s.y}${s.o && s.o[0] !== 'inherited' ? ' · ' + esc(ORIGIN[s.o[0]] || s.o[0]) : ''}</small></li>`).join('')}</ol></div>`;
+  },
+};
+
+// ===== Kronika =====
+screens.kronika = {
+  title: 'Kronika',
+  mount() {
+    const F = [['author', 'Dějiny autora', 'author'], ['bg', 'Pozadí dějin', 'bg'], ['soc', 'Společnost', 'soc'], ['lang', 'Jazyky', 'lang']];
+    main.innerHTML = `<div class="screen doc"><div class="side"><span class="caps">Co ukázat</span><div class="seg" id="flt" style="flex-direction:column;align-items:flex-start">${F.map(([k, t, m]) => `<button data-f="${k}" aria-pressed="${state.filters.has(k)}"><span class="mk ${m}" style="margin-right:8px"></span>${t}</button>`).join('')}</div>
+      <p class="why">Drobné změny (zvuky, analogie, význam, nová slova) jsou souhrnem u každého století. Klik na událost otevře Atlas v jejím roce.</p></div>
+      <div class="doc-main" id="chron"></div></div>`;
+    $('flt').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; const k = b.dataset.f; state.filters.has(k) ? state.filters.delete(k) : state.filters.add(k); b.setAttribute('aria-pressed', String(state.filters.has(k))); this.render(); });
+    $('chron').addEventListener('click', (e) => { const li = e.target.closest('li[data-y]'); if (li) { state.year = Math.max(100, Math.ceil(+li.dataset.y / 100) * 100); go('atlas'); } });
+    this.render();
+  },
+  update() { const el = document.querySelector(`[data-c="${Math.floor((state.year - 1) / 100) * 100}"]`); el?.scrollIntoView({ block: 'start', behavior: 'smooth' }); },
+  render() {
+    let s = '';
+    for (let c = 0; c < 2000; c += 100) {
+      const evs = A.events.filter((e) => e.year > c && e.year <= c + 100 && state.filters.has(EV_CLASS(e)));
+      const sum = A.century[c] || {};
+      s += `<section class="cent" data-c="${c}"><div class="y">${c + 1}–${c + 100}</div><div><div class="sum">${Object.entries(sum).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} <b class="num" style="color:var(--ink);font-weight:500">${fmt(v)}</b>`).join(' · ')}</div>
+        <ul>${evs.map((e) => { const d = describe(e); return `<li data-y="${e.year}"><span class="yy">${Math.round(e.year)}</span><span class="mk ${EV_CLASS(e)}"></span><span><b style="font-weight:500">${esc(d.title)}</b>${d.text ? ` <span class="why">${esc(d.text)}</span>` : ''}</span></li>`; }).join('')}</ul></div></section>`;
+    }
+    $('chron').innerHTML = s;
+  },
+};
+
+// ===== Větve =====
+// Jazyk větve B je „tentýž“ jako jazyk A, když s ním sdílí nejvíc vsí (do roku větvení jsou běhy shodné).
+function matchB(fa, fb) {
+  const owner = {};
+  for (const [l, gs] of Object.entries(fa.langs)) for (const g of gs) owner[A.groups[g][0]] = +l;
+  const out = {};
+  for (const [l, gs] of Object.entries(fb.langs)) {
+    const count = {};
+    for (const g of gs) { const a = owner[B.groups[g][0]]; if (a != null) count[a] = (count[a] || 0) + 1; }
+    const best = Object.entries(count).sort((x, y) => y[1] - x[1])[0];
+    out[l] = best && best[1] * 2 >= gs.length ? +best[0] : null;
+  }
+  return out;
+}
+screens.vetve = {
+  title: 'Větve',
+  mount() {
+    main.innerHTML = `<div class="screen map2"><div class="branch-maps">
+      <div><h2>A · Hlavní <span class="why">všechny dějiny</span></h2><div class="stage" id="sa"></div></div>
+      <div><h2><span class="red">B</span> · Bez připojení <span class="why">západ v roce 1300 nepřipojí Rowohe, Sawe a Rokwu</span></h2><div class="stage" id="sb"></div></div></div>
+      <aside class="card" id="card"></aside></div>`;
+    const drawFor = (R) => (c, m) => {
+      const fa = frameAt(A, state.year), fb = frameAt(B, state.year), map = matchB(fa, fb), ha = homeGroups(A, fa), hb = homeGroups(B, fb);
+      const f = R === A ? fa : fb, home = R === A ? ha : hb;
+      const colorOf = (lin) => (R === A ? lcolor(A, lin) : map[lin] != null ? lcolor(A, map[lin]) : lcolor(B, lin));
+      VILLAGES.forEach((v, i) => { const h = home[v.id]; if (!h) return; c.fillStyle = colorOf(h.lin); c.globalAlpha = 0.55; c.fill(m.vcells[i]); c.globalAlpha = 1; });
+      relief(c, m);
+      VILLAGES.forEach((v, i) => { const a = ha[v.id], b = hb[v.id]; if (!a || !b) return; if (a.lin !== map[b.lin]) { c.strokeStyle = css('--red'); c.lineWidth = 2; c.stroke(m.vcells[i]); } });
+      const st = statesAt(f);
+      for (const e of m.redges) { const sa = st[REG[e.a].id]?.id, sb = st[REG[e.b].id]?.id; if (sa === sb) continue; c.strokeStyle = css('--ink'); c.lineWidth = 1.1; c.setLineDash([8, 3, 1.5, 3]); c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke(); }
+      c.setLineDash([]);
+      m.after = null;
+    };
+    this.ma = makeMap($('sa'), { draw: drawFor(A), onPick: (x, y) => { state.place = REG[this.ma.regionAt(x, y)].id; this.card(); } });
+    this.mb = makeMap($('sb'), { draw: drawFor(B), onPick: (x, y) => { state.place = REG[this.mb.regionAt(x, y)].id; this.card(); } });
+    if (!state.place) state.place = 'corrin';
+    requestAnimationFrame(() => { this.ma.layout(); this.mb.layout(); }); this.card();
+  },
+  update() { this.ma.render(); this.mb.render(); this.card(); },
+  card() {
+    const fa = frameAt(A, state.year), fb = frameAt(B, state.year), ha = homeGroups(A, fa), hb = homeGroups(B, fb), map = matchB(fa, fb);
+    const diff = VILLAGES.filter((v) => ha[v.id] && hb[v.id] && ha[v.id].lin !== map[hb[v.id].lin]).length;
+    const sa = speakers(A, fa), sb = speakers(B, fb), na = {}, nb = {};
+    for (const [l, v] of Object.entries(sa)) na[A.names.get(+l)] = v;
+    for (const [l, v] of Object.entries(sb)) { const n = map[l] != null ? A.names.get(map[l]) : B.names.get(+l) + ' (jen v B)'; nb[n] = (nb[n] || 0) + v; }
+    const names = new Set([...Object.keys(na), ...Object.keys(nb)]);
+    const ga = regionHome(A, fa, state.place), gb = regionHome(B, fb, state.place);
+    const words = ['water', 'stone', 'fire', 'person', 'dog', 'eye', 'river', 'king', 'war', 'trade', 'law', 'town'].filter((c) => C.includes(c));
+    $('card').innerHTML = `<div><span class="caps">V roce ${state.year}</span><h1>${diff} ${diff === 1 ? 'ves mluví' : diff >= 2 && diff < 5 ? 'vsi mluví' : 'vsí mluví'} jinak</h1><p class="why" style="margin:4px 0 0">Obě větve sdílejí svět, protojazyky i seed; liší se jedinou událostí. Červeně obtažené vsi mají v B jiný jazyk.</p></div>
+      <table class="t"><thead><tr><th>jazyk</th><th class="num">A</th><th class="num">B</th></tr></thead><tbody>${[...names].map((n) => `<tr><td>${esc(n)}</td><td class="num">${na[n] ? fmt(na[n]) : '—'}</td><td class="num ${(na[n] || 0) !== (nb[n] || 0) ? 'red' : ''}">${nb[n] ? fmt(nb[n]) : '—'}</td></tr>`).join('')}</tbody></table>
+      <div><span class="caps">Slova kraje ${esc(regionName(state.place))}</span><table class="t"><thead><tr><th>význam</th><th>A</th><th>B</th></tr></thead><tbody>${words.map((c) => { const ci = C.indexOf(c), a = ga ? formOf(A, fa, ga.gi, ci) : '', b = gb ? formOf(B, fb, gb.gi, ci) : ''; return `<tr><td>${esc(GL[c])}</td><td class="ipa">${esc(a)}</td><td class="ipa ${a !== b ? 'red' : ''}">${esc(b)}</td></tr>`; }).join('')}</tbody></table></div>
+      <button class="btn" id="new-branch">+ Nová větev z roku ${state.year}</button><p class="why" style="margin:0">Větev začne jako kopie zadání; změníš v ní dějiny a engine ji spočítá. Přepočet od roku větvení čeká na kontrolní body v API.</p>`;
+    $('new-branch').addEventListener('click', () => toast('Větev by se otevřela v Dějinách jako kopie zadání.'));
+  },
+};
+
+// ===== Zadání: Svět =====
+screens.svet = {
+  title: 'Svět',
+  mount() {
+    const w = state.world;
+    main.innerHTML = `<div class="screen map3"><div class="side">
+      <span class="caps">Nástroje</span><div class="seg" style="flex-direction:column;align-items:flex-start"><button aria-pressed="true">V · Výběr kraje</button><button aria-pressed="false" data-soon>R · Nový kraj</button><button aria-pressed="false" data-soon>S · Spoj</button></div>
+      <span class="caps">Svět</span>
+      <div class="field"><label>Seed <input type="number" id="w-seed" value="${w.seed}" style="width:90px"></label><p class="why">Stejný svět a stejný seed dají stejné dějiny jazyků.</p></div>
+      <div class="field"><label>Roky <span class="num">${w.start_year ?? 0}–${w.end_year}</span></label><input type="range" id="w-end" min="500" max="5000" step="100" value="${w.end_year}"></div>
+      <div class="field"><span class="caps" style="letter-spacing:.1em">Pozadí dějin</span><div class="seg small" id="w-bg">${['none', 'calm', 'normal', 'turbulent'].map((k) => `<button data-v="${k}" aria-pressed="${w.background === k}">${LEVEL.background[k]}</button>`).join('')}</div><p class="why">Drobné dějiny, které engine vymyslí sám: mor, obchod, přesídlení, změny prestiže, cizí elita.</p></div>
+      <div class="field"><label>Generace <span class="num">${w.generation_years ?? 25} let</span></label><p class="why">Krok simulace obnoví 25/G mluvčích.</p></div>
+      <div class="field"><label>Vsi v kraji od sebe <span class="num">${w.village_spacing ?? 10} km</span></label></div>
+      <label class="field" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="w-sem" ${w.semantics !== false ? 'checked' : ''}> Posun významu slov <span class="why">(vypnutý zrychlí běh asi o třetinu)</span></label>
+    </div>
+    <div class="stage" id="st"><div class="overlay"><div class="sub">Kraj je bod, území se dopočítá; vsi podle osídlení.</div></div><div class="tip" id="tip" hidden></div></div>
+    <aside class="card" id="card"></aside></div>`;
+    $('footer').innerHTML = specFooter('Pokračovat: Protojazyky', 'protojazyky');
+    bindSpec();
+    for (const b of main.querySelectorAll('[data-soon]')) b.addEventListener('click', () => toast('Kreslení krajů a spojů je v prototypu Editor světa; tady jde o rozložení zadání.'));
+    $('w-seed').addEventListener('change', (e) => { w.seed = +e.target.value; edited(); refreshSpec(); });
+    $('w-end').addEventListener('input', (e) => { w.end_year = +e.target.value; e.target.previousElementSibling.querySelector('span').textContent = `0–${w.end_year}`; edited(); refreshSpec(); });
+    $('w-bg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; w.background = b.dataset.v; for (const x of $('w-bg').children) x.setAttribute('aria-pressed', String(x === b)); edited(); refreshSpec(); });
+    $('w-sem').addEventListener('change', (e) => { w.semantics = e.target.checked; edited(); refreshSpec(); });
+    this.map = makeMap($('st'), { draw: (c, m) => this.draw(c, m), onPick: (x, y) => { state.sel.region = REG[this.map.regionAt(x, y)].id; this.update(); } });
+    requestAnimationFrame(() => this.map.layout()); this.card();
+  },
+  update() { this.map.render(); this.card(); },
+  draw(c, m) {
+    const w = state.world;
+    w.regions.forEach((r, i) => { const li = LANG0.findIndex((l) => l.id === (r.language || LANG0[0].id)); c.fillStyle = css('--l' + li); c.globalAlpha = 0.16; c.fill(m.rcells[i]); c.globalAlpha = 1; });
+    relief(c, m);
+    c.strokeStyle = css('--ink-2'); c.lineWidth = 0.7; c.setLineDash([2, 3]);
+    for (const e of m.redges) { c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke(); }
+    c.setLineDash([]);
+    // spoje
+    c.strokeStyle = css('--ink-2'); c.lineWidth = 1;
+    w.regions.forEach((r, i) => (r.neighbours || []).forEach((n) => { const j = RI[n]; if (j > i) { const [x1, y1] = m.rpts[i], [x2, y2] = m.rpts[j]; c.globalAlpha = 0.5; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); c.globalAlpha = 1; } }));
+    const i = RI[state.sel.region]; if (i != null) { c.strokeStyle = css('--red'); c.lineWidth = 2.4; c.stroke(m.rcells[i]); }
+    m.after = (cc) => w.regions.forEach((r, k) => {
+      const [x, y] = m.rpts[k];
+      if (r.identity && r.identity !== 'shared') { cc.strokeStyle = css('--ink'); cc.lineWidth = r.identity === 'strong' ? 1.8 : 1; cc.beginPath(); cc.arc(x, y, 9, 0, 7); cc.stroke(); }
+      cc.fillStyle = k === i ? css('--red') : css('--ink'); cc.beginPath(); cc.arc(x, y, 4, 0, 7); cc.fill();
+      if (r.immigration) { cc.strokeStyle = css('--ink'); cc.lineWidth = 1; cc.strokeRect(x - 6, y - 6, 12, 12); }
+      label(cc, r.name.toUpperCase(), x, y - 15, { font: `600 9px ${css('--f-ui')}`, spacing: '1.5px' });
+    });
+  },
+  card() {
+    const r = state.world.regions[RI[state.sel.region]], el = $('card'); if (!r || !el) return;
+    const dens = [[0.5, 'řídké'], [1, 'běžné'], [2, 'husté'], [4, 'velmi husté']];
+    el.innerHTML = `<div><span class="caps">Kraj</span><input class="ipa" id="r-name" value="${esc(r.name)}" style="font:700 26px var(--f-ui);border:0;border-bottom:1px solid var(--ink);background:none;width:100%"><p class="why" style="margin:4px 0 0">Jméno složil protojazyk ze svých slov.</p></div>
+      ${fieldSeg('Jazyk na počátku', 'language', LANG0.map((l) => [l.id, l.name]), r.language || LANG0[0].id, 'Jazyk všech vsí kraje v roce 0.')}
+      ${fieldSeg('Krajina', 'terrain', Object.entries(LEVEL.terrain), r.terrain, { plain: 'Rovina se snadno prochází; řeč se šíří rychle.', hills: 'Pahorky zpomalí šíření změn.', mountains: 'Hory dělí; za nimi se mluví jinak.', island: 'Ostrov je spojený jen přes moře.' }[r.terrain])}
+      ${fieldSeg('Osídlení', 'density', dens.map(([v, t]) => [v, t]), r.density ?? 1, `${r.villages ?? 4} vsí; v hustém kraji se změny šíří rychleji a lidé víc ovlivňují sousedy.`)}
+      ${fieldSeg('Svébytnost', 'identity', Object.entries(LEVEL.identity), r.identity || 'shared', 'Svébytný kraj se drží své řeči a nepřejímá snadno.')}
+      <div class="field"><label><span><input type="checkbox" data-k="preserve" ${r.preserve ? 'checked' : ''}> Ochrana jazyka</span></label><p class="why">Místní řeč se brání výpůjčkám a přechodu (také jako událost v Dějinách).</p></div>
+      <div class="field"><label>Obchodní město <span class="num">${Math.round((r.immigration || 0) * 100)} % za generaci</span></label><input type="range" data-k="immigration" min="0" max="0.3" step="0.05" value="${r.immigration || 0}"><p class="why">Přistěhovalci přinášejí cizí slova a oslabují místní normu.</p></div>
+      <div class="field"><span class="caps">Sousedé</span><div class="chips">${(r.neighbours || []).map((n) => `<span class="chip">${esc(regionName(n))}</span>`).join('')}</div></div>`;
+    el.querySelectorAll('[data-seg]').forEach((g) => g.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; const k = g.dataset.seg; r[k] = isNaN(+b.dataset.v) ? b.dataset.v : +b.dataset.v; edited(); refreshSpec(); this.update(); }));
+    el.querySelector('[data-k="preserve"]').addEventListener('change', (e) => { r.preserve = e.target.checked; edited(); refreshSpec(); });
+    el.querySelector('[data-k="immigration"]').addEventListener('input', (e) => { r.immigration = +e.target.value; edited(); refreshSpec(); this.update(); });
+    $('r-name').addEventListener('change', (e) => { r.name = e.target.value; edited(); refreshSpec(); this.map.render(); });
+  },
+};
+function fieldSeg(title, key, options, value, why) {
+  return `<div class="field"><span class="caps">${title}</span><div class="seg" data-seg="${key}">${options.map(([v, t]) => `<button data-v="${v}" aria-pressed="${String(v) === String(value)}">${esc(t)}</button>`).join('')}</div>${why ? `<p class="why">${esc(why)}</p>` : ''}</div>`;
+}
+function specFooter(next, route) {
+  return `<div class="foot"><span>${state.world.regions.length} krajů · ${state.world.regions.reduce((a, r) => a + (r.villages ?? 4), 0)} vsí · ${state.world.languages.length} protojazyky · ${state.world.events.length} událostí</span>
+    <button class="btn" id="spec-toggle" aria-expanded="false">Popis světa pro engine</button><span class="spacer"></span>
+    ${route ? `<button class="btn primary" data-go="${route}">${next} →</button>` : `<button class="btn primary" id="run-now">Spustit ${state.world.end_year} let</button>`}
+    <div class="spec" id="spec" hidden><span class="caps">cee-v2-world/1 · přesně to, co dostane engine</span><pre id="spec-json"></pre></div></div>`;
+}
+function bindSpec() {
+  $('spec-toggle').addEventListener('click', () => { const s = $('spec'); s.hidden = !s.hidden; $('spec-toggle').setAttribute('aria-expanded', String(!s.hidden)); refreshSpec(); });
+  $('footer').querySelector('[data-go]')?.addEventListener('click', (e) => go(e.target.dataset.go));
+  $('run-now')?.addEventListener('click', run);
+}
+function refreshSpec() { const p = $('spec-json'); if (p && !$('spec').hidden) p.textContent = JSON.stringify(state.world, null, 1); }
+
+// ===== Zadání: Protojazyky =====
+const PLACES = [['bilabial', 'obouretné', ['p', 'b', 'm', 'ɸ', 'β', 'w']], ['labiodental', 'retozubné', ['f', 'v', 'ɱ', 'ʋ']], ['dental', 'zubné', ['θ', 'ð']], ['alveolar', 'dásňové', ['t', 'd', 'n', 's', 'z', 'r', 'ɾ', 'l', 'ɬ', 't͡s', 'd͡z']], ['postalveolar', 'zadodásňové', ['ʃ', 'ʒ', 't͡ʃ', 'd͡ʒ']], ['palatal', 'tvrdopatrové', ['c', 'ɟ', 'ɲ', 'ç', 'ʝ', 'j', 'ʎ']], ['velar', 'měkkopatrové', ['k', 'ɡ', 'ŋ', 'x', 'ɣ', 'kʷ', 'ɡʷ']], ['uvular', 'čípkové', ['q', 'ɢ', 'χ', 'ʁ']], ['glottal', 'hlasivkové', ['ʔ', 'h', 'ɦ']]];
+const MANNERS = [['ražené', ['p', 'b', 't', 'd', 'c', 'ɟ', 'k', 'ɡ', 'kʷ', 'ɡʷ', 'q', 'ɢ', 'ʔ']], ['nosové', ['m', 'ɱ', 'n', 'ɲ', 'ŋ']], ['třené', ['ɸ', 'β', 'f', 'v', 'θ', 'ð', 's', 'z', 'ʃ', 'ʒ', 'ç', 'ʝ', 'x', 'ɣ', 'χ', 'ʁ', 'h', 'ɦ', 'ɬ']], ['polotřené', ['t͡s', 'd͡z', 't͡ʃ', 'd͡ʒ']], ['kmitavé a švihy', ['r', 'ɾ']], ['přibližné', ['w', 'ʋ', 'j', 'l', 'ʎ']]];
+const VOWELS = ['i', 'y', 'ɨ', 'u', 'e', 'ø', 'ə', 'o', 'ɛ', 'ɔ', 'æ', 'a', 'ɑ'];
+const TONES = ['˥', '˦', '˧', '˨', '˩', '˥˩', '˩˥'];
+const FAMILY_CS = { coda_loss: 'zánik koncové souhlásky', palatalization: 'palatalizace', spirantization: 'spirantizace', voicing: 'znělost', vowel_reduction: 'redukce samohlásky', apocope: 'apokopa', syncope: 'synkopa', tonogenesis_onset: 'vznik tónu', vowel_shift: 'posun samohlásky', final_devoicing: 'neznělost na konci' };
+screens.protojazyky = {
+  title: 'Protojazyky',
+  mount() {
+    main.innerHTML = `<div class="screen doc"><div class="side"><span class="caps">Protojazyky</span><ul class="list" id="plist"></ul><button class="btn quiet" data-soon style="align-self:start">+ Přidat protojazyk</button>
+      <p class="why">Jazyk v roce 0, z něhož se všechno vyvine. Vybíráš hlásky, přízvuk, tóny a mluvnici; slova složí engine a ty můžeš kterékoli přepsat.</p></div>
+      <div class="doc-main"><div class="tabs" role="tablist" id="ptabs">${[['hlasky', 'Hlásky a tóny'], ['prizvuk', 'Přízvuk'], ['mluvnice', 'Mluvnice'], ['zmeny', 'Změny na startu'], ['slova', 'Slova a jméno']].map(([k, t]) => `<button role="tab" data-t="${k}" aria-selected="${state.ptab === k}">${t}</button>`).join('')}</div><div id="pbody" style="display:flex;flex-direction:column;gap:16px"></div></div></div>`;
+    $('footer').innerHTML = specFooter('Pokračovat: Pojmy', 'pojmy'); bindSpec();
+    main.querySelector('[data-soon]').addEventListener('click', () => toast('Nový protojazyk dostane výchozí inventář a slova z generátoru enginu.'));
+    $('ptabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; state.ptab = b.dataset.t; for (const x of $('ptabs').children) x.setAttribute('aria-selected', String(x === b)); this.body(); });
+    $('plist').addEventListener('click', (e) => { const li = e.target.closest('li'); if (li) { state.proto = li.dataset.l; this.update(); } });
+    this.update();
+  },
+  update() {
+    const regs = (id) => state.world.regions.filter((r) => (r.language || LANG0[0].id) === id).length;
+    $('plist').innerHTML = state.world.languages.map((l, i) => `<li data-l="${l.id}" aria-selected="${l.id === state.proto}"><span><span class="sw" style="background:var(--l${i})"></span>*${esc(l.name)}</span><small>${regs(l.id)} krajů</small></li>`).join('');
+    this.body();
+  },
+  body() {
+    const l = state.world.languages.find((x) => x.id === state.proto), b = $('pbody'), lex = D.proto[l.id].lex;
+    const inv = new Set([...(l.consonants || []), ...(l.vowels || [])]);
+    const toggle = (seg) => { const key = VOWELS.includes(seg) ? 'vowels' : 'consonants'; const list = l[key] || []; l[key] = list.includes(seg) ? list.filter((x) => x !== seg) : [...list, seg]; edited(); refreshSpec(); this.body(); };
+    if (state.ptab === 'hlasky') {
+      b.innerHTML = `<div class="grid2"><div><h2>Souhlásky <span class="why">${(l.consonants || []).length}</span></h2><div class="scroll"><table class="ipa-chart"><thead><tr><th></th>${PLACES.map(([, t]) => `<th>${t}</th>`).join('')}</tr></thead><tbody>
+        ${MANNERS.map(([mt, ms]) => `<tr><th scope="row">${mt}</th>${PLACES.map(([, , ps]) => `<td>${ps.filter((p) => ms.includes(p)).map((p) => `<span data-seg="${p}" class="${inv.has(p) ? 'on' : ''}">${p}</span>`).join('')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+        <p class="why">Klikni na hlásku. Engine zná celé IPA včetně diakritiky; tabulka ukazuje běžné hlásky.</p></div>
+        <div><h2>Samohlásky <span class="why">${(l.vowels || []).length}</span></h2><div class="chips" style="font-size:20px;margin:8px 0">${VOWELS.map((v) => `<span class="chip ipa ${inv.has(v) ? 'on' : ''}" data-seg="${v}" style="cursor:pointer;font-size:19px;${inv.has(v) ? '' : 'color:var(--ink-3)'}">${v}</span>`).join('')}</div>
+        <h2 style="margin-top:14px">Tóny</h2><div class="chips" style="margin:8px 0">${TONES.map((t) => `<span class="chip ipa ${(l.tones || []).includes(t) ? 'on' : ''}" data-tone="${t}" style="cursor:pointer;font-size:19px;${(l.tones || []).includes(t) ? '' : 'color:var(--ink-3);border-color:transparent'}">a${t}</span>`).join('')}</div>
+        <p class="why">${(l.tones || []).length ? `Tónový jazyk: každá samohláska dostane jeden z ${(l.tones || []).length} tónů, první nejčastěji.` : `Bez tónů. Tóny mohou vzniknout samy ze ztracených souhlásek: v tomto běhu se vznik tónu ustálil v ${countFamily('vznik tónu')} vsích (například <span class="ipa">${esc(A.lin.find((x) => /[˥˦˧˨˩]/.test(x.endonym || ''))?.endonym || '')}</span>).`}</p>
+        <h2 style="margin-top:14px">Jak jazyk zní</h2><p class="ipa" style="font-size:20px;margin:6px 0">${['water', 'fire', 'stone', 'person', 'sun', 'mother', 'dog', 'eye'].filter((c) => C.includes(c)).map((c) => esc(lex[C.indexOf(c)])).join(' · ')}</p><p class="why">Slova z generátoru enginu pro tento inventář (rok 0).</p></div></div>`;
+      b.querySelectorAll('[data-seg]').forEach((x) => x.addEventListener('click', () => toggle(x.dataset.seg)));
+      b.querySelectorAll('[data-tone]').forEach((x) => x.addEventListener('click', () => { const t = x.dataset.tone, list = l.tones || []; l.tones = list.includes(t) ? list.filter((y) => y !== t) : [...list, t]; edited(); refreshSpec(); this.body(); }));
+    } else if (state.ptab === 'prizvuk') {
+      const sample = ['person', 'woman', 'mother', 'water'].filter((c) => C.includes(c)).map((c) => lex[C.indexOf(c)]);
+      b.innerHTML = `${fieldSeg('Místo přízvuku', 'stress', Object.entries(STRESS), l.stress || 'penult', 'Přízvučné slabiky drží samohlásky, nepřízvučné se zkracují a mizí (redukce, synkopa, apokopa).')}
+        ${fieldSeg('Síla', 'stress_strength', [['weak', 'slabý'], ['strong', 'silný']], l.stress_strength || 'weak', 'Silný přízvuk urychlí redukci nepřízvučných slabik.')}
+        <p class="ipa" style="font-size:22px">${sample.map((s) => esc(s)).join(' · ')}</p>
+        <div><span class="caps">Co se s přízvukem v běhu stalo</span><ul class="list">${A.events.filter((e) => e.kind.startsWith('stress_')).map((e) => `<li><span>${esc(describe(e).title)} ${esc(describe(e).text)}</span><small>${e.year}</small></li>`).join('')}</ul></div>`;
+      b.querySelectorAll('[data-seg]').forEach((g) => g.addEventListener('click', (e) => { const bt = e.target.closest('button'); if (!bt) return; l[g.dataset.seg] = bt.dataset.v; edited(); refreshSpec(); this.body(); }));
+    } else if (state.ptab === 'mluvnice') {
+      const cat = D.grammar_catalog, pg = D.proto[l.id].grammar;
+      const FN = { PAST: 'minulý čas', FUTURE: 'budoucí čas', PL: 'množné číslo', OBJ: 'předmět', DEFINITE: 'určitost (člen)', ASPECT: 'vid', NEG: 'zápor', ORDER: 'slovosled' };
+      const KINDS = { synthetic: 'koncovkou', analytic: 'opisem', pre: 'částice před slovesem', post: 'částice za slovesem', free: 'volný', zero: 'nevyjadřuje' };
+      b.innerHTML = `${fieldSeg('Profil mluvnice', 'grammar', [['default', 'výchozí'], ['substrate', 'starobylý'], ['full', 'otevřený']], l.grammar || 'default', { default: 'Pády, minulý čas a množné číslo koncovkou; ostatní funkce jazyk zatím nevyjadřuje.', substrate: 'Zápor za slovesem a pevný slovosled SOV.', full: 'Jazyk může vyvinout i člen, budoucí čas a vid.' }[l.grammar || 'default'])}
+        <table class="t"><thead><tr><th>funkce</th><th>na počátku</th><th>může vzniknout ze slov</th><th>potřeba</th></tr></thead><tbody>${cat.order.map((fn) => { const f = cat.functions[fn]; return `<tr><td>${FN[fn]}</td><td>${esc(KINDS[pg[fn]] || pg[fn] || 'nevyjadřuje')}</td><td>${(f.sources || []).map((s) => `‘${esc(GL[s] || s)}’ <span class="ipa">${esc(lex[C.indexOf(s)] || '')}</span>`).join(', ') || (f.orders || []).join(' / ') || '—'}</td><td class="num">${f.need}</td></tr>`; }).join('')}</tbody></table>
+        <p class="why">Přepis konstrukce funkce (<span class="ipa">constructions</span>), vlastní koncovky (<span class="ipa">endings</span>) a odvozovací přípony (<span class="ipa">suffixes</span>) jdou zadat ručně; jinak je engine vylosuje z hlásek jazyka.</p>`;
+      b.querySelector('[data-seg]').addEventListener('click', (e) => { const bt = e.target.closest('button'); if (!bt) return; l.grammar = bt.dataset.v; edited(); refreshSpec(); this.body(); });
+    } else if (state.ptab === 'zmeny') {
+      const list = l.processes || [];
+      b.innerHTML = `<p class="why" style="margin:0">Zvukové změny, které na startu už probíhají: rodina, popis kandidáta a podíl mluvčích, kteří ji mají. Hodí se, když chceš začít uprostřed vývoje (například koncové <span class="ipa">-m</span> se už ztrácí).</p>
+        <table class="t"><thead><tr><th>změna</th><th>popis</th><th>podíl mluvčích</th><th></th></tr></thead><tbody>${list.map((p, i) => `<tr><td>${esc(FAMILY_CS[p.family] || p.family)}</td><td class="ipa">${esc(p.label)}</td><td class="num">${Math.round(p.share * 100)} %</td><td><button class="btn quiet" data-del="${i}">Odebrat</button></td></tr>`).join('') || '<tr><td colspan="4" class="why">Žádná. Jazyk začíná bez rozběhnutých změn.</td></tr>'}</tbody></table>
+        <div class="grid2" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))"><label class="field">Rodina<select id="pr-f">${Object.entries(FAMILY_CS).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></label><label class="field">Popis<input type="text" id="pr-l" value="m → ∅ / V_#"></label><label class="field">Podíl <input type="range" id="pr-s" min="0.05" max="0.95" step="0.05" value="0.3"></label></div>
+        <button class="btn" id="pr-add" style="align-self:start">+ Přidat změnu</button>`;
+      $('pr-add').addEventListener('click', () => { l.processes = [...list, { family: $('pr-f').value, label: $('pr-l').value, share: +$('pr-s').value }]; edited(); refreshSpec(); this.body(); });
+      b.querySelectorAll('[data-del]').forEach((x) => x.addEventListener('click', () => { l.processes = list.filter((_, i) => i !== +x.dataset.del); edited(); refreshSpec(); this.body(); }));
+    } else {
+      const words = l.words || {}, endo = l.endonym?.length ? l.endonym : ['language'];
+      b.innerHTML = `<div class="grid2"><div><h2>Vlastní jméno</h2><p style="margin:6px 0">Skládá se z pojmů ${endo.map((c) => `‘${esc(GL[c] || c)}’`).join(' + ')}: <span class="ipa" style="font-size:20px">${esc(endo.map((c) => lex[C.indexOf(c)]).join(''))}</span> → <b>${esc(l.name)}</b></p><p class="why">Jméno se vyvíjí s jazykem: dceřiné jazyky dostanou tvar, který ze složeniny vyrostl u nich.</p></div>
+        <div><h2>Slova od autora <span class="why">${Object.keys(words).length}</span></h2><p class="why">Napiš tvar do sloupce a engine ho použije místo vylosovaného; náhodu spotřebuje stejně, takže zbytek slovníku zůstane.</p></div></div>
+        <input type="search" id="pw-q" placeholder="Hledat význam" style="max-width:280px"><div class="scroll" style="max-height:52vh"><table class="t"><thead><tr><th>význam</th><th>z generátoru</th><th>od autora</th></tr></thead><tbody id="pw-body"></tbody></table></div>`;
+      const fill = () => { const q = $('pw-q').value.toLowerCase(); $('pw-body').innerHTML = C.map((c, i) => [c, i]).filter(([c]) => !q || (GL[c] || c).toLowerCase().includes(q)).map(([c, i]) => `<tr><td>${esc(GL[c] || c)}${endo.includes(c) ? ' <span class="why">jméno</span>' : ''}</td><td class="ipa" style="font-size:17px">${esc(lex[i])}</td><td><input type="text" class="ipa" data-w="${c}" value="${esc(words[c] || '')}" style="max-width:150px"></td></tr>`).join(''); };
+      fill(); $('pw-q').addEventListener('input', fill);
+      $('pw-body').addEventListener('change', (e) => { const c = e.target.dataset.w; if (!c) return; l.words = { ...(l.words || {}) }; if (e.target.value) l.words[c] = e.target.value; else delete l.words[c]; edited(); refreshSpec(); });
+    }
+  },
+};
+const countFamily = (name) => Object.values(A.sound).flat().filter((s) => s.family.startsWith(name)).reduce((a, s) => a + s.groups, 0);
+
+// ===== Zadání: Pojmy =====
+screens.pojmy = {
+  title: 'Pojmy',
+  mount() {
+    const w = state.world, size = w.vocabulary || 149;
+    const DOM = [['core', 'jádro', 'základní slova (tělo, příroda, zájmena, čísla); mění se pomalu a přejímají se málokdy'], ['learned', 'učená', 'slova vzdělanosti a písma; přicházejí se spisovnou normou a školou'], ['culture', 'kultura', 'věci, technika, jídlo, oblečení, hospodaření a počítání; přicházejí obchodem a kontaktem'], ['religion', 'víra', 'víra a obřady; přicházejí s liturgickým jazykem'], ['power', 'moc', 'moc, správa, právo a válka; vymění je nová elita (dobytí, cizí vládci)']];
+    main.innerHTML = `<div class="screen doc"><div class="side"><span class="caps">Slovník světa</span><p class="why">Pojmy jsou společné všem jazykům světa. Engine simuluje jejich slova, posun významu, výpůjčky i nová slova.</p></div>
+      <div class="doc-main"><div class="grid2">
+        <div><h2>Kolik pojmů simulovat</h2><div class="seg" id="voc" style="margin:8px 0">${[149, 200, 500, 1000, 1453].map((n) => `<button data-n="${n}" aria-pressed="${n === size}">${n === 1453 ? 'celý WOLD (1 453)' : n}</button>`).join('')}</div>
+          <p class="why">Výchozích 149 pojmů (Swadeshův seznam a slova, z nichž vzniká mluvnice) dává výsledky, na které je engine kalibrovaný. Větší slovník přidá pojmy z katalogu WOLD v pevném pořadí; běh je pomalejší a ${size === 149 ? 'výsledky se budou lišit od výchozích' : '<b class="red">výsledky se liší od výchozích</b>'}.</p>
+          <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="sem" ${w.semantics !== false ? 'checked' : ''}> Posun významu (graf CLICS⁴ a DatSemShift)</label></div>
+        <div><h2>Domény pojmů</h2><dl class="ledger">${DOM.map(([k, t, d]) => `<div><dt>${t}</dt><dd class="why" style="font-style:normal">${d}</dd></div>`).join('')}</dl></div></div>
+        <div><h2>Vlastní pojmy <span class="why">${(w.concepts || []).length}</span></h2><p class="why">Vymyšlené i reálné pojmy světa. S vazbou na WOLD nebo Concepticon se doména, půjčitelnost, frekvence a slovní druh převezmou z dat; jinak je doplní engine.</p>
+          <table class="t" style="margin-top:6px"><thead><tr><th>ID</th><th>glos</th><th>doména</th><th>slovní druh</th><th>půjčitelnost</th><th>příbuzné</th></tr></thead><tbody id="cbody"></tbody></table>
+          <div class="grid2" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:8px">
+            <label class="field">ID<input type="text" id="c-id" value="salt_road"></label><label class="field">Glos<input type="text" id="c-gl" value="salt road"></label>
+            <label class="field">Doména<select id="c-dom">${DOM.map(([k, t]) => `<option value="${k}" ${k === 'culture' ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+            <label class="field">Slovní druh<select id="c-wc"><option value="noun">podstatné jméno</option><option value="verb">sloveso</option><option value="uninflected">neohebné</option></select></label>
+            <label class="field">Příbuzný pojem<select id="c-rel"><option value="">—</option>${C.map((c) => `<option value="${c}" ${c === 'path' ? 'selected' : ''}>${esc(GL[c] || c)}</option>`).join('')}</select></label></div>
+          <button class="btn" id="c-add" style="align-self:start;margin-top:6px">+ Přidat pojem</button></div></div></div>`;
+    $('footer').innerHTML = specFooter('Pokračovat: Dějiny', 'dejiny'); bindSpec();
+    const fill = () => { $('cbody').innerHTML = (w.concepts || []).map((c) => `<tr><td class="ipa">${esc(c.id)}</td><td>${esc(c.gloss || '')}</td><td>${esc(DOM.find((d) => d[0] === c.domain)?.[1] || 'z dat')}</td><td>${esc({ noun: 'podstatné jméno', verb: 'sloveso', uninflected: 'neohebné' }[c.word_class] || 'z dat')}</td><td>${c.borrowed ?? 'průměr domény'}</td><td>${(c.related || []).map((r) => `‘${esc(GL[r.concept] || r.concept)}’ ${r.kind === 'polysemy' ? 'posun' : r.kind}`).join(', ')}</td></tr>`).join('') || '<tr><td colspan="6" class="why">Zatím žádné. Například cesta solí, jméno boha nebo místní plodina.</td></tr>'; };
+    fill();
+    $('voc').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; w.vocabulary = +b.dataset.n; edited(); refreshSpec(); this.mount(); });
+    $('sem').addEventListener('change', (e) => { w.semantics = e.target.checked; edited(); refreshSpec(); });
+    $('c-add').addEventListener('click', () => { const rel = $('c-rel').value; w.concepts = [...(w.concepts || []), { id: $('c-id').value, gloss: $('c-gl').value, domain: $('c-dom').value, word_class: $('c-wc').value, related: rel ? [{ concept: rel, kind: 'polysemy' }] : [] }]; edited(); refreshSpec(); fill(); this.mount(); });
+  },
+};
+
+// ===== Zadání: Dějiny =====
+screens.dejiny = {
+  title: 'Dějiny',
+  mount() {
+    main.innerHTML = `<div class="screen map2" style="grid-template-rows:minmax(0,1fr) auto"><div class="stage" id="st"><div class="overlay"><div class="big" id="ov-y"></div><div class="sub" id="ov-s"></div></div><div class="legend" id="legend"></div></div>
+      <aside class="card" id="card" style="grid-row:span 2"></aside>
+      <div id="lanes" style="min-width:0"></div></div>`;
+    $('footer').innerHTML = specFooter(null, null); bindSpec();
+    this.map = makeMap($('st'), { draw: (c, m) => this.draw(c, m) });
+    if (!state.sel.event) state.sel.event = state.world.events.findIndex((e) => e.kind === 'elite');
+    requestAnimationFrame(() => this.map.layout()); this.lanes(); this.card();
+  },
+  update() { this.map.render(); this.lanes(); this.card(); },
+  statesAt(y) {
+    const st = {};
+    for (const e of [...state.world.events].sort((a, b) => a.year - b.year)) {
+      if (e.year > y) break;
+      if (e.kind === 'state' || e.kind === 'secession') { for (const s of Object.values(st)) s.regions = s.regions.filter((r) => !e.regions.includes(r)); st[e.id] = { ...e, regions: [...e.regions] }; }
+      if (e.kind === 'annexation' && st[e.state]) { for (const s of Object.values(st)) s.regions = s.regions.filter((r) => !e.regions.includes(r)); st[e.state].regions.push(...e.regions); }
+      if (e.kind === 'collapse') delete st[e.state];
+      if (e.kind === 'language_policy' && st[e.state]) st[e.state].policy = e.policy;
+    }
+    return Object.values(st);
+  },
+  draw(c, m) {
+    const y = state.cursor, sts = this.statesAt(y), owner = {};
+    sts.forEach((s, n) => s.regions.forEach((r) => { owner[r] = { s, n }; }));
+    $('ov-y').textContent = y; $('ov-s').textContent = `${sts.length} ${sts.length === 1 ? 'stát' : sts.length < 5 ? 'státy' : 'států'}, ${REG.filter((r) => !owner[r.id]).length} krajů bez vlády`;
+    REG.forEach((r, i) => { const o = owner[r.id]; if (!o) return; const pol = o.s.policy; c.fillStyle = css('--ink'); c.globalAlpha = pol === 'enforced' ? 0.16 : pol === 'promoted' ? 0.08 : 0.03; c.fill(m.rcells[i]); c.globalAlpha = 1; hatch(c, m.rcells[i], [0.6, -0.6, 1.4, 0.2][o.n % 4], css('--ink-2'), 7, 0.6); });
+    relief(c, m);
+    for (const e of m.redges) { const a = owner[REG[e.a].id]?.s.id, b = owner[REG[e.b].id]?.s.id; if (a === b) continue; c.strokeStyle = css('--ink'); c.lineWidth = 1.5; c.setLineDash([8, 3, 1.5, 3]); c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke(); }
+    c.setLineDash([]);
+    const ev = state.world.events[state.sel.event];
+    const highlight = ev ? [...(ev.regions || []), ...(ev.subjects || []), ev.to, ev.seat, ev.source, ev.capital].filter(Boolean) : [];
+    for (const r of highlight) { const i = RI[r]; if (i == null) continue; c.fillStyle = css('--tint'); c.fill(m.rcells[i]); c.strokeStyle = css('--red'); c.lineWidth = 2; c.stroke(m.rcells[i]); }
+    m.after = (cc) => {
+      if (ev && (ev.kind === 'settlement' || ev.kind === 'elite' || ev.kind === 'lingua_franca')) {
+        const from = m.rpts[RI[ev.from || ev.source]], tos = (ev.kind === 'lingua_franca' ? ev.regions : [ev.to || ev.seat]).map((r) => m.rpts[RI[r]]);
+        cc.strokeStyle = css('--red'); cc.lineWidth = 1.6; cc.setLineDash(ev.kind === 'lingua_franca' ? [3, 3] : []);
+        for (const to of tos) { cc.beginPath(); cc.moveTo(...from); cc.quadraticCurveTo((from[0] + to[0]) / 2, Math.min(from[1], to[1]) - 30, ...to); cc.stroke(); }
+        cc.setLineDash([]);
+      }
+      REG.forEach((r, i) => { const [x, yy] = m.rpts[i]; const cap = sts.some((s) => s.capital === r.id); if (cap) { cc.fillStyle = css('--ink'); cc.fillRect(x - 3.5, yy - 3.5, 7, 7); } else { cc.fillStyle = css('--ink-2'); cc.beginPath(); cc.arc(x, yy, 2.2, 0, 7); cc.fill(); } label(cc, r.name.toUpperCase(), x, yy - 11, { font: `600 8.5px ${css('--f-ui')}`, spacing: '1.5px', color: css('--ink-2') }); });
+      sts.forEach((s) => { const pts = s.regions.map((r) => m.rpts[RI[r]]); if (!pts.length) return; label(cc, (s.name || s.id).toUpperCase(), d3.mean(pts, (p) => p[0]), d3.mean(pts, (p) => p[1]) + 16, { font: `700 10.5px ${css('--f-ui')}`, spacing: '2px' }); });
+    };
+    $('legend').innerHTML = sts.map((s) => `<div><b style="font-weight:500">${esc(s.name || s.id)}</b> <span class="why">${LEVEL.policy[s.policy] || ''}, hranice ${LEVEL.border[s.border] || ''}</span></div>`).join('') || '<div class="why">žádný stát</div>';
+  },
+  lanes() {
+    const el = $('lanes'); if (!el) return;
+    const w = el.clientWidth || 800, X = (y) => 150 + (y / 2000) * (w - 160);
+    const evs = state.world.events.map((e, i) => ({ e, i }));
+    const lane = (title, kinds, extra = '') => `<div style="position:relative;height:30px;border-bottom:1px solid var(--rule)"><span style="position:absolute;left:0;top:6px;font-size:13px">${title}</span>${extra}${evs.filter(({ e }) => kinds.includes(e.kind)).map(({ e, i }) => `<button data-ev="${i}" title="${esc(e.year + ' ' + (KIND[e.kind] || e.kind))}" style="position:absolute;left:${X(e.year) - 5}px;top:8px;width:10px;height:14px;padding:0;border:1px solid ${i === state.sel.event ? 'var(--red)' : 'var(--ink)'};background:${i === state.sel.event ? 'var(--red)' : 'var(--ink)'};cursor:pointer;border-radius:1px"></button>`).join('')}</div>`;
+    const bg = A.events.filter((e) => e.background).map((e) => `<span title="${esc(e.year + ' ' + describe(e).title)}" style="position:absolute;left:${X(e.year) - 3}px;top:12px;width:6px;height:6px;border:1px solid var(--ink-2);border-radius:50%"></span>`).join('');
+    let ruler = '';
+    for (let y = 0; y <= 2000; y += 250) ruler += `<span style="position:absolute;left:${X(y)}px;top:0;font-size:11px;color:var(--ink-2);transform:translateX(-50%)" class="num">${y}</span>`;
+    el.innerHTML = `<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px"><span class="caps">Kronika zadání</span><select id="add-ev" style="width:auto"><option value="">+ Událost…</option>${Object.entries(KIND_GROUP).map(([g, ks]) => `<optgroup label="${g}">${ks.map((k) => `<option value="${k}">${KIND[k]}</option>`).join('')}</optgroup>`).join('')}</select><span class="why">Táhni kurzor po pravítku; krok 25 let.</span></div>
+      <div id="ruler" style="position:relative;height:18px;cursor:ew-resize">${ruler}<span style="position:absolute;left:${X(state.cursor)}px;top:0;bottom:-${4 * 30 + 4}px;border-left:2px solid var(--red);pointer-events:none;z-index:2"></span></div>
+      ${Object.entries(KIND_GROUP).map(([g, ks]) => lane(g, ks)).join('')}
+      ${lane('<span class="why">Pozadí z běhu</span>', [], bg)}`;
+    el.querySelectorAll('[data-ev]').forEach((b) => b.addEventListener('click', () => { state.sel.event = +b.dataset.ev; state.cursor = state.world.events[state.sel.event].year; this.update(); }));
+    const ruler_ = $('ruler'); const set = (ev) => { const r = ruler_.getBoundingClientRect(); state.cursor = Math.max(0, Math.min(2000, Math.round(((ev.clientX - r.left - 150) / (r.width - 160)) * 80) * 25)); this.map.render(); this.lanes(); };
+    let drag = false; ruler_.addEventListener('pointerdown', (e) => { drag = true; ruler_.setPointerCapture(e.pointerId); set(e); }); ruler_.addEventListener('pointermove', (e) => drag && set(e)); ruler_.addEventListener('pointerup', () => { drag = false; });
+    $('add-ev').addEventListener('change', (e) => { const k = e.target.value; if (!k) return; const ne = { kind: k, year: state.cursor, regions: [state.sel.region || 'vardun'] }; if (k === 'settlement') Object.assign(ne, { from: 'vardun', to: 'lisk', share: 0.2 }); if (k === 'elite') Object.assign(ne, { from: 'pelna', seat: 'kaar', strength: 0.5, prestige: 2 }); state.world.events.push(ne); state.sel.event = state.world.events.length - 1; edited(); refreshSpec(); this.update(); });
+  },
+  card() {
+    const e = state.world.events[state.sel.event], el = $('card'); if (!el) return;
+    if (!e) { el.innerHTML = '<p class="why">Vyber událost na ose nebo přidej novou.</p>'; return; }
+    const d = describe(e), hint = {
+      state: 'Řeč hlavního města má prestiž; ostatní kraje se k ní přibližují podle politiky a vlády.', annexation: 'Připojené kraje dostanou úřední jazyk státu na veřejnosti.',
+      secession: 'Nový stát si nese vlastní normu a hranici.', collapse: 'Kraje ztratí úřední jazyk; místní řeč se vrací.', language_policy: 'Vynucení zrychlí přechod k úřednímu jazyku, snášenlivost ho zastaví.',
+      border_policy: 'Zavřená hranice brzdí šíření změn i výpůjček.', lingua_franca: 'Kraje se ji učí jako druhý jazyk na veřejnosti; s „nativize“ se z ní stane mateřština.',
+      standard: 'Psaná norma zpomalí změny u těch, kdo čtou.', schools: 'Škola šíří normu do všech vsí; s diglosií zůstane doma místní řeč.', revival: 'Obrození vrací předávání jazyka dětem.',
+      preserve: 'Chráněný jazyk se brání výpůjčkám a přechodu.', identity: 'Svébytnost zvyšuje věrnost vlastní řeči.', immigration: 'Přistěhovalci oslabují místní normu a přinášejí slova.',
+      settlement: 'Lidé z kraje odejdou a založí novou ves; jejich řeč se pak vyvíjí samostatně.', elite: 'Elita ovládne kraj a mluví svým jazykem; poddaní od ní přejímají slova moci a může vzniknout superstrát.',
+    }[e.kind];
+    const ran = A.events.filter((x) => x.kind === e.kind || (e.kind === 'elite' && x.kind === 'conquest') || (e.kind === 'settlement' && x.kind === 'migration')).find((x) => Math.abs(x.year - e.year) < 1);
+    el.innerHTML = `<div><span class="caps">${esc(KIND[e.kind] || e.kind)}</span><h1>${esc(d.title)}</h1></div>
+      <div class="field"><label>Rok <input type="number" id="e-y" value="${e.year}" step="25" style="width:100px"></label></div>
+      ${e.regions ? `<div class="field"><span class="caps">Kraje</span><div class="chips">${e.regions.map((r) => `<span class="chip on">${esc(regionName(r))}</span>`).join('')}</div></div>` : ''}
+      ${['policy', 'border', 'centralization', 'identity', 'literacy', 'coverage', 'spread', 'strength'].filter((k) => typeof e[k] === 'string' && LEVEL[k]).map((k) => fieldSeg({ policy: 'Jazyková politika', border: 'Hranice', centralization: 'Vláda', identity: 'Identita', literacy: 'Kdo čte', coverage: 'Školy', spread: 'Kolik lidí se ji naučí', strength: 'Síla' }[k], k, Object.entries(LEVEL[k]), e[k])).join('')}
+      ${e.kind === 'elite' ? `<dl class="ledger"><div><dt>Odkud</dt><dd>${esc(regionName(e.from))}</dd></div><div><dt>Sídlo</dt><dd>${esc(regionName(e.seat))}</dd></div><div><dt>Poddaní</dt><dd>${esc(regs(e.subjects))}</dd></div><div><dt>Síla, prestiž</dt><dd>${e.strength}, ${e.prestige}</dd></div><div><dt>Vazba k domovu</dt><dd>${e.homeland ?? 'polovina síly'}</dd></div></dl>` : ''}
+      ${e.kind === 'settlement' ? `<dl class="ledger"><div><dt>Odkud</dt><dd>${esc(regionName(e.from))}</dd></div><div><dt>Kam</dt><dd>${esc(regionName(e.to))}</dd></div><div><dt>Podíl lidí</dt><dd>${Math.round(e.share * 100)} %</dd></div><div><dt>Nových vsí</dt><dd>${e.settlements || 1}</dd></div></dl>` : ''}
+      <p class="why">${esc(hint || '')}</p>
+      ${ran ? `<div><span class="caps">Co z toho v běhu vzešlo</span><p style="margin:4px 0">${esc(describe(ran).title)}. <span class="why">${esc(describe(ran).text)}</span></p></div>` : ''}
+      <button class="btn quiet" id="e-del" style="align-self:start;color:var(--red)">Odstranit událost</button>`;
+    $('e-y').addEventListener('change', (x) => { e.year = +x.target.value; state.cursor = e.year; edited(); refreshSpec(); this.update(); });
+    el.querySelectorAll('[data-seg]').forEach((g) => g.addEventListener('click', (x) => { const b = x.target.closest('button'); if (!b) return; e[g.dataset.seg] = b.dataset.v; edited(); refreshSpec(); this.update(); }));
+    $('e-del').addEventListener('click', () => { state.world.events.splice(state.sel.event, 1); state.sel.event = null; edited(); refreshSpec(); this.update(); });
+  },
+};
+
+// ---------- start ----------
+const notes = $('notes'), opener = $('notes-open');
+const setNotes = (open) => { notes.hidden = !open; opener.setAttribute('aria-expanded', String(open)); (open ? $('notes-close') : opener).focus(); };
+opener.addEventListener('click', () => setNotes(notes.hidden));
+$('notes-close').addEventListener('click', () => setNotes(false));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !notes.hidden) setNotes(false); });
+new MutationObserver(() => show(state.route)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => show(state.route));
+renderStatus();
+show((location.hash || '#atlas').slice(1));
+})();
+</script>

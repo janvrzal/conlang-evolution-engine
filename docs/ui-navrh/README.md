@@ -47,7 +47,7 @@ jméno („řeč lidí“) s českou podobou na -ština, stát podle hlavního m
 | 4 Výsledky | [vysledky.html](prototypy/vysledky.html) | https://claude.ai/artifact/RTBr7v9LLBxxvjZtDbuzi8 |
 | 4 Výsledky: Slovo v krajině | [slovo-v-krajine.html](prototypy/slovo-v-krajine.html) | https://claude.ai/artifact/6fFX1iTNUbjLt8eL43JoaJ |
 | 5 Větve | [vetve.html](prototypy/vetve.html) | https://claude.ai/artifact/DogNpKFaZdEdruqiyaNUuw |
-| **Ucelený návrh** (1–5 pod jednou kostrou) | [aplikace.html](prototypy/aplikace.html) | https://claude.ai/artifact/YVXTN8jtrYjoFWxwRxuvCC |
+| **Návrh aplikace** (od nuly, nad běhy v Rustu) | [aplikace.html](prototypy/aplikace.html) | https://claude.ai/artifact/YVXTN8jtrYjoFWxwRxuvCC |
 
 1. **Svět.** Kraj je bod, území se dopočítá (Voronoi oříznutý pevninou).
    Nástroje V výběr, R kraj, S spoj. Osídlení slovem (řídké až velmi husté),
@@ -67,41 +67,44 @@ jméno („řeč lidí“) s českou podobou na -ština, stát podle hlavního m
 5. **Větve.** Dvě dějiny vedle sebe ve stejném roce, vsi s jiným jazykem
    červeně, mluvčí podle jazyka, slova jedné vsi v obou větvích.
 
-## Ucelený návrh
+## Návrh aplikace (6. 11. 2026)
 
-Ucelený návrh (6. 11. 2026) skládá pět prototypů do jedné aplikace. Uvnitř
-obrazovek se nic nepřekreslovalo; každá zůstává svým prototypem v rámu.
-Pravidla, která drží obrazovky pohromadě, platí pro implementaci v `desktop/`:
+Návrh od nuly nad skutečnými běhy enginu v2 v Rustu nahrazuje skládání pěti
+prototypů. Artefakt: https://claude.ai/artifact/YVXTN8jtrYjoFWxwRxuvCC,
+kopie [prototypy/aplikace.html](prototypy/aplikace.html) (bez písma).
+Vizuální jazyk zůstává (Piazzolla, Charis, papír Břidlice, červený inkoust);
+struktura je nová a vychází z toho, co engine umí.
 
-1. **Jedna lišta:** projekt, cesta práce 1–5 a stav běhu. Obrazovky nemají
-   vlastní hlavičku a klik na jméno projektu otevře Projekty.
-2. **Jeden rok:** rok se nese mezi Dějinami, Výsledky, Slovem v krajině
-   a Větvemi. Ve Výsledcích a Větvích ho ovládá lišta pod cestou práce
-   (posuvník, přehrávání), Dějiny mají pravítko kroniky a Slovo v krajině
-   osu pod mapou.
-3. **Výsledky mají pohledy** Jazyky, Slovník, Slovo v krajině a Mluvnice
-   (později).
-4. **Stav běhu je v liště:** změna ve Světě, Protojazyku nebo Dějinách označí
-   výsledky jako zastaralé a lišta nabídne přepočet. Průběh ukazuje červená
-   linka pod lištou a rok v liště.
-5. **Pata obrazovky:** vlevo počty a Zpět, uprostřed popis pro engine, vpravo
-   jediná hlavní akce (Pokračovat, v Dějinách Spustit).
-6. **Projekty:** seznam projektů s větvemi, nový svět z obrázku nebo prázdný,
-   otevření souboru `.cee`.
+**Lišta má dvě poloviny.** *Zadání* (Svět, Protojazyky, Pojmy, Dějiny) je celý
+`cee-v2-world/1`; *Výsledek* (Atlas, Jazyky, Slova, Kronika, Větve) je export
+`cee-v2/1` a snímky běhu. Změna zadání označí výsledky jako zastaralé.
 
-Zbývá: Mluvnice, Projekty napojené na soubory, jeden běh pro všechny obrazovky
-(Svět, Protojazyk a Dějiny dnes ukazují běh s jedním protojazykem) a angličtina.
+| Obrazovka | Co ukazuje z enginu |
+|---|---|
+| Svět | kraje (krajina, osídlení, svébytnost, ochrana, obchodní město, jazyk), svět (seed, roky, generace, rozestup vsí, pozadí dějin, posun významu) |
+| Protojazyky | hlásky, tóny, přízvuk a síla, profil mluvnice a osm funkcí katalogu se zdrojovými slovy, rozběhnuté změny (`processes`), slova autora a vlastní jméno; slova z generátoru (tick 0) |
+| Pojmy | velikost slovníku 149–1 453 (WOLD), domény, vlastní pojmy s vazbou a vztahy |
+| Dějiny | mapa států v roce pod kurzorem, kronika zadání po skupinách (Státy, Jazyk ve společnosti, Lidé a místa) a pozadí z běhu; karta všech 15 druhů událostí včetně `settlement` a `elite` a „co z toho v běhu vzešlo“ |
+| Atlas | vsi podle jazyka doma a nářečí, vrstvy Státy, Řeč na veřejnosti, Písmo a škola, Věrnost; kraj se sčítáním doma a na veřejnosti a skupinami |
+| Jazyky | řeka linií (vznik, rozštěpení, zánik), vlastní jméno v čase, nářečí se jmény, mluvnice proti protojazyku, zvukové změny jako pravidla, analogie, přízvuk |
+| Slova | srovnávací slovník s etymologií, slovo na mapě s izoglosami, vrt místa po stoletích |
+| Kronika | dějiny autora, pozadí dějin, společnost a jazyky po stoletích se souhrnem drobných změn |
+| Větve | dva běhy vedle sebe; jazyky spárované podle společných vsí, rozdíly červeně |
 
-Sestavení z hotových prototypů (bez běhu enginu):
+**Co engine zatím nedává:** slovník ve snímku (návrh ho má z exportu po
+každém pozorování), přepočet od roku přes API (kontrolní body engine umí),
+jména osob a pravopis.
+
+Sestavení (běhy trvají asi 3 minuty každý a do repozitáře se nedávají; vazba
+`cee_engine_py` musí být sestavená podle `rust/README.md`):
 
 ```bash
-cd docs/ui-navrh
-python zdroje/build_app.py VÝSTUP
+cd docs/ui-navrh/zdroje/aplikace
+python run_world.py ../../../.. BĚH_A          # Poloostrov s pozadím, osídlením a cizí elitou
+python run_world.py ../../../.. BĚH_B b        # větev B: bez připojení v roce 1300
+python prep.py BĚH_A BĚH_B data.json
+python build.py data.json VÝSTUP
 ```
-
-Do `VÝSTUP` zapíše `index.html` a písmo Charis z `desktop/static/fonts`
-a do `prototypy/aplikace.html` kopii bez písma. Kostra je
-`zdroje/app.template.html`.
 
 ## Data prototypů
 
