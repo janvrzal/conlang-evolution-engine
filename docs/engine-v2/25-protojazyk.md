@@ -209,10 +209,24 @@ v celém světě; s novými slovy se v 6 krocích fonologizovala jiná, přiroze
 (spirantizace *b* ve vesnici v01-03). Test teď počítá jen události svého procesu a skupiny,
 jak zamýšlel.
 
-**Kalibrace (`cee calibrate`) se nespustila do konce.** Plný běh zabral 14 GB paměti (souběžně
-s jinou kalibrací 29 GB na stroji s 16 GB) a byl zastaven. Scénáře Evropa a Romanie mají
-generované substráty (iberština, dáčtina, baskičtina), takže je potřeba je přeměřit, např.
-`cee calibrate --only evropa` a `--only romania` zvlášť. Paměť `cee calibrate` je samostatný problém.
+**Kalibrace** (`cee calibrate`, semínka od 1; Evropa s `RAYON_NUM_THREADS=3`, jinak se plný běh
+nevejde do 16 GB): **stejný souhrn před změnou i po ní**, 21 z 24 (bez Evropy) a 13 z 14 (Evropa).
+Romanie a Evropa s generovanými substráty (iberština, dáčtina, baskičtina) zůstaly beze změny
+splněných cílů; retence latiny 0,619 → 0,614, počet jazyků v roce 1900 81,5 → 79,5 (cíl 10–60
+nesplněný už předtím).
+
+| cíl | před | po | práh | |
+|---|---|---|---|---|
+| `m9::tempo` zrychlení kontaktem | 2,45 | 1,92 | [1; 2] | nově splněno |
+| `m9::tempo` bez kontaktu | 0,060 | 0,077 | [0,30; 0,85] | nesplněno (dok. 24) |
+| `m7::typologie_37A` konec (Hellinger) | 0,088 | 0,150 | ≤ 0,112 | nově nesplněno, viz níže |
+| `m7::typologie_33A` konec | 0,056 | 0,092 | ≤ 0,098 | |
+| `m7::typologie_67A` konec | 0,123 | 0,123 | ≤ 0,111 | nesplněno už předtím |
+
+37A je na hraně i se starým generátorem: na dalších semínkách (`--seeds 101/201/301`) vychází
+před změnou 0,173 / 0,173 / 0,129 a po ní 0,129 / 0,222 / 0,150, tedy nad prahem v obou verzích.
+Splnění na semínkách od 1 bylo předtím štěstí; rozdíl je v šumu a stálost členu (37A) je otevřená
+nezávisle na generátoru.
 
 ## Omezení a další kroky
 
