@@ -132,6 +132,7 @@ pub enum Action {
         position: Option<(f64, f64)>,
         reach: f64,
         prestige: Option<f64>,
+        region: Option<String>,
     },
     Conquest {
         conqueror: String,
@@ -263,8 +264,18 @@ pub fn apply_action(
             position,
             reach,
             prestige,
+            region,
         } => migration(
-            world, history, tick, year, sources, target, *position, *reach, *prestige,
+            world,
+            history,
+            tick,
+            year,
+            sources,
+            target,
+            *position,
+            *reach,
+            *prestige,
+            region.as_deref(),
         ),
         Action::Conquest {
             conqueror,
@@ -792,6 +803,7 @@ pub(crate) fn migration(
     position: Option<(f64, f64)>,
     reach: f64,
     prestige: Option<f64>,
+    region: Option<&str>,
 ) -> Result<(), String> {
     let edit = Edits::new(tick);
     let mut moving: Vec<(u32, GroupId)> = Vec::new();
@@ -826,7 +838,16 @@ pub(crate) fn migration(
                 .ok_or("Migrace nemá žádné zdroje.")?;
             let origin = largest.index();
             let origin_territory = world.groups.territory[origin];
-            let parent = world.territories[origin_territory.index()].parent;
+            // Osada patří do cílového regionu (`region`), jinak do regionu odkud lidé přišli.
+            let parent = match region {
+                Some(name) => world
+                    .registry
+                    .territories
+                    .get(name)
+                    .map(TerritoryId)
+                    .ok_or_else(|| format!("Neznámý cílový region '{name}'."))?,
+                None => world.territories[origin_territory.index()].parent,
+            };
             let place = edit.add_territory(
                 world,
                 target,
@@ -884,6 +905,49 @@ pub(crate) fn migration(
     Ok(())
 }
 
+/// Mluvené skupiny regionu (vesnice, jejichž území má region za rodiče).
+fn groups_of_region(world: &World, region: &str) -> Result<Vec<GroupId>, String> {
+    if world.registry.territories.get(region).is_none() {
+        return Err(format!("Neznámý region '{region}'."));
+    }
+    Ok(world
+        .group_ids()
+        .into_iter()
+        .filter(|&g| {
+            let territory = world.groups.territory[g.index()];
+            let parent = world.territories[territory.index()].parent;
+            !world.groups.written[g.index()]
+                && !parent.is_none()
+                && world.registry.territories.name(parent.0) == region
+        })
+        .collect())
+}
+
+/// Největší skupina regionu (vesnice regionu), jejíž hlavní kód je z linie `language`.
+fn largest_speaking(world: &World, region: &str, language: &str) -> Result<GroupId, String> {
+    let number = world
+        .registry
+        .languages
+        .get(language)
+        .ok_or_else(|| format!("Neznámý jazyk '{language}'."))?;
+    world
+        .group_ids()
+        .into_iter()
+        .filter(|&g| {
+            let territory = world.groups.territory[g.index()];
+            let parent = world.territories[territory.index()].parent;
+            !parent.is_none()
+                && world.registry.territories.name(parent.0) == region
+                && world.groups.main_code(g).language.0 == number
+        })
+        .max_by(|&a, &b| {
+            world.groups.population[a.index()]
+                .cmp(&world.groups.population[b.index()])
+                .then(world.group_name(b).cmp(world.group_name(a)))
+        })
+        .ok_or_else(|| format!("V regionu '{region}' nikdo nemluví jazykem '{language}'."))
+}
+
 /// Dobyvatelé usadí v území elitu s vysokou prestiží.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn conquest(
@@ -899,8 +963,11 @@ pub(crate) fn conquest(
     strength: f64,
 ) -> Result<(), String> {
     let edit = Edits::new(tick);
-    let origin = group_named(world, conqueror)?;
-    let elite_name = format!("{territory}+{conqueror}");
+    let origin = match conqueror.split_once(':') {
+        Some((region, language)) => largest_speaking(world, region, language)?,
+        None => group_named(world, conqueror)?,
+    };
+    let elite_name = format!("{territory}+{}", conqueror.replace(':', "-"));
     // Území: ID území, nebo skupiny (její sídlo).
     let place = match world.registry.territories.get(territory) {
         Some(found) if (found as usize) < world.territories.len() => TerritoryId(found),
@@ -921,9 +988,18 @@ pub(crate) fn conquest(
         false,
         &fields,
     )?;
+    // `@region` = všechny mluvené skupiny regionu v roce události (dok. 23).
+    let mut targets: Vec<GroupId> = Vec::new();
     for subject in subjects {
-        let id = group_named(world, subject)?;
-        edit.connect(world, elite, id, strength, LinkKind::Weak)?;
+        match subject.strip_prefix('@') {
+            Some(region) => targets.extend(groups_of_region(world, region)?),
+            None => targets.push(group_named(world, subject)?),
+        }
+    }
+    for id in targets {
+        if id != elite {
+            edit.connect(world, elite, id, strength, LinkKind::Weak)?;
+        }
     }
     edit.connect(world, elite, origin, strength / 2.0, LinkKind::Weak)?;
     history.record(
@@ -1261,8 +1337,11 @@ pub fn parse_action(kind: &str, params: &Value) -> Result<Action, String> {
             position: p.point(&["position"])?,
             reach: p.number(&["reach"], 25.0)?,
             prestige: p.opt_number(&["prestige"])?,
+            region: p.opt_string(&["region"])?,
         },
         "conquest" => Action::Conquest {
+            // `conqueror` je jméno skupiny, nebo `region:jazyk` (největší skupina toho jazyka
+            // v regionu v roce události; dok. 23).
             conqueror: p.string(&["conqueror", "elite"])?,
             territory: p.string(&["territory", "seat"])?,
             subjects: p.strings(&["subjects", "regions"])?,

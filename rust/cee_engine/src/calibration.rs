@@ -993,9 +993,202 @@ fn romania(seed: i64) -> Result<Report, String> {
     Ok(report)
 }
 
+// --- Evropa (M8) ----------------------------------------------------------------------------
+
+/// Popis světa Evropy (dok. 23, M8).
+pub const EVROPA_JSON: &str = include_str!("../../../src/cee/data/scenarios/evropa.json");
+
+/// Skupiny regionu, které mluví jazykem z linie `lineage`.
+fn lineage_groups(
+    world: &crate::world::World,
+    region: &str,
+    lineage: &str,
+) -> Vec<crate::ids::GroupId> {
+    region_groups(world, region)
+        .into_iter()
+        .filter(|&g| {
+            world
+                .registry
+                .languages
+                .name(world.groups.main_code(g).language.0)
+                == lineage
+        })
+        .collect()
+}
+
+/// Podíl mluvčích linie v regionu (z mluvených skupin regionu).
+fn lineage_share(world: &crate::world::World, region: &str, lineage: &str) -> f64 {
+    let pop = |list: &[crate::ids::GroupId]| -> f64 {
+        list.iter()
+            .filter(|&&g| !world.groups.written[g.index()])
+            .map(|&g| f64::from(world.groups.population[g.index()]))
+            .sum()
+    };
+    let total = pop(&region_groups(world, region));
+    if total > 0.0 {
+        pop(&lineage_groups(world, region, lineage)) / total
+    } else {
+        f64::NAN
+    }
+}
+
+/// Má linie v regionu syntetický předmět (pád) a člen? (`None`, když tam nikdo nemluví.)
+fn lineage_grammar(
+    world: &crate::world::World,
+    region: &str,
+    lineage: &str,
+) -> Option<(bool, bool)> {
+    let groups = lineage_groups(world, region, lineage);
+    if groups.is_empty() {
+        return None;
+    }
+    let case = branch_construction(world, &groups, "OBJ").is_some_and(|c| c.kind == "synthetic");
+    let article = branch_construction(world, &groups, "DEFINITE").is_some_and(|c| c.kind != "zero");
+    Some((case, article))
+}
+
+fn evropa(seed: i64) -> Result<Report, String> {
+    let mut spec = crate::spec::WorldSpec::from_json(EVROPA_JSON)?;
+    spec.seed = seed;
+    let (world, events) = crate::spec::build(&spec)?;
+    let config = SimulationConfig {
+        keep_distances: true,
+        ..SimulationConfig::default()
+    };
+    let mut simulation = Simulation::new(world, config, events)?;
+    simulation.run(1900.0)?;
+    let world = &simulation.world;
+    let mut report = Report::new();
+    let flag = |v: bool| f64::from(u8::from(v));
+    // Podíly jazyků v regionech v roce 1900.
+    for (region, lineage) in [
+        ("gallia", "gaulish"),
+        ("gallia", "germanic"),
+        ("hispania", "iberian"),
+        ("britannia", "gaulish"),
+        ("britannia", "germanic"),
+        ("armorica", "gaulish"),
+        ("dacia", "latin"),
+        ("balkan", "slavic"),
+    ] {
+        info(
+            &mut report,
+            &format!("{region} podíl {lineage}"),
+            lineage_share(world, region, lineage),
+        );
+    }
+    // Pád a člen po rodinách a regionech.
+    let mut grammar = |region: &str, lineage: &str| {
+        if let Some((case, article)) = lineage_grammar(world, region, lineage) {
+            info(&mut report, &format!("{region} {lineage} pád"), flag(case));
+            info(
+                &mut report,
+                &format!("{region} {lineage} člen"),
+                flag(article),
+            );
+        }
+    };
+    for region in ["italia", "gallia", "hispania", "dacia"] {
+        grammar(region, "latin");
+    }
+    grammar("britannia", "germanic");
+    grammar("germania", "germanic");
+    grammar("scandinavia", "germanic");
+    grammar("slavia", "slavic");
+    grammar("balkan", "slavic");
+    grammar("dacia", "slavic");
+    let v = |name: &str| metric_value(&report, name);
+    let latin_caseless = ["italia", "gallia", "hispania", "dacia"]
+        .iter()
+        .filter(|r| v(&format!("{r} latin pád")) == 0.0)
+        .count() as f64;
+    let summary = [
+        ("románské větve bez pádu", latin_caseless),
+        (
+            "keltský a iberský ústup",
+            flag(v("gallia podíl gaulish") < 0.1 && v("hispania podíl iberian") < 0.1),
+        ),
+        (
+            "keltština přežije na okraji",
+            flag(v("armorica podíl gaulish") > 0.5 || v("britannia podíl gaulish") > 0.3),
+        ),
+        (
+            "germánština v Británii převládne",
+            flag(v("britannia podíl germanic") > 0.5),
+        ),
+        (
+            "angličtina ztratí pád a pevninská germánština ne",
+            flag(v("britannia germanic pád") == 0.0 && v("germania germanic pád") == 1.0),
+        ),
+        (
+            "franská elita přejde na latinu",
+            flag(v("gallia podíl germanic") < 0.1),
+        ),
+        (
+            "slovanská pravlast drží pád",
+            flag(v("slavia slavic pád") == 1.0),
+        ),
+        (
+            "balkánská slovanština ztratí pád nebo získá člen",
+            flag(v("balkan slavic pád") == 0.0 || v("balkan slavic člen") == 1.0),
+        ),
+    ];
+    for (name, value) in summary {
+        info(&mut report, name, value);
+    }
+    // Vzdálenost uvnitř rodin a mezi nimi (poslední snímek).
+    if let Some(snapshot) = simulation.history.snapshots.last() {
+        info(
+            &mut report,
+            "počet jazyků v roce 1900",
+            snapshot.languages.len() as f64,
+        );
+        if let Some(flat) = snapshot.distances.as_deref() {
+            let n = snapshot.group_ids.len();
+            let lineage: Vec<String> = snapshot
+                .group_ids
+                .iter()
+                .map(|name| {
+                    group_named(world, name).map_or(String::new(), |g| {
+                        world
+                            .registry
+                            .languages
+                            .name(world.groups.main_code(g).language.0)
+                            .to_owned()
+                    })
+                })
+                .collect();
+            let (mut within, mut between) = (Vec::new(), Vec::new());
+            for i in 0..n {
+                for j in i + 1..n {
+                    if lineage[i].is_empty() || lineage[j].is_empty() {
+                        continue;
+                    }
+                    if lineage[i] == lineage[j] {
+                        within.push(flat[i * n + j]);
+                    } else {
+                        between.push(flat[i * n + j]);
+                    }
+                }
+            }
+            info(
+                &mut report,
+                "vzdálenost uvnitř rodin / mezi rodinami",
+                mean(&within) / mean(&between),
+            );
+        }
+    }
+    Ok(report)
+}
+
 /// Všechny kalibrační běhy.
 pub fn runs() -> Vec<Run> {
     vec![
+        Run {
+            id: "evropa",
+            description: "Evropa: latina, keltština, iberština, dáčtina, germánština, slovanština, řečtina; 10 regionů, −500 až 1900",
+            measure: evropa,
+        },
         Run {
             id: "romania",
             description: "latina ve čtyřech větvích (Itálie, Galie, Hispánie, Dácie), −100 až 1900",

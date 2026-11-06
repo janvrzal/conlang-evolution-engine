@@ -1,0 +1,689 @@
+{
+  "format": "cee-v2-world/1",
+  "name": "Evropa: latina, keltština, germánština a slovanština (M8)",
+  "seed": 1,
+  "start_year": -500,
+  "end_year": 1900,
+  "languages": [
+    {
+      "id": "latin",
+      "name": "latina",
+      "consonants": [
+        "p",
+        "b",
+        "t",
+        "d",
+        "k",
+        "ɡ",
+        "kʷ",
+        "f",
+        "s",
+        "h",
+        "m",
+        "n",
+        "l",
+        "r",
+        "j",
+        "w"
+      ],
+      "vowels": [
+        "a",
+        "e",
+        "i",
+        "o",
+        "u"
+      ],
+      "grammar": "full",
+      "stress": "penult",
+      "constructions": {
+        "FUTURE": {
+          "kind": "synthetic"
+        },
+        "NEG": {
+          "kind": "pre",
+          "source": "not"
+        },
+        "ORDER": {
+          "kind": "free"
+        }
+      },
+      "endings": {
+        "noun:PL": [
+          [
+            "s",
+            0.6
+          ],
+          [
+            "i",
+            0.4
+          ]
+        ],
+        "noun:OBJ": [
+          [
+            "m",
+            1.0
+          ]
+        ],
+        "verb:PAST": [
+          [
+            "wi",
+            0.6
+          ],
+          [
+            "i",
+            0.4
+          ]
+        ],
+        "verb:FUT": [
+          [
+            "bo",
+            0.6
+          ],
+          [
+            "am",
+            0.4
+          ]
+        ]
+      },
+      "words": {
+        "i": "eɡo",
+        "you": "tu",
+        "we": "nos",
+        "this": "hik",
+        "that": "ille",
+        "who": "kʷis",
+        "what": "kʷid",
+        "not": "non",
+        "all": "omne",
+        "many": "multu",
+        "one": "unu",
+        "two": "duo",
+        "big": "maɡnu",
+        "long": "lonɡu",
+        "small": "parwu",
+        "woman": "muliere",
+        "man": "wiru",
+        "person": "homine",
+        "fish": "piske",
+        "bird": "awe",
+        "dog": "kane",
+        "louse": "pedikulu",
+        "tree": "arbore",
+        "seed": "semine",
+        "leaf": "folju",
+        "root": "radike",
+        "bark": "kortike",
+        "skin": "kute",
+        "flesh": "karne",
+        "blood": "sanɡwine",
+        "bone": "osse",
+        "grease": "adipe",
+        "egg": "owu",
+        "horn": "kornu",
+        "tail": "kauda",
+        "feather": "pluma",
+        "hair": "kapillu",
+        "head": "kaput",
+        "ear": "aure",
+        "eye": "okulu",
+        "nose": "nasu",
+        "mouth": "ore",
+        "tooth": "dente",
+        "tongue": "linɡwa",
+        "fingernail": "unɡwe",
+        "foot": "pede",
+        "leg": "krure",
+        "knee": "ɡenu",
+        "hand": "manu",
+        "belly": "wentre",
+        "neck": "kollu",
+        "breasts": "pektus",
+        "heart": "kor",
+        "liver": "jekur",
+        "drink": "bibe",
+        "eat": "ede",
+        "bite": "morde",
+        "see": "wide",
+        "hear": "audi",
+        "know": "ski",
+        "sleep": "dormi",
+        "die": "mori",
+        "kill": "interfike",
+        "swim": "nata",
+        "fly": "wola",
+        "walk": "ambula",
+        "come": "weni",
+        "lie": "jake",
+        "sit": "sede",
+        "stand": "sta",
+        "give": "da",
+        "say": "dike",
+        "sun": "sole",
+        "moon": "luna",
+        "star": "stella",
+        "water": "akʷa",
+        "rain": "pluwja",
+        "stone": "lapide",
+        "sand": "arena",
+        "earth": "terra",
+        "cloud": "nube",
+        "smoke": "fumu",
+        "fire": "iɡne",
+        "ash": "kinere",
+        "burn": "arde",
+        "path": "semita",
+        "mountain": "monte",
+        "red": "rubru",
+        "green": "wiride",
+        "yellow": "flawu",
+        "white": "albu",
+        "black": "niɡru",
+        "night": "nokte",
+        "hot": "kalidu",
+        "cold": "friɡidu",
+        "full": "plenu",
+        "new": "nowu",
+        "good": "bonu",
+        "round": "rotundu",
+        "dry": "sikku",
+        "name": "nomen",
+        "father": "patre",
+        "mother": "matre",
+        "child": "infante",
+        "family": "familja",
+        "house": "domu",
+        "village": "wiku",
+        "town": "oppidu",
+        "road": "wia",
+        "river": "flumen",
+        "sea": "mare",
+        "forest": "silwa",
+        "field": "aɡru",
+        "wind": "wentu",
+        "thunder": "tonitru",
+        "day": "die",
+        "year": "annu",
+        "morning": "mane",
+        "food": "kibu",
+        "grain": "ɡranu",
+        "salt": "sale",
+        "animal": "animale",
+        "horse": "ekʷu",
+        "boat": "nawe",
+        "trade": "merkatu",
+        "king": "reɡe",
+        "law": "leɡe",
+        "war": "bellu",
+        "peace": "pake",
+        "god": "deu",
+        "spirit": "spiritu",
+        "ritual": "ritu",
+        "write": "skribe",
+        "read": "leɡe",
+        "speak": "lokʷe",
+        "language": "linɡwa",
+        "friend": "amiku",
+        "enemy": "inimiku",
+        "work": "labora",
+        "make": "fake",
+        "carry": "fere",
+        "open": "aperi",
+        "close": "klaude",
+        "near": "prope",
+        "far": "prokul",
+        "old": "wetere",
+        "young": "juwene",
+        "fast": "weloke",
+        "slow": "lentu",
+        "have": "habe",
+        "finish": "fini",
+        "go": "wade",
+        "want": "wole",
+        "thing": "re",
+        "step": "passu"
+      },
+      "processes": [
+        {
+          "family": "coda_loss",
+          "label": "m → ∅ /V_#",
+          "share": 0.3
+        }
+      ]
+    },
+    {
+      "id": "gaulish",
+      "name": "galština (keltština)",
+      "consonants": [
+        "p",
+        "b",
+        "t",
+        "d",
+        "k",
+        "ɡ",
+        "s",
+        "m",
+        "n",
+        "l",
+        "r",
+        "j",
+        "w",
+        "x"
+      ]
+    },
+    {
+      "id": "iberian",
+      "name": "iberština",
+      "consonants": [
+        "b",
+        "t",
+        "d",
+        "k",
+        "ɡ",
+        "s",
+        "ʃ",
+        "m",
+        "n",
+        "l",
+        "r",
+        "ɾ"
+      ]
+    },
+    {
+      "id": "dacian",
+      "name": "dáčtina",
+      "consonants": [
+        "p",
+        "b",
+        "t",
+        "d",
+        "k",
+        "ɡ",
+        "s",
+        "z",
+        "m",
+        "n",
+        "l",
+        "r",
+        "j",
+        "w"
+      ]
+    },
+    {
+      "id": "germanic",
+      "name": "pragermánština",
+      "consonants": [
+        "p",
+        "b",
+        "t",
+        "d",
+        "k",
+        "ɡ",
+        "f",
+        "θ",
+        "s",
+        "h",
+        "m",
+        "n",
+        "l",
+        "r",
+        "j",
+        "w"
+      ],
+      "stress": "initial",
+      "stress_strength": "strong"
+    },
+    {
+      "id": "slavic",
+      "name": "praslovanština",
+      "consonants": [
+        "p",
+        "b",
+        "t",
+        "d",
+        "k",
+        "ɡ",
+        "s",
+        "z",
+        "x",
+        "m",
+        "n",
+        "l",
+        "r",
+        "j",
+        "w",
+        "tʃ",
+        "ʃ",
+        "ʒ"
+      ]
+    },
+    {
+      "id": "greek",
+      "name": "řečtina",
+      "grammar": "full",
+      "consonants": [
+        "p",
+        "b",
+        "t",
+        "d",
+        "k",
+        "ɡ",
+        "f",
+        "θ",
+        "s",
+        "z",
+        "x",
+        "m",
+        "n",
+        "l",
+        "r"
+      ],
+      "constructions": {
+        "DEFINITE": {
+          "kind": "periphrastic",
+          "stage": "free",
+          "source": "that"
+        }
+      }
+    }
+  ],
+  "regions": [
+    {
+      "id": "italia",
+      "name": "Itálie",
+      "position": [
+        0,
+        0
+      ],
+      "neighbours": [
+        "gallia",
+        "balkan",
+        "germania"
+      ],
+      "language": "latin",
+      "density": 2.0,
+      "prestige": 1.0
+    },
+    {
+      "id": "gallia",
+      "name": "Galie",
+      "position": [
+        -60,
+        50
+      ],
+      "neighbours": [
+        "italia",
+        "hispania",
+        "armorica",
+        "germania",
+        "britannia"
+      ],
+      "language": "gaulish"
+    },
+    {
+      "id": "hispania",
+      "name": "Hispánie",
+      "position": [
+        -120,
+        10
+      ],
+      "neighbours": [
+        "gallia"
+      ],
+      "language": "iberian"
+    },
+    {
+      "id": "britannia",
+      "name": "Británie",
+      "position": [
+        -80,
+        120
+      ],
+      "neighbours": [
+        "gallia",
+        "armorica",
+        "germania",
+        "scandinavia"
+      ],
+      "language": "gaulish"
+    },
+    {
+      "id": "armorica",
+      "name": "Armorika",
+      "position": [
+        -110,
+        80
+      ],
+      "neighbours": [
+        "gallia",
+        "britannia"
+      ],
+      "language": "gaulish",
+      "villages": 3,
+      "density": 0.7
+    },
+    {
+      "id": "germania",
+      "name": "Germánie",
+      "position": [
+        10,
+        100
+      ],
+      "neighbours": [
+        "gallia",
+        "italia",
+        "scandinavia",
+        "slavia",
+        "britannia"
+      ],
+      "language": "germanic"
+    },
+    {
+      "id": "scandinavia",
+      "name": "Skandinávie",
+      "position": [
+        20,
+        170
+      ],
+      "neighbours": [
+        "germania",
+        "britannia"
+      ],
+      "language": "germanic",
+      "villages": 3,
+      "density": 0.6
+    },
+    {
+      "id": "slavia",
+      "name": "Slovanská pravlast",
+      "position": [
+        110,
+        110
+      ],
+      "neighbours": [
+        "germania",
+        "dacia",
+        "balkan"
+      ],
+      "language": "slavic"
+    },
+    {
+      "id": "dacia",
+      "name": "Dácie",
+      "position": [
+        100,
+        40
+      ],
+      "neighbours": [
+        "slavia",
+        "balkan"
+      ],
+      "language": "dacian",
+      "density": 0.7,
+      "terrain": "mountains"
+    },
+    {
+      "id": "balkan",
+      "name": "Balkán",
+      "position": [
+        80,
+        -10
+      ],
+      "neighbours": [
+        "italia",
+        "dacia",
+        "slavia"
+      ],
+      "language": "greek"
+    }
+  ],
+  "events": [
+    {
+      "kind": "state",
+      "year": -100,
+      "id": "rome",
+      "regions": [
+        "italia",
+        "hispania",
+        "gallia"
+      ],
+      "capital": "italia",
+      "policy": "romanization"
+    },
+    {
+      "kind": "annexation",
+      "year": 43,
+      "state": "rome",
+      "regions": [
+        "britannia"
+      ]
+    },
+    {
+      "kind": "annexation",
+      "year": 106,
+      "state": "rome",
+      "regions": [
+        "dacia"
+      ]
+    },
+    {
+      "kind": "secession",
+      "year": 271,
+      "id": "dacia-free",
+      "regions": [
+        "dacia"
+      ],
+      "capital": "dacia"
+    },
+    {
+      "kind": "secession",
+      "year": 410,
+      "id": "britain-free",
+      "regions": [
+        "britannia"
+      ],
+      "capital": "britannia"
+    },
+    {
+      "kind": "elite",
+      "year": 418,
+      "from": "germania",
+      "seat": "hispania",
+      "language": "germanic",
+      "population": 150,
+      "prestige": 1.5
+    },
+    {
+      "kind": "settlement",
+      "year": 450,
+      "from": "germania",
+      "to": "britannia",
+      "share": 0.15,
+      "settlements": 2
+    },
+    {
+      "kind": "secession",
+      "year": 476,
+      "id": "hispania-state",
+      "regions": [
+        "hispania"
+      ],
+      "capital": "hispania",
+      "language": "latin",
+      "policy": "promoted"
+    },
+    {
+      "kind": "elite",
+      "year": 486,
+      "from": "germania",
+      "seat": "gallia",
+      "language": "germanic",
+      "population": 200,
+      "prestige": 1.5
+    },
+    {
+      "kind": "secession",
+      "year": 486,
+      "id": "francia",
+      "regions": [
+        "gallia"
+      ],
+      "capital": "gallia",
+      "language": "latin",
+      "policy": "promoted"
+    },
+    {
+      "kind": "settlement",
+      "year": 550,
+      "from": "slavia",
+      "to": "balkan",
+      "share": 0.2,
+      "settlements": 2
+    },
+    {
+      "kind": "settlement",
+      "year": 600,
+      "from": "slavia",
+      "to": "dacia",
+      "share": 0.15,
+      "settlements": 1
+    },
+    {
+      "kind": "elite",
+      "year": 870,
+      "from": "scandinavia",
+      "seat": "britannia",
+      "language": "germanic",
+      "population": 150,
+      "prestige": 1.2
+    },
+    {
+      "kind": "elite",
+      "year": 1066,
+      "from": "gallia",
+      "seat": "britannia",
+      "language": "latin",
+      "population": 100,
+      "prestige": 2.5
+    }
+  ],
+  "parameters": {
+    "policy_levels": {
+      "enforced": {
+        "pull": 1.0,
+        "share": 0.6
+      },
+      "promoted": {
+        "pull": 0.1,
+        "share": 0.3
+      },
+      "tolerant": {
+        "pull": 0.0,
+        "share": 0.1
+      },
+      "romanization": {
+        "pull": 0.15,
+        "share": 0.6
+      }
+    }
+  }
+}

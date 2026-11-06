@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 use crate::events::{PendingEvent, WorldEvent};
 use crate::grammar::profile;
@@ -28,7 +28,9 @@ use crate::{Simulation, SimulationConfig};
 pub const FORMAT: &str = "cee-v2-world/1";
 
 /// Druhy událostí popisu světa.
-pub const EVENT_KINDS: [&str; 13] = [
+pub const EVENT_KINDS: [&str; 15] = [
+    "settlement",
+    "elite",
     "state",
     "language_policy",
     "annexation",
@@ -468,14 +470,126 @@ pub fn build(spec: &WorldSpec) -> Result<(World, Vec<Box<dyn WorldEvent>>), Stri
                 item.kind
             ));
         }
-        events.push(crate::events::from_pending(PendingEvent::new(
-            item.year,
-            &item.kind,
-            Value::Object(item.params.clone()),
-        )));
+        match item.kind.as_str() {
+            "settlement" | "elite" => {
+                for (kind, params) in region_event(spec, item)
+                    .map_err(|e| format!("events.{index} ({}): {e}", item.kind))?
+                {
+                    events.push(crate::events::from_pending(PendingEvent::new(
+                        item.year, kind, params,
+                    )));
+                }
+            }
+            _ => events.push(crate::events::from_pending(PendingEvent::new(
+                item.year,
+                &item.kind,
+                Value::Object(item.params.clone()),
+            ))),
+        }
     }
     events.extend(background_events(spec, &params_for_background)?);
     Ok((world, events))
+}
+
+/// Vesnice regionu popisu světa (jména `region-v0` …, jak je zakládá `region_world`).
+fn villages_of(spec: &WorldSpec, region: &str) -> Result<Vec<String>, String> {
+    let found = spec
+        .regions
+        .iter()
+        .find(|r| r.id == region)
+        .ok_or_else(|| format!("neznámý region '{region}'"))?;
+    Ok((0..found.villages)
+        .map(|i| format!("{region}-v{i}"))
+        .collect())
+}
+
+/// Události po regionech přeložené na události skupin enginu (dok. 23, M8):
+///
+/// - `settlement` (`from`, `to`, `share`, volitelně `settlements` a `prestige`): podíl `share`
+///   obyvatel vesnic regionu `from` se usadí v regionu `to` v nových osadách (`to+from-0` …);
+///   osady patří do regionu `to` a jejich lidé mluví jazykem odkud přišli (migrace).
+/// - `elite` (`from`, `seat`, `subjects`, volitelně `population`, `prestige`, `strength`): elita
+///   z největší vesnice regionu `from` se usadí v regionu `seat` s vazbami na vesnice regionů
+///   `subjects` (dobytí, superstrát).
+fn region_event(spec: &WorldSpec, item: &EventSpec) -> Result<Vec<(&'static str, Value)>, String> {
+    let p = &item.params;
+    let text = |key: &str| -> Result<String, String> {
+        p.get(key)
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .ok_or_else(|| format!("chybí pole '{key}'"))
+    };
+    let number = |key: &str, default: f64| p.get(key).and_then(Value::as_f64).unwrap_or(default);
+    match item.kind.as_str() {
+        "settlement" => {
+            let (from, to) = (text("from")?, text("to")?);
+            let share = number("share", 0.2);
+            if !(share > 0.0 && share < 1.0) {
+                return Err("share musí být mezi 0 a 1".into());
+            }
+            let count = number("settlements", 1.0).max(1.0) as usize;
+            let target = spec
+                .regions
+                .iter()
+                .find(|r| r.id == to)
+                .ok_or_else(|| format!("neznámý region '{to}'"))?;
+            let sources = villages_of(spec, &from)?;
+            let mut out = Vec::new();
+            for n in 0..count {
+                let angle = std::f64::consts::TAU * (n as f64 + 0.5) / count as f64;
+                let position = [
+                    target.position.0 + spec.village_spacing * 0.5 * angle.cos(),
+                    target.position.1 + spec.village_spacing * 0.5 * angle.sin(),
+                ];
+                let mut params = Map::new();
+                params.insert(
+                    "sources".into(),
+                    Value::Array(
+                        sources
+                            .iter()
+                            .map(|s| json!([s, share / count as f64]))
+                            .collect(),
+                    ),
+                );
+                params.insert("target".into(), json!(format!("{to}+{from}-{n}")));
+                params.insert("position".into(), json!(position));
+                params.insert("region".into(), json!(to));
+                params.insert("reach".into(), json!(spec.village_spacing * 2.5));
+                if let Some(prestige) = p.get("prestige").filter(|v| !v.is_null()) {
+                    params.insert("prestige".into(), prestige.clone());
+                }
+                out.push(("migration", Value::Object(params)));
+            }
+            Ok(out)
+        }
+        "elite" => {
+            let (from, seat) = (text("from")?, text("seat")?);
+            villages_of(spec, &from)?;
+            // S jazykem (`language`) se elita vybere až v roce události podle jazyka.
+            let conqueror = match p.get("language").and_then(Value::as_str) {
+                Some(language) => format!("{from}:{language}"),
+                None => format!("{from}-v0"),
+            };
+            // Poddané regiony se dohledají až v roce události (`@region`).
+            let subjects: Vec<String> = match p.get("subjects") {
+                Some(Value::Array(items)) => items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(|r| villages_of(spec, r).map(|_| format!("@{r}")))
+                    .collect::<Result<Vec<_>, _>>()?,
+                _ => vec![format!("@{seat}")],
+            };
+            let mut params = Map::new();
+            params.insert("conqueror".into(), json!(conqueror));
+            params.insert("territory".into(), json!(seat));
+            params.insert("subjects".into(), json!(subjects));
+            params.insert("population".into(), json!(number("population", 100.0)));
+            params.insert("prestige".into(), json!(number("prestige", 2.0)));
+            params.insert("strength".into(), json!(number("strength", 0.5)));
+            Ok(vec![("conquest", Value::Object(params))])
+        }
+        _ => Ok(Vec::new()),
+    }
 }
 
 /// Události pozadí dějin pro popis světa (po událostech autora ve stejném roce).

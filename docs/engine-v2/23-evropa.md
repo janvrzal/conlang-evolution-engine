@@ -60,3 +60,43 @@ v západní církvi, církevní slovanština na Balkáně a východě (`religiou
    (po rodinách a regionech).
 3. Cíle jako profil podobnosti; nudge jen podmínkami scénáře.
 4. Výkon: odhad 9 regionů × 4 až 6 vesnic × 96 generací, desítky sekund na běh.
+
+## M8a: postaveno (6. 11. 2026)
+
+Schválil uživatel („Ano, stavět“). Zapsáno:
+
+- **Události po regionech v popisu světa** (Rust `spec::region_event`, `spec.py`): `settlement`
+  (`from`, `to`, `share`, `settlements`, `prestige`) se přeloží na migraci do nových osad v cílovém
+  regionu (`migration` nově umí `region`, kam osada patří); `elite` (`from`, `seat`, `subjects`,
+  `language`, `population`, `prestige`, `strength`) na dobytí. Elita i poddaní se dohledají **až v roce
+  události** (`region:jazyk` = největší skupina toho jazyka v regionu, `@region` = všechny mluvené
+  skupiny regionu), protože romanizace mezitím vesnice přestaví.
+- **Scénář** `src/cee/data/scenarios/evropa.json`: 10 regionů, 7 prajazyků (latina z dokumentu 22;
+  galština, iberština, dáčtina, pragermánština s pevným silným přízvukem na první slabice,
+  praslovanština, řečtina se členem; generované slovníky), −500 až 1900. Řím (romanizace), anexe
+  Británie (43) a Dácie (106), odtržení Dácie (271) a Británie (410), Vizigóti v Hispánii (418),
+  Anglosasové do Británie (450), Frankové v Galii (486), nástupnické státy s úřední latinou, Slované
+  na Balkán (550) a do Dácie (600), seveřané (870) a Normané (1066) jako elita v Británii.
+- **Měřidlo** `cee calibrate --only evropa` (12 semínek, 31 s): podíly jazyků v regionech, pád a člen
+  po rodinách, vzdálenost uvnitř rodin a mezi nimi, počet jazyků; zatím cíl `m8::evropa_info`
+  (informace).
+
+### První běh bez ladění
+
+| bod profilu | medián 12 semínek |
+|---|---|
+| románské větve bez pádu | 4 ze 4 |
+| galština a iberština zaniknou (podíl < 0,1) | ano |
+| keltština přežije na okraji | ano (Armorika 1,00, Británie 0,56) |
+| franská elita přejde na latinu | ano |
+| slovanská pravlast drží pád | ano |
+| počet jazyků v roce 1900 | 25 |
+| vzdálenost uvnitř rodin / mezi rodinami | 0,58 |
+| germánština v Británii převládne | **ne** (podíl 0,10) |
+| angličtina ztratí pád a pevninská germánština ne | **ne** |
+| balkánská slovanština ztratí pád nebo získá člen | **ne** (Slované na Balkáně 0,16) |
+| latina v Dácii | 0,07 |
+
+Selhání mají jednu příčinu: **přistěhovalci se usadí, ale jejich jazyk se nešíří**. Historicky přešli
+Britové na angličtinu a Balkán na slovanštinu díky anglosaským královstvím a bulharské říši, tedy
+přes státy s úředním jazykem přistěhovalců. Další krok: tyto státy jako podmínky scénáře.

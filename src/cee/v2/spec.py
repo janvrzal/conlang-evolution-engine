@@ -277,16 +277,45 @@ class ImmigrationSpec(_Event):
 
 
 
+class SettlementSpec(_Event):
+    """Lidé z regionu ``from`` se usadí v regionu ``to`` (migrace, nové osady)."""
+
+    kind: Literal["settlement"]
+    from_: str = Field(alias="from", min_length=1)
+    to: str = Field(min_length=1)
+    share: float = Field(default=0.2, gt=0.0, lt=1.0)
+    settlements: int = Field(default=1, ge=1)
+    prestige: float | None = None
+
+
+
+class EliteSpec(_Event):
+    """Elita z regionu ``from`` ovládne region ``seat`` (dobytí, superstrát)."""
+
+    kind: Literal["elite"]
+    from_: str = Field(alias="from", min_length=1)
+    seat: str = Field(min_length=1)
+    #: Jazyk elity (linie); elitou je největší skupina toho jazyka v regionu ``from`` v roce události.
+    language: str | None = None
+    subjects: list[str] | None = None
+    population: float = Field(default=100.0, gt=0.0)
+    prestige: float = 2.0
+    strength: float = Field(default=0.5, gt=0.0)
+
+
+
 EventSpec = Annotated[
     Union[
         StateSpec, LanguagePolicySpec, AnnexationSpec, SecessionSpec, CollapseSpec, BorderPolicySpec,
         LinguaFrancaSpec, StandardSpec, SchoolsSpec, RevivalSpec, PreserveSpec, IdentitySpec, ImmigrationSpec,
+        SettlementSpec, EliteSpec,
     ],
     Field(discriminator="kind"),
 ]
 EVENT_KINDS = (
     "state", "language_policy", "annexation", "secession", "collapse", "border_policy",
     "lingua_franca", "standard", "schools", "revival", "preserve", "identity", "immigration",
+    "settlement", "elite",
 )
 
 
