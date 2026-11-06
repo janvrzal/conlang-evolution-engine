@@ -933,3 +933,29 @@ Romania 9 z 10: nově zánik latinského futura (≥ 3 větve) a jeho obnova (as
 **člen** (`m7::latina_clen`, 0 z 20 běhů): potřebuje silnější extravaganci (0,15 se škálou 0,4 nebo
 0,2), a ta rozbije stacionaritu typologie. Člen v Romanii nejspíš brzdí něco specifického pro latinu
 (zdroj *ille* = `that`, potřeba členu 0,25 a kontext 0,16 jsou nejnižší v katalogu); rozbor zbývá.
+
+### M7.3m: proč v Romanii nevzniká člen (rozbor, nezapsáno)
+
+Dočasný výpis fitness (do kódu nezapsán) pro `construction:DEFINITE` ve výchozí Romanii, průměr
+přes hodnocení:
+
+| varianta | expresivita | ekonomie | konformita | součet |
+|---|---|---|---|---|
+| volný opis *ille* (`that`) / *hic* (`this`) | +0,149 | −0,150 | −0,098 | **−0,10** |
+| bez členu (`zero`) | +0,008 | 0 | +0,044 | **+0,05** |
+| koncovkový člen (exaptace) | +0,012 | 0 | −0,099 | −0,09, u L2 mluvčích navíc učitelnost −0,95 |
+
+Opis členu (podíl v průměru 1 %, nejvýš 0,57) vždy prohraje: přitažlivost čerstvého opisu
+(`extravagance` 0,1) a potřeba (0,25 × 0,2) jen vyrovnají cenu slova navíc a konformita vzácnou variantu
+dorazí. Futurum se obnoví jen díky vyšší potřebě (0,4 × 0,2 + 0,1 = 0,18 > 0,15). V malém typologickém
+světě člen vzniká, protože drift tam občas vynese vzácnou variantu nad práh.
+
+Vyšší potřeba členu (`grammar.DEFINITE.need` 0,35 / 0,4 / 0,5; `kalibrace/m73-clen.json`) nepomůže:
+v typologii se člen pak jen hromadí (+20 / −0, Hellinger 0,36, neprošla) a v Romanii vznikne ve dvou
+větvích jen v 1 až 3 bězích z 20.
+
+**Závěr:** člen v Romanii potřebuje podmínku, kterou model nemá. Literatura spojuje vznik románského
+členu s přestavbou jmenné fráze po zániku pádů (*ille* přebírá značení určitosti a části role, kterou
+nesly koncovky); model mezi zánikem pádu a potřebou členu žádnou vazbu nemá. Doložit takovou vazbu
+napříč jazyky by chtělo zdroj (WALS 37A × 49A), zatím se nic nemění. **Romania zůstává 9 z 10,
+kalibrace 21 z 22.**
