@@ -107,7 +107,11 @@ pub struct World {
     pub bank: FormBank,
     /// Živé fondy: proměnné, ve kterých se skupiny liší.
     pub live: LivePools,
+    /// Odvozovací přípona světa bez jazykových linií (`scenarios::DERIVATIONAL_SUFFIX`).
     pub derivational_suffix: Form,
+    /// Odvozovací přípony jazykových linií (`seed_lineages`); linie bez nich bere příponu světa.
+    #[serde(default)]
+    pub derivational_suffixes: BTreeMap<LanguageId, Vec<Form>>,
     /// Protojazyky už dostaly souběžnou variabilitu (`variation::seed`).
     pub varied: bool,
     /// Zvukové změny rozběhnuté na startu (`LanguageSpec.processes`), rozdají se při startu
@@ -152,6 +156,7 @@ impl World {
             bank: FormBank::new(table),
             live: LivePools::default(),
             derivational_suffix: Vec::new(),
+            derivational_suffixes: BTreeMap::new(),
             varied: false,
             initial_processes: Vec::new(),
             transfer: TransferState::default(),
@@ -775,6 +780,44 @@ impl World {
             self.derivational_suffix = table.parse(suffix)?;
         }
         Ok(())
+    }
+
+    /// Odvozovací přípony jazykové linie (IPA podle tabulky hlásek).
+    pub fn set_derivational_suffixes(
+        &mut self,
+        language: LanguageId,
+        suffixes: &[String],
+    ) -> Result<(), String> {
+        let Some(table) = &self.table else {
+            return Ok(());
+        };
+        let parsed = suffixes
+            .iter()
+            .map(|s| table.parse(s))
+            .collect::<Result<Vec<Form>, String>>()?;
+        self.derivational_suffixes.insert(language, parsed);
+        Ok(())
+    }
+
+    /// Odvozovací přípony, které skupina zná: přípony její linie, jinak přípona světa.
+    pub fn suffixes_of(&self, group: GroupId) -> Vec<&Form> {
+        let language = self.groups.main_code(group).language;
+        match self.derivational_suffixes.get(&language) {
+            Some(own) if !own.is_empty() => own.iter().collect(),
+            _ if self.derivational_suffix.is_empty() => Vec::new(),
+            _ => vec![&self.derivational_suffix],
+        }
+    }
+
+    /// Přípona, kterou skupina odvodí slovo pro pojem `concept`: v jedné linii má pojem
+    /// vždy stejnou příponu, v různých liniích různou.
+    pub fn suffix_for(&self, group: GroupId, concept: &str) -> Option<&Form> {
+        let known = self.suffixes_of(group);
+        if known.is_empty() {
+            return None;
+        }
+        let at = stable_int(&[Part::Str("suffix"), Part::Str(concept)]) as usize % known.len();
+        Some(known[at])
     }
 
     /// Jazyk (linie) podle jména; nová linie dostane další číslo.

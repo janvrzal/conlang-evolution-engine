@@ -599,6 +599,8 @@ pub struct ProtoLanguage {
     pub tones: Vec<String>,
     /// Vlastní koncovky jazyka (`None` = výchozí `syntax_endings`).
     pub endings: Option<Endings>,
+    /// Odvozovací přípony (IPA); prázdné = vylosují se z inventáře ([`generated_suffixes`]).
+    pub suffixes: Vec<String>,
 }
 
 impl ProtoLanguage {
@@ -615,6 +617,7 @@ impl ProtoLanguage {
             endonym: Vec::new(),
             tones: Vec::new(),
             endings: None,
+            suffixes: Vec::new(),
         }
     }
 
@@ -627,6 +630,43 @@ impl ProtoLanguage {
         self.grammar = grammar;
         self
     }
+}
+
+/// Počet odvozovacích přípon jazyka, který je nemá zadané.
+const GENERATED_SUFFIXES: usize = 3;
+
+/// Odvozovací přípony z inventáře jazyka: tvary VC, CV a VCV z častějších hlásek (začátek
+/// seznamu), různé od sebe; stejné semínko dá stejné přípony.
+pub fn generated_suffixes(language: &ProtoLanguage, seed: u64) -> Vec<String> {
+    let mut rng = Stream::new(seed, &[Part::Str("suffixes")]);
+    let (consonants, vowels) = (&language.consonants, &language.vowels);
+    if consonants.is_empty() || vowels.is_empty() {
+        return Vec::new();
+    }
+    let mut pick = |list: &Vec<String>, top: usize| -> String {
+        list[rng.integers(list.len().min(top) as u64) as usize].clone()
+    };
+    let mut found: Vec<String> = Vec::new();
+    for attempt in 0..30 {
+        let shape = ["VC", "CV", "VCV"][(found.len() + attempt) % 3];
+        let suffix: String = shape
+            .chars()
+            .map(|c| {
+                if c == 'V' {
+                    pick(vowels, 4)
+                } else {
+                    pick(consonants, 8)
+                }
+            })
+            .collect();
+        if !found.contains(&suffix) {
+            found.push(suffix);
+        }
+        if found.len() == GENERATED_SUFFIXES {
+            break;
+        }
+    }
+    found
 }
 
 /// Protojazyky několika nepříbuzných linií (každý vlastní tvary a gramatiku).
@@ -713,6 +753,13 @@ pub fn seed_lineages(
             Some(&cells[&language.id]),
         )?;
         let base = seed_constructions(world, base, &language.grammar)?;
+        let suffixes = if language.suffixes.is_empty() {
+            generated_suffixes(language, language_seed as u64)
+        } else {
+            language.suffixes.clone()
+        };
+        let id = world.language(&language.id);
+        world.set_derivational_suffixes(id, &suffixes)?;
         bases.insert(
             language.id.clone(),
             seed_prosody(world, base, language.stress_rule, language.stress_strength),

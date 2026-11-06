@@ -470,14 +470,27 @@ pub struct Relation {
     pub colexification: u32,
 }
 
+/// Váha dokladu z `count` jazyků: ln(1 + count), u vazby doložené v méně než `recurrence`
+/// jazycích navíc krát count / recurrence (ojedinělý posun nebo odvození jednoho jazyka
+/// se jinde opakuje zřídka). `recurrence` ≤ 1 = bez zmenšení.
+fn evidence(count: u32, recurrence: f64) -> f64 {
+    let n = f64::from(count);
+    n.ln_1p()
+        * if recurrence > 1.0 {
+            (n / recurrence).min(1.0)
+        } else {
+            1.0
+        }
+}
+
 impl Relation {
     /// Síla dokladu pro posun významu A → B (kolexifikace váží méně).
-    pub fn shift_weight(&self) -> f64 {
-        f64::from(self.polysemy).ln_1p() + f64::from(self.colexification).ln_1p() / 3.0
+    pub fn shift_weight(&self, recurrence: f64) -> f64 {
+        evidence(self.polysemy, recurrence) + f64::from(self.colexification).ln_1p() / 3.0
     }
 
-    pub fn derivation_weight(&self) -> f64 {
-        f64::from(self.derivation).ln_1p()
+    pub fn derivation_weight(&self, recurrence: f64) -> f64 {
+        evidence(self.derivation, recurrence)
     }
 }
 

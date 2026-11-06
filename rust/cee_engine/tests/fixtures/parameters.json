@@ -190,6 +190,7 @@
   "mass": 0.8,
   "towns": 0.3
  },
+ "semantic_recurrence": 3.0,
  "shift_exponent": 1.31,
  "shift_rate": 1.0,
  "standard_prestige": 1.5,

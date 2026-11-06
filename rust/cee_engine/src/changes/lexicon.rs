@@ -394,7 +394,7 @@ impl SemanticChange {
                     if Some(root) == current || !compatible(relation.source, concept) {
                         continue;
                     }
-                    let weight = relation.shift_weight();
+                    let weight = relation.shift_weight(world.params.semantic_recurrence);
                     if weight > 0.0 {
                         found.push(Path {
                             weight,
@@ -424,14 +424,14 @@ impl SemanticChange {
                 }
             }
             Semantic::Derivation => {
-                if world.derivational_suffix.is_empty() {
+                if world.suffixes_of(group).is_empty() {
                     return found;
                 }
                 for relation in graph.into(concept) {
                     let Some(root) = dominant_root(world, group, relation.source) else {
                         continue;
                     };
-                    let weight = relation.derivation_weight();
+                    let weight = relation.derivation_weight(world.params.semantic_recurrence);
                     if weight > 0.0 {
                         found.push(Path {
                             weight,
@@ -843,7 +843,10 @@ impl Change for SemanticChange {
             Semantic::Derivation => {
                 let root = path.root?;
                 let mut form = world.form_of(group, root).to_vec();
-                form.extend_from_slice(&world.derivational_suffix);
+                let suffix = world
+                    .suffix_for(group, concept_name(world, concept))?
+                    .clone();
+                form.extend_from_slice(&suffix);
                 let sources = names(world, &path.from);
                 let morpheme = new_root(world, ctx, site, &form, kind, &parts, sources, Some(root));
                 (
@@ -893,10 +896,11 @@ impl Change for SemanticChange {
             }
             Semantic::BackFormation => {
                 let form = world.form_of(group, path.root?).to_vec();
-                let suffix = world.derivational_suffix.clone();
-                if suffix.is_empty() || form.len() <= suffix.len() + 1 || !form.ends_with(&suffix) {
-                    return None;
-                }
+                let suffix = world
+                    .suffixes_of(group)
+                    .into_iter()
+                    .find(|s| !s.is_empty() && form.len() > s.len() + 1 && form.ends_with(s))?
+                    .clone();
                 let stem = &form[..form.len() - suffix.len()];
                 let morpheme = new_root(world, ctx, site, stem, kind, &parts, Vec::new(), None);
                 (

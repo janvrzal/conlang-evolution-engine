@@ -94,6 +94,8 @@ class LanguageSpec(_Model):
     #: Zvukové změny rozběhnuté na startu: ``[{"family": "coda_loss", "label": "m → ∅ /V_#",
     #: "share": 0.3}]``.
     processes: list[InitialProcessSpec] = Field(default_factory=list)
+    #: Odvozovací přípony (IPA); prázdné = engine je vylosuje z inventáře hlásek jazyka.
+    suffixes: list[str] = Field(default_factory=list)
 
 
 class RegionSpec(_Model):

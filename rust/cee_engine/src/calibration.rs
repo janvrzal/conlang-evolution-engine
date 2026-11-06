@@ -1019,11 +1019,15 @@ fn lineage_groups(
         .collect()
 }
 
-/// Podíl mluvčích linie v regionu (z mluvených skupin regionu).
+/// Podíl mluvčích linie v regionu: domácí jazyk mluvených skupin regionu. Veřejná
+/// dvojjazyčnost (dospělí užívají úřední jazyk mimo domov) se nepočítá.
 fn lineage_share(world: &crate::world::World, region: &str, lineage: &str) -> f64 {
     let pop = |list: &[crate::ids::GroupId]| -> f64 {
         list.iter()
-            .filter(|&&g| !world.groups.written[g.index()])
+            .filter(|&&g| {
+                !world.groups.written[g.index()]
+                    && world.groups.domain[g.index()] == crate::model::group::Domain::Home
+            })
             .map(|&g| f64::from(world.groups.population[g.index()]))
             .sum()
     };
@@ -1073,6 +1077,9 @@ fn evropa(seed: i64) -> Result<Report, String> {
         ("armorica", "gaulish"),
         ("dacia", "latin"),
         ("balkan", "slavic"),
+        ("vasconia", "basque"),
+        ("cambria", "gaulish"),
+        ("graecia", "greek"),
     ] {
         info(
             &mut report,
@@ -1100,6 +1107,7 @@ fn evropa(seed: i64) -> Result<Report, String> {
     grammar("slavia", "slavic");
     grammar("balkan", "slavic");
     grammar("dacia", "slavic");
+    grammar("graecia", "greek");
     // Přežití původních jazyků regionů: ostrůvek = původní jazyk drží menšinu (2 až 50 %).
     let (mut islands, mut survivors) = (0.0, std::collections::BTreeSet::new());
     for region in &spec.regions {
@@ -1151,6 +1159,18 @@ fn evropa(seed: i64) -> Result<Report, String> {
         (
             "slovanská pravlast drží pád",
             flag(v("slavia slavic pád") == 1.0),
+        ),
+        (
+            "baskičtina přežije v horách",
+            flag(v("vasconia podíl basque") > 0.5),
+        ),
+        (
+            "velština přežije i pod anglickým státem",
+            flag(v("cambria podíl gaulish") > 0.5),
+        ),
+        (
+            "řečtina přežije s vlastním státem",
+            flag(v("graecia podíl greek") > 0.5),
         ),
         (
             "balkánská slovanština ztratí pád nebo získá člen",

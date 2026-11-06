@@ -243,3 +243,69 @@ a věrohodnost zdrojů posunů a složenin.
 
 **Další možnost:** se skutečným výchozím slovníkem jde měřit retenci i mimo latinu, například
 staroslověnština → slovanské jazyky nebo starořečtina → novořečtina proti IE-CoR.
+
+## M8f: Vaskonie, Kambrie a Řecko; přípony podle jazyka; ojedinělé posuny (6. 11. 2026)
+
+Uživatel: „Udělej oboje. Taky je potřeba rozšířit ty koncovky, mít pouze -ka je špatně.“
+
+**Regiony** (podmínky ze skutečných dějin, ne ladění): Vaskonie (hory, silná identita, 9 vesnic,
+baskičtina s generovaným slovníkem, uvnitř Říma i Hispánie), Kambrie (kopce, odlišná identita, římská,
+po roce 599 bez státu, 1282 připojena k anglosaskému státu), Řecko (odlišná identita, prestiž 0,9,
+v Římě od −100, Byzanc od 395 s úřední řečtinou). Měřidlo počítá podíl jazyka jen z domácích skupin
+(veřejná dvojjazyčnost dospělých se dřív počítala jako přechod). Nové cíle `m8::baskictina`,
+`m8::velstina`, `m8::rectina` (domácí jazyk nad 50 %, `p_min` 0,8): **12 z 12**. Velština klesne po
+připojení k Anglii na 80–88 % (sčítání 1901: asi polovina Walesu), v Řecku zůstanou latinské komunity
+z římské doby (10–12 %, jako Vlaši).
+
+**Přípony podle jazyka.** Dosud měl celý svět jedinou odvozovací příponu `-ka`. Nově má každá jazyková
+linie své (`LanguageSpec.suffixes`, `World::derivational_suffixes`); jazyk bez zadaných si vylosuje tři
+z inventáře hlásek (tvary VC, CV, VCV z častějších hlásek, `scenarios::generated_suffixes`). Pojem má
+v jedné linii vždy stejnou příponu (`World::suffix_for`), zpětné odvození pozná kteroukoli příponu
+linie. Světy bez linií (statistické brány) dál používají `-ka`. Skutečné přípony (kmeny bez
+koncovky, jako slova):
+
+| jazyk | přípony | předloha |
+|---|---|---|
+| latina | `ellu`, `inu`, `ariu` | *-ellus*, *-īnus*, *-ārius* |
+| gótština | `inɡ`, `isk`, `il` | *-ing-*, *-isk-*, *-ila* |
+| staroslověnština | `ɪk`, `it͡sa`, `ɪn` | *-ьkъ*, *-ica*, *-ьnъ* |
+| starořečtina | `ik`, `idi`, `tɛr` | *-ikós*, *-ídion*, *-tḗr* |
+| galština | `ak`, `ill`, `ik` | *-ākos*, *-illos*, *-ikos* |
+
+**Ojedinělé posuny a odvození.** Z 28 odvozovacích vazeb mezi pojmy (DatSemShift) je 19 doložených
+v jediném jazyce („otec → velký“, „slunce → matka“, „písek → mnoho“) a nesly 48 % váhy, u posunů
+významu 43 %, protože váha ln(1 + n) ojedinělé doklady skoro netrestá. Nový parametr
+`semantic_recurrence` K = 3: vazba z n < K jazyků má váhu ln(1 + n) · n / K. Retence latiny
+0,604 → 0,619 (IE-CoR 0,68–0,73), izolovaný jazyk 0,852 → 0,863 za tisíciletí (Swadesh 0,86).
+
+### Výsledek
+
+**Brány 47 z 47, testy prošly, kalibrace 34 z 36.** Neprošly:
+
+- **`m7::typologie_67A`** (budoucí čas, svět bez linií): Hellinger 0,123 při mezi 0,111 (dosud 0,104).
+  Shodí ho jakékoli zmenšení ojedinělých vazeb (K = 2 i 3 dají 0,123), K = 1 projde. Mechanismus
+  zatím nevysvětlený.
+- **`m8::pocet_jazyku`**: 81,5 jazyka v roce 1900 (pásmo 10–60, dosud 45). Z 83 jazyků (semínko 1)
+  je 68 jednovesnických: Británie 30, Kambrie 16, Řecko 12, Vaskonie 9. Vesnice se tam rozejdou
+  v samostatné jazyky, protože se jejich hlásky mění příliš rychle (viz níže). Británie se tříštila
+  už předtím.
+
+### Tempo hláskových změn proti skutečnosti (podnět uživatele)
+
+Uživatel: „přijde mi, že ty varianty původní stále přežívají.“ Normalizovaná Levenshteinova
+vzdálenost zděděného slova od tvaru prajazyka (po hláskách, bez přízvuku a délky), model v roce 1900
+proti skutečným příbuzným slovům stejného významu v IE-CoR:
+
+| model (od −500) | vzdálenost | beze změny | skutečnost | vzdálenost | beze změny |
+|---|---|---|---|---|---|
+| Itálie (latina) | 0,56 | 9 % | latina → italština / španělština (~2 000 let) | 0,46 / 0,58 | 9 % / 5 % |
+| Germánie / Skandinávie | 0,31 / 0,35 | 33 % / 25 % | gótština → němčina / angličtina (sesterské, ~1 600 let) | 0,64 / 0,69 | 1 % / 0 % |
+| slovanská pravlast | **0,19** | **48 %** | staroslověnština → čeština / ruština (~1 100 let) | 0,40 / 0,55 | 6 % / 7 % |
+| Armorika (galština) | 0,50 | 6 % | | | |
+| Kambrie (galština) | **0,84** | 0 % | | | |
+| Řecko | **0,84** | 0 % | starořečtina → novořečtina (~2 300 let) | 0,42 | 16 % |
+
+Tempo je nerovnoměrné: bez kontaktu (slovanská pravlast, Germánie) se slova mění 2–3× pomaleji než
+ve skutečnosti a třetina až polovina slov zůstane beze změny; v regionech s cizí správou a dvojjazyčností
+(Řecko pod Římem, Kambrie) dvakrát rychleji. Další krok: kalibrace tempa hláskových změn podle těchto
+vzdáleností (IE-CoR, nezávislé na dosavadním ladění).

@@ -96,6 +96,15 @@
    "group": "morphology"
   },
   {
+   "name": "semantic_recurrence",
+   "kind": "number",
+   "default": 3.0,
+   "min": 1.0,
+   "max": 20.0,
+   "description": "Kolik jazyků musí doložit posun významu nebo odvození v grafu pojmů (DatSemShift), aby měl plnou váhu: vazba z n < K jazyků má váhu ln(1 + n) · n / K. Ojedinělý doklad (jeden jazyk: „otec → velký“, „slunce → matka“) se jinde opakuje zřídka. 1 = bez zmenšení (model před M8f). 3 od M8f (6. 11. 2026): vazby z jednoho jazyka nesly 48 % váhy odvození a 43 % váhy posunů; s 3 retence latiny 0,604 → 0,619 (IE-CoR 0,68–0,73) a izolovaný jazyk 0,852 → 0,863 za tisíciletí (Swadesh 0,86; docs/engine-v2/23-evropa.md).",
+   "group": "morphology"
+  },
+  {
    "name": "extravagance",
    "kind": "number",
    "default": 0.1,

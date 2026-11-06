@@ -127,6 +127,9 @@ pub struct LanguageSpec {
     /// provedené (lat. -m vyslovované jen jako nosovost samohlásky).
     #[serde(default)]
     pub processes: Vec<InitialProcess>,
+    /// Odvozovací přípony (IPA); prázdné = engine je vylosuje z inventáře hlásek jazyka.
+    #[serde(default)]
+    pub suffixes: Vec<String>,
 }
 
 /// Zvuková změna rozběhnutá na startu: rodina, popis kandidáta (`m → ∅ /V_#`) a podíl
@@ -262,6 +265,12 @@ fn proto_language(spec: &LanguageSpec, table: &SegmentTable) -> Result<ProtoLang
             .map_err(|e| format!("languages.{}.words.{concept}: {e}", spec.id))?;
     }
     language.words = spec.words.clone();
+    for suffix in &spec.suffixes {
+        table
+            .parse(suffix)
+            .map_err(|e| format!("languages.{}.suffixes: {e}", spec.id))?;
+    }
+    language.suffixes = spec.suffixes.clone();
     language.endonym = spec.endonym.clone();
     language.tones = spec.tones.clone();
     for (function, given) in &spec.constructions {
