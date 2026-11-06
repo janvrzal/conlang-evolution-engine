@@ -1,0 +1,411 @@
+<meta charset="utf-8">
+<title>CEE Poloostrov</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Piazzolla:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+/* Kostra: nahoře jedna lišta (projekt, cesta práce, stav běhu), pod ní pohledy Výsledků, zbytek výšky patří obrazovce. Červený inkoust = změna a ruka autora. */
+:root {
+  --sea: #bccad0; --sea-line: #eef3f4; --land: #fbfbf9;
+  --ink: #1b2830; --ink-2: #56656e; --rule: #d1d9dc;
+  --panel: #eef1f2; --field: #f7f9f9;
+  --red: #ae2a1f; --warn: #9a6a12; --tint: rgba(174, 42, 31, 0.07);
+  --shade: rgba(27, 40, 48, 0.28);
+  --f-ui: "Piazzolla", Georgia, serif;
+  --f-ipa: "Charis CEE", "Charis SIL", "Gentium Plus", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --rule: #26323d;
+    --panel: #111a22; --field: #16212b; --red: #e8806f; --warn: #d9a54a; --tint: rgba(232, 128, 111, 0.09);
+    --shade: rgba(0, 0, 0, 0.5); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sea: #0d141b; --sea-line: #2c4556; --land: #17202a; --ink: #ecdfc5; --ink-2: #8e99a3; --rule: #26323d;
+  --panel: #111a22; --field: #16212b; --red: #e8806f; --warn: #d9a54a; --tint: rgba(232, 128, 111, 0.09);
+  --shade: rgba(0, 0, 0, 0.5); color-scheme: dark;
+}
+@font-face { font-family: "Charis CEE"; src: url("fonts/Charis-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Charis CEE"; src: url("fonts/Charis-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+
+html, body { height: 100%; }
+body { margin: 0; background: var(--panel); color: var(--ink); font-family: var(--f-ui); font-size: 15px; line-height: 1.4; }
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.caps { text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; font-weight: 700; color: var(--ink-2); }
+.why { font-size: 13px; color: var(--ink-2); font-style: italic; line-height: 1.35; }
+.ipa { font-family: var(--f-ipa); }
+
+.shell { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
+
+/* lišta */
+.bar {
+  position: relative; display: flex; align-items: baseline; gap: 10px 28px; flex-wrap: wrap;
+  padding-block: 10px 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--ink);
+}
+.project { background: none; border: 0; padding: 0; cursor: pointer; text-align: left; font-size: 22px; font-style: italic; }
+.project small { font-style: normal; font-size: 12px; color: var(--ink-2); margin-left: 8px; }
+.project:hover small { color: var(--ink); }
+.path { display: flex; gap: 4px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; align-items: baseline; }
+.path li { display: flex; align-items: baseline; gap: 4px; }
+.path li + li::before { content: ""; width: 22px; border-top: 1px dotted var(--ink-2); align-self: center; }
+.path a { color: var(--ink-2); text-decoration: none; padding: 2px 4px; font-size: 15px; }
+.path a b { font-weight: 500; font-size: 11px; margin-right: 4px; }
+.path a[aria-current="page"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--red); }
+.path a:hover { color: var(--ink); }
+.path .mark { font-size: 11px; font-style: italic; color: var(--red); margin-left: 4px; }
+.run { margin-left: auto; display: flex; align-items: baseline; gap: 12px; font-size: 13px; color: var(--ink-2); font-style: italic; }
+.run b { font-style: normal; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.run.stale { color: var(--red); }
+.btn { background: var(--field); border: 1px solid var(--rule); border-radius: 2px; padding: 4px 12px; cursor: pointer; font-size: 14px; font-style: normal; }
+.btn:hover { border-color: var(--ink-2); }
+.btn.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.btn.quiet { background: none; border-color: transparent; color: var(--ink-2); padding-inline: 6px; }
+.btn.quiet:hover { color: var(--ink); border-color: var(--rule); }
+.progress { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--red); width: 0; transition: width 0.3s linear; }
+
+/* pohledy Výsledků */
+.views {
+  display: flex; gap: 22px; align-items: baseline; flex-wrap: wrap;
+  padding-block: 8px 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.views a { color: var(--ink-2); text-decoration: none; font-size: 16px; padding-bottom: 3px; }
+.views a[aria-current="page"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--red); }
+.views a:hover { color: var(--ink); }
+.views span[aria-disabled] { color: var(--ink-2); opacity: 0.5; font-size: 16px; cursor: default; }
+.views .note { margin-left: auto; }
+.views .branch { font-size: 15px; color: var(--ink-2); font-style: italic; }
+.views .branch b { font-style: normal; font-weight: 500; color: var(--ink); }
+.yr { display: flex; align-items: baseline; gap: 10px; }
+.views .note + .yr { margin-left: 0; }
+.yr input { width: min(260px, 40vw); accent-color: var(--ink); align-self: center; }
+.yr b { font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
+.play { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--ink-2); background: none; display: grid; place-items: center; cursor: pointer; align-self: center; padding: 0; }
+.play svg { fill: var(--ink); }
+
+/* obrazovky */
+.stage { position: relative; min-height: 0; }
+.stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--panel); }
+.stage iframe.off { visibility: hidden; pointer-events: none; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; }
+
+/* projekty */
+.projects { position: absolute; inset: 0; overflow-y: auto; padding-block: 28px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.projects-in { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 40px; }
+.projects h1 { font-size: 26px; font-weight: 400; font-style: italic; margin: 0 0 4px; }
+.projects h2 { margin: 0 0 10px; }
+.plist { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ink); }
+.plist li { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.plist .thumb { width: 96px; height: 64px; background: var(--sea); border-radius: 2px; display: block; }
+.plist b { font-size: 18px; font-weight: 500; font-style: italic; }
+.plist .meta { font-size: 13px; color: var(--ink-2); }
+.plist .branches { font-size: 13px; color: var(--ink-2); font-style: italic; margin-top: 2px; }
+.start { display: grid; gap: 0; border-top: 1px solid var(--ink); }
+.start button { display: grid; gap: 2px; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 11px 0; cursor: pointer; }
+.start button:hover b { box-shadow: inset 0 -1px 0 var(--red); }
+.start b { font-weight: 500; justify-self: start; }
+.start span { font-size: 13px; color: var(--ink-2); font-style: italic; }
+.engine { margin-top: 22px; display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--ink-2); }
+.engine i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); display: inline-block; align-self: center; }
+
+/* poznámky k návrhu */
+.notes {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100%); z-index: 20; overflow-y: auto;
+  background: var(--land); border-left: 1px solid var(--ink); box-shadow: -10px 0 30px var(--shade);
+  padding-block: calc(18px + env(safe-area-inset-top, 0px)) 24px; padding-left: 24px; padding-right: max(24px, env(safe-area-inset-right, 0px));
+}
+.notes h2 { font-size: 22px; font-weight: 400; font-style: italic; margin: 0 0 4px; }
+.notes ol { padding-left: 20px; margin: 14px 0; display: grid; gap: 10px; }
+.notes li b { font-weight: 500; }
+.notes li p { margin: 2px 0 0; font-size: 14px; color: var(--ink-2); }
+.notes .close { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: max(14px, env(safe-area-inset-right, 0px)); }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 30; background: var(--ink); color: var(--panel); padding: 6px 14px; border-radius: 2px; font-size: 13px; font-style: italic; max-width: calc(100% - 32px); }
+
+@media (max-width: 760px) {
+  .projects-in { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .run { margin-left: 0; width: 100%; }
+  .project { font-size: 19px; }
+}
+@media (prefers-reduced-motion: reduce) { .progress { transition: none; } }
+</style>
+
+<div class="shell">
+  <header class="bar">
+    <button class="project" id="project" title="Projekty">Poloostrov<small>2000 let, krok 25 let · 20 krajů · 2 protojazyky</small></button>
+    <nav aria-label="Postup práce">
+      <ol class="path" id="path">
+        <li><a href="#svet" data-step="1"><b>1</b>Svět</a></li>
+        <li><a href="#protojazyk" data-step="2"><b>2</b>Protojazyk</a></li>
+        <li><a href="#dejiny" data-step="3"><b>3</b>Dějiny</a></li>
+        <li><a href="#jazyky" data-step="4"><b>4</b>Výsledky<span class="mark" id="mark4"></span></a></li>
+        <li><a href="#vetve" data-step="5"><b>5</b>Větve</a></li>
+      </ol>
+    </nav>
+    <div class="run" id="run" aria-live="polite"></div>
+    <button class="btn quiet" id="notes-open" aria-expanded="false" aria-controls="notes">O návrhu</button>
+    <div class="progress" id="progress" aria-hidden="true"></div>
+  </header>
+
+  <nav class="views" id="views" aria-label="Pohledy na výsledky" hidden>
+    <a href="#jazyky" data-view="jazyky">Jazyky</a>
+    <a href="#slovnik" data-view="slovnik">Slovník</a>
+    <a href="#slovo" data-view="slovo">Slovo v krajině</a>
+    <span aria-disabled="true" title="Mluvnici navrhneme později">Mluvnice</span>
+    <span class="branch" id="branch-caption" hidden>Hlavní větev <b>×</b> Západ dobude východ, od roku 1300</span>
+    <span class="why note" id="view-note"></span>
+    <div class="yr" id="yr">
+      <button class="play" id="play" aria-label="Přehrát dějiny"><svg id="play-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2l10 6-10 6z"/></svg></button>
+      <input type="range" id="year-input" min="0" max="2000" step="50" aria-label="Rok">
+      <span class="caps">rok</span><b id="year-out"></b>
+    </div>
+  </nav>
+
+  <main class="stage" id="stage">
+    <section class="projects" id="projects" hidden aria-labelledby="h-projects">
+      <div class="projects-in">
+        <div>
+          <h1 id="h-projects">Projekty</h1>
+          <p class="why" style="margin:0 0 18px">Projekt je jeden soubor <span style="font-style:normal">.cee</span>: svět, protojazyky, dějiny, větve a uložené běhy. Ukládá se tam, kam ho dáš.</p>
+          <ul class="plist">
+            <li>
+              <canvas class="thumb" id="thumb" width="192" height="128" aria-label="Mapa Poloostrova"></canvas>
+              <div>
+                <b>Poloostrov</b>
+                <div class="meta">20 krajů · 80 vsí · 2 protojazyky · 0–2000</div>
+                <div class="branches">Větve: hlavní, „Západ dobude východ“ (od 1300)</div>
+              </div>
+              <button class="btn primary" data-go="svet">Otevřít</button>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <h2 class="caps">Nový projekt</h2>
+          <div class="start">
+            <button data-toast="Výběr obrázku tu v návrhu nefunguje."><b>Svět z obrázku mapy…</b><span>Podklad z Azgaaru, Inkarnate nebo ruky. Kraje pak naklikáš na pevninu.</span></button>
+            <button data-toast="V návrhu se otevře rovnou ukázka."><b>Prázdný svět</b><span>Čistý atlas bez podkladu. Pevninu dají kraje.</span></button>
+            <button data-toast="Otevírání souborů tu v návrhu nefunguje."><b>Otevřít soubor .cee…</b><span>Projekt z jiného počítače, i s větvemi a běhy.</span></button>
+          </div>
+          <div class="engine"><i aria-hidden="true"></i><span>Engine v2 je připravený. Běh 2000 let tohoto světa trvá asi 10 s.</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<aside class="notes" id="notes" hidden aria-labelledby="h-notes">
+  <button class="btn quiet close" id="notes-close">Zavřít</button>
+  <span class="caps">Ucelený návrh</span>
+  <h2 id="h-notes">Jak obrazovky drží pohromadě</h2>
+  <p class="why">Pět prototypů z 1. 11. 2026 pod jednou kostrou. Uvnitř obrazovek se nic nepřekreslovalo. Pravidla níže platí pro implementaci v desktopové aplikaci.</p>
+  <ol>
+    <li><b>Jedna lišta.</b><p>Projekt, cesta práce 1–5 a stav běhu. Obrazovky vlastní hlavičku nemají. Klik na jméno projektu otevře Projekty.</p></li>
+    <li><b>Jeden rok.</b><p>Rok pod kurzorem se nese mezi Dějinami, Výsledky, Slovem v krajině a Větvemi. Ve Výsledcích a Větvích ho ovládá lišta pod cestou práce (posuvník, přehrávání, šipky v mapě), Dějiny mají pravítko kroniky a Slovo v krajině osu pod mapou. Dějiny přichytávají na krok 25 let, výsledky na snímek po 50 letech.</p></li>
+    <li><b>Výsledky mají čtyři pohledy.</b><p>Jazyky, Slovník, Slovo v krajině a Mluvnice (přijde později). Slovo v krajině už není samostatná stránka.</p></li>
+    <li><b>Stav běhu žije v liště.</b><p>Změna ve Světě, Protojazyku nebo Dějinách označí výsledky jako zastaralé a lišta nabídne přepočet. Během běhu se dá dál pracovat; průběh je červená linka pod lištou a rok v liště.</p></li>
+    <li><b>Pata obrazovky.</b><p>Vlevo počty a Zpět, uprostřed popis pro engine, vpravo jediná hlavní akce: Pokračovat na další krok, v Dějinách Spustit.</p></li>
+    <li><b>Červený inkoust jen pro změnu.</b><p>Výběr, ruka autora, zastaralé výsledky, rozdíl mezi větvemi. Nic jiného.</p></li>
+  </ol>
+  <span class="caps">Co zbývá</span>
+  <ol>
+    <li><b>Mluvnice</b> jako čtvrtý pohled Výsledků.</li>
+    <li><b>Projekty</b> napojené na soubory a uložené běhy.</li>
+    <li><b>Data:</b> Svět, Protojazyk a Dějiny ukazují běh s jedním protojazykem, Výsledky a Větve běh se dvěma. V aplikaci půjde všechno z jednoho běhu enginu v Rustu.</li>
+    <li><b>Angličtina</b> v rozhraní; prototypy jsou zatím jen česky.</li>
+  </ol>
+</aside>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<!-- FRAMES -->
+
+<script>
+(() => {
+  const ROUTES = {
+    projekty: { native: 'projects' },
+    svet: { frame: 'svet', step: 1, label: 'Svět' },
+    protojazyk: { frame: 'proto', step: 2, label: 'Protojazyk' },
+    dejiny: { frame: 'dejiny', step: 3, label: 'Dějiny' },
+    jazyky: { frame: 'vysledky', step: 4, view: 'lang', label: 'Výsledky' },
+    slovnik: { frame: 'vysledky', step: 4, view: 'dict', label: 'Slovník' },
+    slovo: { frame: 'slovo', step: 4, label: 'Slovo v krajině' },
+    vetve: { frame: 'vetve', step: 5, label: 'Větve' },
+  };
+  const END = 2000, RUN_SECONDS = 6;
+  const stage = document.getElementById('stage');
+  const frames = {}, ready = {};
+  const state = { route: null, year: 1300, results: 'fresh', progress: 0 };
+  let toastTimer = null;
+
+  function toast(text) {
+    const t = document.getElementById('toast');
+    t.textContent = text; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+  }
+
+  function theme() { return document.documentElement.getAttribute('data-theme'); }
+  function send(key, msg) { const f = frames[key]; if (f && ready[key]) f.contentWindow.postMessage(Object.assign({ cee: true }, msg), '*'); }
+
+  function frame(key) {
+    if (frames[key]) return frames[key];
+    const f = document.createElement('iframe');
+    f.title = ROUTES[Object.keys(ROUTES).find(k => ROUTES[k].frame === key)].label;
+    f.srcdoc = JSON.parse(document.getElementById('doc-' + key).textContent);
+    stage.append(f);
+    frames[key] = f;
+    return f;
+  }
+
+  function show(name) {
+    const r = ROUTES[name] || ROUTES.svet;
+    if (!ROUTES[name]) name = 'svet';
+    const prev = state.route;
+    state.route = name;
+    document.getElementById('projects').hidden = r.native !== 'projects';
+    for (const [key, f] of Object.entries(frames)) f.classList.toggle('off', key !== r.frame);
+    if (r.frame) {
+      frame(r.frame).classList.remove('off');
+      if (ready[r.frame]) { send(r.frame, { type: 'year', year: state.year }); if (r.view) send(r.frame, { type: 'view', view: r.view }); }
+    }
+    for (const a of document.querySelectorAll('#path a')) {
+      if (+a.dataset.step === r.step) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    }
+    const views = document.getElementById('views');
+    views.hidden = r.step !== 4 && r.step !== 5;
+    for (const el of views.querySelectorAll('a, span[aria-disabled]')) el.hidden = r.step !== 4;
+    document.getElementById('branch-caption').hidden = r.step !== 5;
+    for (const a of views.querySelectorAll('a')) {
+      if (a.dataset.view === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    }
+    // Slovo v krajině má vlastní časovou osu pod mapou; jinde ve Výsledcích a ve Větvích rok drží kostra.
+    document.getElementById('yr').hidden = !['jazyky', 'slovnik', 'vetve'].includes(name);
+    if (name !== prev) setPlaying(false);
+    renderYear();
+    document.title = (r.label ? r.label + ' · ' : '') + 'CEE Poloostrov';
+    renderRun();
+  }
+
+  // Sdílený rok: posuvník a přehrávání v kostře, rám ho jen kreslí.
+  const yearInput = document.getElementById('year-input');
+  function renderYear() {
+    const y = Math.round(state.year / 50) * 50;
+    yearInput.value = String(y);
+    document.getElementById('year-out').textContent = y;
+  }
+  function setYear(y, from) {
+    state.year = y; renderYear();
+    const r = ROUTES[state.route] || {};
+    if (r.frame && r.frame !== from) send(r.frame, { type: 'year', year: y });
+  }
+  yearInput.addEventListener('input', () => setYear(+yearInput.value));
+  let playTimer = null;
+  function setPlaying(on) {
+    clearInterval(playTimer); playTimer = null;
+    document.getElementById('play-icon').innerHTML = on ? '<path d="M4 2h3v12H4zM9 2h3v12H9z"/>' : '<path d="M4 2l10 6-10 6z"/>';
+    document.getElementById('play').setAttribute('aria-label', on ? 'Zastavit přehrávání' : 'Přehrát dějiny');
+    if (!on) return;
+    if (state.year >= END) setYear(0);
+    playTimer = setInterval(() => { if (state.year >= END) setPlaying(false); else setYear(Math.min(END, Math.round(state.year / 50) * 50 + 50)); }, 450);
+  }
+  document.getElementById('play').addEventListener('click', () => setPlaying(!playTimer));
+
+  function route() { show((location.hash || '#svet').slice(1)); }
+  function go(name) { if (location.hash !== '#' + name) location.hash = name; else route(); }
+
+  function renderRun() {
+    const box = document.getElementById('run'), mark = document.getElementById('mark4');
+    box.classList.toggle('stale', state.results === 'stale');
+    document.getElementById('progress').style.width = state.results === 'running' ? (state.progress * 100).toFixed(1) + '%' : '0';
+    if (state.results === 'running') {
+      const year = Math.round(state.progress * END / 25) * 25;
+      box.innerHTML = `<span>Počítá se, rok <b>${year}</b> z ${END}</span><button class="btn" id="run-stop">Zastavit</button>`;
+      mark.textContent = Math.round(state.progress * 100) + ' %';
+    } else if (state.results === 'stale') {
+      box.innerHTML = `<span>Svět se od běhu změnil, výsledky jsou zastaralé</span><button class="btn primary" id="run-go">Přepočítat ${END} let</button>`;
+      mark.textContent = 'zastaralé';
+    } else {
+      box.innerHTML = `<span>Výsledky odpovídají dějinám · běh <b>${END}</b> let, ${state.ranAt}</span>`;
+      mark.textContent = '';
+    }
+    const note = document.getElementById('view-note');
+    note.textContent = state.results === 'stale' ? 'Ukazuje se poslední běh, než se svět změnil.' : '';
+  }
+
+  let runTimer = null;
+  function run() {
+    clearInterval(runTimer);
+    state.results = 'running'; state.progress = 0; renderRun();
+    const started = performance.now();
+    runTimer = setInterval(() => {
+      state.progress = Math.min(1, (performance.now() - started) / (RUN_SECONDS * 1000));
+      if (state.progress >= 1) {
+        clearInterval(runTimer);
+        state.results = 'fresh'; state.ranAt = 'právě teď'; state.year = END;
+        toast(`Hotovo za ${RUN_SECONDS} s. Výsledky ukazují rok ${END}.`);
+        go('jazyky');
+      }
+      renderRun();
+    }, 150);
+  }
+  function stop() { clearInterval(runTimer); state.results = 'stale'; renderRun(); toast('Běh zastaven. Výsledky zůstaly z minulého běhu.'); }
+
+  window.addEventListener('message', (e) => {
+    const m = e.data || {};
+    if (!m.cee || !m.frame) return;
+    if (m.type === 'ready') {
+      ready[m.frame] = true;
+      send(m.frame, { type: 'theme', theme: theme() });
+      const r = ROUTES[state.route] || {};
+      if (r.frame === m.frame) { send(m.frame, { type: 'year', year: state.year }); if (r.view) send(m.frame, { type: 'view', view: r.view }); }
+    } else if (m.type === 'year' && (ROUTES[state.route] || {}).frame === m.frame) {
+      if (m.year !== state.year && !playTimer) { state.year = m.year; renderYear(); }
+    } else if (m.type === 'go') {
+      go(m.to);
+    } else if (m.type === 'run') {
+      run();
+    } else if (m.type === 'edited' && ['svet', 'proto', 'dejiny'].includes(m.frame) && state.results === 'fresh') {
+      state.results = 'stale'; renderRun();
+    }
+  });
+
+  document.getElementById('run').addEventListener('click', (e) => {
+    if (e.target.id === 'run-go') run();
+    if (e.target.id === 'run-stop') stop();
+  });
+  document.getElementById('project').addEventListener('click', () => go('projekty'));
+  for (const b of document.querySelectorAll('[data-go]')) b.addEventListener('click', () => go(b.dataset.go));
+  for (const b of document.querySelectorAll('[data-toast]')) b.addEventListener('click', () => toast(b.dataset.toast));
+  const notes = document.getElementById('notes'), opener = document.getElementById('notes-open');
+  function setNotes(open) { notes.hidden = !open; opener.setAttribute('aria-expanded', String(open)); if (open) document.getElementById('notes-close').focus(); else opener.focus(); }
+  opener.addEventListener('click', () => setNotes(notes.hidden));
+  document.getElementById('notes-close').addEventListener('click', () => setNotes(false));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !notes.hidden) setNotes(false); });
+
+  // Rámy dostanou stejný režim jako kostra, i když ho přepne prohlížeč projektu.
+  new MutationObserver(() => { for (const key of Object.keys(frames)) send(key, { type: 'theme', theme: theme() }); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  // Náhled mapy v seznamu projektů: pevnina poloostrova jako v editoru.
+  function thumb() {
+    const c = document.getElementById('thumb'), g = c.getContext('2d'), css = getComputedStyle(document.documentElement);
+    g.fillStyle = css.getPropertyValue('--sea'); g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = css.getPropertyValue('--land');
+    g.beginPath();
+    const pts = [[18, 70], [30, 40], [62, 26], [96, 30], [120, 18], [150, 30], [170, 58], [160, 88], [132, 104], [100, 98], [70, 112], [40, 104], [22, 90]];
+    pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+    g.closePath(); g.fill();
+    g.strokeStyle = css.getPropertyValue('--sea-line'); g.lineWidth = 3; g.stroke();
+    g.fillStyle = css.getPropertyValue('--ink');
+    [[50, 66], [86, 52], [118, 62], [140, 80], [72, 90]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 2.6, 0, 7); g.fill(); });
+  }
+  thumb();
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', thumb);
+
+  state.ranAt = '1. 11. 2026';
+  window.addEventListener('hashchange', route);
+  route();
+})();
+</script>

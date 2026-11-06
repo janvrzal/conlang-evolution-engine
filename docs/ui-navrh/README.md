@@ -47,6 +47,7 @@ jméno („řeč lidí“) s českou podobou na -ština, stát podle hlavního m
 | 4 Výsledky | [vysledky.html](prototypy/vysledky.html) | https://claude.ai/artifact/RTBr7v9LLBxxvjZtDbuzi8 |
 | 4 Výsledky: Slovo v krajině | [slovo-v-krajine.html](prototypy/slovo-v-krajine.html) | https://claude.ai/artifact/6fFX1iTNUbjLt8eL43JoaJ |
 | 5 Větve | [vetve.html](prototypy/vetve.html) | https://claude.ai/artifact/DogNpKFaZdEdruqiyaNUuw |
+| **Ucelený návrh** (1–5 pod jednou kostrou) | [aplikace.html](prototypy/aplikace.html) | https://claude.ai/artifact/YVXTN8jtrYjoFWxwRxuvCC |
 
 1. **Svět.** Kraj je bod, území se dopočítá (Voronoi oříznutý pevninou).
    Nástroje V výběr, R kraj, S spoj. Osídlení slovem (řídké až velmi husté),
@@ -65,6 +66,42 @@ jméno („řeč lidí“) s českou podobou na -ština, stát podle hlavního m
    v krajině: tvary jednoho slova přímo na mapě, izoglosy, vrt místa.
 5. **Větve.** Dvě dějiny vedle sebe ve stejném roce, vsi s jiným jazykem
    červeně, mluvčí podle jazyka, slova jedné vsi v obou větvích.
+
+## Ucelený návrh
+
+Ucelený návrh (6. 11. 2026) skládá pět prototypů do jedné aplikace. Uvnitř
+obrazovek se nic nepřekreslovalo; každá zůstává svým prototypem v rámu.
+Pravidla, která drží obrazovky pohromadě, platí pro implementaci v `desktop/`:
+
+1. **Jedna lišta:** projekt, cesta práce 1–5 a stav běhu. Obrazovky nemají
+   vlastní hlavičku a klik na jméno projektu otevře Projekty.
+2. **Jeden rok:** rok se nese mezi Dějinami, Výsledky, Slovem v krajině
+   a Větvemi. Ve Výsledcích a Větvích ho ovládá lišta pod cestou práce
+   (posuvník, přehrávání), Dějiny mají pravítko kroniky a Slovo v krajině
+   osu pod mapou.
+3. **Výsledky mají pohledy** Jazyky, Slovník, Slovo v krajině a Mluvnice
+   (později).
+4. **Stav běhu je v liště:** změna ve Světě, Protojazyku nebo Dějinách označí
+   výsledky jako zastaralé a lišta nabídne přepočet. Průběh ukazuje červená
+   linka pod lištou a rok v liště.
+5. **Pata obrazovky:** vlevo počty a Zpět, uprostřed popis pro engine, vpravo
+   jediná hlavní akce (Pokračovat, v Dějinách Spustit).
+6. **Projekty:** seznam projektů s větvemi, nový svět z obrázku nebo prázdný,
+   otevření souboru `.cee`.
+
+Zbývá: Mluvnice, Projekty napojené na soubory, jeden běh pro všechny obrazovky
+(Svět, Protojazyk a Dějiny dnes ukazují běh s jedním protojazykem) a angličtina.
+
+Sestavení z hotových prototypů (bez běhu enginu):
+
+```bash
+cd docs/ui-navrh
+python zdroje/build_app.py VÝSTUP
+```
+
+Do `VÝSTUP` zapíše `index.html` a písmo Charis z `desktop/static/fonts`
+a do `prototypy/aplikace.html` kopii bez písma. Kostra je
+`zdroje/app.template.html`.
 
 ## Data prototypů
 
