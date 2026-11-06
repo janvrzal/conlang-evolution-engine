@@ -100,3 +100,42 @@ Schválil uživatel („Ano, stavět“). Zapsáno:
 Selhání mají jednu příčinu: **přistěhovalci se usadí, ale jejich jazyk se nešíří**. Historicky přešli
 Britové na angličtinu a Balkán na slovanštinu díky anglosaským královstvím a bulharské říši, tedy
 přes státy s úředním jazykem přistěhovalců. Další krok: tyto státy jako podmínky scénáře.
+
+## M8b: profil podobnosti splněn (6. 11. 2026)
+
+Tři podmínky scénáře a jedna úprava enginu:
+
+1. **Státy přistěhovalců**: anglosaské království v Británii (600, úřední germánština, po zániku
+   subrímské Británie v roce 599) a bulharská říše na Balkáně (681, úřední slovanština), obě s politikou
+   `romanization`. Bez nich se přistěhovalci usadí, ale jejich jazyk se nešíří (Británie 0,10 germánštiny,
+   Balkán 0,16 slovanštiny); s nimi Británie 0,82 a Balkán 1,00.
+2. **Moře**: Británie sousedí jen s Galií a Armorikou. Přímé vazby do Germánie a Skandinávie přenášely
+   ztrátu pádu z angličtiny na pevninu; kontakt se seveřany obstará jejich elita (870).
+3. **Elity se od domoviny odtrhnou** (`homeland` 0 u událostí `elite`): dobytí dřív spojilo elitu
+   s domovinou poloviční silou. Franská, vizigótská a seveřanská elita mezi poddanými jiného jazyka
+   ztratila pád a jako skupina stejné linie ho poslala zpět do Germánie a Skandinávie (pád tam zanikl
+   kolem 1500, aniž by se tam ztráta navrhla). Engine: nové pole `homeland` (síla vazby k domovině;
+   bez něj polovina `strength` jako dřív, 0 = bez vazby), Rust i `spec.py`.
+4. Pragermánština má přízvuk na první slabice se **slabou** silou (silný mazal koncovky i na pevnině).
+
+### Cíle `m8::*` (12 semínek, `k` z `N`)
+
+| cíl | tvrzení | výsledek |
+|---|---|---|
+| `romanske_pady` | románské větve ztratí pád (≥ 3 ze 4, `p_min` 0,8) | 12/12 |
+| `keltsky_ustup` | galština a iberština ustoupí latině (`p_min` 0,8) | 12/12 |
+| `keltsky_okraj` | keltština přežije na okraji (`p_min` 0,5) | 12/12 |
+| `anglosasove` | germánština v Británii převládne (`p_min` 0,5) | 12/12 |
+| `anglicke_pady` | germánská větev v Británii ztratí pád, pevninská ho udrží (`p_min` 0,5) | 12/12 |
+| `franska_elita` | franská elita v Galii přejde na latinu (`p_min` 0,8) | 12/12 |
+| `slovanske_pady` | slovanská pravlast si pád udrží (`p_min` 0,8) | 12/12 |
+| `balkansky_svaz` | balkánská slovanština ztratí pád nebo získá člen (`p_min` 0,2) | 3/12 |
+| `pocet_jazyku` | v roce 1900 desítky jazyků [10; 60] | 21,5 |
+| `rodiny` | vzdálenost uvnitř rodin / mezi rodinami ≤ 0,8 | 0,56 |
+
+**Evropa 10 z 10, kalibrace celkem 32 z 32, brány 47 z 47, testy prošly.** Celý běh Evropy trvá
+asi 8 s, měření 12 semínek 31 s.
+
+**Slabá místa:** balkánský svaz jen ve 3 z 12 běhů (pád ztracen, člen nevznikne nikdy: řečtina
+přejde na slovanštinu a člen se nepřenese); latina v Dácii jen 7 % (rumunština nevznikne, Dácie
+mluví dáčtinou a slovanštinou); slovník prajazyků kromě latiny je generovaný.

@@ -330,7 +330,7 @@
         "w"
       ],
       "stress": "initial",
-      "stress_strength": "strong"
+      "stress_strength": "weak"
     },
     {
       "id": "slavic",
@@ -440,9 +440,7 @@
       ],
       "neighbours": [
         "gallia",
-        "armorica",
-        "germania",
-        "scandinavia"
+        "armorica"
       ],
       "language": "gaulish"
     },
@@ -472,8 +470,7 @@
         "gallia",
         "italia",
         "scandinavia",
-        "slavia",
-        "britannia"
+        "slavia"
       ],
       "language": "germanic"
     },
@@ -485,8 +482,7 @@
         170
       ],
       "neighbours": [
-        "germania",
-        "britannia"
+        "germania"
       ],
       "language": "germanic",
       "villages": 3,
@@ -590,7 +586,8 @@
       "seat": "hispania",
       "language": "germanic",
       "population": 150,
-      "prestige": 1.5
+      "prestige": 1.5,
+      "homeland": 0.0
     },
     {
       "kind": "settlement",
@@ -618,7 +615,8 @@
       "seat": "gallia",
       "language": "germanic",
       "population": 200,
-      "prestige": 1.5
+      "prestige": 1.5,
+      "homeland": 0.0
     },
     {
       "kind": "secession",
@@ -640,6 +638,11 @@
       "settlements": 2
     },
     {
+      "kind": "collapse",
+      "year": 599,
+      "state": "britain-free"
+    },
+    {
       "kind": "settlement",
       "year": 600,
       "from": "slavia",
@@ -648,13 +651,36 @@
       "settlements": 1
     },
     {
+      "kind": "state",
+      "year": 600,
+      "id": "anglo-saxon",
+      "regions": [
+        "britannia"
+      ],
+      "capital": "britannia",
+      "language": "germanic",
+      "policy": "romanization"
+    },
+    {
+      "kind": "state",
+      "year": 681,
+      "id": "bulgaria",
+      "regions": [
+        "balkan"
+      ],
+      "capital": "balkan",
+      "language": "slavic",
+      "policy": "romanization"
+    },
+    {
       "kind": "elite",
       "year": 870,
       "from": "scandinavia",
       "seat": "britannia",
       "language": "germanic",
       "population": 150,
-      "prestige": 1.2
+      "prestige": 1.2,
+      "homeland": 0.0
     },
     {
       "kind": "elite",
@@ -663,7 +689,8 @@
       "seat": "britannia",
       "language": "latin",
       "population": 100,
-      "prestige": 2.5
+      "prestige": 2.5,
+      "homeland": 0.0
     }
   ],
   "parameters": {

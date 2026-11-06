@@ -339,6 +339,7 @@ pub fn apply(
                 population,
                 params.background_elite_prestige,
                 params.background_elite_link,
+                params.background_elite_link / 2.0,
             )?;
             history.record(
                 "foreign_elite",

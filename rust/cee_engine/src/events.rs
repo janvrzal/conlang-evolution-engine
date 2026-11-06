@@ -138,6 +138,8 @@ pub enum Action {
         conqueror: String,
         territory: String,
         subjects: Vec<String>,
+        /// Síla vazby elity k domovině (`None` = polovina `strength`, 0 = žádná).
+        homeland: Option<f64>,
         population: u32,
         prestige: f64,
         strength: f64,
@@ -281,6 +283,7 @@ pub fn apply_action(
             conqueror,
             territory,
             subjects,
+            homeland,
             population,
             prestige,
             strength,
@@ -295,6 +298,7 @@ pub fn apply_action(
             *population,
             *prestige,
             *strength,
+            homeland.unwrap_or(*strength / 2.0),
         ),
         Action::War {
             side_a,
@@ -961,6 +965,7 @@ pub(crate) fn conquest(
     population: u32,
     prestige: f64,
     strength: f64,
+    homeland: f64,
 ) -> Result<(), String> {
     let edit = Edits::new(tick);
     let origin = match conqueror.split_once(':') {
@@ -1001,7 +1006,9 @@ pub(crate) fn conquest(
             edit.connect(world, elite, id, strength, LinkKind::Weak)?;
         }
     }
-    edit.connect(world, elite, origin, strength / 2.0, LinkKind::Weak)?;
+    if homeland > 0.0 {
+        edit.connect(world, elite, origin, homeland, LinkKind::Weak)?;
+    }
     history.record(
         "conquest",
         tick,
@@ -1348,6 +1355,7 @@ pub fn parse_action(kind: &str, params: &Value) -> Result<Action, String> {
             population: p.number(&["population"], 100.0)? as u32,
             prestige: p.number(&["prestige"], 2.0)?,
             strength: p.number(&["strength"], 0.5)?,
+            homeland: p.opt_number(&["homeland"])?,
         },
         "epidemic" => Action::Epidemic {
             groups: p.strings(&["groups"])?,

@@ -586,6 +586,9 @@ fn region_event(spec: &WorldSpec, item: &EventSpec) -> Result<Vec<(&'static str,
             params.insert("population".into(), json!(number("population", 100.0)));
             params.insert("prestige".into(), json!(number("prestige", 2.0)));
             params.insert("strength".into(), json!(number("strength", 0.5)));
+            if let Some(homeland) = p.get("homeland").and_then(Value::as_f64) {
+                params.insert("homeland".into(), json!(homeland));
+            }
             Ok(vec![("conquest", Value::Object(params))])
         }
         _ => Ok(Vec::new()),

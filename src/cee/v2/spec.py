@@ -301,6 +301,8 @@ class EliteSpec(_Event):
     population: float = Field(default=100.0, gt=0.0)
     prestige: float = 2.0
     strength: float = Field(default=0.5, gt=0.0)
+    #: Síla vazby elity k domovině; ``None`` = polovina ``strength``, 0 = elita se od domova odtrhne.
+    homeland: float | None = Field(default=None, ge=0.0)
 
 
 
