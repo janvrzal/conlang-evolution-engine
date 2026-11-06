@@ -54,13 +54,14 @@ pub struct NewVariant {
 
 /// Tlaky zvukových změn (`changes.sound.SOUND_PRESSURES`): (číslo tlaku z `cee_core::pressures::id`, váha).
 ///
-/// Zřetelnost 1,5 (dříve 0,6) a funkční zatížení 1,5 (dříve 1,0) od M9b: při realistickém tempu
-/// hláskových změn (`Parameters::sound_actuation`) chrání rozlišení, jinak eroze gramatických
-/// značek rozhází typologii (člen, zápor); dok. 24.
+/// Zřetelnost 1,75 (dříve 0,6) a funkční zatížení 1,25 (dříve 1,0) od M9b a M9c: při realistickém
+/// tempu hláskových změn (`Parameters::sound_actuation`) s řadovými změnami chrání rozlišení, jinak
+/// eroze gramatických značek rozhází typologii (člen, zápor, minulý čas); silnější funkční zatížení
+/// by zase brzdilo ztrátu koncového -m v latině (pořadí změn v Romanii). Dok. 24.
 pub const SOUND_PRESSURES: [(u8, f64); 7] = [
     (id::ARTICULATION, 1.0),
-    (id::CLARITY, 1.5),
-    (id::FUNCTIONAL_LOAD, 1.5),
+    (id::CLARITY, 1.75),
+    (id::FUNCTIONAL_LOAD, 1.25),
     (id::DISPERSION, 0.5),
     (id::PHONOTACTICS, 0.4),
     (id::CONFORMITY, 0.1),

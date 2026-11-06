@@ -208,3 +208,44 @@ Kalibrace trvala 26 minut (Evropa po dávkách, špička procesu 6,6 GB), brány
 **Další kroky:** (1) zapsat sílu normy 2,25 a ověřit; (2) širší hláskové změny podle tříd hlásek,
 aby skutečnou vzdálenost tvarů dalo méně změn (brána m2::metrika_6); (3) soudržnost nářečí
 v Evropě (156 jazyků), pravděpodobně souvisí s (2).
+
+## M9c: řadové hláskové změny a síla normy (7. 11. 2026)
+
+Uživatel: „Ano, obojí“ (zapsat sílu normy a širší hláskové změny).
+
+**Rozbor:** v regionu 12 vesnic (1 000 let) se ustálilo 25 změn na vesnici, **všechny po jednotlivých
+hláskách**, nejvíc fortice (8,7) a posuny samohlásek (8,2), a uzavřená změna přepsala kolem 17 slov.
+Asi pětina ustálených změn nepřepsala ani jedno slovo. Skutečné zákony zasahují přirozené třídy
+(Grimmův zákon všechny okluzivy), proto jich na stejnou vzdálenost tvarů stačí méně.
+
+**Zapsáno:**
+
+- **Řadoví kandidáti** (`cee_core::candidates`): kandidát pro celou řadu hlásek má váhu
+  `SERIES_SHARE` (2) × počet hlásek řady v inventáři (rozpočet rodiny se jen přerozdělí). Nové řady:
+  fortice (všechny znělé frikativy na začátku slova → okluzivy) a zúžení středních samohlásek
+  (e → i, o → u, všude nebo v přízvučné slabici); znělost a spirantizace řady měly, ale s váhou 1.
+  Výsledek: 15,8 ustálené změny na vesnici za tisíciletí, uzavřená změna přepíše ~34 slov.
+- **Síla normy** `NORM_WEIGHT` 2,25 (úměrně `sound_actuation`): škola při realistickém tempu
+  sjednotí nářečí (brány m6a 20 z 20).
+- **Ochranné tlaky** hláskových změn: zřetelnost 1,75 a funkční zatížení 1,25. Silnější zřetelnost
+  (2,0) nebo zatížení (1,5) brzdí ztrátu latinského -m (pořadí v Romanii 0,67–0,71), slabší
+  rozhází typologii; sousední hodnoty selhávají vždy těsně v jednom rysu, což je úroveň šumu testu
+  (7 rysů po 95 % = aspoň jedno selhání asi ve 30 % i při stálém rozložení).
+- **Brána `m2::metrika_6` měří podle zdroje:** počítá jen ustálené změny se stopou (aspoň jedno
+  přepsané slovo; změnu bez reflexu rekonstrukce nenajde) a podél jedné linie (průměr na vesnici);
+  dřív sjednocení přes 10 málo propojených vesnic sčítalo i změny sesterských nářečí. Ringe (2006)
+  počítá změny jedné linie od praindoevropštiny k pragermánštině.
+- Testy: test zvuku počítá fonologizace jen ve skupině testu; test normy čeká účinek
+  0,3 × 0,5 × 2,25.
+
+### Výsledek
+
+**Testy 110 ze 110, brány 47 ze 47, kalibrace 37 z 38.** Tempo 0,36 za tisíciletí a zrychlení
+kontaktem 1,97×, typologie všech 7 rysů, kontinuum 0,125, Trudgill −0,09, Romania 10 z 10,
+`m2::metrika_6` 33 změn za 3 000 let (pásmo 10–40). Neprochází jen `m8::pocet_jazyku`: 152 jazyků
+v Evropě v roce 1900 (pásmo 10–60), vesnice regionů se při skutečném tempu rozcházejí v samostatné
+jazyky (Británie, Kambrie, Řecko, Vaskonie). Kalibrace trvá 12 minut (Evropa po dávkách, špička
+procesu 7,6 GB), brány 5 minut.
+
+**Zbývá:** soudržnost nářečí v Evropě (152 jazyků); typologie je u mezí zašuměná, takže při další
+změně tempa stojí za to pouštět ji s víc semínky.

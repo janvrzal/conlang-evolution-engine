@@ -85,6 +85,11 @@ pub fn plan(params: &crate::parameters::Parameters) -> Result<Plan, String> {
     plan_for(&crate::changes::default_changes(), params)
 }
 
+/// Váha normy (škola, spisovný jazyk) u každého cílového druhu. 2,25 od M9b: úměrně síle
+/// hláskových změn (`Parameters::sound_actuation` 2,25), jinak škola při realistickém tempu
+/// nářečí nesjednotí (brány m6a; dok. 24).
+const NORM_WEIGHT: f64 = 2.25;
+
 /// Plán tlaků podle deklarací změn (`pressures_by_kind`): všechny varianty jedné proměnné se
 /// hodnotí stejnými tlaky, i když je vyrobily různé změny, proto se tlaky sdružují podle cílového
 /// druhu proměnné (`Change::target`); deklaruje-li tentýž tlak víc změn, platí nejvyšší váha.
@@ -99,7 +104,7 @@ pub fn plan_for(
     for change in changes {
         let target = &mut declared[kind_number(change.target())];
         if !target.iter().any(|&(pressure, _)| pressure == id::NORM) {
-            target.push((id::NORM, 1.0));
+            target.push((id::NORM, NORM_WEIGHT));
         }
         for &(pressure, weight) in change.pressures() {
             match target.iter_mut().find(|item| item.0 == pressure) {

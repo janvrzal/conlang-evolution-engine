@@ -222,7 +222,11 @@ fn aktivace_naplni_frontu_a_fonologizace_prepise_tvary_a_proces_se_uzavre() {
     // Při realistickém tempu (M9b) mezitím doběhnou i jiné hláskové změny: počítají se jen
     // události tohoto procesu.
     let name = sim.world.registry.variables.name(variable.0).to_owned();
-    let own = |e: &serde_json::Map<String, serde_json::Value>| e["variable"] == name.as_str();
+    let group_name = sim.world.group_name(group).to_owned();
+    // Proces je ve všech skupinách na 100 %, takže se rozběhne i jinde: počítá se skupina testu.
+    let own = |e: &serde_json::Map<String, serde_json::Value>| {
+        e["variable"] == name.as_str() && e["group"] == group_name.as_str()
+    };
     let phonologized: u64 = sim
         .history
         .of_kind("phonologized")
@@ -230,7 +234,11 @@ fn aktivace_naplni_frontu_a_fonologizace_prepise_tvary_a_proces_se_uzavre() {
         .map(|e| e["words"].as_u64().unwrap())
         .sum();
     assert!(phonologized > 0, "slova si změnu zapsala");
-    let closed: Vec<_> = sim.history.of_kind("process_closed").filter(|e| own(e)).collect();
+    let closed: Vec<_> = sim
+        .history
+        .of_kind("process_closed")
+        .filter(|e| own(e))
+        .collect();
     assert_eq!(closed.len(), 1, "proces se uzavřel právě jednou");
     assert_eq!(
         closed[0]["restructured"].as_u64().unwrap() as usize,
@@ -307,10 +315,27 @@ fn proces_pod_prahem_nepise_a_neuzavre_se() {
     for _ in 0..6 {
         sim.step().unwrap();
     }
-    let name = sim.world.registry.variables.name(variant.variable.0).to_owned();
+    let name = sim
+        .world
+        .registry
+        .variables
+        .name(variant.variable.0)
+        .to_owned();
     let own = |e: &serde_json::Map<String, serde_json::Value>| e["variable"] == name.as_str();
-    assert_eq!(sim.history.of_kind("phonologized").filter(|e| own(e)).count(), 0);
-    assert_eq!(sim.history.of_kind("process_closed").filter(|e| own(e)).count(), 0);
+    assert_eq!(
+        sim.history
+            .of_kind("phonologized")
+            .filter(|e| own(e))
+            .count(),
+        0
+    );
+    assert_eq!(
+        sim.history
+            .of_kind("process_closed")
+            .filter(|e| own(e))
+            .count(),
+        0
+    );
     let proc = &sim
         .world
         .groups

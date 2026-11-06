@@ -257,9 +257,10 @@ fn norm_zvyhodni_kodifikovanou_variantu_uumerne_skolni_docazce() {
             let column = 1;
             for (at, (b, a)) in before.iter().zip(&after).enumerate() {
                 if at == column * block.capacity + slot {
+                    // Síla normy 0,3 × školní docházka 0,5 × váha normy 2,25 (M9b, dok. 24).
                     assert!(
-                        (a - b - 0.3 * 0.5).abs() < 1e-12,
-                        "norma {} místo 0,15",
+                        (a - b - 0.3 * 0.5 * 2.25).abs() < 1e-12,
+                        "norma {} místo 0,3375",
                         a - b
                     );
                 } else {

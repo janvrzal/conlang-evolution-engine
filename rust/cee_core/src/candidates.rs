@@ -749,8 +749,12 @@ fn voicing(m: &Maker<'_>, f: usize) -> Found {
         .map(|s| make(m.single(s), format!("{} → zněle /V_V", m.ipa(s))))
         .collect();
     let series = m.pattern(&[("syl", "-"), ("son", "-"), ("voi", "-"), ("cont", "-")])?;
-    if m.present(&series).len() >= 2 {
-        found.push(make(series, "řada neznělých okluziv → zněle /V_V".into()));
+    let members = m.present(&series).len();
+    if members >= 2 {
+        found.push(
+            make(series, "řada neznělých okluziv → zněle /V_V".into())
+                .weight(series_weight(members)),
+        );
     }
     Ok(found)
 }
@@ -778,8 +782,12 @@ fn spirantization(m: &Maker<'_>, f: usize) -> Found {
         ("delrel", "-"),
         ("voi", "+"),
     ])?;
-    if m.present(&voiced).len() >= 2 {
-        found.push(make(voiced, "řada znělých okluziv → frikativy /V_V".into()));
+    let members = m.present(&voiced).len();
+    if members >= 2 {
+        found.push(
+            make(voiced, "řada znělých okluziv → frikativy /V_V".into())
+                .weight(series_weight(members)),
+        );
     }
     Ok(found)
 }
@@ -846,6 +854,22 @@ fn intervocalic_loss(m: &Maker<'_>, f: usize) -> Found {
 fn fortition(m: &Maker<'_>, f: usize) -> Found {
     let mut found = Vec::new();
     let fricatives = m.pattern(&[("syl", "-"), ("son", "-"), ("cont", "+"), ("voi", "+")])?;
+    let members = m.present(&fricatives).len();
+    if members >= 2 {
+        found.push(
+            Candidate::new(
+                f,
+                "řada znělých frikativ → okluzivy /#_".into(),
+                fricatives.clone(),
+                Operation::Change,
+            )
+            .changes(&[("cont", "-"), ("strid", "-"), ("delrel", "-")])
+            .left(Pat::Boundary)
+            .ease(-0.1)
+            .clarity(0.3)
+            .weight(series_weight(members)),
+        );
+    }
     for s in m.present(&fricatives) {
         found.push(
             Candidate::new(
@@ -991,6 +1015,17 @@ fn final_devoicing(m: &Maker<'_>, f: usize) -> Found {
 /// nejslabší kody a nosové samohlásky vznikají skoro vždy jejich ztrátou (Ferguson 1963; Ohala
 /// 1975), koncové sykavky a frikativy slábnou přes *h* (s → h → ∅); okluzivy a likvidy zůstávají.
 /// Hodnoty jsou autorský odhad podle směru v literatuře, literatura čísla nedává.
+/// Váha kandidáta pro celou řadu hlásek: zasáhne `members` hlásek najednou, proto se navrhuje
+/// tak často jako jejich jednotlivé změny dohromady (`SERIES_SHARE` × počet). Pravidelné hláskové
+/// zákony obvykle zasahují přirozené třídy (Ringe 2006: kolem čtyřiceti změn za 3 500 let), ne
+/// hlásku po hlásce; dok. 24, M9c.
+fn series_weight(members: usize) -> f64 {
+    SERIES_SHARE * members as f64
+}
+
+/// Násobek váhy řadového kandidáta proti jedné hlásce (viz [`series_weight`]).
+const SERIES_SHARE: f64 = 2.0;
+
 fn coda_class(name: &str) -> (f64, f64) {
     match name {
         "nazály" => (0.25, 3.0),
@@ -1204,11 +1239,33 @@ fn hiatus_elision(m: &Maker<'_>, f: usize) -> Found {
 }
 
 fn vowel_shift(m: &Maker<'_>, f: usize) -> Found {
+    let mut found = Vec::new();
+    // Řetězové zúžení: všechny střední samohlásky o stupeň výš (e → i, o → u), jedna změna.
+    let mid = m.pattern(&[("syl", "+"), ("hi", "-"), ("lo", "-")])?;
+    let members = m.present(&mid).len();
+    if members >= 2 {
+        for (stress, place) in [
+            (Stress::Any, "všude"),
+            (Stress::Stressed, "v přízvučné slabice"),
+        ] {
+            let mut candidate = Candidate::new(
+                f,
+                format!("řada středních samohlásek → zúžení {place}"),
+                mid.clone(),
+                Operation::Change,
+            )
+            .changes(&[("hi", "+")])
+            .stress(stress)
+            .clarity(0.0)
+            .weight(series_weight(members));
+            candidate.ease_int = true;
+            found.push(candidate);
+        }
+    }
     let mut space = Vec::new();
     for symbol in VOWEL_SPACE {
         space.push(m.t.id(symbol)?);
     }
-    let mut found = Vec::new();
     for vowel in m.vowels() {
         if !space.contains(&vowel) {
             continue;
