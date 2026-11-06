@@ -9,6 +9,7 @@ pub mod assess_index;
 pub mod bank;
 pub mod candidates;
 pub mod code_state;
+pub mod flags;
 pub mod form_assess;
 pub mod form_restructure;
 pub mod index;

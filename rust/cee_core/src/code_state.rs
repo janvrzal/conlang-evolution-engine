@@ -19,6 +19,7 @@
 //!
 //! Žádná transcendentní funkce se tu nepočítá: logity a sklony slov dodává Python.
 
+use crate::flags::{Flags, EMPTY};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
@@ -188,8 +189,8 @@ pub struct Proc {
     pub row: Option<usize>,
     /// Řádek procesu v bance bez ohledu na pravidlo přízvuku (podle něj se proces přepisuje).
     pub own_row: Option<usize>,
-    pub queued: Vec<u8>,
-    pub done: Vec<u8>,
+    pub queued: Flags,
+    pub done: Flags,
     pub needed: Vec<f64>,
     pub morphemes: Vec<i32>,
     /// Kdy dosáhl změněný tvar procesu 100 % (tik).
@@ -257,14 +258,8 @@ fn needs_of(needs: Needs, procs: &[Proc], live: &[usize]) -> CodeNeeds {
     needs_with(needs, |target| procs[live[target]].number)
 }
 
-fn set_flag(flags: &mut Vec<u8>, morpheme: usize, value: u8) {
-    if morpheme >= flags.len() {
-        if value == 0 {
-            return;
-        }
-        flags.resize(morpheme + 1, 0);
-    }
-    flags[morpheme] = value;
+fn set_flag(flags: &mut Flags, morpheme: usize, value: u8) {
+    flags.set(morpheme, value == 1);
 }
 
 /// Zařadí morfém do fronty na místo dané dvojicí (logit, jméno).
@@ -425,8 +420,8 @@ impl CodeState {
         }
         let target = Target {
             row: row as i64,
-            queued: &[],
-            restructured: &[],
+            queued: &EMPTY,
+            restructured: &EMPTY,
             bias,
             reductive,
         };
@@ -578,12 +573,12 @@ impl CodeState {
             if round.full[k] {
                 let since = *proc.fixed_since.get_or_insert(round.tick);
                 if ((round.tick - since) as f64) * round.dt >= round.threshold {
-                    let restructured = proc.done.iter().filter(|&&flag| flag == 1).count();
+                    let restructured = proc.done.count();
                     let relics = proc.needed.len();
                     proc.live = false;
                     proc.needed = Vec::new();
                     proc.morphemes = Vec::new();
-                    proc.queued = Vec::new();
+                    proc.queued = Flags::default();
                     out.events.push(Event::Closed {
                         proc: proc.number,
                         restructured,
@@ -667,6 +662,6 @@ mod tests {
         insert_sorted(&mut proc, -2.0, 2, &names);
         assert_eq!(proc.morphemes, vec![2, 1, 0]);
         assert_eq!(proc.needed, vec![-2.0, -1.0, -1.0]);
-        assert_eq!(proc.queued, vec![1, 1, 1]);
+        assert_eq!(proc.queued, Flags::from_bytes(&[1, 1, 1]));
     }
 }

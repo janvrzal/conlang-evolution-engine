@@ -319,6 +319,43 @@ impl Bank {
         value
     }
 
+    /// Uvolní tabulky výsledků procesů, které nežijí v žádném kódu (`keep[řádek]` = false).
+    /// Tabulka je čistá keš: při dalším dotazu se založí znovu a dopočítá; tvary, které výpočet
+    /// najde, už v bance jsou, takže nevzniknou nová čísla. Vrací počet uvolněných výsledků.
+    pub fn release_tables(&mut self, keep: &[bool]) -> usize {
+        let mut freed = 0;
+        for (slot, table) in self.tables.iter_mut().enumerate() {
+            let row = slot / RULE_COUNT;
+            if keep.get(row).copied().unwrap_or(false) {
+                continue;
+            }
+            if let Some(found) = table.take() {
+                freed += found.results.len() + found.hypo.len();
+                self.hypo_entries = self.hypo_entries.saturating_sub(found.hypo.len());
+            }
+        }
+        freed
+    }
+
+    /// Ponechá v tabulkách výsledků jen tvary, které nějaký kód ještě používá (`alive[tvar]`).
+    /// Výsledky pro zastaralé podoby slov se už nečtou; kdyby se tvar vrátil, dopočítá se.
+    /// Vrací počet uvolněných výsledků.
+    pub fn retain_forms(&mut self, alive: &[bool]) -> usize {
+        let keep = |form: &u32| alive.get(*form as usize).copied().unwrap_or(false);
+        let mut freed = 0;
+        for table in self.tables.iter_mut().flatten() {
+            let (results, hypo) = (table.results.len(), table.hypo.len());
+            table.results.retain(|form, _| keep(form));
+            table.hypo.retain(|form, _| keep(form));
+            let dropped_hypo = hypo - table.hypo.len();
+            self.hypo_entries = self.hypo_entries.saturating_sub(dropped_hypo);
+            freed += results - table.results.len() + dropped_hypo;
+            table.results.shrink_to_fit();
+            table.hypo.shrink_to_fit();
+        }
+        freed
+    }
+
     pub fn proc_count(&self) -> usize {
         self.procs.len()
     }
