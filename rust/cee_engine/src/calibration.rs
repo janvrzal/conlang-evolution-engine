@@ -380,6 +380,10 @@ fn record_typology(
 ) {
     let world = &simulation.world;
     let mut shares = Vec::new();
+    // Běh je jedna linie: její jazyky dostanou dohromady váhu 1, jako genus ve WALS
+    // (rozložení WALS je genusově vážené). Jinak by rychlejší vývoj, který linii rozdělí
+    // na víc jazyků, zvětšil vzorek o nářečí téže linie a zpřísnil práh šumu.
+    let lineage_weight = 1.0 / languages.len().max(1) as f64;
     for groups in languages.values() {
         let members: Vec<_> = groups
             .iter()
@@ -401,9 +405,9 @@ fn record_typology(
                 let previous = metric_value(report, &name);
                 report.metrics.retain(|m| m.name != name);
                 let count = if previous.is_nan() {
-                    1.0
+                    lineage_weight
                 } else {
-                    previous + 1.0
+                    previous + lineage_weight
                 };
                 info(report, &name, count);
             }

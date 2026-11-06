@@ -164,3 +164,47 @@ konstrukcí a pravidla přízvuku); (2) pak společně kalibrovat tempo (výchoz
 koeficientem −0,5) s gramatikou; (3) pásmo kontinua znovu podložit daty (dnes odhad bez ověřeného
 atlasu), protože při skutečném tempu je spojené s tempem. Do té doby zůstává známé omezení: tvary se
 mění asi 5× pomaleji než ve skutečnosti a změny pohání hlavně kontakt.
+
+## M9b: realistické tempo s ochranou gramatiky (6. 11. 2026)
+
+Uživatel: „Ano, M9b.“ Kontrolovaný rozbor ukázal, kudy tempo posouvá typologii: při rychlé erozi
+zápor před slovesem (143A-1) klesne ze 75 na 41 % a vznikne zápor za slovesem (Jespersenův cyklus
+běží rychleji) a jazyků bez členu (37A) zůstane 8 % (eroze pádu ztrojnásobí potřebu členu).
+Slovosled (81A) a přízvuk (14A) se posouvají stejně jako při dnešním tempu.
+
+**Měřidlo typologie vážené liniemi.** Konec běhu se porovnával se šumem vzorku o tolika jazycích,
+kolik jich na konci bylo: rychlejší vývoj rozdělí 40 linií na 113–184 nářečních jazyků a práh
+se zpřísní z ~0,11 na ~0,05. Rozložení WALS je genusově vážené, proto má teď každá linie (běh)
+dohromady váhu 1 rozdělenou mezi své jazyky a vzorek je počet linií. Při dnešním tempu (jeden jazyk
+na běh) se nic nemění.
+
+**Ochranné tlaky hláskových změn** (`changes::SOUND_PRESSURES`): zřetelnost 0,6 → 1,5 a funkční
+zatížení 1,0 → 1,5. Při rychlejších změnách chrání rozlišení, takže doběhnou hlavně neškodné změny.
+
+**Zapsané výchozí hodnoty:** `sound_actuation` 2,25, `village_openness` 0,6,
+`population_pressure_exponents.actuation` −1 (malé komunity oceňují změny silněji; Nettle 1999).
+Testy zvuku počítají jen události svého procesu (při realistickém tempu doběhnou i jiné změny).
+
+### Výsledek
+
+**Kalibrace 37 z 38** (dosud 34 z 38): tempo 0,34 za tisíciletí a zrychlení kontaktem 1,8× splněny,
+typologie všech 7 rysů včetně 67A, kontinuum 0,14, Trudgill −0,10, Romania 10 z 10. Neprošel jen
+`m8::pocet_jazyku`: **156 jazyků** v roce 1900 (dosud 81,5; pásmo 10–60), vesnice se při skutečném
+tempu rozcházejí v samostatné jazyky.
+
+**Brány 45 z 47**, nově neprošly:
+
+- `m2::metrika_6`: **69 ustálených hláskových změn** na jazyk za 3 000 let (pásmo 10–40, široké
+  5–60; Ringe 2006: asi 40 pravidelných změn mezi praindoevropštinou a pragermánštinou za ~3 500 let).
+  Model dosahuje skutečné vzdálenosti tvarů dvojnásobným počtem užších změn (proces zasáhne kolem
+  8 % slovníku): změny mají být širší (třídy hlásek), ne četnější.
+- `m6a::skola_sjednoti`: škola sjednotí nářečí v 0 z 20 běhů. Tlak normy úměrně zesílený
+  (`id::NORM` 1 → 2,25) to v pokusu vrátí (všechny tři brány m6a 20 z 20); nezapsáno, čeká na
+  ověření celou kalibrací.
+
+Kalibrace trvala 26 minut (Evropa po dávkách, špička procesu 6,6 GB), brány 6 minut, testy prošly
+(110). Výchozí hodnoty jsou zatím jen na větvi `recal-tempo`.
+
+**Další kroky:** (1) zapsat sílu normy 2,25 a ověřit; (2) širší hláskové změny podle tříd hlásek,
+aby skutečnou vzdálenost tvarů dalo méně změn (brána m2::metrika_6); (3) soudržnost nářečí
+v Evropě (156 jazyků), pravděpodobně souvisí s (2).
