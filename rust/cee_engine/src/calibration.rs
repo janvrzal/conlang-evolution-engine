@@ -1225,9 +1225,164 @@ fn evropa(seed: i64) -> Result<Report, String> {
     Ok(report)
 }
 
+// --- Tempo hláskových změn (M9) ----------------------------------------------------------
+
+/// Délka běhu tempa v letech.
+pub const TEMPO_YEARS: f64 = 1000.0;
+
+/// Levenshteinova vzdálenost po hláskách.
+fn edit_distance(a: &[i32], b: &[i32]) -> usize {
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, x) in a.iter().enumerate() {
+        let mut previous = row[0];
+        row[0] = i + 1;
+        for (j, y) in b.iter().enumerate() {
+            let current = row[j + 1];
+            row[j + 1] = (row[j + 1] + 1)
+                .min(row[j] + 1)
+                .min(previous + usize::from(x != y));
+            previous = current;
+        }
+    }
+    row[b.len()]
+}
+
+/// Průměrná normalizovaná vzdálenost zděděných slov domácích skupin regionu `region` od tvarů
+/// prajazyka (`words`: pojem → IPA) a podíl slov beze změny.
+fn form_drift(
+    world: &crate::world::World,
+    region: &str,
+    words: &BTreeMap<String, String>,
+) -> (f64, f64) {
+    let Some(table) = world.table.as_ref() else {
+        return (f64::NAN, f64::NAN);
+    };
+    let proto: BTreeMap<&str, Vec<i32>> = words
+        .iter()
+        .filter_map(|(c, w)| table.parse(w).ok().map(|f| (c.as_str(), f)))
+        .collect();
+    let (mut distances, mut same) = (Vec::new(), 0usize);
+    for group in region_groups(world, region) {
+        let g = group.index();
+        if world.groups.written[g] || world.groups.domain[g] != crate::model::group::Domain::Home {
+            continue;
+        }
+        for (variable, concept) in crate::gates::metrics::lexical_variables(world) {
+            let name = world.registry.concepts.name(concept.0);
+            let Some(start) = proto.get(name) else {
+                continue;
+            };
+            let Some((variant, _)) = world.dominant(group, variable) else {
+                continue;
+            };
+            if world.variants.origin[variant.index()].change.is_some() {
+                continue;
+            }
+            let Some(root) = crate::gates::metrics::root_of(world, group, variable) else {
+                continue;
+            };
+            let Ok(now) = crate::phonology::surface(world, group, root) else {
+                continue;
+            };
+            let d = edit_distance(start, &now) as f64 / start.len().max(now.len()).max(1) as f64;
+            same += usize::from(d == 0.0);
+            distances.push(d);
+        }
+    }
+    (
+        mean(&distances),
+        same as f64 / distances.len().max(1) as f64,
+    )
+}
+
+/// Kontrolovaný svět tempa: region `r0` (12 vesnic jazyka `language`), volitelně sousední
+/// region latiny a stát s úřední latinou (politika `policy`) nad oběma.
+fn tempo_world(
+    language: &Value,
+    contact: Option<(&Value, &str)>,
+    seed: i64,
+) -> Result<Simulation, String> {
+    let evropa: Value = serde_json::from_str(EVROPA_JSON).map_err(|e| e.to_string())?;
+    let mut languages = vec![language.clone()];
+    let mut regions = vec![
+        json!({"id": "r0", "name": "r0", "position": [0, 0], "neighbours": [],
+        "language": language["id"], "villages": 12}),
+    ];
+    let mut events = Vec::new();
+    if let Some((other, policy)) = contact {
+        languages.push(other.clone());
+        regions[0]["neighbours"] = json!(["r1"]);
+        regions.push(
+            json!({"id": "r1", "name": "r1", "position": [60, 0], "neighbours": ["r0"],
+            "language": other["id"], "villages": 12, "density": 2.0}),
+        );
+        events.push(
+            json!({"kind": "state", "year": 100, "id": "st", "regions": ["r0", "r1"],
+            "capital": "r1", "language": other["id"], "policy": policy}),
+        );
+    }
+    let text = json!({"format": evropa["format"], "name": "tempo", "seed": seed, "start_year": 0,
+        "end_year": TEMPO_YEARS, "languages": languages, "regions": regions, "events": events,
+        "parameters": evropa["parameters"]})
+    .to_string();
+    let spec = crate::spec::WorldSpec::from_json(&text)?;
+    let (world, events) = crate::spec::build(&spec)?;
+    let mut simulation = Simulation::new(world, SimulationConfig::default(), events)?;
+    simulation.run(TEMPO_YEARS)?;
+    Ok(simulation)
+}
+
+/// Tempo hláskových změn: rychlost r = −ln(1 − d) za tisíciletí (d = vzdálenost tvarů
+/// zděděných slov od prajazyka), jako u skutečných dvojic IE-CoR (dok. 24).
+fn tempo(seed: i64) -> Result<Report, String> {
+    let evropa: Value = serde_json::from_str(EVROPA_JSON).map_err(|e| e.to_string())?;
+    let language = |id: &str| -> Result<Value, String> {
+        evropa["languages"]
+            .as_array()
+            .and_then(|l| l.iter().find(|x| x["id"] == id))
+            .cloned()
+            .ok_or_else(|| format!("jazyk {id} ve scénáři Evropy chybí"))
+    };
+    let (slavic, latin) = (language("slavic")?, language("latin")?);
+    let words = |l: &Value| -> BTreeMap<String, String> {
+        serde_json::from_value(l["words"].clone()).unwrap_or_default()
+    };
+    let rate = |d: f64| -(1.0 - d).ln() / (TEMPO_YEARS / 1000.0);
+    let mut report = Report::new();
+    let mut quiet = Vec::new();
+    for (name, l, contact) in [
+        ("slovanština bez kontaktu", &slavic, None),
+        ("latina bez kontaktu", &latin, None),
+        (
+            "slovanština s latinským státem",
+            &slavic,
+            Some((&latin, "tolerant")),
+        ),
+    ] {
+        let simulation = tempo_world(l, contact, seed)?;
+        let (d, same) = form_drift(&simulation.world, "r0", &words(l));
+        info(&mut report, &format!("{name} tempo"), rate(d));
+        info(&mut report, &format!("{name} beze změny"), same);
+        if contact.is_none() {
+            quiet.push(rate(d));
+        }
+    }
+    let quiet_mean = mean(&quiet);
+    info(&mut report, "tempo bez kontaktu", quiet_mean);
+    let speedup = metric_value(&report, "slovanština s latinským státem tempo")
+        / metric_value(&report, "slovanština bez kontaktu tempo");
+    info(&mut report, "zrychlení kontaktem", speedup);
+    Ok(report)
+}
+
 /// Všechny kalibrační běhy.
 pub fn runs() -> Vec<Run> {
     vec![
+        Run {
+            id: "tempo",
+            description: "tempo hláskových změn: 12 vesnic staroslověnštiny / latiny 1 000 let, bez kontaktu a pod latinským státem",
+            measure: tempo,
+        },
         Run {
             id: "evropa",
             description: "Evropa: latina, keltština, iberština, dáčtina, germánština, slovanština, řečtina; 10 regionů, −500 až 1900",
