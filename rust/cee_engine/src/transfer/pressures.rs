@@ -147,6 +147,13 @@ pub fn plan_for(
                     .get(NAMES[pressure as usize])
                     .copied()
                     .unwrap_or(weight);
+                // Sociální ocenění hláskových změn má vlastní násobek (tempo, dok. 24).
+                let weight =
+                    if kind == kind_number(VariableKind::Process) && pressure == id::ACTUATION {
+                        weight * params.sound_actuation
+                    } else {
+                        weight
+                    };
                 (pressure, weight)
             })
             .collect();

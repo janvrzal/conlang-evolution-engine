@@ -222,6 +222,7 @@ pub struct Parameters {
     pub population_per_density: f64,
     pub loyalty_spread: f64,
     pub semantic_recurrence: f64,
+    pub sound_actuation: f64,
     pub village_openness: f64,
     pub border_link_scale: f64,
     pub category_loss_l2_boost: f64,

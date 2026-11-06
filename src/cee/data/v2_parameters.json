@@ -96,6 +96,15 @@
    "group": "morphology"
   },
   {
+   "name": "sound_actuation",
+   "kind": "number",
+   "default": 1.0,
+   "min": 0.0,
+   "max": 5.0,
+   "description": "Násobek váhy sociálního ocenění změny (`actuation`, Weinreich, Labov a Herzog 1968) jen u hláskových procesů: změna potřebuje výhodu, aby doběhla (Blythe a Croft 2012). Řídí tempo hláskových změn (cíl `m9::tempo` z IE-CoR, dok. 24). 1 = váha 1 jako u ostatních změn.",
+   "group": "transfer"
+  },
+  {
    "name": "semantic_recurrence",
    "kind": "number",
    "default": 3.0,
