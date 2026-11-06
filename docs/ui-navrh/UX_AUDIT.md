@@ -3,6 +3,8 @@
 Datum: 6. 11. 2026. Předmět: artefakt [CEE Poloostrov](https://claude.ai/artifact/YVXTN8jtrYjoFWxwRxuvCC)
 (verze 2, zdroj `zdroje/aplikace/template.html`, commit 2acc046).
 
+**Stav:** zapracováno na plátně https://claude.ai/artifact/Gxj1bv7Wb29iWytp5jSLUt (6. 11. 2026).
+
 ## Metoda
 
 - Průchod všemi devíti obrazovkami ve světlém i tmavém režimu, na šířce 1440, 1280 a 400 px

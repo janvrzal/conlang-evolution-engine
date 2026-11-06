@@ -48,6 +48,7 @@ jméno („řeč lidí“) s českou podobou na -ština, stát podle hlavního m
 | 4 Výsledky: Slovo v krajině | [slovo-v-krajine.html](prototypy/slovo-v-krajine.html) | https://claude.ai/artifact/6fFX1iTNUbjLt8eL43JoaJ |
 | 5 Větve | [vetve.html](prototypy/vetve.html) | https://claude.ai/artifact/DogNpKFaZdEdruqiyaNUuw |
 | **Návrh aplikace** (od nuly, nad běhy v Rustu) | [aplikace.html](prototypy/aplikace.html) | https://claude.ai/artifact/YVXTN8jtrYjoFWxwRxuvCC |
+| **Obrazovky na plátně** (návrh + opravy z UX auditu) | plátno Design | https://claude.ai/artifact/Gxj1bv7Wb29iWytp5jSLUt |
 
 1. **Svět.** Kraj je bod, území se dopočítá (Voronoi oříznutý pevninou).
    Nástroje V výběr, R kraj, S spoj. Osídlení slovem (řídké až velmi husté),
@@ -66,6 +67,19 @@ jméno („řeč lidí“) s českou podobou na -ština, stát podle hlavního m
    v krajině: tvary jednoho slova přímo na mapě, izoglosy, vrt místa.
 5. **Větve.** Dvě dějiny vedle sebe ve stejném roce, vsi s jiným jazykem
    červeně, mluvčí podle jazyka, slova jedné vsi v obou větvích.
+
+## Obrazovky na plátně (6. 11. 2026)
+
+Plátno [CEE Poloostrov · obrazovky](https://claude.ai/artifact/Gxj1bv7Wb29iWytp5jSLUt)
+má 13 artboardů (1440 × 900): Projekty; Zadání (Svět, Protojazyky, Pojmy, Dějiny);
+Výsledek (Atlas, Jazyky, Slova, Kronika, Větve); stavy (běh počítá, zadání
+s chybami, zastaralé výsledky s Vrátit). Zapracovává [UX audit](UX_AUDIT.md):
+ověření zadání, Zpět/Znovu, projekty a uložení, původ jazyků, klávesnice
+na mapách, jeden rok, červená jen pro změnu, cíle 24 px, `--ink-3` `#5f6b72`.
+Mapy a řeka jazyků jsou obrázky vykreslené z obou běhů (výběr inkoustem),
+čísla v kartách jsou z týchž dat a hlášení ověření z enginu (`check_spec`).
+Plátno je zdrojem pravdy pro implementaci v `desktop/`; HTML návrh níže zůstává
+jako funkční ukázka dat.
 
 ## Návrh aplikace (6. 11. 2026)
 
