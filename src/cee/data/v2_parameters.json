@@ -184,8 +184,8 @@
   {
    "name": "standing_variation",
    "kind": "number",
-   "default": 1.0,
-   "description": "Souběžná variabilita slovní zásoby protojazyka (``cee.v2.variation``): násobek naměřené hustoty menšinových variant (0 = protojazyk bez variability) a nejvyšší součet jejich podílů u pojmu ve vesnici, aby slovo autora zůstalo převládající.",
+   "default": 0.3,
+   "description": "Souběžná variabilita slovní zásoby protojazyka (``cee.v2.variation``): násobek naměřené hustoty menšinových variant (0 = protojazyk bez variability) a nejvyšší součet jejich podílů u pojmu ve vesnici, aby slovo autora zůstalo převládající. 0,3 od M8d (6. 11. 2026): s 1,0 se v `region_world` během prvního tisíciletí prosadily startovní varianty u 27 % pojmů (latina ztratila 18 % slov za prvních 500 let, později 17 % za tisíciletí); s 0 je prvních 500 let téměř beze změn. 0,3 dává v Romanii skoro stálé tempo (0,86 a 0,81 za tisíciletí na začátku a na konci), retenci vůči latině 0,605 (IE-CoR 0,68–0,73) a izolovaný jazyk 0,852 za tisíciletí (Swadesh 0,86; docs/engine-v2/22-kalibrace-m7.md).",
    "group": "transfer"
   },
   {

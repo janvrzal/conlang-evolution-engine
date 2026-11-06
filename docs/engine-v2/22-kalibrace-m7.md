@@ -986,3 +986,40 @@ zápor zůstane před slovesem, retence a rozmanitost v pásmu.
 **Stav po M8c (6. 11. 2026):** rozptyl loajality vesnic (`loyalty_spread` 0,25, dokument 23) shodil
 dva cíle Romanie, které byly na hraně: retence 0,536 (pásmo od 0,55) a obnova futura 4 z 20 (potřeba 5).
 Kalibrace 31 z 33; retence se řeší samostatně.
+
+## M8d: souběžná variabilita protojazyka 0,3; retence latiny (6. 11. 2026)
+
+Podnět: po M8c retence vůči latině 0,536 (pásmo od 0,55; IE-CoR 0,68–0,73). Uživatel: „Ano, retence“.
+
+**Čím se zděděná slova ztrácejí** (Romania, 20 semínek, podíl převládajících slov v roce 1900):
+
+| původ | Itálie | Galie | Dácie |
+|---|---|---|---|
+| zděděné | 0,56 | 0,57 | 0,46 |
+| varianta už na startu (`variation::seed`): odvozenina, složenina, posun významu | 0,28 | 0,27 | 0,28 |
+| nový posun významu | 0,19 | 0,14 | 0,23 |
+| výpůjčka | 0,006 | 0,006 | 0,006 |
+
+Kontakt (substrát) retenci skoro nebere. Většinu ztráty dělají menšinové varianty, které protojazyk
+dostal na startu: měly zůstat menšinou v rovnováze, ale v `region_world` se během prvního tisíciletí
+prosadí u 27 % pojmů. Latina tak ztratí 18 % slov za prvních 500 let a pak jen asi 17 % za tisíciletí.
+Měření je přitom ve shodě s IE-CoR: i slovo, které v latině existovalo jako synonymum (*caballus* místo
+*equus*), je náhrada.
+
+**Retence v čase** (průměr čtyř větví, start −100):
+
+| `standing_variation` | 250 | 400 | 600 | 1200 | 1900 | lexikon (za tisíciletí) |
+|---|---|---|---|---|---|---|
+| 1,0 (dosud) | 0,90 | 0,82 | 0,74 | 0,61 | 0,54 | 0,831 |
+| 0,5 | 0,95 | 0,89 | 0,81 | 0,66 | 0,58 | 0,847 |
+| **0,3** | 0,97 | 0,93 | 0,86 | 0,70 | **0,60** | **0,852** |
+| 0,2 | 0,98 | 0,95 | 0,89 | 0,73 | 0,62 | 0,851 |
+| 0 | 1,00 | 0,99 | 0,97 | 0,83 | 0,69 | 0,862 |
+
+S 0 se vrátí zahřívání (prvních 700 let skoro beze změn, pak rychlá ztráta), s 1,0 je začátek
+příliš rychlý. **Zapsáno 0,3:** tempo je skoro stálé (0,86 za tisíciletí na začátku, 0,81 na konci),
+izolovaný jazyk 0,852 za tisíciletí (Swadesh 0,86, Lees 0,805). Retence latiny 0,605 je v pásmu,
+ale pod IE-CoR; zbytek dělá období 600–1200 (asi 0,72 za tisíciletí při všech hodnotách), kdy se
+říše rozpadá na nástupnické státy. Obnova futura se vrátila na 5 z 20.
+
+**Výsledek: kalibrace 33 z 33, brány 47 z 47, testy prošly.**
