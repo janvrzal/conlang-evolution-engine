@@ -49,6 +49,10 @@ pub struct GrammaticalFunction {
     /// Vázaný výraz funkce může vyblednout v ukazatel bez významu (člen, Greenberg 1978).
     #[serde(default)]
     pub bleaches: bool,
+    /// Potřeba funkce roste se slabostí jiných funkcí: `need × (1 + Σ k × slabost)`. Člen je
+    /// častější v jazycích bez pádů (WALS 37A × 49A: 0,65 proti 0,35 u 4 a víc pádů; dok. 22).
+    #[serde(default)]
+    pub reinforced_by: BTreeMap<String, f64>,
 }
 
 fn default_weight() -> f64 {

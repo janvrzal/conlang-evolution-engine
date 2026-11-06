@@ -81,6 +81,10 @@ functions:
     # Vázaný člen může vyblednout v ukazatel jména bez určitosti (Greenberg 1978,
     # How does a language acquire gender markers?, stadium III); změna `bleaching`.
     bleaches: true
+    # Potřeba členu roste se slabostí pádu předmětu: need × (1 + 2 × slabost OBJ). WALS 37A × 49A
+    # (176 jazyků): člen má 65 % jazyků bez pádů, 35 % jazyků se 4 a víc pády (genusově 0,62 a 0,47);
+    # románský člen vznikl s přestavbou jmenné fráze po zániku pádů. M7.3n.
+    reinforced_by: {OBJ: 2.0}
     weight: 0.6
     need: 0.25
     context: 0.16

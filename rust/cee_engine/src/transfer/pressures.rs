@@ -943,7 +943,13 @@ impl<'a> Pressures<'a> {
                         -params.learnability_strength * bound * self.l2[g]
                     }
                     id::EXPRESSIVITY => {
-                        let mut need = self.catalog.functions[function].need;
+                        let entry = &self.catalog.functions[function];
+                        let mut need = entry.need;
+                        for (other, k) in &entry.reinforced_by {
+                            if let Some(target) = self.catalog.index(other) {
+                                need *= 1.0 + k * self.weakness(g, target);
+                            }
+                        }
                         if need == 0.0 {
                             0.0
                         } else {

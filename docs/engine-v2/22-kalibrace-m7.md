@@ -959,3 +959,26 @@ větvích jen v 1 až 3 bězích z 20.
 nesly koncovky); model mezi zánikem pádu a potřebou členu žádnou vazbu nemá. Doložit takovou vazbu
 napříč jazyky by chtělo zdroj (WALS 37A × 49A), zatím se nic nemění. **Romania zůstává 9 z 10,
 kalibrace 21 z 22.**
+
+## M7.3n: potřeba členu podle pádů (WALS 37A × 49A)
+
+Schválil uživatel 6. 11. 2026 („Ano, ověřit“). Křížení WALS (CLDF v2020.3, CC BY 4.0; jazyky
+s údajem v obou rysech, 176):
+
+| pády (49A) | jazyků | podíl jazyků se členem (37A-1, -2, -3) |
+|---|---|---|
+| žádný pád (49A-1) | 72 | **0,65** |
+| 2–3 pády | 24 | 0,71 |
+| 4 a víc pádů | 68 | **0,35** |
+| genusově váženo: bez pádu / s pády | 56 / 78 genusů | 0,62 / 0,47 |
+
+Jazyky s bohatými pády mají člen asi o polovinu méně často, i po vážení genusem. **Zapsáno:** katalog
+zná `reinforced_by` (potřeba funkce × (1 + Σ k × slabost jiné funkce)), člen má `{"OBJ": 2}`: s úplně
+zaniklým pádem předmětu je potřeba členu trojnásobná. Hodnota 2 je nejmenší z vyzkoušených (1, 2, 4),
+při níž Romania splní člen a typologie zůstane stacionární (k = 4 dá člen v 90 % běhů, ale shodí jeden
+typologický rys).
+
+**Výsledek: kalibrace 22 z 22, brány 47 z 47, testy prošly.** Romania splňuje celý profil rodinné
+podobnosti (10 z 10): slabé `-m` před zánikem pádu, rodina ztratí pád, latinské futurum zanikne
+a obnoví se, aspoň dvě větve získají člen (7 z 20 běhů) a ustálí slovosled, jedna větev drží pád déle,
+zápor zůstane před slovesem, retence a rozmanitost v pásmu.
