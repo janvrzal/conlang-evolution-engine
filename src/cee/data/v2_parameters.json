@@ -96,6 +96,15 @@
    "group": "morphology"
   },
   {
+   "name": "chain_shift_weight",
+   "kind": "number",
+   "default": 1.0,
+   "min": 0.0,
+   "max": 5.0,
+   "description": "Výhoda tahového řetězu (Martinet 1955, Économie des changements phonétiques; Labov 1994): hlásková změna, jejíž výstupy padnou do třídy, kterou jiná změna bez podmínky okolí ve skupině z většiny vyprázdnila (*p t k* → *ɸ θ x*, pak *b d g* → *p t k*), dostane k sociálnímu ocenění navíc váha × (podíl vyprazdňující změny − ½) / ½. Pod polovinou nic. 0 = bez řetězení (dok. 26).",
+   "group": "transfer"
+  },
+  {
    "name": "sound_actuation",
    "kind": "number",
    "default": 2.25,

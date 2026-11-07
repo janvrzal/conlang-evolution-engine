@@ -231,6 +231,135 @@ pub fn seed_initial(world: &mut World) -> Result<(), String> {
     Ok(())
 }
 
+/// Podíl mluvčích, do kterého zadaný posun táhne: skoro všichni, aby posun doběhl. Řetěz
+/// (výhoda zaplnění mezery a protikrmení) se spustí už při absolutní většině (½).
+pub const SHIFT_UNTIL: f64 = 1.0;
+
+/// Událost `sound_shift`: zadaná hlásková změna (rodina a popis kandidáta jako v
+/// `LanguageSpec.processes`) se rozběhne u mluvených skupin jazyka `language`, volitelně jen
+/// v regionech `regions`, s podílem `share` mluvčích (dok. 26). Jestli doběhne a kam se rozšíří,
+/// rozhodne dál přenos; událost změnu jen nastartuje.
+#[allow(clippy::too_many_arguments)]
+pub fn shift_event(
+    world: &mut World,
+    history: &mut crate::history::History,
+    tick: u32,
+    year: f64,
+    language: &str,
+    regions: &[String],
+    family: &str,
+    label: &str,
+    share: f64,
+    pull: f64,
+) -> Result<(), String> {
+    if !(share > 0.0 && share < 1.0) {
+        return Err("sound_shift: share musí být mezi 0 a 1".into());
+    }
+    let Some(number) = world.registry.languages.get(language) else {
+        return Err(format!("sound_shift: neznámý jazyk '{language}'"));
+    };
+    let within = if regions.is_empty() {
+        None
+    } else {
+        Some(crate::polity::check_regions(world, regions)?)
+    };
+    let groups: Vec<GroupId> = world
+        .group_ids()
+        .into_iter()
+        .filter(|&g| {
+            !world.groups.written[g.index()]
+                && world.groups.main_code(g).language.0 == number
+                && within.as_ref().is_none_or(|ids| {
+                    crate::polity::region_of(world, g).is_some_and(|r| ids.contains(&r))
+                })
+        })
+        .collect();
+    let Some(&first) = groups.first() else {
+        return Ok(());
+    };
+    let inventory: Vec<u32> = crate::contact::inventory(world, first)
+        .into_iter()
+        .filter(|&s| s >= 0)
+        .map(|s| s as u32)
+        .collect();
+    let built = cee_core::candidates::build(snapshot(), &inventory)?;
+    let index = cee_core::candidates::FAMILIES
+        .iter()
+        .position(|f| *f == family)
+        .ok_or_else(|| format!("sound_shift: neznámá rodina '{family}'"))?;
+    let candidate = built
+        .candidates
+        .iter()
+        .find(|c| c.family == index && c.label == label)
+        .cloned()
+        .ok_or_else(|| {
+            let labels: Vec<&str> = built
+                .candidates
+                .iter()
+                .filter(|c| c.family == index)
+                .map(|c| c.label.as_str())
+                .collect();
+            format!(
+                "sound_shift: rodina '{family}' nemá v inventáři jazyka '{language}' kandidáta '{label}'; možnosti: {labels:?}"
+            )
+        })?;
+    let found = register(world, &candidate, family, tick, year, first)?;
+    let variable = found.variable;
+    if !world.live.contains(variable) {
+        let dists: Vec<_> = world
+            .live
+            .group_ids
+            .iter()
+            .map(|&g| world.stored(g, variable))
+            .collect();
+        let mut live = std::mem::take(&mut world.live);
+        let loaded = live.load(variable, &dists, &world.registry.variants);
+        world.live = live;
+        loaded?;
+    }
+    if pull > 0.0 {
+        world.sound.shifts.push(crate::state::sound::ActiveShift {
+            variable,
+            changed: found.changed,
+            language: number,
+            regions: within.clone().unwrap_or_default(),
+            pull,
+            until: SHIFT_UNTIL,
+        });
+    }
+    let mut started = Vec::new();
+    for group in groups {
+        if !world.live.holds(group, variable) {
+            continue;
+        }
+        let held = world.distribution(group, variable);
+        if held
+            .as_ref()
+            .is_some_and(|d| d.frequency(found.changed) >= share)
+        {
+            continue;
+        }
+        world.live.innovate(
+            variable,
+            group,
+            found.changed,
+            share,
+            &world.registry.variants,
+        );
+        started.push(world.group_name(group).to_owned());
+    }
+    history.record(
+        "sound_shift",
+        tick,
+        year,
+        serde_json::json!({
+            "language": language, "family": family, "label": label, "share": share, "pull": pull,
+            "variable": world.registry.variables.name(variable.0), "groups": started,
+        }),
+    );
+    Ok(())
+}
+
 /// Masky hlásek a parametry procesu pro banku tvarů (`FormBank._register_native`).
 pub(crate) fn proc_of(def: &ProcessDef, table: &SegmentTable) -> Proc {
     let size = table.len() + 1;
@@ -389,4 +518,86 @@ pub fn resolve_maps(world: &mut World, maps: &[(usize, Vec<i32>)]) -> Result<(),
 /// Banka tvarů světa (pro čtenáře mimo fonologii, např. hodnocení tlaků).
 pub fn bank_of(world: &World) -> &Bank {
     &world.bank.bank
+}
+
+/// Hláskové změny bez podmínky okolí (operace změny rysů, žádné okolí ani přízvuk), které
+/// mohou vyprázdnit třídu hlásek (řetězový posun, dok. 26).
+pub fn vacating_processes(world: &World) -> Vec<ProcessId> {
+    world
+        .processes
+        .iter()
+        .enumerate()
+        .filter_map(|(index, def)| {
+            let def = def.as_ref()?;
+            (def.operation == Operation::Change
+                && def.left.is_none()
+                && def.right.is_none()
+                && def.right2.is_none()
+                && def.stress == Stress::Any
+                && !def.medial)
+                .then(|| ProcessId::new(index))
+        })
+        .collect()
+}
+
+/// Po kterých změnách z `vacating` proces `process` zaplňuje mezeru: každá jeho výstupní
+/// hláska (u hlásek jeho třídy bez diakritik navíc) padne do třídy té změny.
+pub fn fills(world: &World, process: ProcessId, vacating: &[ProcessId]) -> Vec<ProcessId> {
+    let (Some(Some(def)), Some(table)) =
+        (world.processes.get(process.index()), world.table.as_ref())
+    else {
+        return Vec::new();
+    };
+    if def.operation != Operation::Change || vacating.is_empty() {
+        return Vec::new();
+    }
+    let changes: Vec<(&str, &str)> = def
+        .changes
+        .iter()
+        .map(|(f, v)| (f.as_str(), v.as_str()))
+        .collect();
+    let mut outputs = Vec::new();
+    for (segment, &inside) in def.target.mask.iter().enumerate() {
+        if !inside || segment >= table.len() || !table.is_plain(segment as i32) {
+            continue;
+        }
+        match table.changed(segment as i32, &changes, &def.allow) {
+            Ok(Some(output)) => outputs.push(output),
+            _ => return Vec::new(),
+        }
+    }
+    if outputs.is_empty() {
+        return Vec::new();
+    }
+    vacating
+        .iter()
+        .copied()
+        .filter(|&gap| gap != process)
+        .filter(|gap| {
+            world.processes[gap.index()]
+                .as_ref()
+                .is_some_and(|other| outputs.iter().all(|&o| other.target.contains(o)))
+        })
+        .collect()
+}
+
+/// Čísla procesů, po kterých proces zaplňuje mezeru (s pamětí v `Runtime`).
+pub fn gap_partners(world: &mut World, process: ProcessId) -> Vec<usize> {
+    let count = world.processes.len();
+    if world.sound.runtime.gap_processes != count {
+        world.sound.runtime.gaps = vec![None; count];
+        world.sound.runtime.gap_processes = count;
+    }
+    if let Some(Some(found)) = world.sound.runtime.gaps.get(process.index()) {
+        return found.clone();
+    }
+    let vacating = vacating_processes(world);
+    let found: Vec<usize> = fills(world, process, &vacating)
+        .into_iter()
+        .map(|p| p.index())
+        .collect();
+    if let Some(slot) = world.sound.runtime.gaps.get_mut(process.index()) {
+        *slot = Some(found.clone());
+    }
+    found
 }

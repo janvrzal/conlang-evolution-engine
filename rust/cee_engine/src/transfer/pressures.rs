@@ -264,9 +264,76 @@ pub struct Pressures<'a> {
     weakness: Vec<OnceLock<f64>>,
     /// Dominantní varianta konstrukční proměnné funkce podle (sloupec, funkce).
     dominant: Vec<OnceLock<Option<VariantId>>>,
+    /// Hláskové změny bez podmínky okolí, které mohou vyprázdnit třídu hlásek (tahový řetěz).
+    vacating: Vec<Vacating>,
+    /// Pro každý proces: které z `vacating` jeho výstupy zaplní; staví se líně.
+    fills: Vec<OnceLock<Vec<usize>>>,
+}
+
+/// Změna bez podmínky okolí, která vyprazdňuje třídu hlásek (`target`).
+struct Vacating {
+    process: crate::ids::ProcessId,
+    variable: VariableId,
+    changed: VariantId,
+}
+
+/// Vyprazdňující změny s proměnnou a variantou „změna“ (jen ty, jejichž proměnná existuje).
+fn vacating_changes(world: &World) -> Vec<Vacating> {
+    crate::phonology::rows::vacating_processes(world)
+        .into_iter()
+        .filter_map(|process| {
+            let name = world.registry.processes.name(process.0);
+            let variable = world.registry.variables.get(name)?;
+            let changed = world
+                .registry
+                .variants
+                .get(&crate::phonology::rows::changed_name(name))?;
+            Some(Vacating {
+                process,
+                variable: VariableId(variable),
+                changed: VariantId(changed),
+            })
+        })
+        .collect()
 }
 
 impl<'a> Pressures<'a> {
+    /// Výhoda tahového řetězu (Martinet 1955; Labov 1994) pro změnu `process` ve sloupci `g`:
+    /// zaplňuje-li třídu, kterou jiná změna bez podmínky okolí ve skupině z většiny vyprázdnila,
+    /// dostane `chain_shift_weight` × (podíl té změny − ½) / ½. Pod polovinou žádnou.
+    fn chain_bonus(&self, g: usize, process: crate::ids::ProcessId) -> f64 {
+        // Mezeru zaplňuje sousední řada (posun bez podmínky okolí), ne podmíněné pravidlo, které
+        // by nové hlásky jen vrátilo (znělost /V_V po ztrátě znělosti).
+        if !self.vacating.iter().any(|v| v.process == process) {
+            return 0.0;
+        }
+        let Some(slot) = self.fills.get(process.index()) else {
+            return 0.0;
+        };
+        let fills = slot.get_or_init(|| {
+            let ids: Vec<crate::ids::ProcessId> = self.vacating.iter().map(|v| v.process).collect();
+            crate::phonology::rows::fills(self.world, process, &ids)
+                .into_iter()
+                .filter_map(|p| ids.iter().position(|&q| q == p))
+                .collect()
+        });
+        let group = self.inputs.axis[g];
+        let progress = fills
+            .iter()
+            .map(|&at| {
+                let gap = &self.vacating[at];
+                let share = crate::phonology::rows::changed_share(
+                    self.world,
+                    group,
+                    gap.variable,
+                    gap.changed,
+                );
+                ((share - 0.5) / 0.5).clamp(0.0, 1.0)
+            })
+            .fold(0.0, f64::max);
+        self.world.params.chain_shift_weight * progress
+    }
+
     pub fn new(
         world: &'a World,
         inputs: &'a StepInputs,
@@ -294,7 +361,17 @@ impl<'a> Pressures<'a> {
         let catalog = Catalog::new(world)?;
         let columns = inputs.axis.len();
         let functions = catalog.functions.len();
+        let vacating = if world.params.chain_shift_weight > 0.0 {
+            vacating_changes(world)
+        } else {
+            Vec::new()
+        };
+        let fills = (0..world.processes.len())
+            .map(|_| OnceLock::new())
+            .collect();
         Ok(Pressures {
+            vacating,
+            fills,
             world,
             inputs,
             plan,
@@ -511,6 +588,34 @@ impl<'a> Pressures<'a> {
                         &mut cells[g * slots + slot],
                         weight * (ACTUATION_SPREAD * noise).clamp(-1.0, 1.0),
                     );
+                    if !lexical && !self.world.sound.shifts.is_empty() {
+                        let group = self.inputs.axis[g];
+                        let language = world.groups.main_code(group).language.0;
+                        for shift in &self.world.sound.shifts {
+                            if shift.variable == variable
+                                && shift.changed == variant
+                                && shift.language == language
+                                && current[g * slots + slot] < shift.until
+                                && (shift.regions.is_empty()
+                                    || crate::polity::region_of(world, group)
+                                        .is_some_and(|r| shift.regions.contains(&r)))
+                            {
+                                add(&mut cells[g * slots + slot], shift.pull);
+                            }
+                        }
+                    }
+                    if !lexical && !self.vacating.is_empty() {
+                        if let Some(crate::model::repertoire::Payload::Process {
+                            process,
+                            changed: true,
+                        }) = world.variants.payload.get(variant.index())
+                        {
+                            let bonus = self.chain_bonus(g, *process);
+                            if bonus > 0.0 {
+                                add(&mut cells[g * slots + slot], bonus);
+                            }
+                        }
+                    }
                 }
             }
             id::LEXICAL_CLARITY if has_table => {

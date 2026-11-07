@@ -267,7 +267,7 @@ fn queue_into<'t>(
     units: &Units,
     index: &RowIndex,
     at: &impl Fn(usize) -> Target<'t>,
-    skip: Option<usize>,
+    skip: &[usize],
     morpheme: usize,
     form_id: usize,
     freq: &dyn Frequency,
@@ -293,7 +293,7 @@ fn queue_into<'t>(
     let mut found = Vec::new();
     for position in candidates {
         let target = at(position);
-        if Some(position) == skip {
+        if skip.contains(&position) {
             continue;
         }
         if flagged(target.restructured, morpheme) || flagged(target.queued, morpheme) {
@@ -337,7 +337,16 @@ pub fn queue_morpheme_with<'t>(
         return Ok((Vec::new(), needs));
     };
     let found = queue_into(
-        bank, params, units, index, at, None, morpheme, unit.form, freq, &mut needs,
+        bank,
+        params,
+        units,
+        index,
+        at,
+        &[],
+        morpheme,
+        unit.form,
+        freq,
+        &mut needs,
     )?;
     Ok(if needs.is_empty() {
         (found, needs)
@@ -393,6 +402,7 @@ pub fn step(
     level: f64,
     targets: &[Target],
     skip: usize,
+    no_feed: &[usize],
     freq: &dyn Frequency,
 ) -> Result<StepOut, String> {
     let mut out = StepOut::default();
@@ -418,14 +428,18 @@ pub fn step(
                 }
                 Applied::Changed { form, cut } => (form as usize, cut),
             };
-        // Nový tvar posoudí jen ostatní živé procesy; sám sebe nikdy.
+        // Nový tvar posoudí jen ostatní živé procesy; sám sebe nikdy, ani procesy, po kterých
+        // zaplňuje mezeru a které už převládly (protikrmení řetězového posunu, Kiparsky 1968).
+        let mut skips = Vec::with_capacity(no_feed.len() + 1);
+        skips.push(skip);
+        skips.extend_from_slice(no_feed);
         let inserts = queue_into(
             bank,
             params,
             units,
             &index,
             &|at| targets[at],
-            Some(skip),
+            &skips,
             morpheme,
             form,
             freq,

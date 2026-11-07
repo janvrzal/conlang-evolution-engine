@@ -75,6 +75,10 @@ pub struct Runtime {
     /// Roste, kdykoli se změní vstup četností užití (pojmy, váhy buněk); kód podle něj
     /// zahodí paměť četností. Začíná od nuly, kód od nuly „nikdy nesrovnáno“.
     pub epoch: u64,
+    /// Řetězové posuny: pro proces čísla procesů, po kterých zaplňuje mezeru
+    /// (`phonology::rows::gap_partners`); platí pro `gap_processes` procesů světa.
+    pub gaps: Vec<Option<Vec<usize>>>,
+    pub gap_processes: usize,
 }
 
 impl Clone for Runtime {
@@ -94,11 +98,26 @@ impl fmt::Debug for Runtime {
     }
 }
 
+/// Zadaný hláskový posun (událost `sound_shift`, dok. 26): změna `changed` proměnné `variable`
+/// má ve skupinách jazyka `language` (v regionech `regions`, prázdné = všude) výhodu `pull`,
+/// dokud tam nemá podíl `until`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ActiveShift {
+    pub variable: crate::ids::VariableId,
+    pub changed: crate::ids::VariantId,
+    pub language: u32,
+    pub regions: Vec<crate::ids::TerritoryId>,
+    pub pull: f64,
+    pub until: f64,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SoundWorldState {
     /// Verze indexu prostředí; roste, když se změní slovní zásoba nebo tvary.
     pub index_version: u64,
+    /// Zadané hláskové posuny (událost `sound_shift`), které táhnou, dokud nepřevládnou.
+    pub shifts: Vec<ActiveShift>,
     #[serde(skip)]
     pub runtime: Runtime,
 }

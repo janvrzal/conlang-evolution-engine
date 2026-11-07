@@ -28,7 +28,8 @@ use crate::{Simulation, SimulationConfig};
 pub const FORMAT: &str = "cee-v2-world/1";
 
 /// Druhy událostí popisu světa.
-pub const EVENT_KINDS: [&str; 15] = [
+pub const EVENT_KINDS: [&str; 16] = [
+    "sound_shift",
     "settlement",
     "elite",
     "state",

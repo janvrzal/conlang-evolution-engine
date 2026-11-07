@@ -789,6 +789,31 @@ fn spirantization(m: &Maker<'_>, f: usize) -> Found {
                 .weight(series_weight(members)),
         );
     }
+    // Řada neznělých okluziv → frikativy bez podmínky okolí (první krok Grimmova zákona,
+    // *p t k* → *ɸ θ x*). Samovolně vzniká zřídka (`UNCONDITIONED_ONSET`); rozbíhá ji událost
+    // `sound_shift` nebo výhoda řetězu (`transfer::chain`, dok. 26).
+    let voiceless = m.pattern(&[
+        ("syl", "-"),
+        ("son", "-"),
+        ("cont", "-"),
+        ("delrel", "-"),
+        ("voi", "-"),
+    ])?;
+    if m.present(&voiceless).len() >= 2 {
+        found.push(
+            Candidate::new(
+                f,
+                "řada neznělých okluziv → frikativy".into(),
+                voiceless,
+                Operation::Change,
+            )
+            .changes(&[("cont", "+"), ("strid", "-")])
+            .ease(0.05)
+            .clarity(-0.2)
+            .reductive()
+            .weight(UNCONDITIONED_ONSET),
+        );
+    }
     Ok(found)
 }
 
@@ -882,6 +907,53 @@ fn fortition(m: &Maker<'_>, f: usize) -> Found {
             .left(Pat::Boundary)
             .ease(-0.1)
             .clarity(0.3),
+        );
+    }
+    // Řetězové posuny okluziv bez podmínky okolí (druhý a třetí krok Grimmova zákona):
+    // *b d g* → *p t k* a *bʰ dʰ gʰ* → *b d g*. Samovolně zřídka, výhodu dává řetěz.
+    let plain_voiced = m.pattern(&[
+        ("syl", "-"),
+        ("son", "-"),
+        ("cont", "-"),
+        ("delrel", "-"),
+        ("voi", "+"),
+        ("sg", "-"),
+    ])?;
+    if m.present(&plain_voiced).len() >= 2 {
+        found.push(
+            Candidate::new(
+                f,
+                "řada znělých okluziv → nezněle".into(),
+                plain_voiced,
+                Operation::Change,
+            )
+            .changes(&[("voi", "-")])
+            // Bez mezery v řadě nevýhodná (splynula by s neznělými); ujme se hlavně v řetězu.
+            .ease(-0.05)
+            .clarity(0.0)
+            .weight(UNCONDITIONED_SERIES),
+        );
+    }
+    let aspirated = m.pattern(&[
+        ("syl", "-"),
+        ("son", "-"),
+        ("cont", "-"),
+        ("delrel", "-"),
+        ("voi", "+"),
+        ("sg", "+"),
+    ])?;
+    if m.present(&aspirated).len() >= 2 {
+        found.push(
+            Candidate::new(
+                f,
+                "řada přídechových znělých → bez přídechu".into(),
+                aspirated,
+                Operation::Change,
+            )
+            .changes(&[("sg", "-")])
+            .ease(0.1)
+            .clarity(-0.05)
+            .weight(UNCONDITIONED_SERIES),
         );
     }
     if m.has(m.t.id("j")?) {
@@ -1025,6 +1097,15 @@ fn series_weight(members: usize) -> f64 {
 
 /// Násobek váhy řadového kandidáta proti jedné hlásce (viz [`series_weight`]).
 const SERIES_SHARE: f64 = 2.0;
+
+/// Váha řadového posunu bez podmínky okolí (Grimmův zákon a podobné): samovolně vzniká
+/// zřídka, jako polovina jedné hláskové změny; rozbíhá ho událost nebo výhoda řetězu (dok. 26).
+const UNCONDITIONED_SERIES: f64 = 0.5;
+
+/// Váha počátečního kroku řetězu bez podmínky okolí (tření všech neznělých okluziv): napříč
+/// jazyky vzácný, samovolně vzniká ještě méně často než navazující kroky; rozbíhá ho hlavně
+/// událost `sound_shift` (dok. 26).
+const UNCONDITIONED_ONSET: f64 = 0.2;
 
 fn coda_class(name: &str) -> (f64, f64) {
     match name {

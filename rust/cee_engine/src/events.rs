@@ -159,6 +159,15 @@ pub enum Action {
         reach: f64,
         literacy: f64,
     },
+    /// Zadaná hlásková změna se rozběhne (`phonology::rows::shift_event`, dok. 26).
+    SoundShift {
+        language: String,
+        regions: Vec<String>,
+        family: String,
+        label: String,
+        share: f64,
+        pull: f64,
+    },
     Polity(PolityAction),
     Background(crate::background::BackgroundAction),
     /// Popis, který se nedal rozebrat; provedení vrátí chybu.
@@ -316,6 +325,16 @@ pub fn apply_action(
         } => state_collapse(world, history, tick, year, groups, *reach, *literacy),
         Action::Polity(action) => crate::polity::apply(action, year, world, history, tick),
         Action::Background(action) => crate::background::apply(action, year, world, history, tick),
+        Action::SoundShift {
+            language,
+            regions,
+            family,
+            label,
+            share,
+            pull,
+        } => crate::phonology::rows::shift_event(
+            world, history, tick, year, language, regions, family, label, *share, *pull,
+        ),
         Action::Invalid(message) => Err(message.clone()),
     }
 }
@@ -1271,6 +1290,18 @@ pub fn parse_action(kind: &str, params: &Value) -> Result<Action, String> {
             strength: p.number(&["strength"], 0.5)?,
             kind: link_kind(p.opt_string(&["kind"])?)?,
             trade: p.flag(&["trade"], false)?,
+        },
+        "sound_shift" => Action::SoundShift {
+            language: p.string(&["language"])?,
+            regions: if p.map.contains_key("regions") {
+                p.strings(&["regions"])?
+            } else {
+                Vec::new()
+            },
+            family: p.string(&["family"])?,
+            label: p.string(&["label"])?,
+            share: p.number(&["share"], 0.2)?,
+            pull: p.number(&["pull"], 1.0)?,
         },
         "language_shift" => {
             let defaults = ShiftOptions::default();

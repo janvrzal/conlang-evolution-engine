@@ -321,6 +321,7 @@ struct Inputs {
     levels: Vec<f64>,
     full: Vec<bool>,
     numbers: Vec<usize>,
+    no_feed: Vec<Vec<usize>>,
 }
 
 fn inputs_of(world: &mut World, group: GroupId) -> Result<Inputs, String> {
@@ -344,10 +345,15 @@ fn inputs_of(world: &mut World, group: GroupId) -> Result<Inputs, String> {
         });
         full.push(share >= 1.0);
     }
+    let no_feed = numbers
+        .iter()
+        .map(|&number| crate::phonology::rows::gap_partners(world, ProcessId::new(number)))
+        .collect();
     Ok(Inputs {
         levels,
         full,
         numbers,
+        no_feed,
     })
 }
 
@@ -512,6 +518,7 @@ fn restructure_group(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), St
                 reductive,
                 levels: inputs.levels.clone(),
                 full: inputs.full.clone(),
+                no_feed: inputs.no_feed.clone(),
                 tick,
                 dt,
                 threshold,

@@ -322,6 +322,9 @@ pub struct Round<'a> {
     pub levels: Vec<f64>,
     /// Podíl změny dosáhl 100 %.
     pub full: Vec<bool>,
+    /// Čísla procesů, které živý proces (v pořadí `live`) nesmí krmit: zaplňuje mezeru po nich
+    /// (řetězový posun). Krmení se zastaví, až má takový proces podíl aspoň ½.
+    pub no_feed: Vec<Vec<usize>>,
     pub tick: i64,
     pub dt: f64,
     /// `closure_generations × generation_years`.
@@ -511,6 +514,21 @@ impl CodeState {
                         .iter()
                         .position(|&other| other == k)
                         .ok_or("proces uprostřed kroku není živý")?;
+                    let no_feed: Vec<usize> = round
+                        .no_feed
+                        .get(k)
+                        .map(|numbers| {
+                            alive
+                                .iter()
+                                .enumerate()
+                                .filter(|&(_, &other)| {
+                                    numbers.contains(&self.procs[live0[other]].number)
+                                        && round.levels[other] >= 0.0
+                                })
+                                .map(|(position, _)| position)
+                                .collect()
+                        })
+                        .unwrap_or_default();
                     let source = LiveUsage::new(&mut self.usage, &ctx.usage);
                     let units = Units {
                         overlay: &overlay,
@@ -526,6 +544,7 @@ impl CodeState {
                         level,
                         &targets,
                         skip,
+                        &no_feed,
                         &source,
                     )?
                 };

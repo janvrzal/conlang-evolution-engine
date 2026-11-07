@@ -78,6 +78,19 @@ pub struct SegmentTable {
     index_syl: usize,
 }
 
+/// Sekundární značky, které kóduje rys: přídech, nosovost, ejektivnost, délka, zaokrouhlení
+/// (u souhlásek ʷ).
+fn marks_of_feature(name: &str) -> &'static [char] {
+    match name {
+        "sg" => &['ʰ', 'ʱ'],
+        "nas" => &['\u{303}'],
+        "cg" => &['ʼ'],
+        "long" => &['ː'],
+        "round" => &['ʷ'],
+        _ => &[],
+    }
+}
+
 fn value_of(text: &str) -> Result<i8, String> {
     match text {
         "+" => Ok(1),
@@ -497,6 +510,13 @@ impl SegmentTable {
         allow: &[char],
     ) -> Result<Option<i32>, String> {
         let mut allowed: BTreeSet<char> = self.secondary[segment as usize].clone();
+        // Značka, kterou kóduje měněný rys, se nezachovává: ztráta přídechu musí smět odstranit
+        // ʰ, ztráta nosovosti ◌̃ a podobně (jinak změna skončí u nesmyslné hlásky jako ɓʰ).
+        for &(name, _) in changes {
+            for &mark in marks_of_feature(name) {
+                allowed.remove(&mark);
+            }
+        }
         allowed.extend(allow.iter().copied());
         let mut wanted: Vec<(usize, i8)> = Vec::with_capacity(changes.len());
         for &(name, value) in changes {
@@ -543,7 +563,13 @@ impl SegmentTable {
                 continue;
             }
             let distance = vector.iter().zip(source).filter(|(a, b)| a != b).count();
-            if best.is_none_or(|(d, _)| distance < d) {
+            // Při stejné vzdálenosti vyhraje hláska s kratším zápisem (tʰ před tʰʰ).
+            let better = best.is_none_or(|(d, at)| {
+                distance < d
+                    || (distance == d
+                        && self.ipa[row].chars().count() < self.ipa[at].chars().count())
+            });
+            if better {
                 best = Some((distance, row));
             }
         }

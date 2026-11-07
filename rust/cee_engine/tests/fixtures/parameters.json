@@ -65,6 +65,7 @@
   "strong": 2.0,
   "weak": 0.5
  },
+ "chain_shift_weight": 1.0,
  "change_rates": {},
  "channel_domains": {
   "elite": {

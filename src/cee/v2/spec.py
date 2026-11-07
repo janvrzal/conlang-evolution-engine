@@ -308,18 +308,34 @@ class EliteSpec(_Event):
 
 
 
+class SoundShiftSpec(_Event):
+    """Zadaná hlásková změna se rozběhne u jazyka ``language`` (dok. 26): rodina a popis
+    kandidáta jako v ``LanguageSpec.processes`` (např. ``spirantization``,
+    ``"řada neznělých okluziv → frikativy"``). Engine ji jen nastartuje."""
+
+    kind: Literal["sound_shift"]
+    language: str = Field(min_length=1)
+    #: Jen v těchto regionech; prázdné = všude, kde jazykem mluví.
+    regions: list[str] = Field(default_factory=list)
+    family: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    share: float = Field(default=0.2, gt=0.0, lt=1.0)
+    #: Výhoda změny ve skupinách jazyka, dokud v nich nemá většinu mluvčích; 0 = jen start.
+    pull: float = Field(default=1.0, ge=0.0)
+
+
 EventSpec = Annotated[
     Union[
         StateSpec, LanguagePolicySpec, AnnexationSpec, SecessionSpec, CollapseSpec, BorderPolicySpec,
         LinguaFrancaSpec, StandardSpec, SchoolsSpec, RevivalSpec, PreserveSpec, IdentitySpec, ImmigrationSpec,
-        SettlementSpec, EliteSpec,
+        SettlementSpec, EliteSpec, SoundShiftSpec,
     ],
     Field(discriminator="kind"),
 ]
 EVENT_KINDS = (
     "state", "language_policy", "annexation", "secession", "collapse", "border_policy",
     "lingua_franca", "standard", "schools", "revival", "preserve", "identity", "immigration",
-    "settlement", "elite",
+    "settlement", "elite", "sound_shift",
 )
 
 
