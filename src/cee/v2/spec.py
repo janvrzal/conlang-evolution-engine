@@ -96,6 +96,9 @@ class LanguageSpec(_Model):
     processes: list[InitialProcessSpec] = Field(default_factory=list)
     #: Odvozovací přípony (IPA); prázdné = engine je vylosuje z inventáře hlásek jazyka.
     suffixes: list[str] = Field(default_factory=list)
+    #: Slabičná stavba generovaných slov (WALS 12A); ``None`` = engine ji vylosuje podle
+    #: podílů typů ve WALS (dok. 25).
+    syllables: Literal["simple", "moderate", "complex"] | None = None
 
 
 class RegionSpec(_Model):

@@ -315,27 +315,22 @@ fn proces_pod_prahem_nepise_a_neuzavre_se() {
     for _ in 0..6 {
         sim.step().unwrap();
     }
+    // Jen události tohoto procesu: jiné, přirozeně vzniklé změny se ve světě ujmout smějí.
     let name = sim
         .world
         .registry
         .variables
         .name(variant.variable.0)
         .to_owned();
-    let own = |e: &serde_json::Map<String, serde_json::Value>| e["variable"] == name.as_str();
-    assert_eq!(
+    let group_name = sim.world.group_name(group).to_owned();
+    let mine = |kind: &str| {
         sim.history
-            .of_kind("phonologized")
-            .filter(|e| own(e))
-            .count(),
-        0
-    );
-    assert_eq!(
-        sim.history
-            .of_kind("process_closed")
-            .filter(|e| own(e))
-            .count(),
-        0
-    );
+            .of_kind(kind)
+            .filter(|e| e["variable"] == name.as_str() && e["group"] == group_name.as_str())
+            .count()
+    };
+    assert_eq!(mine("phonologized"), 0);
+    assert_eq!(mine("process_closed"), 0);
     let proc = &sim
         .world
         .groups

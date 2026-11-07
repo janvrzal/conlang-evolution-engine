@@ -19,6 +19,7 @@ use crate::grammar::profile;
 use crate::history::History;
 use crate::model::code::{StressRule, StressStrength};
 use crate::parameters::Parameters;
+use crate::protoform::SyllableType;
 use crate::scenarios::{region_world, ProtoLanguage, Region, SeedOptions};
 use crate::segments::SegmentTable;
 use crate::vocabulary::{resolve, CustomConcept, DEFAULT_SIZE};
@@ -131,6 +132,10 @@ pub struct LanguageSpec {
     /// Odvozovací přípony (IPA); prázdné = engine je vylosuje z inventáře hlásek jazyka.
     #[serde(default)]
     pub suffixes: Vec<String>,
+    /// Slabičná stavba generovaných slov (WALS 12A): `simple`, `moderate`, `complex`;
+    /// `None` = vylosuje se podle podílů typů ve WALS.
+    #[serde(default)]
+    pub syllables: Option<String>,
 }
 
 /// Zvuková změna rozběhnutá na startu: rodina, popis kandidáta (`m → ∅ /V_#`) a podíl
@@ -247,6 +252,10 @@ impl WorldSpec {
 
 fn proto_language(spec: &LanguageSpec, table: &SegmentTable) -> Result<ProtoLanguage, String> {
     let mut language = ProtoLanguage::new(&spec.id);
+    // Jazyky z popisu světa (aplikace, scénáře Evropa a Romania) dostanou vlastní morfémy.
+    language.generated_morphemes = true;
+    // Bez zadaného inventáře (ani souhlásek, ani samohlásek) se inventář vygeneruje (PHOIBLE).
+    language.generated_inventory = spec.consonants.is_none() && spec.vowels.is_none();
     language.grammar = profile::by_name(&spec.grammar).ok_or_else(|| {
         format!(
             "languages.{}: neznámá gramatika '{}'",
@@ -275,6 +284,14 @@ fn proto_language(spec: &LanguageSpec, table: &SegmentTable) -> Result<ProtoLang
             .map_err(|e| format!("languages.{}.suffixes: {e}", spec.id))?;
     }
     language.suffixes = spec.suffixes.clone();
+    if let Some(name) = &spec.syllables {
+        language.syllables = Some(SyllableType::parse(name).ok_or_else(|| {
+            format!(
+                "languages.{}.syllables: neznámá slabičná stavba '{name}' (simple, moderate, complex)",
+                spec.id
+            )
+        })?);
+    }
     language.endonym = spec.endonym.clone();
     language.tones = spec.tones.clone();
     for (function, given) in &spec.constructions {
@@ -422,25 +439,9 @@ fn make_world(spec: &WorldSpec, params: Parameters) -> Result<World, String> {
                 ));
             }
             let mut inventory: Vec<u32> = Vec::new();
-            for segment in language
-                .consonants
-                .clone()
-                .unwrap_or_else(|| {
-                    crate::concepts::Defaults::shared()
-                        .default_consonants
-                        .clone()
-                })
-                .iter()
-                .chain(
-                    language
-                        .vowels
-                        .clone()
-                        .unwrap_or_else(|| {
-                            crate::concepts::Defaults::shared().default_vowels.clone()
-                        })
-                        .iter(),
-                )
-            {
+            let (consonants, vowels) = proto_language(language, &table)?
+                .inventory(crate::scenarios::language_seed(spec.seed, &language.id));
+            for segment in consonants.iter().chain(vowels.iter()) {
                 inventory.extend(table.parse(segment)?.into_iter().map(|s| s as u32));
             }
             inventory.sort_unstable();
@@ -712,6 +713,16 @@ fn word_issues(spec: &WorldSpec, known: &HashSet<String>) -> Vec<Issue> {
                 format!("languages.{index}.tones"),
                 "tóny se opakují",
             ));
+        }
+        if let Some(name) = &language.syllables {
+            if SyllableType::parse(name).is_none() {
+                issues.push(Issue::error(
+                    format!("languages.{index}.syllables"),
+                    format!(
+                        "neznámá slabičná stavba '{name}'; možnosti: simple, moderate, complex"
+                    ),
+                ));
+            }
         }
         for (position, concept) in language.endonym.iter().enumerate() {
             if !known.contains(concept) {

@@ -1,12 +1,9 @@
-//! Vektory z Pythonu (`scripts/export_v2_rust_vectors.py`): náhoda, numpy generátor, protojazyk,
+//! Vektory z Pythonu (`scripts/export_v2_rust_vectors.py`): náhoda, numpy generátor,
 //! tabulka hlásek a parametry. Ověřují, že Rust dává stejná čísla jako referenční Python.
+//! (Protojazyk už Python nezrcadlí: dok. 25, `tests/protoform.rs`.)
 
-use std::collections::HashMap;
-
-use cee_engine::concepts::ConceptData;
 use cee_engine::legacy_numpy::Pcg64;
 use cee_engine::parameters::Parameters;
-use cee_engine::protoform::{protolanguage, ProtoSpec};
 use cee_engine::rng::{hash_poisson, stable_id, stable_int, Part, Stream};
 use cee_engine::segments::SegmentTable;
 use serde_json::Value;
@@ -147,59 +144,6 @@ fn strings(value: &Value) -> Vec<String> {
         .iter()
         .map(|s| s.as_str().unwrap().to_owned())
         .collect()
-}
-
-#[test]
-fn protojazyk() {
-    let data = ConceptData::shared();
-    for case in fixture("protolanguage")["cases"].as_array().unwrap() {
-        let concepts = strings(&case["concepts"]);
-        let defaults = cee_engine::concepts::Defaults::shared();
-        let pick = |key: &str, fallback: &Vec<String>| {
-            case.get(key).map_or_else(|| fallback.clone(), strings)
-        };
-        let consonants = pick("consonants", &defaults.default_consonants);
-        let vowels = pick("vowels", &defaults.default_vowels);
-        let tones = pick("tones", &Vec::new());
-        let fixed: HashMap<String, String> = case
-            .get("fixed")
-            .map(|f| {
-                f.as_object()
-                    .unwrap()
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned()))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let (forms, freqs) = protolanguage(
-            &ProtoSpec {
-                concepts: &concepts,
-                seed: case["seed"].as_u64().unwrap(),
-                consonants: &consonants,
-                vowels: &vowels,
-                fixed: &fixed,
-                tones: &tones,
-                known_frequencies: None,
-            },
-            data,
-        )
-        .unwrap();
-        for (concept, expected) in case["forms"].as_object().unwrap() {
-            assert_eq!(
-                forms[concept],
-                expected.as_str().unwrap(),
-                "tvar {concept} (semínko {})",
-                case["seed"]
-            );
-        }
-        for (concept, expected) in case["freqs"].as_object().unwrap() {
-            let found = freqs[concept];
-            assert!(
-                (found - expected.as_f64().unwrap()).abs() < 1e-12,
-                "frekvence {concept}: {found} vs {expected}"
-            );
-        }
-    }
 }
 
 #[test]

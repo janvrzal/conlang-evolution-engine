@@ -348,10 +348,19 @@ pub fn lexicon_profile(world: &World, group: GroupId) -> LexiconProfile {
         }
     }
     let inventory: BTreeSet<i32> = forms.iter().flatten().copied().collect();
-    let vowels: BTreeSet<i32> = inventory
+    // Kvality samohlásek jako ve WALS 2A (Maddieson 2013): bez tónu, délky a nosovosti
+    // („Long and short variants of the same vowel are always counted once… nasalized vowels
+    // do not add to the inventory as long as a non-nasalized counterpart occurs“).
+    let vowels: BTreeSet<String> = inventory
         .iter()
         .filter(|&&s| table.is_vowel(s))
-        .map(|&s| table.with_tone(s, 0).unwrap_or(s))
+        .map(|&s| {
+            table
+                .render(&[table.with_tone(s, 0).unwrap_or(s)])
+                .chars()
+                .filter(|c| !matches!(c, '\u{303}' | 'ː' | 'ˑ'))
+                .collect()
+        })
         .collect();
     let consonants = inventory.iter().filter(|&&s| !table.is_vowel(s)).count();
     let tones: BTreeSet<u32> = inventory
