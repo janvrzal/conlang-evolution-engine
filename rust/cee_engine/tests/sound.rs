@@ -219,13 +219,26 @@ fn aktivace_naplni_frontu_a_fonologizace_prepise_tvary_a_proces_se_uzavre() {
     for _ in 0..5 {
         sim.step().unwrap();
     }
+    // Při realistickém tempu (M9b) mezitím doběhnou i jiné hláskové změny: počítají se jen
+    // události tohoto procesu.
+    let name = sim.world.registry.variables.name(variable.0).to_owned();
+    let group_name = sim.world.group_name(group).to_owned();
+    // Proces je ve všech skupinách na 100 %, takže se rozběhne i jinde: počítá se skupina testu.
+    let own = |e: &serde_json::Map<String, serde_json::Value>| {
+        e["variable"] == name.as_str() && e["group"] == group_name.as_str()
+    };
     let phonologized: u64 = sim
         .history
         .of_kind("phonologized")
+        .filter(|e| own(e))
         .map(|e| e["words"].as_u64().unwrap())
         .sum();
     assert!(phonologized > 0, "slova si změnu zapsala");
-    let closed: Vec<_> = sim.history.of_kind("process_closed").collect();
+    let closed: Vec<_> = sim
+        .history
+        .of_kind("process_closed")
+        .filter(|e| own(e))
+        .collect();
     assert_eq!(closed.len(), 1, "proces se uzavřel právě jednou");
     assert_eq!(
         closed[0]["restructured"].as_u64().unwrap() as usize,
@@ -243,10 +256,15 @@ fn aktivace_naplni_frontu_a_fonologizace_prepise_tvary_a_proces_se_uzavre() {
         VariableId::new(0)
     ));
     let code = sim.world.groups.main_code(group);
-    assert_eq!(
-        code.phonology.sound.lifecycle_log,
-        vec![(process, true), (process, false)]
-    );
+    let own_log: Vec<_> = code
+        .phonology
+        .sound
+        .lifecycle_log
+        .iter()
+        .copied()
+        .filter(|&(p, _)| p == process)
+        .collect();
+    assert_eq!(own_log, vec![(process, true), (process, false)]);
     // Přepsané tvary se liší od výchozích a obsahují jen skutečné hlásky.
     let rewritten = code.forms.overridden();
     assert!(rewritten > 0);

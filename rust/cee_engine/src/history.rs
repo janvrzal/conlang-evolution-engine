@@ -48,24 +48,139 @@ pub struct Snapshot {
     pub distances: Option<Vec<f64>>,
 }
 
+/// Kolik bajtů záznamů smí zůstat v paměti; starší se připíší do dočasného souboru.
+pub const SPILL_BYTES: usize = 32 << 20;
+
+/// Dočasný soubor se staršími záznamy (jen se připisuje; smaže se hned po otevření, takže po
+/// běhu nezůstane na disku ani po pádu).
+#[derive(Debug)]
+struct Spill {
+    file: std::fs::File,
+    /// Kolik bajtů logu je v souboru (záznamy od začátku logu).
+    bytes: usize,
+}
+
+impl Spill {
+    fn create() -> std::io::Result<Spill> {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "cee-historie-{}-{}.jsonl",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(&path)?;
+        // Na Unixu soubor žije, dokud je otevřený; jinde se smaže až při zavření (`Drop`).
+        let _ = std::fs::remove_file(&path);
+        Ok(Spill { file, bytes: 0 })
+    }
+
+    fn append(&mut self, text: &str) -> std::io::Result<()> {
+        use std::io::Write;
+        self.file.write_all(text.as_bytes())?;
+        self.bytes += text.len();
+        Ok(())
+    }
+
+    fn read(&self, start: usize, end: usize) -> String {
+        let mut buffer = vec![0_u8; end - start];
+        read_at(&self.file, &mut buffer, start as u64).expect("čtení historie z dočasného souboru");
+        String::from_utf8(buffer).expect("záznam historie je UTF-8")
+    }
+}
+
+#[cfg(unix)]
+fn read_at(file: &std::fs::File, buffer: &mut [u8], offset: u64) -> std::io::Result<()> {
+    std::os::unix::fs::FileExt::read_exact_at(file, buffer, offset)
+}
+
+#[cfg(windows)]
+fn read_at(file: &std::fs::File, buffer: &mut [u8], offset: u64) -> std::io::Result<()> {
+    let mut done = 0;
+    while done < buffer.len() {
+        let read = std::os::windows::fs::FileExt::seek_read(
+            file,
+            &mut buffer[done..],
+            offset + done as u64,
+        )?;
+        if read == 0 {
+            return Err(std::io::ErrorKind::UnexpectedEof.into());
+        }
+        done += read;
+    }
+    Ok(())
+}
+
 /// Záznamy historie uložené kompaktně: každý záznam jako řádek JSON (klíče seřazené, přesně ten
-/// text, ze kterého se počítá otisk) v jednom řetězci, k tomu konec řádku a číslo druhu.
-/// Objekt se z řádku sestaví až při čtení (`iter`, `get`, `History::of_kind`).
-#[derive(Clone, Debug, Default, PartialEq)]
+/// text, ze kterého se počítá otisk), k tomu konec řádku a číslo druhu. Objekt se z řádku sestaví
+/// až při čtení (`iter`, `get`, `History::of_kind`).
+///
+/// Text se s během jen připisuje a čte se zřídka (měřidla, export), proto v paměti zůstává jen
+/// posledních [`SPILL_BYTES`] bajtů; starší jsou v dočasném souboru. V paměti tak zbývá rejstřík
+/// (konec a druh záznamu). Dlouhý běh Evropy jinak držel stovky MB záznamů.
+#[derive(Debug, Default)]
 pub struct EventLog {
+    /// Záznamy od `spilled()` dál.
     text: String,
+    /// Konce řádků v celém logu (bajty od začátku logu).
     ends: Vec<usize>,
     kinds: Vec<u16>,
     kind_names: Vec<String>,
+    spill: Option<Spill>,
+    /// Limit textu v paměti (0 = [`SPILL_BYTES`]; testy volí menší).
+    limit: usize,
+}
+
+impl Clone for EventLog {
+    /// Kopie má všechny záznamy v paměti (kontrolní body; přesune se jen to, co je potřeba).
+    fn clone(&self) -> Self {
+        EventLog {
+            text: self.lines().collect(),
+            ends: self.ends.clone(),
+            kinds: self.kinds.clone(),
+            kind_names: self.kind_names.clone(),
+            spill: None,
+            limit: self.limit,
+        }
+    }
+}
+
+impl PartialEq for EventLog {
+    fn eq(&self, other: &Self) -> bool {
+        self.ends == other.ends
+            && self.kinds.len() == other.kinds.len()
+            && (0..self.len()).all(|index| self.kind_name(index) == other.kind_name(index))
+            && self.lines().eq(other.lines())
+    }
 }
 
 impl EventLog {
+    /// Log, který odkládá na disk už nad `limit` bajtů textu.
+    pub fn with_limit(limit: usize) -> EventLog {
+        EventLog {
+            limit,
+            ..EventLog::default()
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.ends.len()
     }
 
     pub fn is_empty(&self) -> bool {
         self.ends.is_empty()
+    }
+
+    fn spilled(&self) -> usize {
+        self.spill.as_ref().map_or(0, |spill| spill.bytes)
+    }
+
+    fn kind_name(&self, index: usize) -> &str {
+        &self.kind_names[self.kinds[index] as usize]
     }
 
     pub fn push(&mut self, event: Map<String, Value>) {
@@ -79,8 +194,31 @@ impl EventLog {
         };
         self.text
             .push_str(&serde_json::to_string(&event).expect("JSON"));
-        self.ends.push(self.text.len());
+        self.ends.push(self.spilled() + self.text.len());
         self.kinds.push(number as u16);
+        let limit = if self.limit == 0 {
+            SPILL_BYTES
+        } else {
+            self.limit
+        };
+        if self.text.len() > limit {
+            self.spill_text();
+        }
+    }
+
+    /// Připíše text v paměti do dočasného souboru; když soubor nejde založit, zůstane v paměti.
+    fn spill_text(&mut self) {
+        if self.spill.is_none() {
+            match Spill::create() {
+                Ok(spill) => self.spill = Some(spill),
+                Err(_) => return,
+            }
+        }
+        let spill = self.spill.as_mut().expect("soubor historie");
+        spill
+            .append(&self.text)
+            .expect("zápis historie do dočasného souboru");
+        self.text.clear();
     }
 
     pub fn extend(&mut self, events: impl IntoIterator<Item = Map<String, Value>>) {
@@ -90,24 +228,60 @@ impl EventLog {
     }
 
     /// Řádek JSON záznamu číslo `index`.
-    pub fn line(&self, index: usize) -> &str {
+    pub fn line(&self, index: usize) -> std::borrow::Cow<'_, str> {
         let start = if index == 0 { 0 } else { self.ends[index - 1] };
-        &self.text[start..self.ends[index]]
+        let end = self.ends[index];
+        let spilled = self.spilled();
+        if start >= spilled {
+            std::borrow::Cow::Borrowed(&self.text[start - spilled..end - spilled])
+        } else {
+            std::borrow::Cow::Owned(
+                self.spill
+                    .as_ref()
+                    .expect("soubor historie")
+                    .read(start, end),
+            )
+        }
     }
 
-    pub fn lines(&self) -> impl Iterator<Item = &str> + '_ {
-        (0..self.len()).map(|index| self.line(index))
+    /// Řádky po řadě; ze souboru se čtou po větších kusech.
+    pub fn lines(&self) -> impl Iterator<Item = std::borrow::Cow<'_, str>> + '_ {
+        const CHUNK: usize = 8 << 20;
+        let spilled = self.spilled();
+        let mut buffer = String::new();
+        let mut buffer_start = 0_usize;
+        (0..self.len()).map(move |index| {
+            let start = if index == 0 { 0 } else { self.ends[index - 1] };
+            let end = self.ends[index];
+            if start >= spilled {
+                return std::borrow::Cow::Borrowed(&self.text[start - spilled..end - spilled]);
+            }
+            if start < buffer_start || end > buffer_start + buffer.len() {
+                // Další kus souboru: od začátku záznamu po konec posledního celého záznamu v kusu.
+                let limit = (start + CHUNK).max(end).min(spilled);
+                let last = self.ends.partition_point(|&e| e <= limit);
+                let stop = self.ends[last.saturating_sub(1)].max(end).min(spilled);
+                buffer = self
+                    .spill
+                    .as_ref()
+                    .expect("soubor historie")
+                    .read(start, stop);
+                buffer_start = start;
+            }
+            std::borrow::Cow::Owned(buffer[start - buffer_start..end - buffer_start].to_owned())
+        })
     }
 
     /// Záznam číslo `index` jako objekt.
     pub fn get(&self, index: usize) -> Option<Map<String, Value>> {
         (index < self.len())
-            .then(|| serde_json::from_str(self.line(index)).expect("záznam historie je JSON"))
+            .then(|| serde_json::from_str(&self.line(index)).expect("záznam historie je JSON"))
     }
 
     /// Všechny záznamy po řadě jako objekty.
     pub fn iter(&self) -> impl Iterator<Item = Map<String, Value>> + '_ {
-        (0..self.len()).filter_map(|index| self.get(index))
+        self.lines()
+            .map(|line| serde_json::from_str(&line).expect("záznam historie je JSON"))
     }
 
     /// Záznamy daného druhu; ostatní řádky se nerozebírají.
@@ -119,25 +293,17 @@ impl EventLog {
     }
 }
 
-impl std::ops::Index<usize> for EventLog {
-    type Output = str;
-
-    /// Řádek JSON záznamu (objekt viz [`EventLog::get`]).
-    fn index(&self, index: usize) -> &str {
-        self.line(index)
-    }
-}
-
 /// Kontrolní body ukládají záznamy jako jediný řetězec s polem JSON.
 impl Serialize for EventLog {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut text = String::with_capacity(self.text.len() + self.len() + 2);
+        let mut text =
+            String::with_capacity(self.ends.last().copied().unwrap_or(0) + self.len() + 2);
         text.push('[');
         for (index, line) in self.lines().enumerate() {
             if index > 0 {
                 text.push(',');
             }
-            text.push_str(line);
+            text.push_str(&line);
         }
         text.push(']');
         serializer.serialize_str(&text)
@@ -189,7 +355,7 @@ impl History {
     /// Řádky logu: JSON s řazenými klíči (`json.dumps(sort_keys=True)`).
     pub fn lines(&self) -> Vec<String> {
         // `serde_json::Map` bez `preserve_order` drží klíče seřazené.
-        self.events.lines().map(str::to_owned).collect()
+        self.events.lines().map(|line| line.into_owned()).collect()
     }
 
     /// Otisk celého logu (SHA-256 nad řádky); dva běhy se stejným semínkem ho mají shodný.
@@ -206,5 +372,55 @@ impl History {
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn filled(log: &mut EventLog) {
+        for index in 0..5000 {
+            let kind = ["innovation", "established", "language_shift"][index % 3];
+            log.push(History::event(
+                kind,
+                index as u32,
+                index as f64 * 0.5,
+                serde_json::json!({"group": format!("g{index}"), "share": 1.0 / (index + 1) as f64}),
+            ));
+        }
+    }
+
+    #[test]
+    fn odlozeny_log_cte_stejne_jako_v_pameti() {
+        let (mut memory, mut spilled) =
+            (EventLog::with_limit(usize::MAX), EventLog::with_limit(1000));
+        filled(&mut memory);
+        filled(&mut spilled);
+        assert!(spilled.spilled() > 0 && memory.spilled() == 0);
+        assert!(memory.lines().eq(spilled.lines()));
+        assert_eq!(memory.get(1234), spilled.get(1234));
+        assert_eq!(memory.get(4999), spilled.get(4999));
+        assert_eq!(
+            memory.of_kind("established").count(),
+            spilled.of_kind("established").count()
+        );
+        assert!(memory
+            .of_kind("language_shift")
+            .eq(spilled.of_kind("language_shift")));
+        assert!(memory.iter().eq(spilled.iter()));
+        assert_eq!(memory, spilled);
+        assert_eq!(memory, spilled.clone());
+        let digest = |log: EventLog| {
+            History {
+                events: log,
+                ..History::default()
+            }
+            .digest()
+        };
+        assert_eq!(digest(memory.clone()), digest(spilled));
+        let text = serde_json::to_string(&memory).unwrap();
+        let back: EventLog = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, memory);
     }
 }

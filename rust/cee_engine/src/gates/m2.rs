@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use cee_core::candidates::FAMILIES;
 
 use super::metrics::{
-    established_processes, hellinger, lexicon_profile, maximum, median, minimum, text,
-    LexiconProfile, CONSONANT_BAND, VOWEL_BAND,
+    established_per_group, established_processes, established_with_reflexes, hellinger,
+    lexicon_profile, maximum, median, minimum, text, LexiconProfile, CONSONANT_BAND, VOWEL_BAND,
 };
 use super::{Batch, Cmp, Report, Runner};
 use crate::changes::sound::PRIORS;
@@ -152,7 +152,7 @@ pub fn check_metrika_6(runs: &[&PhonologyRun]) -> Report {
     let mut domains: BTreeMap<String, f64> = BTreeMap::new();
     let mut families: BTreeSet<usize> = BTreeSet::new();
     for run in runs {
-        for variable in established_processes(&run.simulation.history) {
+        for variable in established_with_reflexes(&run.simulation.history) {
             if let Some(family) = family_of(&run.simulation, &variable) {
                 families.insert(family);
                 *domains.entry(DOMAINS[family].to_owned()).or_insert(0.0) += 1.0;
@@ -160,7 +160,12 @@ pub fn check_metrika_6(runs: &[&PhonologyRun]) -> Report {
         }
     }
     let total: f64 = domains.values().sum();
-    report.check("počet ustálených změn", total, Cmp::Ge, 30.0);
+    // Počet změn podél jedné linie (průměr na vesnici), podíly druhů ze všech změn běhu.
+    let per_lineage: f64 = runs
+        .iter()
+        .map(|run| established_per_group(&run.simulation.history))
+        .sum();
+    report.check("počet ustálených změn", per_lineage, Cmp::Ge, 30.0);
     let share = |domain: &str| domains.get(domain).copied().unwrap_or(0.0) / total;
     report.check("podíl souhláskových změn", share("consonant"), Cmp::Ge, 0.2);
     report.check("podíl samohláskových změn", share("vowel"), Cmp::Ge, 0.2);

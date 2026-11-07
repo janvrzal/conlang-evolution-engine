@@ -216,7 +216,7 @@ pub fn check_s3_substrat(run: &Shifted) -> Report {
                     .state
                     .procs
                     .iter()
-                    .any(|proc| proc.number == process.index() && proc.done.contains(&1))
+                    .any(|proc| proc.number == process.index() && proc.done.any())
             })
             .count();
         report.check(

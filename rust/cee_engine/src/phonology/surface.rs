@@ -148,14 +148,7 @@ fn surface_cached(
         state
             .live()
             .into_iter()
-            .filter(|&at| {
-                state.procs[at]
-                    .done
-                    .get(morpheme.index())
-                    .copied()
-                    .unwrap_or(0)
-                    != 1
-            })
+            .filter(|&at| !state.procs[at].done.get(morpheme.index()))
             .map(|at| (state.procs[at].number, state.procs[at].reductive))
             .collect()
     };

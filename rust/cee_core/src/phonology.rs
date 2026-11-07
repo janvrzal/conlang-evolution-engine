@@ -22,6 +22,9 @@
 //! logitů rozhoduje jméno. Jméno jádro nezná, proto aktivace vrací dvojice
 //! seřazené podle (logit, číslo) a Python srovná jen úseky shodných logitů.
 
+use crate::flags::Flags;
+#[cfg(test)]
+use crate::flags::EMPTY;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
@@ -105,8 +108,8 @@ pub struct Target<'a> {
     /// neexistuje a založí se, až na ni dojde (viz `Needs::tables`).
     pub row: i64,
     /// Morfémy, které v frontě čekají, a které si změnu už zapsaly (příznaky).
-    pub queued: &'a [u8],
-    pub restructured: &'a [u8],
+    pub queued: &'a Flags,
+    pub restructured: &'a Flags,
     /// Sklon slov vůči změně podle čísla lexému; NaN = ještě nelosováno.
     pub bias: &'a [f64],
     pub reductive: bool,
@@ -179,8 +182,8 @@ pub struct Rewrite {
     pub exponent: i32,
 }
 
-fn flagged(flags: &[u8], morpheme: usize) -> bool {
-    flags.get(morpheme).copied() == Some(1)
+fn flagged(flags: &Flags, morpheme: usize) -> bool {
+    flags.get(morpheme)
 }
 
 /// Logit, při kterém si slovo změnu zapíše (`_needed`, `activate`):
@@ -569,11 +572,11 @@ mod tests {
         lead_scale: 0.5,
     };
 
-    fn target<'a>(row: i64, queued: &'a [u8], bias: &'a [f64], reductive: bool) -> Target<'a> {
+    fn target<'a>(row: i64, queued: &'a Flags, bias: &'a [f64], reductive: bool) -> Target<'a> {
         Target {
             row,
             queued,
-            restructured: &[],
+            restructured: &EMPTY,
             bias,
             reductive,
         }
@@ -605,7 +608,10 @@ mod tests {
                                    // je cíl, do kterého se přepsaný tvar zařadí, ale jeho řádek nesedí
                                    // (v „kada“ už k není jinde než na začátku), takže ano.
         let bias = [0.25];
-        let targets = [target(0, &[], &bias, false), target(1, &[], &bias, false)];
+        let targets = [
+            target(0, &EMPTY, &bias, false),
+            target(1, &EMPTY, &bias, false),
+        ];
         let out = step(
             &mut bank,
             &PARAMS,
@@ -654,7 +660,10 @@ mod tests {
         let (forms, lexeme, none) = ([kata], [0], [-1]);
         let units = units(&forms, &lexeme, &none);
         let bias = [f64::NAN];
-        let targets = [target(0, &[], &bias, false), target(1, &[], &bias, false)];
+        let targets = [
+            target(0, &EMPTY, &bias, false),
+            target(1, &EMPTY, &bias, false),
+        ];
         let out = step(
             &mut bank,
             &PARAMS,
@@ -678,7 +687,10 @@ mod tests {
         );
         // S doplněným sklonem krok doběhne a četnost se použije jen u redukčních změn.
         let bias = [0.0];
-        let targets = [target(0, &[], &bias, false), target(1, &[], &bias, true)];
+        let targets = [
+            target(0, &EMPTY, &bias, false),
+            target(1, &EMPTY, &bias, true),
+        ];
         let out = step(
             &mut bank,
             &PARAMS,
@@ -718,10 +730,10 @@ mod tests {
         let (forms, lexeme, none) = ([kata, ta], [0, 1], [-1, -1]);
         let units = units(&forms, &lexeme, &none);
         let bias = [0.0, 0.0];
-        let waiting = [1u8];
+        let waiting = Flags::from_bytes(&[1u8]);
         let targets = [
             target(0, &waiting, &bias, false),
-            target(1, &[], &bias, false),
+            target(1, &EMPTY, &bias, false),
         ];
         let (found, needs) =
             queue_morpheme(&mut bank, &PARAMS, &units, &targets, 0, &Frequencies::new()).unwrap();
@@ -747,20 +759,20 @@ mod tests {
         let (forms, lexeme, none) = ([kata], [0], [-1]);
         let units = units(&forms, &lexeme, &none);
         let bias = [0.0];
-        let waiting = [1u8];
+        let waiting = Flags::from_bytes(&[1u8]);
         // Fronta bez tabulky a morfém, který v ní už čeká: tabulka se nezakládá.
         let targets = [target(NO_TABLE, &waiting, &bias, false)];
         let (found, needs) =
             queue_morpheme(&mut bank, &PARAMS, &units, &targets, 0, &Frequencies::new()).unwrap();
         assert!(found.is_empty() && needs.is_empty());
         // Nečeká-li, Rust o tabulku požádá a nic nezařadí.
-        let targets = [target(NO_TABLE, &[], &bias, false)];
+        let targets = [target(NO_TABLE, &EMPTY, &bias, false)];
         let (found, needs) =
             queue_morpheme(&mut bank, &PARAMS, &units, &targets, 0, &Frequencies::new()).unwrap();
         assert!(found.is_empty());
         assert_eq!(needs.tables.iter().copied().collect::<Vec<_>>(), vec![0]);
         // Přeskočená fronta (strict) nezakládá nic.
-        let targets = [target(SKIP, &[], &bias, false)];
+        let targets = [target(SKIP, &EMPTY, &bias, false)];
         let (found, needs) =
             queue_morpheme(&mut bank, &PARAMS, &units, &targets, 0, &Frequencies::new()).unwrap();
         assert!(found.is_empty() && needs.is_empty());
@@ -775,8 +787,8 @@ mod tests {
         let (forms, lexeme, none) = ([kata, pata, ta], [0, 1, 2], [-1; 3]);
         let units = units(&forms, &lexeme, &none);
         let bias = [0.5, 0.5, 0.25];
-        let restructured = [0u8, 1];
-        let mut target = target(0, &[], &bias, false);
+        let restructured = Flags::from_bytes(&[0u8, 1]);
+        let mut target = target(0, &EMPTY, &bias, false);
         target.restructured = &restructured;
         let out = activate(
             &mut bank,
@@ -793,7 +805,7 @@ mod tests {
         // Morfém 1 se už zapsal, morfém 2 („ta“) nemá místo; zbývá morfém 0.
         assert_eq!((out.morphemes, out.needed), (vec![0], vec![-1.5 - 0.5]));
         let target = Target {
-            restructured: &[],
+            restructured: &EMPTY,
             ..target
         };
         let out = activate(

@@ -167,6 +167,7 @@
  },
  "population_per_density": 500.0,
  "population_pressure_exponents": {
+  "actuation": -1.0,
   "articulation": -0.75
  },
  "pressure_weights": {},
@@ -193,7 +194,7 @@
  "semantic_recurrence": 3.0,
  "shift_exponent": 1.31,
  "shift_rate": 1.0,
- "sound_actuation": 1.0,
+ "sound_actuation": 2.25,
  "standard_prestige": 1.5,
  "standing_variation": 0.3,
  "stress_strength_multiplier": 1.5,
@@ -204,6 +205,6 @@
   "plain": 1.0
  },
  "variation_cap": 0.4,
- "village_openness": 0.5,
+ "village_openness": 0.6,
  "word_bias_sd": 1.5
 }

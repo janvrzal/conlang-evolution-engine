@@ -391,6 +391,46 @@ pub fn established_processes(history: &History) -> BTreeSet<String> {
         .collect()
 }
 
+/// Ustálené procesy, které aspoň v jedné skupině přepsaly slovo (fonologizace s `words` > 0).
+/// Změna bez jediného zasaženého slova po sobě nenechá stopu, takže ji rekonstrukce (Ringe
+/// 2006) nemůže započítat.
+pub fn established_with_reflexes(history: &History) -> BTreeSet<String> {
+    let written: BTreeSet<String> = history
+        .of_kind("phonologized")
+        .filter(|event| event.get("words").and_then(|w| w.as_u64()).unwrap_or(0) > 0)
+        .map(|event| text(&event, "variable").to_owned())
+        .collect();
+    established_processes(history)
+        .into_iter()
+        .filter(|name| written.contains(name))
+        .collect()
+}
+
+/// Průměrný počet ustálených procesů se stopou na skupinu: změny podél jedné linie, jak je
+/// počítá rekonstrukce (Ringe 2006 od praindoevropštiny k pragermánštině). Sjednocení přes
+/// všechny vesnice by sčítalo i změny sesterských nářečí.
+pub fn established_per_group(history: &History) -> f64 {
+    let written: BTreeSet<String> = history
+        .of_kind("phonologized")
+        .filter(|event| event.get("words").and_then(|w| w.as_u64()).unwrap_or(0) > 0)
+        .map(|event| text(&event, "variable").to_owned())
+        .collect();
+    let mut by_group: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for event in history.of_kind("established") {
+        let variable = text(&event, "variable");
+        if variable.starts_with("process:") && written.contains(variable) {
+            by_group
+                .entry(text(&event, "group").to_owned())
+                .or_default()
+                .insert(variable.to_owned());
+        }
+    }
+    if by_group.is_empty() {
+        return 0.0;
+    }
+    by_group.values().map(|set| set.len() as f64).sum::<f64>() / by_group.len() as f64
+}
+
 /// Hellingerova vzdálenost dvou rozdělení (0 = shodná, 1 = disjunktní).
 pub fn hellinger(observed: &BTreeMap<String, f64>, expected: &BTreeMap<String, f64>) -> f64 {
     let keys: BTreeSet<&String> = observed.keys().chain(expected.keys()).collect();

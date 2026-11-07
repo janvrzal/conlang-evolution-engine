@@ -380,6 +380,10 @@ fn record_typology(
 ) {
     let world = &simulation.world;
     let mut shares = Vec::new();
+    // Běh je jedna linie: její jazyky dostanou dohromady váhu 1, jako genus ve WALS
+    // (rozložení WALS je genusově vážené). Jinak by rychlejší vývoj, který linii rozdělí
+    // na víc jazyků, zvětšil vzorek o nářečí téže linie a zpřísnil práh šumu.
+    let lineage_weight = 1.0 / languages.len().max(1) as f64;
     for groups in languages.values() {
         let members: Vec<_> = groups
             .iter()
@@ -401,9 +405,9 @@ fn record_typology(
                 let previous = metric_value(report, &name);
                 report.metrics.retain(|m| m.name != name);
                 let count = if previous.is_nan() {
-                    1.0
+                    lineage_weight
                 } else {
-                    previous + 1.0
+                    previous + lineage_weight
                 };
                 info(report, &name, count);
             }
@@ -490,6 +494,47 @@ pub struct Run {
     pub id: &'static str,
     pub description: &'static str,
     pub measure: fn(i64) -> Result<Report, String>,
+    /// Odhad paměťové špičky jednoho běhu v GB; podle něj se omezí, kolik semínek běží naráz.
+    pub memory_gb: f64,
+}
+
+/// Jakou část fyzické paměti smějí souběžné běhy zabrat.
+const MEMORY_SHARE: f64 = 0.7;
+
+/// Fyzická paměť v GB (`CEE_MEMORY_GB` ji přepíše); neznámá = 8 GB.
+fn physical_memory_gb() -> f64 {
+    if let Some(value) = std::env::var("CEE_MEMORY_GB")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
+        return value;
+    }
+    let bytes = if cfg!(target_os = "macos") {
+        std::process::Command::new("sysctl")
+            .args(["-n", "hw.memsize"])
+            .output()
+            .ok()
+            .and_then(|out| String::from_utf8(out.stdout).ok())
+            .and_then(|text| text.trim().parse::<f64>().ok())
+    } else {
+        std::fs::read_to_string("/proc/meminfo")
+            .ok()
+            .and_then(|text| {
+                text.lines()
+                    .find(|line| line.starts_with("MemTotal:"))
+                    .and_then(|line| line.split_whitespace().nth(1))
+                    .and_then(|kb| kb.parse::<f64>().ok())
+                    .map(|kb| kb * 1024.0)
+            })
+    };
+    bytes.map_or(8.0, |b| b / 1e9)
+}
+
+/// Kolik semínek běhu smí běžet naráz, aby se běhy vešly do paměti (aspoň jedno).
+fn concurrency(run: &Run) -> usize {
+    let budget = physical_memory_gb() * MEMORY_SHARE;
+    let fit = (budget / run.memory_gb.max(0.1)).floor() as usize;
+    fit.clamp(1, rayon::current_num_threads().max(1))
 }
 
 /// Délka typologického běhu v letech (dokument 10: odečet 5 000 let).
@@ -1382,37 +1427,44 @@ pub fn runs() -> Vec<Run> {
             id: "tempo",
             description: "tempo hláskových změn: 12 vesnic staroslověnštiny / latiny 1 000 let, bez kontaktu a pod latinským státem",
             measure: tempo,
+            memory_gb: 0.4,
         },
         Run {
             id: "evropa",
             description: "Evropa: latina, keltština, iberština, dáčtina, germánština, slovanština, řečtina; 10 regionů, −500 až 1900",
             measure: evropa,
+            memory_gb: 3.0,
         },
         Run {
             id: "romania",
             description: "latina ve čtyřech větvích (Itálie, Galie, Hispánie, Dácie), −100 až 1900",
             measure: romania,
+            memory_gb: 0.8,
         },
         Run {
             id: "typologie",
             description: "village_grid 6 vesnic, start gramatiky a přízvuku z WALS, 5 000 let",
             measure: typology,
+            memory_gb: 0.4,
         },
         Run {
             id: "lexikon",
             description: "8 vesnic se sémantikou (běh m3b), 3 000 let",
             measure: lexicon,
+            memory_gb: 0.4,
         },
         Run {
             id: "region",
             description: "čtyři regiony po pěti vesnicích (region-square), 3 000 let",
             measure: region,
+            memory_gb: 0.4,
         },
         Run {
             id: "slozitost",
             description:
                 "20 míst: populace 100 až 10 000 × podíl L2 0 až 45 % (běh metriky 11), 1 500 let",
             measure: complexity,
+            memory_gb: 0.4,
         },
     ]
 }
@@ -1662,10 +1714,17 @@ pub fn run_rows(options: &Options) -> Result<Vec<Row>, String> {
                 variant.name, run.id, count
             );
             let seeds: Vec<i64> = (0..count as i64).map(|i| options.start + i).collect();
-            let results: Vec<(i64, Result<Report, String>)> = seeds
-                .par_iter()
-                .map(|&seed| (seed, execute(run, seed, variant.params.as_ref())))
-                .collect();
+            // Paměťově náročné běhy (Evropa) po menších dávkách: jinak systém odkládá paměť
+            // na disk a kalibrace se zastaví. Semínka jsou nezávislá, výsledky se nemění.
+            let mut results: Vec<(i64, Result<Report, String>)> = Vec::new();
+            for batch in seeds.chunks(concurrency(run)) {
+                results.extend(
+                    batch
+                        .par_iter()
+                        .map(|&seed| (seed, execute(run, seed, variant.params.as_ref())))
+                        .collect::<Vec<_>>(),
+                );
+            }
             let mut kept = Vec::new();
             for (seed, result) in results {
                 match result {

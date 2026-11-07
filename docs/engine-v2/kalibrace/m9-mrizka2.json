@@ -1,0 +1,50 @@
+{
+ "a2.5_o0.6_e0.0": {
+  "sound_actuation": 2.5,
+  "village_openness": 0.6
+ },
+ "a2.5_o0.6_e-0.5": {
+  "sound_actuation": 2.5,
+  "village_openness": 0.6,
+  "population_pressure_exponents": {
+   "articulation": -0.75,
+   "actuation": -0.5
+  }
+ },
+ "a2.5_o0.75_e0.0": {
+  "sound_actuation": 2.5,
+  "village_openness": 0.75
+ },
+ "a2.5_o0.75_e-0.5": {
+  "sound_actuation": 2.5,
+  "village_openness": 0.75,
+  "population_pressure_exponents": {
+   "articulation": -0.75,
+   "actuation": -0.5
+  }
+ },
+ "a3.0_o0.6_e0.0": {
+  "sound_actuation": 3.0,
+  "village_openness": 0.6
+ },
+ "a3.0_o0.6_e-0.5": {
+  "sound_actuation": 3.0,
+  "village_openness": 0.6,
+  "population_pressure_exponents": {
+   "articulation": -0.75,
+   "actuation": -0.5
+  }
+ },
+ "a3.0_o0.75_e0.0": {
+  "sound_actuation": 3.0,
+  "village_openness": 0.75
+ },
+ "a3.0_o0.75_e-0.5": {
+  "sound_actuation": 3.0,
+  "village_openness": 0.75,
+  "population_pressure_exponents": {
+   "articulation": -0.75,
+   "actuation": -0.5
+  }
+ }
+}

@@ -48,6 +48,13 @@ pub fn run(ctx: &mut StepContext<'_>) -> Result<(), String> {
         let _t = crate::timing::scope("rebuild/phonology");
         phonology(ctx, &groups)?;
     }
+    {
+        let _t = crate::timing::scope("rebuild/release");
+        release_tables(ctx.world);
+        if ctx.tick.is_multiple_of(RETAIN_EVERY) {
+            retain_forms(ctx.world);
+        }
+    }
     for group in groups {
         {
             let _t = crate::timing::scope("rebuild/morphology");
@@ -63,4 +70,53 @@ pub fn run(ctx: &mut StepContext<'_>) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Uvolní z banky tabulky výsledků procesů, které nežijí v žádné skupině (uzavřené všude).
+/// Jsou to keše, se kterými se už nepracuje; kdyby se proces znovu rozběhl, dopočítají se.
+fn release_tables(world: &mut crate::world::World) {
+    let rows = world.bank.bank.proc_count();
+    let mut keep = vec![false; rows];
+    for group in world.group_ids() {
+        for code in &world.groups.codes[group.index()] {
+            for proc in &code.phonology.sound.queues.state.procs {
+                if !proc.live {
+                    continue;
+                }
+                for row in [proc.own_row, proc.row].into_iter().flatten() {
+                    if row < rows {
+                        keep[row] = true;
+                    }
+                }
+            }
+        }
+    }
+    world.bank.bank.release_tables(&keep);
+}
+
+/// Po kolika krocích se z tabulek výsledků vyřadí zastaralé tvary.
+const RETAIN_EVERY: u32 = 8;
+
+/// Vyřadí z tabulek výsledků procesů tvary, které už žádný kód nepoužívá (podkladové tvary
+/// kódů a výchozí tvary morfémů jsou živé, ostatní jsou zastaralé podoby slov).
+fn retain_forms(world: &mut crate::world::World) {
+    let count = world.bank.bank.len();
+    let mut alive = vec![false; count];
+    let mut mark = |form: i32| {
+        if form >= 0 && (form as usize) < count {
+            alive[form as usize] = true;
+        }
+    };
+    for &form in &world.sound.runtime.columns.default_form {
+        mark(form);
+    }
+    for group in world.group_ids() {
+        for code in &world.groups.codes[group.index()] {
+            let (forms, _, _) = code.forms.raw();
+            for &form in forms {
+                mark(form);
+            }
+        }
+    }
+    world.bank.bank.retain_forms(&alive);
 }
