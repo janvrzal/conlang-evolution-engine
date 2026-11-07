@@ -390,6 +390,15 @@
       "policy": "romanization"
     },
     {
+      "kind": "sound_shift",
+      "year": -100,
+      "language": "latin",
+      "family": "coda_loss",
+      "label": "m → ∅ /V_#",
+      "share": 0.3,
+      "pull": 1.0
+    },
+    {
       "kind": "secession",
       "year": 271,
       "id": "dacia-free",

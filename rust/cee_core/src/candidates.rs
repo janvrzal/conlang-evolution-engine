@@ -1686,7 +1686,9 @@ fn tone_from_onset(m: &Maker<'_>, f: usize) -> Found {
                 .tone(m.t.tone_code(tone)?)
                 .left(onset)
                 .ease(0.0)
-                .clarity(0.1),
+                // Tón po souhlásce je nadbytečný, dokud se nestírá rozdíl znělosti; výhodu mu
+                // dává až ztráta znělosti (Haudricourt 1954; `transfer::pressures`, dok. 28).
+                .clarity(-0.1),
             );
         }
     }
@@ -1713,7 +1715,8 @@ fn tone_from_coda(m: &Maker<'_>, f: usize) -> Found {
                 .right(m.single(segment))
                 .right2(Pat::Boundary)
                 .ease(0.0)
-                .clarity(0.1),
+                // Totéž pro tón z koncové souhlásky: výhodu dává až její ztráta (dok. 28).
+                .clarity(-0.1),
             );
         }
     }

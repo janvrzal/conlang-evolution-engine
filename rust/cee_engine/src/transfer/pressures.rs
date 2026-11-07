@@ -300,6 +300,75 @@ fn vacating_changes(world: &World) -> Vec<Vacating> {
 }
 
 impl<'a> Pressures<'a> {
+    /// Výhoda vzniku tónu (Haudricourt 1954, dok. 28): tón po souhlásce se stává rozlišovacím,
+    /// když se ve skupině stírá rozdíl znělosti (ztráta znělosti, `voi` → −), tón z koncové
+    /// souhlásky, když koncové h/ʔ mizí (`coda_loss` hrtanových).
+    /// Člen = `tonogenesis_trigger` × (2 × nejvyšší podíl takové změny ve skupině − 1): bez
+    /// spouštěče nevýhoda, s úplnou ztrátou znělosti výhoda. Ztráta znělosti na konci slova
+    /// a spodoba znělosti se nepočítají (týkají se konce slova a shluků, ne náslovu).
+    fn tone_trigger(&self, g: usize, process: crate::ids::ProcessId) -> f64 {
+        let Some(Some(def)) = self.world.processes.get(process.index()) else {
+            return 0.0;
+        };
+        let wanted: &[&str] = match def.family.as_str() {
+            "tonogenesis_onset" => &["voi"],
+            "tonogenesis_coda" => &[],
+            _ => return 0.0,
+        };
+        let group = self.inputs.axis[g];
+        let mut best: f64 = 0.0;
+        for (index, other) in self.world.processes.iter().enumerate() {
+            let Some(other) = other else { continue };
+            // Ztráta znělosti (rys `voi` → −), ne znělost mezi samohláskami; u koncové souhlásky
+            // její oslabení na h/ʔ (debukalizace), ne každé odpadnutí koncovky.
+            let triggers = if wanted.is_empty() {
+                // Úplná ztráta koncového h/ʔ (vietnamština, čínština), ne oslabení s → h.
+                other.family == "coda_loss" && self.laryngeal_target(other)
+            } else {
+                other.family != def.family
+                    && other.family != "final_devoicing"
+                    && other.family != "voicing_assimilation"
+                    && other
+                        .changes
+                        .iter()
+                        .any(|(feature, value)| feature == "voi" && value == "-")
+            };
+            if !triggers {
+                continue;
+            }
+            let name = self.world.registry.processes.name(index as u32);
+            let (Some(variable), Some(changed)) = (
+                self.world.registry.variables.get(name),
+                self.world
+                    .registry
+                    .variants
+                    .get(&crate::phonology::rows::changed_name(name)),
+            ) else {
+                continue;
+            };
+            let share = crate::phonology::rows::changed_share(
+                self.world,
+                group,
+                VariableId(variable),
+                VariantId(changed),
+            );
+            best = best.max(share);
+        }
+        // Spouštěč je nutná podmínka: bez něj tón nevýhodu, se ztrátou znělosti výhodu.
+        self.world.params.tonogenesis_trigger * (2.0 * best - 1.0)
+    }
+
+    /// Míří změna na hrtanové souhlásky h nebo ʔ?
+    fn laryngeal_target(&self, def: &crate::model::lexicon::ProcessDef) -> bool {
+        let Some(table) = self.world.table.as_ref() else {
+            return false;
+        };
+        ["h", "ʔ"]
+            .iter()
+            .filter_map(|ipa| table.id_of(ipa).ok())
+            .any(|segment| def.target.contains(segment))
+    }
+
     /// Leží skupina ve městě (`Territory::urban`)?
     fn urban(&self, group: crate::ids::GroupId) -> bool {
         let territory = self.world.groups.territory[group.index()];
@@ -619,7 +688,16 @@ impl<'a> Pressures<'a> {
                     }
                     let mixed = splitmix64(columns.key[variant.index()]);
                     let local = hash_normal_mixed(self.actuation_keys[g], mixed);
-                    let rho = world.params.actuation_coherence;
+                    // Společné ocenění regionu jen u hláskových změn: rozpad nářečí řeší výslovnost;
+                    // slovník a syntax zůstávají místní (jinak se po regionu šíří i nová slova
+                    // a změny záporu a retence latiny klesne pod pásmo; dok. 27).
+                    let rho = if world.variables.kind[variable.index()]
+                        == crate::model::repertoire::VariableKind::Process
+                    {
+                        world.params.actuation_coherence
+                    } else {
+                        world.params.actuation_coherence_other
+                    };
                     let noise = if rho > 0.0 && self.region_keys[g] != 0 {
                         let shared = hash_normal_mixed(self.region_keys[g], mixed);
                         rho.sqrt() * shared + (1.0 - rho).sqrt() * local
@@ -643,6 +721,18 @@ impl<'a> Pressures<'a> {
                                         .is_some_and(|r| shift.regions.contains(&r)))
                             {
                                 add(&mut cells[g * slots + slot], shift.pull);
+                            }
+                        }
+                    }
+                    if !lexical && world.params.tonogenesis_trigger > 0.0 {
+                        if let Some(crate::model::repertoire::Payload::Process {
+                            process,
+                            changed: true,
+                        }) = world.variants.payload.get(variant.index())
+                        {
+                            let bonus = self.tone_trigger(g, *process);
+                            if bonus != 0.0 {
+                                add(&mut cells[g * slots + slot], bonus);
                             }
                         }
                     }

@@ -132,6 +132,15 @@
    "group": "society"
   },
   {
+   "name": "actuation_coherence_other",
+   "kind": "number",
+   "default": 0.4,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Soudržnost ocenění změn v regionu (jako `actuation_coherence`) pro slovník, tvary a syntax; `actuation_coherence` platí jen pro hláskové změny (dok. 27, 28).",
+   "group": "transfer"
+  },
+  {
    "name": "city_size",
    "kind": "number",
    "default": 6.0,
@@ -146,6 +155,24 @@
    "default": 0.3,
    "description": "Prestiž města navíc proti vesnicím regionu: městská řeč se šíří zpátky na venkov, nejdřív do blízkých a velkých vesnic (Trudgill 1974, šíření po hierarchii sídel; dok. 27).",
    "group": "society"
+  },
+  {
+   "name": "release_residual",
+   "kind": "number",
+   "default": 0.3,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Na jaký zlomek zeslábnou vazby skupin na sídlo státu, když stát region opustí (odtržení, rozpad): kontakt přes církev, obchod a vzdělanost zůstává, ale slabší (dok. 28). 1 = vazby zůstanou (model před M10c: odtržené románské větve sdílely 82–97 % slov), 0 = zmizí (52–59 %; skutečnost 71–78 %).",
+   "group": "society"
+  },
+  {
+   "name": "tonogenesis_trigger",
+   "kind": "number",
+   "default": 1.0,
+   "min": 0.0,
+   "max": 5.0,
+   "description": "Výhoda vzniku tónu (Haudricourt 1954, De l'origine des tons en vietnamien; dok. 28): tón po souhlásce se stává rozlišovacím, až když se ve skupině stírá rozdíl znělosti, tón z koncové souhlásky, až když mizí koncové h/ʔ. Člen ocenění = váha × (2 × nejvyšší podíl takové změny ve skupině − 1): bez spouštěče nevýhoda, s úplnou ztrátou znělosti výhoda; ztráta znělosti na konci slova a spodoba se nepočítají. 0 = tón bez spouštěče (model před M10c, tóny pak měla polovina slov i v germánštině a latině).",
+   "group": "transfer"
   },
   {
    "name": "city_listening",

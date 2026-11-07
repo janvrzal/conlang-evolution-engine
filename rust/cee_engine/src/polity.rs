@@ -620,8 +620,35 @@ fn centralize(
     if strength <= 0.0 {
         return Ok(linked);
     }
+    // Regiony s městem: se sídlem státu mluví město, vesnice ho dostanou přes něj (šíření po
+    // hierarchii sídel, Trudgill 1974; dok. 28). Přímá vazba každé vesnice na sídlo šířila nová
+    // slova sídla do všech větví naráz (románské větve sdílely 82–97 % slov místo 71–78 %).
+    let urban = |world: &World, g: GroupId| {
+        let territory = world.groups.territory[g.index()];
+        world
+            .territories
+            .get(territory.index())
+            .is_some_and(|t| t.urban > 0.0)
+    };
+    let with_city: Vec<TerritoryId> = regions
+        .iter()
+        .copied()
+        .filter(|&r| {
+            world.territories.get(r.index()).is_some_and(|t| {
+                t.children.iter().any(|c| {
+                    world
+                        .territories
+                        .get(c.index())
+                        .is_some_and(|x| x.urban > 0.0)
+                })
+            })
+        })
+        .collect();
     for group in groups_in(world, regions) {
         if region_of(world, group) == Some(polity.capital) {
+            continue;
+        }
+        if region_of(world, group).is_some_and(|r| with_city.contains(&r)) && !urban(world, group) {
             continue;
         }
         let value = strength * reach(world, group, polity.seat, true);
@@ -657,6 +684,29 @@ fn release(
                 edit.set_border_factor(world, source, target, None)?;
             }
             edit.set_state_link(world, &polity.id, group, None)?;
+        }
+    }
+    // Zeslábnou i vazby veřejné dvojjazyčnosti na sídlo a jejich kopie u skupin, které jazyk
+    // státu přijaly (dok. 28): na zbytek `release_residual` (církev, obchod, vzdělanost). Plnou
+    // silou by odtržená provincie mluvila se sídlem navždy (Galie s Římem i po roce 486, větve
+    // sdílely 82–97 % slov); bez zbytku sdílejí jen 52–59 % (skutečnost 71–78 %).
+    let residual = world.params.release_residual;
+    for group in groups_in(world, regions) {
+        if let Some(link) = world.links.get(group, polity.seat).copied() {
+            if residual > 0.0 {
+                edit.connect(
+                    world,
+                    group,
+                    polity.seat,
+                    link.strength * residual,
+                    link.kind,
+                )?;
+            } else {
+                for (source, target) in [(group, polity.seat), (polity.seat, group)] {
+                    edit.drop_link(world, source, target)?;
+                    edit.set_border_factor(world, source, target, None)?;
+                }
+            }
         }
     }
     let mut mirrored: Vec<(GroupId, GroupId)> = world

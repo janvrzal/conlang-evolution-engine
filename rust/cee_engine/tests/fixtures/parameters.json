@@ -1,6 +1,7 @@
 {
  "activation_share": 0.05,
  "actuation_coherence": 0.8,
+ "actuation_coherence_other": 0.4,
  "analogy_l2_boost": 4.0,
  "analogy_threshold": 0.85,
  "background_elite_link": 0.1,
@@ -182,6 +183,7 @@
  "reading_core_resistance": 1.0,
  "reading_weight": 0.1,
  "redundant_merge_weight": 0.3,
+ "release_residual": 0.3,
  "restructure_threshold": 0.85,
  "revival_levels": {
   "movement": {
@@ -213,6 +215,7 @@
   "mountains": 0.3,
   "plain": 1.0
  },
+ "tonogenesis_trigger": 1.0,
  "urban_mortality": 0.15,
  "variation_cap": 0.4,
  "village_openness": 0.6,
