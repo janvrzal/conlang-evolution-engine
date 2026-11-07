@@ -676,8 +676,20 @@ fn release(
         // Lidé jazyk umějí dál, ale stát už ho domů netlačí.
         if world.groups.domain[group.index()] == Domain::Public {
             edit.set_group(world, group, Field::HomePull(0.0))?;
-        } else if world.groups.home_pull[group.index()] > 0.0 {
-            edit.set_group(world, group, Field::HomePull(1e-6))?;
+        } else {
+            if world.groups.home_pull[group.index()] > 0.0 {
+                edit.set_group(world, group, Field::HomePull(1e-6))?;
+            }
+            // Domácí skupina jazyka státu přijde o jeho prestiž: vrátí se k prestiži vesnice,
+            // ze které vzešla (dok. 27; jinak by latinské rodiny v řecké vesnici měly prestiž
+            // Říma navždy).
+            let source = world.groups.main_code(group).l1_source;
+            if !source.is_none() && world.groups.contains(source) {
+                let local = world.groups.prestige[source.index()];
+                edit.set_group(world, group, Field::Prestige(local))?;
+                edit.set_base_prestige(world, group, Some(local))?;
+            }
+            edit.set_prestige_mirror(world, group, GroupId::NONE)?;
         }
     }
     Ok(())

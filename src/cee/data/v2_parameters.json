@@ -114,6 +114,15 @@
    "group": "transfer"
   },
   {
+   "name": "leveling_beyond_region",
+   "kind": "number",
+   "default": 0.0,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Násobek tahu vyrovnávání výslovnosti od dárce mimo vlastní region (sídlo státu, anglické město pro anglické rodiny ve Walesu); 0 = jen vesnice ↔ město svého regionu (dok. 27).",
+   "group": "society"
+  },
+  {
    "name": "leveling_rate",
    "kind": "number",
    "default": 0.1,
@@ -136,6 +145,15 @@
    "kind": "number",
    "default": 0.3,
    "description": "Prestiž města navíc proti vesnicím regionu: městská řeč se šíří zpátky na venkov, nejdřív do blízkých a velkých vesnic (Trudgill 1974, šíření po hierarchii sídel; dok. 27).",
+   "group": "society"
+  },
+  {
+   "name": "city_listening",
+   "kind": "number",
+   "default": 0.2,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Jakým zlomkem síly vazby slyší město své vesnice (vesnice slyší město plně): změny se šíří z města ven (Labov 2001) a město venkov neprůměruje; při 1 se region kolem stavu města zastaví (Romania: Řím by si navždy držel koncové -m; dok. 27).",
    "group": "society"
   },
   {

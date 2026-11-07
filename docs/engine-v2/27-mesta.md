@@ -82,3 +82,41 @@ a `m7::latina_pady` 0,70. Neprošly:
 - `m7::latina_poradi` 0,50 (pásmo 0,75–1): koncové *-m* zeslábne dřív, než zanikne pád, jen
   v polovině větví (dřív v pásmu).
 - `m9::tempo`, zrychlení kontaktem 2,09 (pásmo 1–2; otevřené od M9d, dok. 26).
+
+## Doplněno: ostrůvky, město jako zdroj změn, kontakt (7. 11. 2026)
+
+Uživatel: „Ano, tak všechny tyto věci udělej“ (rozšířit kontrolu kontaktu, opravit ostrůvky,
+pořadí -m a pádu, sloučit větve).
+
+- **Kontrola kontaktu** `m9::tempo` (zrychlení kontaktem): pásmo [1; 2,8] místo [1; 2] podle
+  dat u cíle (angličtina 0,85 a francouzština 0,70 proti sardinštině a italštině 0,30).
+- **Prestiž po odchodu státu**: domácí skupina jazyka státu v opuštěném regionu přijde o
+  zrcadlenou prestiž sídla a vrátí se k prestiži vesnice, ze které vzešla (`polity::release`).
+- **Ostrůvek** (`communities::shift`): když novým jazykem mluví mezi lidmi, se kterými skupina
+  mluví, méně než `child_threshold` (0,2), netáhne ho žádná politika (tah pod 10⁻³) a není
+  prestižnější než jazyk okolí, děti se rodí do jazyka většiny. Podmínka je podíl jazyka v okolí,
+  ne velikost skupiny: první verze podle velikosti uhasila přechod cizí elity (brána
+  `m6b::elita_prejde`).
+- **Město jako síť čtvrtí**: velikost vesnice platí u města pro všechny populační tlaky (ocenění
+  změn i artikulace) a pro náhodný posun v přenosu (`transfer::network`).
+- **Nesouměrné vazby města** (`city_listening` 0,2): vesnice slyší město plně, město své vesnice
+  jen pětinou síly. Změny se šíří z města ven; při plné síle město průměruje venkov a region
+  kolem jeho stavu zamrzne.
+- `leveling_beyond_region` (výchozí 0): vyrovnávání i podle dárce mimo region nepomohlo
+  (Evropa 64 a 67 jazyků proti 61), anglické rodiny ve Walesu se sídlem státu přímo spojené nejsou.
+
+### Pořadí -m a pádu v latině
+
+`m7::latina_poradi` (0,50, pásmo 0,75–1) selhává kvůli **italské větvi**: koncové *-m* tam
+nezeslábne vůbec (podíl tvarů s -m 0,92–0,98 ještě v roce 1900, v 15–16 z 16 běhů, kde pád
+zanikl), pád přesto zanikne. **Totéž platí i bez měst** (`city_size` 0: Itálie -m 0,98), kontrola
+tehdy prošla těsně (0,75 = 3 ze 4 větví). Jde o starší vadu z rekalibrace tempa (dok. 24), ne o
+důsledek měst; ostatní větve mají pořadí většinou správně (Galie 14 : 3, Hispánie 12 : 8,
+Dácie 16 : 4). Otevřený úkol: proč se v rodilé latině Itálie (bez učících se dospělých)
+rozběhnutá ztráta -m nedokončí.
+
+### Ověření
+
+**Testy prošly, brány 47 z 47, kalibrace 36 z 38.** Neprošly `m8::pocet_jazyku` **69,5**
+(pásmo 10–60; před M10 153) a `m7::latina_poradi` 0,50 (viz výše). Kontinuum 0,084, ztráta
+pádu v Romanii 0,90, retence latiny 0,552, tempo 0,441, zrychlení kontaktem 2,32 v pásmu.

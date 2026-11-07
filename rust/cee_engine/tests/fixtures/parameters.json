@@ -114,6 +114,7 @@
  },
  "child_threshold": 0.2,
  "city_link": 0.5,
+ "city_listening": 0.2,
  "city_prestige": 0.3,
  "city_size": 6.0,
  "clarity_short_factor": 1.5,
@@ -139,6 +140,7 @@
  },
  "interference_weight": 0.5,
  "learnability_strength": 1.0,
+ "leveling_beyond_region": 0.0,
  "leveling_rate": 0.1,
  "lexical_appeal_sd": 0.03,
  "lingua_franca_levels": {

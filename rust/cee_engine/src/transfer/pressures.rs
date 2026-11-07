@@ -518,9 +518,10 @@ impl<'a> Pressures<'a> {
                         let group = self.inputs.axis[at / slots];
                         let mut size = f64::from(self.world.groups.population[group.index()])
                             / POPULATION_REFERENCE;
-                        // Město je síť čtvrtí, ne jedna obrovská obec: sociální ocenění změn v něm
-                        // má sílu jako ve vesnici (změny se šíří z měst, Labov 2001; dok. 27).
-                        if pressure == id::ACTUATION && self.urban(group) {
+                        // Město je síť čtvrtí, ne jedna obrovská obec: populační tlaky (ocenění
+                        // změn, artikulace) v něm mají sílu jako ve vesnici (změny se šíří z měst,
+                        // Labov 2001; dok. 27).
+                        if self.urban(group) {
                             size /= self.world.params.city_size.max(1.0);
                         }
                         add(&mut cells[at], value * size.powf(exponent));

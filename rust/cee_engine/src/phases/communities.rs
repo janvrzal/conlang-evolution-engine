@@ -22,6 +22,9 @@ use crate::model::links::LinkKind;
 use crate::phases::StepContext;
 use crate::world::World;
 
+/// Tah politiky, pod kterým stát přechod už netáhne (po odchodu státu zůstane 10⁻⁶).
+const POLICY_ACTIVE: f64 = 1e-3;
+
 /// Skupina s menší populací zaniká (poslední mluvčí).
 pub const LAST_SPEAKERS: f64 = 1.0;
 
@@ -115,12 +118,19 @@ fn level_forms(world: &mut World, dt: f64, tick: u32) -> Result<(), String> {
                     && !world.groups.written[at]
                     && world.groups.domain[at] == Domain::Home
                     && world.groups.main_code(*d).language == language
-                    && crate::polity::region_of(world, *d) == region
+                    && (world.params.leveling_beyond_region > 0.0
+                        || crate::polity::region_of(world, *d) == region)
                     && pull_of(at) > prestige
             })
             .map(|(d, link)| {
                 let pd = pull_of(d.index());
-                (d, link.strength * (pd - prestige) / pd)
+                // Dárce mimo region (sídlo státu) táhne slaběji: `leveling_beyond_region`.
+                let reach = if crate::polity::region_of(world, d) == region {
+                    1.0
+                } else {
+                    world.params.leveling_beyond_region
+                };
+                (d, reach * link.strength * (pd - prestige) / pd)
             })
             .max_by(|a, b| {
                 a.1.partial_cmp(&b.1)
@@ -524,6 +534,19 @@ fn shift(
             births = source_population * renewal;
         }
         moving = moving.min(source_population - births);
+    }
+    // Ostrůvek (dok. 27): novým jazykem mluví mezi lidmi, se kterými skupina mluví (i sousedé),
+    // jen malá menšina (pod `child_threshold`), netáhne ho žádná politika a není prestižnější
+    // než jazyk okolí: děti se rodí do jazyka většiny (zrcadlo pravidla pro mizející starý
+    // jazyk výše). Elita uprostřed poddaných ostrůvkem není: jazyk poddaných ji obklopuje.
+    if resist == 0.0
+        && !world.groups.preserved[t]
+        && world.groups.home_pull[t] < POLICY_ACTIVE
+        && status <= 0.5 + 1e-12
+        && demographic_share(world, source, target) < params.child_threshold
+    {
+        back =
+            (back + target_population_now * renewal).min(target_population_now + moving + births);
     }
     // Zpětný tok podle Abramse a Strogatze (2003): děti mluvčích nového jazyka uprostřed
     // většiny starého převezmou starý, tempem politiky, dokud ji stát táhne (dok. 27). Bez něj

@@ -202,8 +202,19 @@ pub fn prepare(world: &World, params: &TransmissionParams, tick: u32) -> StepInp
     let renewal: Vec<f64> = axis.iter().map(|&g| groups.renewal(g, params.dt)).collect();
     let (mut drift_scale, mut loss_floor) = (Vec::with_capacity(n), Vec::with_capacity(n));
     for (column, &group) in axis.iter().enumerate() {
-        // Kohorta je podíl obnovené populace (nejméně jeden mluvčí).
-        let cohort = (renewal[column] * f64::from(groups.population[group.index()])).max(1.0);
+        // Kohorta je podíl obnovené populace (nejméně jeden mluvčí). Město je síť čtvrtí: náhodný
+        // posun v něm má velikost vesnice, jinak by se ve velkém městě změny skoro nehnuly
+        // (Řím by si navždy držel koncové -m; dok. 27).
+        let mut people = f64::from(groups.population[group.index()]);
+        let territory = groups.territory[group.index()];
+        if world
+            .territories
+            .get(territory.index())
+            .is_some_and(|t| t.urban > 0.0)
+        {
+            people /= world.params.city_size.max(1.0);
+        }
+        let cohort = (renewal[column] * people).max(1.0);
         drift_scale.push(params.sigma / cohort.sqrt());
         loss_floor.push(params.loss_threshold.max(0.5 / cohort));
     }

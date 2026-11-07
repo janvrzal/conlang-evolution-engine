@@ -967,6 +967,17 @@ pub fn region_world(
                 if current < world.params.city_link {
                     world.connect(city, village, world.params.city_link, LinkKind::Weak)?;
                 }
+                // Vesnice slyší město plně, město své vesnice jen zlomkem: změny se šíří z města
+                // ven a město venkov neprůměruje (jinak region zamrzne kolem stavu města; dok. 27).
+                let heard = world.links.get(city, village).map_or(0.0, |l| l.strength);
+                world.links.set(
+                    city,
+                    village,
+                    crate::model::links::Link {
+                        strength: heard * world.params.city_listening,
+                        kind: LinkKind::Weak,
+                    },
+                );
             }
         }
         villages_of.insert(region.id.clone(), members);

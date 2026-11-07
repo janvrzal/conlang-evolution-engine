@@ -15,7 +15,7 @@ fn soubor_pokryva_vsechna_pole_a_hodnoty_sedi() {
     assert_eq!(file.format, "cee-v2-parameters/1");
     let value = serde_json::to_value(Parameters::default()).unwrap();
     let fields = value.as_object().unwrap();
-    assert_eq!(file.parameters.len(), 79);
+    assert_eq!(file.parameters.len(), 81);
     assert_eq!(fields.len(), file.parameters.len());
     for spec in &file.parameters {
         assert_eq!(fields[&spec.name], spec.default, "{}", spec.name);
