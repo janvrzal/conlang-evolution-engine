@@ -75,7 +75,104 @@ pub fn community_step(
         };
         removed |= shift(world, group, source, renewal, tick, year, history, &edit)?;
     }
+    if world.params.leveling_rate > 0.0 && world.table.is_some() {
+        level_forms(world, dt, tick)?;
+    }
     Ok(removed)
+}
+
+/// Vyrovnávání nářečí podle centra (dok. 27; Trudgill 1986, Dialects in Contact): skupina
+/// převezme u části slov výslovnost téhož slova od propojené skupiny stejné linie s vyšší
+/// přitažlivostí (prestiž × √populace) ve stejném regionu (vesnice od města). Za generaci
+/// podíl `leveling_rate` × síla vazby × (A_dárce − A) / A_dárce slov, která
+/// dárce vyslovuje jinak; dárcem je soused s největší silou × rozdílem přitažlivosti. Slova se vybírají
+/// stabilní náhodou; změněné slovo znovu posoudí živé hláskové změny (`requeue_all`).
+fn level_forms(world: &mut World, dt: f64, tick: u32) -> Result<(), String> {
+    use crate::rng::{Part, Stream};
+    let rate = world.params.leveling_rate;
+    for group in world.group_ids() {
+        if !world.groups.contains(group) {
+            continue;
+        }
+        let g = group.index();
+        if world.groups.written[g] || world.groups.domain[g] != Domain::Home {
+            continue;
+        }
+        let language = world.groups.main_code(group).language;
+        // Přitažlivost centra = prestiž × √populace (gravitační model šíření, Trudgill 1974):
+        // město táhne i tam, kde mají všechny skupiny prestiž zrcadlenou od sídla státu.
+        let pull_of =
+            |at: usize| world.groups.prestige[at] * f64::from(world.groups.population[at]).sqrt();
+        let prestige = pull_of(g);
+        // Jen uvnitř regionu: město je hegemonem svého regionu (vesnice ↔ město), ne provincie
+        // sídla státu (srovnání provincií podle Říma by zastavilo vývoj románských větví).
+        let region = crate::polity::region_of(world, group);
+        let donor = neighbors(world, group)
+            .into_iter()
+            .filter(|(d, _)| {
+                let at = d.index();
+                world.groups.contains(*d)
+                    && !world.groups.written[at]
+                    && world.groups.domain[at] == Domain::Home
+                    && world.groups.main_code(*d).language == language
+                    && crate::polity::region_of(world, *d) == region
+                    && pull_of(at) > prestige
+            })
+            .map(|(d, link)| {
+                let pd = pull_of(d.index());
+                (d, link.strength * (pd - prestige) / pd)
+            })
+            .max_by(|a, b| {
+                a.1.partial_cmp(&b.1)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| world.group_name(b.0).cmp(world.group_name(a.0)))
+            });
+        let Some((donor, pull)) = donor else { continue };
+        let renewal = (dt / world.groups.generation_years[g]).min(1.0);
+        // Loajalita platí vlastnímu jazyku proti cizímu, ne místní výslovnosti proti centru
+        // téhož jazyka: vyrovnávání nebrzdí.
+        let share = (rate * pull * renewal).clamp(0.0, 1.0);
+        if share <= 0.0 {
+            continue;
+        }
+        let differing: Vec<crate::ids::MorphemeId> = world
+            .groups
+            .main_code(group)
+            .phonology
+            .vocabulary
+            .iter()
+            .filter(|&unit| {
+                world
+                    .groups
+                    .main_code(donor)
+                    .phonology
+                    .vocabulary
+                    .contains(unit)
+                    && world.unit_of(group, unit) != world.unit_of(donor, unit)
+            })
+            .collect();
+        if differing.is_empty() {
+            continue;
+        }
+        let mut rng = Stream::new(
+            world.seed as u64,
+            &[
+                Part::Str("leveling"),
+                Part::Uint(u64::from(tick)),
+                Part::Str(world.group_name(group)),
+            ],
+        );
+        for unit in differing {
+            if rng.random() >= share {
+                continue;
+            }
+            let form = world.unit_of(donor, unit);
+            crate::views::set_form(world, group, unit, form);
+            crate::phonology::requeue_all(world, group, unit)?;
+        }
+        world.groups.main_code_mut(group).phonology.version += 1;
+    }
+    Ok(())
 }
 
 /// Města jako hřbitovy (Wrigley 1967; de Vries 1984): ve městě umírá víc lidí, než se rodí,
@@ -427,6 +524,24 @@ fn shift(
             births = source_population * renewal;
         }
         moving = moving.min(source_population - births);
+    }
+    // Zpětný tok podle Abramse a Strogatze (2003): děti mluvčích nového jazyka uprostřed
+    // většiny starého převezmou starý, tempem politiky, dokud ji stát táhne (dok. 27). Bez něj
+    // drobné ostrůvky (latinské rodiny v řecké vesnici) vydrží věčně.
+    if resist == 0.0 && params.shift_return > 0.0 && world.groups.transmitted[s] {
+        let pace = if driven {
+            world.groups.home_pull[t]
+        } else {
+            1.0
+        };
+        back = target_population_now
+            * renewal
+            * params.shift_rate
+            * pace
+            * params.shift_return
+            * (1.0 - status)
+            * demographic_share(world, target, source).powf(params.shift_exponent);
+        back = back.min(target_population_now + moving + births);
     }
     if resist > 0.0 {
         if !world.groups.transmitted[s] {

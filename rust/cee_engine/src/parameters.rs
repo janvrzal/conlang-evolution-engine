@@ -229,6 +229,8 @@ pub struct Parameters {
     pub city_link: f64,
     pub urban_mortality: f64,
     pub actuation_coherence: f64,
+    pub leveling_rate: f64,
+    pub shift_return: f64,
     pub village_openness: f64,
     pub border_link_scale: f64,
     pub category_loss_l2_boost: f64,

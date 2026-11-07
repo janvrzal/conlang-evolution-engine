@@ -300,6 +300,15 @@ fn vacating_changes(world: &World) -> Vec<Vacating> {
 }
 
 impl<'a> Pressures<'a> {
+    /// Leží skupina ve městě (`Territory::urban`)?
+    fn urban(&self, group: crate::ids::GroupId) -> bool {
+        let territory = self.world.groups.territory[group.index()];
+        self.world
+            .territories
+            .get(territory.index())
+            .is_some_and(|t| t.urban > 0.0)
+    }
+
     /// Výhoda tahového řetězu (Martinet 1955; Labov 1994) pro změnu `process` ve sloupci `g`:
     /// zaplňuje-li třídu, kterou jiná změna bez podmínky okolí ve skupině z většiny vyprázdnila,
     /// dostane `chain_shift_weight` × (podíl té změny − ½) / ½. Pod polovinou žádnou.
@@ -507,8 +516,13 @@ impl<'a> Pressures<'a> {
                 for (at, &value) in part.iter().enumerate() {
                     if value != 0.0 {
                         let group = self.inputs.axis[at / slots];
-                        let size = f64::from(self.world.groups.population[group.index()])
+                        let mut size = f64::from(self.world.groups.population[group.index()])
                             / POPULATION_REFERENCE;
+                        // Město je síť čtvrtí, ne jedna obrovská obec: sociální ocenění změn v něm
+                        // má sílu jako ve vesnici (změny se šíří z měst, Labov 2001; dok. 27).
+                        if pressure == id::ACTUATION && self.urban(group) {
+                            size /= self.world.params.city_size.max(1.0);
+                        }
                         add(&mut cells[at], value * size.powf(exponent));
                     }
                 }

@@ -98,11 +98,29 @@
   {
    "name": "actuation_coherence",
    "kind": "number",
-   "default": 0.0,
+   "default": 0.8,
    "min": 0.0,
    "max": 1.0,
    "description": "Soudržnost sociálního ocenění změn v regionu ρ (dok. 27): ocenění změny ve skupině = √ρ × společná složka regionu + √(1 − ρ) × místní složka (obě normální, za epochu). Změny, které „frčí“ v regionu, frčí ve všech jeho vesnicích; 0 = každá vesnice zvlášť (model před M10), 1 = celý region stejně.",
    "group": "transfer"
+  },
+  {
+   "name": "shift_return",
+   "kind": "number",
+   "default": 0.0,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Zpětný tok přechodu jazyka (Abrams a Strogatz 2003, dok. 27): mluvčí nového jazyka uprostřed většiny starého se k němu vracejí podílem shift_return × (1 − status) × podíl starého jazyka^a za generaci, tempem politiky, dokud ji stát táhne. 0 = přechod jen jedním směrem (model před M10). Zkoušeno v M10 (0,5 a 1): ostrůvky ani počet jazyků nezlepší, proto 0.",
+   "group": "transfer"
+  },
+  {
+   "name": "leveling_rate",
+   "kind": "number",
+   "default": 0.1,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Vyrovnávání nářečí podle centra (Trudgill 1986, Dialects in Contact; dok. 27): skupina převezme za generaci u podílu leveling_rate × síla vazby × relativní rozdíl přitažlivosti (prestiž × √populace, Trudgill 1974) slov výslovnost téhož slova od propojené skupiny stejné linie s vyšší přitažlivostí (vesnice od města, město od sídla státu). 0 = bez vyrovnávání (model před M10).",
+   "group": "society"
   },
   {
    "name": "city_size",

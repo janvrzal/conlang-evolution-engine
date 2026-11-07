@@ -1,6 +1,6 @@
 {
  "activation_share": 0.05,
- "actuation_coherence": 0.0,
+ "actuation_coherence": 0.8,
  "analogy_l2_boost": 4.0,
  "analogy_threshold": 0.85,
  "background_elite_link": 0.1,
@@ -139,6 +139,7 @@
  },
  "interference_weight": 0.5,
  "learnability_strength": 1.0,
+ "leveling_rate": 0.1,
  "lexical_appeal_sd": 0.03,
  "lingua_franca_levels": {
   "common": 0.3,
@@ -199,6 +200,7 @@
  "semantic_recurrence": 3.0,
  "shift_exponent": 1.31,
  "shift_rate": 1.0,
+ "shift_return": 0.0,
  "sound_actuation": 2.25,
  "standard_prestige": 1.5,
  "standing_variation": 0.3,
