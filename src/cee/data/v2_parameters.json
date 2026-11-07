@@ -96,6 +96,49 @@
    "group": "morphology"
   },
   {
+   "name": "actuation_coherence",
+   "kind": "number",
+   "default": 0.0,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Soudržnost sociálního ocenění změn v regionu ρ (dok. 27): ocenění změny ve skupině = √ρ × společná složka regionu + √(1 − ρ) × místní složka (obě normální, za epochu). Změny, které „frčí“ v regionu, frčí ve všech jeho vesnicích; 0 = každá vesnice zvlášť (model před M10), 1 = celý region stejně.",
+   "group": "transfer"
+  },
+  {
+   "name": "city_size",
+   "kind": "number",
+   "default": 6.0,
+   "min": 0.0,
+   "max": 50.0,
+   "description": "Velikost města regionu jako násobek vesnice (scénář `region_world`, `RegionSpec.city`): středová vesnice každého regionu s aspoň dvěma vesnicemi je město, trh a úřad regionu (dok. 27). 0 nebo 1 = bez měst (model před M10).",
+   "group": "society"
+  },
+  {
+   "name": "city_prestige",
+   "kind": "number",
+   "default": 0.3,
+   "description": "Prestiž města navíc proti vesnicím regionu: městská řeč se šíří zpátky na venkov, nejdřív do blízkých a velkých vesnic (Trudgill 1974, šíření po hierarchii sídel; dok. 27).",
+   "group": "society"
+  },
+  {
+   "name": "city_link",
+   "kind": "number",
+   "default": 0.5,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Nejmenší síla vazby města ke každé vesnici jeho regionu (trh, úřady, přistěhovalci): drží nářečí regionu pohromadě kolem centra (dok. 27).",
+   "group": "society"
+  },
+  {
+   "name": "urban_mortality",
+   "kind": "number",
+   "default": 0.15,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Úmrtnost města navíc proti venkovu za generaci, kterou doplňuje příliv z vesnic regionu (Wrigley 1967, London's importance; de Vries 1984): podíl přistěhovalců ve městě drží aspoň na této úrovni, takže městská řeč vyrovnává nářečí venkova (koiné; Trudgill 1986; Kerswill a Williams 2000; dok. 27).",
+   "group": "society"
+  },
+  {
    "name": "chain_shift_weight",
    "kind": "number",
    "default": 1.0,

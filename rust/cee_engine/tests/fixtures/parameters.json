@@ -1,5 +1,6 @@
 {
  "activation_share": 0.05,
+ "actuation_coherence": 0.0,
  "analogy_l2_boost": 4.0,
  "analogy_threshold": 0.85,
  "background_elite_link": 0.1,
@@ -112,6 +113,9 @@
   }
  },
  "child_threshold": 0.2,
+ "city_link": 0.5,
+ "city_prestige": 0.3,
+ "city_size": 6.0,
  "clarity_short_factor": 1.5,
  "closure_generations": 2.0,
  "coda_tolerance_scale": 0.0,
@@ -205,6 +209,7 @@
   "mountains": 0.3,
   "plain": 1.0
  },
+ "urban_mortality": 0.15,
  "variation_cap": 0.4,
  "village_openness": 0.6,
  "word_bias_sd": 1.5

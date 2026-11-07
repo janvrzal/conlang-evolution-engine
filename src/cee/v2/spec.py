@@ -117,6 +117,8 @@ class RegionSpec(_Model):
     preserve: bool = False
     #: Podíl přistěhovalců za generaci (obchodní město).
     immigration: float = Field(default=0.0, ge=0.0, le=1.0)
+    #: Velikost města regionu (násobek vesnice); ``None`` = parametr ``city_size``, 0 = bez města.
+    city: float | None = Field(default=None, ge=0.0)
 
 
 class RelatedSpec(_Model):

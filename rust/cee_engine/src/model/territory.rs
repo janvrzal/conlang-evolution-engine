@@ -39,6 +39,10 @@ pub struct Territory {
     pub terrain: String,
     /// Původní jazyk území (linie), pokud ho scénář zná.
     pub native_language: LanguageId,
+    /// Město: úmrtnost navíc proti venkovu za generaci, kterou doplní příliv z vesnic regionu
+    /// (Wrigley 1967); 0 = vesnice (dok. 27).
+    #[serde(default)]
+    pub urban: f64,
 }
 
 impl Territory {
@@ -51,6 +55,7 @@ impl Territory {
             refined_from_year: None,
             terrain: "plain".into(),
             native_language: LanguageId::NONE,
+            urban: 0.0,
         }
     }
 }

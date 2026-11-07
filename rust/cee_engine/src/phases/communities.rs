@@ -42,6 +42,7 @@ pub fn community_step(
     if world.society.migration > 0.0 {
         migrate(world, &edit)?;
     }
+    urban_inflow(world, &edit)?;
     let mut removed = false;
     for group in world.group_ids() {
         if !world.groups.contains(group) {
@@ -75,6 +76,29 @@ pub fn community_step(
         removed |= shift(world, group, source, renewal, tick, year, history, &edit)?;
     }
     Ok(removed)
+}
+
+/// Města jako hřbitovy (Wrigley 1967; de Vries 1984): ve městě umírá víc lidí, než se rodí,
+/// a úbytek `Territory::urban` za generaci doplňuje příliv z venkova. Populace města se
+/// nemění, ale podíl přistěhovalců (dospělých, kteří se městskou řeč učí až ve městě) drží
+/// aspoň na úrovni úmrtnosti: městská řeč vyrovnává nářečí venkova (koiné; Trudgill 1986;
+/// Kerswill a Williams 2000). Vazby k vesnicím regionu vznikají při stavbě města.
+fn urban_inflow(world: &mut World, edit: &Edits) -> Result<(), String> {
+    for group in world.group_ids() {
+        let g = group.index();
+        if world.groups.written[g] || world.groups.domain[g] != Domain::Home {
+            continue;
+        }
+        let territory = world.groups.territory[g];
+        let urban = world
+            .territories
+            .get(territory.index())
+            .map_or(0.0, |t| t.urban);
+        if urban > 0.0 && world.groups.immigration[g] < urban {
+            edit.set_group(world, group, Field::Immigration(urban))?;
+        }
+    }
+    Ok(())
 }
 
 /// Gravitační migrace: podíl přistěhovalců každé skupiny za generaci.

@@ -253,6 +253,8 @@ pub struct Pressures<'a> {
     plan: &'a Plan,
     /// Klíče ocenění změn skupin v epoše (podle sloupce osy).
     actuation_keys: Vec<u64>,
+    /// Klíče společného ocenění regionu skupiny v epoše (podle sloupce osy; 0 = bez regionu).
+    region_keys: Vec<u64>,
     l2: Vec<f64>,
     any_l2: bool,
     any_school: bool,
@@ -353,6 +355,23 @@ impl<'a> Pressures<'a> {
                 ])
             })
             .collect();
+        // Společné ocenění změny v regionu (dok. 27): změna, která „frčí“ ve městě a regionu, frčí
+        // ve všech jeho vesnicích, s místní odchylkou. Bez něj si každá vesnice vybere jiné změny
+        // a nářečí jednoho regionu se rozpadnou na jednovesnické jazyky.
+        let region_keys = inputs
+            .axis
+            .iter()
+            .map(|&g| {
+                crate::polity::region_of(world, g).map_or(0, |region| {
+                    stable_int(&[
+                        Part::Int(world.seed),
+                        Part::Str("actuation-region"),
+                        Part::Int(epoch),
+                        Part::Str(world.registry.territories.name(region.0)),
+                    ])
+                })
+            })
+            .collect();
         let l2: Vec<f64> = inputs
             .axis
             .iter()
@@ -370,6 +389,7 @@ impl<'a> Pressures<'a> {
             .map(|_| OnceLock::new())
             .collect();
         Ok(Pressures {
+            region_keys,
             vacating,
             fills,
             world,
@@ -583,7 +603,14 @@ impl<'a> Pressures<'a> {
                         continue;
                     }
                     let mixed = splitmix64(columns.key[variant.index()]);
-                    let noise = hash_normal_mixed(self.actuation_keys[g], mixed);
+                    let local = hash_normal_mixed(self.actuation_keys[g], mixed);
+                    let rho = world.params.actuation_coherence;
+                    let noise = if rho > 0.0 && self.region_keys[g] != 0 {
+                        let shared = hash_normal_mixed(self.region_keys[g], mixed);
+                        rho.sqrt() * shared + (1.0 - rho).sqrt() * local
+                    } else {
+                        local
+                    };
                     add(
                         &mut cells[g * slots + slot],
                         weight * (ACTUATION_SPREAD * noise).clamp(-1.0, 1.0),

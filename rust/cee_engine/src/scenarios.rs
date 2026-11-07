@@ -564,6 +564,8 @@ pub struct Region {
     pub terrain: String,
     pub identity: String,
     pub preserve: bool,
+    /// Velikost města regionu (násobek vesnice); `None` = `Parameters::city_size`, 0 = bez města.
+    pub city: Option<f64>,
 }
 
 impl Region {
@@ -581,6 +583,7 @@ impl Region {
             terrain: "plain".into(),
             identity: "shared".into(),
             preserve: false,
+            city: None,
         }
     }
 }
@@ -904,6 +907,10 @@ pub fn region_world(
         let rule = lineage.map_or(options.stress_rule, |l| l.stress_rule);
         let strength = lineage.map_or(options.stress_strength, |l| l.stress_strength);
         let mut members = Vec::new();
+        // Středová vesnice regionu je město (dok. 27): větší, prestižnější, s úmrtností navíc,
+        // kterou doplňuje příliv z venkova; region s jedinou vesnicí město nemá.
+        let city_size = region.city.unwrap_or(world.params.city_size);
+        let has_city = city_size > 1.0 && region.villages >= 2;
         for index in 0..region.villages {
             let position = if index == 0 {
                 region.position
@@ -918,13 +925,26 @@ pub fn region_world(
             let village = format!("{}-v{index}", region.id);
             let mut settlement = Territory::new(TerritoryLevel::Settlement);
             settlement.position = Some(position);
+            let city = has_city && index == 0;
+            if city {
+                settlement.urban = world.params.urban_mortality;
+            }
             let territory_id = world.add_territory(&village, Some(&region.id), settlement)?;
             let mut code = new_code(&mut world, &base, language, rule, strength);
             code.l2_share = region.immigration;
-            let mut init = GroupInit::new(&village, territory_id, population, vec![code]);
+            let size = if city {
+                ((f64::from(population) * city_size).round_ties_even() as u32).max(1)
+            } else {
+                population
+            };
+            let mut init = GroupInit::new(&village, territory_id, size, vec![code]);
             init.generation_years = generation_years;
             init.openness = region.openness.unwrap_or(world.params.village_openness);
-            init.prestige = region.prestige;
+            init.prestige = if city {
+                region.prestige + world.params.city_prestige
+            } else {
+                region.prestige
+            };
             init.immigration = region.immigration;
             init.loyalty = village_loyalty(
                 &world,
@@ -939,6 +959,16 @@ pub fn region_world(
             Some(village_spacing * link_reach),
             Some(&members),
         )?;
+        // Město je trh a úřad celého regionu: vazba ke každé vesnici (nejméně `city_link`).
+        if has_city {
+            let city = members[0];
+            for &village in &members[1..] {
+                let current = world.links.get(city, village).map_or(0.0, |l| l.strength);
+                if current < world.params.city_link {
+                    world.connect(city, village, world.params.city_link, LinkKind::Weak)?;
+                }
+            }
+        }
         villages_of.insert(region.id.clone(), members);
     }
     for region in regions {

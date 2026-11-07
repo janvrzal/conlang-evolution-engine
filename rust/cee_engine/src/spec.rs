@@ -184,6 +184,9 @@ pub struct RegionSpec {
     pub preserve: bool,
     #[serde(default)]
     pub immigration: f64,
+    /// Velikost města regionu (násobek vesnice); chybí = `city_size`, 0 = bez města (dok. 27).
+    #[serde(default)]
+    pub city: Option<f64>,
 }
 
 /// Událost popisu světa: rok, druh a zbylá pole podle druhu (viz pydantic modely v `spec.py`).
@@ -385,6 +388,7 @@ fn make_world(spec: &WorldSpec, params: Parameters) -> Result<World, String> {
             terrain: r.terrain.clone(),
             identity: r.identity.clone(),
             preserve: r.preserve,
+            city: r.city,
         })
         .collect();
     let options = SeedOptions {
