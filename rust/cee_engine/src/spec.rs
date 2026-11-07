@@ -248,6 +248,10 @@ impl WorldSpec {
 
 fn proto_language(spec: &LanguageSpec, table: &SegmentTable) -> Result<ProtoLanguage, String> {
     let mut language = ProtoLanguage::new(&spec.id);
+    // Jazyky z popisu světa (aplikace, scénáře Evropa a Romania) dostanou vlastní morfémy.
+    language.generated_morphemes = true;
+    // Bez zadaného inventáře (ani souhlásek, ani samohlásek) se inventář vygeneruje (PHOIBLE).
+    language.generated_inventory = spec.consonants.is_none() && spec.vowels.is_none();
     language.grammar = profile::by_name(&spec.grammar).ok_or_else(|| {
         format!(
             "languages.{}: neznámá gramatika '{}'",
@@ -430,25 +434,9 @@ fn make_world(spec: &WorldSpec, params: Parameters) -> Result<World, String> {
                 ));
             }
             let mut inventory: Vec<u32> = Vec::new();
-            for segment in language
-                .consonants
-                .clone()
-                .unwrap_or_else(|| {
-                    crate::concepts::Defaults::shared()
-                        .default_consonants
-                        .clone()
-                })
-                .iter()
-                .chain(
-                    language
-                        .vowels
-                        .clone()
-                        .unwrap_or_else(|| {
-                            crate::concepts::Defaults::shared().default_vowels.clone()
-                        })
-                        .iter(),
-                )
-            {
+            let (consonants, vowels) = proto_language(language, &table)?
+                .inventory(crate::scenarios::language_seed(spec.seed, &language.id));
+            for segment in consonants.iter().chain(vowels.iter()) {
                 inventory.extend(table.parse(segment)?.into_iter().map(|s| s as u32));
             }
             inventory.sort_unstable();

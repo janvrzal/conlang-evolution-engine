@@ -20,7 +20,7 @@ use crate::model::links::LinkKind;
 use crate::model::repertoire::{Distribution, Origin, Repertoire};
 use crate::model::territory::{Territory, TerritoryLevel};
 use crate::parameters::Parameters;
-use crate::protoform::{protolanguage, ProtoSpec, SyllableType};
+use crate::protoform::{self, protolanguage, ProtoSpec, SyllableType};
 use crate::rng::{stable_int, Part, Stream};
 use crate::vocabulary::Vocabulary;
 use crate::world::{gravity_links, gravity_pairs, Endings, World};
@@ -604,6 +604,11 @@ pub struct ProtoLanguage {
     pub suffixes: Vec<String>,
     /// Slabičná stavba generovaných slov; `None` = vylosuje se (WALS 12A).
     pub syllables: Option<SyllableType>,
+    /// Koncovky a přípony bez zadání se vygenerují z hlásek jazyka (`protoform::morphemes`);
+    /// `false` = výchozí koncovky `syntax_endings` a [`generated_suffixes`] (scénáře bran).
+    pub generated_morphemes: bool,
+    /// Inventář se vygeneruje z PHOIBLE (`protoform::inventory`) místo `consonants`/`vowels`.
+    pub generated_inventory: bool,
 }
 
 impl ProtoLanguage {
@@ -622,6 +627,17 @@ impl ProtoLanguage {
             endings: None,
             suffixes: Vec::new(),
             syllables: None,
+            generated_morphemes: false,
+            generated_inventory: false,
+        }
+    }
+
+    /// Souhlásky a samohlásky jazyka: zadané, nebo vygenerované ze semínka jazyka.
+    pub fn inventory(&self, language_seed: u64) -> (Vec<String>, Vec<String>) {
+        if self.generated_inventory {
+            protoform::inventory(language_seed)
+        } else {
+            (self.consonants.clone(), self.vowels.clone())
         }
     }
 
@@ -634,6 +650,11 @@ impl ProtoLanguage {
         self.grammar = grammar;
         self
     }
+}
+
+/// Semínko protojazyka linie: odvozené ze semínka světa a ID jazyka.
+pub fn language_seed(seed: i64, id: &str) -> u64 {
+    stable_int(&[Part::Int(seed), Part::Str("language"), Part::Str(id)]) % (1 << 31)
 }
 
 /// Počet odvozovacích přípon jazyka, který je nemá zadané.
@@ -730,38 +751,43 @@ pub fn seed_lineages(
     let used = syntax_endings();
     let mut bases = HashMap::new();
     for language in languages {
-        let language_seed = stable_int(&[
-            Part::Int(seed),
-            Part::Str("language"),
-            Part::Str(&language.id),
-        ]) % (1 << 31);
-        let (forms, frequencies) = protolanguage(
-            &ProtoSpec {
-                concepts: &concepts,
-                seed: language_seed,
-                consonants: &language.consonants,
-                vowels: &language.vowels,
-                fixed: &language.words,
-                tones: &language.tones,
-                known_frequencies: known.as_ref(),
-                syllables: language.syllables,
-            },
-            ConceptData::shared(),
-        )?;
+        let language_seed = language_seed(seed, &language.id);
+        let (consonants, vowels) = language.inventory(language_seed);
+        let spec = ProtoSpec {
+            concepts: &concepts,
+            seed: language_seed,
+            consonants: &consonants,
+            vowels: &vowels,
+            fixed: &language.words,
+            tones: &language.tones,
+            known_frequencies: known.as_ref(),
+            syllables: language.syllables,
+        };
+        let (forms, frequencies) = protolanguage(&spec, ConceptData::shared())?;
+        // Koncovky a přípony z hlásek jazyka, pokud je autor nezadal (dok. 25). Zadal-li autor
+        // aspoň jednu koncovku, ostatní buňky mají výchozí koncovky (latina bez členu).
+        let generated = protoform::morphemes(&spec, GENERATED_SUFFIXES)?;
+        let endings: Endings = match &language.endings {
+            Some(given) => given.clone(),
+            None if language.generated_morphemes => generated.endings,
+            None => used.clone(),
+        };
         let base = world.seed_lexicon(
             &concepts,
             Some(&forms),
             Some(&frequencies),
             Some(&classes),
-            language.endings.as_ref().unwrap_or(&used),
+            &endings,
             &language.id,
             Some(&cells[&language.id]),
         )?;
         let base = seed_constructions(world, base, &language.grammar)?;
-        let suffixes = if language.suffixes.is_empty() {
-            generated_suffixes(language, language_seed as u64)
-        } else {
+        let suffixes = if !language.suffixes.is_empty() {
             language.suffixes.clone()
+        } else if language.generated_morphemes {
+            generated.suffixes
+        } else {
+            generated_suffixes(language, language_seed)
         };
         let id = world.language(&language.id);
         world.set_derivational_suffixes(id, &suffixes)?;

@@ -293,3 +293,96 @@ fn zvukova_symbolika() {
     assert!(tongue > 1.5, "jazyk–l: RR {tongue}");
     assert!(i < 0.6, "já–l: RR {i}");
 }
+
+#[test]
+fn inventar_z_phoible() {
+    use cee_engine::protoform::inventory;
+    let table = cee_engine::segments::SegmentTable::default_table();
+    let (mut consonants, mut vowels, mut with_b, mut b_and_g) = (0, 0, 0, 0);
+    for seed in 1..=300 {
+        let (c, v) = inventory(seed);
+        assert_eq!((c.clone(), v.clone()), inventory(seed), "determinismus");
+        assert!(c.len() >= 6 && v.len() >= 2, "semínko {seed}: {c:?} {v:?}");
+        for segment in c.iter().chain(&v) {
+            assert!(
+                table.parse(segment).is_ok(),
+                "hláska {segment} mimo tabulku"
+            );
+        }
+        // Dlouhá nebo nosová samohláska předpokládá krátkou ústní.
+        for vowel in &v {
+            let base: String = vowel
+                .chars()
+                .filter(|c| !matches!(c, 'ː' | '\u{303}'))
+                .collect();
+            let known = cee_engine::protoform::InventoryData::shared().contains(1, &base);
+            assert!(
+                base == *vowel || v.contains(&base) || !known,
+                "{vowel} bez {base}: {v:?}"
+            );
+        }
+        consonants += c.len();
+        vowels += v.len();
+        if c.iter().any(|s| s == "b") {
+            with_b += 1;
+            b_and_g += usize::from(c.iter().any(|s| s == "ɡ"));
+        }
+    }
+    // PHOIBLE: průměr asi 18 souhlásek a 7,5 samohlásky; P(ɡ | b) = 0,86.
+    let (c, v) = (consonants as f64 / 300.0, vowels as f64 / 300.0);
+    assert!(
+        (14.0..23.0).contains(&c) && (5.5..10.0).contains(&v),
+        "{c} / {v}"
+    );
+    assert!(
+        b_and_g as f64 / with_b as f64 > 0.6,
+        "P(ɡ | b) = {b_and_g}/{with_b}"
+    );
+}
+
+#[test]
+fn koncovky_a_pripony_z_fonologie() {
+    use cee_engine::protoform::{morphemes, ENDING_CELLS};
+    let consonants = &Defaults::shared().default_consonants;
+    let vowels = &Defaults::shared().default_vowels;
+    let fixed = HashMap::new();
+    let mut distinct = HashSet::new();
+    for seed in 1..=30 {
+        for kind in SyllableType::ALL {
+            let spec = ProtoSpec {
+                concepts: &[],
+                seed,
+                consonants,
+                vowels,
+                fixed: &fixed,
+                tones: &[],
+                known_frequencies: None,
+                syllables: Some(kind),
+            };
+            let found = morphemes(&spec, 3).unwrap();
+            assert_eq!(found.endings.len(), ENDING_CELLS.len());
+            assert_eq!(found.suffixes.len(), 3);
+            let mains: HashSet<&String> = found.endings.values().map(|o| &o[0].0).collect();
+            assert_eq!(
+                mains.len(),
+                ENDING_CELLS.len(),
+                "hlavní koncovky buněk se liší"
+            );
+            for options in found.endings.values() {
+                for (ending, _) in options {
+                    assert!(ending.chars().count() <= 3, "krátká koncovka: {ending}");
+                    if kind == SyllableType::Simple {
+                        assert!(is_vowel(ending.chars().last().unwrap()), "(C)V: {ending}");
+                    }
+                }
+                distinct.insert(options[0].0.clone());
+            }
+        }
+    }
+    // Jazyky nemají všechny stejné koncovky.
+    assert!(
+        distinct.len() > 30,
+        "jen {} různých koncovek",
+        distinct.len()
+    );
+}

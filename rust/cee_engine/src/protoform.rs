@@ -809,3 +809,317 @@ pub fn protolanguage(spec: &ProtoSpec<'_>, data: &ConceptData) -> Result<ProtoWo
     }
     Ok((forms, frequencies))
 }
+
+/// Buňky paradigmatu, pro které generátor vytvoří koncovky (třída, buňka); stejné jako
+/// výchozí `scenarios::syntax_endings`.
+pub const ENDING_CELLS: [(&str, &str); 5] = [
+    ("noun", "PL"),
+    ("noun", "OBJ"),
+    ("noun", "DEF"),
+    ("verb", "PAST"),
+    ("verb", "FUT"),
+];
+
+/// Váhy hlavní a vedlejší koncovky buňky (větší a menší vzor, jako ve výchozích koncovkách).
+const ALLOMORPH_WEIGHTS: [f64; 2] = [0.65, 0.35];
+
+/// Exponent zostření vah hlásek v gramatických morfémech: koncovky a přípony berou hlavně
+/// nejčastější hlásky jazyka (gramatické morfémy jsou krátké a z neutrálních hlásek;
+/// Bybee 1985, Bybee, Perkins a Pagliuca 1994). Volba modelu, ne číslo z dat.
+const AFFIX_SHARPNESS: f64 = 2.0;
+
+/// Gramatické koncovky a odvozovací přípony protojazyka.
+#[derive(Clone, Debug, Default)]
+pub struct Morphemes {
+    /// (třída, buňka) → koncovky s vahami.
+    pub endings: crate::world::Endings,
+    pub suffixes: Vec<String>,
+}
+
+impl<'d> Phonology<'d> {
+    /// Souhláska gramatického morfému: zostřené váhy pozice, volitelně jen kódy.
+    fn affix_consonant(&self, rng: &mut Stream, position: usize, coda: bool) -> Option<usize> {
+        let weights: Vec<f64> = self
+            .consonants
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let allowed = !coda || (self.coda[i] && !is_laryngeal(s.class));
+                if allowed {
+                    self.consonant_weights[position][i].powf(AFFIX_SHARPNESS)
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        if weights.iter().sum::<f64>() <= 0.0 {
+            return None;
+        }
+        rng.choice(&weights).ok()
+    }
+
+    fn affix_vowel(&self, rng: &mut Stream, position: usize) -> usize {
+        let weights: Vec<f64> = self.vowel_weights[position]
+            .iter()
+            .map(|w| w.powf(AFFIX_SHARPNESS))
+            .collect();
+        rng.choice(&weights).unwrap_or(0)
+    }
+
+    /// Morfém podle tvaru (`C`, `V`): souhláska na konci je koda (jen dovolené hlásky).
+    fn affix(&self, rng: &mut Stream, shape: &str) -> Option<String> {
+        let mut out = String::new();
+        let count = shape.chars().count();
+        for (at, slot) in shape.chars().enumerate() {
+            let last = at + 1 == count;
+            if slot == 'V' {
+                let position = if last { FINAL } else { MEDIAL };
+                out.push_str(&self.vowels[self.affix_vowel(rng, position)].ipa);
+                self.tone(rng, &mut out);
+            } else {
+                let position = if last { FINAL } else { MEDIAL };
+                let c = self.affix_consonant(rng, position, last)?;
+                out.push_str(&self.consonants[c].ipa);
+            }
+        }
+        Some(out)
+    }
+
+    /// Tvary koncovek podle slabičné stavby: jednoduchá jen -V a -CV; ostatní i -VC a -C
+    /// (koncovka z jediné souhlásky, jako lat. *-m*, *-s*).
+    fn ending_shapes(&self) -> &'static [(&'static str, f64)] {
+        match self.kind {
+            SyllableType::Simple => &[("V", 0.35), ("CV", 0.65)],
+            SyllableType::Moderate => &[("V", 0.25), ("CV", 0.45), ("VC", 0.15), ("C", 0.15)],
+            SyllableType::Complex => &[("V", 0.2), ("CV", 0.4), ("VC", 0.2), ("C", 0.2)],
+        }
+    }
+
+    fn morphemes(&self, rng: &mut Stream, suffix_count: usize) -> Morphemes {
+        let shapes = self.ending_shapes();
+        let weights: Vec<f64> = shapes.iter().map(|(_, w)| *w).collect();
+        let mut taken: HashSet<String> = HashSet::new();
+        let mut endings = crate::world::Endings::new();
+        for (class, cell) in ENDING_CELLS {
+            let mut options: Vec<(String, f64)> = Vec::new();
+            for weight in ALLOMORPH_WEIGHTS {
+                for _ in 0..50 {
+                    let shape = shapes[rng.choice(&weights).unwrap_or(0)].0;
+                    let Some(ending) = self.affix(rng, shape) else {
+                        continue;
+                    };
+                    // Hlavní koncovky buněk se liší (bez soustavného synkretismu); vedlejší
+                    // se jen nesmí shodovat s hlavní téže buňky.
+                    let clash = if options.is_empty() {
+                        taken.contains(&ending)
+                    } else {
+                        options.iter().any(|(e, _)| *e == ending)
+                    };
+                    if !clash {
+                        taken.insert(ending.clone());
+                        options.push((ending, weight));
+                        break;
+                    }
+                }
+            }
+            if !options.is_empty() {
+                endings.insert((class.to_owned(), cell.to_owned()), options);
+            }
+        }
+        // Odvozovací přípony: VC, CV, VCV (jako dřív), ale z vah jazyka a jen s dovolenou kodou.
+        let mut suffixes: Vec<String> = Vec::new();
+        for attempt in 0..60 {
+            if suffixes.len() == suffix_count {
+                break;
+            }
+            let shape = ["VC", "CV", "VCV"][(suffixes.len() + attempt) % 3];
+            if let Some(suffix) = self.affix(rng, shape) {
+                if !suffixes.contains(&suffix) {
+                    suffixes.push(suffix);
+                }
+            }
+        }
+        Morphemes { endings, suffixes }
+    }
+}
+
+/// Gramatické koncovky (buňky [`ENDING_CELLS`]) a `suffix_count` odvozovacích přípon
+/// z hlásek a slabičné stavby jazyka; stejné semínko dá stejné morfémy.
+pub fn morphemes(spec: &ProtoSpec<'_>, suffix_count: usize) -> Result<Morphemes, String> {
+    if spec.consonants.is_empty() || spec.vowels.is_empty() {
+        return Err("protojazyk potřebuje aspoň jednu souhlásku a jednu samohlásku".into());
+    }
+    let phonology = Phonology::new(spec, ProtoformData::shared());
+    let mut rng = Stream::new(
+        spec.seed,
+        &[Part::Str("protolanguage"), Part::Str("morphemes")],
+    );
+    Ok(phonology.morphemes(&mut rng, suffix_count))
+}
+
+/// Počet pokusů o výměnu na hlásku inventáře (jako `SWAP_SWEEPS` ve skriptu dat).
+pub const SWAP_SWEEPS: usize = 20;
+
+/// Statistiky inventářů z PHOIBLE (`v2_protoform.json`, část `inventory`): log-lineární
+/// (Isingův) model přítomnosti hlásek `P(x) ∝ exp(Σ h_s x_s + Σ_{s<t} J_st x_s x_t)`
+/// při pevné velikosti inventáře.
+pub struct InventoryData {
+    /// `[souhlásky | samohlásky]`: (IPA, podíl jazyků), pole `h` a vazby `J`.
+    segments: [Vec<(String, f64)>; 2],
+    field: [Vec<f64>; 2],
+    coupling: [Vec<Vec<f64>>; 2],
+    /// (počet souhlásek, počet samohlásek, váha) podle PHOIBLE (váženo po rodinách).
+    sizes: Vec<(usize, usize, f64)>,
+}
+
+impl InventoryData {
+    pub fn from_json(text: &str) -> Result<InventoryData, String> {
+        let root: Value =
+            serde_json::from_str(text).map_err(|e| format!("v2_protoform.json: {e}"))?;
+        let inventory = &root["inventory"];
+        let mut segments: [Vec<(String, f64)>; 2] = Default::default();
+        let mut field: [Vec<f64>; 2] = Default::default();
+        let mut coupling: [Vec<Vec<f64>>; 2] = Default::default();
+        let floats = |value: &Value| -> Vec<f64> {
+            value
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|v| v.as_f64().unwrap_or(0.0))
+                .collect()
+        };
+        for (k, kind) in ["consonants", "vowels"].iter().enumerate() {
+            for entry in inventory[*kind].as_array().into_iter().flatten() {
+                let ipa = entry["ipa"].as_str().unwrap_or_default().to_owned();
+                segments[k].push((ipa, number(entry, "share")?));
+            }
+            field[k] = floats(&inventory[format!("{kind}_field")]);
+            coupling[k] = inventory[format!("{kind}_coupling")]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(floats)
+                .collect();
+            let n = segments[k].len();
+            if n == 0
+                || field[k].len() != n
+                || coupling[k].len() != n
+                || coupling[k].iter().any(|row| row.len() != n)
+            {
+                return Err(format!("v2_protoform.json: inventory.{kind}"));
+            }
+        }
+        let sizes: Vec<(usize, usize, f64)> = inventory["sizes"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|row| {
+                let row = row.as_array()?;
+                Some((
+                    row.first()?.as_u64()? as usize,
+                    row.get(1)?.as_u64()? as usize,
+                    row.get(2)?.as_f64()?,
+                ))
+            })
+            .collect();
+        if sizes.is_empty() {
+            return Err("v2_protoform.json: inventory.sizes".into());
+        }
+        Ok(InventoryData {
+            segments,
+            field,
+            coupling,
+            sizes,
+        })
+    }
+
+    pub fn shared() -> &'static InventoryData {
+        static DATA: OnceLock<InventoryData> = OnceLock::new();
+        DATA.get_or_init(|| {
+            InventoryData::from_json(crate::data::PROTOFORM_JSON).expect("v2_protoform.json")
+        })
+    }
+
+    /// Je hláska mezi kandidáty druhu (0 souhlásky, 1 samohlásky)?
+    pub fn contains(&self, kind: usize, ipa: &str) -> bool {
+        self.segments[kind].iter().any(|(s, _)| s == ipa)
+    }
+
+    /// `size` hlásek jednoho druhu: start výběrem podle podílů, pak výměny podle
+    /// Metropolise (jedna hláska ven, jiná dovnitř) z modelu souvýskytu.
+    fn pick(&self, kind: usize, size: usize, rng: &mut Stream) -> Vec<String> {
+        let segments = &self.segments[kind];
+        let (field, coupling) = (&self.field[kind], &self.coupling[kind]);
+        let n = segments.len();
+        let size = size.clamp(1, n.saturating_sub(1).max(1));
+        // Výběr bez vracení podle podílů: klíče u^(1/w), největší vyhrávají.
+        let mut keys: Vec<(f64, usize)> = segments
+            .iter()
+            .enumerate()
+            .map(|(i, (_, share))| (rng.random().powf(1.0 / share.max(1e-6)), i))
+            .collect();
+        keys.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let mut present = vec![false; n];
+        for (_, i) in keys.iter().take(size) {
+            present[*i] = true;
+        }
+        if size < n {
+            for _ in 0..SWAP_SWEEPS * size {
+                let on: Vec<usize> = (0..n).filter(|&i| present[i]).collect();
+                let off: Vec<usize> = (0..n).filter(|&i| !present[i]).collect();
+                let i = on[rng.integers(on.len() as u64) as usize];
+                let j = off[rng.integers(off.len() as u64) as usize];
+                let mut delta = field[j] - field[i] - coupling[j][i];
+                for &t in &on {
+                    delta += coupling[j][t] - coupling[i][t];
+                }
+                if rng.random() < delta.min(0.0).exp() {
+                    present[i] = false;
+                    present[j] = true;
+                }
+            }
+        }
+        // Podmíněné hlásky (dlouhá, nosová, aspirovaná, labializovaná, palatalizovaná,
+        // ejektivní) předpokládají prostou: chybí-li prostá, nahradí podmíněnou (Ferguson 1963;
+        // Maddieson 1984). Velikost inventáře se nemění.
+        for i in 0..n {
+            if !present[i] {
+                continue;
+            }
+            let base: String = segments[i]
+                .0
+                .chars()
+                .filter(|c| !matches!(c, 'ː' | '\u{303}' | 'ʰ' | 'ʷ' | 'ʲ' | 'ʼ'))
+                .collect();
+            if base == segments[i].0 {
+                continue;
+            }
+            if let Some(b) = segments.iter().position(|(ipa, _)| *ipa == base) {
+                if !present[b] {
+                    present[i] = false;
+                    present[b] = true;
+                }
+            }
+        }
+        // Pořadí podle četnosti v jazycích světa (nejběžnější první).
+        segments
+            .iter()
+            .zip(&present)
+            .filter(|(_, on)| **on)
+            .map(|((ipa, _), _)| ipa.clone())
+            .collect()
+    }
+}
+
+/// Inventář hlásek (souhlásky, samohlásky) jazyka, který ho nemá zadaný: velikost podle
+/// PHOIBLE, hlásky z modelu souvýskytu (dok. 25); stejné semínko dá stejný inventář.
+pub fn inventory(seed: u64) -> (Vec<String>, Vec<String>) {
+    let data = InventoryData::shared();
+    let mut rng = Stream::new(seed, &[Part::Str("protolanguage"), Part::Str("inventory")]);
+    let weights: Vec<f64> = data.sizes.iter().map(|(_, _, w)| *w).collect();
+    let (consonants, vowels, _) = data.sizes[rng.choice(&weights).unwrap_or(0)];
+    (
+        data.pick(0, consonants, &mut rng),
+        data.pick(1, vowels, &mut rng),
+    )
+}

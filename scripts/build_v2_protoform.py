@@ -11,6 +11,9 @@ cldf-datasets/wals, CC BY 4.0) spočítá:
   a podíl slov se skupinou souhlásek na začátku a uvnitř;
 - Zipfův zákon zkracování: Spearmanovo ρ mezi frekvencí pojmu (``v2_concept_frequencies``)
   a délkou slova v hláskách uvnitř jazyka; medián přes rodiny;
+- inventáře hlásek z PHOIBLE (Moran a McCloy, eds., ``phoible/dev``, data CC BY 4.0): četnost
+  hlásek (podíl jazyků, vážený po rodinách), Isingův model souvýskytu (pole a vazby) a velikosti
+  inventářů pro kontrolu; jeden inventář na Glottocode, jen hlásky, které zná tabulka enginu;
 - kontrolu dětských slov pro rodiče na WOLD (CC BY 4.0, 41 jazyků): podíl slov „matka“
   s nosovkou a slov „otec“ s retnou nebo zubnou ražnicí.
 
@@ -18,7 +21,7 @@ Zvuková symbolika se nepočítá: poměry rizik (RR) jsou převzaté z Blasi a 
 (PNAS 113: 10818, tab. S2 a S3), kteří pracovali se stejnými daty ASJP.
 
 Data: ``~/.cee/data/asjp/cldf``, ``~/.cee/data/wals/cldf``, ``~/.cee/data/wold/wold-master/cldf``.
-Spuštění: ``python scripts/build_v2_protoform.py`` (zapíše JSON a vypíše přehled).
+Spuštění: ``python scripts/build_v2_protoform.py`` (potřebuje numpy z extra ``data``) (zapíše JSON a vypíše přehled).
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ DATA = Path.home() / ".cee" / "data"
 ASJP = DATA / "asjp" / "cldf"
 WALS = DATA / "wals" / "cldf"
 WOLD = DATA / "wold" / "wold-master" / "cldf"
+PHOIBLE = DATA / "phoible"
 OUT = ROOT / "src" / "cee" / "data" / "v2_protoform.json"
 ASJP_COMMIT = "cf4bf0d13c95256b1b48f440d07c5c098500a770"
 WALS_COMMIT = "81298aa26d01fdc11b769bcc7fa87ad9e43d7ccd"
@@ -300,6 +304,180 @@ def parental_terms() -> dict:
     }
 
 
+INVENTORY_SHARE = 0.02
+REPLACE = {"ȵ": "ɲ", "ȶ": "c", "ȡ": "ɟ", "ȴ": "ʎ"}
+CHECKS = [
+    ("consonants", "ɡ", "b"), ("consonants", "d", "b"), ("consonants", "b", "ɡ"),
+    ("consonants", "tʰ", "pʰ"), ("consonants", "kʰ", "pʰ"), ("consonants", "ʒ", "ʃ"),
+    ("consonants", "t͡ʃ", "ʃ"), ("consonants", "ɲ", "ŋ"), ("consonants", "kʼ", "pʼ"),
+    ("vowels", "ɔ", "ɛ"), ("vowels", "ɛ", "ɔ"), ("vowels", "uː", "iː"), ("vowels", "aː", "iː"),
+    ("vowels", "ã", "ĩ"), ("vowels", "ũ", "ĩ"),
+]
+
+
+def engine_symbols() -> set[str]:
+    return set(json.loads((ROOT / "src" / "cee" / "data" / "v2_segments.json").read_text())["symbols"])
+
+
+def engine_phoneme(phoneme: str, known: set[str]) -> str | None:
+    """Zápis hlásky PHOIBLE v tabulce enginu (NFD, oblouček u afrikát), jinak ``None``."""
+    import unicodedata
+    text = unicodedata.normalize("NFD", phoneme).replace("̠", "").replace("̞", "")
+    text = REPLACE.get(text, text)
+    if text in known:
+        return text
+    if len(text) >= 2 and text[0] in "tdpbkɡcɟq" and text[1] in "szʃʒɕʑçʝxɣχʁθðfvɸβpbɡ":
+        tied = text[0] + "͡" + text[1:]
+        if tied in known:
+            return tied
+    return None
+
+
+ISING_L2 = 2.0
+SWAP_SWEEPS = 20  # jako protoform::SWAP_SWEEPS
+
+
+def initial_state(share, sizes, rng):
+    """Počáteční inventáře dané velikosti: výběr bez vracení podle podílů (klíče u^(1/w))."""
+    import numpy as np
+
+    keys = rng.random((len(sizes), len(share))) ** (1.0 / share)
+    order = np.argsort(-keys, axis=1)
+    state = np.zeros_like(keys)
+    for c, size in enumerate(sizes):
+        state[c, order[c, :size]] = 1.0
+    return state
+
+
+def swap_step(state, field, coupling, rng):
+    """Jedna výměna v každém řetězci: přítomná hláska i ven, chybějící j dovnitř (Metropolis)."""
+    import numpy as np
+
+    rows = np.arange(len(state))
+    i = np.argmax(rng.random(state.shape) * state, axis=1)
+    j = np.argmax(rng.random(state.shape) * (1.0 - state), axis=1)
+    delta = field[j] - field[i] + (state * (coupling[j] - coupling[i])).sum(axis=1) - coupling[j, i]
+    accept = rng.random(len(state)) < np.exp(np.minimum(delta, 0.0))
+    state[rows[accept], i[accept]] = 0.0
+    state[rows[accept], j[accept]] = 1.0
+    return state
+
+
+def ising(found: dict, kind: str, chosen: list[str], meta: dict) -> tuple[list[float], list[list[float]]]:
+    """Log-lineární (Isingův) model přítomnosti hlásek: pole h a symetrické vazby J.
+
+    Odhad pseudověrohodností (Besag 1975): pro každou hlásku logistická regrese její
+    přítomnosti na přítomnosti ostatních (Newtonova metoda, L2 ``ISING_L2``), jazyky vážené
+    1 / velikost rodiny; J = průměr (J_st + J_ts) / 2.
+    """
+    import numpy as np
+
+    codes = sorted(found)
+    x = np.array([[1.0 if s in found[g][kind] else 0.0 for s in chosen] for g in codes])
+    family_size = Counter(meta[g][1] for g in codes)
+    weight = np.array([1.0 / family_size[meta[g][1]] for g in codes])
+    k = len(chosen)
+    field = np.zeros(k)
+    raw = np.zeros((k, k))
+    for i in range(k):
+        others = np.delete(x, i, axis=1)
+        design = np.hstack([np.ones((len(codes), 1)), others])
+        beta = np.zeros(design.shape[1])
+        penalty = np.full(design.shape[1], ISING_L2)
+        penalty[0] = 0.0
+        for _ in range(30):
+            p = 1.0 / (1.0 + np.exp(-(design @ beta)))
+            gradient = design.T @ (weight * (x[:, i] - p)) - penalty * beta
+            hessian = (design * (weight * p * (1 - p))[:, None]).T @ design + np.diag(penalty)
+            step = np.linalg.solve(hessian, gradient)
+            beta += step
+            if np.abs(step).max() < 1e-6:
+                break
+        field[i] = beta[0]
+        raw[i, np.arange(k) != i] = beta[1:]
+    coupling = (raw + raw.T) / 2.0
+    # Pole doladěná tak, aby vzorkování enginu (pevná velikost inventáře z PHOIBLE, výměny
+    # hlásek podle Metropolise) dávalo podíly jazyků; pseudověrohodnost sama podíly silně
+    # provázaného modelu nezachová.
+    target = np.clip(np.array([weighted_share(found, kind, s, meta) for s in chosen]), 0.01, 0.99)
+    sizes = np.array([sum(1 for s in found[g][kind] if s in set(chosen)) for g in codes])
+    size_weight = weight / weight.sum()
+    rng = np.random.default_rng(0)
+    chains = 2000
+    for _ in range(30):
+        draw = np.clip(rng.choice(sizes, size=chains, p=size_weight), 1, k - 1)
+        state = initial_state(target, draw, rng)
+        for _ in range(SWAP_SWEEPS * int(draw.mean())):
+            state = swap_step(state, field, coupling, rng)
+        generated = np.clip(state.mean(axis=0), 0.005, 0.995)
+        print(kind, "největší odchylka podílu", round(float(np.abs(generated - target).max()), 3), flush=True)
+        field += 0.5 * (np.log(target / (1 - target)) - np.log(generated / (1 - generated)))
+    return [round(float(h), 4) for h in field], [[round(float(v), 4) for v in row] for row in coupling]
+
+
+def weighted_share(found: dict, kind: str, segment: str, meta: dict) -> float:
+    return nested_mean({g: float(segment in inv[kind]) for g, inv in found.items()}, meta)
+
+
+def inventories() -> dict:
+    known = engine_symbols()
+    families = {}
+    for row in csv.DictReader((ASJP / "languages.csv").open(encoding="utf-8")):
+        if row["Glottocode"]:
+            families.setdefault(row["Glottocode"], row["Family"] or row["Glottocode"])
+    found: dict[str, dict[str, set[str]]] = {}
+    first: dict[str, str] = {}
+    for row in csv.DictReader((PHOIBLE / "phoible.csv").open(encoding="utf-8")):
+        glottocode = row["Glottocode"]
+        if not glottocode or glottocode == "NA" or row["Marginal"] == "TRUE":
+            continue
+        if first.setdefault(glottocode, row["InventoryID"]) != row["InventoryID"]:
+            continue
+        kind = {"consonant": "consonants", "vowel": "vowels"}.get(row["SegmentClass"])
+        symbol = engine_phoneme(row["Phoneme"], known) if kind else None
+        if symbol:
+            found.setdefault(glottocode, {"consonants": set(), "vowels": set()})[kind].add(symbol)
+    # Zubná (◌̪) a apikální (◌̺) hláska bez prosté protějšky není kontrast, jen fonetický detail:
+    # zapíše se prostě (t̪ → t), aby generované jazyky neměly diakritiku tam, kde nic nerozlišuje.
+    for inv in found.values():
+        for kind in ("consonants", "vowels"):
+            for symbol in sorted(inv[kind]):
+                plain = symbol.replace("\u032a", "").replace("\u033a", "")
+                if plain != symbol and plain in known and plain not in inv[kind]:
+                    inv[kind].discard(symbol)
+                    inv[kind].add(plain)
+    meta = {g: (g, families.get(g, g)) for g in found}
+    out: dict = {"languages": len(found)}
+    for kind in ("consonants", "vowels"):
+        counts = Counter(s for inv in found.values() for s in inv[kind])
+        share = {s: weighted_share(found, kind, s, meta) for s in counts}
+        chosen = sorted((s for s, v in share.items() if v >= INVENTORY_SHARE), key=lambda s: -share[s])
+        field, coupling = ising(found, kind, chosen, meta)
+        out[kind] = [{"ipa": s, "share": round(share[s], 4)} for s in chosen]
+        out[f"{kind}_field"] = field
+        out[f"{kind}_coupling"] = coupling
+    # Velikosti (souhlásky, samohlásky) z vybraných hlásek, vážené 1 / velikost rodiny.
+    family_size = Counter(meta[g][1] for g in found)
+    chosen_sets = {kind: {e["ipa"] for e in out[kind]} for kind in ("consonants", "vowels")}
+    sizes: Counter = Counter()
+    for g, inv in found.items():
+        c = len(inv["consonants"] & chosen_sets["consonants"])
+        v = len(inv["vowels"] & chosen_sets["vowels"])
+        if c >= 6 and v >= 2:
+            sizes[(c, v)] += 1.0 / family_size[meta[g][1]]
+    out["sizes"] = [[c, v, round(w, 4)] for (c, v), w in sorted(sizes.items())]
+    checks = []
+    import unicodedata
+    for kind, target, given in CHECKS:
+        target, given = unicodedata.normalize("NFD", target), unicodedata.normalize("NFD", given)
+        having = [inv for inv in found.values() if given in inv[kind]]
+        if having:
+            checks.append({"kind": kind, "segment": target, "given": given, "languages": len(having),
+                           "share": round(sum(target in inv[kind] for inv in having) / len(having), 3)})
+    out["checks"] = checks
+    return out
+
+
 def main() -> None:
     meta = languages()
     found = {d: c for d, c in words().items() if d in meta}
@@ -311,10 +489,15 @@ def main() -> None:
         "sources": [
             {"name": "ASJP Database (lexibank/asjp, CLDF)", "citation": "Wichmann, Søren, Holman, Eric W. & Brown, "
              "Cecil H. (eds.) The ASJP Database. https://asjp.clld.org", "license": "CC BY 4.0",
+             "license_url": "https://creativecommons.org/licenses/by/4.0/",
+             "changes": "Odvozené souhrnné statistiky (podíly tříd hlásek podle pozice, délky slov, korelace), "
+             "bez slovníků; výpůjčky a vymřelé jazyky vynechány.",
              "url": f"https://github.com/lexibank/asjp/tree/{ASJP_COMMIT}/cldf",
              "sha256": {f: sha256(ASJP / f) for f in ("forms.csv", "languages.csv", "parameters.csv")}},
             {"name": "WALS 12A Syllable Structure", "citation": "Maddieson, Ian 2013. Syllable Structure. In Dryer & "
              "Haspelmath (eds.), WALS Online (v2020.3).", "license": "CC BY 4.0",
+             "license_url": "https://creativecommons.org/licenses/by/4.0/",
+             "changes": "Jen zařazení jazyků do typů 12A a jejich počty, spárováno s ASJP přes Glottocode.",
              "url": f"https://github.com/cldf-datasets/wals/tree/{WALS_COMMIT}/cldf",
              "sha256": {f: sha256(WALS / f) for f in ("values.csv", "languages.csv", "codes.csv")}},
             {"name": "Blasi et al. 2016", "citation": "Blasi, Damián E., Wichmann, Søren, Hammarström, Harald, "
@@ -323,6 +506,17 @@ def main() -> None:
             {"name": "Murdock 1959", "citation": "Murdock, George P. 1959. Cross-language parallels in parental kin "
              "terms. Anthropological Linguistics 1(9): 1–5; Jakobson, Roman 1962. Why 'mama' and 'papa'? Selected "
              "Writings I: 538–545.", "license": "převzatá čísla s citací"},
+            {"name": "PHOIBLE (inventáře hlásek)", "citation": "Moran, Steven & McCloy, Daniel (eds.) PHOIBLE. "
+             "https://phoible.org", "license": "CC BY 4.0 (data v phoible/dev)",
+             "url": f"https://github.com/phoible/dev/tree/{(PHOIBLE / 'COMMIT').read_text().strip()}/data",
+             "sha256": {"phoible.csv": sha256(PHOIBLE / "phoible.csv")},
+             "license_url": "https://creativecommons.org/licenses/by/4.0/",
+             "changes": "Neobsahuje inventáře jazyků, jen odvozené souhrnné statistiky: podíl jazyků s hláskou "
+             "(jeden inventář na Glottocode, váženo po rodinách), parametry log-lineárního modelu souvýskytu "
+             "hlásek (pole a vazby, odhad pseudověrohodností) a rozložení "
+             "velikostí inventářů. Hlásky převedené do zápisu enginu (NFD, oblouček u afrikát, bez ̠ a ̞; "
+             "zubná a apikální hláska bez prosté protějšky zapsaná prostě; "
+             "ȵ ȶ ȡ ȴ → ɲ c ɟ ʎ), vynechané okrajové hlásky, tóny a hlásky, které tabulka enginu nezná."},
             {"name": "WOLD (kontrola dětských slov)", "citation": "Haspelmath, Martin & Tadmor, Uri (eds.) 2009. "
              "World Loanword Database.", "license": "CC BY 4.0"},
         ],
@@ -332,9 +526,15 @@ def main() -> None:
         "abbreviation": abbreviation(found, meta),
         "parental_check": parental_terms(),
         "symbolism": [{"concept": c, "symbol": s, "risk_ratio": rr} for c, s, rr in BLASI],
+        "inventory": inventories(),
     }
     OUT.write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(json.dumps({k: result[k] for k in ("syllable_types", "abbreviation", "parental_check")}, ensure_ascii=False, indent=1))
+    inventory = result["inventory"]
+    print("inventáře", inventory["languages"], "souhlásek", len(inventory["consonants"]), "samohlásek", len(inventory["vowels"]))
+    print([e["ipa"] for e in inventory["consonants"]])
+    print([e["ipa"] for e in inventory["vowels"]])
+    print(inventory["checks"])
     print("spread", result["segment_weights"]["language_spread"])
     for kind, table in result["segment_weights"].items():
         if kind == "language_spread":

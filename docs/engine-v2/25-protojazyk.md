@@ -1,6 +1,6 @@
 # 25. Generátor protojazyka
 
-Stav: **hotovo** (6. 11. 2026, větev `protojazyk`).
+Stav: **hotovo** (6. 11. 2026, větev `protojazyk`; 7. 11. koncovky, přípony a inventář).
 
 Podnět: vygenerovaný jazyk je první, co uživatel aplikace uvidí (iberština, dáčtina, baskičtina
 v Evropě a protojazyky ve hrách). Dosavadní generátor skládal 1–3 slabiky CV z inventáře, 15 % slov
@@ -19,17 +19,21 @@ Slova zadaná autorem (`words`, např. z IE-CoR) mají vždy přednost; stejné 
 | Blasi, Wichmann, Hammarström, Stadler a Christiansen 2016, PNAS 113: 10818, tab. S2–S3 | 74 asociací pojem–hláska s poměrem rizik (RR) | převzatá čísla s citací (data ASJP CC BY 4.0) |
 | Murdock 1959, Anthropological Linguistics 1(9); Jakobson 1962, *Why „mama“ and „papa“?* | dětská slova pro rodiče | převzatá čísla s citací |
 | WOLD (Haspelmath a Tadmor 2009), 41 jazyků | kontrola dětských slov | CC BY 4.0 |
+| PHOIBLE (Moran a McCloy, eds.; `phoible/dev`, commit v datech; 2 175 jazyků) | inventáře hlásek (od 7. 11.) | CC BY 4.0 |
 
-**PHOIBLE** zadání navrhovalo. Licenci jsem ověřil: web phoible.org (verze 2.0) uvádí CC BY-SA 3.0,
-repozitář `phoible/dev` dnes uvádí data pod CC BY 4.0 (kód MIT). Nakonec jsem PHOIBLE nepoužil,
-a to z věcného důvodu, ne kvůli licenci: měří, *zda* jazyk hlásku má (inventář), kdežto generátor
-potřebuje, *jak často* se hláska ve slovech jazyka, který ji má, vyskytuje. To dává ASJP přímo
-a na stejných datech pracovali Blasi a kol., takže je všechno na jedné stupnici. Inventář si
-zatím volí autor nebo výchozí `p t k b d ɡ m n s l r w j h` / `a e i o u`. Pro budoucí
-generování inventářů je vhodný PHOIBLE z GitHubu (CC BY 4.0).
+**PHOIBLE.** Web phoible.org (vydání 2.0) uvádí CC BY-SA 3.0, repozitář `phoible/dev` dnes uvádí
+data pod **CC BY 4.0** (kód MIT); bereme data z repozitáře se zapsaným commitem. Na četnost hlásek
+ve slovech se nehodí (měří, *zda* jazyk hlásku má, ne *jak často* ji používá; to dává ASJP),
+slouží jen ke generování inventářů (oddíl 7).
+
+**Podmínky CC BY 4.0** (ASJP, WALS, PHOIBLE, WOLD): uvést autory a zdroj, odkaz na licenci a co
+jsme změnili. `v2_protoform.json` má u každého zdroje citaci, URL s commitem, otisk SHA-256,
+`license_url` a `changes`. Engine neobsahuje slovníky ani inventáře jednotlivých jazyků, jen
+odvozené souhrnné statistiky. Kdyby aplikace měla stránku „O aplikaci“ nebo „Zdroje“, patří tam
+tytéž citace.
 
 Data: `src/cee/data/v2_protoform.json`, vyrábí ho `scripts/build_v2_protoform.py` (data v
-`~/.cee/data/{asjp,wals,wold}`, otisky SHA-256 v souboru). Výpůjčky (`Loan`) a vymřelé jazyky
+`~/.cee/data/{asjp,wals,wold,phoible}`, otisky SHA-256 v souboru; numpy z extra `data`). Výpůjčky (`Loan`) a vymřelé jazyky
 skript vynechává; průměr se počítá doculect → jazyk (Glottocode) → rodina → přes rodiny, aby
 velké rodiny (bantuské, austronéské) nepřevážily.
 
@@ -138,6 +142,62 @@ hláska stojí ve slově jen na některých místech, generované RR vychází s
 - Generátor už nezrcadlí Python (bitová shoda byla zrušena 3. 11.); proto zmizel test
   `vectors.rs::protojazyk` a vektor `tests/fixtures/protolanguage.json`.
 
+### 6. Koncovky a přípony podle jazyka (od 7. 11.)
+
+Dřív měly všechny generované jazyky stejné gramatické koncovky (PL *-i/-an*, PAST *-ta/-u*,
+OBJ *-m/-ne*, DEF *-le/-n*, FUT *-sa/-bo*), takže iberština, dáčtina i baskičtina v Evropě
+skloňovaly stejně. `protoform::morphemes` je teď skládá z hlásek a slabičné stavby jazyka:
+
+- každá buňka (`ENDING_CELLS`) dostane hlavní a vedlejší koncovku (váhy 0,65 / 0,35 jako dřív),
+  hlavní koncovky buněk se liší;
+- tvary podle stavby: jednoduchá jen *-V*, *-CV*; středně složitá a složitá i *-VC* a *-C*
+  (koncovka z jediné souhlásky jako lat. *-m*, *-s*), souhláska na konci jen z dovolených kód;
+- hlásky z vah jazyka, zostřené na druhou (`AFFIX_SHARPNESS`): gramatické morfémy jsou krátké
+  a z nejběžnějších hlásek (Bybee 1985; Bybee, Perkins a Pagliuca 1994). Je to volba modelu,
+  ne číslo z dat;
+- odvozovací přípony (VC, CV, VCV) stejně, místo prvních hlásek seznamu.
+
+Platí jen pro jazyky z popisu světa (`WorldSpec`: aplikace, Evropa, Romanie), které nemají
+zadanou ani jednu koncovku (`endings`). Zadá-li autor aspoň jednu, ostatní buňky mají výchozí
+koncovky jako dřív (latina). Scénáře bran postavené v Rustu (`ProtoLanguage::new`) mají dál
+výchozí koncovky (`generated_morphemes: false`), aby se brány neměřily na jiném vstupu.
+
+Ukázka (výchozí inventář, `ukazky`): semínko 2, jednoduchá stavba: PL *-e/-a*, OBJ *-te/-ta*,
+DEF *-ra/-a*, PAST *-i/-a*, FUT *-ti/-ke*; semínko 4, středně složitá: PL *-in/-ni*, OBJ
+*-hi/-i*, DEF *-ik/-ki*, PAST *-l/-ri*, FUT *-al/-r*.
+
+### 7. Inventář hlásek z PHOIBLE (od 7. 11.)
+
+Jazyk z popisu světa, který nemá zadané **ani souhlásky, ani samohlásky**, dostane inventář
+z `protoform::inventory` (zadá-li autor jen souhlásky, samohlásky jsou výchozí jako dřív; Evropa
+se tedy nemění). Model:
+
+- kandidáti: hlásky, které má aspoň 2 % jazyků PHOIBLE (93 souhlásek, 39 samohlásek), převedené
+  do zápisu enginu (afrikáty s obloučkem, zubná a apikální hláska bez prosté protějšky jako
+  prostá); prenazalizované hlásky tabulka enginu nemá, vynechané;
+- velikost (souhlásky × samohlásky) se vylosuje z rozložení v PHOIBLE (váženo po rodinách;
+  průměr 18,2 souhlásky a 7,5 samohlásky včetně dlouhých a nosových);
+- hlásky z log-lineárního (Isingova) modelu souvýskytu `P(x) ∝ exp(Σ h_s x_s + Σ J_st x_s x_t)`:
+  vazby J z pseudověrohodnosti (Besag 1975; logistická regrese každé hlásky na ostatní, L2 = 2,
+  jazyky vážené 1 / velikost rodiny), pole h doladěná tak, aby vzorkování dávalo podíly jazyků
+  z PHOIBLE (moment matching). Vzorkuje se při pevné velikosti výměnami hlásek (Metropolis,
+  20 pokusů na hlásku): bez pevné velikosti se model překlápěl mezi malými a obřími inventáři;
+- podmíněná hláska (dlouhá, nosová, aspirovaná, labializovaná, palatalizovaná, ejektivní) bez
+  prosté protějšky se nahradí prostou (Ferguson 1963; Maddieson 1984).
+
+Ověření (`cargo run --release --example protojazyk -- inventare 2000`): průměr 18,4 souhlásky
+a 7,6 samohlásky; podíly hlásek sedí na ±0,05 (*m* 0,96 / 0,97, *s* 0,52 / 0,50, *b* 0,47 /
+0,45, *aː* 0,30 / 0,31); implikace mají 70–100 % síly v PHOIBLE:
+
+| | P(ɡ \| b) | P(b \| ɡ) | P(kʰ \| pʰ) | P(t͡ʃ \| ʃ) | P(ɲ \| ŋ) | P(ɔ \| ɛ) | P(aː \| iː) | P(ã \| ĩ) | P(kʼ \| pʼ) |
+|---|---|---|---|---|---|---|---|---|---|
+| generováno | 0,74 | 0,86 | 0,77 | 0,67 | 0,72 | 0,64 | 0,74 | 0,66 | 0,61 |
+| PHOIBLE | 0,86 | 0,95 | 0,93 | 0,68 | 0,70 | 0,83 | 0,87 | 0,88 | 0,92 |
+
+Ukázky inventářů (semínka 1–6): velký západoafrický typ s *ɓ ɗ k͡p ɡ͡b* a nosovkami;
+malý tichomořský (*m n j k w t p l ŋ ɲ r c ɹ* / *i a e o*); kavkazský či americký s ejektivy
+a aspiráty (*kʼ tʼ pʼ t͡ʃʼ kʰ pʰ tʰ*); australský (*ɳ ɭ ɻ ʎ*, bez frikativ, *i a u e o y*).
+
 ## Ověření
 
 `cargo run --release --example protojazyk -- mereni 300`: 300 semínek, výchozí pojmy, bohatší inventář
@@ -228,13 +288,36 @@ před změnou 0,173 / 0,173 / 0,129 a po ní 0,129 / 0,222 / 0,150, tedy nad pra
 Splnění na semínkách od 1 bylo předtím štěstí; rozdíl je v šumu a stálost členu (37A) je otevřená
 nezávisle na generátoru.
 
+### Po sloučení s M9b/M9c a s koncovkami a inventářem (7. 11. 2026)
+
+Větev `protojazyk` má vmergovanou `engine-v2-dynamika` (M9b/M9c: realistické tempo hláskových
+změn). Kombinace dala **46 z 47 bran**: `m2::metrika_4`, největší inventář samohlásek 16 při
+širokém pásmu [2; 14]. Samotná `engine-v2-dynamika` je na 14 (na hraně; před M9b 11), nová slova
+přidají nosovky z nosových kód.
+
+Metrika ale měřila něco jiného než svůj zdroj: počítala *ã* a *aː* jako samohlásky navíc,
+kdežto WALS 2A (Maddieson 2013) počítá kvality: „Long and short variants of the same vowel are
+always counted once… nasalized vowels do not add to the inventory as long as a non-nasalized
+counterpart occurs.“ `gates::metrics::lexicon_profile` teď počítá kvality (bez tónu, délky
+a nosovosti); prahy beze změny. Pak **47 z 47** (nejméně 10, nejvíc 13 samohlásek).
+Nad úzkým pásmem [4; 7] / [5; 10] zůstává inventář kvůli rychlejšímu tempu (štěpení kvalit:
+*y æ ø ə ɛ ɨ ɪ ɯ ʊ* v 6 vzorových bězích), to je otázka pro M9.
+
+Kalibrace (Evropa se 3 vlákny, swap do 1 GB), sloučený stav před koncovkami a inventářem →
+po nich: **23 z 24 a 13 z 14 v obou** (nesplněné `m7::typologie_37A` 0,114 při prahu 0,112
+a `m8::pocet_jazyku` 152 / 150 při [10; 60], obojí už předtím). Generované koncovky mění Evropu
+jen v mezích cílů: románské větve bez pádu 0,83 → 0,75 (≥ 3 ze 4, p_min 0,8 splněno),
+balkánský svaz 0,92 → 0,50 (p_min 0,2), latina v Romanii beze změny splnění (latina má
+koncovky zadané, mění se jen substráty).
+
 ## Omezení a další kroky
 
-- Inventář se negeneruje; výchozí inventář je pořád stejný pro všechny vygenerované jazyky
-  (kromě příchuti vah). Generování inventáře podle PHOIBLE (CC BY 4.0 na GitHubu) by byl další krok.
+- Inventář se generuje jen při úplně nezadaném inventáři; jazyk se zadanými souhláskami bez
+  samohlásek má výchozí *a e i o u*. Tóny inventář nevolí (tónové jazyky zadává autor).
 - Váhy jsou podmíněné přítomností třídy v krátkém seznamu ASJP, takže vzácné třídy (mlaskavky,
   ʔ na konci) vycházejí v jazycích, které je mají, vysoké; s běžnými inventáři to nevadí.
-- Odvozovací přípony (`generated_suffixes`) se pořád losují z prvních hlásek seznamu.
+- Scénáře bran postavené v Rustu mají dál výchozí koncovky, přípony z prvních hlásek seznamu
+  a výchozí inventář; nový generátor koncovek a inventářů brány neměří.
 - Tvary jsou kořeny bez morfologie; ASJP obsahuje citační tvary (někdy s afixy), proto je cíl
   délky jen orientační.
 - Tóny a délka samohlásek nemají data (tóny zipfovsky podle pořadí jako dřív).

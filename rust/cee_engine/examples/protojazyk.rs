@@ -8,7 +8,9 @@
 use std::collections::HashMap;
 
 use cee_engine::concepts::{ConceptData, Defaults};
-use cee_engine::protoform::{protolanguage, syllable_type, ProtoSpec, ProtoformData, SyllableType};
+use cee_engine::protoform::{
+    morphemes, protolanguage, syllable_type, ProtoSpec, ProtoformData, SyllableType,
+};
 use cee_engine::scenarios::default_concepts;
 
 const SAMPLE: [(&str, &str); 24] = [
@@ -131,6 +133,31 @@ fn samples(seeds: &[u64]) {
                 kind.name(),
                 words.join(", ")
             );
+            let fixed = HashMap::new();
+            let spec = ProtoSpec {
+                concepts: &concepts,
+                seed,
+                consonants: c,
+                vowels: v,
+                fixed: &fixed,
+                tones: &[],
+                known_frequencies: None,
+                syllables: None,
+            };
+            let found = morphemes(&spec, 3).unwrap();
+            let endings: Vec<String> = found
+                .endings
+                .iter()
+                .map(|((class, cell), options)| {
+                    let forms: Vec<String> = options.iter().map(|(e, _)| format!("-{e}")).collect();
+                    format!("{class}:{cell} {}", forms.join("/"))
+                })
+                .collect();
+            println!(
+                "    koncovky {}; přípony {}",
+                endings.join(", "),
+                found.suffixes.join(", ")
+            );
         }
     }
 }
@@ -237,9 +264,71 @@ fn measure(count: u64) {
     }
 }
 
+fn inventories(count: u64) {
+    let root: serde_json::Value = serde_json::from_str(cee_engine::data::PROTOFORM_JSON).unwrap();
+    let generated: Vec<(Vec<String>, Vec<String>)> =
+        (1..=count).map(cee_engine::protoform::inventory).collect();
+    let n = count as f64;
+    let mean = |k: usize| {
+        generated
+            .iter()
+            .map(|g| if k == 0 { g.0.len() } else { g.1.len() } as f64)
+            .sum::<f64>()
+            / n
+    };
+    println!("souhlásek {:.1}, samohlásek {:.1}", mean(0), mean(1));
+    for check in root["inventory"]["checks"].as_array().unwrap() {
+        let kind = check["kind"].as_str().unwrap();
+        let target = check["segment"].as_str().unwrap();
+        let given = check["given"].as_str().unwrap();
+        let pick = |g: &(Vec<String>, Vec<String>)| -> Vec<String> {
+            if kind == "consonants" {
+                g.0.clone()
+            } else {
+                g.1.clone()
+            }
+        };
+        let having: Vec<_> = generated
+            .iter()
+            .filter(|g| pick(g).iter().any(|s| s == given))
+            .collect();
+        let share = having
+            .iter()
+            .filter(|g| pick(g).iter().any(|s| s == target))
+            .count() as f64
+            / having.len().max(1) as f64;
+        println!(
+            "P({target} | {given}): generováno {share:.2} (z {}), PHOIBLE {:.2}",
+            having.len(),
+            check["share"].as_f64().unwrap()
+        );
+    }
+    for (k, kind) in ["consonants", "vowels"].iter().enumerate() {
+        let mut line = Vec::new();
+        for entry in root["inventory"][*kind].as_array().unwrap().iter().take(24) {
+            let ipa = entry["ipa"].as_str().unwrap();
+            let share = generated
+                .iter()
+                .filter(|g| if k == 0 { &g.0 } else { &g.1 }.iter().any(|s| s == ipa))
+                .count() as f64
+                / n;
+            line.push(format!(
+                "{ipa} {share:.2}/{:.2}",
+                entry["share"].as_f64().unwrap()
+            ));
+        }
+        println!("podíly {kind}: {}", line.join(", "));
+    }
+    for seed in 1..=6 {
+        let (c, v) = &generated[seed - 1];
+        println!("semínko {seed}: {} | {}", c.join(" "), v.join(" "));
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
+        Some("inventare") => inventories(args.get(1).and_then(|s| s.parse().ok()).unwrap_or(2000)),
         Some("mereni") => measure(args.get(1).and_then(|s| s.parse().ok()).unwrap_or(300)),
         _ => {
             let seeds: Vec<u64> = args.iter().skip(1).filter_map(|s| s.parse().ok()).collect();
