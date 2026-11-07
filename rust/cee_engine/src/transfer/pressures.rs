@@ -270,6 +270,9 @@ pub struct Pressures<'a> {
     vacating: Vec<Vacating>,
     /// Pro každý proces: které z `vacating` jeho výstupy zaplní; staví se líně.
     fills: Vec<OnceLock<Vec<usize>>>,
+    /// Výstupní hlásky procesů (líně) a hlásky skupin podle sloupce (líně) pro riziko splynutí.
+    outputs: Vec<OnceLock<Vec<(i32, i32)>>>,
+    inventories: Vec<OnceLock<Vec<i32>>>,
 }
 
 /// Změna bez podmínky okolí, která vyprazdňuje třídu hlásek (`target`).
@@ -358,15 +361,27 @@ impl<'a> Pressures<'a> {
         self.world.params.tonogenesis_trigger * (2.0 * best - 1.0)
     }
 
-    /// Míří změna na hrtanové souhlásky h nebo ʔ?
+    /// Míří změna jen na hrtanové souhlásky h nebo ʔ? Odpadnutí celé třídy frikativ (s, x, h …)
+    /// se nepočítá: tón vzniká až z oslabeného *-s* → *-h* (Haudricourt 1954), ne z jeho ztráty.
     fn laryngeal_target(&self, def: &crate::model::lexicon::ProcessDef) -> bool {
         let Some(table) = self.world.table.as_ref() else {
             return false;
         };
-        ["h", "ʔ"]
+        let laryngeal: Vec<i32> = ["h", "ʔ"]
             .iter()
             .filter_map(|ipa| table.id_of(ipa).ok())
-            .any(|segment| def.target.contains(segment))
+            .collect();
+        let mut any = false;
+        for (segment, &inside) in def.target.mask.iter().enumerate() {
+            if !inside || segment >= table.len() || !table.is_plain(segment as i32) {
+                continue;
+            }
+            if !laryngeal.contains(&(segment as i32)) {
+                return false;
+            }
+            any = true;
+        }
+        any
     }
 
     /// Leží skupina ve městě (`Territory::urban`)?
@@ -412,6 +427,52 @@ impl<'a> Pressures<'a> {
             })
             .fold(0.0, f64::max);
         self.world.params.chain_shift_weight * progress
+    }
+
+    /// Riziko splynutí řadového posunu bez podmínky okolí: podíl jeho výstupních hlásek, které
+    /// skupina ještě má (cílová řada je obsazená), × `chain_shift_weight`, zmenšený o pokrok
+    /// změny, která cílovou řadu vyprazdňuje (v polovině jejího průběhu je nulový). Ztráta znělosti *b d g* → *p t k* u jazyka,
+    /// který *p t k* má, je proto nevýhodná; po vyprázdnění *p t k* (řetěz) ne (dok. 29).
+    fn merger_risk(&self, g: usize, process: crate::ids::ProcessId) -> f64 {
+        if !self.vacating.iter().any(|v| v.process == process) {
+            return 0.0;
+        }
+        let outputs = self.outputs[process.index()]
+            .get_or_init(|| crate::phonology::rows::outputs(self.world, process));
+        if outputs.is_empty() {
+            return 0.0;
+        }
+        let group = self.inputs.axis[g];
+        let inventory =
+            self.inventories[g].get_or_init(|| crate::contact::inventory(self.world, group));
+        // Jen hlásky, které skupina má: kolik jejích vstupů by splynulo s hláskou, kterou už má.
+        let has = |s: &i32| inventory.binary_search(s).is_ok();
+        let own: Vec<&(i32, i32)> = outputs.iter().filter(|(input, _)| has(input)).collect();
+        if own.is_empty() {
+            return 0.0;
+        }
+        let present =
+            own.iter().filter(|(_, output)| has(output)).count() as f64 / own.len() as f64;
+        if present == 0.0 {
+            return 0.0;
+        }
+        let fills = self.fills[process.index()].get_or_init(|| {
+            let ids: Vec<crate::ids::ProcessId> = self.vacating.iter().map(|v| v.process).collect();
+            crate::phonology::rows::fills(self.world, process, &ids)
+                .into_iter()
+                .filter_map(|p| ids.iter().position(|&q| q == p))
+                .collect()
+        });
+        let vacated = fills
+            .iter()
+            .map(|&at| {
+                let gap = &self.vacating[at];
+                crate::phonology::rows::changed_share(self.world, group, gap.variable, gap.changed)
+            })
+            .fold(0.0, f64::max);
+        // Zrcadlo `chain_bonus`: riziko mizí, když vyprazdňující změna přesáhne polovinu, a od
+        // ní dál táhne bonus řetězu (souvislý přechod tlaku přes nulu).
+        self.world.params.chain_shift_weight * present * (1.0 - vacated / 0.5).clamp(0.0, 1.0)
     }
 
     pub fn new(
@@ -466,7 +527,13 @@ impl<'a> Pressures<'a> {
         let fills = (0..world.processes.len())
             .map(|_| OnceLock::new())
             .collect();
+        let outputs = (0..world.processes.len())
+            .map(|_| OnceLock::new())
+            .collect();
+        let inventories = (0..inputs.axis.len()).map(|_| OnceLock::new()).collect();
         Ok(Pressures {
+            outputs,
+            inventories,
             region_keys,
             vacating,
             fills,
@@ -742,8 +809,9 @@ impl<'a> Pressures<'a> {
                             changed: true,
                         }) = world.variants.payload.get(variant.index())
                         {
-                            let bonus = self.chain_bonus(g, *process);
-                            if bonus > 0.0 {
+                            let bonus =
+                                self.chain_bonus(g, *process) - self.merger_risk(g, *process);
+                            if bonus != 0.0 {
                                 add(&mut cells[g * slots + slot], bonus);
                             }
                         }
@@ -1080,7 +1148,10 @@ impl<'a> Pressures<'a> {
         if root.is_none() {
             return true;
         }
-        world.form_of(group, root).len() < world.bank.form(world.morphemes.form[root.index()]).len()
+        crate::syntax::worn(
+            world.form_of(group, root).len(),
+            world.bank.form(world.morphemes.form[root.index()]).len(),
+        )
     }
 
     /// Míra, do jaké roli funkce přebírají jiné dominantní konstrukce (`syntax.compensation`).

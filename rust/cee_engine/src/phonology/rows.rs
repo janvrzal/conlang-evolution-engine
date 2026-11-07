@@ -601,3 +601,32 @@ pub fn gap_partners(world: &mut World, process: ProcessId) -> Vec<usize> {
     }
     found
 }
+
+/// Dvojice (vstup, výstup) změny rysů (u hlásek její třídy bez diakritik navíc, hlásky bez
+/// protějšku se vynechají); prázdné, když nejde o změnu rysů.
+pub fn outputs(world: &World, process: ProcessId) -> Vec<(i32, i32)> {
+    let (Some(Some(def)), Some(table)) =
+        (world.processes.get(process.index()), world.table.as_ref())
+    else {
+        return Vec::new();
+    };
+    if def.operation != Operation::Change {
+        return Vec::new();
+    }
+    let changes: Vec<(&str, &str)> = def
+        .changes
+        .iter()
+        .map(|(f, v)| (f.as_str(), v.as_str()))
+        .collect();
+    let mut found = Vec::new();
+    for (segment, &inside) in def.target.mask.iter().enumerate() {
+        if !inside || segment >= table.len() || !table.is_plain(segment as i32) {
+            continue;
+        }
+        // Hláska bez protějšku (exotická okluziva bez neznělé dvojice) se přeskočí.
+        if let Ok(Some(output)) = table.changed(segment as i32, &changes, &def.allow) {
+            found.push((segment as i32, output));
+        }
+    }
+    found
+}

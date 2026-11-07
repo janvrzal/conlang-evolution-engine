@@ -142,7 +142,7 @@
  "interference_weight": 0.5,
  "learnability_strength": 1.0,
  "leveling_beyond_region": 0.0,
- "leveling_rate": 0.1,
+ "leveling_rate": 0.35,
  "lexical_appeal_sd": 0.03,
  "lingua_franca_levels": {
   "common": 0.3,

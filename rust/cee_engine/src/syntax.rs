@@ -148,7 +148,15 @@ pub fn eroded(world: &World, group: GroupId, concept: Option<&str>) -> bool {
         return true;
     };
     let original = world.bank.form(world.morphemes.form[root.index()]).len();
-    world.form_of(group, root).len() < original
+    worn(world.form_of(group, root).len(), original)
+}
+
+/// Je slovo délky `now` (z původních `original` hlásek) zvukově zchátralé? Až když z něj zbude
+/// nejvýš jedna hláska nebo ztratí aspoň polovinu: fr. *ne* → *n'* ano, it. *non* a šp. *no*
+/// (ztráta koncové souhlásky) ne, ty drží zápor před slovesem přes tisíc let (Jespersen 1917;
+/// Breitbarth 2009; dok. 29).
+pub fn worn(now: usize, original: usize) -> bool {
+    now <= 1 || 2 * now <= original
 }
 
 /// Zapsala skupina konstrukci do tvarů (nová koncovka)?

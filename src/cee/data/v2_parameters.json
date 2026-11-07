@@ -125,10 +125,10 @@
   {
    "name": "leveling_rate",
    "kind": "number",
-   "default": 0.1,
+   "default": 0.35,
    "min": 0.0,
    "max": 1.0,
-   "description": "Vyrovnávání nářečí podle centra (Trudgill 1986, Dialects in Contact; dok. 27): skupina převezme za generaci u podílu leveling_rate × síla vazby × relativní rozdíl přitažlivosti (prestiž × √populace, Trudgill 1974) slov výslovnost téhož slova od propojené skupiny stejné linie s vyšší přitažlivostí (vesnice od města, město od sídla státu). 0 = bez vyrovnávání (model před M10).",
+   "description": "Vyrovnávání nářečí podle centra (Trudgill 1986, Dialects in Contact; dok. 27): skupina převezme za generaci u podílu leveling_rate × síla vazby × relativní rozdíl přitažlivosti (prestiž × √populace, Trudgill 1974) slov výslovnost téhož slova od propojené skupiny stejné linie s vyšší přitažlivostí (vesnice od města, město od sídla státu). 0,35: s 0,1 (autorský odhad) se malé regiony rozpadaly na jazyk za každou vesnici (Evropa 73,5 jazyka, 9 vesnic Vaskonie = 9 jazyků; dok. 29). 0 = bez vyrovnávání (model před M10).",
    "group": "society"
   },
   {
@@ -207,7 +207,7 @@
    "default": 1.0,
    "min": 0.0,
    "max": 5.0,
-   "description": "Výhoda tahového řetězu (Martinet 1955, Économie des changements phonétiques; Labov 1994): hlásková změna, jejíž výstupy padnou do třídy, kterou jiná změna bez podmínky okolí ve skupině z většiny vyprázdnila (*p t k* → *ɸ θ x*, pak *b d g* → *p t k*), dostane k sociálnímu ocenění navíc váha × (podíl vyprazdňující změny − ½) / ½. Pod polovinou nic. 0 = bez řetězení (dok. 26).",
+   "description": "Výhoda tahového řetězu (Martinet 1955, Économie des changements phonétiques; Labov 1994): hlásková změna, jejíž výstupy padnou do třídy, kterou jiná změna bez podmínky okolí ve skupině z většiny vyprázdnila (*p t k* → *ɸ θ x*, pak *b d g* → *p t k*), dostane k sociálnímu ocenění navíc váha × (podíl vyprazdňující změny − ½) / ½. Pod polovinou nic. Táž váha je i riziko splynutí: řadový posun, jehož výstupní hlásky skupina už má (*b d g* → *p t k* u jazyka s *p t k*), dostane −váha × podíl obsazených výstupů × (1 − podíl vyprazdňující změny / ½), takže samovolné splynutí řad je vzácné a řetěz po polovině první změny ne (dok. 29). 0 = bez řetězení (dok. 26).",
    "group": "transfer"
   },
   {
