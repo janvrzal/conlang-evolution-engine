@@ -138,6 +138,7 @@ fn write(path: &Option<String>, value: &serde_json::Value) -> Result<(), String>
 
 fn run_simulation(mut simulation: Simulation, until: f64, options: &Options) -> Result<(), String> {
     simulation.run(until)?;
+    simulation.observe_now()?;
     if let Some(path) = &options.checkpoint {
         let bytes = simulation.checkpoint().to_bytes()?;
         std::fs::write(path, bytes).map_err(|e| format!("{path}: {e}"))?;

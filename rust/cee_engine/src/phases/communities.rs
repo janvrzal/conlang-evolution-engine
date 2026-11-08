@@ -96,7 +96,32 @@ pub fn community_step(
 fn level_forms(world: &mut World, dt: f64, tick: u32) -> Result<(), String> {
     use crate::rng::{Part, Stream};
     let rate = world.params.leveling_rate;
-    for group in world.group_ids() {
+    let is_primary_group = |world: &World, group: GroupId| -> bool {
+        crate::polity::region_of(world, group)
+            .and_then(|r| world.territories.get(r.index()))
+            .and_then(|t| t.children.first())
+            .is_some_and(|&c| world.groups.territory[group.index()] == c)
+    };
+    let mut groups = world.group_ids();
+    if world.params.leveling_beyond_region > 0.0 {
+        // Při nadregionálním vyrovnávání nejprve srovnáme střediskové obce (`-v0`) od
+        // nejsilnějších center k periferii a teprve poté podřízené osady (`-v1`, `+`) uvnitř regionu.
+        groups.sort_by(|&a, &b| {
+            let pa = is_primary_group(world, a);
+            let pb = is_primary_group(world, b);
+            pb.cmp(&pa).then_with(|| {
+                let pull_a = world.groups.prestige[a.index()]
+                    * f64::from(world.groups.population[a.index()]).sqrt();
+                let pull_b = world.groups.prestige[b.index()]
+                    * f64::from(world.groups.population[b.index()]).sqrt();
+                pull_b
+                    .partial_cmp(&pull_a)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| a.index().cmp(&b.index()))
+            })
+        });
+    }
+    for group in groups {
         if !world.groups.contains(group) {
             continue;
         }
@@ -107,13 +132,49 @@ fn level_forms(world: &mut World, dt: f64, tick: u32) -> Result<(), String> {
         let language = world.groups.main_code(group).language;
         // Přitažlivost centra = prestiž × √populace (gravitační model šíření, Trudgill 1974):
         // město táhne i tam, kde mají všechny skupiny prestiž zrcadlenou od sídla státu.
-        let pull_of =
+        let region = crate::polity::region_of(world, group);
+        let is_primary = is_primary_group(world, group);
+        let rural_center = region.and_then(|r| {
+            let first = *world.territories.get(r.index())?.children.first()?;
+            (world.territories.get(first.index())?.urban == 0.0).then_some(first)
+        });
+        let base_pull =
             |at: usize| world.groups.prestige[at] * f64::from(world.groups.population[at]).sqrt();
+        let pull_of = |at: usize| {
+            let base = base_pull(at);
+            if rural_center.is_some_and(|c| {
+                world.groups.territory[at] == c && world.groups.territory[g] != c
+            }) {
+                // Ve venkovském regionu bez města (`city: 0`) působí středová vesnice (`-v0`)
+                // jako místní tržiště pro ostatní osady téhož regionu.
+                base * 2.5
+            } else {
+                base
+            }
+        };
         let prestige = pull_of(g);
         // Jen uvnitř regionu: město je hegemonem svého regionu (vesnice ↔ město), ne provincie
         // sídla státu (srovnání provincií podle Říma by zastavilo vývoj románských větví).
-        let region = crate::polity::region_of(world, group);
-        let donor = neighbors(world, group)
+        let mut candidates = neighbors(world, group);
+        if is_primary && world.params.leveling_beyond_region > 0.0 {
+            if let Some(r) = region {
+                for member in crate::polity::groups_in(world, &[r]) {
+                    for (nb, link) in neighbors(world, member) {
+                        if let Some(other_reg) = crate::polity::region_of(world, nb) {
+                            if other_reg != r {
+                                candidates.push((nb, link));
+                                if let Ok(seat) = crate::polity::seat_of(world, other_reg) {
+                                    if seat != nb {
+                                        candidates.push((seat, link));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let donor = candidates
             .into_iter()
             .filter(|(d, _)| {
                 let at = d.index();
@@ -121,19 +182,25 @@ fn level_forms(world: &mut World, dt: f64, tick: u32) -> Result<(), String> {
                     && !world.groups.written[at]
                     && world.groups.domain[at] == Domain::Home
                     && world.groups.main_code(*d).language == language
-                    && (world.params.leveling_beyond_region > 0.0
+                    && ((is_primary && world.params.leveling_beyond_region > 0.0)
                         || crate::polity::region_of(world, *d) == region)
                     && pull_of(at) > prestige
             })
             .map(|(d, link)| {
                 let pd = pull_of(d.index());
-                // Dárce mimo region (sídlo státu) táhne slaběji: `leveling_beyond_region`.
-                let reach = if crate::polity::region_of(world, d) == region {
+                let same_region = crate::polity::region_of(world, d) == region;
+                // Dárce mimo region (sídlo sousedního regionu / státu) táhne podle `leveling_beyond_region`.
+                let reach = if same_region {
                     1.0
                 } else {
                     world.params.leveling_beyond_region
                 };
-                (d, reach * link.strength * (pd - prestige) / pd)
+                let grad = if same_region {
+                    (pd - prestige) / pd
+                } else {
+                    ((pd - prestige) / pd).sqrt()
+                };
+                (d, reach * link.strength * grad)
             })
             .max_by(|a, b| {
                 a.1.partial_cmp(&b.1)

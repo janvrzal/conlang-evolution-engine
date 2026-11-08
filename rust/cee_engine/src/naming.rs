@@ -108,11 +108,11 @@ pub fn endonym(world: &World, groups: &[String]) -> Option<String> {
         .map_or(&default[..], Vec::as_slice);
     let mut parts: Vec<Vec<i32>> = Vec::new();
     for concept in concepts {
-        let root = code.phonology.dominant_of(*concept);
+        let root = world.dominant_or_plural_root(group, *concept);
         if root.is_none() {
             continue;
         }
-        parts.push(world.form_of(group, root).to_vec());
+        parts.push(world.adapted_form_of(group, root));
     }
     let form = compound(&parts, &|s| table.is_vowel(s));
     let rendered: String = form.iter().map(|&s| table.render(&[s])).collect();

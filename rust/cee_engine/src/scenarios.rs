@@ -1048,6 +1048,20 @@ pub fn region_world(
                 * world.params.terrain_access[&other.terrain];
             let scaled = strength * world.params.border_link_scale * terrain;
             world.connect(first, second, scaled, LinkKind::Weak)?;
+            if world.params.leveling_beyond_region > 0.0 {
+                if let (Some(&va), Some(&vb)) = (
+                    villages_of[&region.id].first(),
+                    villages_of[&neighbour].first(),
+                ) {
+                    if (va, vb) != (first, second) && (vb, va) != (first, second) {
+                        gravity_links(&mut world, None, Some(&[va, vb]))?;
+                        let center_strength = world.links.get(va, vb).expect("vazba").strength;
+                        let center_scaled =
+                            center_strength * world.params.border_link_scale * terrain;
+                        world.connect(va, vb, center_scaled, LinkKind::Weak)?;
+                    }
+                }
+            }
         }
     }
     Ok(world)

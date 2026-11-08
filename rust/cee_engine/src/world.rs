@@ -429,6 +429,48 @@ impl World {
         self.bank.form(self.unit_of(group, morpheme).form)
     }
 
+    /// Dominantní kořen pojmu ve skupině (`>= 0.5`), nebo kořen varianty s nejvyšším
+    /// podílem v rozdělení lexikální proměnné, pokud žádná varianta nepřesahuje polovinu.
+    pub fn dominant_or_plural_root(&self, group: GroupId, concept: ConceptId) -> MorphemeId {
+        let root = self.groups.main_code(group).phonology.dominant_of(concept);
+        if !root.is_none() {
+            return root;
+        }
+        let name = self.registry.concepts.name(concept.0);
+        let key = variable_name(VariableKind::Lexical, name);
+        let Some(var_idx) = self.registry.variables.get(&key) else {
+            return MorphemeId::NONE;
+        };
+        let variable = VariableId(var_idx);
+        if variable.index() >= self.variables.len() {
+            return MorphemeId::NONE;
+        }
+        let Some((variant, _)) = self.dominant(group, variable) else {
+            return MorphemeId::NONE;
+        };
+        match self.variants.payload.get(variant.index()) {
+            Some(Payload::Lexical { morpheme, .. }) => *morpheme,
+            _ => MorphemeId::NONE,
+        }
+    }
+
+    /// Tvar morfému ve skupině; pro cizí morfém, který ještě nepřešel práh 0.5 do `code.forms`,
+    /// vrátí tvar adaptovaný na domácí hláskový inventář skupiny.
+    pub fn adapted_form_of(&self, group: GroupId, morpheme: MorphemeId) -> Vec<i32> {
+        let code = self.groups.main_code(group);
+        if code.forms.get(morpheme).is_some()
+            || self.morphemes.language[morpheme.index()] == code.language
+        {
+            return self.form_of(group, morpheme).to_vec();
+        }
+        let native = crate::contact::inventory(self, group);
+        if native.is_empty() {
+            self.form_of(group, morpheme).to_vec()
+        } else {
+            crate::contact::adapt(self, &native, self.form_of(group, morpheme))
+        }
+    }
+
     fn make_morpheme(&mut self, name: &str, init: MorphemeInit) -> MorphemeId {
         let id = self.registry.morpheme(name);
         self.morphemes.store(id, init);

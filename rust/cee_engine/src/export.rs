@@ -126,22 +126,20 @@ pub fn lexicon(world: &World, group: GroupId) -> Map<String, Value> {
         return result;
     };
     let code = world.groups.main_code(group);
-    let mut concepts: Vec<(String, usize)> = code
-        .phonology
-        .dominant
-        .iter()
-        .enumerate()
-        .filter(|(_, root)| !root.is_none())
-        .map(|(concept, _)| {
-            (
-                world.registry.concepts.name(concept as u32).to_owned(),
-                concept,
-            )
+    let total_concepts = world.registry.concepts.len().max(code.phonology.dominant.len());
+    let mut concepts: Vec<(String, crate::ids::MorphemeId)> = (0..total_concepts)
+        .filter_map(|concept| {
+            let root = world.dominant_or_plural_root(group, crate::ids::ConceptId::new(concept));
+            (!root.is_none()).then(|| {
+                (
+                    world.registry.concepts.name(concept as u32).to_owned(),
+                    root,
+                )
+            })
         })
         .collect();
-    concepts.sort();
-    for (concept, number) in concepts {
-        let root = code.phonology.dominant[number];
+    concepts.sort_by(|a, b| a.0.cmp(&b.0));
+    for (concept, root) in concepts {
         let at = root.index();
         let meta = &world.morphemes.meta[at];
         let language = world.morphemes.language[at];
@@ -154,10 +152,11 @@ pub fn lexicon(world: &World, group: GroupId) -> Map<String, Value> {
                 "coinage".into()
             }
         });
+        let form = world.adapted_form_of(group, root);
         result.insert(
             concept,
             json!({
-                "form": table.render(world.form_of(group, root)),
+                "form": table.render(&form),
                 "root": world.registry.morphemes.name(root.0),
                 "language": world.registry.languages.name(language.0),
                 "loan": loan,

@@ -148,6 +148,32 @@ impl Simulation {
         Ok(&self.history)
     }
 
+    /// Pořídí snímek pozorování pro aktuální krok, pokud v něm ještě nevznikl
+    /// (např. když koncový rok běhu neleží na násobku `observe_every`).
+    pub fn observe_now(&mut self) -> Result<(), String> {
+        if self.tick == 0 || self.config.observe_every == 0 {
+            return Ok(());
+        }
+        if self
+            .history
+            .snapshots
+            .last()
+            .is_some_and(|s| s.tick == self.tick)
+        {
+            return Ok(());
+        }
+        let year = self.year();
+        let mut ctx = StepContext {
+            world: &mut self.world,
+            history: &mut self.history,
+            config: &self.config,
+            tick: self.tick,
+            year,
+        };
+        let _t = crate::timing::scope("observe");
+        phases::observe::run(&mut ctx)
+    }
+
     /// Jeden krok: fáze v pořadí specifikace.
     pub fn step(&mut self) -> Result<(), String> {
         self.tick += 1;

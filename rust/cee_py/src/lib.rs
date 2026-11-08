@@ -118,7 +118,11 @@ impl Run {
                 }
                 simulation.step().map_err(PyRuntimeError::new_err)?;
             }
-            Ok(simulation.year() + simulation.config.dt <= end + 1e-9)
+            let more = simulation.year() + simulation.config.dt <= end + 1e-9;
+            if !more {
+                simulation.observe_now().map_err(PyRuntimeError::new_err)?;
+            }
+            Ok(more)
         })
     }
 
