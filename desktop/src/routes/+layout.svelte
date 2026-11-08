@@ -6,6 +6,7 @@
 	import '$lib/tokens.css';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
+	import { API_REVISION } from '$lib/engine';
 	import { i18n, t, type Locale, type MessageKey } from '$lib/i18n.svelte';
 	import { app } from '$lib/state.svelte';
 
@@ -32,8 +33,9 @@
 		const file = (event.currentTarget as HTMLInputElement).files?.[0];
 		if (!file) return;
 		try {
-			const world = JSON.parse(await file.text());
-			if (world.format !== 'cee-v2-world/1') throw new Error('format');
+			const parsed = JSON.parse(await file.text());
+			const world = parsed.format === 'cee-project/1' ? parsed.world : parsed;
+			if (world?.format !== 'cee-v2-world/1') throw new Error('format');
 			app.load(world, file.name);
 			notice = t('project.opened', { name: file.name });
 		} catch {
@@ -55,7 +57,7 @@
 	}
 
 	const years = $derived(app.world ? app.world.end_year - (app.world.start_year ?? 0) : 0);
-	const errors = $derived(app.issues?.length ?? 0);
+	const errors = $derived(app.issues?.filter((i) => i.severity !== 'warning').length ?? 0);
 </script>
 
 <div class="app">
@@ -92,7 +94,7 @@
 			<div class="banner" role="alert">
 				<b>{app.engineState.phase === 'offline'
 						? t('engine.offline')
-						: t('engine.outdated', { have: app.engineState.health.api_revision, need: 9 })}</b>
+						: t('engine.outdated', { have: app.engineState.health.api_revision, need: API_REVISION })}</b>
 				<span class="why">{t('engine.hint')}</span>
 				<button class="btn" onclick={() => app.connect()}>{t('engine.retry')}</button>
 			</div>

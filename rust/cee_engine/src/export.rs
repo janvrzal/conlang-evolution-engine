@@ -110,7 +110,13 @@ fn group_view(world: &World, group: GroupId, lineage: Option<&String>) -> Value 
         "standard": name(g.standard[at]), "liturgy": name(g.liturgy[at]),
         "loyalty": g.loyalty[at], "home_pull": g.home_pull[at], "preserved": g.preserved[at],
         "revival": g.revival[at],
+        "root_retention": root_retention(world, group),
     })
+}
+
+/// Podíl pojmů skupiny vyjádřených zděděným kořenem (zahrnuje obnovu zdrobnělinou a zkrácení).
+pub fn root_retention(world: &World, group: GroupId) -> f64 {
+    crate::gates::metrics::root_retention(world, group)
 }
 
 /// Dnešní slova skupiny: tvar (IPA), lexém a jeho původ.

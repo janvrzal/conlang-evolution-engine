@@ -119,4 +119,5 @@ fn retain_forms(world: &mut crate::world::World) {
         }
     }
     world.bank.bank.retain_forms(&alive);
+    crate::phonology::index::retain_forms(world, &alive);
 }

@@ -211,6 +211,27 @@ impl Contexts {
         table[key] = (start as u32, last as u32);
         (start, last)
     }
+
+    /// Vyčistí keš prostředí pro tvary, které už nejsou živé.
+    fn retain_forms(&mut self, alive: &[bool]) {
+        for table in &mut self.forms {
+            if table.len() > alive.len() {
+                table.truncate(alive.len());
+            }
+            for (form, slot) in table.iter_mut().enumerate() {
+                if !alive[form] {
+                    *slot = (UNKNOWN, 0);
+                }
+            }
+            while let Some(&(start, _)) = table.last() {
+                if start == UNKNOWN {
+                    table.pop();
+                } else {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 /// Sada kandidátů pro jeden inventář jako transponované bitové sady.
@@ -460,6 +481,11 @@ impl SoundIndex {
         self.table.is_some()
     }
 
+    /// Vyčistí keš prostředí pro tvary, které už nejsou živé.
+    pub fn retain_forms(&mut self, alive: &[bool]) {
+        self.contexts.retain_forms(alive);
+    }
+
     fn release_set(&mut self, slot: usize) {
         if let Some(set) = self.sets[slot].as_mut() {
             set.refs -= 1;
@@ -664,6 +690,8 @@ impl SoundIndex {
             found: Pending,
             slot: usize,
             supports: Vec<i64>,
+            effective: Vec<i64>,
+            families: Vec<Family>,
             done: bool,
         }
         let mut work: Vec<Work> = Vec::with_capacity(pending.len());
@@ -673,21 +701,32 @@ impl SoundIndex {
                 .set_ids
                 .get(&group.inventory)
                 .ok_or("sada kandidátů zmizela")?;
-            let supports = if found.full {
-                Vec::new()
+            let (supports, effective, families) = if found.full {
+                (
+                    Vec::new(),
+                    Vec::new(),
+                    vec![Family::default(); self.scales.len()],
+                )
             } else {
-                std::mem::take(&mut group.supports)
+                (
+                    std::mem::take(&mut group.supports),
+                    std::mem::take(&mut group.effective),
+                    std::mem::take(&mut group.families),
+                )
             };
             work.push(Work {
                 found,
                 slot,
                 supports,
+                effective,
+                families,
                 done: false,
             });
         }
         let results: Vec<Result<bool, String>> = {
             use rayon::prelude::*;
-            let (contexts, sets, groups) = (&self.contexts, &self.sets, &self.groups);
+            let (contexts, sets, groups, scales) =
+                (&self.contexts, &self.sets, &self.groups, &self.scales);
             let vowel = &bank.vowel;
             let compute = |item: &mut Work| -> Result<bool, String> {
                 let set = sets[item.slot].as_ref().ok_or("sada kandidátů zmizela")?;
@@ -695,6 +734,13 @@ impl SoundIndex {
                     for &(context, diff) in &item.found.nets {
                         set.add(contexts, vowel, context as usize, diff, &mut item.supports)?;
                     }
+                    compute_families(
+                        set,
+                        scales,
+                        &item.supports,
+                        &mut item.effective,
+                        &mut item.families,
+                    );
                     return Ok(true);
                 }
                 let group = &groups[item.found.at];
@@ -728,6 +774,13 @@ impl SoundIndex {
                     )?;
                     run = end;
                 }
+                compute_families(
+                    set,
+                    scales,
+                    &item.supports,
+                    &mut item.effective,
+                    &mut item.families,
+                );
                 Ok(true)
             };
             work.par_iter_mut().map(compute).collect()
@@ -737,7 +790,6 @@ impl SoundIndex {
         }
         // Uložení v pořadí skupin: nejdřív se sady nových inventářů uchopí (`refs`), teprve potom se
         // uvolňují dosavadní, aby sada, kterou potřebuje jiná skupina, nezanikla.
-        let families = self.scales.len();
         let mut previous: Vec<usize> = Vec::new();
         for item in &mut work {
             if !item.done {
@@ -745,14 +797,13 @@ impl SoundIndex {
             }
             let group = &mut self.groups[item.found.at];
             group.supports = std::mem::take(&mut item.supports);
+            group.effective = std::mem::take(&mut item.effective);
+            group.families = std::mem::take(&mut item.families);
             if item.found.full {
                 if let Some(old) = group.set.replace(item.slot) {
                     previous.push(old);
                 }
                 group.valid_for = Some(group.inventory.clone());
-                group.effective.clear();
-                group.families.clear();
-                group.families.resize(families, Family::default());
                 self.sets[item.slot]
                     .as_mut()
                     .ok_or("sada kandidátů zmizela")?
@@ -763,9 +814,7 @@ impl SoundIndex {
             self.release_set(old);
         }
         for item in work {
-            if item.done {
-                self.refresh_families(item.found.at, item.slot);
-            } else {
+            if !item.done {
                 self.sync_group_apply(bank, item.found)?;
             }
         }
@@ -867,62 +916,84 @@ impl SoundIndex {
             return;
         };
         let group = &mut self.groups[at];
-        let mut effective: Vec<i64> = group
-            .supports
-            .iter()
-            .map(|&s| {
-                if s < MIN_SUPPORT {
-                    0
-                } else {
-                    s.min(FULL_SUPPORT)
-                }
-            })
-            .collect();
-        let known = group.effective.len() == effective.len();
-        let mut begin = 0;
-        for (family, &end) in set.family_ends.iter().enumerate() {
-            let state = &mut group.families[family];
-            if known && state.valid && group.effective[begin..end] == effective[begin..end] {
-                begin = end;
-                continue;
-            }
-            state.sites.clear();
-            state.rates.clear();
-            for (offset, &support) in group.supports[begin..end].iter().enumerate() {
-                if support >= MIN_SUPPORT {
-                    state.sites.push(offset as u32);
-                }
-            }
-            let sites = state.sites.len();
-            // Relativní četnost kandidátů (přirozenost změny); rovnoměrně, když je všude 1.
-            let weight_of = |site: u32| {
-                set.built
-                    .as_ref()
-                    .and_then(|b| b.candidates.get(begin + site as usize))
-                    .map_or(1.0, |c| c.weight)
-            };
-            let weight_sum: f64 = state.sites.iter().map(|&site| weight_of(site)).sum();
-            for &site in &state.sites {
-                let support = group.supports[begin + site as usize] as f64;
-                let share = (support / FULL_SUPPORT as f64).min(1.0);
-                let weight = weight_of(site);
-                let rate = if weight_sum == sites as f64 {
-                    (self.scales[family] * share) / sites as f64
-                } else {
-                    self.scales[family] * share * weight / weight_sum
-                };
-                state.rates.push(rate);
-            }
-            state.total = if sites == 0 {
-                0.0
-            } else {
-                pairwise_sum(&state.rates)
-            };
-            state.valid = true;
-            begin = end;
-        }
-        std::mem::swap(&mut group.effective, &mut effective);
+        compute_families(
+            set,
+            &self.scales,
+            &group.supports,
+            &mut group.effective,
+            &mut group.families,
+        );
     }
+}
+
+/// Přepočítá rodiny, kterým se změnily efektivní opory.
+fn compute_families(
+    set: &CandidateSet,
+    scales: &[f64],
+    supports: &[i64],
+    effective: &mut Vec<i64>,
+    families: &mut Vec<Family>,
+) {
+    let next_effective: Vec<i64> = supports
+        .iter()
+        .map(|&s| {
+            if s < MIN_SUPPORT {
+                0
+            } else {
+                s.min(FULL_SUPPORT)
+            }
+        })
+        .collect();
+    let known = effective.len() == next_effective.len();
+    if families.len() < scales.len() {
+        families.resize(scales.len(), Family::default());
+    }
+    let mut begin = 0;
+    for (family, &end) in set.family_ends.iter().enumerate() {
+        let state = &mut families[family];
+        if known && state.valid && effective[begin..end] == next_effective[begin..end] {
+            begin = end;
+            continue;
+        }
+        state.sites.clear();
+        state.rates.clear();
+        for (offset, &support) in supports[begin..end].iter().enumerate() {
+            if support >= MIN_SUPPORT {
+                state.sites.push(offset as u32);
+            }
+        }
+        let sites = state.sites.len();
+        // Relativní četnost kandidátů (přirozenost změny); rovnoměrně, když je všude 1.
+        let weight_of = |site: u32| {
+            set.built
+                .as_ref()
+                .and_then(|b| b.candidates.get(begin + site as usize))
+                .map_or(1.0, |c| c.weight)
+        };
+        let weight_sum: f64 = state.sites.iter().map(|&site| weight_of(site)).sum();
+        for &site in &state.sites {
+            let support = supports[begin + site as usize] as f64;
+            let share = (support / FULL_SUPPORT as f64).min(1.0);
+            let weight = weight_of(site);
+            let rate = if weight_sum == sites as f64 {
+                (scales[family] * share) / sites as f64
+            } else {
+                scales[family] * share * weight / weight_sum
+            };
+            state.rates.push(rate);
+        }
+        state.total = if sites == 0 {
+            0.0
+        } else {
+            pairwise_sum(&state.rates)
+        };
+        state.valid = true;
+        begin = end;
+    }
+    *effective = next_effective;
+}
+
+impl SoundIndex {
 
     // --- čtení --------------------------------------------------------------
 

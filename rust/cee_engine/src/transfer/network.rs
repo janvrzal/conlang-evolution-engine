@@ -207,12 +207,17 @@ pub fn prepare(world: &World, params: &TransmissionParams, tick: u32) -> StepInp
         // (Řím by si navždy držel koncové -m; dok. 27).
         let mut people = f64::from(groups.population[group.index()]);
         let territory = groups.territory[group.index()];
-        if world
+        if let Some(t) = world
             .territories
             .get(territory.index())
-            .is_some_and(|t| t.urban > 0.0)
+            .filter(|t| t.urban > 0.0)
         {
-            people /= world.params.city_size.max(1.0);
+            let scale = if t.city_size > 0.0 {
+                t.city_size
+            } else {
+                world.params.city_size
+            };
+            people /= scale.max(1.0);
         }
         let cohort = (renewal[column] * people).max(1.0);
         drift_scale.push(params.sigma / cohort.sqrt());

@@ -44,56 +44,64 @@
    "kind": "number",
    "default": 5.0,
    "description": "Jak silně zvýhodňuje funkční zátěž zachování kontrastu. Je to sklon, ne zákaz (Wedel a kol. 2013): eroze pádových koncovek se v reálných jazycích děje i přes splynutí tvarů (latinské koncové -m).",
-   "group": "sound"
+   "group": "sound",
+   "role": "active"
   },
   {
    "name": "stress_strength_multiplier",
    "kind": "number",
    "default": 1.5,
    "description": "Násobek úspory artikulace pro redukční procesy v nepřízvučných slabikách u jazyků se silným přízvukem (stress-timed). Literatura podporuje směr (silnější redukce a afixální komprese v nepřízvučné pozici: Dauer 1983; Bybee, Chakraborti, Jung & Scheibman 1998 „Prosody and segmental effect: Some paths of evolution for word stress“, Studies in Language 22; Schiering 2010), hodnota 1,5 je autorský odhad (neladěno na WALS).",
-   "group": "sound"
+   "group": "sound",
+   "role": "fixed"
   },
   {
    "name": "coda_tolerance_scale",
    "kind": "number",
    "default": 0.0,
    "description": "Autorský odhad míry tolerance nové kody podle stávající stavby slabik jazyka (WALS 12A, Maddieson: jazyky s povolenou kodou netrestají vznik uzavřené slabiky absolutně jako jazyky s čistě otevřenými slabikami). 0.0 = výchozí model bez tolerance (kalibrace v M7); 1.0 = plná tolerance kod.",
-   "group": "sound"
+   "group": "sound",
+   "role": "fixed"
   },
   {
    "name": "learnability_strength",
    "kind": "number",
    "default": 1.0,
    "description": "Autorský odhad: stejná síla jako `Teachability` u tvarů. Literatura podporuje směr, ne velikost.",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "economy_word_cost",
    "kind": "number",
    "default": 0.15,
    "description": "Cena každého slova navíc, které konstrukce přidává (tlak `Economy`).",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "fusion_bonus",
    "kind": "number",
    "default": 0.25,
    "description": "Výhoda konstrukce o stupeň dál na škále gramatikalizace (tlak `Fusion`).",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "order_rigidity",
    "kind": "number",
    "default": 0.05,
    "description": "Nepatrná cena pevného slovosledu, dokud pád drží roli (tlak `Ambiguity`).",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "emergence_need_scale",
    "kind": "number",
    "default": 0.2,
    "description": "Jakou část potřeby funkce (``need``) uplatní `Expressivity`, když jazyk funkci nevyjadřuje (``zero``). Tlak podle potřeby je doložený pro obnovu zeslabeného výrazu (Hopper & Traugott 2003); nová kategorie vzniká hlavně z častého užívání a expresivních inovací mluvčích (Bybee 2003; Haspelmath 1999), ne z potřeby. 1,0 = model před M7a (potřeba táhne i vznik). 0,6 z kalibrace M7a (docs/engine-v2/12-kalibrace-m7a.md). 0,4 od M7.2b (5. 11. 2026, schválil uživatel); 0,2 od M7.3l (6. 11. 2026): vznik nové kategorie pohání hlavně `extravagance`: s vyblednutím členu drží start z WALS po 5 000 letech u 37A rovnováhou vzniku a zániku a brána m4b::clen_vznikne ještě projde (0,2 až 0,3 by ji porušily; docs/engine-v2/22-kalibrace-m7.md). Tempo je předběžné, dokud ho neověří zpětný test latina → románské jazyky (M7.3).",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "active"
   },
   {
    "name": "actuation_coherence",
@@ -102,7 +110,8 @@
    "min": 0.0,
    "max": 1.0,
    "description": "Soudržnost sociálního ocenění změn v regionu ρ (dok. 27): ocenění změny ve skupině = √ρ × společná složka regionu + √(1 − ρ) × místní složka (obě normální, za epochu). Změny, které „frčí“ v regionu, frčí ve všech jeho vesnicích; 0 = každá vesnice zvlášť (model před M10), 1 = celý region stejně.",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "active"
   },
   {
    "name": "shift_return",
@@ -111,7 +120,8 @@
    "min": 0.0,
    "max": 1.0,
    "description": "Zpětný tok přechodu jazyka (Abrams a Strogatz 2003, dok. 27): mluvčí nového jazyka uprostřed většiny starého se k němu vracejí podílem shift_return × (1 − status) × podíl starého jazyka^a za generaci, tempem politiky, dokud ji stát táhne. 0 = přechod jen jedním směrem (model před M10). Zkoušeno v M10 (0,5 a 1): ostrůvky ani počet jazyků nezlepší, proto 0.",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "fixed"
   },
   {
    "name": "leveling_beyond_region",
@@ -120,7 +130,8 @@
    "min": 0.0,
    "max": 1.0,
    "description": "Násobek tahu vyrovnávání výslovnosti od dárce mimo vlastní region (sídlo státu, anglické město pro anglické rodiny ve Walesu); 0 = jen vesnice ↔ město svého regionu (dok. 27).",
-   "group": "society"
+   "group": "society",
+   "role": "fixed"
   },
   {
    "name": "leveling_rate",
@@ -129,7 +140,8 @@
    "min": 0.0,
    "max": 1.0,
    "description": "Vyrovnávání nářečí podle centra (Trudgill 1986, Dialects in Contact; dok. 27): skupina převezme za generaci u podílu leveling_rate × síla vazby × relativní rozdíl přitažlivosti (prestiž × √populace, Trudgill 1974) slov výslovnost téhož slova od propojené skupiny stejné linie s vyšší přitažlivostí (vesnice od města, město od sídla státu). 0,35: s 0,1 (autorský odhad) se malé regiony rozpadaly na jazyk za každou vesnici (Evropa 73,5 jazyka, 9 vesnic Vaskonie = 9 jazyků; dok. 29). 0 = bez vyrovnávání (model před M10).",
-   "group": "society"
+   "group": "society",
+   "role": "active"
   },
   {
    "name": "actuation_coherence_other",
@@ -138,7 +150,8 @@
    "min": 0.0,
    "max": 1.0,
    "description": "Soudržnost ocenění změn v regionu (jako `actuation_coherence`) pro slovník, tvary a syntax; `actuation_coherence` platí jen pro hláskové změny (dok. 27, 28).",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "fixed"
   },
   {
    "name": "city_size",
@@ -147,14 +160,16 @@
    "min": 0.0,
    "max": 50.0,
    "description": "Velikost města regionu jako násobek vesnice (scénář `region_world`, `RegionSpec.city`): středová vesnice každého regionu s aspoň dvěma vesnicemi je město, trh a úřad regionu (dok. 27). 0 nebo 1 = bez měst (model před M10).",
-   "group": "society"
+   "group": "society",
+   "role": "active"
   },
   {
    "name": "city_prestige",
    "kind": "number",
    "default": 0.3,
    "description": "Prestiž města navíc proti vesnicím regionu: městská řeč se šíří zpátky na venkov, nejdřív do blízkých a velkých vesnic (Trudgill 1974, šíření po hierarchii sídel; dok. 27).",
-   "group": "society"
+   "group": "society",
+   "role": "active"
   },
   {
    "name": "lexical_length_cost",
@@ -163,7 +178,8 @@
    "min": 0.0,
    "max": 3.0,
    "description": "Zipfův zákon zkracování (Zipf 1935; Piantadosi, Tily a Gibson 2011): slovo delší, než je medián délky slov jazyka, má v tlaku na jasnost slova nevýhodu váha × (½ + frekvence pojmu) × relativní přesah délky. Bez ní se základní slova nahrazovala dlouhými složeninami a odvozeninami („zvíře-voda“ za rybu, „slunce-ne“ za noc) stejně snadno jako krátkými (dok. 30). 0 = bez nevýhody (model před M11). 0,3: s 0,6 byla retence 0,908 nad pásmem.",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "active"
   },
   {
    "name": "settlement_growth",
@@ -172,7 +188,8 @@
    "min": 0.0,
    "max": 2.0,
    "description": "Logistický růst sídla, které je menší než obvyklá vesnice jeho regionu (medián): za generaci násobek 1 + růst × (1 − velikost / obvyklá velikost). 0,3 za generaci je asi 1 % ročně, tempo předindustriální kolonizace (Livi-Bacci 2017, A Concise History of World Population). Osadníci po příchodu dorostou do velikosti vesnice (dok. 30). 0 = populace stálé (model před M11).",
-   "group": "society"
+   "group": "society",
+   "role": "fixed"
   },
   {
    "name": "release_residual",
@@ -181,7 +198,8 @@
    "min": 0.0,
    "max": 1.0,
    "description": "Na jaký zlomek zeslábnou vazby skupin na sídlo státu, když stát region opustí (odtržení, rozpad): kontakt přes církev, obchod a vzdělanost zůstává, ale slabší (dok. 28). 1 = vazby zůstanou (model před M10c: odtržené románské větve sdílely 82–97 % slov), 0 = zmizí (52–59 %; skutečnost 71–78 %).",
-   "group": "society"
+   "group": "society",
+   "role": "fixed"
   },
   {
    "name": "tonogenesis_trigger",
@@ -190,7 +208,8 @@
    "min": 0.0,
    "max": 5.0,
    "description": "Výhoda vzniku tónu (Haudricourt 1954, De l'origine des tons en vietnamien; dok. 28): tón po souhlásce se stává rozlišovacím, až když se ve skupině stírá rozdíl znělosti, tón z koncové souhlásky, až když mizí koncové h/ʔ. Člen ocenění = váha × (2 × nejvyšší podíl takové změny ve skupině − 1): bez spouštěče nevýhoda, s úplnou ztrátou znělosti výhoda; ztráta znělosti na konci slova a spodoba se nepočítají. 0 = tón bez spouštěče (model před M10c, tóny pak měla polovina slov i v germánštině a latině).",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "fixed"
   },
   {
    "name": "city_listening",
@@ -199,7 +218,8 @@
    "min": 0.0,
    "max": 1.0,
    "description": "Jakým zlomkem síly vazby slyší město své vesnice (vesnice slyší město plně): změny se šíří z města ven (Labov 2001) a město venkov neprůměruje; při 1 se region kolem stavu města zastaví (Romania: Řím by si navždy držel koncové -m; dok. 27).",
-   "group": "society"
+   "group": "society",
+   "role": "active"
   },
   {
    "name": "city_link",
@@ -208,7 +228,8 @@
    "min": 0.0,
    "max": 1.0,
    "description": "Nejmenší síla vazby města ke každé vesnici jeho regionu (trh, úřady, přistěhovalci): drží nářečí regionu pohromadě kolem centra (dok. 27).",
-   "group": "society"
+   "group": "society",
+   "role": "fixed"
   },
   {
    "name": "urban_mortality",
@@ -217,7 +238,8 @@
    "min": 0.0,
    "max": 1.0,
    "description": "Úmrtnost města navíc proti venkovu za generaci, kterou doplňuje příliv z vesnic regionu (Wrigley 1967, London's importance; de Vries 1984): podíl přistěhovalců ve městě drží aspoň na této úrovni, takže městská řeč vyrovnává nářečí venkova (koiné; Trudgill 1986; Kerswill a Williams 2000; dok. 27).",
-   "group": "society"
+   "group": "society",
+   "role": "fixed"
   },
   {
    "name": "chain_shift_weight",
@@ -226,7 +248,8 @@
    "min": 0.0,
    "max": 5.0,
    "description": "Výhoda tahového řetězu (Martinet 1955, Économie des changements phonétiques; Labov 1994): hlásková změna, jejíž výstupy padnou do třídy, kterou jiná změna bez podmínky okolí ve skupině z většiny vyprázdnila (*p t k* → *ɸ θ x*, pak *b d g* → *p t k*), dostane k sociálnímu ocenění navíc váha × (podíl vyprazdňující změny − ½) / ½. Pod polovinou nic. Táž váha je i riziko splynutí: řadový posun, jehož výstupní hlásky skupina už má (*b d g* → *p t k* u jazyka s *p t k*), dostane −váha × podíl obsazených výstupů × (1 − podíl vyprazdňující změny / ½), takže samovolné splynutí řad je vzácné a řetěz po polovině první změny ne (dok. 29). 0 = bez řetězení (dok. 26).",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "active"
   },
   {
    "name": "sound_actuation",
@@ -235,7 +258,8 @@
    "min": 0.0,
    "max": 5.0,
    "description": "Násobek váhy sociálního ocenění změny (`actuation`, Weinreich, Labov a Herzog 1968) jen u hláskových procesů: změna potřebuje výhodu, aby doběhla (Blythe a Croft 2012). Řídí tempo hláskových změn (cíl `m9::tempo` z IE-CoR, dok. 24). 1 = váha 1 jako u ostatních změn. 2,25 od M9b (6. 11. 2026, docs/engine-v2/24-tempo-hlaskovych-zmen.md): realistické tempo hláskových změn z IE-CoR s ochranou gramatiky. Tempo bez kontaktu 0,34 za tisíciletí (cíl 0,30–0,85), zrychlení kontaktem 1,8×.",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "active"
   },
   {
    "name": "semantic_recurrence",
@@ -244,7 +268,8 @@
    "min": 1.0,
    "max": 20.0,
    "description": "Kolik jazyků musí doložit posun významu nebo odvození v grafu pojmů (DatSemShift), aby měl plnou váhu: vazba z n < K jazyků má váhu ln(1 + n) · n / K. Ojedinělý doklad (jeden jazyk: „otec → velký“, „slunce → matka“) se jinde opakuje zřídka. 1 = bez zmenšení (model před M8f). 3 od M8f (6. 11. 2026): vazby z jednoho jazyka nesly 48 % váhy odvození a 43 % váhy posunů; s 3 retence latiny 0,604 → 0,619 (IE-CoR 0,68–0,73) a izolovaný jazyk 0,852 → 0,863 za tisíciletí (Swadesh 0,86; docs/engine-v2/23-evropa.md).",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "extravagance",
@@ -253,161 +278,184 @@
    "min": 0.0,
    "max": 1.0,
    "description": "Přitažlivost čerstvého volného opisu (`Expressivity`): mluvčí sahají po výraznějším vyjádření, aby byli slyšet (Haspelmath 1999, Why is grammaticalization irreversible?; Detges a Waltereit 2002). Přičte se k expresivitě opisu krát (1 − jeho podíl ve skupině), takže slábne, jak opis zevšední. Pohání gramatikalizaci i ve velkých skupinách, kde drift nestačí. 0 = bez přitažlivosti. 0,1 od M7.3l (6. 11. 2026, se škálou vzniku 0,2 a vyblednutím plurálu a minulého času): plurál, člen, minulý a budoucí čas mají ve 40 jazycích za 5 000 let vyvážený vznik i zánik a Romania dostane zánik i obnovu futura (docs/engine-v2/22-kalibrace-m7.md).",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "active"
   },
   {
    "name": "population_per_density",
    "kind": "number",
    "default": 500.0,
    "description": "Populace jedné vesnice regionu při relativní hustotě osídlení 1,0 (scénář `region_world`). Autor světa zadává hustotu, ne počty; převod na velikost populace, která řídí drift, je kalibrační parametr. Výchozí hodnota odpovídá vesnicím dosavadních scénářů (500).",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "fixed"
   },
   {
    "name": "village_openness",
    "kind": "number",
    "default": 0.6,
    "description": "Otevřenost vesnice regionu (`region_world`): podíl vstupu, který děti dostávají od sousedních vesnic. Síly vazeb se v mixing matrix normalizují, takže kolik se skupina od sousedů učí, určuje jen otevřenost. Region ji může přepsat. 0,5 z kalibrace nářečního kontinua (pásmo atlasů, jeden jazyk na 80 km, pořadí vzdáleností; docs/engine-v2/14-kalibrace-kontinua.md); od 0,35 výš zůstane jeden jazyk, při 0,1 se 80 km rozpadne na čtyři jazyky. Ostatní scénáře (`village_grid`) mají dál vlastní 0,1. 0,6 od M9b (6. 11. 2026, docs/engine-v2/24-tempo-hlaskovych-zmen.md): realistické tempo hláskových změn z IE-CoR s ochranou gramatiky. (dříve 0.5): při skutečném tempu drží sousední vesnice regionu blízko (kontinuum 0,14).",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "active"
   },
   {
    "name": "border_link_scale",
    "kind": "number",
    "default": 1.0,
    "description": "Násobek síly vazby mezi pohraničními vesnicemi sousedních regionů proti gravitační síle (`region_world`). Určuje, jakou část vstupu pohraniční vesnice dostává přes hranici, tedy propustnost hranice.",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "fixed"
   },
   {
    "name": "category_loss_l2_boost",
    "kind": "number",
    "default": 4.0,
    "description": "Kolikrát častěji navrhují vypuštění výrazu L2 mluvčí; stejně jako u analogie (změna `CategoryLoss`).",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "analogy_l2_boost",
    "kind": "number",
    "default": 4.0,
    "description": "Kolikrát častěji navrhují regularizaci (analogii) L2 mluvčí: přehnané zobecnění. Autorský odhad.",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "clarity_short_factor",
    "kind": "number",
    "default": 1.5,
    "description": "Váha trestu `Clarity` za podíl slov zkrácených pod mez.",
-   "group": "sound"
+   "group": "sound",
+   "role": "fixed"
   },
   {
    "name": "dispersion_factor",
    "kind": "number",
    "default": 4.0,
    "description": "Váha odměny `Dispersion` za zaplnění mezery v soustavě vokálů.",
-   "group": "sound"
+   "group": "sound",
+   "role": "fixed"
   },
   {
    "name": "entrenchment_strength",
    "kind": "number",
    "default": 0.3,
    "description": "Výměna slov (``pressures.lexical.Entrenchment`` a ``Motivation``): převládající varianta pojmu má výhodu ``entrenchment_base`` + ``entrenchment_strength`` × frekvence ** ``entrenchment_frequency_exponent``, nové slovo výhodu podle druhu (odvozenina +0,15, nový kořen −0,15…) plus náhodnou přitažlivost ~ N(0, ``lexical_appeal_sd``), stálou pro variantu (expresivita, módnost, sociální hodnota slova). Bez přitažlivosti nové slovo vyhraje buď vždycky, nebo nikdy, a výměna je prahová (polovina pojmů se nemění vůbec, častá slova se vyměňují rychlostí 0,26 ostatních). Kalibrace 2026-11-02 (``scripts/v2_calibrate_frequency.py``, ``v2_calibrate_retention.py``): přitažlivost 0,03 dává poměr rychlostí horních 30 % pojmů podle frekvence 0,44 (Pagel a kol. 2007: 0,70) a retenci jádra 0,785 / 0,827 po tisíciletích (glotochronologie 0,81–0,86); širší přitažlivost se blíží poměru z dat, ale retence klesá (0,05: 0,68 a 0,72), základní ochrana (``entrenchment_base``) potlačí dělení jazyků a výpůjčky. Viz ``docs/engine-v2/19-pojmy.md``.",
-   "group": "lexicon"
+   "group": "lexicon",
+   "role": "active"
   },
   {
    "name": "entrenchment_frequency_exponent",
    "kind": "number",
    "default": 1.0,
    "description": "Výměna slov (``pressures.lexical.Entrenchment`` a ``Motivation``): převládající varianta pojmu má výhodu ``entrenchment_base`` + ``entrenchment_strength`` × frekvence ** ``entrenchment_frequency_exponent``, nové slovo výhodu podle druhu (odvozenina +0,15, nový kořen −0,15…) plus náhodnou přitažlivost ~ N(0, ``lexical_appeal_sd``), stálou pro variantu (expresivita, módnost, sociální hodnota slova). Bez přitažlivosti nové slovo vyhraje buď vždycky, nebo nikdy, a výměna je prahová (polovina pojmů se nemění vůbec, častá slova se vyměňují rychlostí 0,26 ostatních). Kalibrace 2026-11-02 (``scripts/v2_calibrate_frequency.py``, ``v2_calibrate_retention.py``): přitažlivost 0,03 dává poměr rychlostí horních 30 % pojmů podle frekvence 0,44 (Pagel a kol. 2007: 0,70) a retenci jádra 0,785 / 0,827 po tisíciletích (glotochronologie 0,81–0,86); širší přitažlivost se blíží poměru z dat, ale retence klesá (0,05: 0,68 a 0,72), základní ochrana (``entrenchment_base``) potlačí dělení jazyků a výpůjčky. Viz ``docs/engine-v2/19-pojmy.md``.",
-   "group": "lexicon"
+   "group": "lexicon",
+   "role": "fixed"
   },
   {
    "name": "entrenchment_base",
    "kind": "number",
    "default": 0.0,
    "description": "Výměna slov (``pressures.lexical.Entrenchment`` a ``Motivation``): převládající varianta pojmu má výhodu ``entrenchment_base`` + ``entrenchment_strength`` × frekvence ** ``entrenchment_frequency_exponent``, nové slovo výhodu podle druhu (odvozenina +0,15, nový kořen −0,15…) plus náhodnou přitažlivost ~ N(0, ``lexical_appeal_sd``), stálou pro variantu (expresivita, módnost, sociální hodnota slova). Bez přitažlivosti nové slovo vyhraje buď vždycky, nebo nikdy, a výměna je prahová (polovina pojmů se nemění vůbec, častá slova se vyměňují rychlostí 0,26 ostatních). Kalibrace 2026-11-02 (``scripts/v2_calibrate_frequency.py``, ``v2_calibrate_retention.py``): přitažlivost 0,03 dává poměr rychlostí horních 30 % pojmů podle frekvence 0,44 (Pagel a kol. 2007: 0,70) a retenci jádra 0,785 / 0,827 po tisíciletích (glotochronologie 0,81–0,86); širší přitažlivost se blíží poměru z dat, ale retence klesá (0,05: 0,68 a 0,72), základní ochrana (``entrenchment_base``) potlačí dělení jazyků a výpůjčky. Viz ``docs/engine-v2/19-pojmy.md``.",
-   "group": "lexicon"
+   "group": "lexicon",
+   "role": "fixed"
   },
   {
    "name": "lexical_appeal_sd",
    "kind": "number",
    "default": 0.03,
    "description": "Výměna slov (``pressures.lexical.Entrenchment`` a ``Motivation``): převládající varianta pojmu má výhodu ``entrenchment_base`` + ``entrenchment_strength`` × frekvence ** ``entrenchment_frequency_exponent``, nové slovo výhodu podle druhu (odvozenina +0,15, nový kořen −0,15…) plus náhodnou přitažlivost ~ N(0, ``lexical_appeal_sd``), stálou pro variantu (expresivita, módnost, sociální hodnota slova). Bez přitažlivosti nové slovo vyhraje buď vždycky, nebo nikdy, a výměna je prahová (polovina pojmů se nemění vůbec, častá slova se vyměňují rychlostí 0,26 ostatních). Kalibrace 2026-11-02 (``scripts/v2_calibrate_frequency.py``, ``v2_calibrate_retention.py``): přitažlivost 0,03 dává poměr rychlostí horních 30 % pojmů podle frekvence 0,44 (Pagel a kol. 2007: 0,70) a retenci jádra 0,785 / 0,827 po tisíciletích (glotochronologie 0,81–0,86); širší přitažlivost se blíží poměru z dat, ale retence klesá (0,05: 0,68 a 0,72), základní ochrana (``entrenchment_base``) potlačí dělení jazyků a výpůjčky. Viz ``docs/engine-v2/19-pojmy.md``.",
-   "group": "lexicon"
+   "group": "lexicon",
+   "role": "fixed"
   },
   {
    "name": "standing_variation",
    "kind": "number",
    "default": 0.3,
    "description": "Souběžná variabilita slovní zásoby protojazyka (``cee.v2.variation``): násobek naměřené hustoty menšinových variant (0 = protojazyk bez variability) a nejvyšší součet jejich podílů u pojmu ve vesnici, aby slovo autora zůstalo převládající. 0,3 od M8d (6. 11. 2026): s 1,0 se v `region_world` během prvního tisíciletí prosadily startovní varianty u 27 % pojmů (latina ztratila 18 % slov za prvních 500 let, později 17 % za tisíciletí); s 0 je prvních 500 let téměř beze změn. 0,3 dává v Romanii skoro stálé tempo (0,86 a 0,81 za tisíciletí na začátku a na konci), retenci vůči latině 0,605 (IE-CoR 0,68–0,73) a izolovaný jazyk 0,852 za tisíciletí (Swadesh 0,86; docs/engine-v2/22-kalibrace-m7.md).",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "active"
   },
   {
    "name": "variation_cap",
    "kind": "number",
    "default": 0.4,
    "description": "Souběžná variabilita slovní zásoby protojazyka (``cee.v2.variation``): násobek naměřené hustoty menšinových variant (0 = protojazyk bez variability) a nejvyšší součet jejich podílů u pojmu ve vesnici, aby slovo autora zůstalo převládající.",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "fixed"
   },
   {
    "name": "interference_weight",
    "kind": "number",
    "default": 0.5,
    "description": "Jak velkou část vstupu L2 kódu tvoří první jazyk jeho mluvčích, když se ho učí všichni až v dospělosti (``l2_share`` = 1).",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "active"
   },
   {
    "name": "school_correction",
    "kind": "number",
    "default": 0.8,
    "description": "O kolik školní výuka (opravování podle normy) interferenci tlumí: kdo se kód učí ve škole, nese do něj svůj první jazyk méně než kdo na ulici.",
-   "group": "institutions"
+   "group": "institutions",
+   "role": "active"
   },
   {
    "name": "shift_rate",
    "kind": "number",
    "default": 1.0,
    "description": "Abrams & Strogatz (2003): rychlost přechodu je úměrná statusu cílového jazyka a podílu jeho mluvčích na ``shift_exponent``.",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "fixed"
   },
   {
    "name": "shift_exponent",
    "kind": "number",
    "default": 1.31,
    "description": "Abrams & Strogatz (2003): rychlost přechodu je úměrná statusu cílového jazyka a podílu jeho mluvčích na ``shift_exponent``.",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "fixed"
   },
   {
    "name": "child_threshold",
    "kind": "number",
    "default": 0.2,
    "description": "Pod tímto podílem užívání v komunitě se kód nepředává dětem (iterace 4).",
-   "group": "transfer"
+   "group": "transfer",
+   "role": "fixed"
   },
   {
    "name": "reading_weight",
    "kind": "number",
    "default": 0.1,
    "description": "Jak velkou část vstupu gramotného mluvčího tvoří psaný kód (jen slova).",
-   "group": "institutions"
+   "group": "institutions",
+   "role": "fixed"
   },
   {
    "name": "reading_core_resistance",
    "kind": "number",
    "default": 1.0,
    "description": "Jak moc čtení šetří častá slova: vliv psaného kódu na pojem je ``1 − reading_core_resistance · frekvence pojmu``. 1 = jako liturgie (učená slova bývají vzácná, základní slovní zásoba se čtením vrací málo; arabské dialekty si drží vlastní základní slova), 0 = čtení vrací všechna slova stejně. Rovnováha mluvené a psané řeči se liší svět od světa; autor ji ladí tímto a ``reading_weight``.",
-   "group": "institutions"
+   "group": "institutions",
+   "role": "fixed"
   },
   {
    "name": "school_weight",
    "kind": "number",
    "default": 0.3,
    "description": "Jak velkou část vstupu dětí při plné školní docházce tvoří psaný kód. Škola učí slova, tvary a konstrukce; výslovnost si děti nesou z domova a podle písma se mění jen výjimečně (výslovnost podle pravopisu).",
-   "group": "institutions"
+   "group": "institutions",
+   "role": "active"
   },
   {
    "name": "liturgy_weight",
    "kind": "number",
    "default": 0.1,
    "description": "Jak velkou část vstupu věřícího tvoří liturgický kód (jen slova).",
-   "group": "institutions"
+   "group": "institutions",
+   "role": "fixed"
   },
   {
    "name": "channel_domains",
@@ -458,6 +506,7 @@
    },
    "description": "Domény slov v kanálech (``cee.v2.contact``, ``cee.v2.institutions``). Slovo přes hranici jazyka projde s váhou kanálu (kontakt sousedů, liturgie, čtení, škola) × váha jeho domény v tomto kanálu. Doména pojmu je z WOLD (``core``, ``learned``, ``culture``, ``religion``, ``power``; vlastní pojem autora má zadanou nebo ``core``). Kanály: ``neighbor`` (obecný kontakt, vazby mezi jazyky), ``elite`` (zdroj je cizí elita, ``Conquest``, ``ForeignElite``), ``trade`` (podíl vazby, který přinesla obchodní cesta: ``TradeShift``, ``Contact(trade=True)``), ``liturgy`` (``ReligiousChange``), ``reading`` a ``school`` (psaný kód). Váha 1 = beze změny proti kanálu bez domén, váha nad 1 slova domény zvýhodní (kanál není dál filtr nejvýš 1, ale podíl vstupu se u čtení, školy a liturgie ořízne na 1). Zadat stačí změněné položky, ostatní zůstanou výchozí (``NEUTRAL_CHANNEL_DOMAINS`` vrátí model beze domén). Kalibrace a data: ``docs/engine-v2/19-pojmy.md``.",
    "group": "contact",
+   "role": "world",
    "keys": [
     "neighbor",
     "elite",
@@ -480,98 +529,112 @@
    "kind": "number",
    "default": 3.0,
    "description": "Jak silně půjčitelnost pojmu z WOLD (``concept_data.borrowed``, u vlastního pojmu hodnota autora nebo výchozí) řídí přenos slov vazbami mezi jazyky (kontakt sousedů, elita, obchod, výpůjčky); liturgie ani čtení ji nepoužívají. Váha slova je ``(1 − frekvence) ** max(0, 1 − s) · (půjčitelnost / průměr) ** s``, přepočtená tak, aby měla přes výchozích 149 pojmů stejný průměr jako ``1 − frekvence``, takže ``s`` nemění průměrnou míru výpůjček, jen které pojmy se půjčují. 0 = jen frekvence jako dřív, 1 = jen půjčitelnost, nad 1 jsou rozdíly mezi pojmy zvýrazněné.",
-   "group": "contact"
+   "group": "contact",
+   "role": "active"
   },
   {
    "name": "grammar_threshold",
    "kind": "number",
    "default": 0.85,
    "description": "Nad tímto podílem se nová koncovka zapíše do tvarů slov.",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "conserved_frequency",
    "kind": "number",
    "default": 0.7,
    "description": "Lexémy aspoň tak časté si při nástupu nové koncovky drží starý tvar.",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "analogy_threshold",
    "kind": "number",
    "default": 0.85,
    "description": "Nad tímto podílem si nová generace analogický tvar zapíše.",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "restructure_threshold",
    "kind": "number",
    "default": 0.85,
    "description": "Nad tímto p_slovo si nová generace slovo přepíše.",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "word_bias_sd",
    "kind": "number",
    "default": 1.5,
    "description": "Rozptyl sklonu jednotlivých slov; určuje podíl reliktních výjimek.",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "frequency_lead",
    "kind": "number",
    "default": 1.0,
    "description": "Jak silně frekvence předbíhá u redukčních změn (Bybee).",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "closure_generations",
    "kind": "number",
    "default": 2.0,
    "description": "Po kolika generacích na 100 % proces přestane být živý.",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "activation_share",
    "kind": "number",
    "default": 0.05,
    "description": "Od jakého podílu ve skupině začne proces působit na slova. Většina inovací zanikne dřív, a nemusí se proto ani zařazovat do front.",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "paradigm_merge_weight",
    "kind": "number",
    "default": 1.0,
    "description": "Splynutí dvou buněk téhož paradigmatu (synkretismus) stojí stejně jako náhodný homofon; tvary téhož slova od sebe často odliší kontext.",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "redundant_merge_weight",
    "kind": "number",
    "default": 0.3,
    "description": "Cena splynutí buňky s jiným tvarem téhož slova, když je funkce buňky plně nadbytečná. Od M7.3f plynule: cena je 1 − (1 − tato váha) × nadbytečnost, kde nadbytečnost = větší z `context` funkce (kolik ji nese kontext) a `coverage` konstrukce, která roli přebírá (pevný slovosled za pád). Latinské -m zaniklo i proto, že roli předmětu nesly předložky a kontext (dok. 22).",
-   "group": "morphology"
+   "group": "morphology",
+   "role": "fixed"
   },
   {
    "name": "capital_prestige",
    "kind": "number",
    "default": 2.0,
    "description": "Kolikrát vyšší prestiž mají vesnice hlavního města. Prestiž řídí, od koho se děti učí (mixing matrix), i status jazyka při přechodu.",
-   "group": "society"
+   "group": "society",
+   "role": "active"
   },
   {
    "name": "capital_link_strength",
    "kind": "number",
    "default": 0.3,
    "description": "Síla vazby vesnice k sídlu státu při centralizaci ``\"moderate\"`` a nulové vzdálenosti (úřady, trh, vojsko, cesty). Klesá s ``exp(-d / capital_reach)``.",
-   "group": "society"
+   "group": "society",
+   "role": "active"
   },
   {
    "name": "capital_reach",
    "kind": "number",
    "default": 150.0,
    "description": "Síla vazby vesnice k sídlu státu při centralizaci ``\"moderate\"`` a nulové vzdálenosti (úřady, trh, vojsko, cesty). Klesá s ``exp(-d / capital_reach)``.",
-   "group": "society"
+   "group": "society",
+   "role": "fixed"
   },
   {
    "name": "centralization_levels",
@@ -583,7 +646,8 @@
     "weak": 0.5
    },
    "description": "Slovní úrovně centralizace státu (``State(centralization=...)``) a jejich násobky síly vazby vesnice k sídlu státu (``capital_link_strength``).",
-   "group": "society"
+   "group": "society",
+   "role": "world"
   },
   {
    "name": "policy_levels",
@@ -603,7 +667,8 @@
     }
    },
    "description": "Jazyková politika vůči regionům jiného jazyka: ``share`` = podíl dospělých, kteří úřední jazyk užívají mimo domov (veřejná doména), ``pull`` = jak silně ho tlačí i domů (škola v úředním jazyce, úřady, smíšená manželství). ``tolerant`` nechá stabilní dvojjazyčnost (diglosie, Fishman 1967).",
-   "group": "society"
+   "group": "society",
+   "role": "world"
   },
   {
    "name": "lingua_franca_levels",
@@ -614,21 +679,24 @@
     "universal": 0.6
    },
    "description": "Podíl dospělých, kteří se lingua francou domluví mimo domov.",
-   "group": "society"
+   "group": "society",
+   "role": "world"
   },
   {
    "name": "lingua_franca_link",
    "kind": "number",
    "default": 0.3,
    "description": "Síla vazby mluvčích lingua franca k jejímu zdroji (obchodní město).",
-   "group": "society"
+   "group": "society",
+   "role": "fixed"
   },
   {
    "name": "lingua_franca_pull",
    "kind": "number",
    "default": 0.1,
    "description": "Tlak lingua franca domů, když ji autor nechá zdomácnět (``nativize``).",
-   "group": "society"
+   "group": "society",
+   "role": "fixed"
   },
   {
    "name": "revival_levels",
@@ -644,7 +712,8 @@
     }
    },
    "description": "Obrození (``polity.Revival``): ``pace`` = tempo návratu rodin k jazyku (obousměrný přechod), ``seed`` = podíl lidí, kteří se vymřelý nebo v obci ztracený jazyk znovu naučí (noví mluvčí, hebrejština, kornština).",
-   "group": "society"
+   "group": "society",
+   "role": "world"
   },
   {
    "name": "border_levels",
@@ -655,7 +724,8 @@
     "open": 1.0
    },
    "description": "Propustnost hranice státu (``State(border=...)``): násobek vazeb mezi regiony různých států. Hranice vznikne sama tam, kde sousedí regiony různých států, a působí hned; rozcházení podél ní dělají odlišná centra a normy. Přes hranici dvou států platí méně propustná z obou.",
-   "group": "society"
+   "group": "society",
+   "role": "world"
   },
   {
    "name": "background_levels",
@@ -667,7 +737,8 @@
     "turbulent": 2.5
    },
    "description": "Pozadí dějin (``cee.v2.background``): míra drobných událostí, které svět generuje sám vedle událostí autora. Násobí ``background_rates``.",
-   "group": "background"
+   "group": "background",
+   "role": "world"
   },
   {
    "name": "background_spans",
@@ -703,28 +774,32 @@
     }
    },
    "description": "Rozsahy náhodných veličin pozadí dějin (rovnoměrně mezi mezemi ``low`` a ``high``): podíl zemřelých při moru, podíl přesídlených, násobek obchodu a prestiže a doby v krocích po 25 letech (obnova po moru, trvání obchodní cesty, splynutí cizí elity s místními).",
-   "group": "background"
+   "group": "background",
+   "role": "fixed"
   },
   {
    "name": "background_elite_prestige",
    "kind": "number",
    "default": 2.0,
    "description": "Cizí elita z pozadí dějin (``background.ForeignElite``): prestiž elity, síla její vazby ke každé poddané vesnici a podíl obyvatel sídla. Síla vazby kalibrovaná na svět dvou jazyků s pozadím ``normal`` (``docs/engine-v2/17-pozadi-dejin.md``): 0,1 dá retenci 88 % za tisíciletí a výpůjčky v základním slovníku 13 % za 3 000 let; dřívějších 0,5 (jako ``events.Conquest``) dávalo 77 % a 25 %.",
-   "group": "background"
+   "group": "background",
+   "role": "fixed"
   },
   {
    "name": "background_elite_link",
    "kind": "number",
    "default": 0.1,
    "description": "Cizí elita z pozadí dějin (``background.ForeignElite``): prestiž elity, síla její vazby ke každé poddané vesnici a podíl obyvatel sídla. Síla vazby kalibrovaná na svět dvou jazyků s pozadím ``normal`` (``docs/engine-v2/17-pozadi-dejin.md``): 0,1 dá retenci 88 % za tisíciletí a výpůjčky v základním slovníku 13 % za 3 000 let; dřívějších 0,5 (jako ``events.Conquest``) dávalo 77 % a 25 %.",
-   "group": "background"
+   "group": "background",
+   "role": "fixed"
   },
   {
    "name": "background_elite_share",
    "kind": "number",
    "default": 0.1,
    "description": "Cizí elita z pozadí dějin (``background.ForeignElite``): prestiž elity, síla její vazby ke každé poddané vesnici a podíl obyvatel sídla. Síla vazby kalibrovaná na svět dvou jazyků s pozadím ``normal`` (``docs/engine-v2/17-pozadi-dejin.md``): 0,1 dá retenci 88 % za tisíciletí a výpůjčky v základním slovníku 13 % za 3 000 let; dřívějších 0,5 (jako ``events.Conquest``) dávalo 77 % a 25 %.",
-   "group": "background"
+   "group": "background",
+   "role": "fixed"
   },
   {
    "name": "background_rates",
@@ -737,7 +812,8 @@
     "trade": 0.12
    },
    "description": "Kolikrát za století v jednom kraji nastane událost pozadí při míře ``normal``: mor, přesídlení části lidí k sousedům, vzestup obchodní cesty k sousednímu kraji, změna prestiže kraje, cizí elita od souseda jiného jazyka. Autorský odhad, kalibruje se v M7 (retence slovní zásoby).",
-   "group": "background"
+   "group": "background",
+   "role": "fixed"
   },
   {
    "name": "literacy_levels",
@@ -748,7 +824,8 @@
     "towns": 0.2
    },
    "description": "Spisovný jazyk (``polity.Standard``, ``polity.Schools``): podíl gramotných při kodifikaci a podíl dětí ve škole podle úrovně; násobí se dosahem centra.",
-   "group": "institutions"
+   "group": "institutions",
+   "role": "world"
   },
   {
    "name": "schooling_levels",
@@ -758,14 +835,16 @@
     "towns": 0.3
    },
    "description": "Spisovný jazyk (``polity.Standard``, ``polity.Schools``): podíl gramotných při kodifikaci a podíl dětí ve škole podle úrovně; násobí se dosahem centra.",
-   "group": "institutions"
+   "group": "institutions",
+   "role": "world"
   },
   {
    "name": "standard_prestige",
    "kind": "number",
    "default": 1.5,
    "description": "Kolikrát vyšší prestiž dostanou mluvčí jazyka, který má vlastní spisovnou normu (literatura, úřady, škola): vlastní norma brzdí přechod na jiný jazyk (čeština, finština, katalánština). Autorský odhad.",
-   "group": "institutions"
+   "group": "institutions",
+   "role": "fixed"
   },
   {
    "name": "terrain_access",
@@ -777,7 +856,8 @@
     "plain": 1.0
    },
    "description": "Dostupnost regionu podle terénu: násobí vazby přes hranici regionu, vazbu k sídlu státu i dosah jazykové politiky. Hory a ostrovy izolují.",
-   "group": "society"
+   "group": "society",
+   "role": "world"
   },
   {
    "name": "identity_loyalty",
@@ -788,7 +868,8 @@
     "strong": 0.8
    },
    "description": "Loajalita k jazyku podle odlišnosti regionu (etnikum, náboženství, vlastní historie): zpomalí přechod na jiný jazyk i jeho pronikání domů.",
-   "group": "society"
+   "group": "society",
+   "role": "world"
   },
   {
    "name": "loyalty_spread",
@@ -797,14 +878,16 @@
    "min": 0.0,
    "max": 1.0,
    "description": "Rozptyl loajality vesnic kolem hodnoty regionu (`identity_loyalty`, scénář `region_world`): každá vesnice si podle semínka vylosuje odchylku z normálního rozdělení s touto směrodatnou odchylkou, výsledek se ořízne do [0; 0,95]. Přechod jazyka pak postupuje vesnici po vesnici a odolnější vesnice ho drží déle, jako ostrůvky starých jazyků (bretonština, ladinština). Oříznutí zvedne průměr regionu se sdílenou identitou (0) asi na 0,1. 0 = všechny vesnice regionu stejné (model před M8c). 0,25 od M8c (6. 11. 2026, schválil uživatel; docs/engine-v2/23-evropa.md).",
-   "group": "society"
+   "group": "society",
+   "role": "active"
   },
   {
    "name": "pressure_weights",
    "kind": "table",
    "default": {},
    "description": "Přepisy vah tlaků podle jejich ``name`` (např. ``{\"clarity\": 2.0}``); platí pro všechny typy proměnných, kde tlak působí. Prázdné = tabulky jednotlivých změn beze změny. Neznámý tlak odmítne ``pressures_by_kind``.",
-   "group": "tuning"
+   "group": "tuning",
+   "role": "active"
   },
   {
    "name": "population_pressure_exponents",
@@ -814,14 +897,16 @@
     "articulation": -0.75
    },
    "description": "Populační koeficient tlaků: váha tlaku ``name`` se ve skupině násobí (populace / 500) ** exponent (např. ``{\"conformity\": -0.5}``: malá skupina drží normu silněji). Trudgillova sociolingvistická typologie (Trudgill 2011): malá hustá komunita udrží neobvyklé tvary, velká s volnými vazbami vyrovnává. Prázdné = tlaky na velikosti skupiny nezávisí. Neznámý tlak je chyba. Výchozí ``articulation`` −0,75 (M7.2e, 5. 11. 2026): v malé komunitě se sdílí víc kontextu, takže se zrychlené výslovnostní zkratky (asimilace, redukce) snáz ustálí a vznikne morfofonologická složitost (Trudgill 2011, kap. 4); nejmenší kulatá hodnota, při níž alternace kmene spolehlivě klesá s velikostí (−0,5 dá −0,07 s intervalem přes nulu), docs/engine-v2/22-kalibrace-m7.md. `actuation` −1 od M9b (6. 11. 2026, docs/engine-v2/24-tempo-hlaskovych-zmen.md): realistické tempo hláskových změn z IE-CoR s ochranou gramatiky. Malé komunity oceňují změny silněji (Nettle 1999), takže hromadí morfofonologickou složitost (Trudgill).",
-   "group": "tuning"
+   "group": "tuning",
+   "role": "active"
   },
   {
    "name": "change_rates",
    "kind": "table",
    "default": {},
    "description": "Násobky tempa inovací podle ``kind`` změny (např. ``{\"periphrasis\": 0.5}``); násobí očekávaný počet inovací. Prázdné = tempa změn beze změny. Neznámou změnu odmítne simulace.",
-   "group": "tuning"
+   "group": "tuning",
+   "role": "active"
   },
   {
    "name": "grammar",
@@ -829,6 +914,7 @@
    "default": {},
    "description": "Přepisy polí ``need`` a ``context`` katalogu gramatických funkcí podle funkce, např. ``{\"DEFINITE\": {\"context\": 0.4}}``. Prázdné = katalog ``v2_grammar.yaml`` beze změny.",
    "group": "morphology",
+   "role": "world",
    "inner_keys": [
     "context",
     "coverage",

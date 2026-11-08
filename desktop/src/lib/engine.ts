@@ -1,7 +1,7 @@
 // Spojení s enginem (Python, /api/v2). V Tauri engine spustí aplikace a adresu
 // dá příkazem engine_url; v prohlížeči se hledá na obvyklých portech.
 
-export const API_REVISION = 9;
+export const API_REVISION = 10;
 const SIGNATURE = 'Conlang Evolution Engine';
 const PORTS = Array.from({ length: 20 }, (_, i) => 8000 + i);
 
@@ -10,11 +10,13 @@ export interface Health {
 	engine: string;
 	version: string;
 	api_revision: number;
+	v2_binding_fresh?: boolean;
 }
 
 export interface Issue {
 	path: string;
 	message: string;
+	severity?: 'error' | 'warning';
 }
 
 export interface RunStatus {

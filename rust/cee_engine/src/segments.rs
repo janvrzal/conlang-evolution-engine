@@ -399,10 +399,32 @@ impl SegmentTable {
                     index += length;
                 }
                 None => {
+                    if let Some(&last) = out.last() {
+                        let diacritic: Option<(&[(&str, &str)], &[char])> = match chars[index] {
+                            'ʰ' => Some((&[("sg", "+")][..], &['ʰ'])),
+                            'ʱ' => Some((&[("sg", "+"), ("voi", "+")][..], &['ʱ'])),
+                            '\u{0303}' => Some((&[("nas", "+")][..], &['\u{0303}'])),
+                            'ʼ' => Some((&[("cg", "+")][..], &['ʼ'])),
+                            'ː' => Some((&[("long", "+")][..], &['ː'])),
+                            'ʷ' => Some((&[("round", "+")][..], &['ʷ'])),
+                            'ʲ' => Some((&[("hi", "+"), ("back", "-")][..], &['ʲ'])),
+                            'ˠ' => Some((&[("hi", "+"), ("back", "+")][..], &['ˠ'])),
+                            '\u{0325}' => Some((&[("voi", "-")][..], &['\u{0325}'])),
+                            '\u{032c}' => Some((&[("voi", "+")][..], &['\u{032c}'])),
+                            _ => None,
+                        };
+                        if let Some((changes, allow)) = diacritic {
+                            if let Ok(Some(modified)) = self.changed(last, changes, allow) {
+                                *out.last_mut().expect("neprázdné") = modified;
+                                index += 1;
+                                continue;
+                            }
+                        }
+                    }
                     return Err(format!(
                         "Tvar '{ipa}' obsahuje hlásku '{}', kterou engine zatím neumí zapsat.",
                         chars[index]
-                    ))
+                    ));
                 }
             }
         }
@@ -626,5 +648,18 @@ impl std::fmt::Debug for SegmentTable {
             self.ipa.len(),
             self.width
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kompozicni_rozbor_diakritik() {
+        let table = SegmentTable::default_table();
+        let normal = table.parse("a\u{0303}ː").unwrap();
+        let reversed = table.parse("aː\u{0303}").unwrap();
+        assert_eq!(normal, reversed);
     }
 }

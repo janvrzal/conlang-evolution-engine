@@ -636,16 +636,17 @@ mod tests {
             0.0,
             &targets,
             0,
+            &[],
             &Frequencies::new(),
         )
         .unwrap();
         assert_eq!(out.popped, 1);
         assert!(out.needs.is_empty());
-        // Vznikl „kada“ a při posouzení cílem i „ada“ (bez k), čísla po řadě.
+        // Vznikl jen „kada“ (posouzení cílem používá has_site bez zápisu do banky).
         let (first, flat, lengths) = bank.take_created();
         assert_eq!(
             (first, flat, lengths),
-            (1, vec![1, 0, 3, 0, 0, 3, 0], vec![4, 3])
+            (1, vec![1, 0, 3, 0], vec![4])
         );
         assert_eq!(
             out.rewrites,
@@ -688,6 +689,7 @@ mod tests {
             0.0,
             &targets,
             0,
+            &[],
             &Frequencies::new(),
         )
         .unwrap();
@@ -715,6 +717,7 @@ mod tests {
             0.0,
             &targets,
             0,
+            &[],
             &Frequencies::new(),
         )
         .unwrap();
@@ -730,6 +733,7 @@ mod tests {
             0.0,
             &targets,
             0,
+            &[],
             &freq,
         )
         .unwrap();

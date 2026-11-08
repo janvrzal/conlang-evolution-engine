@@ -37,7 +37,10 @@ class App {
 			return;
 		}
 		this.engine = new Engine(found.base);
-		this.engineState = found.health.api_revision < API_REVISION ? { phase: 'outdated', health: found.health } : { phase: 'ready', health: found.health };
+		this.engineState =
+			found.health.api_revision < API_REVISION || found.health.v2_binding_fresh === false
+				? { phase: 'outdated', health: found.health }
+				: { phase: 'ready', health: found.health };
 		if (this.world) await this.check();
 	}
 

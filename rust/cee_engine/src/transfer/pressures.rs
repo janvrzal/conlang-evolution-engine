@@ -85,17 +85,12 @@ pub fn plan(params: &crate::parameters::Parameters) -> Result<Plan, String> {
     plan_for(&crate::changes::default_changes(), params)
 }
 
-/// Váha normy (škola, spisovný jazyk) u každého cílového druhu. 2,25 od M9b: úměrně síle
-/// hláskových změn (`Parameters::sound_actuation` 2,25), jinak škola při realistickém tempu
-/// nářečí nesjednotí (brány m6a; dok. 24).
-const NORM_WEIGHT: f64 = 2.25;
-
 /// Plán tlaků podle deklarací změn (`pressures_by_kind`): všechny varianty jedné proměnné se
 /// hodnotí stejnými tlaky, i když je vyrobily různé změny, proto se tlaky sdružují podle cílového
 /// druhu proměnné (`Change::target`); deklaruje-li tentýž tlak víc změn, platí nejvyšší váha.
-/// `Norm` (škola) působí na každý cílový druh. `Parameters::pressure_weights` přepíše výslednou
-/// váhu tlaku podle jeho jména; neznámý tlak se odmítne. Tlaky jsou seřazené podle jména jako
-/// v Pythonu (pořadí sčítání).
+/// `Norm` (škola) působí na každý cílový druh s výchozí vahou úměrnou `params.sound_actuation`
+/// (dok. 24 a 31). `Parameters::pressure_weights` přepíše výslednou váhu tlaku podle jeho jména;
+/// neznámý tlak se odmítne. Tlaky jsou seřazené podle jména jako v Pythonu (pořadí sčítání).
 pub fn plan_for(
     changes: &[Box<dyn crate::changes::Change>],
     params: &crate::parameters::Parameters,
@@ -104,7 +99,7 @@ pub fn plan_for(
     for change in changes {
         let target = &mut declared[kind_number(change.target())];
         if !target.iter().any(|&(pressure, _)| pressure == id::NORM) {
-            target.push((id::NORM, NORM_WEIGHT));
+            target.push((id::NORM, params.sound_actuation));
         }
         for &(pressure, weight) in change.pressures() {
             match target.iter_mut().find(|item| item.0 == pressure) {
@@ -661,7 +656,18 @@ impl<'a> Pressures<'a> {
                         // změn, artikulace) v něm mají sílu jako ve vesnici (změny se šíří z měst,
                         // Labov 2001; dok. 27).
                         if self.urban(group) {
-                            size /= self.world.params.city_size.max(1.0);
+                            let territory = self.world.groups.territory[group.index()];
+                            let local = self
+                                .world
+                                .territories
+                                .get(territory.index())
+                                .map_or(0.0, |t| t.city_size);
+                            let scale = if local > 0.0 {
+                                local
+                            } else {
+                                self.world.params.city_size
+                            };
+                            size /= scale.max(1.0);
                         }
                         add(&mut cells[at], value * size.powf(exponent));
                     }

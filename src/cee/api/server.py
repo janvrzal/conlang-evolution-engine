@@ -6,6 +6,7 @@ HTTP požadavky na volání služby a zpátky na JSON.
 """
 
 import os
+from pathlib import Path
 import subprocess
 import threading
 import time
@@ -87,6 +88,42 @@ app.add_middleware(
 )
 
 
+def _v2_binding_fresh() -> bool:
+    """Ověří přítomnost a čerstvost vazby cee_engine_py vůči zdrojům v Rustu."""
+    try:
+        from cee.v2.runner import native
+
+        mod = native()
+    except Exception:
+        return False
+
+    repo_root = Path(__file__).resolve().parents[3]
+    sources = [
+        repo_root / "rust" / "cee_py" / "src" / "lib.rs",
+        repo_root / "rust" / "cee_engine" / "src" / "lib.rs",
+    ]
+    existing_sources = [s for s in sources if s.is_file()]
+    if not existing_sources:
+        return True
+
+    mod_file = getattr(getattr(mod, "cee_engine_py", mod), "__file__", None) or getattr(mod, "__file__", None)
+    if not mod_file:
+        return False
+    path = Path(mod_file)
+    if path.name == "__init__.py":
+        so_files = list(path.parent.glob("*.so")) + list(path.parent.glob("*.pyd"))
+        if so_files:
+            path = so_files[0]
+    if not path.exists():
+        return False
+
+    binding_mtime = path.stat().st_mtime
+    for src in existing_sources:
+        if binding_mtime < src.stat().st_mtime:
+            return False
+    return True
+
+
 @app.get("/api/health")
 def health_check():
     # `engine` je podpis, podle kterého frontend při hledání portu pozná CEE
@@ -96,6 +133,7 @@ def health_check():
         "engine": ENGINE_SIGNATURE,
         "version": __version__,
         "api_revision": API_REVISION,
+        "v2_binding_fresh": _v2_binding_fresh(),
     }
 
 

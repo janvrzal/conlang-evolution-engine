@@ -959,6 +959,7 @@ pub fn region_world(
             let city = has_city && index == 0;
             if city {
                 settlement.urban = world.params.urban_mortality;
+                settlement.city_size = city_size;
             }
             let territory_id = world.add_territory(&village, Some(&region.id), settlement)?;
             let mut code = new_code(&mut world, &base, language, rule, strength);

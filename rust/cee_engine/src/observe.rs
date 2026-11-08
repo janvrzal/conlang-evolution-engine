@@ -217,12 +217,11 @@ impl ObserveInput {
             if rows.is_empty() {
                 continue;
             }
-            input.freqs.push(block.dense().0);
-            input
-                .present
-                .push(block.present.iter().flatten().copied().collect());
+            let (freqs, present) = block.dense_selected(rows);
+            input.freqs.push(freqs);
+            input.present.push(present);
             input.capacity.push(block.capacity);
-            input.rows.push(rows.iter().map(|&r| r as i64).collect());
+            input.rows.push((0..rows.len() as i64).collect());
             input
                 .ranks
                 .push(rank_of[start..start + rows.len()].to_vec());

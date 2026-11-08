@@ -17,6 +17,8 @@ from typing import Any, Mapping
 PARAMETERS_FILE = Path(__file__).resolve().parents[1] / "data" / "v2_parameters.json"
 #: Druhy parametrů v souboru; ``level_table`` a ``level_table2`` jsou slovní úrovně.
 KINDS = ("number", "table", "table2", "level_table", "level_table2")
+#: Úlohy parametrů v modelu: nastavení světa, aktivně laděné páky, zafixované konstanty.
+ROLES = ("world", "active", "fixed")
 
 
 def _load() -> dict[str, Any]:
@@ -29,11 +31,15 @@ SPECS: dict[str, Any] = _load()
 SPEC_BY_NAME: dict[str, dict[str, Any]] = {item["name"]: item for item in SPECS["parameters"]}
 
 
-def parameter_schema() -> dict[str, Any]:
+def parameter_schema(role: str | None = None) -> dict[str, Any]:
     """Parametry pro UI: skupiny a seznam parametrů s výchozí hodnotou, druhem, popisem,
-    skupinou, mezemi a (u slovních úrovní) výčtem úrovní."""
+    skupinou, mezemi, rolí a (u slovních úrovní) výčtem úrovní."""
+    if role is not None and role not in ROLES:
+        raise ValueError(f"Neznámá role {role!r}; možnosti: {', '.join(ROLES)}")
     items = []
     for item in SPECS["parameters"]:
+        if role is not None and item.get("role") != role:
+            continue
         out = dict(item)
         if item["kind"] in {"level_table", "level_table2"}:
             out["levels"] = sorted(item["default"])

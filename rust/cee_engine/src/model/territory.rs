@@ -43,6 +43,10 @@ pub struct Territory {
     /// (Wrigley 1967); 0 = vesnice (dok. 27).
     #[serde(default)]
     pub urban: f64,
+    /// Velikost města jako násobek vesnice (pro normalizaci kohorty a populačních tlaků);
+    /// 0 = použije se výchozí `Parameters::city_size`.
+    #[serde(default)]
+    pub city_size: f64,
     /// Rok, kdy sídlo založila migrace (osadníci); `None` u sídel scénáře (dok. 30).
     #[serde(default)]
     pub settled: Option<f64>,
@@ -59,6 +63,7 @@ impl Territory {
             terrain: "plain".into(),
             native_language: LanguageId::NONE,
             urban: 0.0,
+            city_size: 0.0,
             settled: None,
         }
     }

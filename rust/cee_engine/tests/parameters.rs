@@ -1,7 +1,7 @@
 //! Metaparametry ze souboru `v2_parameters.json`: výchozí hodnoty, přepisy, chyby, meze.
 
 use cee_engine::parameters::{
-    parameter_file, Kind, Parameters, CHANNELS, DOMAINS, GRAMMAR_FIELDS, LEVEL_TABLES,
+    parameter_file, Kind, Parameters, Role, CHANNELS, DOMAINS, GRAMMAR_FIELDS, LEVEL_TABLES,
 };
 use serde_json::{json, Value};
 
@@ -17,6 +17,13 @@ fn soubor_pokryva_vsechna_pole_a_hodnoty_sedi() {
     let fields = value.as_object().unwrap();
     assert_eq!(file.parameters.len(), 86);
     assert_eq!(fields.len(), file.parameters.len());
+    let world_count = file.by_role(Role::World).count();
+    let active_count = file.by_role(Role::Active).count();
+    let fixed_count = file.by_role(Role::Fixed).count();
+    assert_eq!(world_count, 12);
+    assert_eq!(active_count, 24);
+    assert_eq!(fixed_count, 50);
+    assert_eq!(world_count + active_count + fixed_count, file.parameters.len());
     for spec in &file.parameters {
         assert_eq!(fields[&spec.name], spec.default, "{}", spec.name);
         assert!(
@@ -118,4 +125,55 @@ fn chyby_maji_cestu() {
     );
     assert!(error(json!({"grammar": {"DEFINITE": {"nic": 1.0}}}))
         .starts_with("parameters.grammar.DEFINITE.nic:"));
+}
+
+#[test]
+fn automaticke_svazani_fixovanych_dvojniku() {
+    // 1. Přepis aktivních pák sveze fixované dvojníky
+    let params = overrides(json!({
+        "capital_prestige": 3.5,
+        "capital_link_strength": 0.5,
+        "analogy_l2_boost": 6.0,
+        "restructure_threshold": 0.9,
+        "actuation_coherence": 0.6,
+    }))
+    .unwrap();
+    assert_eq!(params.capital_prestige, 3.5);
+    assert_eq!(params.background_elite_prestige, 3.5);
+    assert_eq!(params.capital_link_strength, 0.5);
+    assert_eq!(params.lingua_franca_link, 0.5);
+    assert_eq!(params.analogy_l2_boost, 6.0);
+    assert_eq!(params.category_loss_l2_boost, 6.0);
+    assert_eq!(params.restructure_threshold, 0.9);
+    assert_eq!(params.grammar_threshold, 0.9);
+    assert_eq!(params.analogy_threshold, 0.9);
+    assert_eq!(params.actuation_coherence, 0.6);
+    assert_eq!(params.actuation_coherence_other, 0.3);
+
+    // 2. Explicitní přepis fixovaného dvojníka má přednost
+    let params_explicit = overrides(json!({
+        "capital_prestige": 3.5,
+        "background_elite_prestige": 1.5,
+        "capital_link_strength": 0.5,
+        "lingua_franca_link": 0.2,
+        "analogy_l2_boost": 6.0,
+        "category_loss_l2_boost": 2.0,
+        "restructure_threshold": 0.9,
+        "grammar_threshold": 0.75,
+        "analogy_threshold": 0.8,
+        "actuation_coherence": 0.6,
+        "actuation_coherence_other": 0.1,
+    }))
+    .unwrap();
+    assert_eq!(params_explicit.capital_prestige, 3.5);
+    assert_eq!(params_explicit.background_elite_prestige, 1.5);
+    assert_eq!(params_explicit.capital_link_strength, 0.5);
+    assert_eq!(params_explicit.lingua_franca_link, 0.2);
+    assert_eq!(params_explicit.analogy_l2_boost, 6.0);
+    assert_eq!(params_explicit.category_loss_l2_boost, 2.0);
+    assert_eq!(params_explicit.restructure_threshold, 0.9);
+    assert_eq!(params_explicit.grammar_threshold, 0.75);
+    assert_eq!(params_explicit.analogy_threshold, 0.8);
+    assert_eq!(params_explicit.actuation_coherence, 0.6);
+    assert_eq!(params_explicit.actuation_coherence_other, 0.1);
 }

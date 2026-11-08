@@ -583,3 +583,277 @@ fn vypujcky_berou_slova_od_souseda_jineho_jazyka() {
     assert!(borrowers > 0, "svět má mít hraniční vazby mezi jazyky");
     panic!("žádná výpůjčka nevznikla");
 }
+
+#[test]
+fn retence_podle_korene_zahrnuje_obnovu_a_zkraceni() {
+    use cee_engine::gates::metrics::{is_inherited_root, retention, root_retention};
+    use cee_engine::ids::{CellId, LanguageId, VariantId, WordClassId};
+    use cee_engine::model::lexicon::{MorphemeInit, MorphemeMeta};
+
+    let mut simulation = simulation();
+    let world = &mut simulation.world;
+    let group = world.group_ids()[0];
+
+    // Výchozí stav: všechna slova jsou zděděná, obě retence jsou 1.0.
+    let initial_strict = retention(world, group);
+    let initial_root = root_retention(world, group);
+    assert_eq!(initial_strict, 1.0);
+    assert_eq!(initial_root, 1.0);
+
+    let lexical = cee_engine::gates::metrics::lexical_variables(world);
+    assert!(lexical.len() >= 3, "test potřebuje aspoň 3 pojmy");
+    let (var_renewed, concept_renewed) = lexical[0];
+    let (var_loan, concept_loan) = lexical[1];
+    let (var_shift, concept_shift) = lexical[2];
+
+    let group_lang = world.groups.main_code(group).language;
+
+    // 1. Obnova zdrobnělinou a zkrácení: pojem var_renewed dostane odvozeninu od původního kořene.
+    let (inherited_var, _) = world.dominant(group, var_renewed).unwrap();
+    let inherited_morpheme = match &world.variants.payload[inherited_var.index()] {
+        Payload::Lexical { morpheme, .. } => *morpheme,
+        _ => panic!("očekávána lexikální varianta"),
+    };
+    assert!(!inherited_morpheme.is_none());
+    assert_eq!(world.morphemes.origin_tick[inherited_morpheme.index()], 0);
+    assert_eq!(
+        world.morphemes.language[inherited_morpheme.index()],
+        group_lang
+    );
+    let concept_name = world.registry.concepts.name(concept_renewed.0).to_owned();
+    assert_eq!(
+        world.morphemes.meta[inherited_morpheme.index()].meaning,
+        concept_name
+    );
+
+    // Krok A: obnova zdrobnělinou (renewal: auricula z auris)
+    let renewal_morpheme = MorphemeId(world.registry.morphemes.intern("test_auricula"));
+    world.morphemes.store(
+        renewal_morpheme,
+        MorphemeInit {
+            meaning: concept_name.clone(),
+            form: 0,
+            frequency: 0.5,
+            kind: MorphemeKind::Root,
+            origin_group: group,
+            origin_tick: 5,
+            word_class: WordClassId::NONE,
+            lexeme: MorphemeId::NONE,
+            cell: CellId::NONE,
+            exponent: MorphemeId::NONE,
+            boundary: -1,
+            language: group_lang,
+            meta: MorphemeMeta {
+                etymology: Some("renewal".into()),
+                sources: Vec::new(),
+                base: Some(inherited_morpheme),
+                meaning: concept_name.clone(),
+            },
+        },
+    );
+
+    // Krok B: zkrácení (clipping z obnovy: řetězec 2 kroků ke zděděnému kořeni)
+    let clipping_morpheme = MorphemeId(world.registry.morphemes.intern("test_clipping"));
+    world.morphemes.store(
+        clipping_morpheme,
+        MorphemeInit {
+            meaning: concept_name.clone(),
+            form: 0,
+            frequency: 0.5,
+            kind: MorphemeKind::Root,
+            origin_group: group,
+            origin_tick: 10,
+            word_class: WordClassId::NONE,
+            lexeme: MorphemeId::NONE,
+            cell: CellId::NONE,
+            exponent: MorphemeId::NONE,
+            boundary: -1,
+            language: group_lang,
+            meta: MorphemeMeta {
+                etymology: Some("clipping".into()),
+                sources: Vec::new(),
+                base: Some(renewal_morpheme),
+                meaning: concept_name,
+            },
+        },
+    );
+
+    // Zavedeme novou variantu se zkráceným tvarem jako dominantní pro var_renewed
+    let clipping_variant = VariantId(world.registry.variants.intern("test_var:clipping"));
+    world.variants.store(
+        clipping_variant,
+        var_renewed,
+        Payload::Lexical {
+            lexeme: "test_clipping".into(),
+            morpheme: clipping_morpheme,
+            origin: "clipping".into(),
+            appeal: 1.0,
+        },
+        Origin {
+            change: Some("clipping".into()),
+            tick: 10,
+            year: 200.0,
+            group,
+            parent: inherited_var,
+        },
+    );
+    world
+        .groups
+        .main_code_mut(group)
+        .repertoire
+        .set(var_renewed, Distribution::fixed(clipping_variant));
+
+    // Ověření: striktní retence klesla, ale root_retention zůstává 1.0!
+    assert!(is_inherited_root(
+        world,
+        group,
+        concept_renewed,
+        clipping_variant
+    ));
+    let strict_after_clipping = retention(world, group);
+    let root_after_clipping = root_retention(world, group);
+    assert!(
+        strict_after_clipping < 1.0,
+        "striktní retence musela klesnout: {strict_after_clipping}"
+    );
+    assert_eq!(
+        root_after_clipping, 1.0,
+        "root_retention musí zůstat 1.0, protože kořen je zděděný"
+    );
+
+    let group_name = world.group_name(group).to_owned();
+
+    // Ověříme i export
+    assert_eq!(cee_engine::export::root_retention(&simulation.world, group), 1.0);
+    let exported = cee_engine::export::export(&simulation, true);
+    let groups_exported = exported["groups"].as_array().unwrap();
+    let group_exported = groups_exported
+        .iter()
+        .find(|g| g["id"].as_str() == Some(&group_name))
+        .expect("export obsahuje skupinu");
+    assert_eq!(group_exported["root_retention"].as_f64().unwrap(), 1.0);
+
+    let world = &mut simulation.world;
+
+    // 2. Výpůjčka z cizího jazyka na var_loan: klesnou obě retence
+    let foreign_lang = LanguageId(world.registry.languages.intern("foreign_lang"));
+    let loan_morpheme = MorphemeId(world.registry.morphemes.intern("test_loan"));
+    let loan_concept_name = world.registry.concepts.name(concept_loan.0).to_owned();
+    world.morphemes.store(
+        loan_morpheme,
+        MorphemeInit {
+            meaning: loan_concept_name.clone(),
+            form: 0,
+            frequency: 0.5,
+            kind: MorphemeKind::Root,
+            origin_group: group,
+            origin_tick: 12,
+            word_class: WordClassId::NONE,
+            lexeme: MorphemeId::NONE,
+            cell: CellId::NONE,
+            exponent: MorphemeId::NONE,
+            boundary: -1,
+            language: foreign_lang,
+            meta: MorphemeMeta {
+                etymology: Some("borrowing".into()),
+                sources: Vec::new(),
+                base: None,
+                meaning: loan_concept_name,
+            },
+        },
+    );
+    let loan_variant = VariantId(world.registry.variants.intern("test_var:loan"));
+    world.variants.store(
+        loan_variant,
+        var_loan,
+        Payload::Lexical {
+            lexeme: "test_loan".into(),
+            morpheme: loan_morpheme,
+            origin: "borrowing".into(),
+            appeal: 1.0,
+        },
+        Origin {
+            change: Some("lexical_borrowing".into()),
+            tick: 12,
+            year: 240.0,
+            group,
+            parent: VariantId::NONE,
+        },
+    );
+    world
+        .groups
+        .main_code_mut(group)
+        .repertoire
+        .set(var_loan, Distribution::fixed(loan_variant));
+
+    assert!(!is_inherited_root(world, group, concept_loan, loan_variant));
+    let root_after_loan = root_retention(world, group);
+    assert!(
+        root_after_loan < 1.0,
+        "výpůjčka z cizího jazyka musí snížit root_retention: {root_after_loan}"
+    );
+
+    // 3. Posun významu (semantic shift) z jiného pojmu na var_shift: klesnou obě retence
+    let shift_morpheme = MorphemeId(world.registry.morphemes.intern("test_shift"));
+    let shift_concept_name = world.registry.concepts.name(concept_shift.0).to_owned();
+    world.morphemes.store(
+        shift_morpheme,
+        MorphemeInit {
+            meaning: shift_concept_name.clone(),
+            form: 0,
+            frequency: 0.5,
+            kind: MorphemeKind::Root,
+            origin_group: group,
+            origin_tick: 15,
+            word_class: WordClassId::NONE,
+            lexeme: MorphemeId::NONE,
+            cell: CellId::NONE,
+            exponent: MorphemeId::NONE,
+            boundary: -1,
+            language: group_lang,
+            meta: MorphemeMeta {
+                etymology: Some("semantic_shift".into()),
+                sources: Vec::new(),
+                base: Some(inherited_morpheme), // báze má jiný význam (concept_renewed), ne concept_shift
+                meaning: shift_concept_name,
+            },
+        },
+    );
+    let shift_variant = VariantId(world.registry.variants.intern("test_var:shift"));
+    world.variants.store(
+        shift_variant,
+        var_shift,
+        Payload::Lexical {
+            lexeme: "test_shift".into(),
+            morpheme: shift_morpheme,
+            origin: "semantic_shift".into(),
+            appeal: 1.0,
+        },
+        Origin {
+            change: Some("semantic_shift".into()),
+            tick: 15,
+            year: 300.0,
+            group,
+            parent: VariantId::NONE,
+        },
+    );
+    world
+        .groups
+        .main_code_mut(group)
+        .repertoire
+        .set(var_shift, Distribution::fixed(shift_variant));
+
+    assert!(!is_inherited_root(
+        world,
+        group,
+        concept_shift,
+        shift_variant
+    ));
+    let root_after_shift = root_retention(world, group);
+    assert!(
+        root_after_shift < root_after_loan,
+        "posun významu z jiného pojmu musí dále snížit root_retention: {root_after_shift}"
+    );
+    let strict_after_shift = retention(world, group);
+    assert!(strict_after_shift < root_after_shift);
+}

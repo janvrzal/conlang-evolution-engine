@@ -320,6 +320,72 @@ pub fn retention(world: &World, group: GroupId) -> f64 {
     }
 }
 
+/// Zda dominantní slovo pro pojem pochází ze zděděného kořene téhož pojmu a téhož jazyka.
+///
+/// Zahrnuje přímo zděděné varianty (`Origin.change` je `None`) i slova vzniklá
+/// vnitrojazykovým odvozením ze zděděného kořene (např. obnova zdrobnělinou `renewal`,
+/// zkrácení `clipping`, metateze nebo disimilace), u nichž řetězec `base` vede
+/// ke kořeni z ticku 0 se stejným významem a jazykem (jako lat. *auris* → *auricula* → fr. *oreille*).
+pub fn is_inherited_root(
+    world: &World,
+    group: GroupId,
+    concept: ConceptId,
+    variant: VariantId,
+) -> bool {
+    let Some(origin) = world.variants.origin.get(variant.index()) else {
+        return false;
+    };
+    if origin.change.is_none() {
+        return true;
+    }
+    let Some(Payload::Lexical { morpheme, .. }) = world.variants.payload.get(variant.index()) else {
+        return false;
+    };
+    if morpheme.is_none() {
+        return false;
+    }
+    let mut ancestor = *morpheme;
+    for _ in 0..16 {
+        if let Some(meta) = world.morphemes.meta.get(ancestor.index()) {
+            if let Some(base) = meta.base {
+                if !base.is_none() && base != ancestor {
+                    ancestor = base;
+                    continue;
+                }
+            }
+        }
+        break;
+    }
+    if ancestor.is_none() || ancestor.index() >= world.morphemes.len() {
+        return false;
+    }
+    world.morphemes.origin_tick.get(ancestor.index()).copied() == Some(0)
+        && world.morphemes.language.get(ancestor.index()).copied()
+            == Some(world.groups.main_code(group).language)
+        && world
+            .morphemes
+            .meta
+            .get(ancestor.index())
+            .map_or(false, |m| m.meaning == world.registry.concepts.name(concept.0))
+}
+
+/// Podíl pojmů, které skupina vyjadřuje zděděným slovem nebo slovem odvozeným z jeho kořene.
+pub fn root_retention(world: &World, group: GroupId) -> f64 {
+    let (mut kept, mut total) = (0_u32, 0_u32);
+    for (variable, concept) in lexical_variables(world) {
+        let Some((variant, _)) = world.dominant(group, variable) else {
+            continue;
+        };
+        total += 1;
+        kept += u32::from(is_inherited_root(world, group, concept, variant));
+    }
+    if total == 0 {
+        0.0
+    } else {
+        f64::from(kept) / f64::from(total)
+    }
+}
+
 /// Povrchové tvary dominantních kořenů skupiny: pojem → tvar (`phonology.lexicon`).
 pub fn lexicon_forms(world: &World, group: GroupId) -> BTreeMap<String, Vec<i32>> {
     let mut found = BTreeMap::new();

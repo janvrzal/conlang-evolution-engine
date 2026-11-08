@@ -206,3 +206,12 @@ pub fn with_group<R>(
     }
     Ok(read(index, token))
 }
+
+/// Vyčistí keš prostředí v indexu zvukových změn pro tvary, které už nejsou živé.
+pub fn retain_forms(world: &World, alive: &[bool]) {
+    if let Ok(mut guard) = world.sound.runtime.index.write() {
+        if let Some(index) = guard.index.as_mut() {
+            index.retain_forms(alive);
+        }
+    }
+}

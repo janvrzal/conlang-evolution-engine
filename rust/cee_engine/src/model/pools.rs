@@ -130,6 +130,25 @@ impl PoolBlock {
         (freqs, previous)
     }
 
+    /// Hustý pohled jen pro vybrané řádky `selected`: `(freqs, present)` o tvaru
+    /// `selected.len() × groups × capacity` a `selected.len() × groups`.
+    pub fn dense_selected(&self, selected: &[usize]) -> (Vec<f64>, Vec<bool>) {
+        let stride = self.groups * self.capacity;
+        let mut freqs = vec![0.0; selected.len() * stride];
+        let mut scratch = vec![0.0; stride];
+        let mut present = Vec::with_capacity(selected.len() * self.groups);
+        for (out_row, &row) in selected.iter().enumerate() {
+            scratch.fill(0.0);
+            self.cells.row_dense(
+                row,
+                &mut freqs[out_row * stride..(out_row + 1) * stride],
+                &mut scratch,
+            );
+            present.extend_from_slice(&self.present[row]);
+        }
+        (freqs, present)
+    }
+
     /// Přidá řádek; jeho pole mají `skupiny × šířka` s šířkou ≤ kapacita.
     pub fn append(&mut self, row: Row) {
         let width = row.slots.len();

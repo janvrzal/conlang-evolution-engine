@@ -42,6 +42,20 @@ pub enum Kind {
     LevelTable2,
 }
 
+/// Úloha parametru: nastavení světa (`world`), aktivně laděná páka (`active`),
+/// nebo měřením zafixovaná konstanta modelu (`fixed`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Role {
+    /// Převodník slovních úrovní, domén nebo katalogu pro autora světa.
+    World,
+    /// Aktivní kalibrační páka s měřením doloženým nezávislým účinkem.
+    #[default]
+    Active,
+    /// Konstanta modelu zafixovaná na základě měření citlivosti (přepis ve starších světech dál funguje).
+    Fixed,
+}
+
 /// Skupina parametrů pro UI.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Group {
@@ -58,6 +72,9 @@ pub struct ParameterSpec {
     pub default: Value,
     pub description: String,
     pub group: String,
+    /// Úloha parametru (`world`, `active`, `fixed`).
+    #[serde(default)]
+    pub role: Role,
     /// Povolená jména (vnější klíče tabulky), když jsou omezená.
     #[serde(default)]
     pub keys: Option<Vec<String>>,
@@ -77,6 +94,13 @@ pub struct ParameterFile {
     pub format: String,
     pub groups: Vec<Group>,
     pub parameters: Vec<ParameterSpec>,
+}
+
+impl ParameterFile {
+    /// Iterátor přes parametry s danou úlohou (`Role`).
+    pub fn by_role(&self, role: Role) -> impl Iterator<Item = &ParameterSpec> {
+        self.parameters.iter().filter(move |spec| spec.role == role)
+    }
 }
 
 /// Soubor metaparametrů (načte se jednou).
@@ -329,6 +353,34 @@ impl Parameters {
             known.insert(key.clone(), value.clone());
         }
         let mut params: Parameters = serde_json::from_value(base).map_err(|e| e.to_string())?;
+        if overrides.contains_key("capital_prestige")
+            && !overrides.contains_key("background_elite_prestige")
+        {
+            params.background_elite_prestige = params.capital_prestige;
+        }
+        if overrides.contains_key("capital_link_strength")
+            && !overrides.contains_key("lingua_franca_link")
+        {
+            params.lingua_franca_link = params.capital_link_strength;
+        }
+        if overrides.contains_key("analogy_l2_boost")
+            && !overrides.contains_key("category_loss_l2_boost")
+        {
+            params.category_loss_l2_boost = params.analogy_l2_boost;
+        }
+        if overrides.contains_key("restructure_threshold") {
+            if !overrides.contains_key("grammar_threshold") {
+                params.grammar_threshold = params.restructure_threshold;
+            }
+            if !overrides.contains_key("analogy_threshold") {
+                params.analogy_threshold = params.restructure_threshold;
+            }
+        }
+        if overrides.contains_key("actuation_coherence")
+            && !overrides.contains_key("actuation_coherence_other")
+        {
+            params.actuation_coherence_other = 0.5 * params.actuation_coherence;
+        }
         params.normalize()?;
         Ok(params)
     }
