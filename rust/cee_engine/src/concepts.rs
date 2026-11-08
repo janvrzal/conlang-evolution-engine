@@ -230,6 +230,14 @@ impl ConceptData {
     }
 
     /// Pojmy enginu z dat se skóre půjčitelnosti (`None` = bez skóre); kotva `contact::reference`.
+    /// Slovní druh pojmu z dat (`Noun`, `Function word` …): pojmy enginu, jinak katalog WOLD.
+    pub fn category(&self, concept: &str) -> Option<&str> {
+        self.concepts[concept]["category"].as_str().or_else(|| {
+            self.catalog_item(concept)
+                .map(|item| item.category.as_str())
+        })
+    }
+
     pub fn engine_concepts(&self) -> Vec<(&str, Option<f64>)> {
         self.concepts
             .as_object()
@@ -473,7 +481,15 @@ pub struct Relation {
 /// Váha dokladu z `count` jazyků: ln(1 + count), u vazby doložené v méně než `recurrence`
 /// jazycích navíc krát count / recurrence (ojedinělý posun nebo odvození jednoho jazyka
 /// se jinde opakuje zřídka). `recurrence` ≤ 1 = bez zmenšení.
+/// Nejmenší počet jazyků, který musí posun významu nebo odvození v DatSemShift doložit, aby se
+/// cesta použila: ojedinělý doklad („slunce → matka“, „otec → velký“) je náhoda jednoho jazyka,
+/// ne opakovatelná cesta (Zalizniak a kol. 2012; dok. 32).
+pub const MIN_EVIDENCE: u32 = 2;
+
 fn evidence(count: u32, recurrence: f64) -> f64 {
+    if count < MIN_EVIDENCE {
+        return 0.0;
+    }
     let n = f64::from(count);
     n.ln_1p()
         * if recurrence > 1.0 {

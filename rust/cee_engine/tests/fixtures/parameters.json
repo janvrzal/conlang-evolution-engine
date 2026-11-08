@@ -127,8 +127,8 @@
  "emergence_need_scale": 0.2,
  "extravagance": 0.1,
  "entrenchment_base": 0.0,
- "entrenchment_frequency_exponent": 1.0,
- "entrenchment_strength": 0.3,
+ "entrenchment_frequency_exponent": 2.0,
+ "entrenchment_strength": 0.6,
  "frequency_lead": 1.0,
  "functional_load_scale": 5.0,
  "fusion_bonus": 0.25,
@@ -186,6 +186,7 @@
  "release_residual": 0.3,
  "lexical_length_cost": 0.3,
  "settlement_growth": 0.3,
+ "borrowing_frequency_exponent": 2.0,
  "restructure_threshold": 0.85,
  "revival_levels": {
   "movement": {

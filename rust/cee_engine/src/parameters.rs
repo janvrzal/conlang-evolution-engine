@@ -262,6 +262,7 @@ pub struct Parameters {
     pub release_residual: f64,
     pub lexical_length_cost: f64,
     pub settlement_growth: f64,
+    pub borrowing_frequency_exponent: f64,
     pub village_openness: f64,
     pub border_link_scale: f64,
     pub category_loss_l2_boost: f64,

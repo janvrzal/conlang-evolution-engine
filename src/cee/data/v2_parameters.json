@@ -340,15 +340,15 @@
   {
    "name": "entrenchment_strength",
    "kind": "number",
-   "default": 0.3,
-   "description": "Výměna slov (``pressures.lexical.Entrenchment`` a ``Motivation``): převládající varianta pojmu má výhodu ``entrenchment_base`` + ``entrenchment_strength`` × frekvence ** ``entrenchment_frequency_exponent``, nové slovo výhodu podle druhu (odvozenina +0,15, nový kořen −0,15…) plus náhodnou přitažlivost ~ N(0, ``lexical_appeal_sd``), stálou pro variantu (expresivita, módnost, sociální hodnota slova). Bez přitažlivosti nové slovo vyhraje buď vždycky, nebo nikdy, a výměna je prahová (polovina pojmů se nemění vůbec, častá slova se vyměňují rychlostí 0,26 ostatních). Kalibrace 2026-11-02 (``scripts/v2_calibrate_frequency.py``, ``v2_calibrate_retention.py``): přitažlivost 0,03 dává poměr rychlostí horních 30 % pojmů podle frekvence 0,44 (Pagel a kol. 2007: 0,70) a retenci jádra 0,785 / 0,827 po tisíciletích (glotochronologie 0,81–0,86); širší přitažlivost se blíží poměru z dat, ale retence klesá (0,05: 0,68 a 0,72), základní ochrana (``entrenchment_base``) potlačí dělení jazyků a výpůjčky. Viz ``docs/engine-v2/19-pojmy.md``.",
+   "default": 0.6,
+   "description": "Výměna slov (``pressures.lexical.Entrenchment`` a ``Motivation``): převládající varianta pojmu má výhodu ``entrenchment_base`` + ``entrenchment_strength`` × frekvence ** ``entrenchment_frequency_exponent``, nové slovo výhodu podle druhu (odvozenina +0,15, nový kořen −0,15…) plus náhodnou přitažlivost ~ N(0, ``lexical_appeal_sd``), stálou pro variantu (expresivita, módnost, sociální hodnota slova). Bez přitažlivosti nové slovo vyhraje buď vždycky, nebo nikdy, a výměna je prahová (polovina pojmů se nemění vůbec, častá slova se vyměňují rychlostí 0,26 ostatních). Kalibrace 2026-11-02 (``scripts/v2_calibrate_frequency.py``, ``v2_calibrate_retention.py``): přitažlivost 0,03 dává poměr rychlostí horních 30 % pojmů podle frekvence 0,44 (Pagel a kol. 2007: 0,70) a retenci jádra 0,785 / 0,827 po tisíciletích (glotochronologie 0,81–0,86); širší přitažlivost se blíží poměru z dat, ale retence klesá (0,05: 0,68 a 0,72), základní ochrana (``entrenchment_base``) potlačí dělení jazyků a výpůjčky. Viz ``docs/engine-v2/19-pojmy.md``. Od M12 síla 0,6 a exponent 2 (dosud 0,3 a 1): stabilita slova strměji roste s frekvencí (Pagel, Atkinson a Meade 2007, Nature 449), v Romanii drží častá slova 0,80, střední 0,63 a vzácná 0,42 (dosud 0,77 / 0,75 / 0,53); síla 0,9 dala 0,86 / 0,68 / 0,45, ale rozbila typologii plurálu 33A (dok. 32).",
    "group": "lexicon",
    "role": "active"
   },
   {
    "name": "entrenchment_frequency_exponent",
    "kind": "number",
-   "default": 1.0,
+   "default": 2.0,
    "description": "Výměna slov (``pressures.lexical.Entrenchment`` a ``Motivation``): převládající varianta pojmu má výhodu ``entrenchment_base`` + ``entrenchment_strength`` × frekvence ** ``entrenchment_frequency_exponent``, nové slovo výhodu podle druhu (odvozenina +0,15, nový kořen −0,15…) plus náhodnou přitažlivost ~ N(0, ``lexical_appeal_sd``), stálou pro variantu (expresivita, módnost, sociální hodnota slova). Bez přitažlivosti nové slovo vyhraje buď vždycky, nebo nikdy, a výměna je prahová (polovina pojmů se nemění vůbec, častá slova se vyměňují rychlostí 0,26 ostatních). Kalibrace 2026-11-02 (``scripts/v2_calibrate_frequency.py``, ``v2_calibrate_retention.py``): přitažlivost 0,03 dává poměr rychlostí horních 30 % pojmů podle frekvence 0,44 (Pagel a kol. 2007: 0,70) a retenci jádra 0,785 / 0,827 po tisíciletích (glotochronologie 0,81–0,86); širší přitažlivost se blíží poměru z dat, ale retence klesá (0,05: 0,68 a 0,72), základní ochrana (``entrenchment_base``) potlačí dělení jazyků a výpůjčky. Viz ``docs/engine-v2/19-pojmy.md``.",
    "group": "lexicon",
    "role": "fixed"
@@ -523,6 +523,16 @@
     "power"
    ],
    "min": 0.0
+  },
+  {
+   "name": "borrowing_frequency_exponent",
+   "kind": "number",
+   "default": 2.0,
+   "min": 0.0,
+   "max": 6.0,
+   "description": "Častá slova se půjčují méně (Calude a Pagel 2011; Monaghan a Roberts 2019): váha výpůjčky pojmu se násobí (1 − frekvence)^exponent; funkční slova (zájmena, číslovky, zápor) navíc 0,15 (Thomason a Kaufman 1988; Tadmor 2009). Průměrná míra výpůjček výchozího slovníku se nemění (normalizace), jen se přesune od základních slov ke kulturním. Bez útlumu se v Talveře veretské „dvě“ rozšířilo do všech čtyř rodin (dok. 32). 0 = jen půjčitelnost z WOLD (model před M12).",
+   "role": "active",
+   "group": "contact"
   },
   {
    "name": "borrowability_strength",

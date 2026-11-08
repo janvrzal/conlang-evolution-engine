@@ -209,8 +209,8 @@ fn pujcitelnost_odpovida_pythonu() {
     use cee_engine::contact;
     // Hodnoty z `cee.v2.contact` (kotva a normalizace přenositelnosti pojmů).
     assert!((contact::reference() - 0.16028590604026843).abs() < 1e-12);
-    assert!((contact::normalizer(3.0) - 5.106587626900806).abs() < 1e-9);
-    assert!((contact::normalizer(0.5) - 1.1159438851452446).abs() < 1e-9);
+    assert!((contact::normalizer(3.0, 0.0) - 5.106587626900806).abs() < 1e-9);
+    assert!((contact::normalizer(0.5, 0.0) - 1.1159438851452446).abs() < 1e-9);
 }
 
 #[test]

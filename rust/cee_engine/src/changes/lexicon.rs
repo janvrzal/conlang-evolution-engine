@@ -1110,12 +1110,16 @@ fn borrowing_factor(world: &World, concept: ConceptId, channel: usize) -> f64 {
     let normalizer = if strength == 0.0 {
         1.0
     } else {
-        *world
-            .grammar
-            .cache
-            .get_or("borrowing-normalizer", strength.to_bits(), || {
-                contact::normalizer(strength)
-            })
+        *world.grammar.cache.get_or(
+            "borrowing-normalizer",
+            strength.to_bits()
+                ^ world
+                    .params
+                    .borrowing_frequency_exponent
+                    .to_bits()
+                    .rotate_left(1),
+            || contact::normalizer(strength, world.params.borrowing_frequency_exponent),
+        )
     };
     let mut factor = contact::borrowing_kind(VariableKind::Lexical)
         * contact::transfer(world, concept, normalizer);

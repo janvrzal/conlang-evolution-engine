@@ -48,6 +48,28 @@ pub const FLOW_CHANNELS: [usize; 2] = [ELITE, TRADE];
 /// nenašla přejaté (*this*, *we*), se nepůjčuje skoro, ale ne nikdy.
 pub const BORROWED_FLOOR: f64 = 0.01;
 
+/// Násobek váhy výpůjčky u funkčních slov (zájmena, číslovky, zápor, kvantifikátory; kategorie
+/// „Function word“): uzavřené třídy se půjčují jen výjimečně (Thomason a Kaufman 1988,
+/// stupně 1–2 škály; Tadmor 2009; dok. 32).
+pub const CLOSED_CLASS_BORROWING: f64 = 0.15;
+
+/// Je pojem funkční slovo (uzavřená třída) podle dat pojmů?
+fn closed_class(name: &str) -> bool {
+    ConceptData::shared().category(name) == Some("Function word")
+}
+
+/// Činitel frekvence a třídy pojmu ve váze výpůjčky: častá slova se půjčují méně (Calude
+/// a Pagel 2011; Monaghan a Roberts 2019), `(1 − frekvence)^borrowing_frequency_exponent`,
+/// funkční slova navíc `CLOSED_CLASS_BORROWING`.
+/// Exponent 0 útlum vypne celý (model před M12).
+fn core_damping(frequency: f64, closed: bool, exponent: f64) -> f64 {
+    if exponent == 0.0 {
+        return 1.0;
+    }
+    let rarity = (1.0 - frequency).max(0.0);
+    rarity.powf(exponent) * if closed { CLOSED_CLASS_BORROWING } else { 1.0 }
+}
+
 /// Filtr výpůjček podle druhu proměnné (slova se dál násobí váhou pojmu a domény).
 pub fn borrowing_kind(kind: VariableKind) -> f64 {
     match kind {
@@ -81,7 +103,7 @@ pub fn reference() -> f64 {
 
 /// Průměr váhy pojmu (bez normalizace) přes pojmy z dat vůči průměru `1 − frekvence`,
 /// aby `borrowability_strength` nezměnila průměrnou míru výpůjček výchozího slovníku.
-pub fn normalizer(strength: f64) -> f64 {
+pub fn normalizer(strength: f64, exponent: f64) -> f64 {
     let data = ConceptData::shared();
     let mean = reference();
     let rarity = |name: &str| 1.0 - data.frequency(name).unwrap_or(0.0);
@@ -93,6 +115,11 @@ pub fn normalizer(strength: f64) -> f64 {
             b.map(|b| {
                 rarity(name).powf((1.0 - strength).max(0.0))
                     * (b.max(BORROWED_FLOOR) / mean).powf(strength)
+                    * core_damping(
+                        data.frequency(name).unwrap_or(0.0),
+                        closed_class(name),
+                        exponent,
+                    )
             })
         })
         .collect();
@@ -121,6 +148,11 @@ pub fn transfer(world: &World, concept: ConceptId, normalizer_value: f64) -> f64
     if strength < 1.0 {
         weight *= rarity.powf(1.0 - strength);
     }
+    weight *= core_damping(
+        world.concept_frequency(concept),
+        closed_class(world.registry.concepts.name(concept.0)),
+        world.params.borrowing_frequency_exponent,
+    );
     weight / normalizer_value
 }
 
@@ -138,7 +170,10 @@ impl BorrowTable {
         let norm = if world.params.borrowability_strength == 0.0 {
             1.0
         } else {
-            normalizer(world.params.borrowability_strength)
+            normalizer(
+                world.params.borrowability_strength,
+                world.params.borrowing_frequency_exponent,
+            )
         };
         let size = world.registry.concepts.len();
         let transfer_of: Vec<f64> = (0..size)

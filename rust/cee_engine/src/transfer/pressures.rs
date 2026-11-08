@@ -706,6 +706,12 @@ impl<'a> Pressures<'a> {
                     if variant.is_none() {
                         continue;
                     }
+                    // Přitažlivost slova platí mezi mluvčími jazyka, kde slovo vzniklo; v cizím
+                    // jazyce rozhoduje prestiž dárce (výpůjčky), ne stálá „módnost“ tvaru, jinak se
+                    // slovo s vysokou přitažlivostí šíří do všech rodin (dok. 32).
+                    if !self.native_word(g, columns.morpheme[variant.index()]) {
+                        continue;
+                    }
                     let appeal = columns.appeal[variant.index()];
                     let term = weight * if appeal.is_nan() { 0.0 } else { appeal }.clamp(-1.0, 1.0);
                     add(&mut cells[g * slots + slot], term);
@@ -745,15 +751,10 @@ impl<'a> Pressures<'a> {
                     // Průhlednost odvozeniny nebo složeniny platí jen v jazyce, kde slovo vzniklo:
                     // přejatá odvozenina je pro mluvčí cizího jazyka neprůhledný kořen (Haspelmath
                     // 2009; dok. 30). Jinak by se výhodná odvozenina šířila přes celý kontinent.
-                    let morpheme = columns.morpheme[variant.index()];
-                    let native = morpheme < 0
-                        || world.morphemes.language.get(morpheme as usize).copied()
-                            == Some(world.groups.main_code(self.inputs.axis[g]).language);
-                    let motivation = if native {
-                        columns.motivation[variant.index()]
-                    } else {
-                        0.0
-                    };
+                    if !self.native_word(g, columns.morpheme[variant.index()]) {
+                        continue;
+                    }
+                    let motivation = columns.motivation[variant.index()];
                     let term = weight * (motivation + if appeal.is_nan() { 0.0 } else { appeal });
                     add(&mut cells[g * slots + slot], term);
                 }
@@ -1080,6 +1081,24 @@ impl<'a> Pressures<'a> {
             }
         }
         value
+    }
+
+    /// Je slovo (morfém `morpheme`, −1 = varianta bez slova) v jazyce skupiny ve sloupci `column`
+    /// domácí? Přitažlivost a motivace slova platí jen tam (dok. 30 a 32).
+    fn native_word(&self, column: usize, morpheme: i32) -> bool {
+        morpheme < 0
+            || self
+                .world
+                .morphemes
+                .language
+                .get(morpheme as usize)
+                .copied()
+                == Some(
+                    self.world
+                        .groups
+                        .main_code(self.inputs.axis[column])
+                        .language,
+                )
     }
 
     /// Zipfův zákon zkracování (Zipf 1935; Piantadosi, Tily a Gibson 2011): nové slovo pro
