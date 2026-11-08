@@ -65,9 +65,12 @@ pub fn community_step(
         if world.groups.domain[g] == Domain::Public {
             // Veřejný kód se každou generaci učí znovu v dospělosti.
             edit.set_code(world, group, CodeChange::l2_share(1.0))?;
-            if world.groups.home_pull[g] > 0.0 {
-                if let Some(source) = source {
-                    removed |= nativize(world, group, source, renewal, tick, year, history, &edit)?;
+            if let Some(source) = source {
+                let pull = world.groups.home_pull[g].max(pocket_pull(world, group, source));
+                if pull > 0.0 {
+                    removed |= nativize(
+                        world, group, source, pull, renewal, tick, year, history, &edit,
+                    )?;
                 }
             }
             continue;
@@ -142,9 +145,9 @@ fn level_forms(world: &mut World, dt: f64, tick: u32) -> Result<(), String> {
             |at: usize| world.groups.prestige[at] * f64::from(world.groups.population[at]).sqrt();
         let pull_of = |at: usize| {
             let base = base_pull(at);
-            if rural_center.is_some_and(|c| {
-                world.groups.territory[at] == c && world.groups.territory[g] != c
-            }) {
+            if rural_center
+                .is_some_and(|c| world.groups.territory[at] == c && world.groups.territory[g] != c)
+            {
                 // Ve venkovském regionu bez města (`city: 0`) působí středová vesnice (`-v0`)
                 // jako místní tržiště pro ostatní osady téhož regionu.
                 base * 2.5
@@ -469,6 +472,32 @@ fn community_of(world: &World, group: GroupId) -> GroupId {
     }
 }
 
+/// Přirozený tah veřejného jazyka domů u elity bez patrona (dok. 33): domácí jazyk elity má mezi
+/// lidmi, se kterými mluví, podíl pod `child_threshold` a elita není prestižnější než veřejný
+/// jazyk okolí (prestiž ztratí v `polity::release`). Přejde i bez politiky státu (zrcadlo pravidla
+/// ostrůvku v `shift`); jinak 0.
+fn pocket_pull(world: &World, public: GroupId, home: GroupId) -> f64 {
+    let (p, h) = (public.index(), home.index());
+    // Jen elita (posádka, šlechta): ostrůvky starousedlíků i enklávy osadníků přežívají staletí
+    // (bretonština, lužická srbština, sedmihradští Sasové); plné pohlcení všech menšin pod
+    // `child_threshold` smetlo i ostrůvky (`m8::ostruvky` 0).
+    if !world.groups.elite[h]
+        || world.groups.preserved[h]
+        || world.groups.domain[h] != Domain::Home
+        || world.groups.main_code(public).language == world.groups.main_code(home).language
+    {
+        // Vysoká varieta téhož jazyka (diglosie) domácí řeč nenahrazuje.
+        return 0.0;
+    }
+    let status = world.groups.prestige[p] / (world.groups.prestige[p] + world.groups.prestige[h]);
+    let own = 1.0 - demographic_share(world, home, public);
+    if own < world.params.child_threshold && status >= 0.5 - 1e-12 {
+        1.0
+    } else {
+        0.0
+    }
+}
+
 /// Veřejný kód proniká domů: dvojjazyčné rodiny s ním vychovávají děti.
 ///
 /// Za generaci přejde podíl `home_pull × status × dvojjazyčnost^1,31` domácnosti, zpomalený
@@ -479,6 +508,7 @@ fn nativize(
     world: &mut World,
     public: GroupId,
     home: GroupId,
+    pull: f64,
     renewal: f64,
     tick: u32,
     year: f64,
@@ -497,7 +527,7 @@ fn nativize(
     let mut moving = home_population
         * renewal
         * params.shift_rate
-        * world.groups.home_pull[p]
+        * pull
         * (1.0 - world.groups.loyalty[h])
         * status
         * bilingual.powf(params.shift_exponent)

@@ -754,6 +754,34 @@ fn release(
             edit.set_prestige_mirror(world, group, GroupId::NONE)?;
         }
     }
+    // Elita odcházejícího státu (posádka, šlechta jeho jazyka) přijde o výsadní prestiž: bez
+    // patrona je jen malou skupinou mezi poddanými, a ti ji jazykově pohltí (Normané v Anglii po
+    // ztrátě Normandie, Frankové v Galii; dok. 33). Prestiž klesne na nejvyšší prestiž domácích
+    // skupin jiného jazyka v regionu.
+    let state_language = world.groups.main_code(polity.seat).language;
+    let mut elites: Vec<GroupId> = groups_in(world, regions)
+        .into_iter()
+        .filter(|&g| {
+            world.groups.elite[g.index()] && world.groups.main_code(g).language == state_language
+        })
+        .collect();
+    elites.sort_by(|a, b| world.group_name(*a).cmp(world.group_name(*b)));
+    for elite in elites {
+        let region = region_of(world, elite);
+        let local = groups_in(world, regions)
+            .into_iter()
+            .filter(|&g| {
+                region_of(world, g) == region
+                    && world.groups.domain[g.index()] == Domain::Home
+                    && world.groups.main_code(g).language != state_language
+            })
+            .map(|g| world.groups.prestige[g.index()])
+            .fold(f64::NAN, f64::max);
+        if local.is_finite() && local < world.groups.prestige[elite.index()] {
+            edit.set_group(world, elite, Field::Prestige(local))?;
+            edit.set_base_prestige(world, elite, Some(local))?;
+        }
+    }
     Ok(())
 }
 
