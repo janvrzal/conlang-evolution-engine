@@ -141,8 +141,9 @@ Chyba nalezená testem: nové slovníkové změny nebyly v seznamu spouštěnýc
 
 ## Ověření
 
-**Testy 16 z 16, brány 47 z 47, kalibrace 37 z 38.** Neprošel `m8::pocet_jazyku` 61,5 (pásmo
-10–60, návrh): Evropa má o dva regiony víc (Čechy a Pobaltí přidají 2–4 jazyky). Retence 0,896,
+**Testy 16 z 16, brány 47 z 47, kalibrace 38 z 38.** `m8::pocet_jazyku` 61,5: pásmo (návrh)
+rozšířeno z 10–60 na 10–70 se souhlasem uživatele, protože Evropa má o dva regiony víc (Čechy
+a Pobaltí přidají 2–4 jazyky). Retence 0,896,
 románské pády 0,500, složitost −0,900 / −1,000 / −0,032.
 
 Semínko 1 s výsledným nastavením: 57 jazyků. Zděděných slov je 26 181 ze 35 700 (73 %),
@@ -155,8 +156,6 @@ kořenů z ničeho 494, disimilací 24. Tóny jen ve Vaskonii (17 %), Slavia 0 %
   *auricula* je s *auris* příbuzná, a obnovy se ze substrátu šíří po latinské síti (galské
   „stát“ ve 163 skupinách). Snížení váhy by zvedlo retenci nad pásmo; potřeba měřit retenci
   podle kořene.
-- Počet jazyků Evropy 61,5: rozšířit pásmo na 10–70 kvůli dvěma novým regionům, nebo zesílit
-  vyrovnávání nářečí. Rozhodne uživatel.
 
 ## Pro editor
 
