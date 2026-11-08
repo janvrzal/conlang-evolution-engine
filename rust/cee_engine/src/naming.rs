@@ -114,7 +114,7 @@ pub fn endonym(world: &World, groups: &[String]) -> Option<String> {
         }
         parts.push(world.adapted_form_of(group, root));
     }
-    let form = compound(&parts, &|s| table.is_vowel(s));
+    let form = crate::onomastics::smooth_compound(&parts, &|s| table.is_vowel(s));
     let rendered: String = form.iter().map(|&s| table.render(&[s])).collect();
     (!rendered.is_empty()).then_some(rendered)
 }

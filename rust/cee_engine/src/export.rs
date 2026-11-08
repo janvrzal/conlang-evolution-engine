@@ -328,6 +328,7 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
     let world = &simulation.world;
     let history = &simulation.history;
     let observed = observed_languages(simulation);
+    let onomastics = crate::onomastics::export_world_onomastics(world);
     let mut territories: Vec<(&str, usize)> = (0..world.territories.len())
         .map(|i| (world.registry.territories.name(i as u32), i))
         .collect();
@@ -336,11 +337,18 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
         .into_iter()
         .map(|(name, i)| {
             let node = &world.territories[i];
+            let top = onomastics
+                .get("toponyms")
+                .and_then(|t| t.get(name))
+                .cloned()
+                .unwrap_or(Value::Null);
+            let place_name = top.get("name").cloned().unwrap_or(Value::Null);
             json!({
-                "id": name, "level": node.level.name(),
+                "id": name, "name": place_name, "level": node.level.name(),
                 "parent": if node.parent.is_none() { Value::Null } else { world.registry.territories.name(node.parent.0).into() },
                 "position": position(node.position), "terrain": node.terrain,
                 "native_language": if node.native_language.is_none() { Value::Null } else { world.registry.languages.name(node.native_language.0).into() },
+                "toponym": top,
             })
         })
         .collect();
@@ -386,6 +394,7 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
         "borders": polity::borders(world),
         "standards": Value::Object(standards),
         "dialect_facts": dialect_facts(simulation),
+        "onomastics": onomastics,
         "census": polity::language_census(world),
         "events": events,
     })

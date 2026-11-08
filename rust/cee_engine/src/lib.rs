@@ -26,6 +26,7 @@ pub mod model;
 pub mod morphology;
 pub mod naming;
 pub mod observe;
+pub mod onomastics;
 pub mod parallel;
 pub mod parameters;
 pub mod phases;
