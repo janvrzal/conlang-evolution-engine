@@ -2142,6 +2142,17 @@
       "border": "closed"
     },
     {
+      "kind": "elite",
+      "year": 750,
+      "from": "m06-03",
+      "seat": "m03-06",
+      "subjects": [
+        "m03-06"
+      ],
+      "population": 60,
+      "prestige": 1.4
+    },
+    {
       "kind": "annexation",
       "year": 850,
       "state": "brodska_mesta",
@@ -2312,6 +2323,17 @@
       "border": "open"
     },
     {
+      "kind": "lingua_franca",
+      "year": 1600,
+      "source": "m12-03+m09-04-0",
+      "regions": [
+        "m12-03",
+        "m12-04"
+      ],
+      "spread": "universal",
+      "nativize": true
+    },
+    {
       "kind": "settlement",
       "year": 1650,
       "from": "m12-02",
@@ -2413,6 +2435,12 @@
       "printing": true
     },
     {
+      "kind": "language_policy",
+      "year": 1875,
+      "state": "istren",
+      "policy": "enforced"
+    },
+    {
       "kind": "standard",
       "year": 1925,
       "of": "m11-08",
@@ -2425,6 +2453,15 @@
         "m11-08"
       ],
       "identity": "strong"
+    },
+    {
+      "kind": "revival",
+      "year": 1925,
+      "regions": [
+        "m05-07"
+      ],
+      "language": "seren",
+      "strength": "movement"
     }
   ],
   "parameters": {

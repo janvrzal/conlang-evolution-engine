@@ -75,6 +75,7 @@ Serenové vycházejí z hustě osídlených niv a dělby práce kolem vody. Talm
 | 525 | Po několika suchých zimách zakládají talmurské rodiny dvory na dřívějších sezónních trasách. Část se živí povoznictvím. | `settlement` z `m06-04` do `m04-05` a z `m06-05` do `m05-03`, podíly 0,15 a 0,12. |
 | 600–650 | Sedlový svaz sjednotí ochranu cesty. Taremští písaři vedle starých varadských listin začnou vyhotovovat vlastní talmurské smlouvy. Slepé údolí `m06-08` zůstane mimo svaz. | `state` **Sedlový svaz** (`tarem`), sídlo `m06-03`, členové `m06-02` až `05`, `m05-02`, `m05-03`, `m04-05`, politika `tolerant`. Poté `standard` a `schools` s `coverage: towns` a `diglossic: true`. |
 | 750 | Tarem obsadí sporný brod, aby vybíral mýto z obou stran. Brodská města zavřou přechody. Horské obce dodají stráže, místní rodiny drží převozy. | `annexation` `m03-06` státem `tarem` a dočasná `border_policy: closed` u `brodska_mesta`. |
+| 750 | Do brodu přijde talmurská posádka a správa mýta. Velitelé se usadí, berou si místní ženy a jejich řeč nese prestiž sedel. | `elite` z `m06-03` do `m03-06`, 60 lidí, prestiž 1,4 (study case **Posádka na brodu**). |
 | 850 | Brod připadne Brodským městům výměnou za otevření průjezdu. Spor o sazby trvá. Kupci zkoušejí západní přístavy, kde jedna smlouva pokrývá převoz i ručení. | `annexation` `m03-06` státem `brodska_mesta` a jeho `border_policy: normal`. |
 | 925 | Selva zakládá kupecké kanceláře u jezer a v deltě. Obchodní veretština se používá při sjednávání přepravy. Hrázové osady dál projednávají svá vodní práva domácí řečí. | `lingua_franca` z `m07-04` pro `m05-07`, `m05-08` a `m01-02`, `spread: common`, `nativize: false`. |
 
@@ -108,6 +109,7 @@ Serenové vycházejí z hustě osídlených niv a dělby práce kolem vody. Talm
 | 1475 | Idařští lodivodi a veretští rejdaři zavedou plavební kalendář. Výpravy míří přes dvě stanice na Vnějších ostrovech dál za mapu. Na jedné zůstávají lodnické rodiny i přes zimu. | `settlement` z veretského `m09-04` do idarského `m12-03`. Průzkum a cesta za mapu jsou kontext. |
 | 1525–1550 | Námořníci přivezou **stříbrnou hlízu**, kterou lze pěstovat na vlhkých svazích, a **přílivovou čočku** pro mírně zasolené nížiny. Nové zdroje potravy živí přístavy i dříve řídce obydlené svahy a mokřady. | `settlement` z `m10-04` do `m09-07` a z `m09-05` do `m09-08`. Každý přesun má podíl 0,12 a dvě osady. Plodiny vysvětlují přesuny v příběhu. |
 | 1575–1600 | Naret spojí jižní přístavy s ostrovními stanicemi. Selva začne zadržovat lodě na svém břehu průlivu. Nezávislá Solná brána zkusí omezit přejezdy, po ztrátě příjmů znovu otevře překládku. | `state` **Naretský svaz** (`naret`), sídlo `m09-05`, území `m09-05` až `08`, `m12-02` a `m12-03`, politika `tolerant`. `border_policy` pro `pruliv` nejprve `closed`, pak `open`. Selva si ponechá `m08-04`. |
+| 1600 | Na ostrovních stanicích se obchodní veretština stane řečí přístavních rodin: sezónní posádky, překupníci a jejich děti spolu mluví jen jí. | `lingua_franca` z veretské osady `m12-03+m09-04-0` pro `m12-03` a `m12-04`, `spread: universal`, `nativize: true` (study case **Přístavní kreol**). |
 | 1625–1650 | Po zavlečené horečce zavede Naret sezónní karanténu. Část rodin se přestěhuje z ostrovů na jih za prací a příbuznými. Jiné dál udržují živnost na druhém břehu. | `settlement` z veretského `m12-02` do `m09-08` zachytí přesun obyvatel původních ostrovních vesnic. Karanténa a návraty konkrétních lodnických rodin jsou kontext. |
 | 1675–1700 | Naret zavede idarskou kancelářskou normu pro berní knihy a výuku úředníků. Obchodní veretština zůstává užitečná na palubě, v přístavních smlouvách a při jednání se Selvou. | `standard` a `schools` pro `naret` s `towns`, `diglossic: true` a `printing: false`. Veřejná veretština pokračuje z éry III. |
 | 1725–1750 | Naretští rejdaři financují sklady u Erenu a vyměřování cesty k Istrenu. Chtějí pravidelné dodávky jezerní rudy, dřeva a paliva. Selva brání výnosy ze západních překladišť. | Kontext. Územní držba M05 se zatím nemění. Pracovní migrace přijde v další éře. |
@@ -127,6 +129,8 @@ Serenové vycházejí z hustě osídlených niv a dělby práce kolem vody. Talm
 | 1825 | Istren sjednotí zápis měr a technických příruček podle městské řeči. Taremské školy a kláštery dál používají starší normu. | `standard` pro `istren`, gramotnost `towns`. |
 | 1850 | Selva hájí přístup ke skladům u západní výpusti. Istren v ozbrojeném sporu obsadí dosud samostatné území a zavře hranici. Část rodin z výpusti odejde k Dolnímu Erenu. | `annexation` `m05-07` státem `istren`, `border_policy: closed` pro Istren a `settlement` z `m05-07` do `m02-06`, podíl 0,12. Uzávěra v CEE zasahuje celou hranici státu. |
 | 1875 | Mír obnoví tranzit se společným ceníkem, výpust však zůstane Istrenu. Svaz vydává pracovní předpisy, financuje obecné školy a levné tisky i mimo městské jádro. | `border_policy: normal`, `schools` s `coverage: mass`, `printing: true` a `diglossic: false`. |
+| 1875 | Po válce Istren prosazuje talmurštinu v úřadech i školách nových území. | `language_policy` `istren` `enforced` (study case **Tvrdá politika a obrození**). |
+| 1925 | Ve výpusti `m05-07` vznikne serenské obrozenecké hnutí. | `revival` `m05-07`, jazyk `seren`, `strength: movement`. |
 | 1925 | Učitelé pramenné obce `m11-08` vydají místní idarské čítanky a dvojjazyčné návody pro sezónní dělníky. Domácí řeč získá vlastní psaný registr. | `standard` pro `m11-08`. Místní obrození lze zkoušet s `identity` a případně s `revival` pro `idar`, pokud se zde mezitím rozšířila jiná rodina. `revival` pracuje s rodinou, takže schopnost oživit konkrétní dceřinou varietu je omezená. |
 
 **Stav roku 1950.** Istren je kulturní a průmyslové těžiště. Tarem si drží sedla a starší normu, Selva pobřežní úvěr a Naret oceánské plavby. Ve škole, na trhu a v rodinách působí různé kódy. Rozsah menšin, jazykového obrození a nových městských variet ukáže běh.
@@ -166,8 +170,65 @@ Serenové vycházejí z hustě osídlených niv a dělby práce kolem vody. Talm
 
 ## První běh
 
-Spustitelný scénář je v [talvera.world.json](talvera.world.json). Převod má 96 regionů, 127 sousedských vazeb a 55 datovaných událostí. Pět center má vlastní jméno a ostatní regiony mají pracovní popisky podle pásu a čísla. Čtyři rodiny používají různé recepty pro vlastní jméno jazyka.
+Spustitelný scénář je v [talvera.world.json](talvera.world.json). Převod má 96 regionů, 127 sousedských vazeb a 59 datovaných událostí (od 8. 11. 2026 i čtyři události study cases). Pět center má vlastní jméno a ostatní regiony mají pracovní popisky podle pásu a čísla. Čtyři rodiny používají různé recepty pro vlastní jméno jazyka.
 
 Seed 1, Rust M11 z commitu `05e27e5`, výchozí dynamika a vypnuté náhodné historické pozadí. Běh došel do roku 1950. V posledním pravidelném snímku z roku 1900 měl **123 domácích jazyků** a **211 nářečních shluků**. Padesát jazyků tvořila jediná skupina. Pouze šest jazyků mělo domácí skupiny ve více než jednom regionu. Výsledek se proti cíli 45–55 rozpadá hlavně na malé místní kódy. Tento běh sám neurčuje, nakolik se na výsledku podílí síť, výchozí rozložení center a pravidla pozorování.
 
 Na konci běhu měl Naret 2 033 domácích mluvčích idarského kódu a 690 veřejných uživatelů veretštiny. Veřejní uživatelé jsou podmnožina obyvatel. Vlastní jména domácí řeči z exportu zahrnují `ŋɛ̃nʃem` v Taremu, `t͡somwu` v Selvě a `mɪ` v Naretu. Poslední příklad je zároveň aktuální slovo pro „řeč“ v Naretu a pochází z veretštiny. [Návrh generování jmen](generovani-jmen.md) rozlišuje tento způsob sestavování názvu a historicky uložené vlastní jméno.
+
+## Rozbor na M12 a study cases (8. 11. 2026)
+
+Engine `a4fb8f2` (M12), semínka 1–3, měření skriptem `scripts/talvera_measure.py`.
+Kontrafaktuály mění jen jednu událost, rozsahy jsou přes semínka.
+
+### Mapa
+
+65–70 domácích jazyků (cíl 45–55), 18–22 z jedné skupiny, 24–25 ve více regionech. Bez čtyř
+událostí study cases 57–62 jazyků a 12–14 jednoskupinových. Přírůstek dělají hlavně skupiny,
+které přešly na talmurštinu pod tvrdou politikou Istrenu (viz níže): pozorování je počítá jako
+samostatné jazyky.
+
+### Co měřit podle ér
+
+| Éra | Otázka | Výsledek |
+|---|---|---|
+| I | serenské obce do 25 km přes nové hranice proti obcím uvnitř nástupce (hlásková vzdálenost) | 0,47–0,52 proti 0,17–0,19; **kontrafaktuál s jedním nástupcem 0,22 přes bývalou hranici** |
+| II | přesídlenci 450 a 525 | všichni drží vlastní kód (seren v `m05-02` 549 lidí, talmur v `m04-05` 424); lexikálně 0,44 a 0,57 od starousedlíků |
+| III | veretské výpůjčky v Naretu a v `m10-06` | 21–27 % proti 7–9 %; **bez veřejné veretštiny z roku 1150 v `m10-06` 0,6 %** |
+| III | ostrovní kapsa `m08-08` a ligový `m08-04` od Selvy (lexikálně) | 0,51–0,57 proti 0,24–0,30 |
+| IV | osady 1475–1650 od mateřské obce (hláskově) | 0,20–0,56: zakladatelský efekt, viz níže |
+| V | kořeny od dělníků v talmurském jádru | 6–7 %, **bez dělnických osad stejně**: 150 let nestačí |
+| V | jezerní obce od Istrenu s masovým školstvím a bez něj | 0,29 proti 0,31 |
+| V | slepé údolí `m06-08` | talmurské, 0,53–0,58 od Istrenu |
+
+### Study cases
+
+**Posádka na brodu (750).** Talmurská elita v `m03-06` zanechá v serenštině 15–25 %
+talmurských slov, v sousedním `m03-07` jsou 2–5 %. Elita (60 lidí) ale na serenštinu
+nepřejde ani za 1 200 let (franská elita v Galii přešla za ~300 let).
+
+**Přístavní kreol (1600).** Nevznikne. V Naretském svazu je úředním jazykem idarština
+(prestiž domácích skupin 0,72, veřejné veretštiny 0,58), veretsky se domluví 12 % lidí a tah ke
+zdomácnění je 0,02. Model tvoří nový domácí jazyk z lingua franky jen s prestiží nebo nutností.
+Pro skutečný kreol by stanice potřebovala smíšené obyvatelstvo bez společného domácího jazyka.
+
+**Tvrdá politika a obrození (1875, 1925).** V anektované výpusti `m05-07` přejde za 75 let na
+talmurštinu 57–83 % lidí (kontrola `m05-08`: všech 1 100 serensky). Obrození z roku 1925 do
+roku 1950 nic nezvrátí. Přešlé skupiny mají talmurský slovník (lexikálně 0,006 od Istrenu), ale
+serenskou výslovnost (hláskově 0,40: odpadají koncové slabiky, *hjæsaneh* → *hjanə*), a proto
+je pozorování počítá jako šest nových jazyků.
+
+**Zakladatelský efekt (pokus, ne událost scénáře).** Osada ze 12 % obyvatel regionu (~150 lidí)
+se od mateřské obce odchýlí o 0,08 už v první generaci i ve vlastním jazykovém regionu, ve
+veretském regionu o 0,13–0,16; osada z poloviny obyvatel (~500 lidí) jen o 0,045, tolik jako dvě
+vesnice mateřského regionu. Malá komunita v modelu rychle dokončí nebo zahodí rozjeté změny
+(tlak populace podle Trudgilla, unášení). Vazba na mateřskou obec ani sdílené ocenění změn
+s mateřským regionem to nezměnily.
+
+### Pro engine
+
+- Varieta po přechodu jazyka (stejný slovník, cizí výslovnost) se počítá jako samostatný jazyk:
+  pozorování by mělo vážit slovník víc než výslovnost.
+- Zakladatelský efekt malých osad je silný; měřítko pro novou osadu (Trudgill 2004, koiné za 2–3
+  generace) by mělo zpomalit první generace.
+- Elita se v Talveře nepřizpůsobí jazyku poddaných.
