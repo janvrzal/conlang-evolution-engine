@@ -22,6 +22,8 @@ pub enum StressRule {
     Antepenult,
     Penult,
     Final,
+    /// Podle váhy předposlední slabiky (latina; WALS 15A).
+    Weight,
 }
 
 impl StressRule {
@@ -32,6 +34,7 @@ impl StressRule {
             "antepenult" => StressRule::Antepenult,
             "penult" => StressRule::Penult,
             "final" => StressRule::Final,
+            "weight" => StressRule::Weight,
             _ => return None,
         })
     }
@@ -43,6 +46,7 @@ impl StressRule {
             StressRule::Antepenult => "antepenult",
             StressRule::Penult => "penult",
             StressRule::Final => "final",
+            StressRule::Weight => "weight",
         }
     }
 
@@ -54,6 +58,7 @@ impl StressRule {
             StressRule::Antepenult => cee_core::process::RULE_ANTEPENULT,
             StressRule::Penult => cee_core::process::RULE_PENULT,
             StressRule::Final => cee_core::process::RULE_FINAL,
+            StressRule::Weight => cee_core::process::RULE_WEIGHT,
         }
     }
 }

@@ -172,7 +172,7 @@ impl Contexts {
             bank.form_of(form)
         };
         nuclei(segments, &bank.vowel, &mut self.nuclei);
-        let stress = stressed_nucleus(&self.nuclei, rule);
+        let stress = stressed_nucleus(&self.nuclei, rule, segments);
         let mut fresh = std::mem::take(&mut self.fresh);
         fresh.clear();
         let last = segments.len();

@@ -19,7 +19,7 @@ pub fn motivation_of(origin: &str) -> f64 {
         "circumlocution" => 0.1,
         "shift" | "conversion" => 0.05,
         "contamination" => -0.05,
-        "coinage" => -0.15,
+        "coinage" => -0.3,
         _ => 0.0,
     }
 }

@@ -15,7 +15,11 @@ starých jazyků a uloží ho do ``src/cee/data/v2_iecor_words.json``:
   Seznam koncovek je náš úsudek, ne data IE-CoR.
 
 Galština v IE-CoR fonemický zápis nemá; její pravopis je skoro fonemický a převádí se
-pravidly (``GAULISH``). Pojmy, které IE-CoR nemá, engine dogeneruje z inventáře hlásek.
+pravidly (``GAULISH``). Pojmy, které mají v IE-CoR jiné ID Concepticonu (kámen, hora, řeka …),
+se párují podle jména (``ALIASES``). Pojmy, které IE-CoR nemá vůbec (zájmena, zápor,
+příbuzenství, kulturní slova), doplní autorský doplněk ``v2_proto_supplement.json`` (dok. 30);
+zbytek engine dogeneruje z inventáře hlásek. Se ``--scenario`` skript zapíše slova i do
+scénáře Evropy (``scenarios/evropa.json``).
 
 Spuštění: ``python scripts/build_v2_iecor_words.py`` (data:
 ``curl -L -o iecor.zip https://codeload.github.com/lexibank/iecor/zip/refs/heads/master``
@@ -42,6 +46,7 @@ LANGUAGES = {
     "slavic": "Old Church Slavonic",
     "greek": "Greek: Ancient",
     "gaulish": "Gaulish",
+    "baltic": "Lithuanian",
 }
 #: Koncovky slovníkového tvaru podle druhu slova (nejdelší první); kmen musí mít
 #: aspoň dvě hlásky.
@@ -54,6 +59,19 @@ ENDINGS = {
         "Verb": [["o", "m", "a", "i̯"], ["o", "m", "a", "ɪ̯"], ["m", "i"], ["o"], ["ɔ"]],
     },
     "Gaulish": {"Noun": [["o", "s"], ["o", "n"]], "Adjective": [["o", "s"]]},
+    # Litevština: jmenné -as, -is, -ys, -us, slovesné -ti (s měkkou i tvrdou souhláskou).
+    "Lithuanian": {
+        "Noun": [["a", "s"], ["ɪ", "s"], ["i", "s"], ["ʊ", "s"], ["u", "s"], ["ɛ", "s"]],
+        "Adjective": [["a", "s"], ["ʊ", "s"], ["u", "s"], ["ɪ", "s"], ["i", "s"]],
+        "Verb": [["tʲ", "ɪ"], ["t", "ɪ"], ["tʲ", "i"], ["t", "i"]],
+    },
+}
+#: Pojem enginu → význam IE-CoR (``Name``) tam, kde se ID Concepticonu liší (STONE OR ROCK
+#: proti STONE apod.) nebo IE-CoR má blízký význam (maso za flesh, jít za walk).
+ALIASES = {
+    "stone": "stone", "mountain": "mountain", "river": "river", "rain": "rain", "burn": "burn",
+    "flesh": "meat", "walk": "go", "fingernail": "nail", "fly": "fly_V", "louse": "louse",
+    "swim": "swim", "skin": "skin",
 }
 #: Galský pravopis → IPA (nejdelší první).
 GAULISH = [
@@ -124,7 +142,8 @@ def strip_ending(segments: list[str], language: str, category: str) -> list[str]
 
 
 def main() -> int:
-    cldf = Path(sys.argv[1]) if len(sys.argv) > 1 else CLDF
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    cldf = Path(args[0]) if args else CLDF
     known = symbols()
     concepts = json.loads((DATA / "v2_concepts.json").read_text(encoding="utf-8"))["concepts"]
     defaults = json.loads((DATA / "v2_defaults.json").read_text(encoding="utf-8"))["default_concepts"]
@@ -134,6 +153,11 @@ def main() -> int:
         for row in csv.DictReader((cldf / "parameters.csv").open(encoding="utf-8"))
         if row.get("Concepticon_ID")
     }
+    by_name = {v: k for k, v in ALIASES.items() if k in defaults}
+    for row in csv.DictReader((cldf / "parameters.csv").open(encoding="utf-8")):
+        if parameter_concept.get(row["ID"]) is None and row["Name"] in by_name:
+            parameter_concept[row["ID"]] = by_name[row["Name"]]
+    supplement = json.loads((DATA / "v2_proto_supplement.json").read_text(encoding="utf-8"))["languages"]
     language_ids = {
         row["Name"]: row["ID"] for row in csv.DictReader((cldf / "languages.csv").open(encoding="utf-8"))
     }
@@ -165,17 +189,37 @@ def main() -> int:
             segments = strip_ending(segments, name, concepts[concept]["category"])
             if len(segments) >= 2:
                 words[concept] = "".join(segments)
+        added = 0
+        for concept, word in supplement.get(scenario_id, {}).items():
+            if concept in defaults and concept not in words:
+                words[concept] = unicodedata.normalize("NFD", word)
+                added += 1
         inventory = Counter(s for w in words.values() for s in split(w, known))
         result[scenario_id] = {
             "iecor_language": name,
             "words": dict(sorted(words.items())),
             "inventory": [s for s, _ in inventory.most_common()],
         }
-        print(f"{scenario_id} ({name}): {len(words)} pojmů, vynecháno {dict(dropped)}")
+        print(f"{scenario_id} ({name}): {len(words)} pojmů (doplněk {added}), vynecháno {dict(dropped)}")
+    if "--scenario" in sys.argv:
+        path = DATA / "scenarios" / "evropa.json"
+        scenario = json.loads(path.read_text(encoding="utf-8"))
+        for language in scenario["languages"]:
+            if language["id"] in result:
+                language["words"] = result[language["id"]]["words"]
+                # Hlásky doplňku, které inventář jazyka ještě nemá (řecké b z β).
+                listed = set(language.get("consonants", [])) | set(language.get("vowels", []))
+                for word in language["words"].values():
+                    for segment in split(word, known):
+                        if listed and segment not in listed:
+                            kind = "vowels" if syllabic(segment) else "consonants"
+                            language[kind].append(segment)
+                            listed.add(segment)
+        path.write_text(json.dumps(scenario, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     OUT.write_text(
         json.dumps(
             {
-                "description": "Slova starých jazyků pro pojmy enginu z IE-CoR (scripts/build_v2_iecor_words.py, dok. 23).",
+                "description": "Slova starých jazyků pro pojmy enginu z IE-CoR a autorského doplňku v2_proto_supplement.json (scripts/build_v2_iecor_words.py, dok. 23 a 30).",
                 "source": {
                     "citation": "Heggarty, Paul & Anderson, Cormac & Scarborough, Matthew 2024. Indo-European Cognate Relationships database (IE-CoR version 1.1). Leipzig: Max Planck Institute for Evolutionary Anthropology. https://iecor.clld.org",
                     "license": "CC BY 4.0",
@@ -190,6 +234,13 @@ def main() -> int:
         encoding="utf-8",
     )
     return 0
+
+
+def syllabic(segment: str) -> bool:
+    """Je hláska slabičná (rys ``syl`` tabulky hlásek)?"""
+    table = json.loads((DATA / "v2_segments.json").read_text(encoding="utf-8"))
+    at = table["ipa"].index(segment)
+    return table["vectors"][at][table["features"].index("syl")] == "2"
 
 
 def split(word: str, known: set[str]) -> list[str]:

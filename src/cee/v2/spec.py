@@ -79,7 +79,7 @@ class LanguageSpec(_Model):
     #: ``default`` (pády, minulý čas, plurál), ``substrate`` (zápor za slovesem,
     #: pevné SOV), ``full`` (i funkce, které jazyk může vyvinout: člen, budoucí čas, vid).
     grammar: Literal["default", "substrate", "full"] = "default"
-    stress: Literal["initial", "second", "antepenult", "penult", "final"] = "penult"
+    stress: Literal["initial", "second", "antepenult", "penult", "final", "weight"] = "penult"
     stress_strength: Literal["weak", "strong"] = "weak"
     #: Slova, která zadal autor: pojem → tvar v IPA. Ostatní složí generátor.
     words: dict[str, str] = Field(default_factory=dict)

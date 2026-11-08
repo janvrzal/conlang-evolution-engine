@@ -262,6 +262,8 @@ pub struct Pressures<'a> {
     catalog: Catalog,
     /// Vlastníci tvarů podle sloupce osy: (tvar, pojem, kořen) seřazení; staví se líně.
     owners: Vec<OnceLock<Vec<(u32, u32, u32)>>>,
+    /// Medián délky dominantních slov skupiny (Zipfovo zkracování, `lexical_length_cost`).
+    typical: Vec<OnceLock<f64>>,
     /// Slabost buňky podle (sloupec, funkce).
     weakness: Vec<OnceLock<f64>>,
     /// Dominantní varianta konstrukční proměnné funkce podle (sloupec, funkce).
@@ -553,6 +555,7 @@ impl<'a> Pressures<'a> {
                 .any(|&g| !groups.taboo[g.index()].is_empty()),
             catalog,
             owners: (0..columns).map(|_| OnceLock::new()).collect(),
+            typical: (0..columns).map(|_| OnceLock::new()).collect(),
             weakness: (0..columns * functions).map(|_| OnceLock::new()).collect(),
             dominant: (0..columns * functions).map(|_| OnceLock::new()).collect(),
         })
@@ -733,9 +736,19 @@ impl<'a> Pressures<'a> {
                         continue;
                     }
                     let appeal = columns.appeal[variant.index()];
-                    let term = weight
-                        * (columns.motivation[variant.index()]
-                            + if appeal.is_nan() { 0.0 } else { appeal });
+                    // Průhlednost odvozeniny nebo složeniny platí jen v jazyce, kde slovo vzniklo:
+                    // přejatá odvozenina je pro mluvčí cizího jazyka neprůhledný kořen (Haspelmath
+                    // 2009; dok. 30). Jinak by se výhodná odvozenina šířila přes celý kontinent.
+                    let morpheme = columns.morpheme[variant.index()];
+                    let native = morpheme < 0
+                        || world.morphemes.language.get(morpheme as usize).copied()
+                            == Some(world.groups.main_code(self.inputs.axis[g]).language);
+                    let motivation = if native {
+                        columns.motivation[variant.index()]
+                    } else {
+                        0.0
+                    };
+                    let term = weight * (motivation + if appeal.is_nan() { 0.0 } else { appeal });
                     add(&mut cells[g * slots + slot], term);
                 }
             }
@@ -832,7 +845,9 @@ impl<'a> Pressures<'a> {
                     let morpheme = MorphemeId(columns.morpheme[variant.index()] as u32);
                     add(
                         &mut cells[at],
-                        weight * self.lexical_clarity(g, morpheme, concept),
+                        weight
+                            * (self.lexical_clarity(g, morpheme, concept)
+                                + self.lexical_length(g, morpheme, concept)),
                     );
                 }
             }
@@ -1059,6 +1074,44 @@ impl<'a> Pressures<'a> {
             }
         }
         value
+    }
+
+    /// Zipfův zákon zkracování (Zipf 1935; Piantadosi, Tily a Gibson 2011): nové slovo pro
+    /// častý pojem, delší než zavedené slovo i než medián slov jazyka, je v řeči nevýhodné
+    /// (složenina „zvíře-voda“ za rybu). Zavedené dlouhé slovo se netrestá: obrousí se nebo
+    /// zkrátí (`Semantic::Clipping`), nenahradí ho kořen z ničeho (dok. 30).
+    fn lexical_length(&self, column: usize, morpheme: MorphemeId, concept: ConceptId) -> f64 {
+        let world = self.world;
+        let cost = world.params.lexical_length_cost;
+        if cost <= 0.0 {
+            return 0.0;
+        }
+        let group = self.inputs.axis[column];
+        let length = world.bank.form(world.unit_of(group, morpheme).form).len() as f64;
+        let typical = *self.typical[column].get_or_init(|| {
+            let mut lengths: Vec<usize> = self
+                .owners_of(column)
+                .iter()
+                .map(|&(form, _, _)| world.bank.form(form).len())
+                .collect();
+            if lengths.is_empty() {
+                return 4.0;
+            }
+            lengths.sort_unstable();
+            (lengths[lengths.len() / 2] as f64).max(3.0)
+        });
+        let dominant = world.groups.main_code(group).phonology.dominant_of(concept);
+        let incumbent = if dominant.is_none() {
+            0.0
+        } else {
+            world.form_of(group, dominant).len() as f64
+        };
+        let reference = typical.max(incumbent);
+        let excess = (length - reference) / reference;
+        if excess <= 0.0 {
+            return 0.0;
+        }
+        -cost * (0.5 + world.concept_frequency(concept)) * excess
     }
 
     // --- tlaky na konstrukce -------------------------------------------------------------

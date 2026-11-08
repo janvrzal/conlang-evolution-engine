@@ -34,7 +34,7 @@
         "u"
       ],
       "grammar": "full",
-      "stress": "penult",
+      "stress": "weight",
       "constructions": {
         "FUTURE": {
           "kind": "synthetic"

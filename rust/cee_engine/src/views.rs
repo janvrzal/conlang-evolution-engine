@@ -781,7 +781,7 @@ pub fn verify(world: &World) -> Result<(), String> {
 use crate::ids::ConceptId;
 
 /// Počet druhů sémantických změn (`changes::lexicon::Semantic`).
-pub const SEMANTIC_KINDS: usize = 7;
+pub const SEMANTIC_KINDS: usize = 10;
 
 /// Pohledy odvozené z dominantních kořenů kódu; upravují se při každé změně dominantního kořene
 /// pojmu ([`set_dominant`]).

@@ -341,6 +341,9 @@ fn group_state(
                 StressRule::Antepenult => "14A-5",
                 StressRule::Penult => "14A-6",
                 StressRule::Final => "14A-7",
+                // Váhový přízvuk (latina) padne většinou na předposlední slabiku; WALS 14A ho
+                // řadí mezi „bez pevného přízvuku“ (14A-1), který převodník na model nemapuje.
+                StressRule::Weight => "14A-6",
             }
             .to_owned(),
         ),

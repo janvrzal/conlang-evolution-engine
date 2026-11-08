@@ -236,6 +236,8 @@ pub struct Parameters {
     pub city_listening: f64,
     pub tonogenesis_trigger: f64,
     pub release_residual: f64,
+    pub lexical_length_cost: f64,
+    pub settlement_growth: f64,
     pub village_openness: f64,
     pub border_link_scale: f64,
     pub category_loss_l2_boost: f64,

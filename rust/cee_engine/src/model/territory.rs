@@ -43,6 +43,9 @@ pub struct Territory {
     /// (Wrigley 1967); 0 = vesnice (dok. 27).
     #[serde(default)]
     pub urban: f64,
+    /// Rok, kdy sídlo založila migrace (osadníci); `None` u sídel scénáře (dok. 30).
+    #[serde(default)]
+    pub settled: Option<f64>,
 }
 
 impl Territory {
@@ -56,6 +59,7 @@ impl Territory {
             terrain: "plain".into(),
             native_language: LanguageId::NONE,
             urban: 0.0,
+            settled: None,
         }
     }
 }

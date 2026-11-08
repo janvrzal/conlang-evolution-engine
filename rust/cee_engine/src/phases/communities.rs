@@ -46,6 +46,9 @@ pub fn community_step(
         migrate(world, &edit)?;
     }
     urban_inflow(world, &edit)?;
+    if world.params.settlement_growth > 0.0 {
+        settlement_growth(world, dt, &edit)?;
+    }
     let mut removed = false;
     for group in world.group_ids() {
         if !world.groups.contains(group) {
@@ -181,6 +184,77 @@ fn level_forms(world: &mut World, dt: f64, tick: u32) -> Result<(), String> {
             crate::phonology::requeue_all(world, group, unit)?;
         }
         world.groups.main_code_mut(group).phonology.version += 1;
+    }
+    Ok(())
+}
+
+/// Růst nových sídel (dok. 30): sídlo založené migrací (`Territory::settled`), menší, než je
+/// obvyklá velikost vesnice v jeho regionu (medián součtu mluvčích sídel), roste logisticky
+/// k ní, `settlement_growth` za generaci (předindustriální kolonizace kolem 1 % ročně;
+/// Livi-Bacci 2017). Osadníci (Slované v Čechách, Sasové v Británii) tak po příchodu nezůstanou
+/// navždy malou skupinou. Sídel scénáře (i záměrně malých vesnic) a měst se to netýká.
+fn settlement_growth(world: &mut World, dt: f64, edit: &Edits) -> Result<(), String> {
+    use crate::model::territory::TerritoryLevel;
+    let rate = world.params.settlement_growth;
+    let mut total: std::collections::BTreeMap<usize, f64> = std::collections::BTreeMap::new();
+    for group in world.group_ids() {
+        let g = group.index();
+        if !world.groups.contains(group) || world.groups.written[g] || world.groups.aggregate[g] {
+            continue;
+        }
+        if world.groups.domain[g] != Domain::Home {
+            continue;
+        }
+        *total.entry(world.groups.territory[g].index()).or_default() +=
+            f64::from(world.groups.population[g]);
+    }
+    // Obvyklá velikost vesnice podle regionu (rodiče sídla).
+    let mut by_region: std::collections::BTreeMap<usize, Vec<f64>> =
+        std::collections::BTreeMap::new();
+    for (&at, &people) in &total {
+        let place = &world.territories[at];
+        if place.level != TerritoryLevel::Settlement || place.urban > 0.0 {
+            continue;
+        }
+        by_region
+            .entry(place.parent.index())
+            .or_default()
+            .push(people);
+    }
+    let typical: std::collections::BTreeMap<usize, f64> = by_region
+        .into_iter()
+        .map(|(region, mut sizes)| {
+            sizes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            (region, sizes[sizes.len() / 2])
+        })
+        .collect();
+    for group in world.group_ids() {
+        let g = group.index();
+        if !world.groups.contains(group) || world.groups.written[g] || world.groups.aggregate[g] {
+            continue;
+        }
+        if world.groups.domain[g] != Domain::Home {
+            continue;
+        }
+        let at = world.groups.territory[g].index();
+        let place = &world.territories[at];
+        if place.level != TerritoryLevel::Settlement || place.urban > 0.0 || place.settled.is_none()
+        {
+            continue;
+        }
+        let (Some(&size), Some(&target)) = (total.get(&at), typical.get(&place.parent.index()))
+        else {
+            continue;
+        };
+        if size >= target || size <= 0.0 {
+            continue;
+        }
+        let renewal = (dt / world.groups.generation_years[g]).min(1.0);
+        let factor = 1.0 + rate * renewal * (1.0 - size / target);
+        let grown = (f64::from(world.groups.population[g]) * factor).round() as u32;
+        if grown > world.groups.population[g] {
+            edit.set_group(world, group, Field::Population(grown))?;
+        }
     }
     Ok(())
 }

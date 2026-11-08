@@ -72,6 +72,11 @@ impl std::fmt::Debug for FormBank {
 
 impl FormBank {
     pub fn new(table: Arc<SegmentTable>) -> FormBank {
+        cee_core::process::set_long_vowels(
+            (0..table.len())
+                .map(|s| table.is_vowel(s as i32) && table.feature(s as i32, "long") == 1)
+                .collect(),
+        );
         let mut bank = Bank::new(table.boundary(), table.vowel.clone()).expect("maska samohlásek");
         // Polosamohlásky (sonorita 3) patří k jádru slabiky v příznakovosti tvarů; hranice slova ne.
         let mut glide: Vec<bool> = (0..table.len())

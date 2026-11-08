@@ -30,14 +30,15 @@ pub const INNOVATIONS_PER_GENERATION: f64 = 0.6;
 
 /// Prior rodin v pořadí `FAMILIES`.
 /// Eliza v hiátu (index 28) má prior 0,5 jako apokopa a synkopa (stejný druh změny).
-pub const PRIORS: [f64; 34] = [
+/// Náhradní prodloužení (29) a krácení samohlásek (30) mají 0,25 a 0,3 (dok. 30).
+pub const PRIORS: [f64; 36] = [
     1.0, 0.8, 0.4, 0.4, 0.3, 0.8, 0.8, 0.6, 0.5, 0.5, 0.6, 0.8, 0.5, 0.5, 1.2, 0.4, 0.5, 0.5, 0.4,
-    0.15, 0.35, 0.2, 0.25, 0.35, 0.2, 0.3, 0.2, 0.2, 0.5, 0.12, 0.08, 0.08, 0.04, 0.04,
+    0.15, 0.35, 0.2, 0.25, 0.35, 0.2, 0.3, 0.2, 0.2, 0.5, 0.25, 0.3, 0.12, 0.08, 0.08, 0.04, 0.04,
 ];
 
 /// Od které rodiny jsou tónové. Mají vlastní rozpočet inovací: do součtu priorů se
 /// nepočítají, takže tempo ostatních rodin nezmění.
-pub const FIRST_TONAL: usize = 29;
+pub const FIRST_TONAL: usize = 31;
 
 /// Míra rodiny na jednotku opory: `INNOVATIONS_PER_GENERATION · prior / součet priorů`
 /// (součet bez tónových rodin).

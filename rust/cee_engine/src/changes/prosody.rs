@@ -12,10 +12,15 @@ use crate::world::World;
 
 /// Doložené směry posunu přízvuku s priory z literatury (Hyman 1977, 2014; Hayes 1995).
 /// Posun na finálu záměrně chybí: oxytone vzniká redukcí a apokopou, ne pravidlem posunu.
-const STRESS_SHIFT_PRIORS: [(StressRule, &[(StressRule, f64)]); 5] = [
+/// Váhový přízvuk (`Weight`) vzniká z předposledního a třetího od konce (dok. 30).
+const STRESS_SHIFT_PRIORS: [(StressRule, &[(StressRule, f64)]); 6] = [
     (
         StressRule::Penult,
-        &[(StressRule::Initial, 0.7), (StressRule::Antepenult, 0.3)],
+        &[
+            (StressRule::Initial, 0.7),
+            (StressRule::Antepenult, 0.3),
+            (StressRule::Weight, 0.2),
+        ],
     ),
     (
         StressRule::Initial,
@@ -23,7 +28,11 @@ const STRESS_SHIFT_PRIORS: [(StressRule, &[(StressRule, f64)]); 5] = [
     ),
     (
         StressRule::Antepenult,
-        &[(StressRule::Penult, 0.6), (StressRule::Initial, 0.4)],
+        &[
+            (StressRule::Penult, 0.6),
+            (StressRule::Initial, 0.4),
+            (StressRule::Weight, 0.3),
+        ],
     ),
     (
         StressRule::Second,
@@ -32,6 +41,16 @@ const STRESS_SHIFT_PRIORS: [(StressRule, &[(StressRule, f64)]); 5] = [
     (
         StressRule::Final,
         &[(StressRule::Penult, 0.7), (StressRule::Initial, 0.3)],
+    ),
+    // Váhový přízvuk se ztrátou délky samohlásek ustálí na předposlední slabice (latina →
+    // románské jazyky), jinde na první (Hayes 1995; dok. 30).
+    (
+        StressRule::Weight,
+        &[
+            (StressRule::Penult, 0.6),
+            (StressRule::Initial, 0.3),
+            (StressRule::Antepenult, 0.1),
+        ],
     ),
 ];
 

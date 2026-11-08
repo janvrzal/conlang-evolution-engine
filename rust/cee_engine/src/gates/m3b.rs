@@ -12,8 +12,8 @@ use crate::model::repertoire::Payload;
 use crate::scenarios::{village_grid_default, SeedOptions};
 use crate::{Simulation, SimulationConfig};
 
-/// Původy nových slov, které Python připouští (`ORIGINS`).
-pub const ORIGINS: [&str; 8] = [
+/// Původy nových slov (`ORIGINS` v Pythonu; `clipping` od M11, dok. 30).
+pub const ORIGINS: [&str; 12] = [
     "shift",
     "conversion",
     "derivation",
@@ -21,6 +21,10 @@ pub const ORIGINS: [&str; 8] = [
     "circumlocution",
     "contamination",
     "back_formation",
+    "clipping",
+    "renewal",
+    "metathesis",
+    "dissimilation",
     "coinage",
 ];
 

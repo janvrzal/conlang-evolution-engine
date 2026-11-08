@@ -157,6 +157,24 @@
    "group": "society"
   },
   {
+   "name": "lexical_length_cost",
+   "kind": "number",
+   "default": 0.3,
+   "min": 0.0,
+   "max": 3.0,
+   "description": "Zipfův zákon zkracování (Zipf 1935; Piantadosi, Tily a Gibson 2011): slovo delší, než je medián délky slov jazyka, má v tlaku na jasnost slova nevýhodu váha × (½ + frekvence pojmu) × relativní přesah délky. Bez ní se základní slova nahrazovala dlouhými složeninami a odvozeninami („zvíře-voda“ za rybu, „slunce-ne“ za noc) stejně snadno jako krátkými (dok. 30). 0 = bez nevýhody (model před M11). 0,3: s 0,6 byla retence 0,908 nad pásmem.",
+   "group": "transfer"
+  },
+  {
+   "name": "settlement_growth",
+   "kind": "number",
+   "default": 0.3,
+   "min": 0.0,
+   "max": 2.0,
+   "description": "Logistický růst sídla, které je menší než obvyklá vesnice jeho regionu (medián): za generaci násobek 1 + růst × (1 − velikost / obvyklá velikost). 0,3 za generaci je asi 1 % ročně, tempo předindustriální kolonizace (Livi-Bacci 2017, A Concise History of World Population). Osadníci po příchodu dorostou do velikosti vesnice (dok. 30). 0 = populace stálé (model před M11).",
+   "group": "society"
+  },
+  {
    "name": "release_residual",
    "kind": "number",
    "default": 0.3,

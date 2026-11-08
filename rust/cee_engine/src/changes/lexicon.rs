@@ -38,6 +38,86 @@ const APPEAL_MEAN: f64 = -0.05;
 const APPEAL_SD: f64 = 0.15;
 /// Nejdelší složenina, která se v řeči ujme (počet hlásek).
 const MAX_COMPOUND: usize = 10;
+/// Exponent poměru prestiží dárce a příjemce ve váze výpůjček (`donors`; dok. 30).
+const PRESTIGE_ASYMMETRY: f64 = 1.0;
+/// Váha cesty k odvozenině od vlastního kořene (proti vazbám grafu: doložená odvozenina ze tří
+/// a více jazyků má váhu ln 4 ≈ 1,4).
+const SELF_DERIVATION: f64 = 0.5;
+/// Kořen delší než tolik hlásek se může zkrátit (`Semantic::Clipping`).
+const CLIP_FROM: usize = 5;
+
+/// Je hláska likvida (r, l a jejich varianty)?
+fn liquid(table: &crate::segments::SegmentTable, segment: i32) -> bool {
+    !table.is_vowel(segment) && table.sonority(segment) == 2
+}
+
+/// Metateze likvidy a samohlásky (Hock 1991, 6.4): *CoRC* → *CRoC* (psl. *golva* → stsl.
+/// *glava*, lat. *formaticum* → it. *formaggio* a fr. *fromage*), jinak *CRVC* → *CVRC* (stangl.
+/// *brid* → *bird*). Mění se první vhodné místo slova; `None`, když ve slově není.
+fn metathesis(form: &[i32], table: &crate::segments::SegmentTable) -> Option<Vec<i32>> {
+    let consonant = |s: i32| !table.is_vowel(s);
+    for i in 1..form.len().saturating_sub(2) {
+        let (before, a, b, after) = (form[i - 1], form[i], form[i + 1], form[i + 2]);
+        let swap = (consonant(before) && table.is_vowel(a) && liquid(table, b) && consonant(after))
+            || (consonant(before)
+                && !liquid(table, before)
+                && liquid(table, a)
+                && table.is_vowel(b)
+                && consonant(after));
+        if swap {
+            let mut out = form.to_vec();
+            out.swap(i, i + 1);
+            return Some(out);
+        }
+    }
+    None
+}
+
+/// Disimilace likvid (Hock 1991, 6.3): ze dvou r (nebo dvou l) ve slově se druhé změní v l
+/// (v r): lat. *arbor* → šp. *árbol*, *peregrinus* → it. *pellegrino* (tam první). `None`, když
+/// slovo dvě stejné likvidy nemá.
+fn dissimilation(form: &[i32], table: &crate::segments::SegmentTable) -> Option<Vec<i32>> {
+    let lateral = |s: i32| table.feature(s, "lat") == 1;
+    let first = form.iter().position(|&s| liquid(table, s))?;
+    let second = form[first + 1..]
+        .iter()
+        .position(|&s| liquid(table, s) && lateral(s) == lateral(form[first]))?
+        + first
+        + 1;
+    if !form[first + 1..second].iter().any(|&s| table.is_vowel(s)) {
+        return None;
+    }
+    let other = table
+        .id_of(if lateral(form[second]) { "r" } else { "l" })
+        .ok()?;
+    let mut out = form.to_vec();
+    out[second] = other;
+    Some(out)
+}
+
+/// Zkrácené slovo: první dvě slabiky (do druhé samohlásky a souhlásky za ní, jsou-li dál ještě
+/// hlásky), u dvojslabičných první slabika se souhláskou; `None`, když by nevzniklo kratší slovo
+/// aspoň o dvou hláskách se samohláskou. Odpovídá zkracování častých slov a splývání složenin
+/// (angl. *hlāf-weard* → *lord*, *hūs-wīf* → *hussy*; Bybee 2001; Hopper a Traugott 2003).
+fn clip(form: &[i32], vowel: impl Fn(i32) -> bool) -> Option<Vec<i32>> {
+    let nuclei: Vec<usize> = (0..form.len())
+        .filter(|&i| vowel(form[i]) && (i == 0 || !vowel(form[i - 1])))
+        .collect();
+    let keep = match nuclei.len() {
+        0 | 1 => return None,
+        2 => nuclei[0] + 1,
+        _ => nuclei[1] + 1,
+    };
+    // Dlouhá samohláska nebo dvojhláska zůstane celá, za ní jedna souhláska.
+    let mut end = keep;
+    while end < form.len() && vowel(form[end]) {
+        end += 1;
+    }
+    if end < form.len() {
+        end += 1;
+    }
+    (end >= 2 && end < form.len()).then(|| form[..end].to_vec())
+}
 
 // --- společné pomocné funkce --------------------------------------------------------------
 
@@ -333,6 +413,9 @@ pub enum Semantic {
     Taboo,
     Contamination,
     BackFormation,
+    Clipping,
+    Metathesis,
+    Dissimilation,
 }
 
 /// Doložená cesta k novému slovu pojmu: váha, kořeny a pojmy, ze kterých slovo vzniká.
@@ -370,6 +453,10 @@ impl SemanticChange {
             Semantic::Taboo => 1e-3,
             Semantic::Contamination => 2e-5,
             Semantic::BackFormation => 5e-5,
+            // Jako odvozování: dlouhé časté slovo se zkrátí za několik set let (Bybee 2001).
+            Semantic::Clipping => 4e-4,
+            // Sporadické změny jednoho slova (Hock 1991, kap. 6): vzácné, bez výhody.
+            Semantic::Metathesis | Semantic::Dissimilation => 1e-4,
         }
     }
 
@@ -427,6 +514,17 @@ impl SemanticChange {
                 if world.suffixes_of(group).is_empty() {
                     return found;
                 }
+                // Obnova slova zdrobnělinou nebo jinou odvozeninou téhož kořene (lat. *auris* →
+                // *auricula* → fr. *oreille*, *sol* → *soliculus* → *soleil*): nejčastější
+                // odvozovací cesta k základnímu slovu (Hasselrot 1957; Bybee 2001; dok. 30).
+                if let Some(root) = current {
+                    found.push(Path {
+                        weight: SELF_DERIVATION,
+                        root: Some(root),
+                        other: None,
+                        from: vec![concept],
+                    });
+                }
                 for relation in graph.into(concept) {
                     let Some(root) = dominant_root(world, group, relation.source) else {
                         continue;
@@ -479,6 +577,34 @@ impl SemanticChange {
                     found.push(Path {
                         weight: 1.0,
                         root: None,
+                        other: None,
+                        from: Vec::new(),
+                    });
+                }
+            }
+            Semantic::Metathesis | Semantic::Dissimilation => {
+                // Místo jde navrhnout u každého slova; tvar, který změnu nepřipouští, návrh vrátí
+                // prázdný (míra tak nezávisí na tvaru, který se mění zvukovými změnami).
+                if let Some(root) = current {
+                    found.push(Path {
+                        weight: 1.0,
+                        root: Some(root),
+                        other: None,
+                        from: Vec::new(),
+                    });
+                }
+            }
+            Semantic::Clipping => {
+                // Míra podle délky, s jakou kořen vznikl (neměnná, takže průběžné míry platí i po
+                // zvukových změnách): složeniny a odvozeniny, ne krátká zděděná slova.
+                let Some(current) = current else {
+                    return found;
+                };
+                let born = world.bank.form(world.morphemes.form[current.index()]).len();
+                if born > CLIP_FROM {
+                    found.push(Path {
+                        weight: ((born - CLIP_FROM) as f64 / CLIP_FROM as f64).min(2.0),
+                        root: Some(current),
                         other: None,
                         from: Vec::new(),
                     });
@@ -583,6 +709,9 @@ impl Semantic {
         Semantic::Taboo,
         Semantic::Contamination,
         Semantic::BackFormation,
+        Semantic::Clipping,
+        Semantic::Metathesis,
+        Semantic::Dissimilation,
     ];
 }
 
@@ -750,6 +879,9 @@ impl Change for SemanticChange {
             Semantic::Taboo => "taboo_replacement",
             Semantic::Contamination => "contamination",
             Semantic::BackFormation => "back_formation",
+            Semantic::Clipping => "clipping",
+            Semantic::Metathesis => "metathesis",
+            Semantic::Dissimilation => "dissimilation",
         }
     }
 
@@ -849,8 +981,15 @@ impl Change for SemanticChange {
                 form.extend_from_slice(&suffix);
                 let sources = names(world, &path.from);
                 let morpheme = new_root(world, ctx, site, &form, kind, &parts, sources, Some(root));
+                // Odvozenina od vlastního kořene (zdrobnělina) není průhlednější než slovo samo:
+                // původ `renewal` nemá výhodu motivace; vyhraje, když se slovo obrousilo.
+                let origin = if path.from == [concept] {
+                    "renewal"
+                } else {
+                    "derivation"
+                };
                 (
-                    lexical(morpheme, "derivation", String::new()),
+                    lexical(morpheme, origin, String::new()),
                     plain_name(kind, &parts),
                 )
             }
@@ -891,6 +1030,40 @@ impl Change for SemanticChange {
                 let morpheme = new_root(world, ctx, site, &form, kind, &parts, Vec::new(), None);
                 (
                     lexical(morpheme, "contamination", String::new()),
+                    plain_name(kind, &parts),
+                )
+            }
+            Semantic::Metathesis | Semantic::Dissimilation => {
+                let form = world.form_of(group, path.root?).to_vec();
+                let table = world.table.as_ref()?;
+                let changed = if self.which == Semantic::Metathesis {
+                    metathesis(&form, table)?
+                } else {
+                    dissimilation(&form, table)?
+                };
+                let morpheme = new_root(
+                    world,
+                    ctx,
+                    site,
+                    &changed,
+                    kind,
+                    &parts,
+                    Vec::new(),
+                    path.root,
+                );
+                (
+                    lexical(morpheme, kind, String::new()),
+                    plain_name(kind, &parts),
+                )
+            }
+            Semantic::Clipping => {
+                let form = world.form_of(group, path.root?).to_vec();
+                let table = world.table.as_ref()?;
+                let stem = clip(&form, |s| table.is_vowel(s))?;
+                let morpheme =
+                    new_root(world, ctx, site, &stem, kind, &parts, Vec::new(), path.root);
+                (
+                    lexical(morpheme, "clipping", String::new()),
                     plain_name(kind, &parts),
                 )
             }
@@ -972,8 +1145,13 @@ pub fn donors(world: &World, group: GroupId) -> Vec<(f64, GroupId)> {
             world.groups.alive[target.index()] && !world.groups.written[target.index()]
         })
         .map(|(target, link)| {
+            // Prestižní asymetrie (Thomason a Kaufman 1988): slova tečou od prestižnějšího
+            // k méně prestižnímu; váha dárce roste s poměrem prestiží, ne jen s jeho prestiží
+            // (město s prestiží 1 si od vesnice s 0,5 půjčí osmkrát méně než ona od něj).
+            let donor = world.groups.prestige[target.index()];
+            let own = world.groups.prestige[group.index()].max(1e-6);
             (
-                link.strength * world.groups.prestige[target.index()],
+                link.strength * donor * (donor / own).powf(PRESTIGE_ASYMMETRY),
                 target,
             )
         })
@@ -1190,17 +1368,53 @@ impl Change for LexicalBorrowing {
 /// Lexikální změny v kanonickém pořadí (před zvukovými změnami).
 pub fn changes() -> Vec<Box<dyn Change>> {
     let mut all: Vec<Box<dyn Change>> = vec![Box::new(LexicalCoinage)];
-    for which in [
-        Semantic::Shift,
-        Semantic::Conversion,
-        Semantic::Derivation,
-        Semantic::Compounding,
-        Semantic::Taboo,
-        Semantic::Contamination,
-        Semantic::BackFormation,
-    ] {
+    for which in Semantic::ALL {
         all.push(Box::new(SemanticChange::new(which)));
     }
     all.push(Box::new(LexicalBorrowing));
     all
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{clip, dissimilation, metathesis};
+    use crate::segments::SegmentTable;
+
+    fn word(table: &SegmentTable, ipa: &str) -> Vec<i32> {
+        table.parse(ipa).unwrap().to_vec()
+    }
+
+    #[test]
+    fn metateze_likvidy() {
+        let table = SegmentTable::default_table();
+        let golva = word(&table, "ɡolva");
+        assert_eq!(table.render(&metathesis(&golva, &table).unwrap()), "ɡlova");
+        let brid = word(&table, "brid");
+        assert_eq!(table.render(&metathesis(&brid, &table).unwrap()), "bird");
+        assert!(metathesis(&word(&table, "voda"), &table).is_none());
+    }
+
+    #[test]
+    fn disimilace_likvid() {
+        let table = SegmentTable::default_table();
+        let arbor = word(&table, "arbor");
+        assert_eq!(
+            table.render(&dissimilation(&arbor, &table).unwrap()),
+            "arbol"
+        );
+        assert!(dissimilation(&word(&table, "ruka"), &table).is_none());
+    }
+
+    #[test]
+    fn zkraceni_na_dve_slabiky() {
+        let table = SegmentTable::default_table();
+        let vowel = |s: i32| table.is_vowel(s);
+        let long = word(&table, "dəmivwədə");
+        assert_eq!(table.render(&clip(&long, vowel).unwrap()), "dəmiv");
+        assert_eq!(
+            table.render(&clip(&word(&table, "voda"), vowel).unwrap()),
+            "vod"
+        );
+        assert!(clip(&word(&table, "dom"), vowel).is_none());
+    }
 }

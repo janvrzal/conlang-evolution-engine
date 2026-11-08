@@ -25,7 +25,25 @@ pub const RULE_SECOND: u8 = 1;
 pub const RULE_ANTEPENULT: u8 = 2;
 pub const RULE_PENULT: u8 = 3;
 pub const RULE_FINAL: u8 = 4;
-pub const RULE_COUNT: usize = 5;
+/// Přízvuk podle váhy slabiky (latinské pravidlo, WALS 15A): předposlední slabika, je-li těžká
+/// (dlouhá samohláska nebo zavřená slabika), jinak třetí od konce.
+pub const RULE_WEIGHT: u8 = 5;
+pub const RULE_COUNT: usize = 6;
+
+/// Dlouhé samohlásky tabulky hlásek (podle čísla hlásky); tabulka je v enginu jedna, takže se
+/// maska nastaví jednou při stavbě banky tvarů (`set_long_vowels`).
+static LONG: std::sync::OnceLock<Vec<bool>> = std::sync::OnceLock::new();
+
+/// Nastaví masku dlouhých samohlásek (první volání platí).
+pub fn set_long_vowels(long: Vec<bool>) {
+    let _ = LONG.set(long);
+}
+
+fn long_vowel(segment: i32) -> bool {
+    LONG.get()
+        .and_then(|mask| mask.get(segment as usize).copied())
+        .unwrap_or(false)
+}
 
 /// V mapě hlásek: výstup ještě není znám (Python ho teprve dopočítá).
 pub const MAP_UNRESOLVED: i32 = -3;
@@ -76,10 +94,19 @@ pub(crate) fn nuclei(form: &[i32], vowel: &[bool], out: &mut Vec<usize>) {
 }
 
 /// Přízvučné jádro podle pravidla (`None`, když tvar nemá samohlásku).
-pub(crate) fn stressed_nucleus(found: &[usize], rule: u8) -> Option<usize> {
+pub(crate) fn stressed_nucleus(found: &[usize], rule: u8, form: &[i32]) -> Option<usize> {
     let count = found.len();
     if count == 0 {
         return None;
+    }
+    if rule == RULE_WEIGHT {
+        if count < 3 {
+            return Some(found[count.saturating_sub(2)]);
+        }
+        let penult = count - 2;
+        // Zavřená slabika: mezi jádry aspoň dvě souhlásky (koda a nástup další slabiky).
+        let heavy = long_vowel(form[found[penult]]) || found[penult + 1] - found[penult] > 2;
+        return Some(found[if heavy { penult } else { penult - 1 }]);
     }
     Some(match rule {
         RULE_INITIAL => found[0],
@@ -140,7 +167,7 @@ fn find_sites(
         nuclei(form, vowel, &mut scratch.nuclei);
     }
     let stressed = if proc.stress != STRESS_NONE {
-        stressed_nucleus(&scratch.nuclei, rule)
+        stressed_nucleus(&scratch.nuclei, rule, form)
     } else {
         None
     };

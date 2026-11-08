@@ -879,6 +879,8 @@ pub(crate) fn migration(
                 position,
                 None,
             )?;
+            // Osada založená migrací smí růst k obvyklé velikosti vesnice (`settlement_growth`).
+            world.territories[place.index()].settled = Some(year);
             let fields = [
                 Field::GenerationYears(world.groups.generation_years[origin]),
                 Field::Prestige(prestige.unwrap_or(world.groups.prestige[origin])),

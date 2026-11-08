@@ -64,9 +64,11 @@ fn miry_a_mista_rodin_jsou_konzistentni() {
     let group = world.group_ids()[0];
     let ctx = context(group);
     let changes = sound_changes();
-    assert_eq!(changes.len(), 34);
+    assert_eq!(changes.len(), 36);
     // Rozpočet netónových rodin dá dohromady nejvýš 0,6 na generaci, tóny mají svůj.
-    let total: f64 = scales()[..29].iter().sum();
+    let total: f64 = scales()[..cee_engine::changes::sound::FIRST_TONAL]
+        .iter()
+        .sum();
     assert!((total - 0.6).abs() < 1e-12);
     let mut found = 0;
     for change in &changes {

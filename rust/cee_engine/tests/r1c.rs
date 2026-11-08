@@ -154,15 +154,16 @@ fn slug_a_prumery_sedi_s_pythonem() {
 #[test]
 fn registr_zmen_ma_kanonicke_poradi() {
     let kinds: Vec<&str> = default_changes().iter().map(|c| c.kind()).collect();
-    // Pořadí jako `DEFAULT_CHANGES`: lexikální (9), zvukové (34), morfologické (3),
+    // Pořadí jako `DEFAULT_CHANGES`: lexikální (12: od M11 i zkracování, metateze a disimilace),
+    // zvukové (36: od M11 i náhradní prodloužení a krácení samohlásek), morfologické (3),
     // syntaktické (11), prozodické (2).
-    assert_eq!(kinds.len(), 9 + 34 + 3 + 11 + 2);
+    assert_eq!(kinds.len(), 12 + 36 + 3 + 11 + 2);
     assert_eq!(kinds[0], "lexical_coinage");
-    assert_eq!(kinds[8], "lexical_borrowing");
-    assert_eq!(kinds[9], cee_core::candidates::FAMILIES[0]);
-    assert_eq!(kinds[9 + 33], cee_core::candidates::FAMILIES[33]);
-    assert_eq!(kinds[43], "leveling");
-    assert_eq!(kinds[46], "periphrasis");
+    assert_eq!(kinds[11], "lexical_borrowing");
+    assert_eq!(kinds[12], cee_core::candidates::FAMILIES[0]);
+    assert_eq!(kinds[12 + 35], cee_core::candidates::FAMILIES[35]);
+    assert_eq!(kinds[48], "leveling");
+    assert_eq!(kinds[51], "periphrasis");
     assert_eq!(*kinds.last().unwrap(), "stress_strength");
     let unique: std::collections::BTreeSet<&&str> = kinds.iter().collect();
     assert_eq!(unique.len(), kinds.len());

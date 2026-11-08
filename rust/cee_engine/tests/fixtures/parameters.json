@@ -184,6 +184,8 @@
  "reading_weight": 0.1,
  "redundant_merge_weight": 0.3,
  "release_residual": 0.3,
+ "lexical_length_cost": 0.3,
+ "settlement_growth": 0.3,
  "restructure_threshold": 0.85,
  "revival_levels": {
   "movement": {

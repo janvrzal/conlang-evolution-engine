@@ -16,7 +16,7 @@
 use std::collections::HashMap;
 
 /// Pořadí rodin (`SOUND_CHANGES`) a jejich druhy.
-pub const FAMILIES: [&str; 34] = [
+pub const FAMILIES: [&str; 36] = [
     "voicing",
     "spirantization",
     "debuccalization",
@@ -46,6 +46,8 @@ pub const FAMILIES: [&str; 34] = [
     "delabialization",
     "labial_shift",
     "hiatus_elision",
+    "compensatory_lengthening",
+    "vowel_shortening",
     "tonogenesis_onset",
     "tonogenesis_coda",
     "tone_merger",
@@ -1411,6 +1413,77 @@ fn diphthongization(m: &Maker<'_>, f: usize) -> Found {
     Ok(found)
 }
 
+/// Dlouhá samohláska k hlásce `vowel`, má-li ji tabulka.
+fn lengthened(m: &Maker<'_>, vowel: u32) -> Option<u32> {
+    let ipa = m.ipa(vowel);
+    if ipa.contains('ː') {
+        return None;
+    }
+    m.t.id(&format!("{ipa}ː")).ok()
+}
+
+/// Náhradní prodloužení (Kavitskaya 2002; Hayes 1989): koncová souhláska slabiky (sonora nebo
+/// frikativa) před další souhláskou odpadne a předchozí samohláska se prodlouží, slabika si
+/// váhu zachová (*nisdo* → lat. *nīdus*, stangl. *gōs* z *gans*). Jen uvnitř slova: na konci
+/// slova by délka konzervovala pádové koncovky (*-am* : *-a*). Jedna změna na samohlásku a třídu.
+fn compensatory_lengthening(m: &Maker<'_>, f: usize) -> Found {
+    let mut found = Vec::new();
+    for (name, features) in CONSONANT_CLASSES {
+        if name == "okluzivy" {
+            continue;
+        }
+        let coda = m.pattern(features)?;
+        if m.present(&coda).is_empty() {
+            continue;
+        }
+        for vowel in m.vowels() {
+            let Some(long) = lengthened(m, vowel) else {
+                continue;
+            };
+            found.push(
+                Candidate::new(
+                    f,
+                    format!("{}+{name} → {} /_C", m.ipa(vowel), m.ipa(long)),
+                    m.single(vowel),
+                    Operation::Merge,
+                )
+                .segment(long)
+                .right(coda.clone())
+                .right2(Pat::Consonant)
+                .ease(0.15)
+                .clarity(-0.05),
+            );
+        }
+    }
+    Ok(found)
+}
+
+/// Krácení dlouhých samohlásek (ztráta délky: latina → románské jazyky, praslovanština →
+/// ruština): bez ní by se délka z náhradního prodloužení jen hromadila.
+fn vowel_shortening(m: &Maker<'_>, f: usize) -> Found {
+    let mut found = Vec::new();
+    for vowel in m.vowels() {
+        let ipa = m.ipa(vowel);
+        let Some(short) = ipa.strip_suffix('ː') else {
+            continue;
+        };
+        let Ok(output) = m.t.id(short) else { continue };
+        found.push(
+            Candidate::new(
+                f,
+                format!("{ipa} → {short}"),
+                m.single(vowel),
+                Operation::Replace,
+            )
+            .segment(output)
+            .ease(0.1)
+            .clarity(-0.1)
+            .reductive(),
+        );
+    }
+    Ok(found)
+}
+
 fn monophthongization(m: &Maker<'_>, f: usize) -> Found {
     let mut found = Vec::new();
     for (first, second, output) in [
@@ -1802,7 +1875,7 @@ fn tone_dissimilation(m: &Maker<'_>, f: usize) -> Found {
 
 type Family = for<'a> fn(&Maker<'a>, usize) -> Found;
 
-const BUILDERS: [Family; 34] = [
+const BUILDERS: [Family; 36] = [
     voicing,
     spirantization,
     debuccalization,
@@ -1832,6 +1905,8 @@ const BUILDERS: [Family; 34] = [
     delabialization,
     labial_shift,
     hiatus_elision,
+    compensatory_lengthening,
+    vowel_shortening,
     tone_from_onset,
     tone_from_coda,
     tone_merger,
