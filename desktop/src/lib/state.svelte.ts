@@ -32,7 +32,10 @@ export interface WorldSpec {
 		name?: string;
 		position: [number, number];
 		neighbours?: string[];
-		villages?: number;
+		/** počet vsí, nebo rozsah [min, max] (počet se vylosuje ze semínka světa) */
+		villages?: number | [number, number];
+		/** prostupnost 0–1 (1 = snadno se přechází); null = z terénu */
+		permeability?: number | null;
 		density?: number;
 		language?: string;
 		terrain?: string;

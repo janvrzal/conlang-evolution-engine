@@ -11,6 +11,7 @@
 		Floating,
 		Ipa,
 		Kbd,
+		Range,
 		Select,
 		Legend,
 		Screen,
@@ -29,7 +30,22 @@
 	} from '$lib/ds';
 	import { t, type MessageKey } from '$lib/i18n.svelte';
 	import { geography } from '$lib/model/geography';
-	import { addRegion, cityOptions, eventsUsingRegion, hasCity, levelsInOrder, regionsPerLanguage, removeRegion, toggleNeighbours, worldWarnings } from '$lib/model/svet';
+	import {
+		addRegion,
+		cityOptions,
+		eventsUsingRegion,
+		hasCity,
+		levelsInOrder,
+		parsePermeability,
+		regionsPerLanguage,
+		removeRegion,
+		terrainPermeability,
+		toggleNeighbours,
+		villagesOf,
+		villagesProblem,
+		villagesValue,
+		worldWarnings
+	} from '$lib/model/svet';
 	import { app } from '$lib/state.svelte';
 
 	const world = $derived(app.world);
@@ -170,22 +186,79 @@
 		});
 		return true;
 	};
-	let villages = $state<string | number>(4), density = $state<string | number>(1), prestige = $state<string | number>(0.5);
+	let density = $state<string | number>(1), prestige = $state<string | number>(0.5);
+	// vsi: pevný počet, nebo rozsah [min, max] (počet vylosuje engine ze semínka světa)
+	let villagesMode = $state<'fixed' | 'range'>('fixed');
+	let vMin = $state<string | number>(4), vMax = $state<string | number>(4);
+	let villagesError = $state<string | null>(null);
+	// prostupnost: z terénu (tabulka terrain_access), nebo zadaná 0–1
+	let permMode = $state<'terrain' | 'set'>('terrain');
+	let permDraft = $state<string | number>(1);
+	let permError = $state<string | null>(null);
 	let posX = $state<string | number>(0), posY = $state<string | number>(0);
 	let numberError = $state<string | null>(null);
 	$effect(() => {
 		if (!region) return;
-		villages = region.villages ?? 4;
+		const v = villagesOf(region.villages);
+		villagesMode = v.min === v.max ? 'fixed' : 'range';
+		vMin = v.min;
+		vMax = v.max;
+		villagesError = null;
+		permMode = region.permeability == null ? 'terrain' : 'set';
+		permDraft = region.permeability ?? terrainPermeability(region.terrain, app.schema, world?.parameters) ?? 1;
+		permError = null;
 		density = region.density ?? 1;
 		prestige = (region.prestige as number | undefined) ?? 0.5;
 		posX = region.position[0];
 		posY = region.position[1];
 		numberError = null;
 	});
-	const commit = (key: 'villages' | 'density' | 'prestige', raw: string | number) => {
+	const commitVillages = () => {
+		if (!region) return;
+		const min = Number(vMin), max = villagesMode === 'fixed' ? Number(vMin) : Number(vMax);
+		const problem = villagesProblem(min, max);
+		villagesError = problem ? t(problem) : null;
+		if (problem) return;
+		const id = region.id, next = villagesValue(min, max), name = geo?.name(id) ?? id;
+		if (JSON.stringify(next) === JSON.stringify(region.villages ?? 4)) return;
+		app.edit(t('svet.edit.villages', { name }), (w) => {
+			const r = w.regions.find((x) => x.id === id);
+			if (r) r.villages = next;
+		});
+	};
+	const setVillagesMode = (mode: 'fixed' | 'range') => {
+		villagesMode = mode;
+		// rozsah začne kolem současného počtu, pevný počet vezme spodní mez
+		if (mode === 'range' && Number(vMax) <= Number(vMin)) vMax = Math.min(12, Number(vMin) + 2);
+		commitVillages();
+	};
+	const derivedPermeability = $derived(region ? terrainPermeability(region.terrain, app.schema, world?.parameters) : null);
+	const setPermeability = (value: number | null) => {
+		if (!region) return;
+		const id = region.id, name = geo?.name(id) ?? id;
+		if ((region.permeability ?? null) === value) return;
+		app.edit(t('svet.edit.permeability', { name }), (w) => {
+			const r = w.regions.find((x) => x.id === id);
+			if (!r) return;
+			if (value == null) delete r.permeability;
+			else r.permeability = value;
+		});
+	};
+	const setPermMode = (mode: 'terrain' | 'set') => {
+		permMode = mode;
+		permError = null;
+		if (mode === 'terrain') setPermeability(null);
+		else setPermeability(parsePermeability(permDraft) ?? derivedPermeability ?? 1);
+	};
+	const commitPermeability = () => {
+		const value = parsePermeability(permDraft);
+		permError = value == null ? t('svet.bad.permeability') : null;
+		if (value != null) setPermeability(value);
+	};
+	const commit = (key: 'density' | 'prestige', raw: string | number) => {
 		if (!region) return;
 		const name = geo?.name(region.id) ?? region.id;
-		const rules = { villages: (n: number) => Number.isInteger(n) && n >= 1 && n <= 12, density: (n: number) => n > 0 && n <= 100, prestige: (n: number) => n >= 0 };
+		const rules = { density: (n: number) => n > 0 && n <= 100, prestige: (n: number) => n >= 0 };
 		numberError = setNumber(region.id, key, t(`svet.edit.${key}` as MessageKey, { name }), raw, rules[key]) ? null : t(`svet.bad.${key}` as MessageKey);
 	};
 	const commitPosition = () => {
@@ -334,6 +407,23 @@
 						onchange={(v) => setRegion(region.id, 'terrain', t('svet.edit.terrain', { name }), v)}
 					/>
 				</Field>
+				<Field label={t('svet.permeability')} hint={t('svet.permeability_note')} error={permError}>
+					<Segmented
+						label={t('svet.edit.permeability', { name })}
+						value={permMode}
+						options={[
+							{ value: 'terrain', label: derivedPermeability != null ? t('svet.permeability_terrain_value', { value: derivedPermeability.toLocaleString('cs-CZ') }) : t('svet.permeability_terrain') },
+							{ value: 'set', label: t('svet.permeability_set') }
+						]}
+						onchange={setPermMode}
+					/>
+					{#if permMode === 'set'}
+						<Cluster gap={2} wrap={false}>
+							<Range min={0} max={1} step={0.05} label={t('svet.permeability')} value={Number(parsePermeability(permDraft) ?? 1)} oninput={(v) => (permDraft = v)} onchange={commitPermeability} />
+							<TextInput type="number" width="s" min={0} max={1} step={0.05} label={t('svet.permeability')} invalid={!!permError} bind:value={permDraft} onchange={commitPermeability} />
+						</Cluster>
+					{/if}
+				</Field>
 				<Field label={t('svet.identity')} hint={t('svet.identity_note')}>
 					<Segmented
 						label={t('svet.edit.identity', { name })}
@@ -342,9 +432,27 @@
 						onchange={(v) => setRegion(region.id, 'identity', t('svet.edit.identity', { name }), v)}
 					/>
 				</Field>
-				<Field label={t('svet.settlement')} hint={t('svet.settlement_note')} error={numberError}>
+				<Field label={t('svet.settlement')} hint={t('svet.settlement_note')} error={villagesError ?? numberError}>
+					<Segmented
+						label={t('svet.villages_mode')}
+						value={villagesMode}
+						options={[
+							{ value: 'fixed', label: t('svet.villages_fixed') },
+							{ value: 'range', label: t('svet.villages_range') }
+						]}
+						onchange={setVillagesMode}
+					/>
 					<Cluster gap={2} align="end">
-						<Stack gap={0}><Text variant="small">{t('svet.villages')}</Text><TextInput type="number" width="s" min={1} max={12} step={1} label={t('svet.villages')} bind:value={villages} onchange={(v) => commit('villages', v)} /></Stack>
+						<Stack gap={0}>
+							<Text variant="small">{t('svet.villages')}</Text>
+							<Cluster gap={1}>
+								<TextInput type="number" width="s" min={1} max={12} step={1} label={villagesMode === 'range' ? t('svet.villages_min') : t('svet.villages')} invalid={!!villagesError} bind:value={vMin} onchange={commitVillages} />
+								{#if villagesMode === 'range'}
+									<Text as="span" tone="muted">–</Text>
+									<TextInput type="number" width="s" min={1} max={12} step={1} label={t('svet.villages_max')} invalid={!!villagesError} bind:value={vMax} onchange={commitVillages} />
+								{/if}
+							</Cluster>
+						</Stack>
 						<Stack gap={0}><Text variant="small">{t('svet.density')}</Text><TextInput type="number" width="s" min={0.1} max={100} step={0.1} label={t('svet.density')} bind:value={density} onchange={(v) => commit('density', v)} /></Stack>
 						<Stack gap={0}><Text variant="small">{t('svet.prestige')}</Text><TextInput type="number" width="s" min={0} step={0.1} label={t('svet.prestige')} bind:value={prestige} onchange={(v) => commit('prestige', v)} /></Stack>
 					</Cluster>

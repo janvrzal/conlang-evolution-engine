@@ -73,3 +73,31 @@ describe('úpravy krajů', () => {
 		expect(w.regions[0].neighbours).toEqual([]);
 	});
 });
+
+import { parsePermeability, terrainPermeability, villagesOf, villagesProblem, villagesValue } from './svet';
+
+describe('vsi jako rozsah a prostupnost', () => {
+	it('počet vsí jako číslo nebo rozsah', () => {
+		expect(villagesOf(undefined)).toEqual({ min: 4, max: 4 });
+		expect(villagesOf(6)).toEqual({ min: 6, max: 6 });
+		expect(villagesOf([2, 5])).toEqual({ min: 2, max: 5 });
+		expect(villagesValue(3, 3)).toBe(3);
+		expect(villagesValue(2, 5)).toEqual([2, 5]);
+		expect(villagesProblem(2, 5)).toBeNull();
+		expect(villagesProblem(5, 2)).toBe('svet.bad.villages_order');
+		expect(villagesProblem(0, 2)).toBe('svet.bad.villages');
+		expect(villagesProblem(1, 13)).toBe('svet.bad.villages');
+		expect(villagesProblem(1.5, 3)).toBe('svet.bad.villages');
+	});
+
+	it('prostupnost z terénu a z pole', () => {
+		const schema = { parameters: { items: [{ name: 'terrain_access', default: { plain: 1, hills: 0.6, mountains: 0.3, island: 0.2 } }] } };
+		expect(terrainPermeability('hills', schema)).toBe(0.6);
+		expect(terrainPermeability(undefined, schema)).toBe(1);
+		expect(terrainPermeability('hills', schema, { terrain_access: { hills: 0.5 } })).toBe(0.5);
+		expect(terrainPermeability('hills', null)).toBeNull();
+		expect(parsePermeability('0,4')).toBe(0.4);
+		expect(parsePermeability('1.2')).toBeNull();
+		expect(parsePermeability('')).toBeNull();
+	});
+});

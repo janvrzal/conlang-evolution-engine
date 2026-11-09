@@ -122,3 +122,37 @@ export function eventsUsingRegion(world: Spec, id: string): number {
 }
 
 const round = (v: number) => Math.round(v * 10) / 10;
+
+// ---------- vsi jako počet nebo rozsah, prostupnost ----------
+
+/** Počet vsí kraje jako rozsah (pevný počet = min i max). */
+export function villagesOf(value: number | [number, number] | undefined | null): { min: number; max: number } {
+	if (Array.isArray(value)) return { min: value[0], max: value[1] };
+	const n = typeof value === 'number' ? value : 4;
+	return { min: n, max: n };
+}
+
+/** Hodnota do zadání: pevný počet jako číslo, jinak dvojice. */
+export function villagesValue(min: number, max: number): number | [number, number] {
+	return min === max ? min : [min, max];
+}
+
+/** Chyba počtu vsí (klíč textu), nebo null: celá čísla 1–12, min ≤ max. */
+export function villagesProblem(min: number, max: number): 'svet.bad.villages' | 'svet.bad.villages_order' | null {
+	const ok = (n: number) => Number.isInteger(n) && n >= 1 && n <= 12;
+	if (!ok(min) || !ok(max)) return 'svet.bad.villages';
+	return min > max ? 'svet.bad.villages_order' : null;
+}
+
+/** Prostupnost odvozená z terénu: tabulka `terrain_access` (přepis ve světě má přednost před výchozí). */
+export function terrainPermeability(terrain: string | undefined, schema: { parameters?: { items?: { name: string; default: unknown }[] } } | null, overrides?: Record<string, unknown>): number | null {
+	const table = (overrides?.terrain_access ?? schema?.parameters?.items?.find((i) => i.name === 'terrain_access')?.default) as Record<string, number> | undefined;
+	const value = table?.[terrain ?? 'plain'];
+	return typeof value === 'number' ? value : null;
+}
+
+/** Prostupnost z textu pole (čárka i tečka); null = neplatná. */
+export function parsePermeability(raw: string | number): number | null {
+	const n = Number(String(raw).replace(',', '.'));
+	return String(raw).trim() !== '' && Number.isFinite(n) && n >= 0 && n <= 1 ? n : null;
+}
