@@ -14,7 +14,24 @@ export interface WorldSpec {
 	semantics?: boolean;
 	vocabulary?: number;
 	concepts?: Record<string, unknown>[];
-	languages: { id: string; name?: string; consonants?: string[]; vowels?: string[]; grammar?: string; stress?: string; words?: Record<string, string>; endonym?: string[]; [key: string]: unknown }[];
+	languages: {
+		id: string;
+		name?: string;
+		consonants?: string[];
+		vowels?: string[];
+		tones?: string[];
+		syllables?: string | null;
+		grammar?: string;
+		stress?: string;
+		stress_strength?: number;
+		constructions?: Record<string, unknown>;
+		suffixes?: Record<string, unknown>;
+		endings?: Record<string, unknown>;
+		processes?: Record<string, unknown>[];
+		words?: Record<string, string>;
+		endonym?: string[];
+		[key: string]: unknown;
+	}[];
 	regions: {
 		id: string;
 		name?: string;

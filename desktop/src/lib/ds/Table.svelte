@@ -1,9 +1,15 @@
 <!-- Tabulka. Hlavička z `head`, řádky jako <Tr><Td>…</Td></Tr>. -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	let { head, caption, children }: { head?: { label: string; num?: boolean }[]; caption?: string; children: Snippet } = $props();
+	let {
+		head,
+		caption,
+		scroll = false,
+		children
+	}: { head?: { label: string; num?: boolean }[]; caption?: string; /** široká tabulka se posouvá vodorovně */ scroll?: boolean; children: Snippet } = $props();
 </script>
 
+<div class="wrap" class:scroll>
 <table class="t">
 	{#if caption}<caption>{caption}</caption>{/if}
 	{#if head}
@@ -11,8 +17,12 @@
 	{/if}
 	<tbody>{@render children()}</tbody>
 </table>
+</div>
 
 <style>
+	.scroll {
+		overflow-x: auto;
+	}
 	.t {
 		border-collapse: collapse;
 		width: 100%;

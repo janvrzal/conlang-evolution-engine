@@ -8,8 +8,14 @@
 		onremove,
 		removeLabel,
 		title,
+		size = 'm',
+		ipa = false,
 		children
 	}: {
+		/** s = malý štítek do tabulek (IPA inventář) */
+		size?: 's' | 'm';
+		/** obsah je výslovnost (písmo Charis) */
+		ipa?: boolean;
 		state?: 'default' | 'on' | 'off';
 		onclick?: () => void;
 		/** štítek jde odebrat (×) */
@@ -22,16 +28,16 @@
 </script>
 
 {#if onremove}
-	<span class="chip {state} rm" {title}>
+	<span class="chip {state} {size} rm" class:ipa {title}>
 		{#if onclick}<button type="button" class="in" {onclick}>{@render children()}</button>{:else}{@render children()}{/if}
 		<button type="button" class="x" aria-label={removeLabel} title={removeLabel} onclick={onremove}>×</button>
 	</span>
 {:else}
 
 {#if onclick}
-	<button type="button" class="chip {state}" {title} aria-pressed={state === 'on' ? 'true' : undefined} {onclick}>{@render children()}</button>
+	<button type="button" class="chip {state} {size}" class:ipa {title} aria-pressed={state === 'on' ? 'true' : undefined} {onclick}>{@render children()}</button>
 {:else}
-	<span class="chip {state}" {title}>{@render children()}</span>
+	<span class="chip {state} {size}" class:ipa {title}>{@render children()}</span>
 {/if}
 {/if}
 
@@ -46,6 +52,16 @@
 		padding: 2px 8px;
 		font-size: 13px;
 		background: var(--field);
+	}
+	.s {
+		min-height: 24px;
+		min-width: 24px;
+		padding: 0 5px;
+		justify-content: center;
+		font-size: 14px;
+	}
+	.ipa {
+		font-family: var(--f-ipa);
 	}
 	button.chip {
 		cursor: pointer;

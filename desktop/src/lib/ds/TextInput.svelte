@@ -13,8 +13,11 @@
 		max,
 		step,
 		onchange,
-		oninput
+		oninput,
+		ipa = false
 	}: {
+		/** zápis výslovnosti písmem Charis */
+		ipa?: boolean;
 		value: string | number;
 		type?: 'text' | 'search' | 'number';
 		id?: string;
@@ -36,6 +39,7 @@
 	class="input {width}"
 	class:num={type === 'number'}
 	class:err={invalid}
+	class:ipa
 	{type}
 	{id}
 	{placeholder}
@@ -72,6 +76,10 @@
 	}
 	.num {
 		font-variant-numeric: tabular-nums;
+	}
+	.ipa {
+		font-family: var(--f-ipa);
+		font-size: 16px;
 	}
 	.err {
 		border-color: var(--red);
