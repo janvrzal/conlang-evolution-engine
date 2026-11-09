@@ -377,3 +377,34 @@ mod measure {
         );
     }
 }
+
+#[cfg(test)]
+mod tempo {
+    use super::*;
+
+    /// Čas kroku po stoletích proti velikosti světa (`cargo test --lib tempo -- --ignored --nocapture`).
+    #[test]
+    #[ignore]
+    fn tempo_po_stoletich() {
+        let world: Value = serde_json::from_str(include_str!("../../static/projects/talvera.cee.json")).unwrap();
+        let ws = WorldSpec::from_json(&world.to_string()).unwrap();
+        let (w, events) = spec::build(&ws).unwrap();
+        let mut sim = Simulation::new(w, SimulationConfig::default(), events).unwrap();
+        let mut t = Instant::now();
+        let mut century = (sim.year() / 100.0).floor();
+        let mut steps = 0;
+        println!("století  s/krok  skupin  jazyků  událostí(log)");
+        while sim.year() + sim.config.dt <= ws.end_year + 1e-9 {
+            sim.step().unwrap();
+            steps += 1;
+            let c = (sim.year() / 100.0).floor();
+            if c != century {
+                let langs = sim.history.snapshots.last().map_or(0, |s| s.languages.len());
+                println!("{:>6}  {:>6.2}  {:>6}  {:>6}  {:>10}", century * 100.0, t.elapsed().as_secs_f64() / steps as f64, sim.world.groups.len(), langs, sim.history.events.len());
+                t = Instant::now();
+                steps = 0;
+                century = c;
+            }
+        }
+    }
+}
