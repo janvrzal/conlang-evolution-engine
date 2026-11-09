@@ -205,20 +205,8 @@ pub fn prepare(world: &World, params: &TransmissionParams, tick: u32) -> StepInp
         // Kohorta je podíl obnovené populace (nejméně jeden mluvčí). Město je síť čtvrtí: náhodný
         // posun v něm má velikost vesnice, jinak by se ve velkém městě změny skoro nehnuly
         // (Řím by si navždy držel koncové -m; dok. 27).
-        let mut people = f64::from(groups.population[group.index()]);
-        let territory = groups.territory[group.index()];
-        if let Some(t) = world
-            .territories
-            .get(territory.index())
-            .filter(|t| t.urban > 0.0)
-        {
-            let scale = if t.city_size > 0.0 {
-                t.city_size
-            } else {
-                world.params.city_size
-            };
-            people /= scale.max(1.0);
-        }
+        // Veřejná skupina vybírá z řeči svého rodilého vzoru (`World::sampled_population`, dok. 34).
+        let people = world.sampled_population(group);
         let cohort = (renewal[column] * people).max(1.0);
         drift_scale.push(params.sigma / cohort.sqrt());
         loss_floor.push(params.loss_threshold.max(0.5 / cohort));

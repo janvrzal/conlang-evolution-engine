@@ -793,6 +793,7 @@ struct Clusters {
     dim: usize,
     lexical: f64,
     margin: f64,
+    form_gate: f64,
     size: Vec<f64>,
     shares: Vec<f32>,
     squares: Vec<f64>,
@@ -810,8 +811,9 @@ impl Clusters {
             &self.shares[a * d..(a + 1) * d],
             &self.shares[b * d..(b + 1) * d],
         );
-        let mut value =
+        let words =
             0.5 * (self.squares[a] / na + self.squares[b] / nb) - f64::from(product) / (na * nb);
+        let mut value = words;
         let (small, large) = if self.spread[a].len() <= self.forms[b].len() {
             (&self.spread[a], &self.forms[b])
         } else {
@@ -823,7 +825,11 @@ impl Clusters {
                 sum += weight * other;
             }
         }
-        value += FORM_WEIGHT * sum / (na * nb);
+        let mut forms = FORM_WEIGHT * sum / (na * nb);
+        if self.form_gate > 0.0 {
+            forms *= (words.max(0.0) / self.lexical / self.form_gate).min(1.0);
+        }
+        value += forms;
         value /= self.lexical;
         if self.margin != 0.0 {
             let mut same = 0.0;
@@ -861,6 +867,10 @@ impl Clusters {
 pub struct Hysteresis<'a> {
     pub labels: &'a [i64],
     pub margin: f64,
+    /// Brána tvarů u jazyků: rozdíl výslovnosti příbuzných slov se započte jen z podílu
+    /// `min(1, rozdíl slov a konstrukcí / form_gate)`; 0 = vždy celý. Varieta se stejným slovníkem
+    /// a cizí výslovností (po přechodu jazyka, irská angličtina) je nářečím, ne jazykem.
+    pub form_gate: f64,
 }
 
 /// Průměrná vazba mezi sousedícími shluky až do prahu (`observe.constrained_average_linkage`).
@@ -881,6 +891,7 @@ pub fn linkage(
         dim: features.dim,
         lexical: features.lexical,
         margin: hysteresis.map_or(0.0, |item| item.margin),
+        form_gate: hysteresis.map_or(0.0, |item| item.form_gate),
         size: vec![1.0; count],
         shares: features.shares.clone(),
         squares: features.squares.clone(),
@@ -1316,10 +1327,12 @@ mod tests {
         let same = Hysteresis {
             labels: &[7, 7],
             margin: 0.02,
+            form_gate: 0.0,
         };
         let apart = Hysteresis {
             labels: &[7, 8],
             margin: 0.02,
+            form_gate: 0.0,
         };
         assert_eq!(
             linkage(&features, &pairs, 0.49, Some(&same)),

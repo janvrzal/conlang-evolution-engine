@@ -337,6 +337,13 @@ pub fn code_distances(world: &World) -> Vec<f64> {
     total
 }
 
+/// Brána tvarů u jazyků (`Hysteresis::form_gate`, dok. 34): rozdíl výslovnosti příbuzných slov
+/// se do vzdálenosti jazyků započte celý až od takového rozdílu slov a konstrukcí (na jednu
+/// proměnnou slova). Skupina po přechodu jazyka mluví stejným slovníkem s cizí výslovností
+/// (talmurština se serenským přízvukem, irská angličtina): je nářečím cílového jazyka. Mezi
+/// skutečně oddělenými jazyky (španělština a portugalština) se slovník liší dost na plnou váhu.
+pub const LANGUAGE_FORM_GATE: f64 = 0.3;
+
 /// Výsledek pozorování: shluky dialektů a jazyků jako seznamy pozic mezi mluvenými skupinami.
 pub struct Observed {
     /// Mluvené domácí skupiny (psaný kód nemá mluvčí, kód trhu či školy je druhý jazyk).
@@ -414,6 +421,7 @@ pub fn observe_world(
     let hysteresis = Hysteresis {
         labels: &labels,
         margin: HYSTERESIS * language_threshold,
+        form_gate: LANGUAGE_FORM_GATE,
     };
     // Shlukování dialektů a jazyků je nezávislé (každé čte jen rysy a kandidáty): souběžně.
     let (dialects, languages) = rayon::join(

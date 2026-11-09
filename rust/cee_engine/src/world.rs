@@ -313,6 +313,49 @@ impl World {
     }
 
     /// Zapíše živé proměnné skupiny do jejího repertoáru (před odebráním či kopií).
+    /// Z kolika mluvčích skupina vybírá vstup (unášení, `drift_scale`): populace, ve městě
+    /// zmenšená na čtvrť (`city_size`, dok. 27). Veřejná skupina, která se jazyk učí od rodilého
+    /// vzoru (`prestige_mirror` téhož jazyka), vybírá z řeči vzoru: hrstka dospělých, kteří se
+    /// úřední jazyk učí, není samostatně předávaná řeč malé komunity (dok. 34). Populační tlaky
+    /// (zjednodušování u L2 mluvčích) se dál řídí vlastní velikostí skupiny.
+    pub fn sampled_population(&self, group: GroupId) -> f64 {
+        let own = self.local_population(group);
+        if self.groups.domain[group.index()] != crate::model::group::Domain::Public {
+            return own;
+        }
+        match self.society.prestige_mirror.get(&group) {
+            Some(&model)
+                if self.groups.contains(model)
+                    && self.groups.main_code(model).language
+                        == self.groups.main_code(group).language =>
+            {
+                own.max(self.local_population(model))
+            }
+            _ => own,
+        }
+    }
+
+    /// Populace skupiny, ve městě dělená velikostí města (síť čtvrtí; dok. 27).
+    pub fn local_population(&self, group: GroupId) -> f64 {
+        let people = f64::from(self.groups.population[group.index()]);
+        let territory = self.groups.territory[group.index()];
+        match self
+            .territories
+            .get(territory.index())
+            .filter(|t| t.urban > 0.0)
+        {
+            Some(t) => {
+                let scale = if t.city_size > 0.0 {
+                    t.city_size
+                } else {
+                    self.params.city_size
+                };
+                people / scale.max(1.0)
+            }
+            None => people,
+        }
+    }
+
     pub fn materialize(&mut self, group: GroupId) {
         if self.live.column(group).is_none() {
             return;
