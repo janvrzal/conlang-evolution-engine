@@ -421,16 +421,10 @@ pub fn seat_of(world: &World, region: TerritoryId) -> Result<GroupId, String> {
         })
 }
 
-/// Dosah centra do skupiny: terén regionu × pokles se vzdáleností.
+/// Dosah centra do skupiny: prostupnost regionu × pokles se vzdáleností.
 pub fn reach(world: &World, group: GroupId, seat: GroupId, distance: bool) -> f64 {
-    let terrain = region_of(world, group)
-        .map(|r| world.territories[r.index()].terrain.as_str())
-        .unwrap_or("plain");
-    let access = world
-        .params
-        .terrain_access
-        .get(terrain)
-        .copied()
+    let access = region_of(world, group)
+        .map(|r| world.territories[r.index()].permeability)
         .unwrap_or(1.0);
     if !distance {
         return access;

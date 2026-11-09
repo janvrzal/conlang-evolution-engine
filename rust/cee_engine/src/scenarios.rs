@@ -551,6 +551,18 @@ pub fn village_grid_default(
 }
 
 /// Region pro [`region_world`]: poloha těžiště, relativní hustota a sousedé.
+/// Prostupnost regionu: zadaná, jinak výchozí podle terénu (`Parameters::terrain_access`).
+pub fn permeability(world: &World, region: &Region) -> f64 {
+    region.permeability.unwrap_or_else(|| {
+        world
+            .params
+            .terrain_access
+            .get(&region.terrain)
+            .copied()
+            .unwrap_or(1.0)
+    })
+}
+
 #[derive(Clone, Debug)]
 pub struct Region {
     pub id: String,
@@ -563,6 +575,8 @@ pub struct Region {
     pub immigration: f64,
     pub language: Option<String>,
     pub terrain: String,
+    /// Prostupnost 0–1; `None` = podle terénu (`Parameters::terrain_access`).
+    pub permeability: Option<f64>,
     pub identity: String,
     pub preserve: bool,
     /// Velikost města regionu (násobek vesnice); `None` = `Parameters::city_size`, 0 = bez města.
@@ -582,6 +596,7 @@ impl Region {
             immigration: 0.0,
             language: None,
             terrain: "plain".into(),
+            permeability: None,
             identity: "shared".into(),
             preserve: false,
             city: None,
@@ -854,6 +869,14 @@ pub fn region_world(
             &region.terrain,
             "úroveň terénu",
         )?;
+        if let Some(value) = region.permeability {
+            if !(0.0..=1.0).contains(&value) {
+                return Err(format!(
+                    "Region '{}': prostupnost musí být mezi 0 a 1, ne {value}.",
+                    region.id
+                ));
+            }
+        }
         Parameters::level(
             &world.params.identity_loyalty,
             &region.identity,
@@ -929,6 +952,7 @@ pub fn region_world(
         let mut territory = Territory::new(TerritoryLevel::Region);
         territory.position = Some(region.position);
         territory.terrain = region.terrain.clone();
+        territory.permeability = permeability(&world, region);
         territory.native_language = language;
         world.add_territory(&region.id, Some("world"), territory)?;
         let population = ((region.density * world.params.population_per_density).round_ties_even()
@@ -1044,8 +1068,7 @@ pub fn region_world(
             let (_, first, second) = best.expect("vesnice");
             gravity_links(&mut world, None, Some(&[first, second]))?;
             let strength = world.links.get(first, second).expect("vazba").strength;
-            let terrain = world.params.terrain_access[&region.terrain]
-                * world.params.terrain_access[&other.terrain];
+            let terrain = permeability(&world, region) * permeability(&world, other);
             let scaled = strength * world.params.border_link_scale * terrain;
             world.connect(first, second, scaled, LinkKind::Weak)?;
             if world.params.leveling_beyond_region > 0.0 {

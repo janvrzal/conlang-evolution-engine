@@ -111,11 +111,21 @@ class RegionSpec(_Model):
     #: Relativní hustota osídlení (1 = běžná krajina).
     density: float = Field(default=1.0, gt=0.0, le=100.0)
     neighbours: list[str] = Field(default_factory=list)
-    villages: int = Field(default=4, ge=1, le=12)
+    #: Počet vesnic: číslo, nebo rozsah ``[min, max]`` vylosovaný podle semínka světa.
+    villages: int | tuple[int, int] = 4
+
+    @model_validator(mode="after")
+    def _villages_in_range(self) -> "RegionSpec":
+        low, high = (self.villages, self.villages) if isinstance(self.villages, int) else self.villages
+        if not (1 <= low <= high <= 12):
+            raise ValueError("villages: počet 1–12, rozsah [min, max] s min ≤ max")
+        return self
     prestige: float = Field(default=0.5, ge=0.0)
     #: ID protojazyka; ``None`` = první z ``languages``.
     language: str | None = None
     terrain: str = "plain"
+    #: Prostupnost 0–1 (1 = snadno prostupná krajina, 0 = izolace); chybí = podle terénu.
+    permeability: float | None = Field(default=None, ge=0.0, le=1.0)
     identity: str = "shared"
     preserve: bool = False
     #: Podíl přistěhovalců za generaci (obchodní město).

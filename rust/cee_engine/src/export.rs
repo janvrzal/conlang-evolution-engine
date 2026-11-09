@@ -620,6 +620,7 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
                 "id": name, "name": place_name, "level": node.level.name(),
                 "parent": if node.parent.is_none() { Value::Null } else { world.registry.territories.name(node.parent.0).into() },
                 "position": position(node.position), "terrain": node.terrain,
+                "permeability": node.permeability,
                 "native_language": if node.native_language.is_none() { Value::Null } else { world.registry.languages.name(node.native_language.0).into() },
                 "toponym": top,
             })

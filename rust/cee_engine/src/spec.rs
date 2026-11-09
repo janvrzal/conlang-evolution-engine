@@ -66,6 +66,47 @@ fn default_weak() -> String {
 fn default_density() -> f64 {
     1.0
 }
+/// Počet vesnic regionu: pevný, nebo rozsah `[min, max]`, ze kterého se podle semínka světa
+/// a jména regionu vylosuje (stejně při stavbě světa i u událostí, které vesnice jmenují).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum VillageCount {
+    Fixed(usize),
+    Range([usize; 2]),
+}
+
+impl Default for VillageCount {
+    fn default() -> Self {
+        VillageCount::Fixed(default_villages())
+    }
+}
+
+impl VillageCount {
+    /// Nejmenší a největší možný počet.
+    pub fn bounds(&self) -> (usize, usize) {
+        match *self {
+            VillageCount::Fixed(count) => (count, count),
+            VillageCount::Range([low, high]) => (low, high),
+        }
+    }
+
+    /// Počet vesnic regionu `region` ve světě se semínkem `seed`.
+    pub fn resolve(&self, seed: i64, region: &str) -> usize {
+        let (low, high) = self.bounds();
+        if high <= low {
+            return low;
+        }
+        let mut draw = crate::rng::Stream::new(
+            seed as u64,
+            &[
+                crate::rng::Part::Str("villages"),
+                crate::rng::Part::Str(region),
+            ],
+        );
+        low + draw.integers((high - low + 1) as u64) as usize
+    }
+}
+
 fn default_villages() -> usize {
     4
 }
@@ -175,14 +216,18 @@ pub struct RegionSpec {
     pub density: f64,
     #[serde(default)]
     pub neighbours: Vec<String>,
-    #[serde(default = "default_villages")]
-    pub villages: usize,
+    /// Počet vesnic: číslo, nebo rozsah `[min, max]` vylosovaný podle semínka.
+    #[serde(default)]
+    pub villages: VillageCount,
     #[serde(default = "default_prestige")]
     pub prestige: f64,
     #[serde(default)]
     pub language: Option<String>,
     #[serde(default = "default_plain")]
     pub terrain: String,
+    /// Prostupnost 0–1 (1 = snadno prostupná krajina, 0 = izolace); chybí = podle terénu.
+    #[serde(default)]
+    pub permeability: Option<f64>,
     #[serde(default = "default_shared")]
     pub identity: String,
     #[serde(default)]
@@ -392,6 +437,15 @@ fn make_world(spec: &WorldSpec, params: Parameters) -> Result<World, String> {
         .iter()
         .map(|l| proto_language(l, &table))
         .collect::<Result<Vec<_>, _>>()?;
+    for (index, r) in spec.regions.iter().enumerate() {
+        let (low, high) = r.villages.bounds();
+        if low < 1 || low > high {
+            return Err(format!(
+                "regions.{index}.villages: počet vesnic musí být aspoň 1 a rozsah [min, max] mít min ≤ max (region '{}')",
+                r.id
+            ));
+        }
+    }
     let regions: Vec<Region> = spec
         .regions
         .iter()
@@ -400,12 +454,13 @@ fn make_world(spec: &WorldSpec, params: Parameters) -> Result<World, String> {
             position: r.position,
             density: r.density,
             neighbours: r.neighbours.clone(),
-            villages: r.villages,
+            villages: r.villages.resolve(spec.seed, &r.id),
             prestige: r.prestige,
             openness: None,
             immigration: r.immigration,
             language: r.language.clone(),
             terrain: r.terrain.clone(),
+            permeability: r.permeability,
             identity: r.identity.clone(),
             preserve: r.preserve,
             city: r.city,
@@ -593,7 +648,7 @@ fn villages_of(spec: &WorldSpec, region: &str) -> Result<Vec<String>, String> {
         .iter()
         .find(|r| r.id == region)
         .ok_or_else(|| format!("neznámý region '{region}'"))?;
-    Ok((0..found.villages)
+    Ok((0..found.villages.resolve(spec.seed, region))
         .map(|i| format!("{region}-v{i}"))
         .collect())
 }

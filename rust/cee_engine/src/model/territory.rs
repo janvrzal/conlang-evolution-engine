@@ -27,6 +27,10 @@ impl TerritoryLevel {
 }
 
 /// Uzel stromu území. Bez potomků je území „nerozepsané“.
+fn full_permeability() -> f64 {
+    1.0
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Territory {
     pub level: TerritoryLevel,
@@ -35,8 +39,12 @@ pub struct Territory {
     /// Poloha těžiště v mapových jednotkách (km).
     pub position: Option<(f64, f64)>,
     pub refined_from_year: Option<f64>,
-    /// Terén (klíč `Parameters::terrain_access`).
+    /// Terén (klíč `Parameters::terrain_access`); popis krajiny pro jména a mapu.
     pub terrain: String,
+    /// Prostupnost 0–1: 1 = krajina, přes kterou se snadno chodí a obchoduje, 0 = úplná izolace
+    /// (žádný kontakt přes hranici). Násobí vazby přes hranici regionu a dosah státu (dok. 31).
+    #[serde(default = "full_permeability")]
+    pub permeability: f64,
     /// Původní jazyk území (linie), pokud ho scénář zná.
     pub native_language: LanguageId,
     /// Město: úmrtnost navíc proti venkovu za generaci, kterou doplní příliv z vesnic regionu
@@ -61,6 +69,7 @@ impl Territory {
             position: None,
             refined_from_year: None,
             terrain: "plain".into(),
+            permeability: 1.0,
             native_language: LanguageId::NONE,
             urban: 0.0,
             city_size: 0.0,
