@@ -6,6 +6,7 @@
 	import {
 		AppBar,
 		Banner,
+		ConfirmDialog,
 		Button,
 		CheckBadge,
 		FilePicker,
@@ -23,6 +24,7 @@
 		type NavItem
 	} from '$lib/ds';
 	import { API_REVISION } from '$lib/engine';
+	import { inApp } from '$lib/files';
 	import { i18n, number, t, type MessageKey } from '$lib/i18n.svelte';
 	import { frameAt, speakers, varietiesAt } from '$lib/model/languages';
 	import { app } from '$lib/state.svelte';
@@ -82,17 +84,31 @@
 		toastTimer = setTimeout(() => (toast = null), 4000);
 	});
 
+	// ⌘Z / ⇧⌘Z zpět a znovu (mimo textová pole), ⌘S uložit, ⇧⌘S uložit jako, ⌘O otevřít
 	function key(event: KeyboardEvent) {
 		const mod = event.metaKey || event.ctrlKey;
-		if (!mod || event.key.toLowerCase() !== 'z') return;
-		const target = event.target as HTMLElement;
-		if (target.closest('input, textarea, select')) return;
-		event.preventDefault();
-		if (event.shiftKey) app.redo();
-		else app.undo();
+		if (!mod) return;
+		const k = event.key.toLowerCase();
+		if (k === 's') {
+			event.preventDefault();
+			void save(event.shiftKey);
+		} else if (k === 'o') {
+			event.preventDefault();
+			void openDialog();
+		} else if (k === 'z') {
+			const target = event.target as HTMLElement;
+			if (target.closest('input, textarea, select')) return;
+			event.preventDefault();
+			if (event.shiftKey) app.redo();
+			else app.undo();
+		}
 	}
 
-	async function open(file: File) {
+	const discardTexts = () => ({ title: t('shell.discard_title'), message: t('shell.discard_message'), confirm: t('shell.discard_confirm'), cancel: t('shell.discard_cancel') });
+
+	/** Otevření v prohlížeči (výběr souboru). */
+	async function openFile(file: File) {
+		if (!(await app.discardChanges(discardTexts()))) return;
 		try {
 			const parsed = JSON.parse(await file.text());
 			const world = parsed.format === 'cee-project/1' ? parsed.world : parsed;
@@ -103,17 +119,21 @@
 			notice = t('project.bad_file');
 		}
 	}
-	function save() {
-		if (!app.world) return;
-		// V prohlížeči se soubor stáhne; v Tauri ho později uloží dialog na disk.
-		const blob = new Blob([JSON.stringify(app.world, null, 1)], { type: 'application/json' });
-		const link = document.createElement('a');
-		link.href = URL.createObjectURL(blob);
-		link.download = app.fileName ?? 'svet.cee.json';
-		link.click();
-		URL.revokeObjectURL(link.href);
-		app.dirty = false;
-		notice = t('project.saved');
+	/** Otevření v aplikaci (dialog). */
+	async function openDialog() {
+		if (!inApp() || !(await app.discardChanges(discardTexts()))) return;
+		try {
+			if (await app.openDialog()) notice = t('project.opened', { name: app.fileName ?? '' });
+		} catch (error) {
+			notice = String(error);
+		}
+	}
+	async function save(as = false) {
+		try {
+			if (await app.save(as)) notice = t('project.saved');
+		} catch (error) {
+			notice = String(error);
+		}
 	}
 
 	// Hlášení ověření s místem v zadání a odkazem na obrazovku.
@@ -205,8 +225,12 @@
 				{/if}
 			{/snippet}
 			{#snippet tools()}
-				<FilePicker accept=".json,application/json" onfile={open} label={t('shell.open')} />
-				<Button icon="save" label={t('shell.save')} title={t('shell.save')} onclick={save} disabled={!app.world} />
+				{#if inApp()}
+					<Button icon="open" label={t('shell.open')} title="{t('shell.open')} (⌘O)" onclick={openDialog} />
+				{:else}
+					<FilePicker accept=".json,application/json" onfile={openFile} label={t('shell.open')} />
+				{/if}
+				<Button icon="save" label={t('shell.save')} title="{t('shell.save')} (⌘S, ⇧⌘S jako)" onclick={() => save()} disabled={!app.world} />
 				<Button variant="quiet" label={t('shell.locale')} title={t('shell.locale')} onclick={() => (i18n.locale = i18n.locale === 'cs' ? 'en' : 'cs')}
 					>{i18n.locale === 'cs' ? 'EN' : 'CS'}</Button
 				>
@@ -251,7 +275,7 @@
 				/>
 				<Button variant="quiet" icon="undo" disabled={!app.canUndo} onclick={() => app.undo()}>{t('shell.undo')}</Button>
 				<Button variant="quiet" icon="redo" disabled={!app.canRedo} onclick={() => app.redo()}>{t('shell.redo')}</Button>
-				{#if notice}<Text variant="why" as="span">{notice}</Text>{/if}
+				{#if notice || app.notice}<Text variant="why" as="span">{notice ?? app.notice}</Text>{/if}
 				<Spacer />
 				{#if errors}<Text variant="why" as="span">{t('shell.fix_first')}</Text>{/if}
 				<Button variant="primary" disabled={errors > 0 || app.running || app.engineState.phase !== 'ready'} href={errors ? undefined : '/atlas'} onclick={() => app.start()}
@@ -274,6 +298,18 @@
 			>
 				{#snippet summary()}{axisSummary}{#if density.length}<Text variant="why">{t('shell.axis_density')}</Text>{/if}{/snippet}
 			</TimeAxis>
+		{/if}
+		{#if app.confirmRequest}
+			<ConfirmDialog
+				open
+				title={app.confirmRequest.title}
+				message={app.confirmRequest.message}
+				confirmLabel={app.confirmRequest.confirm}
+				cancelLabel={app.confirmRequest.cancel}
+				danger={app.confirmRequest.danger}
+				onconfirm={() => app.confirmRequest?.resolve(true)}
+				oncancel={() => app.confirmRequest?.resolve(false)}
+			/>
 		{/if}
 		{#if toast}
 			<Toast

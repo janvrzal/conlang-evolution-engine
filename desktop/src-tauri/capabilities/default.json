@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Hlavní okno CEE",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save"]
 }

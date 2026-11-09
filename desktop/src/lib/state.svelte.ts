@@ -1,5 +1,6 @@
 // Stav aplikace: otevřený svět (popis cee-v2-world/1), spojení s enginem, běh a výběr ve Výsledku.
 import { API_REVISION, Engine, EngineError, connect, type EngineSchema, type Health, type Issue, type RunStatus } from './engine';
+import { baseName, forgetRecent, inApp, openProject, pickOpen, pickSave, recentProjects, saveProject, saveResult, type RecentProject } from './files';
 import type { ExportV2, FrameV2 } from './model/export';
 
 export interface WorldSpec {
@@ -70,6 +71,17 @@ export interface Branch {
 	result: ExportV2 | null;
 }
 
+/** Žádost o potvrzení (vykreslí ji kostra dialogem z ds). */
+export interface ConfirmRequest {
+	title: string;
+	message: string;
+	confirm: string;
+	cancel: string;
+	/** potvrzení něco zahodí (červené tlačítko) */
+	danger?: boolean;
+	resolve: (ok: boolean) => void;
+}
+
 interface Snapshot {
 	world: WorldSpec;
 	label: string;
@@ -80,6 +92,14 @@ const HISTORY = 100;
 class App {
 	world = $state<WorldSpec | null>(null);
 	fileName = $state<string | null>(null);
+	/** cesta k projektu na disku (jen v aplikaci) */
+	filePath = $state<string | null>(null);
+	/** nedávné projekty (jen v aplikaci) */
+	recent = $state<RecentProject[]>([]);
+	/** otevřená žádost o potvrzení */
+	confirmRequest = $state<ConfirmRequest | null>(null);
+	/** hlášení o souborech (uloženo, chyba) pro patu */
+	notice = $state<string | null>(null);
 	dirty = $state(false);
 	engineState = $state<EngineState>({ phase: 'connecting' });
 	issues = $state<Issue[] | null>(null);
@@ -137,11 +157,13 @@ class App {
 				: { phase: 'ready', health: found.health };
 		this.schema = await this.engine.schema().catch(() => this.schema);
 		if (this.world) await this.check();
+		await this.refreshRecent();
 	}
 
-	load(world: WorldSpec, fileName: string | null) {
+	load(world: WorldSpec, fileName: string | null, filePath: string | null = null) {
 		this.world = world;
 		this.fileName = fileName;
+		this.filePath = filePath;
 		this.dirty = false;
 		this.result = null;
 		this.run = null;
@@ -157,6 +179,88 @@ class App {
 	async loadStarter() {
 		const response = await fetch('/projects/talvera.cee.json');
 		this.load(await response.json(), 'talvera.cee.json');
+	}
+
+	/** Potvrzení akce dialogem v kostře; vrátí true, když uživatel potvrdí. */
+	confirm(options: Omit<ConfirmRequest, 'resolve'>): Promise<boolean> {
+		return new Promise((resolve) => {
+			this.confirmRequest = {
+				...options,
+				resolve: (ok) => {
+					this.confirmRequest = null;
+					resolve(ok);
+				}
+			};
+		});
+	}
+
+	/** Neuložené změny: zeptá se, jestli je zahodit. Bez změn rovnou true. */
+	async discardChanges(texts: { title: string; message: string; confirm: string; cancel: string }): Promise<boolean> {
+		if (!this.dirty) return true;
+		return this.confirm({ ...texts, danger: true });
+	}
+
+	async refreshRecent() {
+		if (inApp()) this.recent = await recentProjects().catch(() => []);
+	}
+
+	/** Otevře projekt z disku i s uloženým výsledkem (je-li). */
+	async openPath(path: string) {
+		const opened = await openProject(path);
+		this.load(opened.world, baseName(path), opened.path);
+		if (opened.run) {
+			this.frames = opened.run.frames;
+			this.result = opened.run.result;
+			// výsledek je ze zadání, se kterým vznikl; liší-li se, ukáže se jako zastaralý
+			this.ranSpec = JSON.stringify(opened.run.spec);
+			const start = opened.run.spec.start_year ?? 0, end = opened.run.spec.end_year;
+			this.run = { id: `file:${opened.path}`, status: 'done', year: end, progress: 1, start_year: start, end_year: end, seconds: opened.run.seconds, error: null, frame_count: opened.run.frames.length, frames: [] };
+		}
+		await this.refreshRecent();
+	}
+
+	/** Dialog „Otevřít“ (v aplikaci); vrátí false, když uživatel nic nevybral. */
+	async openDialog(): Promise<boolean> {
+		const path = await pickOpen();
+		if (!path) return false;
+		await this.openPath(path);
+		return true;
+	}
+
+	/** Uloží projekt: v aplikaci na disk (s výsledkem běhu vedle), v prohlížeči stažením. */
+	async save(as = false): Promise<boolean> {
+		if (!this.world) return false;
+		if (!inApp()) {
+			const blob = new Blob([JSON.stringify(this.world, null, 1)], { type: 'application/json' });
+			const link = document.createElement('a');
+			link.href = URL.createObjectURL(blob);
+			link.download = this.fileName ?? 'svet.cee.json';
+			link.click();
+			URL.revokeObjectURL(link.href);
+			this.dirty = false;
+			return true;
+		}
+		const path = !as && this.filePath ? this.filePath : await pickSave(this.fileName ?? `${(this.world.name ?? 'svet').toLowerCase()}.cee.json`);
+		if (!path) return false;
+		const fromEngine = this.run?.status === 'done' && !this.run.id.startsWith('file:') && !!this.result;
+		await saveProject({
+			path,
+			world: $state.snapshot(this.world) as WorldSpec,
+			runId: fromEngine ? this.run!.id : null,
+			spec: fromEngine && this.ranSpec ? JSON.parse(this.ranSpec) : null,
+			resultFrom: this.run?.id.startsWith('file:') ? this.run.id.slice(5) : null
+		});
+		if (this.run?.id.startsWith('file:')) this.run = { ...this.run, id: `file:${path}` };
+		this.filePath = path;
+		this.fileName = baseName(path);
+		this.dirty = false;
+		await this.refreshRecent();
+		return true;
+	}
+
+	async forgetRecent(path: string) {
+		await forgetRecent(path).catch(() => undefined);
+		await this.refreshRecent();
 	}
 
 	/** Vývoj: načte vzorek skutečného běhu ze static/fixtures (scripts/fixture.py), volitelně i větev B. */
@@ -263,7 +367,13 @@ class App {
 			this.polling = setTimeout(() => void this.poll(runId), 500);
 			return;
 		}
-		if (status.status === 'done') this.result = await this.engine.result(runId);
+		if (status.status === 'done') {
+			this.result = await this.engine.result(runId);
+			// výsledek hned vedle uloženého projektu, aby po zavření nezmizel
+			if (inApp() && this.filePath && this.ranSpec) {
+				await saveResult(this.filePath, runId, JSON.parse(this.ranSpec)).catch((error) => (this.notice = String(error)));
+			}
+		}
 	}
 
 	async cancel() {

@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { Area, Button, Cluster, FilePicker, Floating, Ledger, LedgerRow, List, ListItem, Screen, Stack, Text, formatYear } from '$lib/ds';
 	import { number, t } from '$lib/i18n.svelte';
+	import { baseName, inApp } from '$lib/files';
 	import { SAMPLES, parseProject, summarize, type WorldSummary } from '$lib/model/projekty';
 	import { app, type WorldSpec } from '$lib/state.svelte';
 
@@ -44,13 +45,39 @@
 	});
 
 	// Přepsání otevřeného projektu bez uložení by zahodilo práci; ptáme se jen když je co zahodit.
-	function mayReplace(): boolean {
-		return !app.dirty || confirm(t('projekty.discard'));
+	const mayReplace = () =>
+		app.discardChanges({ title: t('shell.discard_title'), message: t('shell.discard_message'), confirm: t('shell.discard_confirm'), cancel: t('shell.discard_cancel') });
+	const app_ = inApp();
+
+	async function openDialog() {
+		if (!(await mayReplace())) return;
+		try {
+			if (await app.openDialog()) notice = { text: t('projekty.opened', { name: app.fileName ?? '' }), bad: false };
+		} catch (error) {
+			notice = { text: String(error), bad: true };
+		}
 	}
+	async function openRecent(path: string) {
+		if (!(await mayReplace())) return;
+		try {
+			await app.openPath(path);
+			notice = { text: t('projekty.opened', { name: baseName(path) }), bad: false };
+		} catch (error) {
+			notice = { text: String(error), bad: true };
+		}
+	}
+	async function save(as = false) {
+		try {
+			if (await app.save(as)) notice = { text: t('project.saved'), bad: false };
+		} catch (error) {
+			notice = { text: String(error), bad: true };
+		}
+	}
+	const when = (seconds: number) => new Date(seconds * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'numeric', year: 'numeric' });
 
 	async function openSample(id: string) {
 		const sample = SAMPLES.find((s) => s.id === id);
-		if (!sample || !mayReplace()) return;
+		if (!sample || !(await mayReplace())) return;
 		let world = sampleWorlds.get(id);
 		if (!world) {
 			try {
@@ -66,7 +93,7 @@
 	}
 
 	async function openFile(file: File) {
-		if (!mayReplace()) return;
+		if (!(await mayReplace())) return;
 		try {
 			const world = parseProject(JSON.parse(await file.text()));
 			if (!world) throw new Error('format');
@@ -96,18 +123,50 @@
 						<LedgerRow term={t('projekty.cities')}>{number(current.cities)}</LedgerRow>
 						<LedgerRow term={t('projekty.languages')}>{number(current.languages)}</LedgerRow>
 						<LedgerRow term={t('projekty.events')}>{number(current.events)}</LedgerRow>
-						<LedgerRow term={t('projekty.file_row')}>{app.fileName ?? t('projekty.file_unsaved')}</LedgerRow>
+						<LedgerRow term={t('projekty.file_row')}>{app.filePath ?? app.fileName ?? t('projekty.file_unsaved')}</LedgerRow>
 						<LedgerRow term={t('projekty.run_row')}><Text tone={runText.bad ? 'red' : undefined} as="span">{runText.text}</Text></LedgerRow>
 					</Ledger>
 					{#if app.dirty}<Text variant="why">{t('projekty.dirty')}</Text>{/if}
 					<Cluster gap={2}>
 						<Button variant="primary" href="/svet" disabled={!app.world}>{t('projekty.continue_world')}</Button>
 						<Button href="/atlas" disabled={!app.world}>{t('projekty.continue_atlas')}</Button>
+						<Button icon="save" onclick={() => save()} disabled={!app.world}>{t('projekty.save')}</Button>
+						{#if app_}<Button variant="quiet" onclick={() => save(true)} disabled={!app.world}>{t('projekty.save_as')}</Button>{/if}
 					</Cluster>
+					{#if app_}<Text variant="why">{t('projekty.save_note')}</Text>{/if}
 				{:else}
 					<Text variant="why">{t('projekty.none')}</Text>
 				{/if}
 			</Stack>
+
+			{#if app_ && app.recent.length}
+				<Stack gap={2}>
+					<Text variant="caps">{t('projekty.recent')}</Text>
+					<List label={t('projekty.recent')}>
+						{#each app.recent as item (item.path)}
+							{#if item.exists}
+								<ListItem
+									onclick={() => openRecent(item.path)}
+									current={app.filePath === item.path}
+									meta={`${when(item.opened)}${item.has_result ? ` · ${t('projekty.recent_result')}` : ''}`}
+								>
+									<Stack gap={1}>
+										<Text variant="h3">{item.name ?? baseName(item.path)}</Text>
+										<Text variant="small">{item.path}</Text>
+									</Stack>
+								</ListItem>
+							{:else}
+								<ListItem>
+									<Cluster gap={2} justify="between">
+										<Text variant="why" as="span">{t('projekty.recent_missing', { name: item.name ?? baseName(item.path) })}</Text>
+										<Button variant="quiet" onclick={() => app.forgetRecent(item.path)}>{t('projekty.recent_forget')}</Button>
+									</Cluster>
+								</ListItem>
+							{/if}
+						{/each}
+					</List>
+				</Stack>
+			{/if}
 
 			<Stack gap={2}>
 				<Text variant="caps">{t('projekty.samples')}</Text>
@@ -130,7 +189,11 @@
 		<Stack gap={2}>
 			<Text variant="caps">{t('projekty.file')}</Text>
 			<Cluster>
-				<FilePicker accept=".json,application/json" onfile={openFile} label={t('projekty.file_open')}>{t('projekty.file_open')}</FilePicker>
+				{#if app_}
+					<Button icon="open" onclick={openDialog}>{t('projekty.file_open')}</Button>
+				{:else}
+					<FilePicker accept=".json,application/json" onfile={openFile} label={t('projekty.file_open')}>{t('projekty.file_open')}</FilePicker>
+				{/if}
 			</Cluster>
 			<Text variant="why">{t('projekty.file_note')}</Text>
 			{#if notice}<Text variant="why" tone={notice.bad ? 'red' : undefined}>{notice.text}</Text>{/if}

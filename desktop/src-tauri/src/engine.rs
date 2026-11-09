@@ -162,6 +162,15 @@ impl Run {
         self.cancelled.store(true, Ordering::Relaxed);
     }
 
+    /// Hotový běh k uložení: všechny snímky, export a doba běhu.
+    pub fn finished(&self) -> Result<(Value, Arc<Value>, f64), String> {
+        let s = self.state.lock().expect("stav běhu");
+        match (&s.result, s.status) {
+            (Some(r), Status::Done) => Ok((Value::Array(s.frames.clone()), r.clone(), s.seconds)),
+            (_, status) => Err(format!("Běh není dokončený (stav {status:?}).")),
+        }
+    }
+
     fn execute(&self, mut simulation: Simulation) {
         let outcome = (|| -> Result<bool, String> {
             let mut observed = simulation.history.snapshots.len();
