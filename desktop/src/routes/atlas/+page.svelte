@@ -184,12 +184,24 @@
 	});
 	const groups = $derived(region && frame && geo ? regionGroups(frame, geo.villages, region.id, domainOf) : new Map());
 	const WORDS = ['water', 'stone', 'fire', 'person'];
-	const words = $derived.by(() => {
+	// slova místa: v koncovém roce s původem z exportu; jinak slovník jazyka v roce ze složky běhu
+	const endWords = $derived.by(() => {
 		if (!result || !region || !atEnd) return [];
 		const best = [...groups.values()].flat().sort((a, b) => b.population - a.population)[0];
 		const lex = best ? result.lexicon[best.group] : undefined;
-		return lex ? WORDS.filter((c) => lex[c]).map((c) => ({ concept: c, form: lex[c].form, origin: lex[c].loan ? 'loan' : lex[c].origin })) : [];
+		return lex ? WORDS.filter((c) => lex[c]).map((c) => ({ concept: c, form: lex[c].form, origin: (lex[c].loan ? 'loan' : lex[c].origin) as string | null })) : [];
 	});
+	let yearWords = $state<{ concept: string; form: string; origin: string | null }[]>([]);
+	$effect(() => {
+		const best = region && !atEnd ? [...groups.values()].flat().sort((a, b) => b.population - a.population)[0] : null;
+		const lineage = best?.lineage;
+		yearWords = [];
+		if (!lineage) return;
+		void app.lexicon(lineage, year).then((lex) => {
+			yearWords = lex ? WORDS.filter((c) => lex.forms[c]).map((c) => ({ concept: c, form: lex.forms[c], origin: null })) : [];
+		});
+	});
+	const words = $derived(atEnd ? endWords : yearWords);
 	const villageName = (id: string) => result?.onomastics?.toponyms?.[id]?.name ?? id;
 
 	// přehled bez výběru a stav běhu
@@ -302,7 +314,7 @@
 					<Text variant="caps">{t('atlas.words')}</Text>
 					{#if words.length}
 						<Ledger termWidth={90}>
-							{#each words as w (w.concept)}<LedgerRow term={conceptLabel(w.concept, i18n.locale)}><Ipa text={w.form} size="m" /> <Text variant="why" as="span">{t(`origin.${w.origin}` as MessageKey)}</Text></LedgerRow>{/each}
+							{#each words as w (w.concept)}<LedgerRow term={conceptLabel(w.concept, i18n.locale)}><Ipa text={w.form} size="m" />{#if w.origin} <Text variant="why" as="span">{t(`origin.${w.origin}` as MessageKey)}</Text>{/if}</LedgerRow>{/each}
 						</Ledger>
 						<Button variant="quiet" href="/slova">{t('atlas.all_words')}</Button>
 					{:else}
