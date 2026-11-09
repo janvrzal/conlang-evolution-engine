@@ -191,7 +191,9 @@ export interface SoundRow {
 	right: Sym | null;
 	stress: string | null;
 	medial: boolean;
-	/** výsledek je v exportu jen jako číslo hlásky, ne IPA */
+	/** výsledná hláska v IPA (nahrazení, vložení, splynutí) */
+	result: string | null;
+	/** výsledek je v exportu jen jako číslo hlásky, ne IPA (starší běhy) */
 	hiddenResult: boolean;
 	year: number;
 	/** vsi, kde se změna ustálila */
@@ -221,7 +223,9 @@ export function soundRows(result: ExportV2 | null, id: string | null): SoundRow[
 			right: parseSym(c.right),
 			stress: c.stress,
 			medial: c.medial === true,
-			hiddenResult: c.segment != null,
+			// starší export měl v `segment` číslo hlásky; nový má IPA a číslo v `segment_id`
+			result: typeof c.segment === 'string' && c.segment ? c.segment : null,
+			hiddenResult: typeof c.segment === 'number' || (c.segment == null && c.segment_id != null),
 			year: c.year,
 			villages: c.groups.length,
 			closed: c.groups.filter((g) => g.closed != null).length,
@@ -231,11 +235,11 @@ export function soundRows(result: ExportV2 | null, id: string | null): SoundRow[
 	return rows.sort((a, b) => b.villages - a.villages || a.year - b.year || a.key.localeCompare(b.key));
 }
 
-/** Zápis pravidla: cíl → výsledek / levé _ pravé (výsledek z čísla hlásky neznáme, značí se …). */
+/** Zápis pravidla: cíl → výsledek / levé _ pravé (bez IPA výsledku ve starším exportu se značí …). */
 export function ruleText(r: SoundRow): string {
 	const target = symText(r.target);
 	const ctx = r.left || r.right ? ` / ${symText(r.left)}_${symText(r.right)}` : '';
-	const result = r.features ? symText({ kind: 'features', spec: r.features }) : '…';
+	const result = r.result ?? (r.features ? symText({ kind: 'features', spec: r.features }) : '…');
 	switch (r.operation) {
 		case 'delete':
 			return `${target} → ∅${ctx}`;

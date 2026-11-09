@@ -91,3 +91,21 @@ describe('zvukové změny a analogie jazyka', () => {
 		expect(analogyCounts(rows)).toEqual([{ operation: 'level', count: 2 }, { operation: 'extend', count: 1 }]);
 	});
 });
+
+describe('výsledná hláska zvukové změny', () => {
+	it('zapíše IPA výsledku z exportu (segment) a starší číslo hlásky ukáže jako …', async () => {
+		const { soundRows, ruleText } = await import('./jazyky');
+		const change = (segment: unknown, segment_id: number | null) => ({
+			kind: 'sound', variable: 'v', family: 'lenition', target: '{p}', operation: 'replace', features: null,
+			segment, segment_id, left: 'V', right: 'V', stress: null, medial: null, year: 500, groups: [{ group: 'g', year: 510, closed: null, relics: 0 }]
+		});
+		const result = (c: object) => ({ change_history: [{ language: 'L', groups: ['g'], changes: [c] }] }) as never;
+		const [now] = soundRows(result(change('ɸ', 12)), 'L');
+		expect(now.result).toBe('ɸ');
+		expect(now.hiddenResult).toBe(false);
+		expect(ruleText(now)).toBe('p → ɸ / V_V');
+		const [old] = soundRows(result(change(12, null)), 'L');
+		expect(old.hiddenResult).toBe(true);
+		expect(ruleText(old)).toBe('p → … / V_V');
+	});
+});

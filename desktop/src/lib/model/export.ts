@@ -138,7 +138,9 @@ export interface SoundChange {
 	target: string;
 	operation: string;
 	features: unknown;
+	/** IPA výsledné hlásky (nahrazení, vložení, splynutí); `segment_id` je její číslo */
 	segment: string | null;
+	segment_id?: number | null;
 	left: string | null;
 	right: string | null;
 	stress: string | null;
