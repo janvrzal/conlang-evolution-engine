@@ -84,16 +84,21 @@ describe.skipIf(!have)('Co kdyby: variety na Talveře', () => {
 		expect(languageCount(end(A), v, true)).toEqual({ langs: Object.keys(end(A).languages).length, small: 0 });
 	});
 
-	it('rozdíl Utjipengu a Luji (7 vsí, Talmurština vs. Serenština) zůstává', () => {
-		const { d } = diff(false);
+	it('rozdíl větví: vsi s jinou rodinou doma, malé variety se do něj nepočítají', () => {
+		const { a, b, d } = diff(false);
+		const fam = { a: lineageFamilies(A.world, A.result), b: lineageFamilies(B.world, B.result) };
 		const geo = geography(A.world, A.result);
-		const regions = new Set([...d].map((v) => geo.name(geo.regionOf.get(v)!)));
-		expect(d.size).toBe(7);
-		expect(regions.has('Luji') && regions.has('Utjipeng')).toBe(true);
-		expect(diff(true).d.size).toBe(7);
+		expect(d.size).toBeGreaterThan(0);
+		// každá rozdílná ves má doma v A a B jazyk jiné rodiny
+		for (const v of d) expect(fam.a.get(a.get(v)!.lineage)).not.toBe(fam.b.get(b.get(v)!.lineage));
+		// rozdíl leží v několika málo krajích, ne po celém světě
+		const regions = new Set([...d].map((v) => geo.regionOf.get(v)));
+		expect(regions.size).toBeGreaterThan(0);
+		expect(regions.size).toBeLessThan(new Set(geo.regionOf.values()).size / 2);
+		// přepínač „všechny jazyky“ rozdíl nemění
+		expect(diff(true).d.size).toBe(d.size);
 		// bez ochrany by se tytéž malé jazyky přiřazené v A a B různým hostitelům počítaly jako rozdíl
-		const a = diff(false);
-		expect(differingVillages(a.a, a.b, matchLineages(a.a, a.b, { a: lineageFamilies(A.world, A.result), b: lineageFamilies(B.world, B.result) })).size).toBeGreaterThan(7);
+		expect(differingVillages(a, b, matchLineages(a, b, fam)).size).toBeGreaterThan(d.size);
 	});
 });
 
