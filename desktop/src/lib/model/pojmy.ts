@@ -13,6 +13,10 @@ export const DOMAINS: readonly Domain[] = ['core', 'learned', 'culture', 'religi
 export const WORD_CLASSES: readonly WordClass[] = ['noun', 'verb', 'uninflected'];
 export const RELATION_KINDS: readonly RelationKind[] = ['polysemy', 'derivation', 'colexification'];
 
+/** Meze ruční frekvence a půjčitelnosti (`ConceptSpec` ve schématu); prázdné = z vazby, jinak průměr katalogu. */
+export const FREQUENCY = { min: 0.05, max: 0.9, step: 0.01 } as const;
+export const BORROWED = { min: 0, max: 1, step: 0.01 } as const;
+
 /** Vztah k jinému pojmu pro posun významu (`RelatedSpec` ve schématu). */
 export interface RelatedSpec {
 	concept: string;
@@ -30,6 +34,8 @@ export interface CustomConcept {
 	domain?: Domain;
 	word_class?: WordClass;
 	related?: RelatedSpec[];
+	frequency?: number;
+	borrowed?: number;
 }
 
 /** Základních 149 pojmů enginu (`core_list` v src/cee/data/v2_concepts.json) s doménou. */
@@ -124,6 +130,9 @@ export interface Draft {
 	concepticon: string;
 	related: string;
 	relation_kind: string;
+	/** text čísla; prázdné = z vazby (ruční režim je v obrazovce) */
+	frequency: string;
+	borrowed: string;
 }
 
 export const emptyDraft = (): Draft => ({
@@ -134,7 +143,9 @@ export const emptyDraft = (): Draft => ({
 	wold: '',
 	concepticon: '',
 	related: '',
-	relation_kind: 'polysemy'
+	relation_kind: 'polysemy',
+	frequency: '',
+	borrowed: ''
 });
 
 export function draftOf(c: CustomConcept): Draft {
@@ -147,7 +158,9 @@ export function draftOf(c: CustomConcept): Draft {
 		wold: c.wold ?? '',
 		concepticon: c.concepticon != null ? String(c.concepticon) : '',
 		related: rel?.concept ?? '',
-		relation_kind: rel?.kind ?? 'polysemy'
+		relation_kind: rel?.kind ?? 'polysemy',
+		frequency: c.frequency != null ? String(c.frequency) : '',
+		borrowed: c.borrowed != null ? String(c.borrowed) : ''
 	};
 }
 
@@ -160,7 +173,25 @@ export function conceptOf(d: Draft): CustomConcept {
 	if (d.wold.trim()) c.wold = d.wold.trim();
 	if (d.concepticon.trim()) c.concepticon = Number(d.concepticon.trim());
 	if (d.related) c.related = [{ concept: d.related, kind: d.relation_kind as RelationKind, direction: null, weight: null }];
+	// mimo meze se číslo do zadání nepíše (formulář to ukáže jako chybu a nedovolí uložit)
+	const frequency = parseRatio(d.frequency, FREQUENCY);
+	if (frequency != null) c.frequency = frequency;
+	const borrowed = parseRatio(d.borrowed, BORROWED);
+	if (borrowed != null) c.borrowed = borrowed;
 	return c;
+}
+
+/** Číslo z formuláře (desetinná čárka i tečka) v mezích; prázdné nebo mimo meze je `null`. */
+export function parseRatio(text: string, range: { min: number; max: number }): number | null {
+	const s = text.trim().replace(',', '.');
+	if (!s) return null;
+	const n = Number(s);
+	return Number.isFinite(n) && n >= range.min && n <= range.max ? n : null;
+}
+
+/** Vyplněné, ale nečitelné nebo mimo meze číslo; prázdné pole není chyba. */
+export function ratioProblem(text: string, range: { min: number; max: number }): boolean {
+	return text.trim() !== '' && parseRatio(text, range) === null;
 }
 
 /** Id pojmu jako v schématu: písmeno nebo číslice či podtržítko, pak i tečka a pomlčka. */
@@ -169,6 +200,8 @@ const ID = /^[\p{L}\p{N}_][\p{L}\p{N}_.-]*$/u;
 export interface DraftProblems {
 	id: 'empty' | 'bad' | 'taken' | null;
 	concepticon: boolean;
+	frequency: boolean;
+	borrowed: boolean;
 }
 
 /** Chyby formuláře; `taken` jsou id, která už ve světě jsou (základní i vlastní kromě upravovaného). */
@@ -180,7 +213,12 @@ export function checkDraft(d: Draft, taken: Set<string>): DraftProblems {
 	else if (taken.has(id)) idProblem = 'taken';
 	const n = d.concepticon.trim();
 	const concepticon = n !== '' && !(/^\d+$/.test(n) && Number(n) >= 1);
-	return { id: idProblem, concepticon };
+	return {
+		id: idProblem,
+		concepticon,
+		frequency: ratioProblem(d.frequency, FREQUENCY),
+		borrowed: ratioProblem(d.borrowed, BORROWED)
+	};
 }
 
 /** Hledání v seznamu: bez velikosti písmen, v id i v popisku (`label`). */

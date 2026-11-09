@@ -10,7 +10,9 @@
 		LedgerRow,
 		List,
 		ListItem,
+		Range,
 		Screen,
+		Segmented,
 		Select,
 		Stack,
 		Table,
@@ -24,7 +26,9 @@
 	import {
 		BASE_CONCEPTS,
 		BASE_SIZE,
+		BORROWED,
 		DOMAINS,
+		FREQUENCY,
 		RELATION_KINDS,
 		WORD_CLASSES,
 		checkDraft,
@@ -34,6 +38,8 @@
 		emptyDraft,
 		filterConcepts,
 		isInvented,
+		parseRatio,
+		ratioProblem,
 		sizeFactor,
 		sizeOf,
 		sizeOptions,
@@ -42,6 +48,9 @@
 		type Draft
 	} from '$lib/model/pojmy';
 	import { app } from '$lib/state.svelte';
+
+	// režim ruční hodnoty: z dat / automaticky (pole se do zadání nepíše), nebo zadat
+	type Mode = 'auto' | 'set';
 
 	const SIZE_TEXT: Record<number, MessageKey> = {
 		[BASE_SIZE]: 'pojmy.size.base',
@@ -59,8 +68,16 @@
 	const baseLabel = (id: string) => conceptLabel(id, i18n.locale);
 	const domainLabel = (d: Domain | undefined) => (d ? t(`pojmy.domain.${d}` as MessageKey) : t('pojmy.domain.default'));
 	const customName = (c: CustomConcept) => c.gloss ?? c.id;
+	const ratio = (n: number) => n.toLocaleString(i18n.locale === 'cs' ? 'cs-CZ' : 'en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+	// v seznamu: vazba nebo vymyšlený, pak zadané frekvence a půjčitelnost (jen když jsou)
 	const customMeta = (c: CustomConcept) =>
-		isInvented(c) ? t('pojmy.invented') : c.wold ? t('pojmy.custom.wold', { id: c.wold }) : t('pojmy.custom.concepticon', { id: String(c.concepticon) });
+		[
+			isInvented(c) ? t('pojmy.invented') : c.wold ? t('pojmy.custom.wold', { id: c.wold }) : t('pojmy.custom.concepticon', { id: String(c.concepticon) }),
+			c.frequency != null ? t('pojmy.fact.frequency', { x: ratio(c.frequency) }) : null,
+			c.borrowed != null ? t('pojmy.fact.borrowed', { x: ratio(c.borrowed) }) : null
+		]
+			.filter(Boolean)
+			.join(' · ');
 
 	// volby velikosti: co přidají a kolikrát déle běží oproti základnímu slovníku
 	const sizeText = (n: number) => t(SIZE_TEXT[n] ?? (n === vocabulary?.max ? 'pojmy.size.max' : 'pojmy.size.other'));
@@ -90,7 +107,14 @@
 	);
 	const problems = $derived(checkDraft(draft, taken));
 	const idProblem = $derived(problems.id === 'empty' && !typed ? null : problems.id);
-	const canSave = $derived(!!world && !problems.id && !problems.concepticon);
+	let freqMode = $state<Mode>('auto');
+	let borrMode = $state<Mode>('auto');
+	// v režimu „zadat“ musí být číslo v mezích; prázdné pole v tom režimu je chyba, ne tichý přechod na „z dat“
+	const ratioError = (mode: Mode, text: string, bad: boolean, rangeKey: MessageKey): MessageKey | null =>
+		mode !== 'set' ? null : !text.trim() ? 'pojmy.err.number_empty' : bad ? rangeKey : null;
+	const freqError = $derived(ratioError(freqMode, draft.frequency, problems.frequency, 'pojmy.err.frequency'));
+	const borrError = $derived(ratioError(borrMode, draft.borrowed, problems.borrowed, 'pojmy.err.borrowed'));
+	const canSave = $derived(!!world && !problems.id && !problems.concepticon && !freqError && !borrError);
 	const invented = $derived(!draft.wold.trim() && !draft.concepticon.trim());
 
 	const domainOptions = $derived([
@@ -108,16 +132,40 @@
 	]);
 	const kindOptions = $derived(RELATION_KINDS.map((k) => ({ value: k, label: t(`pojmy.relation.${k}` as MessageKey) })));
 
+	const modeOptions = $derived([
+		{ value: 'auto' as Mode, label: t('pojmy.mode.auto') },
+		{ value: 'set' as Mode, label: t('pojmy.mode.set') }
+	]);
+	// při přepnutí na „zadat“ je výchozí střed rozsahu; při „z dat / automaticky“ se pole vyprázdní
+	const START = { frequency: '0.48', borrowed: '0.5' };
+	function setFreq(m: Mode) {
+		freqMode = m;
+		draft.frequency = m === 'set' ? START.frequency : '';
+	}
+	function setBorr(m: Mode) {
+		borrMode = m;
+		draft.borrowed = m === 'set' ? START.borrowed : '';
+	}
+	// posuvník ukazuje text v mezích; mimo meze se drží na kraji a chyba je u pole
+	function sliderValue(text: string, r: { min: number; max: number }) {
+		const n = Number(text.trim().replace(',', '.'));
+		return text.trim() && Number.isFinite(n) ? Math.min(r.max, Math.max(r.min, n)) : r.min;
+	}
+
 	function reset() {
 		editingId = null;
 		draft = emptyDraft();
 		typed = false;
+		freqMode = 'auto';
+		borrMode = 'auto';
 	}
 
 	function pick(c: CustomConcept) {
 		editingId = c.id;
 		draft = draftOf(c);
 		typed = true;
+		freqMode = c.frequency != null ? 'set' : 'auto';
+		borrMode = c.borrowed != null ? 'set' : 'auto';
 	}
 
 	function save() {
@@ -274,6 +322,68 @@
 					</Field>
 					<Field label={t('pojmy.field.relation')} for="pojmy-relation">
 						<Select id="pojmy-relation" bind:value={draft.relation_kind} options={kindOptions} />
+					</Field>
+					<Field
+						label={t('pojmy.field.frequency')}
+						for={freqMode === 'set' ? 'pojmy-frequency' : undefined}
+						error={freqError ? t(freqError) : null}
+						errorId="pojmy-frequency-err"
+						hint={t('pojmy.hint.frequency')}
+					>
+						<Stack gap={2}>
+							<Segmented label={t('pojmy.field.frequency')} options={modeOptions} value={freqMode} onchange={setFreq} />
+							{#if freqMode === 'set'}
+								<Cluster gap={2}>
+									<Range
+										id="pojmy-frequency-range"
+										label={t('pojmy.field.frequency')}
+										min={FREQUENCY.min}
+										max={FREQUENCY.max}
+										step={FREQUENCY.step}
+										value={sliderValue(draft.frequency, FREQUENCY)}
+										oninput={(v) => (draft.frequency = v.toFixed(2))}
+									/>
+									<TextInput
+										id="pojmy-frequency"
+										width="s"
+										bind:value={draft.frequency}
+										invalid={!!freqError}
+										describedby={freqError ? 'pojmy-frequency-err' : undefined}
+									/>
+								</Cluster>
+							{/if}
+						</Stack>
+					</Field>
+					<Field
+						label={t('pojmy.field.borrowed')}
+						for={borrMode === 'set' ? 'pojmy-borrowed' : undefined}
+						error={borrError ? t(borrError) : null}
+						errorId="pojmy-borrowed-err"
+						hint={t('pojmy.hint.borrowed')}
+					>
+						<Stack gap={2}>
+							<Segmented label={t('pojmy.field.borrowed')} options={modeOptions} value={borrMode} onchange={setBorr} />
+							{#if borrMode === 'set'}
+								<Cluster gap={2}>
+									<Range
+										id="pojmy-borrowed-range"
+										label={t('pojmy.field.borrowed')}
+										min={BORROWED.min}
+										max={BORROWED.max}
+										step={BORROWED.step}
+										value={sliderValue(draft.borrowed, BORROWED)}
+										oninput={(v) => (draft.borrowed = v.toFixed(2))}
+									/>
+									<TextInput
+										id="pojmy-borrowed"
+										width="s"
+										bind:value={draft.borrowed}
+										invalid={!!borrError}
+										describedby={borrError ? 'pojmy-borrowed-err' : undefined}
+									/>
+								</Cluster>
+							{/if}
+						</Stack>
 					</Field>
 
 					<Cluster gap={2}>

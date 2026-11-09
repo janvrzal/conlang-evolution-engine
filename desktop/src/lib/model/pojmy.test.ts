@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	BASE_CONCEPTS,
 	BASE_SIZE,
+	BORROWED,
+	FREQUENCY,
 	checkDraft,
 	conceptOf,
 	customConcepts,
@@ -9,6 +11,8 @@ import {
 	emptyDraft,
 	filterConcepts,
 	isInvented,
+	parseRatio,
+	ratioProblem,
 	sizeFactor,
 	sizeOf,
 	sizeOptions
@@ -80,6 +84,39 @@ describe('vlastní pojmy', () => {
 		expect(checkDraft({ ...emptyDraft(), id: 'x', concepticon: '12' }, taken).concepticon).toBe(false);
 		expect(checkDraft({ ...emptyDraft(), id: 'x', concepticon: '0' }, taken).concepticon).toBe(true);
 		expect(checkDraft({ ...emptyDraft(), id: 'x', concepticon: '1.5' }, taken).concepticon).toBe(true);
+	});
+
+	it('frekvence a půjčitelnost: prázdné = z vazby, číslo v mezích se zapíše, mimo meze ne', () => {
+		expect(conceptOf({ ...emptyDraft(), id: 'x' })).toEqual({ id: 'x' });
+		const ok = conceptOf({ ...emptyDraft(), id: 'x', frequency: '0,3', borrowed: '0' });
+		expect(ok).toEqual({ id: 'x', frequency: 0.3, borrowed: 0 });
+		const bad = conceptOf({ ...emptyDraft(), id: 'x', frequency: '0.95', borrowed: '1.5' });
+		expect(bad).toEqual({ id: 'x' });
+	});
+
+	it('meze: frekvence 0,05 až 0,9, půjčitelnost 0 až 1; prázdné není chyba', () => {
+		expect(FREQUENCY).toMatchObject({ min: 0.05, max: 0.9 });
+		expect(BORROWED).toMatchObject({ min: 0, max: 1 });
+		expect(parseRatio('0.05', FREQUENCY)).toBe(0.05);
+		expect(parseRatio('0.04', FREQUENCY)).toBeNull();
+		expect(parseRatio('abc', BORROWED)).toBeNull();
+		expect(ratioProblem('', FREQUENCY)).toBe(false);
+		expect(ratioProblem('0,9', FREQUENCY)).toBe(false);
+		expect(ratioProblem('0,91', FREQUENCY)).toBe(true);
+		expect(ratioProblem('1,01', BORROWED)).toBe(true);
+	});
+
+	it('ověření formuláře hlásí frekvenci a půjčitelnost mimo meze', () => {
+		const p = checkDraft({ ...emptyDraft(), id: 'x', frequency: '2', borrowed: '0.5' }, new Set());
+		expect(p.frequency).toBe(true);
+		expect(p.borrowed).toBe(false);
+		expect(checkDraft({ ...emptyDraft(), id: 'x' }, new Set()).frequency).toBe(false);
+	});
+
+	it('draftOf a conceptOf zachovají frekvenci a půjčitelnost', () => {
+		const c = { id: 'hraz', frequency: 0.25, borrowed: 0.7 };
+		expect(conceptOf(draftOf(c))).toEqual(c);
+		expect(draftOf({ id: 'hraz' })).toMatchObject({ frequency: '', borrowed: '' });
 	});
 
 	it('světy bez pole concepts vrátí prázdný seznam', () => {
