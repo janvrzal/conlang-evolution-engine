@@ -199,6 +199,9 @@ pub struct RegionSpec {
 pub struct EventSpec {
     pub year: f64,
     pub kind: String,
+    /// Studijní případ: krátký štítek („Lingua franca v přístavu“); běh zapíše `study_case`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub study_case: Option<String>,
     #[serde(flatten)]
     pub params: Map<String, Value>,
 }
@@ -479,6 +482,7 @@ pub fn build(spec: &WorldSpec) -> Result<(World, Vec<Box<dyn WorldEvent>>), Stri
     let mut events: Vec<Box<dyn WorldEvent>> = Vec::new();
     for index in order {
         let item = &spec.events[index];
+        let first = events.len();
         if !EVENT_KINDS.contains(&item.kind.as_str()) {
             return Err(format!(
                 "events.{index}: neznámý druh události '{}'",
@@ -501,9 +505,85 @@ pub fn build(spec: &WorldSpec) -> Result<(World, Vec<Box<dyn WorldEvent>>), Stri
                 Value::Object(item.params.clone()),
             ))),
         }
+        if let Some(label) = item.study_case.as_ref().filter(|l| !l.trim().is_empty()) {
+            // u události po regionech (víc událostí enginu) nese štítek jen první
+            if first < events.len() {
+                let inner = events.remove(first);
+                events.insert(
+                    first,
+                    Box::new(crate::events::StudyCase {
+                        inner,
+                        label: label.trim().to_owned(),
+                        index,
+                    }),
+                );
+            }
+        }
     }
     events.extend(background_events(spec, &params_for_background)?);
     Ok((world, events))
+}
+
+/// Rok, od kterého se dva popisy světa liší (pro „co kdyby“ z kontrolního bodu).
+///
+/// Liší-li se cokoli mimo události (regiony, jazyky, parametry, semínko …), vrátí `None`:
+/// takový svět se musí počítat od začátku. Jinak vrátí nejdřívější rok, ve kterém se
+/// události liší (přidaná, odebraná nebo změněná událost); stejné události dají `Some(end_year)`
+/// u kratšího/delšího běhu, nebo `Some(f64::INFINITY)`, když jsou popisy shodné.
+pub fn branch_year(original: &WorldSpec, changed: &WorldSpec) -> Option<f64> {
+    let strip = |spec: &WorldSpec| {
+        let mut value = serde_json::to_value(spec).unwrap_or(Value::Null);
+        if let Some(o) = value.as_object_mut() {
+            o.remove("events");
+            o.remove("end_year");
+            o.remove("name");
+        }
+        value
+    };
+    if strip(original) != strip(changed) {
+        return None;
+    }
+    let key = |e: &EventSpec| serde_json::to_string(e).unwrap_or_default();
+    let mut left: Vec<(f64, String)> = original.events.iter().map(|e| (e.year, key(e))).collect();
+    let mut right: Vec<(f64, String)> = changed.events.iter().map(|e| (e.year, key(e))).collect();
+    let order = |a: &(f64, String), b: &(f64, String)| {
+        a.0.partial_cmp(&b.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.1.cmp(&b.1))
+    };
+    left.sort_by(order);
+    right.sort_by(order);
+    let mut first = f64::INFINITY;
+    for at in 0..left.len().max(right.len()) {
+        match (left.get(at), right.get(at)) {
+            (Some(a), Some(b)) if a == b => continue,
+            (a, b) => {
+                let years = [a.map(|x| x.0), b.map(|x| x.0)];
+                first = years.into_iter().flatten().fold(f64::INFINITY, f64::min);
+                break;
+            }
+        }
+    }
+    if original.end_year != changed.end_year {
+        first = first.min(original.end_year.min(changed.end_year));
+    }
+    Some(first)
+}
+
+/// Běh popisu světa pokračující z kontrolního bodu: svět a historie z bodu, události z popisu
+/// (jen ty po roku bodu). Bod musí ležet před rokem větvení ([`branch_year`]).
+pub fn resume(
+    spec: &WorldSpec,
+    checkpoint: crate::checkpoint::Checkpoint,
+    config: SimulationConfig,
+) -> Result<Simulation, String> {
+    let (_, events) = build(spec)?;
+    Simulation::resume(
+        checkpoint,
+        config,
+        events,
+        crate::changes::default_changes(),
+    )
 }
 
 /// Vesnice regionu popisu světa (jména `region-v0` …, jak je zakládá `region_world`).
@@ -735,9 +815,14 @@ fn background_events(
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Issue {
     pub path: String,
+    /// Zpráva česky (výchozí text, když UI kód nezná).
     pub message: String,
     /// `error` svět nepustí, `warning` jen upozorní.
     pub severity: &'static str,
+    /// Stálý kód hlášky pro překlad v UI (`tone_unknown`, `event_failed` …).
+    pub code: &'static str,
+    /// Hodnoty, které zpráva dosazuje (`{"tone": "˥˩"}`); překlad je dosadí do své šablony.
+    pub args: std::collections::BTreeMap<&'static str, String>,
 }
 
 impl Issue {
@@ -746,7 +831,21 @@ impl Issue {
             path: path.into(),
             message: message.into(),
             severity: "error",
+            code: "invalid",
+            args: Default::default(),
         }
+    }
+
+    /// Kód hlášky pro překlad.
+    pub fn code(mut self, code: &'static str) -> Issue {
+        self.code = code;
+        self
+    }
+
+    /// Hodnota dosazená do zprávy.
+    pub fn arg(mut self, name: &'static str, value: impl ToString) -> Issue {
+        self.args.insert(name, value.to_string());
+        self
     }
 
     pub fn warning(path: impl Into<String>, message: impl Into<String>) -> Issue {
@@ -784,32 +883,40 @@ fn word_issues(spec: &WorldSpec, known: &HashSet<String>) -> Vec<Issue> {
                     format!(
                         "neznámý tón '{tone}'; tón se píše tónovými značkami ˥ ˦ ˧ ˨ ˩ (např. ˥, ˧˥)"
                     ),
-                ));
+                ).code("tone_unknown").arg("tone", tone));
             }
         }
         let distinct: HashSet<&String> = language.tones.iter().collect();
         if distinct.len() != language.tones.len() {
-            issues.push(Issue::error(
-                format!("languages.{index}.tones"),
-                "tóny se opakují",
-            ));
+            issues.push(
+                Issue::error(format!("languages.{index}.tones"), "tóny se opakují")
+                    .code("tones_repeated"),
+            );
         }
         if let Some(name) = &language.syllables {
             if SyllableType::parse(name).is_none() {
-                issues.push(Issue::error(
-                    format!("languages.{index}.syllables"),
-                    format!(
-                        "neznámá slabičná stavba '{name}'; možnosti: simple, moderate, complex"
-                    ),
-                ));
+                issues.push(
+                    Issue::error(
+                        format!("languages.{index}.syllables"),
+                        format!(
+                            "neznámá slabičná stavba '{name}'; možnosti: simple, moderate, complex"
+                        ),
+                    )
+                    .code("syllables_unknown")
+                    .arg("syllables", name),
+                );
             }
         }
         for (position, concept) in language.endonym.iter().enumerate() {
             if !known.contains(concept) {
-                issues.push(Issue::error(
-                    format!("languages.{index}.endonym.{position}"),
-                    format!("neznámý pojem '{concept}'"),
-                ));
+                issues.push(
+                    Issue::error(
+                        format!("languages.{index}.endonym.{position}"),
+                        format!("neznámý pojem '{concept}'"),
+                    )
+                    .code("concept_unknown")
+                    .arg("concept", concept),
+                );
             }
         }
         let mut words: Vec<(&String, &String)> = language.words.iter().collect();
@@ -817,19 +924,32 @@ fn word_issues(spec: &WorldSpec, known: &HashSet<String>) -> Vec<Issue> {
         for (concept, form) in words {
             let path = format!("languages.{index}.words.{concept}");
             if !known.contains(concept) {
-                issues.push(Issue::error(path, format!("neznámý pojem '{concept}'")));
+                issues.push(
+                    Issue::error(path, format!("neznámý pojem '{concept}'"))
+                        .code("concept_unknown")
+                        .arg("concept", concept),
+                );
             } else if form.trim().is_empty() {
-                issues.push(Issue::error(path, "slovo nesmí být prázdné"));
+                issues.push(Issue::error(path, "slovo nesmí být prázdné").code("word_empty"));
             } else {
                 match table.lossless(form) {
-                    Err(_) => issues.push(Issue::error(
-                        path,
-                        format!("engine nezná některou hlásku ve slově '{form}'"),
-                    )),
-                    Ok(Some(rendered)) => issues.push(Issue::error(
-                        path,
-                        format!("slovo '{form}' by se zapsalo jako '{rendered}'"),
-                    )),
+                    Err(_) => issues.push(
+                        Issue::error(
+                            path,
+                            format!("engine nezná některou hlásku ve slově '{form}'"),
+                        )
+                        .code("word_unknown_segment")
+                        .arg("form", form),
+                    ),
+                    Ok(Some(rendered)) => issues.push(
+                        Issue::error(
+                            path,
+                            format!("slovo '{form}' by se zapsalo jako '{rendered}'"),
+                        )
+                        .code("word_rewritten")
+                        .arg("form", form)
+                        .arg("rendered", &rendered),
+                    ),
                     Ok(None) => {}
                 }
             }
@@ -848,21 +968,23 @@ pub fn check(spec: &WorldSpec) -> Vec<Issue> {
         Ok(params) => params,
         Err(message) => {
             let (path, text) = with_path(&message, "parameters");
-            return vec![Issue::error(path, text)];
+            return vec![Issue::error(path, text).code("parameter_invalid")];
         }
     };
     let custom = match custom_concepts(spec) {
         Ok(custom) => custom,
-        Err((index, message)) => return vec![Issue::error(format!("concepts.{index}"), message)],
+        Err((index, message)) => {
+            return vec![Issue::error(format!("concepts.{index}"), message).code("concept_invalid")]
+        }
     };
     let mut found: Vec<Issue> = Vec::new();
     for problem in crate::vocabulary::validate(spec.vocabulary, &custom) {
         let (path, text) = with_path(&problem, "vocabulary");
-        found.push(Issue::error(path, text));
+        found.push(Issue::error(path, text).code("vocabulary_invalid"));
     }
     let failed = !found.is_empty();
     for (path, text) in crate::vocabulary::warnings(spec.vocabulary, &custom) {
-        found.push(Issue::warning(path, text));
+        found.push(Issue::warning(path, text).code("vocabulary_warning"));
     }
     if failed {
         return found;
@@ -885,37 +1007,44 @@ pub fn check(spec: &WorldSpec) -> Vec<Issue> {
             } else {
                 "regions".to_owned()
             };
-            let mut all = vec![Issue::error(path, text)];
+            let mut all = vec![Issue::error(path, text).code("world_invalid")];
             all.extend(found);
             return all;
         }
     };
     if !params.background_levels.contains_key(&spec.background) {
-        issues.push(Issue::error(
-            "background",
-            format!(
-                "neznámá míra pozadí dějin '{}'; možnosti: {}",
-                spec.background,
-                params
-                    .background_levels
-                    .keys()
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        ));
+        issues.push(
+            Issue::error(
+                "background",
+                format!(
+                    "neznámá míra pozadí dějin '{}'; možnosti: {}",
+                    spec.background,
+                    params
+                        .background_levels
+                        .keys()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            )
+            .code("background_unknown")
+            .arg("background", &spec.background),
+        );
     }
     for (index, item) in spec.events.iter().enumerate() {
         if !(spec.start_year <= item.year && item.year <= spec.end_year) {
-            issues.push(Issue::error(
-                format!("events.{index}.year"),
-                "událost leží mimo start_year až end_year",
-            ));
+            issues.push(
+                Issue::error(
+                    format!("events.{index}.year"),
+                    "událost leží mimo start_year až end_year",
+                )
+                .code("event_year_outside"),
+            );
         }
     }
     // Zkušební svět má stejný stav jako na začátku běhu; události se provedou v pořadí roků.
     match Simulation::new(world, SimulationConfig::default(), Vec::new()) {
-        Err(message) => issues.push(Issue::error("(svět)", message)),
+        Err(message) => issues.push(Issue::error("(svět)", message).code("world_failed")),
         Ok(mut trial) => {
             let mut history = History::default();
             let mut order: Vec<usize> = (0..spec.events.len()).collect();
@@ -929,10 +1058,14 @@ pub fn check(spec: &WorldSpec) -> Vec<Issue> {
             for index in order {
                 let item = &spec.events[index];
                 if !EVENT_KINDS.contains(&item.kind.as_str()) {
-                    issues.push(Issue::error(
-                        format!("events.{index}"),
-                        format!("neznámý druh události '{}'", item.kind),
-                    ));
+                    issues.push(
+                        Issue::error(
+                            format!("events.{index}"),
+                            format!("neznámý druh události '{}'", item.kind),
+                        )
+                        .code("event_kind_unknown")
+                        .arg("kind", &item.kind),
+                    );
                     continue;
                 }
                 // Události po regionech se zkouší přeložené stejně jako při stavbě běhu.
@@ -943,7 +1076,11 @@ pub fn check(spec: &WorldSpec) -> Vec<Issue> {
                             .map(|(kind, params)| (kind.to_owned(), params))
                             .collect(),
                         Err((field, message)) => {
-                            issues.push(Issue::error(format!("events.{index}.{field}"), message));
+                            issues.push(
+                                Issue::error(format!("events.{index}.{field}"), message)
+                                    .code("event_field_invalid")
+                                    .arg("field", &field),
+                            );
                             continue;
                         }
                     },
@@ -952,22 +1089,32 @@ pub fn check(spec: &WorldSpec) -> Vec<Issue> {
                 for (kind, params) in translated {
                     let (params, warning) = defer_language(&trial.world, &kind, params);
                     if let Some(message) = warning {
-                        found.push(Issue::warning(format!("events.{index}.language"), message));
+                        found.push(
+                            Issue::warning(format!("events.{index}.language"), message)
+                                .code("event_language_later"),
+                        );
                     }
                     let event =
                         crate::events::from_pending(PendingEvent::new(item.year, &kind, params));
                     if let Err(message) = event.apply(&mut trial.world, &mut history, 0) {
-                        issues.push(Issue::error(format!("events.{index}"), message));
+                        issues.push(
+                            Issue::error(format!("events.{index}"), message)
+                                .code("event_failed")
+                                .arg("kind", &kind),
+                        );
                     }
                 }
             }
         }
     }
     if !spec.semantics && custom_related(&custom) {
-        found.push(Issue::warning(
-            "semantics",
-            "příbuzné pojmy vlastních pojmů se bez sémantiky (semantics: false) nepoužijí",
-        ));
+        found.push(
+            Issue::warning(
+                "semantics",
+                "příbuzné pojmy vlastních pojmů se bez sémantiky (semantics: false) nepoužijí",
+            )
+            .code("semantics_off"),
+        );
     }
     issues.extend(found);
     issues

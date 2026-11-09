@@ -8,6 +8,9 @@
 //! `states`, `borders`, `census` počítá `polity`; `lineages`, `dialect_facts` a `endonym`
 //! vycházejí z pozorování (`observe`) a podkladů jmen (`naming`).
 
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
 use crate::grammar::Catalog;
@@ -21,7 +24,8 @@ use crate::world::World;
 pub const FORMAT: &str = "cee-v2/1";
 
 /// Události pro časovou osu UI; ostatní (inovace, milníky šíření…) jsou šum.
-pub const TIMELINE: [&str; 43] = [
+pub const TIMELINE: [&str; 44] = [
+    "study_case",
     "border",
     "contact",
     "migration",
@@ -126,7 +130,11 @@ pub fn lexicon(world: &World, group: GroupId) -> Map<String, Value> {
         return result;
     };
     let code = world.groups.main_code(group);
-    let total_concepts = world.registry.concepts.len().max(code.phonology.dominant.len());
+    let total_concepts = world
+        .registry
+        .concepts
+        .len()
+        .max(code.phonology.dominant.len());
     let mut concepts: Vec<(String, crate::ids::MorphemeId)> = (0..total_concepts)
         .filter_map(|concept| {
             let root = world.dominant_or_plural_root(group, crate::ids::ConceptId::new(concept));
@@ -168,6 +176,262 @@ pub fn lexicon(world: &World, group: GroupId) -> Map<String, Value> {
         );
     }
     result
+}
+
+/// Slovník jazyka v jednom okamžiku: skupina, podle které se tvary berou, a tvar (IPA) pojmů.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LanguageLexicon {
+    pub group: String,
+    pub forms: BTreeMap<String, String>,
+}
+
+/// Tvary pojmů skupiny (IPA) bez původu; lehčí verze [`lexicon`] pro snímky a protojazyk.
+pub fn forms(world: &World, group: GroupId) -> BTreeMap<String, String> {
+    let mut result = BTreeMap::new();
+    let Some(table) = world.segments() else {
+        return result;
+    };
+    let code = world.groups.main_code(group);
+    let total = world
+        .registry
+        .concepts
+        .len()
+        .max(code.phonology.dominant.len());
+    for concept in 0..total {
+        let root = world.dominant_or_plural_root(group, crate::ids::ConceptId::new(concept));
+        if root.is_none() {
+            continue;
+        }
+        result.insert(
+            world.registry.concepts.name(concept as u32).to_owned(),
+            table.render(&world.adapted_form_of(group, root)),
+        );
+    }
+    result
+}
+
+/// Mluvčí skupina, podle které se ukazuje slovník jazyka: největší domácí skupina (ne souhrnná),
+/// jinak největší ze všech; při shodě abecedně první.
+fn representative(world: &World, groups: &[GroupId]) -> Option<GroupId> {
+    let g = &world.groups;
+    let key = |&id: &GroupId| {
+        let at = id.index();
+        let home = g.domain[at] == crate::model::group::Domain::Home && !g.aggregate[at];
+        (home, g.population[at])
+    };
+    groups.iter().copied().max_by(|a, b| {
+        let (ka, kb) = (key(a), key(b));
+        ka.0.cmp(&kb.0)
+            .then(ka.1.partial_cmp(&kb.1).unwrap_or(std::cmp::Ordering::Equal))
+            .then(world.group_name(*b).cmp(world.group_name(*a)))
+    })
+}
+
+/// Slovník každého jazyka podle skupin, které ho mluví (jazyk → skupiny).
+fn lexicons_of(
+    world: &World,
+    members: BTreeMap<String, Vec<GroupId>>,
+) -> BTreeMap<String, LanguageLexicon> {
+    members
+        .into_iter()
+        .filter_map(|(language, groups)| {
+            let group = representative(world, &groups)?;
+            Some((
+                language,
+                LanguageLexicon {
+                    group: world.group_name(group).to_owned(),
+                    forms: forms(world, group),
+                },
+            ))
+        })
+        .collect()
+}
+
+/// Slovník podle jazyka kódu skupin (na startu: protojazyky popisu světa).
+pub fn code_language_lexicons(world: &World) -> BTreeMap<String, LanguageLexicon> {
+    let mut members: BTreeMap<String, Vec<GroupId>> = BTreeMap::new();
+    for g in world.group_ids() {
+        let language = world.groups.main_code(g).language;
+        members
+            .entry(world.registry.languages.name(language.0).to_owned())
+            .or_default()
+            .push(g);
+    }
+    lexicons_of(world, members)
+}
+
+/// Slovník každého pozorovaného jazyka (linie posledního snímku); bez snímku podle jazyka kódu.
+pub fn language_lexicons(simulation: &Simulation) -> BTreeMap<String, LanguageLexicon> {
+    let world = &simulation.world;
+    let Some(last) = simulation.history.snapshots.last() else {
+        return code_language_lexicons(world);
+    };
+    let members: BTreeMap<String, Vec<GroupId>> = last
+        .languages
+        .iter()
+        .map(|(language, groups)| {
+            let ids = groups
+                .iter()
+                .filter_map(|name| world.registry.groups.get(name).map(GroupId))
+                .filter(|&id| world.groups.contains(id))
+                .collect();
+            (language.clone(), ids)
+        })
+        .collect();
+    lexicons_of(world, members)
+}
+
+/// Části klíče zvukové změny (`rodina|cíl|operace|rysy|hláska|vlevo|vpravo|přízvuk|…`).
+fn sound_parts(variable: &str) -> Value {
+    let key = variable.strip_prefix("process:").unwrap_or(variable);
+    let parts: Vec<&str> = key.split('|').collect();
+    let part = |i: usize| {
+        parts
+            .get(i)
+            .filter(|p| !p.is_empty())
+            .map_or(Value::Null, |p| json!(p))
+    };
+    json!({
+        "family": part(0), "target": part(1), "operation": part(2), "features": part(3),
+        "segment": part(4), "left": part(5), "right": part(6), "stress": part(7),
+        "medial": parts.get(8).is_some_and(|p| *p == "medial"),
+    })
+}
+
+/// Zvukové změny a analogie po jazycích (dok. 36): které vesnice změnu přijaly a kdy.
+///
+/// Zvuková změna = procesní proměnná, která se ve skupině ustálila (`established`); u každé
+/// skupiny rok ustálení, případně rok uzavření procesu (`process_closed`) s počtem reliktů.
+/// Analogie = vyrovnání tvaru (`analogy`) s pojmem a buňkou paradigmatu. Jazyk skupiny je
+/// linie posledního snímku; skupiny, které už nežijí, jsou pod `null`.
+pub fn change_history(simulation: &Simulation) -> Vec<Value> {
+    let history = &simulation.history;
+    let observed = observed_languages(simulation);
+    // (proměnná, skupina) → (rok ustálení, rok uzavření, relikty)
+    type Adopted = (f64, Option<f64>, f64);
+    let mut sound: BTreeMap<String, BTreeMap<String, Adopted>> = BTreeMap::new();
+    let text =
+        |e: &Map<String, Value>, k: &str| e.get(k).and_then(Value::as_str).map(str::to_owned);
+    let year = |e: &Map<String, Value>| e.get("year").and_then(Value::as_f64).unwrap_or(0.0);
+    for event in history.of_kind("established") {
+        let (Some(variable), Some(group)) = (text(&event, "variable"), text(&event, "group"))
+        else {
+            continue;
+        };
+        if !variable.starts_with("process:") {
+            continue;
+        }
+        sound
+            .entry(variable)
+            .or_default()
+            .entry(group)
+            .or_insert((year(&event), None, 0.0));
+    }
+    for event in history.of_kind("process_closed") {
+        let (Some(variable), Some(group)) = (text(&event, "variable"), text(&event, "group"))
+        else {
+            continue;
+        };
+        let relics = event.get("relics").and_then(Value::as_f64).unwrap_or(0.0);
+        let entry =
+            sound
+                .entry(variable)
+                .or_default()
+                .entry(group)
+                .or_insert((year(&event), None, 0.0));
+        entry.1.get_or_insert(year(&event));
+        entry.2 += relics;
+    }
+    // (proměnná, operace, pojem, buňka) → skupina → rok
+    let mut analogy: BTreeMap<(String, String, String, String), BTreeMap<String, f64>> =
+        BTreeMap::new();
+    for event in history.of_kind("analogy") {
+        let (Some(variable), Some(group)) = (text(&event, "variable"), text(&event, "group"))
+        else {
+            continue;
+        };
+        let key = (
+            variable,
+            text(&event, "operation").unwrap_or_default(),
+            text(&event, "concept").unwrap_or_default(),
+            text(&event, "cell").unwrap_or_default(),
+        );
+        analogy
+            .entry(key)
+            .or_default()
+            .entry(group)
+            .or_insert(year(&event));
+    }
+    let mut by_language: BTreeMap<Option<String>, Vec<Value>> = BTreeMap::new();
+    let language_of = |group: &str| observed.get(group).cloned();
+    for (variable, groups) in sound {
+        let mut split: BTreeMap<Option<String>, Vec<Value>> = BTreeMap::new();
+        for (group, (since, closed, relics)) in groups {
+            split.entry(language_of(&group)).or_default().push(json!({
+                "group": group, "year": since, "closed": closed, "relics": relics,
+            }));
+        }
+        for (language, list) in split {
+            let first = list
+                .iter()
+                .filter_map(|g| g["year"].as_f64())
+                .fold(f64::INFINITY, f64::min);
+            let mut item =
+                json!({ "kind": "sound", "variable": variable, "year": first, "groups": list });
+            if let (Some(o), Value::Object(parts)) = (item.as_object_mut(), sound_parts(&variable))
+            {
+                o.extend(parts);
+            }
+            by_language.entry(language).or_default().push(item);
+        }
+    }
+    for ((variable, operation, concept, cell), groups) in analogy {
+        let mut split: BTreeMap<Option<String>, Vec<Value>> = BTreeMap::new();
+        for (group, since) in groups {
+            split
+                .entry(language_of(&group))
+                .or_default()
+                .push(json!({ "group": group, "year": since }));
+        }
+        for (language, list) in split {
+            let first = list
+                .iter()
+                .filter_map(|g| g["year"].as_f64())
+                .fold(f64::INFINITY, f64::min);
+            by_language.entry(language).or_default().push(json!({
+                "kind": "analogy", "variable": variable, "operation": operation,
+                "concept": if concept.is_empty() { Value::Null } else { json!(concept) },
+                "cell": if cell.is_empty() { Value::Null } else { json!(cell) },
+                "year": first, "groups": list,
+            }));
+        }
+    }
+    let speakers: BTreeMap<String, usize> = simulation
+        .history
+        .snapshots
+        .last()
+        .map(|s| {
+            s.languages
+                .iter()
+                .map(|(l, g)| (l.clone(), g.len()))
+                .collect()
+        })
+        .unwrap_or_default();
+    by_language
+        .into_iter()
+        .map(|(language, mut changes)| {
+            changes.sort_by(|a, b| {
+                let y = |v: &Value| v["year"].as_f64().unwrap_or(0.0);
+                y(a).partial_cmp(&y(b)).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            let groups = language
+                .as_ref()
+                .and_then(|l| speakers.get(l))
+                .copied()
+                .unwrap_or(0);
+            json!({ "language": language, "groups": groups, "changes": changes })
+        })
+        .collect()
 }
 
 /// Převládající konstrukce každé gramatické funkce skupiny.
@@ -397,6 +661,9 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
         "onomastics": onomastics,
         "census": polity::language_census(world),
         "events": events,
+        "proto_lexicon": history.proto,
+        "lexicon_by_language": language_lexicons(simulation),
+        "change_history": change_history(simulation),
     })
 }
 

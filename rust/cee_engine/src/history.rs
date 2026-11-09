@@ -325,6 +325,9 @@ pub struct History {
     pub snapshots: Vec<Snapshot>,
     /// (varianta, skupina) → [(tik, frekvence)]; plní se jen na vyžádání.
     pub trajectories: std::collections::BTreeMap<(VariantId, GroupId), Vec<(u32, f64)>>,
+    /// Slovník protojazyků na startu běhu (jazyk → skupina a tvary), viz `export::code_language_lexicons`.
+    #[serde(default)]
+    pub proto: std::collections::BTreeMap<String, crate::export::LanguageLexicon>,
 }
 
 impl History {

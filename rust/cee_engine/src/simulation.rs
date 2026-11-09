@@ -123,13 +123,17 @@ impl Simulation {
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then(a.0.cmp(&b.0))
         });
+        let history = History {
+            proto: crate::export::code_language_lexicons(&world),
+            ..History::default()
+        };
         Ok(Simulation {
             world,
             config,
             changes,
             events: described,
             pending: sorted.into_iter().map(|(_, e)| e).collect(),
-            history: History::default(),
+            history,
             tick: 0,
             checkpoints: BTreeMap::new(),
         })

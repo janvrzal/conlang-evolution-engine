@@ -13,7 +13,7 @@ use crate::history::History;
 use crate::world::World;
 
 /// Verze formátu kontrolního bodu; mění se s rozložením uložených struktur.
-pub const CHECKPOINT_VERSION: u32 = 1;
+pub const CHECKPOINT_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint {

@@ -43,6 +43,45 @@ pub trait WorldEvent: Send + Sync + std::fmt::Debug {
     fn describe(&self) -> Value;
 }
 
+/// Událost, kterou popis světa označil jako studijní případ (`study_case`): provede se beze
+/// změny a do historie přibude záznam `study_case` se štítkem, aby ho časová osa a UI našly.
+#[derive(Debug)]
+pub struct StudyCase {
+    pub inner: Box<dyn WorldEvent>,
+    pub label: String,
+    /// Pořadí události v popisu světa (`events.N`).
+    pub index: usize,
+}
+
+impl WorldEvent for StudyCase {
+    fn year(&self) -> f64 {
+        self.inner.year()
+    }
+
+    fn kind(&self) -> &str {
+        self.inner.kind()
+    }
+
+    fn apply(&self, world: &mut World, history: &mut History, tick: u32) -> Result<(), String> {
+        self.inner.apply(world, history, tick)?;
+        history.record(
+            "study_case",
+            tick,
+            self.inner.year(),
+            json!({ "label": self.label, "event_kind": self.inner.kind(), "spec_event": self.index }),
+        );
+        Ok(())
+    }
+
+    fn describe(&self) -> Value {
+        let mut described = self.inner.describe();
+        if let Some(o) = described.as_object_mut() {
+            o.insert("study_case".into(), json!(self.label));
+        }
+        described
+    }
+}
+
 /// Událost, kterou ještě nikdo nerozebral: druh a parametry.
 #[derive(Clone, Debug)]
 pub struct PendingEvent {
