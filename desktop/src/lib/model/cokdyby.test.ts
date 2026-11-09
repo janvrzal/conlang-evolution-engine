@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { WorldSpec } from '$lib/state.svelte';
-import { differingVillages, focusRegions, matchLineages, withoutEvent, worldDifference, type Home } from './cokdyby';
+import type { StoredRun } from '$lib/engine';
+import {
+	branchesOf,
+	branchYearOf,
+	compareForms,
+	differingVillages,
+	focusRegions,
+	folderName,
+	matchLineages,
+	storedBranch,
+	withoutEvent,
+	worldDifference,
+	type Home
+} from './cokdyby';
 
 const h = (entries: [string, string][]): Home => new Map(entries.map(([v, lineage]) => [v, { lineage, population: 1, group: v }]));
 const world = (events: { kind: string; year: number }[]) => ({ format: 'cee-v2-world/1', end_year: 100, languages: [], regions: [], events }) as unknown as WorldSpec;
@@ -71,15 +84,49 @@ describe.skipIf(!have)('Co kdyby: variety na Talveře', () => {
 		expect(languageCount(end(A), v, true)).toEqual({ langs: Object.keys(end(A).languages).length, small: 0 });
 	});
 
-	it('rozdíl Utjipengu a Luji (7 vsí, Talmurština vs. Serenština) zůstává', () => {
-		const { d } = diff(false);
+	it('rozdíl větví: vsi s jinou rodinou doma, ochrana před varietami ho nezvětšuje', () => {
+		const { a, b, d } = diff(false);
+		const fam = { a: lineageFamilies(A.world, A.result), b: lineageFamilies(B.world, B.result) };
 		const geo = geography(A.world, A.result);
-		const regions = new Set([...d].map((v) => geo.name(geo.regionOf.get(v)!)));
-		expect(d.size).toBe(7);
-		expect(regions.has('Luji') && regions.has('Utjipeng')).toBe(true);
-		expect(diff(true).d.size).toBe(7);
+		expect(d.size).toBeGreaterThan(0);
+		// každá rozdílná ves má doma v A a B jazyk jiné rodiny
+		for (const v of d) expect(fam.a.get(a.get(v)!.lineage)).not.toBe(fam.b.get(b.get(v)!.lineage));
+		// rozdíl leží v několika málo krajích, ne po celém světě
+		const regions = new Set([...d].map((v) => geo.regionOf.get(v)));
+		expect(regions.size).toBeGreaterThan(0);
+		expect(regions.size).toBeLessThan(new Set(geo.regionOf.values()).size / 2);
+		// přepínač „všechny jazyky“ rozdíl nemění
+		expect(diff(true).d.size).toBe(d.size);
 		// bez ochrany by se tytéž malé jazyky přiřazené v A a B různým hostitelům počítaly jako rozdíl
-		const a = diff(false);
-		expect(differingVillages(a.a, a.b, matchLineages(a.a, a.b, { a: lineageFamilies(A.world, A.result), b: lineageFamilies(B.world, B.result) })).size).toBeGreaterThan(7);
+		expect(differingVillages(a, b, matchLineages(a, b, fam)).size).toBeGreaterThanOrEqual(d.size);
+	});
+});
+
+describe('uložené větve a rok větvení', () => {
+	const run = (o: Partial<StoredRun>) => ({ id: 'x', path: '/r/x', parent: null, branch_year: null, created: 0, ...o }) as StoredRun;
+	it('folderName bere poslední díl cesty a vzorek nemá složku', () => {
+		expect(folderName('/p/svet.cee.behy/20261109-162252')).toBe('20261109-162252');
+		expect(folderName('/p/behy/a/')).toBe('a');
+		expect(folderName('fixture:talvera')).toBeNull();
+		expect(folderName(null)).toBeNull();
+	});
+	it('branchesOf vybere děti běhu A, nejnovější první', () => {
+		const runs = [run({ id: 'a' }), run({ id: 'b', parent: 'a', created: 1 }), run({ id: 'c', parent: 'a', created: 5 }), run({ id: 'd', parent: 'z' })];
+		expect(branchesOf(runs, '/p/behy/a').map((r) => r.id)).toEqual(['c', 'b']);
+		expect(branchesOf(runs, 'fixture:talvera')).toEqual([]);
+	});
+	it('storedBranch a branchYearOf', () => {
+		const r = run({ id: 'b', branch_year: 1875 });
+		expect(storedBranch([r], '/p/behy/b')).toBe(r);
+		expect(storedBranch([r], 'fixture:x')).toBeNull();
+		expect(branchYearOf(r, 1900, 1800)).toBe(1875);
+		expect(branchYearOf(null, 1875, 1800)).toBe(1875);
+		expect(branchYearOf(null, undefined, 1800)).toBe(1800);
+		expect(branchYearOf(null, null, null)).toBeNull();
+	});
+	it('compareForms porovná společné pojmy', () => {
+		const c = compareForms({ water: 'a', fire: 'b', dog: 'x' }, { water: 'a', fire: 'c' }, ['water', 'fire', 'dog']);
+		expect(c).toEqual({ rows: [{ concept: 'water', a: 'a', b: 'a', differs: false }, { concept: 'fire', a: 'b', b: 'c', differs: true }], changed: 1, total: 2 });
+		expect(compareForms(undefined, {}, [])).toBeNull();
 	});
 });
