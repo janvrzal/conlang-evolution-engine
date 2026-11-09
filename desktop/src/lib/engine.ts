@@ -51,6 +51,8 @@ export interface StoredRun {
 	has_result: boolean;
 	/** běh vznikl z tohoto zadání */
 	matches: boolean;
+	/** velikost složky po částech v bajtech (frames, events, lexicon, result, checkpoints) */
+	size?: Record<string, number>;
 }
 
 export interface StartOptions {
@@ -213,6 +215,10 @@ export class Engine {
 
 	renameRun(runId: string, name: string | null): Promise<void> {
 		return this.call('run_rename', { id: runId, name });
+	}
+
+	dropCheckpoints(runId: string): Promise<void> {
+		return this.call('run_drop_checkpoints', { id: runId });
 	}
 
 	deleteRun(runId: string): Promise<void> {

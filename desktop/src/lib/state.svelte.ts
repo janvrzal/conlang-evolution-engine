@@ -264,6 +264,12 @@ class App {
 		await this.refreshRuns();
 	}
 
+	/** Smaže kontrolní body běhu (uvolní místo; větvení z něj se pak počítá od začátku). */
+	async dropCheckpoints(run: StoredRun) {
+		await this.engine?.dropCheckpoints(run.path);
+		await this.refreshRuns();
+	}
+
 	async deleteRun(run: StoredRun) {
 		await this.engine?.deleteRun(run.path);
 		if (this.run?.id === run.path) {

@@ -144,6 +144,16 @@ fn run_rename(id: String, name: Option<String>) -> Result<(), String> {
     cee_store::rename(&PathBuf::from(id), name.as_deref())
 }
 
+/// Smaže kontrolní body běhu (zabírají nejvíc místa); výsledek a slovník zůstanou,
+/// jen „co kdyby“ z tohoto běhu se pak počítá od začátku.
+#[tauri::command]
+async fn run_drop_checkpoints(id: String, runs: State<'_, Runs>) -> Result<(), String> {
+    if runs.get(&id).is_some_and(|r| r.status(usize::MAX)["status"] == "running") {
+        return Err("Běh ještě počítá; nejdřív ho zastav.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || cee_store::drop_checkpoints(&PathBuf::from(id))).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 fn run_delete(id: String, runs: State<'_, Runs>) -> Result<(), String> {
     if runs.get(&id).is_some_and(|r| r.status(usize::MAX)["status"] == "running") {
@@ -229,6 +239,7 @@ pub fn run() {
             run_word_history,
             run_rename,
             run_delete,
+            run_drop_checkpoints,
             project_open,
             project_save,
             recent_list,

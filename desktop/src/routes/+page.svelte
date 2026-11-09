@@ -115,6 +115,23 @@
 		if (ok) await guarded(() => app.deleteRun(run));
 	}
 
+	// velikost běhu: celkem a z toho kontrolní body (dají se smazat)
+	const mb = (bytes: number) => (bytes / 1_000_000).toLocaleString(locale === 'cs' ? 'cs-CZ' : 'en-GB', { maximumFractionDigits: bytes < 10_000_000 ? 1 : 0 });
+	const sizeText = (run: StoredRun) => {
+		if (!run.size) return '';
+		const total = Object.values(run.size).reduce((a, b) => a + b, 0), points = run.size.checkpoints ?? 0;
+		return points ? t('projekty.run_size_points', { total: mb(total), points: mb(points) }) : t('projekty.run_size', { total: mb(total) });
+	};
+	async function dropPoints(run: StoredRun) {
+		const ok = await app.confirm({
+			title: t('projekty.run_points_title'),
+			message: t('projekty.run_points_message', { size: mb(run.size?.checkpoints ?? 0) }),
+			confirm: t('projekty.run_points_confirm'),
+			cancel: t('projekty.run_delete_cancel')
+		});
+		if (ok) await guarded(() => app.dropCheckpoints(run));
+	}
+
 	const when = (seconds: number) => new Date(seconds * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'numeric', year: 'numeric' });
 
 	async function openSample(id: string) {
@@ -197,6 +214,7 @@
 										{statusText(run)} · {t('projekty.run_year', { year: formatYear(run.year) })} · {formatDuration(run.seconds)} · {run.matches ? t('projekty.run_matches') : t('projekty.run_older')}
 									</Text>
 									{#if branchText(run)}<Text variant="small">{branchText(run)}</Text>{/if}
+									{#if sizeText(run)}<Text variant="small">{sizeText(run)}</Text>{/if}
 									{#if renaming === run.id}
 										<Cluster gap={2}>
 											<TextInput bind:value={draft} label={t('projekty.run_rename_label')} width="m" onchange={() => saveRename(run)} />
@@ -208,6 +226,7 @@
 											<Button disabled={!run.has_result || isOpen(run)} onclick={() => guarded(() => app.openRun(run))}>{t('projekty.run_open')}</Button>
 											<Button disabled={!run.has_result} onclick={() => guarded(async () => { await app.openBranch(run); await goto('/co-kdyby'); })}>{t('projekty.run_branch_b')}</Button>
 											<Button variant="quiet" onclick={() => startRename(run)}>{t('projekty.run_rename')}</Button>
+											{#if (run.size?.checkpoints ?? 0) > 0}<Button variant="quiet" onclick={() => dropPoints(run)}>{t('projekty.run_points')}</Button>{/if}
 											<Button variant="quiet" onclick={() => removeRun(run)}>{t('projekty.run_delete')}</Button>
 										</Cluster>
 									{/if}

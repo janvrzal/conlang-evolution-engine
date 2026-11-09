@@ -47,6 +47,8 @@ pub fn runs(dir: &Path, world: &Value) -> Result<Value, String> {
             let mut v = serde_json::to_value(&info).unwrap_or(Value::Null);
             v["matches"] = json!(matches);
             v["path"] = json!(dir.join(&info.id));
+            // velikost po částech (bajty); kontrolní body jsou největší a dají se smazat
+            v["size"] = json!(cee_store::size(&dir.join(&info.id)));
             v
         })
         .collect();

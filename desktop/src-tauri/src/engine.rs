@@ -656,6 +656,11 @@ mod rezie {
                 }
                 add("zápis snímků", at);
             }
+            if record {
+                let at = Instant::now();
+                writer.wait().unwrap();
+                add("čekání na poslední bod", at);
+            }
             let total: f64 = t.values().sum();
             println!("{} do roku {until}: celkem {total:.1} s", if record { "SE ZÁPISEM" } else { "BEZ ZÁPISU" });
             for (k, v) in &t {
