@@ -241,6 +241,23 @@ impl Simulation {
         }
     }
 
+    /// Kontrolní bod bez záznamu událostí (dynamika ho nečte; ukládá se jednou za běh zvlášť
+    /// a při pokračování se doplní `EventLog::push_line`). Šetří místo: záznam roste s během
+    /// a v každém úplném bodu by se opakoval.
+    pub fn checkpoint_without_events(&self) -> Checkpoint {
+        Checkpoint {
+            tick: self.tick,
+            year: self.year(),
+            world: self.world.clone(),
+            history: History {
+                events: Default::default(),
+                snapshots: self.history.snapshots.clone(),
+                trajectories: self.history.trajectories.clone(),
+                proto: self.history.proto.clone(),
+            },
+        }
+    }
+
     /// Pokračování z kontrolního bodu s (případně jinými) pozdějšími událostmi.
     pub fn resume(
         checkpoint: Checkpoint,

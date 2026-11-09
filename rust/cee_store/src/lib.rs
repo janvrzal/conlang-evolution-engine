@@ -8,9 +8,14 @@
 //! zadani.json         zadání, ze kterého běh vznikl (čitelné)
 //! snimky.jsonl.gz     průběžné snímky (`export::frame`), řádek po řádku
 //! slovnik.jsonl.gz    slovník jazyků v čase: jen změny tvarů (řádek = rok + jazyk)
+//! udalosti.jsonl.gz   záznam událostí běhu (jen se připisuje)
 //! vysledek.json.gz    výsledek (export enginu), u hotového běhu
-//! body/t00040_y300.bin.gz   kontrolní body (postcard), ze kterých „co kdyby“ pokračuje
+//! body/t00040_y300_e123456.bin.gz   kontrolní body (postcard) bez záznamu událostí;
+//!                     `e` = kolik řádků `udalosti.jsonl.gz` k bodu patří
 //! ```
+//!
+//! „Co kdyby“ převezme od rodiče snímky, slovník a záznam událostí do roku bodu, kontrolní
+//! body ale ne: bod před rokem větvení hledá [`checkpoint_before`] i ve složce rodiče.
 //!
 //! Každý zápis do `.jsonl.gz` je samostatný člen gzipu připsaný na konec souboru, takže
 //! pád aplikace nechá všechno zapsané čitelné; `beh.json` a výsledek se zapisují přes
@@ -39,6 +44,7 @@ const SPEC: &str = "zadani.json";
 const FRAMES: &str = "snimky.jsonl.gz";
 const LEXICON: &str = "slovnik.jsonl.gz";
 const RESULT: &str = "vysledek.json.gz";
+const EVENTS: &str = "udalosti.jsonl.gz";
 const CHECKPOINTS: &str = "body";
 
 /// Stav běhu.
@@ -97,12 +103,16 @@ pub struct RunInfo {
     pub has_result: bool,
 }
 
-/// Kontrolní bod ze složky běhu.
+/// Kontrolní bod ve složce běhu (bez záznamu událostí).
 #[derive(Clone, Debug)]
 pub struct StoredCheckpoint {
     pub tick: u32,
     pub year: f64,
-    pub bytes: Vec<u8>,
+    /// Kolik řádků záznamu událostí k bodu patří.
+    pub events: usize,
+    /// Složka běhu, ve které bod leží (u „co kdyby“ i rodič).
+    pub run: PathBuf,
+    path: PathBuf,
 }
 
 /// Tvar slova od jednoho roku (historie slova).
@@ -373,40 +383,76 @@ pub fn word_history(run: &Path, language: &str, concept: &str) -> Result<Vec<Wor
         .collect())
 }
 
-/// Kontrolní body složky běhu: (tik, rok, soubor), seřazené podle roku.
-fn checkpoint_files(run: &Path) -> Result<Vec<(u32, f64, PathBuf)>, String> {
+/// Kontrolní body složky běhu, seřazené podle roku.
+fn checkpoint_files(run: &Path) -> Result<Vec<StoredCheckpoint>, String> {
     let dir = run.join(CHECKPOINTS);
     let entries = match fs::read_dir(&dir) {
         Ok(e) => e,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(err(&dir, e)),
     };
-    let mut out: Vec<(u32, f64, PathBuf)> = entries
+    let mut out: Vec<StoredCheckpoint> = entries
         .filter_map(Result::ok)
         .filter_map(|e| {
             let name = e.file_name().to_str()?.strip_suffix(".bin.gz")?.to_owned();
-            let (tick, year) = name.strip_prefix('t')?.split_once("_y")?;
-            Some((tick.parse().ok()?, year.parse().ok()?, e.path()))
+            let (tick, rest) = name.strip_prefix('t')?.split_once("_y")?;
+            let (year, events) = rest.split_once("_e")?;
+            Some(StoredCheckpoint {
+                tick: tick.parse().ok()?,
+                year: year.parse().ok()?,
+                events: events.parse().ok()?,
+                run: run.to_owned(),
+                path: e.path(),
+            })
         })
         .collect();
-    out.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    out.sort_by(|a, b| {
+        a.year
+            .partial_cmp(&b.year)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     Ok(out)
 }
 
-/// Nejpozdější kontrolní bod ostře před rokem `year` (pro „co kdyby“ od roku větvení).
+/// Nejpozdější kontrolní bod ostře před rokem `year` (pro „co kdyby“ od roku větvení). Když ho
+/// běh nemá (větev „co kdyby“ má vlastní body až od roku větvení), hledá u rodiče.
 pub fn checkpoint_before(run: &Path, year: f64) -> Result<Option<StoredCheckpoint>, String> {
-    let Some((tick, at, path)) = checkpoint_files(run)?
+    if let Some(found) = checkpoint_files(run)?
         .into_iter()
-        .filter(|c| c.1 < year)
+        .filter(|c| c.year < year)
         .last()
-    else {
-        return Ok(None);
-    };
-    Ok(Some(StoredCheckpoint {
-        tick,
-        year: at,
-        bytes: gunzip(&path)?,
-    }))
+    {
+        return Ok(Some(found));
+    }
+    let about = info(run)?;
+    match (about.parent, run.parent()) {
+        (Some(parent), Some(dir)) if dir.join(&parent).join(INFO).is_file() => {
+            let limit = about.branch_year.map_or(year, |b| b.min(year));
+            checkpoint_before(&dir.join(parent), limit)
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Úplný kontrolní bod: stav světa z bodu a záznam událostí doplněný z `udalosti.jsonl.gz`
+/// složky, ve které bod leží.
+pub fn load_checkpoint(
+    point: &StoredCheckpoint,
+) -> Result<cee_engine::checkpoint::Checkpoint, String> {
+    let mut checkpoint = cee_engine::checkpoint::Checkpoint::from_bytes(&gunzip(&point.path)?)?;
+    let lines = read_lines(&point.run.join(EVENTS))?;
+    if lines.len() < point.events {
+        return Err(format!(
+            "{}: záznam událostí má {} řádků, bod jich potřebuje {}",
+            point.run.display(),
+            lines.len(),
+            point.events
+        ));
+    }
+    for line in &lines[..point.events] {
+        checkpoint.history.events.push_line(line);
+    }
+    Ok(checkpoint)
 }
 
 /// Smaže kontrolní body běhu (zabírají nejvíc místa); běh zůstane čitelný, jen se z něj
@@ -440,10 +486,11 @@ pub fn size(run: &Path) -> BTreeMap<&'static str, u64> {
     let checkpoints = checkpoint_files(run)
         .unwrap_or_default()
         .into_iter()
-        .map(|c| len(c.2))
+        .map(|c| len(c.path))
         .sum();
     BTreeMap::from([
         ("frames", len(run.join(FRAMES))),
+        ("events", len(run.join(EVENTS))),
         ("lexicon", len(run.join(LEXICON))),
         ("result", len(run.join(RESULT))),
         ("checkpoints", checkpoints),
@@ -462,6 +509,8 @@ fn write_info(run: &Path, info: &RunInfo) -> Result<(), String> {
 pub struct RunWriter {
     pub dir: PathBuf,
     pub info: RunInfo,
+    /// Kolik řádků záznamu událostí už je v souboru.
+    pub events: usize,
     /// Poslední zapsaný slovník (jazyk → pojem → tvar), aby se zapisovaly jen změny.
     last_forms: BTreeMap<String, BTreeMap<String, String>>,
 }
@@ -509,6 +558,7 @@ impl RunWriter {
         Ok(RunWriter {
             dir: run,
             info,
+            events: 0,
             last_forms: BTreeMap::new(),
         })
     }
@@ -561,19 +611,41 @@ impl RunWriter {
         Ok(written)
     }
 
-    /// Kontrolní bod (`Checkpoint::to_bytes`).
-    pub fn add_checkpoint(&mut self, tick: u32, year: f64, bytes: &[u8]) -> Result<(), String> {
+    /// Připíše řádky záznamu událostí (pokračování od `self.events`).
+    pub fn add_events(&mut self, lines: &[String]) -> Result<(), String> {
+        append_lines(&self.dir.join(EVENTS), lines)?;
+        self.events += lines.len();
+        Ok(())
+    }
+
+    /// Kontrolní bod bez záznamu událostí (`Simulation::checkpoint_without_events`); patří k němu
+    /// prvních `events` řádků záznamu (záznam musí být zapsaný aspoň po ně).
+    pub fn add_checkpoint(
+        &mut self,
+        tick: u32,
+        year: f64,
+        events: usize,
+        bytes: &[u8],
+    ) -> Result<(), String> {
+        if events > self.events {
+            return Err(format!(
+                "kontrolní bod potřebuje {events} řádků záznamu, zapsáno {}",
+                self.events
+            ));
+        }
         let dir = self.dir.join(CHECKPOINTS);
         fs::create_dir_all(&dir).map_err(|e| err(&dir, e))?;
         write_atomic(
-            &dir.join(format!("t{tick:05}_y{year}.bin.gz")),
+            &dir.join(format!("t{tick:05}_y{year}_e{events}.bin.gz")),
             &gzip(bytes),
         )
     }
 
-    /// Převezme snímky, slovník a kontrolní body rodičovského běhu do roku `until_year`
-    /// (včetně): „co kdyby“ má celou časovou osu, i když se počítá až od kontrolního bodu.
-    pub fn copy_prefix(&mut self, parent: &Path, until_year: f64) -> Result<(), String> {
+    /// „Co kdyby“: převezme od rodiče snímky a slovník do roku bodu (včetně) a záznam událostí
+    /// do bodu, aby větev měla celou časovou osu; kontrolní body zůstanou u rodiče.
+    pub fn branch_from(&mut self, point: &StoredCheckpoint) -> Result<(), String> {
+        let parent = &point.run;
+        let until_year = point.year;
         let frames: Vec<String> = read_lines(&parent.join(FRAMES))?
             .into_iter()
             .filter(|l| {
@@ -600,14 +672,9 @@ impl RunWriter {
             lines.push(serde_json::to_string(&line).map_err(|e| err(&self.dir, e))?);
         }
         append_lines(&self.dir.join(LEXICON), &lines)?;
-        for (tick, year, path) in checkpoint_files(parent)? {
-            if year <= until_year {
-                let dir = self.dir.join(CHECKPOINTS);
-                fs::create_dir_all(&dir).map_err(|e| err(&dir, e))?;
-                fs::copy(&path, dir.join(format!("t{tick:05}_y{year}.bin.gz")))
-                    .map_err(|e| err(&path, e))?;
-            }
-        }
+        let mut events = read_lines(&parent.join(EVENTS))?;
+        events.truncate(point.events);
+        self.add_events(&events)?;
         self.info.year = until_year;
         write_info(&self.dir, &self.info)
     }

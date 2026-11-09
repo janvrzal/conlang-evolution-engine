@@ -48,9 +48,17 @@ beh.json                 stav, rok, doba, rodič a rok větvení, počet snímk�
 zadani.json              zadání, ze kterého běh vznikl
 snimky.jsonl.gz          snímky (export::frame), řádek po řádku
 slovnik.jsonl.gz         slovník v čase: řádek = rok + jazyk + skupina + změněné tvary (null = zmizel)
+udalosti.jsonl.gz        záznam událostí běhu (jen se připisuje)
 vysledek.json.gz         výsledek (export), u hotového běhu
-body/t00040_y300.bin.gz  kontrolní body (po 100 letech)
+body/t00040_y300_e123456.bin.gz  kontrolní body po 100 letech, bez záznamu událostí
+                         (e = počet řádků záznamu, které k bodu patří)
 ```
+
+Kontrolní bod bez záznamu událostí (`Simulation::checkpoint_without_events`): dynamika záznam
+nečte a v úplných bodech se opakoval (Talvera do roku 500: 122 MB bodů, body rostly z 2 na
+23 MB). `load_checkpoint` doplní záznam z `udalosti.jsonl.gz` (`EventLog::push_line`).
+„Co kdyby“ (`RunWriter::branch_from`) převezme snímky, slovník a záznam do bodu; body
+nekopíruje, `checkpoint_before` je najde ve složce rodiče.
 
 - Zápis do `.jsonl.gz` je samostatný člen gzipu připsaný na konec: pád nechá zapsané čitelné
   (useknutý konec se zahodí). `beh.json` a výsledek jdou přes dočasný soubor a přejmenování.
@@ -58,8 +66,8 @@ body/t00040_y300.bin.gz  kontrolní body (po 100 letech)
 - Čtení: `list`, `info`, `spec`, `result`, `frames(since)`, `lexicon(jazyk, rok)`,
   `lexicon_years`, `word_history(jazyk, pojem)`, `checkpoint_before(rok)`, `size`; úpravy
   `rename`, `delete`, `drop_checkpoints`.
-- Zápis: `RunWriter::create`, `Recorder` (po kroku `collect` → `Batch::write`), `copy_prefix`
-  (co kdyby převezme snímky, slovník a body rodiče do roku bodu), `finish`.
+- Zápis: `RunWriter::create`, `Recorder` (po kroku `collect` → `Batch::write`), `branch_from`
+  (co kdyby), `finish`.
 - Slovník protojazyka leží v roce začátku pod jménem jazyka popisu; od prvního pozorování
   pod jmény linií (strom linií v exportu je spojuje).
 

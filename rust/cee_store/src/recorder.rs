@@ -35,12 +35,18 @@ impl Default for RecordOptions {
 pub struct Batch {
     pub frame: Option<Value>,
     pub lexicon: Option<(f64, BTreeMap<String, LanguageLexicon>)>,
-    pub checkpoint: Option<(u32, f64, Vec<u8>)>,
+    /// Nové řádky záznamu událostí od minulé dávky.
+    pub events: Vec<String>,
+    /// Kontrolní bod bez záznamu: tik, rok, počet řádků záznamu k bodu, bajty.
+    pub checkpoint: Option<(u32, f64, usize, Vec<u8>)>,
 }
 
 impl Batch {
     pub fn is_empty(&self) -> bool {
-        self.frame.is_none() && self.lexicon.is_none() && self.checkpoint.is_none()
+        self.frame.is_none()
+            && self.lexicon.is_none()
+            && self.events.is_empty()
+            && self.checkpoint.is_none()
     }
 
     /// Zapíše data kroku; `seconds` = doba běhu do teď.
@@ -48,8 +54,9 @@ impl Batch {
         if let Some((year, lexicons)) = &self.lexicon {
             writer.add_lexicon(*year, lexicons)?;
         }
-        if let Some((tick, year, bytes)) = &self.checkpoint {
-            writer.add_checkpoint(*tick, *year, bytes)?;
+        writer.add_events(&self.events)?;
+        if let Some((tick, year, events, bytes)) = &self.checkpoint {
+            writer.add_checkpoint(*tick, *year, *events, bytes)?;
         }
         if let Some(frame) = &self.frame {
             writer.add_frame(frame, seconds)?;
@@ -62,6 +69,8 @@ pub struct Recorder {
     pub options: RecordOptions,
     observed: usize,
     last_checkpoint: f64,
+    /// Kolik řádků záznamu událostí už dávky předaly.
+    logged: usize,
 }
 
 impl Recorder {
@@ -72,6 +81,7 @@ impl Recorder {
             options,
             observed: simulation.history.snapshots.len(),
             last_checkpoint: simulation.year(),
+            logged: simulation.history.events.len(),
         }
     }
 
@@ -100,11 +110,21 @@ impl Recorder {
                 batch.lexicon = Some((year, export::language_lexicons(simulation)));
             }
         }
+        let log = &simulation.history.events;
+        batch.events = (self.logged..log.len())
+            .map(|i| log.line(i).into_owned())
+            .collect();
+        self.logged = log.len();
         if let Some(every) = self.options.checkpoint_every {
             if year - self.last_checkpoint >= every - 1e-9 {
                 self.last_checkpoint = year;
-                let checkpoint = simulation.checkpoint();
-                batch.checkpoint = Some((checkpoint.tick, checkpoint.year, checkpoint.to_bytes()?));
+                let checkpoint = simulation.checkpoint_without_events();
+                batch.checkpoint = Some((
+                    checkpoint.tick,
+                    checkpoint.year,
+                    self.logged,
+                    checkpoint.to_bytes()?,
+                ));
             }
         }
         Ok(batch)

@@ -2,7 +2,6 @@
 
 use super::recorder::{RecordOptions, Recorder};
 use super::*;
-use cee_engine::checkpoint::Checkpoint;
 use cee_engine::spec::{self, WorldSpec};
 use cee_engine::{export, Simulation, SimulationConfig};
 
@@ -122,8 +121,14 @@ fn beh_se_zapise_a_precte() {
     // kontrolní bod před rokem větvení
     let point = checkpoint_before(&run, 250.0).unwrap().unwrap();
     assert_eq!(point.year, 200.0);
-    let checkpoint = Checkpoint::from_bytes(&point.bytes).unwrap();
+    let checkpoint = load_checkpoint(&point).unwrap();
     assert_eq!(checkpoint.tick, point.tick);
+    assert_eq!(checkpoint.history.events.len(), point.events);
+    // záznam událostí v souboru = záznam běhu
+    assert_eq!(
+        read_lines(&run.join(EVENTS)).unwrap().len(),
+        simulation.history.events.len()
+    );
     assert!(checkpoint_before(&run, 0.0).unwrap().is_none());
 
     rename(&run, Some("první")).unwrap();
@@ -176,8 +181,8 @@ fn co_kdyby_navaze_na_rodice() {
         },
     )
     .unwrap();
-    child.copy_prefix(&parent_dir, point.year).unwrap();
-    let checkpoint = Checkpoint::from_bytes(&point.bytes).unwrap();
+    child.branch_from(&point).unwrap();
+    let checkpoint = load_checkpoint(&point).unwrap();
     let mut resumed = spec::resume(&changed, checkpoint, SimulationConfig::default()).unwrap();
     record(&mut resumed, &mut child, 400.0, false);
 
@@ -188,6 +193,14 @@ fn co_kdyby_navaze_na_rodice() {
     fresh.observe_now().unwrap();
     assert_eq!(resumed.history.digest(), fresh.history.digest());
 
+    // větev nemá vlastní body před rokem větvení: najde je u rodiče
+    let again = checkpoint_before(&child.dir, branch).unwrap().unwrap();
+    assert_eq!(again.run, parent_dir);
+    assert!(checkpoint_before(&child.dir, 400.0).unwrap().unwrap().run == child.dir);
+    assert_eq!(
+        read_lines(&child.dir.join(EVENTS)).unwrap().len(),
+        resumed.history.events.len()
+    );
     let about = info(&child.dir).unwrap();
     assert_eq!(about.parent.as_deref(), Some(parent.info.id.as_str()));
     assert_eq!(about.branch_year, Some(branch));
