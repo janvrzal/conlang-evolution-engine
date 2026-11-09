@@ -1,7 +1,8 @@
 import type { ExportV2, FrameV2 } from './model/export';
 
-// Spojení s enginem (Python, /api/v2). V Tauri engine spustí aplikace a adresu
-// dá příkazem engine_url; v prohlížeči se hledá na obvyklých portech.
+// Spojení s enginem. V aplikaci (Tauri) běží engine v2 přímo v procesu a volá se příkazy
+// (src-tauri/src/lib.rs); v prohlížeči (vývoj UI) se hledá Python server /api/v2 na obvyklých portech.
+// Tvary odpovědí jsou v obou případech stejné.
 
 export const API_REVISION = 10;
 const SIGNATURE = 'Conlang Evolution Engine';
@@ -60,10 +61,11 @@ export class EngineError extends Error {
 	}
 }
 
-async function tauriUrl(): Promise<string | null> {
-	if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return null;
+const inTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
 	const { invoke } = await import('@tauri-apps/api/core');
-	return invoke<string>('engine_url');
+	return invoke<T>(command, args);
 }
 
 async function probe(base: string): Promise<Health | null> {
@@ -77,17 +79,11 @@ async function probe(base: string): Promise<Health | null> {
 	}
 }
 
-/** Najde běžící engine; vrátí adresu a jeho stav, nebo null. */
+/** Najde engine: v aplikaci ten v procesu, v prohlížeči běžící server. */
 export async function connect(): Promise<{ base: string; health: Health } | null> {
-	const fromTauri = await tauriUrl().catch(() => null);
-	if (fromTauri) {
-		// Aplikace engine právě spustila; Python s numpy startuje pár sekund.
-		for (let attempt = 0; attempt < 40; attempt++) {
-			const health = await probe(fromTauri);
-			if (health) return { base: fromTauri, health };
-			await new Promise((resolve) => setTimeout(resolve, 500));
-		}
-		return null;
+	if (inTauri()) {
+		const health = await invoke<Health>('engine_health').catch(() => null);
+		return health ? { base: TAURI, health } : null;
 	}
 	for (const base of PORTS.map((port) => `http://127.0.0.1:${port}`)) {
 		const health = await probe(base);
@@ -95,6 +91,9 @@ export async function connect(): Promise<{ base: string; health: Health } | null
 	}
 	return null;
 }
+
+/** Adresa „engine v procesu aplikace“. */
+const TAURI = 'tauri:';
 
 export class Engine {
 	constructor(readonly base: string) {}
@@ -113,26 +112,46 @@ export class Engine {
 	}
 
 	schema(): Promise<EngineSchema> {
+		if (this.native) return this.call('engine_schema');
 		return this.request('/schema');
 	}
 
+	private get native() {
+		return this.base === TAURI;
+	}
+
+	/** Příkaz Tauri; odmítnutí `{ detail: { issues } }` nebo text se převede na EngineError. */
+	private async call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+		try {
+			return await invoke<T>(command, args);
+		} catch (error) {
+			const detail = (error as { detail?: { issues?: Issue[] } })?.detail;
+			throw new EngineError(detail?.issues?.[0]?.message ?? String(error), detail?.issues ?? []);
+		}
+	}
+
 	validate(spec: unknown): Promise<{ ok: boolean; issues: Issue[] }> {
+		if (this.native) return this.call('engine_validate', { spec });
 		return this.request('/validate', { method: 'POST', body: JSON.stringify(spec) });
 	}
 
 	start(spec: unknown): Promise<{ run_id: string; status: string }> {
+		if (this.native) return this.call('run_start', { spec });
 		return this.request('/runs', { method: 'POST', body: JSON.stringify(spec) });
 	}
 
 	status(runId: string, since: number): Promise<RunStatus> {
+		if (this.native) return this.call('run_status', { id: runId, since });
 		return this.request(`/runs/${runId}?since=${since}`);
 	}
 
 	result(runId: string): Promise<ExportV2> {
+		if (this.native) return this.call('run_result', { id: runId });
 		return this.request(`/runs/${runId}/result`);
 	}
 
 	cancel(runId: string): Promise<unknown> {
+		if (this.native) return this.call('run_cancel', { id: runId });
 		return this.request(`/runs/${runId}`, { method: 'DELETE' });
 	}
 }

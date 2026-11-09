@@ -15,3 +15,18 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Engine CEE v2 přímo v aplikaci (místo Python serveru).
+cee_engine = { path = "../../rust/cee_engine" }
+
+# Engine počítá těžce: i ve vývoji (`tauri dev`) se překládá s optimalizacemi.
+[profile.dev.package.cee_engine]
+opt-level = 3
+[profile.dev.package.cee_core]
+opt-level = 3
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4

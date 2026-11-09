@@ -1,0 +1,1565 @@
+{
+ "format": "cee-v2-world/1",
+ "json_schema": {
+  "$defs": {
+   "AnnexationSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "annexation",
+      "title": "Kind",
+      "type": "string"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "regions": {
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1,
+      "title": "Regions",
+      "type": "array"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "state",
+     "regions"
+    ],
+    "title": "AnnexationSpec",
+    "type": "object"
+   },
+   "BorderPolicySpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "border_policy",
+      "title": "Kind",
+      "type": "string"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "border": {
+      "title": "Border",
+      "type": "string"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "state",
+     "border"
+    ],
+    "title": "BorderPolicySpec",
+    "type": "object"
+   },
+   "CollapseSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "collapse",
+      "title": "Kind",
+      "type": "string"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "state"
+    ],
+    "title": "CollapseSpec",
+    "type": "object"
+   },
+   "ConceptSpec": {
+    "additionalProperties": false,
+    "description": "Vlastní pojem autora světa, vymyšlený nebo reálný (``vocabulary.CustomConcept``).",
+    "properties": {
+     "id": {
+      "minLength": 1,
+      "pattern": "^\\w[\\w.-]*$",
+      "title": "Id",
+      "type": "string"
+     },
+     "gloss": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Gloss"
+     },
+     "wold": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Wold"
+     },
+     "concepticon": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Concepticon"
+     },
+     "domain": {
+      "anyOf": [
+       {
+        "enum": [
+         "core",
+         "learned",
+         "culture",
+         "religion",
+         "power"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Domain"
+     },
+     "frequency": {
+      "anyOf": [
+       {
+        "maximum": 0.9,
+        "minimum": 0.05,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Frequency"
+     },
+     "word_class": {
+      "anyOf": [
+       {
+        "enum": [
+         "noun",
+         "verb",
+         "uninflected"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Word Class"
+     },
+     "borrowed": {
+      "anyOf": [
+       {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Borrowed"
+     },
+     "related": {
+      "items": {
+       "$ref": "#/$defs/RelatedSpec"
+      },
+      "title": "Related",
+      "type": "array"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "title": "ConceptSpec",
+    "type": "object"
+   },
+   "ConstructionSpec": {
+    "additionalProperties": false,
+    "description": "Konstrukce gramatické funkce (druh, zdrojové slovo, stadium, pořadí, posila).",
+    "properties": {
+     "kind": {
+      "minLength": 1,
+      "title": "Kind",
+      "type": "string"
+     },
+     "source": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Source"
+     },
+     "stage": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Stage"
+     },
+     "order": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Order"
+     },
+     "reinforcer": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Reinforcer"
+     }
+    },
+    "required": [
+     "kind"
+    ],
+    "title": "ConstructionSpec",
+    "type": "object"
+   },
+   "EliteSpec": {
+    "additionalProperties": false,
+    "description": "Elita z regionu ``from`` ovládne region ``seat`` (dobytí, superstrát).",
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "elite",
+      "title": "Kind",
+      "type": "string"
+     },
+     "from": {
+      "minLength": 1,
+      "title": "From",
+      "type": "string"
+     },
+     "seat": {
+      "minLength": 1,
+      "title": "Seat",
+      "type": "string"
+     },
+     "language": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Language"
+     },
+     "subjects": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Subjects"
+     },
+     "population": {
+      "default": 100.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Population",
+      "type": "number"
+     },
+     "prestige": {
+      "default": 2.0,
+      "title": "Prestige",
+      "type": "number"
+     },
+     "strength": {
+      "default": 0.5,
+      "exclusiveMinimum": 0.0,
+      "title": "Strength",
+      "type": "number"
+     },
+     "homeland": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Homeland"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "from",
+     "seat"
+    ],
+    "title": "EliteSpec",
+    "type": "object"
+   },
+   "IdentitySpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "identity",
+      "title": "Kind",
+      "type": "string"
+     },
+     "regions": {
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1,
+      "title": "Regions",
+      "type": "array"
+     },
+     "identity": {
+      "title": "Identity",
+      "type": "string"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "regions",
+     "identity"
+    ],
+    "title": "IdentitySpec",
+    "type": "object"
+   },
+   "ImmigrationSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "immigration",
+      "title": "Kind",
+      "type": "string"
+     },
+     "regions": {
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1,
+      "title": "Regions",
+      "type": "array"
+     },
+     "immigration": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Immigration",
+      "type": "number"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "regions",
+     "immigration"
+    ],
+    "title": "ImmigrationSpec",
+    "type": "object"
+   },
+   "InitialProcessSpec": {
+    "additionalProperties": false,
+    "description": "Zvuková změna rozběhnutá na startu (rodina, popis kandidáta, podíl mluvčích).",
+    "properties": {
+     "family": {
+      "minLength": 1,
+      "title": "Family",
+      "type": "string"
+     },
+     "label": {
+      "minLength": 1,
+      "title": "Label",
+      "type": "string"
+     },
+     "share": {
+      "exclusiveMaximum": 1.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Share",
+      "type": "number"
+     }
+    },
+    "required": [
+     "family",
+     "label",
+     "share"
+    ],
+    "title": "InitialProcessSpec",
+    "type": "object"
+   },
+   "LanguagePolicySpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "language_policy",
+      "title": "Kind",
+      "type": "string"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "policy": {
+      "title": "Policy",
+      "type": "string"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "state",
+     "policy"
+    ],
+    "title": "LanguagePolicySpec",
+    "type": "object"
+   },
+   "LanguageSpec": {
+    "additionalProperties": false,
+    "description": "Protojazyk jedné linie.",
+    "properties": {
+     "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Name"
+     },
+     "consonants": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Consonants"
+     },
+     "vowels": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Vowels"
+     },
+     "grammar": {
+      "default": "default",
+      "enum": [
+       "default",
+       "substrate",
+       "full"
+      ],
+      "title": "Grammar",
+      "type": "string"
+     },
+     "stress": {
+      "default": "penult",
+      "enum": [
+       "initial",
+       "second",
+       "antepenult",
+       "penult",
+       "final",
+       "weight"
+      ],
+      "title": "Stress",
+      "type": "string"
+     },
+     "stress_strength": {
+      "default": "weak",
+      "enum": [
+       "weak",
+       "strong"
+      ],
+      "title": "Stress Strength",
+      "type": "string"
+     },
+     "words": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "title": "Words",
+      "type": "object"
+     },
+     "endonym": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Endonym",
+      "type": "array"
+     },
+     "tones": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Tones",
+      "type": "array"
+     },
+     "constructions": {
+      "additionalProperties": {
+       "$ref": "#/$defs/ConstructionSpec"
+      },
+      "title": "Constructions",
+      "type": "object"
+     },
+     "endings": {
+      "additionalProperties": {
+       "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "number"
+         }
+        ],
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "title": "Endings",
+      "type": "object"
+     },
+     "processes": {
+      "items": {
+       "$ref": "#/$defs/InitialProcessSpec"
+      },
+      "title": "Processes",
+      "type": "array"
+     },
+     "suffixes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Suffixes",
+      "type": "array"
+     },
+     "syllables": {
+      "anyOf": [
+       {
+        "enum": [
+         "simple",
+         "moderate",
+         "complex"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Syllables"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "title": "LanguageSpec",
+    "type": "object"
+   },
+   "LinguaFrancaSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "lingua_franca",
+      "title": "Kind",
+      "type": "string"
+     },
+     "source": {
+      "title": "Source",
+      "type": "string"
+     },
+     "regions": {
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1,
+      "title": "Regions",
+      "type": "array"
+     },
+     "spread": {
+      "default": "common",
+      "title": "Spread",
+      "type": "string"
+     },
+     "nativize": {
+      "default": false,
+      "title": "Nativize",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "source",
+     "regions"
+    ],
+    "title": "LinguaFrancaSpec",
+    "type": "object"
+   },
+   "PreserveSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "preserve",
+      "title": "Kind",
+      "type": "string"
+     },
+     "regions": {
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1,
+      "title": "Regions",
+      "type": "array"
+     },
+     "language": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Language"
+     },
+     "preserved": {
+      "default": true,
+      "title": "Preserved",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "regions"
+    ],
+    "title": "PreserveSpec",
+    "type": "object"
+   },
+   "RegionSpec": {
+    "additionalProperties": false,
+    "description": "Region jako síť vesnic (``scenarios.Region``).",
+    "properties": {
+     "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Name"
+     },
+     "position": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "number"
+       }
+      ],
+      "title": "Position",
+      "type": "array"
+     },
+     "density": {
+      "default": 1.0,
+      "exclusiveMinimum": 0.0,
+      "maximum": 100.0,
+      "title": "Density",
+      "type": "number"
+     },
+     "neighbours": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Neighbours",
+      "type": "array"
+     },
+     "villages": {
+      "default": 4,
+      "maximum": 12,
+      "minimum": 1,
+      "title": "Villages",
+      "type": "integer"
+     },
+     "prestige": {
+      "default": 0.5,
+      "minimum": 0.0,
+      "title": "Prestige",
+      "type": "number"
+     },
+     "language": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Language"
+     },
+     "terrain": {
+      "default": "plain",
+      "title": "Terrain",
+      "type": "string"
+     },
+     "identity": {
+      "default": "shared",
+      "title": "Identity",
+      "type": "string"
+     },
+     "preserve": {
+      "default": false,
+      "title": "Preserve",
+      "type": "boolean"
+     },
+     "immigration": {
+      "default": 0.0,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Immigration",
+      "type": "number"
+     },
+     "city": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "City"
+     }
+    },
+    "required": [
+     "id",
+     "position"
+    ],
+    "title": "RegionSpec",
+    "type": "object"
+   },
+   "RelatedSpec": {
+    "additionalProperties": false,
+    "description": "Příbuzný pojem vlastního pojmu pro posuny významu (``vocabulary.Related``).",
+    "properties": {
+     "concept": {
+      "minLength": 1,
+      "title": "Concept",
+      "type": "string"
+     },
+     "kind": {
+      "default": "polysemy",
+      "enum": [
+       "polysemy",
+       "derivation",
+       "colexification"
+      ],
+      "title": "Kind",
+      "type": "string"
+     },
+     "direction": {
+      "anyOf": [
+       {
+        "enum": [
+         "to",
+         "from",
+         "both"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Direction"
+     },
+     "weight": {
+      "anyOf": [
+       {
+        "maximum": 100000,
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Weight"
+     }
+    },
+    "required": [
+     "concept"
+    ],
+    "title": "RelatedSpec",
+    "type": "object"
+   },
+   "RevivalSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "revival",
+      "title": "Kind",
+      "type": "string"
+     },
+     "regions": {
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1,
+      "title": "Regions",
+      "type": "array"
+     },
+     "language": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Language"
+     },
+     "strength": {
+      "default": "movement",
+      "title": "Strength",
+      "type": "string"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "regions"
+    ],
+    "title": "RevivalSpec",
+    "type": "object"
+   },
+   "SchoolsSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "schools",
+      "title": "Kind",
+      "type": "string"
+     },
+     "of": {
+      "title": "Of",
+      "type": "string"
+     },
+     "coverage": {
+      "default": "mass",
+      "title": "Coverage",
+      "type": "string"
+     },
+     "printing": {
+      "default": true,
+      "title": "Printing",
+      "type": "boolean"
+     },
+     "diglossic": {
+      "default": false,
+      "title": "Diglossic",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "of"
+    ],
+    "title": "SchoolsSpec",
+    "type": "object"
+   },
+   "SecessionSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "secession",
+      "title": "Kind",
+      "type": "string"
+     },
+     "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Name"
+     },
+     "regions": {
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1,
+      "title": "Regions",
+      "type": "array"
+     },
+     "capital": {
+      "title": "Capital",
+      "type": "string"
+     },
+     "centralization": {
+      "default": "moderate",
+      "title": "Centralization",
+      "type": "string"
+     },
+     "policy": {
+      "default": "tolerant",
+      "title": "Policy",
+      "type": "string"
+     },
+     "border": {
+      "default": "normal",
+      "title": "Border",
+      "type": "string"
+     },
+     "language": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Language"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "id",
+     "regions",
+     "capital"
+    ],
+    "title": "SecessionSpec",
+    "type": "object"
+   },
+   "SettlementSpec": {
+    "additionalProperties": false,
+    "description": "Lidé z regionu ``from`` se usadí v regionu ``to`` (migrace, nové osady).",
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "settlement",
+      "title": "Kind",
+      "type": "string"
+     },
+     "from": {
+      "minLength": 1,
+      "title": "From",
+      "type": "string"
+     },
+     "to": {
+      "minLength": 1,
+      "title": "To",
+      "type": "string"
+     },
+     "share": {
+      "default": 0.2,
+      "exclusiveMaximum": 1.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Share",
+      "type": "number"
+     },
+     "settlements": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Settlements",
+      "type": "integer"
+     },
+     "prestige": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Prestige"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "from",
+     "to"
+    ],
+    "title": "SettlementSpec",
+    "type": "object"
+   },
+   "SoundShiftSpec": {
+    "additionalProperties": false,
+    "description": "Zadaná hlásková změna se rozběhne u jazyka ``language`` (dok. 26): rodina a popis\nkandidáta jako v ``LanguageSpec.processes`` (např. ``spirantization``,\n``\"řada neznělých okluziv → frikativy\"``). Engine ji jen nastartuje.",
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "sound_shift",
+      "title": "Kind",
+      "type": "string"
+     },
+     "language": {
+      "minLength": 1,
+      "title": "Language",
+      "type": "string"
+     },
+     "regions": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Regions",
+      "type": "array"
+     },
+     "family": {
+      "minLength": 1,
+      "title": "Family",
+      "type": "string"
+     },
+     "label": {
+      "minLength": 1,
+      "title": "Label",
+      "type": "string"
+     },
+     "share": {
+      "default": 0.2,
+      "exclusiveMaximum": 1.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Share",
+      "type": "number"
+     },
+     "pull": {
+      "default": 1.0,
+      "minimum": 0.0,
+      "title": "Pull",
+      "type": "number"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "language",
+     "family",
+     "label"
+    ],
+    "title": "SoundShiftSpec",
+    "type": "object"
+   },
+   "StandardSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "standard",
+      "title": "Kind",
+      "type": "string"
+     },
+     "of": {
+      "title": "Of",
+      "type": "string"
+     },
+     "literacy": {
+      "default": "elite",
+      "title": "Literacy",
+      "type": "string"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "of"
+    ],
+    "title": "StandardSpec",
+    "type": "object"
+   },
+   "StateSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "year": {
+      "title": "Year",
+      "type": "number"
+     },
+     "kind": {
+      "const": "state",
+      "title": "Kind",
+      "type": "string"
+     },
+     "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Name"
+     },
+     "regions": {
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1,
+      "title": "Regions",
+      "type": "array"
+     },
+     "capital": {
+      "title": "Capital",
+      "type": "string"
+     },
+     "centralization": {
+      "default": "moderate",
+      "title": "Centralization",
+      "type": "string"
+     },
+     "policy": {
+      "default": "tolerant",
+      "title": "Policy",
+      "type": "string"
+     },
+     "border": {
+      "default": "normal",
+      "title": "Border",
+      "type": "string"
+     },
+     "language": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Language"
+     }
+    },
+    "required": [
+     "year",
+     "kind",
+     "id",
+     "regions",
+     "capital"
+    ],
+    "title": "StateSpec",
+    "type": "object"
+   }
+  },
+  "additionalProperties": false,
+  "description": "Celý svět: protojazyky, regiony, časová osa a přepisy parametrů.",
+  "properties": {
+   "format": {
+    "const": "cee-v2-world/1",
+    "default": "cee-v2-world/1",
+    "title": "Format",
+    "type": "string"
+   },
+   "name": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Name"
+   },
+   "seed": {
+    "default": 1,
+    "title": "Seed",
+    "type": "integer"
+   },
+   "start_year": {
+    "default": 0.0,
+    "title": "Start Year",
+    "type": "number"
+   },
+   "end_year": {
+    "title": "End Year",
+    "type": "number"
+   },
+   "languages": {
+    "items": {
+     "$ref": "#/$defs/LanguageSpec"
+    },
+    "minItems": 1,
+    "title": "Languages",
+    "type": "array"
+   },
+   "regions": {
+    "items": {
+     "$ref": "#/$defs/RegionSpec"
+    },
+    "minItems": 1,
+    "title": "Regions",
+    "type": "array"
+   },
+   "events": {
+    "items": {
+     "discriminator": {
+      "mapping": {
+       "annexation": "#/$defs/AnnexationSpec",
+       "border_policy": "#/$defs/BorderPolicySpec",
+       "collapse": "#/$defs/CollapseSpec",
+       "elite": "#/$defs/EliteSpec",
+       "identity": "#/$defs/IdentitySpec",
+       "immigration": "#/$defs/ImmigrationSpec",
+       "language_policy": "#/$defs/LanguagePolicySpec",
+       "lingua_franca": "#/$defs/LinguaFrancaSpec",
+       "preserve": "#/$defs/PreserveSpec",
+       "revival": "#/$defs/RevivalSpec",
+       "schools": "#/$defs/SchoolsSpec",
+       "secession": "#/$defs/SecessionSpec",
+       "settlement": "#/$defs/SettlementSpec",
+       "sound_shift": "#/$defs/SoundShiftSpec",
+       "standard": "#/$defs/StandardSpec",
+       "state": "#/$defs/StateSpec"
+      },
+      "propertyName": "kind"
+     },
+     "oneOf": [
+      {
+       "$ref": "#/$defs/StateSpec"
+      },
+      {
+       "$ref": "#/$defs/LanguagePolicySpec"
+      },
+      {
+       "$ref": "#/$defs/AnnexationSpec"
+      },
+      {
+       "$ref": "#/$defs/SecessionSpec"
+      },
+      {
+       "$ref": "#/$defs/CollapseSpec"
+      },
+      {
+       "$ref": "#/$defs/BorderPolicySpec"
+      },
+      {
+       "$ref": "#/$defs/LinguaFrancaSpec"
+      },
+      {
+       "$ref": "#/$defs/StandardSpec"
+      },
+      {
+       "$ref": "#/$defs/SchoolsSpec"
+      },
+      {
+       "$ref": "#/$defs/RevivalSpec"
+      },
+      {
+       "$ref": "#/$defs/PreserveSpec"
+      },
+      {
+       "$ref": "#/$defs/IdentitySpec"
+      },
+      {
+       "$ref": "#/$defs/ImmigrationSpec"
+      },
+      {
+       "$ref": "#/$defs/SettlementSpec"
+      },
+      {
+       "$ref": "#/$defs/EliteSpec"
+      },
+      {
+       "$ref": "#/$defs/SoundShiftSpec"
+      }
+     ]
+    },
+    "title": "Events",
+    "type": "array"
+   },
+   "vocabulary": {
+    "default": 149,
+    "minimum": 149,
+    "title": "Vocabulary",
+    "type": "integer"
+   },
+   "concepts": {
+    "items": {
+     "$ref": "#/$defs/ConceptSpec"
+    },
+    "title": "Concepts",
+    "type": "array"
+   },
+   "semantics": {
+    "default": true,
+    "title": "Semantics",
+    "type": "boolean"
+   },
+   "village_spacing": {
+    "default": 10.0,
+    "exclusiveMinimum": 0.0,
+    "title": "Village Spacing",
+    "type": "number"
+   },
+   "generation_years": {
+    "default": 25.0,
+    "maximum": 1000.0,
+    "minimum": 25.0,
+    "title": "Generation Years",
+    "type": "number"
+   },
+   "parameters": {
+    "additionalProperties": true,
+    "title": "Parameters",
+    "type": "object"
+   },
+   "background": {
+    "default": "none",
+    "title": "Background",
+    "type": "string"
+   }
+  },
+  "required": [
+   "end_year",
+   "languages",
+   "regions"
+  ],
+  "title": "WorldSpec",
+  "type": "object"
+ },
+ "event_kinds": [
+  "state",
+  "language_policy",
+  "annexation",
+  "secession",
+  "collapse",
+  "border_policy",
+  "lingua_franca",
+  "standard",
+  "schools",
+  "revival",
+  "preserve",
+  "identity",
+  "immigration",
+  "settlement",
+  "elite",
+  "sound_shift"
+ ],
+ "vocabulary": {
+  "default": 149,
+  "presets": [
+   149,
+   200,
+   500,
+   1000
+  ],
+  "domains": [
+   "core",
+   "learned",
+   "culture",
+   "religion",
+   "power"
+  ],
+  "word_classes": [
+   "noun",
+   "verb",
+   "uninflected"
+  ],
+  "relation_kinds": [
+   "polysemy",
+   "derivation",
+   "colexification"
+  ],
+  "relation_directions": [
+   "to",
+   "from",
+   "both"
+  ],
+  "default_weight": {
+   "polysemy": 2,
+   "derivation": 2,
+   "colexification": 9
+  },
+  "frequency_range": [
+   0.05,
+   0.9
+  ]
+ }
+}

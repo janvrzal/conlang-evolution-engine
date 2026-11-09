@@ -1,48 +1,50 @@
 # CEE desktop
 
 Desktopová aplikace CEE: Tauri 2, UI ve Svelte 5 (SvelteKit, statický výstup)
-a engine v2 jako pomocný proces s `/api/v2`. Vizuální jazyk a návrh obrazovek
+a engine v2 v Rustu přímo v procesu aplikace (crate `rust/cee_engine`, příkazy Tauri
+v `src-tauri/src`). Python ani server za běhu nepotřebuje. Vizuální jazyk a návrh obrazovek
 jsou v [`docs/ui-navrh`](../docs/ui-navrh/README.md).
 
-## Stav kostry
+## Stavba
 
-- Cesta práce Svět → Protojazyk → Dějiny → Výsledky → Větve, otevření a uložení
-  popisu světa (`cee-v2-world/1`), ukázkový svět Poloostrov.
-- Spojení s enginem: kontrola světa, běh s průběhem, výsledek. Výsledky
-  ukazují jazyky a nářečí se jmény z vlastních jmen jazyků (`src/lib/naming.ts`).
-- Všechny popisky česky i anglicky (`src/lib/messages/cs.ts`, `en.ts`,
-  přepínač CS/EN). Hlášení enginu jsou zatím jen česky.
-- Obrazovky z prototypů (mapa, editor, kronika, řeka jazyků, větve) přijdou
-  postupně; teď jsou to tabulky nad stejnými daty.
-
-## Vývoj v prohlížeči
-
-Engine běží zvlášť a UI ho najde na portech 8000–8019:
-
-```bash
-PYTHONPATH=src python -m uvicorn cee.api.server:app --port 8001
-```
-
-```bash
-cd desktop && npm install && npm run dev
-```
-
-Testy (`npm test`); s běžícím enginem i průchod světem:
-
-```bash
-CEE_ENGINE_URL=http://127.0.0.1:8001 npm test
-```
+- **Design systém** `src/lib/ds` (pravidla v `src/lib/ds/README.md`). Sentinel
+  (`npm run check:ds`, součást `npm test`) hlídá, že obrazovky skládají jen jeho komponenty.
+- **Obrazovky** `src/routes/<obrazovka>`: Projekty, Svět, Protojazyky, Pojmy, Dějiny, Model
+  (Zadání) a Atlas, Jazyky, Slova, Kronika, Co kdyby (Výsledek). Kostra s lištou, ověřením
+  zadání, Zpět/Znovu a časovou osou je v `src/routes/+layout.svelte`.
+- **Data** `src/lib/model` (typy exportu `cee-v2/1`, mapa, jazyky, variety malých jazyků),
+  stav `src/lib/state.svelte.ts`, texty `src/lib/messages/screens/<obrazovka>.ts` (cs i en).
+- **Engine** `src-tauri/src/engine.rs`: ověření zadání, schéma pro UI, běhy na pozadí se
+  snímky, export s událostmi časové osy a souhrnem všech událostí po stoletích (`event_summary`).
 
 ## Desktop (Tauri)
 
-Potřebuje Rust (`rustup`). Aplikace spustí engine sama na volném portu:
+Potřebuje Rust (`rustup`). Engine se i ve vývoji překládá s optimalizacemi (první sestavení trvá):
 
 ```bash
-CEE_PYTHON=../../CEE/.venv/bin/python CEE_ENGINE_SRC=$(pwd)/../src npm run tauri dev
+cd desktop && npm install && npm run tauri dev
 ```
 
-Zabalení enginu do aplikace (PyInstaller) a později přímé volání enginu
-v Rustu přijde místo pomocného procesu.
+Testy enginu v aplikaci (ověření Talvery, schéma, krátký běh):
+
+```bash
+cd desktop/src-tauri && cargo test --lib
+```
+
+Statickou část schématu (JSON schéma zadání z pydanticu, druhy událostí, volby slovníku)
+vygeneruje po změně `src/cee/v2/spec.py` skript `scripts/schema.py` do `src-tauri/data/schema.json`.
+
+## Vývoj UI v prohlížeči
+
+```bash
+cd desktop && npm run dev
+```
+
+Bez enginu se dá pracovat nad vzorkem skutečného běhu: `scripts/fixture.py` udělá ze
+zkráceného exportu soubor do `static/fixtures/` (mimo git) a `?fixture=talvera` ho načte
+(`&branch=…` druhou větev pro Co kdyby). Snímek obrazovky: `node scripts/shot.mjs URL soubor.png`.
+UI v prohlížeči umí i Python server `/api/v2` na portech 8000–8019
+(`PYTHONPATH=src python -m uvicorn cee.api.server:app --port 8001`).
 
 ## Písmo
 
