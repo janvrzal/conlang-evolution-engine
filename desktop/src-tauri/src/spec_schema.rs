@@ -562,7 +562,8 @@ struct Checker<'a> {
 impl Checker<'_> {
     fn issue(&mut self, path: &str, message: impl Into<String>) {
         let path = if path.is_empty() { "(svět)".into() } else { path.to_owned() };
-        self.issues.push(Issue { path, message: message.into(), severity: "error" });
+        let message: String = message.into();
+        self.issues.push(Issue::error(path, message.clone(), code_of(&message)));
     }
 
     fn model(&mut self, name: &str, value: &Value, path: &str) {
@@ -678,6 +679,25 @@ impl Checker<'_> {
             },
         }
     }
+}
+
+/// Stálý kód hlášky tvaru zadání pro překlad v UI (podle druhu chyby).
+fn code_of(message: &str) -> &'static str {
+    const CODES: [(&str, &str); 12] = [
+        ("chybí povinné pole", "field_missing"),
+        ("neznámé pole", "field_unknown"),
+        ("musí být jedna z možností", "field_option"),
+        ("nesmí být prázdné", "field_empty"),
+        ("počet položek", "field_count"),
+        ("smí obsahovat jen", "field_pattern"),
+        ("chybí druh události", "event_kind_missing"),
+        ("neznámý druh události", "event_kind_unknown"),
+        ("end_year musí", "world_years"),
+        ("musí být větší", "field_range"),
+        ("musí být aspoň", "field_range"),
+        ("smí být nejvýš", "field_range"),
+    ];
+    CODES.iter().find(|(start, _)| message.starts_with(start)).map(|(_, code)| *code).unwrap_or(if message.starts_with("musí být menší") { "field_range" } else { "field_type" })
 }
 
 fn valid_id(s: &str) -> bool {
