@@ -182,6 +182,16 @@
    "role": "active"
   },
   {
+   "name": "contact_shift_threshold",
+   "kind": "number",
+   "default": 0.3,
+   "min": 0.0,
+   "max": 1.0,
+   "description": "Přechod menšiny na jazyk okolí bez politiky: domácí skupina, jejíž jazyk má mezi lidmi, se kterými mluví (vazby × populace), podíl pod touto hodnotou, začne přecházet na převažující jazyk okolí (dál podle Abramse a Strogatze, brzdí loajalita). Soudržná komunita (Milroy 1987; husté vazby uvnitř vlastního jazyka) a skupina se silnou identitou (loajalita ≥ 0,5) nepřejdou. Hrstky osadníků a zbytky po přechodu se přizpůsobí okolí (dok. 35). 0 = jen politikou a pravidlem ostrůvku (model před M15).",
+   "role": "active",
+   "group": "society"
+  },
+  {
    "name": "settlement_growth",
    "kind": "number",
    "default": 0.3,

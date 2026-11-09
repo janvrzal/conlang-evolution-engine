@@ -24,6 +24,8 @@ use crate::world::World;
 
 /// Tah politiky, pod kterým stát přechod už netáhne (po odchodu státu zůstane 10⁻⁶).
 const POLICY_ACTIVE: f64 = 1e-3;
+/// Ochranná doba nové osady před přechodem na jazyk okolí (`contact_shift`, dok. 35).
+const SETTLER_GRACE_YEARS: f64 = 200.0;
 
 /// Skupina s menší populací zaniká (poslední mluvčí).
 pub const LAST_SPEAKERS: f64 = 1.0;
@@ -84,10 +86,153 @@ pub fn community_step(
         };
         removed |= shift(world, group, source, renewal, tick, year, history, &edit)?;
     }
+    if world.params.contact_shift_threshold > 0.0 {
+        removed |= contact_shift(world, tick, year, history)?;
+    }
     if world.params.leveling_rate > 0.0 && world.table.is_some() {
         level_forms(world, dt, tick)?;
     }
     Ok(removed)
+}
+
+/// Mluví skupina úředním jazykem státu, do kterého patří její region?
+fn speaks_state_language(world: &World, group: GroupId, language: crate::ids::LanguageId) -> bool {
+    let Some(region) = crate::polity::region_of(world, group) else {
+        return false;
+    };
+    world
+        .society
+        .states
+        .values()
+        .any(|state| state.language == language && state.regions.contains(&region))
+}
+
+/// Přechod menšiny na jazyk okolí bez politiky (dok. 35): domácí skupina, jejíž jazyk má mezi
+/// lidmi, se kterými mluví (vazby × populace, sama skupina plnou vahou), podíl pod
+/// `contact_shift_threshold`, začne přecházet na jazyk, který mezi nimi převažuje (`language_shift`
+/// s podílem 5 %; dál ho vede `shift` podle Abramse a Strogatze). Hrstky osadníků a zbytky po
+/// přechodu se tak přizpůsobí okolí. Soudržná komunita (Milroy 1987: husté vazby uvnitř vlastního
+/// jazyka, ostrov, horské údolí, dvě vesnice regionu spolu) má vlastních lidí mezi kontakty dost
+/// a nepřejde; skupina se silnou identitou (loajalita ≥ 0,5) také ne, ani mluvčí úředního
+/// jazyka státu, ve kterém žijí (dobyvatelé se státem; státní jazyk táhne opačně), ani elita
+/// (přechází vlastním modelem M13).
+fn contact_shift(
+    world: &mut World,
+    tick: u32,
+    year: f64,
+    history: &mut History,
+) -> Result<bool, String> {
+    let threshold = world.params.contact_shift_threshold;
+    // Skupiny, od kterých se už některá domácí skupina jiného jazyka učí (přechod běží).
+    let learned_from: std::collections::BTreeSet<GroupId> = world
+        .group_ids()
+        .into_iter()
+        .filter(|&g| world.groups.contains(g) && world.groups.domain[g.index()] == Domain::Home)
+        .map(|g| world.groups.main_code(g).l1_source)
+        .filter(|s| !s.is_none())
+        .collect();
+    let mut starts: Vec<(GroupId, GroupId)> = Vec::new();
+    for group in world.group_ids() {
+        let g = group.index();
+        if !world.groups.contains(group)
+            || world.groups.written[g]
+            || world.groups.preserved[g]
+            || world.groups.domain[g] != Domain::Home
+            || world.groups.loyalty[g] >= 0.5
+            || world.groups.population[g] < 20
+            // elita přechází vlastním modelem (M13: `polity::release`, `pocket_pull`)
+            || world.groups.elite[g]
+        {
+            continue;
+        }
+        // Osadníci první generace jazyk drží (přechod trvá asi tři generace, Fishman 1966;
+        // Anglosasové z roku 450 se dožijí vlastního státu): ochranná doba od založení osady.
+        let territory = world.groups.territory[g];
+        if world
+            .territories
+            .get(territory.index())
+            .and_then(|t| t.settled)
+            .is_some_and(|founded| year - founded < SETTLER_GRACE_YEARS)
+        {
+            continue;
+        }
+        let code = world.groups.main_code(group);
+        if !code.l1_source.is_none() {
+            continue; // skupina sama teprve přechází
+        }
+        let language = code.language;
+        if learned_from.contains(&group) {
+            continue; // už přechází
+        }
+        let own_people = f64::from(world.groups.population[g]);
+        let (mut own, mut total) = (own_people, own_people);
+        let mut by_language: std::collections::BTreeMap<u32, (f64, Option<(f64, GroupId)>)> =
+            std::collections::BTreeMap::new();
+        for (other, link) in neighbors(world, group) {
+            let o = other.index();
+            if world.groups.written[o] || world.groups.domain[o] != Domain::Home {
+                continue;
+            }
+            let weight = link.strength * f64::from(world.groups.population[o]);
+            total += weight;
+            let other_language = world.groups.main_code(other).language;
+            if other_language == language {
+                own += weight;
+                continue;
+            }
+            let entry = by_language.entry(other_language.0).or_insert((0.0, None));
+            entry.0 += weight;
+            if entry.1.is_none_or(|(best, _)| weight > best) {
+                entry.1 = Some((weight, other));
+            }
+        }
+        if total <= 0.0 || own / total >= threshold {
+            continue;
+        }
+        let majority = by_language
+            .values()
+            .filter_map(|(weight, best)| best.map(|(_, target)| (*weight, target)))
+            .max_by(|a, b| {
+                a.0.partial_cmp(&b.0)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| world.group_name(b.1).cmp(world.group_name(a.1)))
+            });
+        // Prestižnější menšina (dobyvatelé, osadníci s mocí) jazyk okolí nepřebírá.
+        if let Some((_, target)) = majority {
+            // Přešlá odnož `X>jazyk` už někdy vznikla (přechod doběhl, odkaz na zdroj zmizel,
+            // případně odnož zanikla): druhý přechod na týž jazyk nezačíná (jméno je obsazené).
+            let learners = format!(
+                "{}>{}",
+                world.group_name(group),
+                world
+                    .registry
+                    .languages
+                    .name(world.groups.main_code(target).language.0)
+            );
+            let exists = world.registry.groups.contains(&learners);
+            if !exists && !speaks_state_language(world, group, language) {
+                starts.push((group, target));
+            }
+        }
+    }
+    let started = !starts.is_empty();
+    for (group, target) in starts {
+        if world.groups.contains(group) && world.groups.contains(target) {
+            crate::events::language_shift(
+                world,
+                history,
+                tick,
+                year,
+                group,
+                target,
+                &crate::events::ShiftOptions {
+                    initial_share: 0.05,
+                    ..Default::default()
+                },
+            )?;
+        }
+    }
+    Ok(started)
 }
 
 /// Vyrovnávání nářečí podle centra (dok. 27; Trudgill 1986, Dialects in Contact): skupina

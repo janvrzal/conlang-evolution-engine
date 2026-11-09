@@ -187,6 +187,7 @@
  "lexical_length_cost": 0.3,
  "settlement_growth": 0.3,
  "borrowing_frequency_exponent": 2.0,
+ "contact_shift_threshold": 0.3,
  "restructure_threshold": 0.85,
  "revival_levels": {
   "movement": {
