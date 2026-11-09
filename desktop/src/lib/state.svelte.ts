@@ -68,6 +68,8 @@ type FixtureLexicon = { year: number; languages: Record<string, { group: string;
 /** Druhá větev pro „Co kdyby“: upravené zadání a jeho běh. */
 export interface Branch {
 	label: string;
+	/** rok, od kterého se větev liší od A (z uloženého běhu); null = neznámý */
+	branchYear: number | null;
 	world: WorldSpec;
 	run: RunStatus | null;
 	frames: FrameV2[];
@@ -244,7 +246,7 @@ class App {
 		if (!this.engine) return;
 		const status = await this.engine.status(run.path, 0);
 		const result = run.has_result ? await this.engine.result(run.path) : null;
-		this.branch = { label: run.name ?? run.id, world: this.world as WorldSpec, run: { ...status, frames: [] }, frames: status.frames, result };
+		this.branch = { label: run.name ?? run.id, branchYear: run.branch_year, world: this.world as WorldSpec, run: { ...status, frames: [] }, frames: status.frames, result };
 	}
 
 	/** Seznam běhů projektu znovu z disku. */
@@ -377,14 +379,14 @@ class App {
 			const b = await (await fetch(`/fixtures/${branch}.json`)).json();
 			const id = `fixture:${branch}`;
 			if (b.lexicon_years) this.fixtureLexicon.set(id, b.lexicon_years);
-			this.branch = { label: b.info?.name ?? branch, world: b.world, run: { ...this.run, id }, frames: b.frames, result: b.result };
+			this.branch = { label: b.info?.name ?? branch, branchYear: b.info?.branch_year ?? null, world: b.world, run: { ...this.run, id }, frames: b.frames, result: b.result };
 		}
 	}
 
 	/** Spustí větev B s upraveným zadáním (Co kdyby): z kontrolního bodu běhu A, je-li uložený. */
 	async startBranch(label: string, world: WorldSpec) {
 		if (!this.engine) return;
-		this.branch = { label, world, run: null, frames: [], result: null };
+		this.branch = { label, branchYear: null, world, run: null, frames: [], result: null };
 		const parent = this.run && !this.run.id.startsWith('fixture:') ? this.run.id : null;
 		const { run_id } = await this.engine.start(world, { project: this.filePath, name: label, parent });
 		const poll = async () => {
@@ -395,6 +397,9 @@ class App {
 			else {
 				if (status.status === 'done') this.branch = { ...this.branch, result: await this.engine.result(run_id) };
 				await this.refreshRuns();
+				// rok větvení z uloženého běhu (spočítal ho backend)
+				const stored = this.storedRuns.find((r) => r.path === run_id);
+				if (stored && this.branch) this.branch = { ...this.branch, branchYear: stored.branch_year };
 			}
 		};
 		await poll();

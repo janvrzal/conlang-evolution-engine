@@ -294,6 +294,7 @@
 				{until}
 				{density}
 				{markers}
+				branchFrom={route === 'co-kdyby' && app.branch?.branchYear != null && Number.isFinite(app.branch.branchYear) ? app.branch.branchYear : undefined}
 				label={t('shell.axis')}
 				playLabel={t('shell.play')}
 				pauseLabel={t('shell.pause')}
