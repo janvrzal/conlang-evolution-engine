@@ -821,7 +821,7 @@ pub fn seed_lineages(
 ///
 /// Každý region má vesnici v těžišti a zbytek na prstenci o poloměru `village_spacing`;
 /// uvnitř regionu gravitační vazby, mezi sousedními regiony jediná vazba mezi nejbližší
-/// dvojicí vesnic (násobená `border_link_scale` a terénem).
+/// dvojicí vesnic (násobená `border_link_scale` a geometrickým průměrem prostupností obou).
 #[allow(clippy::too_many_arguments)]
 pub fn region_world(
     regions: &[Region],
@@ -1068,7 +1068,7 @@ pub fn region_world(
             let (_, first, second) = best.expect("vesnice");
             gravity_links(&mut world, None, Some(&[first, second]))?;
             let strength = world.links.get(first, second).expect("vazba").strength;
-            let terrain = permeability(&world, region) * permeability(&world, other);
+            let terrain = (permeability(&world, region) * permeability(&world, other)).sqrt();
             let scaled = strength * world.params.border_link_scale * terrain;
             world.connect(first, second, scaled, LinkKind::Weak)?;
             if world.params.leveling_beyond_region > 0.0 {

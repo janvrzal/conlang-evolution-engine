@@ -127,8 +127,8 @@ impl LineageTracker {
 // (`SimulationConfig::keep_distances`).
 
 use cee_core::observe::{
-    candidates, categories, cognate_totals, distance_totals, embedded_features, linkage, Costs,
-    Dominant, FormTable, Hysteresis, PoolView, DISTANCE_CHUNK, FORM_WEIGHT,
+    candidates, categories, cognate_totals, continua, distance_totals, embedded_features, linkage,
+    Costs, Dominant, FormTable, Hysteresis, PoolView, DISTANCE_CHUNK, FORM_WEIGHT,
 };
 
 use crate::ids::GroupId;
@@ -423,10 +423,34 @@ pub fn observe_world(
         margin: HYSTERESIS * language_threshold,
         form_gate: LANGUAGE_FORM_GATE,
     };
+    // Střecha skupiny: spisovná norma vlastního jazyka, kterou skupina čte (dok. 37).
+    let roofs: Vec<i64> = spoken
+        .iter()
+        .map(|&g| {
+            let standard = world.groups.standard[g.index()];
+            let own = !standard.is_none()
+                && world.groups.contains(standard)
+                && world.groups.literacy[g.index()] > 0.0
+                && world.groups.main_code(standard).language == world.groups.main_code(g).language;
+            if own {
+                i64::from(standard.0)
+            } else {
+                -1
+            }
+        })
+        .collect();
     // Shlukování dialektů a jazyků je nezávislé (každé čte jen rysy a kandidáty): souběžně.
     let (dialects, languages) = rayon::join(
         || linkage(&features, &pairs, dialect_threshold, None),
-        || linkage(&features, &pairs, language_threshold, Some(&hysteresis)),
+        || {
+            continua(
+                &features,
+                &pairs,
+                language_threshold,
+                Some(&hysteresis),
+                &roofs,
+            )
+        },
     );
     Observed {
         spoken,

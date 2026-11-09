@@ -262,6 +262,16 @@
    "role": "active"
   },
   {
+   "name": "state_cohesion",
+   "kind": "number",
+   "default": 0.0,
+   "min": 0.0,
+   "max": 5.0,
+   "description": "Soudržnost regionů téhož státu: vazby přes hranici regionů uvnitř státu se násobí 1 + `state_cohesion` (úřady, cesty, trhy, vojsko spojují kraje). Přes hranici států vazby zeslabuje propustnost hranice (`border_levels`). 0 = stát vazby mezi svými regiony nemění (dok. 37).",
+   "group": "society",
+   "role": "active"
+  },
+  {
    "name": "sound_actuation",
    "kind": "number",
    "default": 2.25,

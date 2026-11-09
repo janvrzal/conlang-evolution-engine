@@ -1382,6 +1382,10 @@ pub fn refresh(world: &mut World, tick: u32) -> Result<(), String> {
                         .unwrap_or(1.0)
                 };
                 factor = open(oh).min(open(ot));
+            } else if oh.is_some() && h != t {
+                // Společný stát spojuje své regiony (úřady, cesty, trhy, vojsko): vazba přes
+                // hranici regionů uvnitř státu zesílí (dok. 37).
+                factor = 1.0 + params.state_cohesion;
             }
         }
         let old = world

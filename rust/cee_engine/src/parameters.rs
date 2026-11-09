@@ -247,6 +247,7 @@ pub struct Parameters {
     pub loyalty_spread: f64,
     pub semantic_recurrence: f64,
     pub sound_actuation: f64,
+    pub state_cohesion: f64,
     pub chain_shift_weight: f64,
     pub city_size: f64,
     pub city_prestige: f64,
