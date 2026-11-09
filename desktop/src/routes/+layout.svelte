@@ -52,7 +52,7 @@
 	let checkOpen = $state(false);
 	let notice = $state<string | null>(null);
 
-	// Výběr z adresy (odkazy z hlášení, sdílení pohledu): ?region= &year= &concept= &lineage= &event= &lang=
+	// Výběr z adresy (odkazy z hlášení, sdílení pohledu): ?region= &year= &concept= &lineage= &event= &lang= &all=1
 	$effect(() => {
 		const q = page.url.searchParams;
 		const lang = q.get('lang');
@@ -62,6 +62,7 @@
 		if (q.has('concept')) app.view.concept = q.get('concept')!;
 		if (q.has('lineage')) app.view.lineage = q.get('lineage');
 		if (q.has('event')) app.view.event = Number(q.get('event'));
+		if (q.has('all')) app.view.allLanguages = q.get('all') === '1';
 	});
 
 	onMount(async () => {
