@@ -16,6 +16,7 @@ jsou v [`docs/ui-navrh`](../docs/ui-navrh/README.md).
   stav `src/lib/state.svelte.ts`, texty `src/lib/messages/screens/<obrazovka>.ts` (cs i en).
 - **Engine** `src-tauri/src/engine.rs`: ověření zadání, schéma pro UI, běhy na pozadí se
   snímky, export s událostmi časové osy a souhrnem všech událostí po stoletích (`event_summary`).
+  Popis a ověření tvaru zadání: `src-tauri/src/spec_schema.rs`.
 
 ## Desktop (Tauri)
 
@@ -31,8 +32,10 @@ Testy enginu v aplikaci (ověření Talvery, schéma, krátký běh):
 cd desktop/src-tauri && cargo test --lib
 ```
 
-Statickou část schématu (JSON schéma zadání z pydanticu, druhy událostí, volby slovníku)
-vygeneruje po změně `src/cee/v2/spec.py` skript `scripts/schema.py` do `src-tauri/data/schema.json`.
+Popis zadání (pole, typy, meze, druhy událostí) je v Rustu v `src-tauri/src/spec_schema.rs`:
+z něj je JSON schéma pro formuláře i ověření tvaru s českými hláškami a cestou k poli.
+Test `shoda_s_pydanticem` ho porovnává s pydanticem (`src/cee/v2/spec.py`, který dál používá
+Python server); po změně `spec.py` vygeneruj vzor `scripts/schema.py` a dorovnej `spec_schema.rs`.
 
 ## Vývoj UI v prohlížeči
 

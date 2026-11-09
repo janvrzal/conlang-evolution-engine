@@ -1,18 +1,17 @@
-"""Statická část schématu enginu pro desktop (src-tauri/data/schema.json).
+"""Vzor pro test shody: schéma zadání z pydanticu (src-tauri/tests/pydantic-schema.json).
 
     python scripts/schema.py        # z kořene desktop/, s PYTHONPATH=../src
 
-Zadání světa popisuje pydantic (src/cee/v2/spec.py); jeho JSON schéma, druhy událostí a volby
-slovníku se tu uloží do souboru, který si Tauri zabuduje do aplikace. Parametry, slovní úrovně
-a největší slovník bere aplikace za běhu přímo z rustového enginu. Po změně spec.py spusť znovu;
-test v src-tauri hlídá, že druhy událostí sedí se schématem.
+Aplikace má popis zadání v Rustu (src-tauri/src/spec_schema.rs) a Python za běhu nepotřebuje.
+Test `spec_schema::tests::shoda_s_pydanticem` porovnává rustové schéma s tímto výstupem
+pydanticu (src/cee/v2/spec.py). Po změně spec.py spusť skript a dorovnej spec_schema.rs.
 """
 import json
 from pathlib import Path
 
 from cee.v2 import spec
 
-out = Path(__file__).resolve().parents[1] / "src-tauri" / "data" / "schema.json"
+out = Path(__file__).resolve().parents[1] / "src-tauri" / "tests" / "pydantic-schema.json"
 vocabulary = spec.vocabulary_options(0)
 vocabulary.pop("max")
 data = {

@@ -4,6 +4,7 @@
 //! jako dřív u `/api/v2`, takže UI (desktop/src/lib/engine.ts) se změnilo jen v přenosu.
 
 mod engine;
+mod spec_schema;
 
 use serde_json::{json, Value};
 use tauri::State;

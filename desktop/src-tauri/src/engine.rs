@@ -16,8 +16,6 @@ use cee_engine::{export, Simulation, SimulationConfig};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
-/// Statická část schématu z pydanticu (`scripts/schema.py`): JSON schéma zadání, druhy událostí, volby slovníku.
-const STATIC_SCHEMA: &str = include_str!("../data/schema.json");
 /// Kolik dokončených běhů aplikace drží v paměti.
 const KEEP_RUNS: usize = 8;
 pub const API_REVISION: u32 = 10;
@@ -31,6 +29,11 @@ pub struct Issue {
 
 /// Ověření popisu světa bez běhu: chyby před varováními (jako `/api/v2/validate`).
 pub fn validate(spec: &Value) -> Vec<Issue> {
+    // tvar zadání (pole, typy, meze) s cestou k poli; teprve pak engine
+    let shape = crate::spec_schema::check_shape(spec);
+    if !shape.is_empty() {
+        return shape;
+    }
     let text = spec.to_string();
     let world_spec = match WorldSpec::from_json(&text) {
         Ok(s) => s,
@@ -67,7 +70,11 @@ fn check_parameters(spec: &Value) -> Vec<Issue> {
 
 /// Schéma pro UI (jako `/api/v2/schema`): zadání, slovní úrovně, parametry podle rolí, druhy událostí, slovník.
 pub fn schema() -> Value {
-    let mut out: Map<String, Value> = serde_json::from_str(STATIC_SCHEMA).expect("data/schema.json");
+    let mut out = Map::new();
+    out.insert("format".into(), json!(spec::FORMAT));
+    out.insert("json_schema".into(), crate::spec_schema::json_schema());
+    out.insert("event_kinds".into(), json!(crate::spec_schema::EVENT_KINDS));
+    out.insert("vocabulary".into(), crate::spec_schema::vocabulary_options());
     let file: Value = serde_json::from_str(cee_engine::data::PARAMETERS_JSON).expect("v2_parameters.json");
     let items: Vec<Value> = file["parameters"]
         .as_array()
@@ -317,9 +324,12 @@ mod tests {
         assert!(s["levels"]["policy_levels"].as_array().unwrap().iter().any(|v| v == "enforced"));
         assert!(!s["parameters_by_role"]["world"]["items"].as_array().unwrap().is_empty());
         assert!(s["vocabulary"]["max"].as_u64().unwrap() > 149);
-        // druhy událostí ze schématu odpovídají enginu (jinak znovu scripts/schema.py)
-        let kinds: Vec<&str> = s["event_kinds"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
-        assert!(kinds.contains(&"sound_shift") && kinds.contains(&"elite"));
+        // druhy událostí popisu zadání = druhy, které engine umí
+        let mut kinds: Vec<&str> = s["event_kinds"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        let mut engine_kinds = spec::EVENT_KINDS.to_vec();
+        kinds.sort();
+        engine_kinds.sort();
+        assert_eq!(kinds, engine_kinds);
     }
 
     #[test]
