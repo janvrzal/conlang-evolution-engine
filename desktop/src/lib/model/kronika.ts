@@ -47,11 +47,22 @@ export interface KRow {
 	members: KEvent[];
 }
 
+/** Jeden druh drobné změny v rozpisu století (z result.event_summary). */
+export interface KindCount {
+	kind: string;
+	label: string;
+	value: number;
+	/** vysvětlení druhu, jen u milníků a uzavřených procesů */
+	why: string;
+}
+
 export interface KCentury {
 	key: number;
 	from: number;
 	to: number;
 	summary: { id: SummaryId; value: number }[];
+	/** rozpis po druzích, od nejčastějšího; milníky a uzavřené procesy jsou poslední */
+	kinds: KindCount[];
 	rows: KRow[];
 }
 
@@ -87,14 +98,20 @@ const SUMMARY_ORDER: SummaryId[] = ['sound', 'stress', 'analogy', 'innovation', 
 /** Drobné změny: jen v souhrnu století, jako řádky se nezobrazují. */
 const SUMMARY_ONLY = new Set(['stress_rule_changed', 'stress_strength_changed', 'grammaticalized', 'exapted']);
 const LANG_KINDS = new Set(['language_emerged', 'language_split', 'language_ended']);
-/** Druhy, jejichž název je v kind.* (cs.ts, en.ts). */
-const CORE_KIND = new Set(['state', 'language_policy', 'annexation', 'secession', 'collapse', 'border_policy', 'lingua_franca', 'standard', 'schools', 'revival', 'preserve', 'identity', 'immigration']);
-/** Druhy jen z této obrazovky (kronika.kind.*). */
-const OWN_KIND = new Set([
-	'settlement', 'elite', 'conquest', 'migration', 'codification', 'printing', 'schooling', 'revival_movement', 'bilingualism',
-	'nativization', 'transmission_stopped', 'transmission_resumed', 'language_shift', 'language_emerged', 'language_split',
-	'language_ended', 'stress_rule_changed', 'stress_strength_changed', 'grammaticalized', 'exapted'
+/** Druhy, jejichž název je v sdíleném kind.* (cs.ts, en.ts). */
+const CORE_KIND = new Set([
+	'state', 'language_policy', 'annexation', 'secession', 'collapse', 'border_policy', 'lingua_franca', 'standard', 'schools',
+	'revival', 'preserve', 'identity', 'immigration', 'settlement', 'elite', 'conquest', 'migration', 'codification', 'printing',
+	'schooling', 'revival_movement', 'bilingualism', 'nativization', 'transmission_stopped', 'transmission_resumed', 'language_shift',
+	'language_emerged', 'language_split', 'language_ended'
 ]);
+/** Druhy jen z této obrazovky (kronika.kind.*), včetně těch, které jsou jen v souhrnu století. */
+const OWN_KIND = new Set([
+	'stress_rule_changed', 'stress_strength_changed', 'grammaticalized', 'exapted', 'innovation', 'extinct', 'analogy',
+	'established', 'phonologized', 'milestone', 'process_closed'
+]);
+/** Druhy rozpisu, které jdou na konec století (v tomto pořadí) s vysvětlením. */
+const LAST_KINDS = ['milestone', 'process_closed'] as const;
 
 const WORDS = {
 	policy: ['tolerant', 'promoted', 'enforced'],
@@ -120,6 +137,24 @@ export function kindKey(kind: string): MessageKey | null {
 export function kindLabel(kind: string, tr: Tr): string {
 	const key = kindKey(kind);
 	return key ? tr(key) : kind;
+}
+
+/**
+ * Rozpis drobných změn jednoho století: druhy s počtem, od nejčastějšího (při shodě podle názvu);
+ * milníky a uzavřené procesy na konci. Nulové počty se vynechají.
+ */
+export function kindCounts(counts: Record<string, number> | undefined, tr: Tr): KindCount[] {
+	const entries = Object.entries(counts ?? {}).filter(([, n]) => Number(n) > 0);
+	const main = entries
+		.filter(([kind]) => !(LAST_KINDS as readonly string[]).includes(kind))
+		.sort(([ka, na], [kb, nb]) => nb - na || ka.localeCompare(kb));
+	const last = LAST_KINDS.flatMap((kind) => entries.filter(([k]) => k === kind));
+	return [...main, ...last].map(([kind, value]) => ({
+		kind,
+		label: kindLabel(kind, tr),
+		value: Number(value),
+		why: (LAST_KINDS as readonly string[]).includes(kind) ? tr(`kronika.why.${kind}` as MessageKey) : ''
+	}));
 }
 
 export function classOf(source: Source, kind: string): Cls {
@@ -402,7 +437,7 @@ export function mergeRows(events: KEvent[]): KRow[] {
  * Století od začátku do konce běhu (včetně těch, kam zasahují události nebo souhrn).
  * Století je [k, k+99]; souhrn drobných změn je ve result.event_summary pod klíčem k.
  */
-export function centuries(start: number, end: number, summary: Record<string, Record<string, number>> | undefined, rows: KRow[]): KCentury[] {
+export function centuries(start: number, end: number, summary: Record<string, Record<string, number>> | undefined, rows: KRow[], tr: Tr): KCentury[] {
 	const bucket = (y: number) => Math.floor(y / 100) * 100;
 	const keys = [start, end, ...rows.map((r) => r.year), ...Object.keys(summary ?? {}).map(Number)].filter((y) => Number.isFinite(y));
 	const lo = bucket(Math.min(...keys));
@@ -420,6 +455,7 @@ export function centuries(start: number, end: number, summary: Record<string, Re
 			from,
 			to: Math.max(from, Math.min(k + 99, Math.floor(end))),
 			summary: items,
+			kinds: kindCounts(counts, tr),
 			rows: rows.filter((r) => bucket(r.year) === k)
 		});
 	}
