@@ -37,6 +37,27 @@ z něj je JSON schéma pro formuláře i ověření tvaru s českými hláškami
 Test `shoda_s_pydanticem` ho porovnává s pydanticem (`src/cee/v2/spec.py`, který dál používá
 Python server); po změně `spec.py` vygeneruj vzor `scripts/schema.py` a dorovnej `spec_schema.rs`.
 
+## Sestavení aplikace (.app)
+
+```bash
+cd desktop && npm run tauri build -- --bundles app
+```
+
+Výsledek je v `src-tauri/target/release/bundle/macos/CEE.app`. Bez podpisu ji macOS při prvním
+spuštění zablokuje (Gatekeeper); otevře se pravým tlačítkem → Otevřít.
+
+**Podpis a notarizace** (až bude certifikát Developer ID Application). Konfigurace je připravená
+v `src-tauri/tauri.conf.json` (`bundle.macOS`: hardened runtime, macOS 12+); identita a údaje
+pro notarizaci se dávají proměnnými prostředí, ne do repozitáře:
+
+```bash
+export APPLE_SIGNING_IDENTITY="Developer ID Application: Jméno (TEAMID)"
+export APPLE_ID="apple-id@example.com" APPLE_PASSWORD="heslo-pro-aplikaci" APPLE_TEAM_ID="TEAMID"
+npm run tauri build -- --bundles app,dmg
+```
+
+Tauri pak aplikaci podepíše, odešle k notarizaci a výsledek připojí (staple).
+
 ## Vývoj UI v prohlížeči
 
 ```bash
