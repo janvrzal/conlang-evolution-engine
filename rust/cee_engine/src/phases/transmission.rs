@@ -82,6 +82,7 @@ pub fn run(
         adult_rate: ctx.config.adult_rate,
         loss_threshold: ctx.config.loss_threshold,
         establish_threshold: ctx.config.establish_threshold,
+        completion_share: ctx.config.completion_share,
     };
     // Dvouprůchodový návrh: nejdřív hodnocení procesů (mění banku tvarů), potom přenos nad `&World`.
     let t = crate::timing::scope("transmission/prepare");

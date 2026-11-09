@@ -23,6 +23,8 @@ pub struct TransmissionParams {
     pub adult_rate: f64,
     pub loss_threshold: f64,
     pub establish_threshold: f64,
+    /// Viz `cee_core::transmission::Cohorts::completion_share`.
+    pub completion_share: f64,
 }
 
 /// Kanál vazeb mezi jazyky (filtr přenositelnosti se liší podle domén pojmů).

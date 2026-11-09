@@ -206,21 +206,27 @@ pub fn requeue_all(world: &mut World, group: GroupId, morpheme: MorphemeId) -> R
 }
 
 /// Proces poprvé zasáhl kód: zařadí do fronty všechna slova slovní zásoby, kterých se týká
-/// a která si změnu ještě nezapsala (`activate`). Proces, který už kód zná (živý nebo uzavřený),
-/// se přeskočí.
+/// a která si změnu ještě nezapsala (`activate`). Živý proces se přeskočí; uzavřený se znovu
+/// otevře, jen když změna není dokončená (odumřelá změna se do skupiny vrátila).
 pub fn activate(world: &mut World, group: GroupId, process: ProcessId) -> Result<(), String> {
-    let known = world
-        .groups
-        .main_code(group)
-        .phonology
-        .sound
-        .queues
-        .state
-        .find(process.index())
-        .is_some();
-    if known {
-        return Ok(());
-    }
+    let known = {
+        let state = &world.groups.main_code(group).phonology.sound.queues.state;
+        state
+            .find(process.index())
+            .map(|at| state.procs[at].live)
+    };
+    let reopen = match known {
+        Some(true) => return Ok(()),
+        Some(false) => {
+            let (variable, changed) = crate::phonology::rows::info_of(world, process)?;
+            let share = changed_share(world, group, variable, changed);
+            if share >= 1.0 - world.params.activation_share {
+                return Ok(());
+            }
+            true
+        }
+        None => false,
+    };
     prepare(world, group)?;
     let row = crate::phonology::rows::row_of(world, process)?;
     let reductive = world
@@ -231,7 +237,9 @@ pub fn activate(world: &mut World, group: GroupId, process: ProcessId) -> Result
         .ok_or_else(|| format!("proces č. {} nemá definici", process.0))?;
     {
         let sound = &mut world.groups.main_code_mut(group).phonology.sound;
-        sound.order.push(process);
+        if !reopen {
+            sound.order.push(process);
+        }
         sound.lifecycle_log.push((process, true));
     }
     for _ in 0..MAX_ROUNDS {
@@ -284,15 +292,27 @@ pub fn activate(world: &mut World, group: GroupId, process: ProcessId) -> Result
                     lexeme: &runtime.columns.lexeme,
                 },
             };
-            state.activate(
-                &mut bank.bank,
-                &ctx,
-                process.index(),
-                row,
-                reductive,
-                bias,
-                &flags,
-            )?
+            if reopen {
+                state.reopen(
+                    &mut bank.bank,
+                    &ctx,
+                    process.index(),
+                    row,
+                    reductive,
+                    bias,
+                    &flags,
+                )?
+            } else {
+                state.activate(
+                    &mut bank.bank,
+                    &ctx,
+                    process.index(),
+                    row,
+                    reductive,
+                    bias,
+                    &flags,
+                )?
+            }
         };
         if needs.is_empty() {
             return Ok(());
@@ -320,6 +340,7 @@ pub fn restructure_groups(ctx: &mut StepContext<'_>, groups: &[GroupId]) -> Resu
 struct Inputs {
     levels: Vec<f64>,
     full: Vec<bool>,
+    faded: Vec<bool>,
     numbers: Vec<usize>,
     no_feed: Vec<Vec<usize>>,
 }
@@ -335,6 +356,10 @@ fn inputs_of(world: &mut World, group: GroupId) -> Result<Inputs, String> {
     };
     let mut levels = Vec::with_capacity(numbers.len());
     let mut full = Vec::with_capacity(numbers.len());
+    let mut faded = Vec::with_capacity(numbers.len());
+    // Dokončená změna má nad `1 − activation_share` (zbytek drží kontakt se sousedy), odumřelá
+    // pod `activation_share`; v obou stavech se proces po `closure_generations` uzavře.
+    let margin = world.params.activation_share;
     for &number in &numbers {
         let (variable, changed) = info_of(world, ProcessId::new(number))?;
         let share = changed_share(world, group, variable, changed);
@@ -343,7 +368,8 @@ fn inputs_of(world: &mut World, group: GroupId) -> Result<Inputs, String> {
         } else {
             f64::NEG_INFINITY
         });
-        full.push(share >= 1.0);
+        full.push(share >= 1.0 - margin);
+        faded.push(share < margin);
     }
     let no_feed = numbers
         .iter()
@@ -352,6 +378,7 @@ fn inputs_of(world: &mut World, group: GroupId) -> Result<Inputs, String> {
     Ok(Inputs {
         levels,
         full,
+        faded,
         numbers,
         no_feed,
     })
@@ -413,6 +440,7 @@ fn apply(
                 proc,
                 restructured,
                 relics,
+                faded,
             } => {
                 let (variable, _) = info_of(world, ProcessId::new(proc))?;
                 let sound = &mut world.groups.main_code_mut(group).phonology;
@@ -426,6 +454,7 @@ fn apply(
                     "variable": world.registry.variables.name(variable.0),
                     "restructured": restructured,
                     "relics": relics,
+                    "faded": faded,
                 });
                 ctx.history
                     .record("process_closed", ctx.tick, ctx.year, payload);
@@ -518,6 +547,7 @@ fn restructure_group(ctx: &mut StepContext<'_>, group: GroupId) -> Result<(), St
                 reductive,
                 levels: inputs.levels.clone(),
                 full: inputs.full.clone(),
+                faded: inputs.faded.clone(),
                 no_feed: inputs.no_feed.clone(),
                 tick,
                 dt,

@@ -417,6 +417,10 @@ pub struct Cohorts<'a> {
     pub kappa: f64,
     pub adult_rate: f64,
     pub establish_threshold: f64,
+    /// Dokončení změny: má-li buňka variantu aspoň s tímto podílem, nová generace se neučí
+    /// ostatní varianty, které ustupují (podíl pod trendovou základnou). Stará varianta dožije
+    /// se starší generací a inovace, která se neuchytila, odumře. Nad 1 vypnuto.
+    pub completion_share: f64,
 }
 
 /// Stav bloku, který `settle` čte (celé bloky).
@@ -569,6 +573,14 @@ fn settle_cell(
         };
         let trend = cohorts.kappa * (cell.current[slot] - cell.previous[slot]);
         grown[at] = (share + trend + drift).max(0.0);
+    }
+    // Dokončení: při většinové variantě se děti neučí ustupující menšinové varianty.
+    if (0..n).any(|at| current[at] >= cohorts.completion_share) {
+        for (at, &slot) in support.iter().enumerate() {
+            if current[at] < cohorts.completion_share && current[at] < cell.previous[slot] {
+                grown[at] = 0.0;
+            }
+        }
     }
     normalize_cell(&grown[..n], &selected[..n], &mut children[..n], sorted);
     let renewed = cohorts.renewal[group];
@@ -724,6 +736,7 @@ mod tests {
             kappa: 0.3,
             adult_rate: 0.05,
             establish_threshold: 0.9,
+            completion_share: 0.5,
         };
         let mut reference = (vec![0.0; cells], vec![0.0; cells]);
         settle(

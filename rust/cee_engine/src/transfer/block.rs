@@ -212,6 +212,7 @@ pub fn transmit_rows(
         kappa: params.kappa,
         adult_rate: params.adult_rate,
         establish_threshold: params.establish_threshold,
+        completion_share: params.completion_share,
     };
     let state = State {
         current: &current,

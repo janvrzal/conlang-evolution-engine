@@ -220,6 +220,7 @@ fn norm_zvyhodni_kodifikovanou_variantu_uumerne_skolni_docazce() {
         adult_rate: config.adult_rate,
         loss_threshold: config.loss_threshold,
         establish_threshold: config.establish_threshold,
+        completion_share: config.completion_share,
     };
     let compute = |world: &World, block: &cee_engine::model::pools::PoolBlock, row: usize| {
         let inputs = prepare(world, &params, 1);
@@ -295,6 +296,7 @@ fn tabu_opotrebuje_inovovane_slovo_po_deseti_generacich() {
         adult_rate: config.adult_rate,
         loss_threshold: config.loss_threshold,
         establish_threshold: config.establish_threshold,
+        completion_share: config.completion_share,
     };
     let compute = |world: &World, tick: u32, block: &cee_engine::model::pools::PoolBlock, row| {
         let inputs = prepare(world, &params, tick);
@@ -397,6 +399,7 @@ fn ekonomie_tresta_volny_opis_a_nic_jineho_nedela() {
         adult_rate: config.adult_rate,
         loss_threshold: config.loss_threshold,
         establish_threshold: config.establish_threshold,
+        completion_share: config.completion_share,
     };
     let inputs = prepare(&world, &params, 1);
     let pressure_plan = plan(&world.params).unwrap();
