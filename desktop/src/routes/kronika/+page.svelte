@@ -27,7 +27,7 @@
 	import { lineageNames } from '$lib/model/languages';
 	import { app } from '$lib/state.svelte';
 
-	const MARK: Record<Cls, string> = { author: '■', lang: '◆', soc: '□' };
+	const MARK: Record<Cls, string> = { author: '■', lang: '◆', soc: '□', case: '▢' };
 
 	const world = $derived(app.world);
 	const result = $derived(app.result);
@@ -58,7 +58,8 @@
 
 	const authorCount = $derived(world?.events.length ?? 0);
 	const all = $derived(world ? listEvents(world.events, result?.events ?? [], ctx) : []);
-	let show = $state<Record<Cls, boolean>>({ author: true, soc: true, lang: true });
+	let show = $state<Record<Cls, boolean>>({ author: true, soc: true, lang: true, case: true });
+	const caseCount = $derived(all.filter((e) => e.cls === 'case').length);
 	let query = $state<string | number>('');
 	const rows = $derived(mergeRows(filterEvents(all, { show, query: String(query) })));
 	const blocks = $derived(
@@ -142,6 +143,10 @@
 					<Text as="span" tone="muted">{MARK.author}</Text>
 					{t('kronika.filter.author')}
 				</Checkbox>
+				<Checkbox bind:checked={show.case} meta={number(caseCount)}>
+					<Text as="span" tone="muted">{MARK.case}</Text>
+					{t('kronika.filter.case')}
+				</Checkbox>
 				<Checkbox bind:checked={show.soc} meta={t('kronika.filter.soc_meta')}>
 					<Text as="span" tone="muted">{MARK.soc}</Text>
 					{t('kronika.filter.soc')}
@@ -173,7 +178,7 @@
 		<Card label={t('kronika.card')}>
 			{#if selected}
 				<Stack gap={1}>
-					<Text variant="caps">{formatYear(selected.year)} · {selected.source === 'author' ? t('kronika.src.author') : t('kronika.src.history')} · {selected.kindLabel}</Text>
+					<Text variant="caps">{formatYear(selected.year)} · {selected.source === 'author' ? t('kronika.src.author') : t('kronika.src.history')} · {selected.cls === 'case' ? t('kronika.kind.study_case') : selected.kindLabel}</Text>
 					<Text variant="h1">{selected.title}</Text>
 					{#if selected.text}<Text variant="why">{selected.text}</Text>{/if}
 				</Stack>
@@ -196,7 +201,8 @@
 				{/if}
 				<Cluster>
 					<Button href="/atlas">{t('kronika.open_atlas')}</Button>
-					{#if selected.source === 'author'}<Button variant="quiet" href="/dejiny">{t('kronika.open_dejiny')}</Button>{/if}
+					{#if selected.source === 'author'}<Button variant="quiet" href={`/dejiny?event=${selected.index}`}>{t('kronika.open_dejiny')}</Button>{/if}
+					{#if selected.specEvent != null}<Button variant="quiet" href={`/dejiny?event=${selected.specEvent}`}>{t('kronika.open_case')}</Button>{/if}
 				</Cluster>
 			{:else}
 				<Text variant="why">{t('kronika.hint')}</Text>

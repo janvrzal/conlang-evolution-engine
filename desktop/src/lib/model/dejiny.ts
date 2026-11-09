@@ -29,6 +29,8 @@ export const snapYear = (year: number, min: number, max: number) => Math.min(max
 
 /** Studijní případ: zadání ho zatím žádnou vlastností nenese; podporujeme nepovinné `study_case`. */
 export const isStudyCase = (ev: WorldEvent) => ev.study_case === true || (typeof ev.study_case === 'string' && ev.study_case !== '');
+/** Štítek studijního případu (text `study_case`), jinak prázdný řetězec. */
+export const caseLabelOf = (ev: WorldEvent) => (typeof ev.study_case === 'string' ? ev.study_case : '');
 
 // ---------- stát v daném roce podle událostí zadání ----------
 

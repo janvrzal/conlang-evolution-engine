@@ -36,6 +36,7 @@
 		fieldsOf,
 		highlightOf,
 		insertIndex,
+		caseLabelOf,
 		isStudyCase,
 		languageShare,
 		laneOf,
@@ -345,6 +346,7 @@
 				<Stack gap={1}>
 					<Text variant="caps">{t(`dejiny.lane.${laneOf(ev.kind)}` as MessageKey)} · {kindName(ev.kind)}{isStudyCase(ev) ? ` · ${t('dejiny.kind_case')}` : ''}</Text>
 					<Text variant="h1">{titleOf(ev)}</Text>
+					{#if caseLabelOf(ev)}<Text variant="why">{t('dejiny.case_label', { label: caseLabelOf(ev) })}</Text>{/if}
 				</Stack>
 				<Stack gap={0}>
 					<Field label={t('dejiny.year')} for="dejiny-year" hint={t('dejiny.year_hint')}>
@@ -352,7 +354,7 @@
 					</Field>
 					{#each shown as f (f.name)}
 						{@const value = ev[f.name]}
-						<Field label={fieldLabel(f.name)} for={f.kind === 'regions' || f.kind === 'level' || f.kind === 'bool' ? undefined : `dejiny-f-${f.name}`}>
+						<Field label={fieldLabel(f.name)} for={f.kind === 'regions' || f.kind === 'level' || f.kind === 'bool' ? undefined : `dejiny-f-${f.name}`} hint={f.name === 'study_case' ? t('dejiny.case_hint') : undefined}>
 							{#if f.kind === 'level' && f.levels}
 								<Segmented label={fieldLabel(f.name)} value={String(value ?? f.levels[0])} options={f.levels.map((l) => ({ value: l, label: levelLabel(f.name, l) }))} onchange={(v) => setField(f.name, v)} />
 							{:else if f.kind === 'state'}
@@ -388,7 +390,7 @@
 				</Stack>
 				{#if unset.length}
 					<Cluster gap={1}>
-						{#each unset as f (f.name)}<Button variant="quiet" onclick={() => setField(f.name, initial(f))}>+ {fieldLabel(f.name)}</Button>{/each}
+						{#each unset as f (f.name)}<Button variant="quiet" onclick={() => setField(f.name, f.name === 'study_case' && ev ? titleOf(ev) : initial(f))}>+ {fieldLabel(f.name)}</Button>{/each}
 					</Cluster>
 				{/if}
 				<Text variant="why">{t(`dejiny.hint.${ev.kind}` as MessageKey)}</Text>
