@@ -282,7 +282,9 @@ pub fn language_lexicons(simulation: &Simulation) -> BTreeMap<String, LanguageLe
 }
 
 /// Části klíče zvukové změny (`rodina|cíl|operace|rysy|hláska|vlevo|vpravo|přízvuk|…`).
-fn sound_parts(variable: &str) -> Value {
+/// `segment` (výsledná hláska u `replace`, `insert_before`, `merge_next`) je v klíči číslo
+/// hlásky; tady se zapíše v IPA (`segment_id` nechává číslo).
+fn sound_parts(variable: &str, table: Option<&crate::segments::SegmentTable>) -> Value {
     let key = variable.strip_prefix("process:").unwrap_or(variable);
     let parts: Vec<&str> = key.split('|').collect();
     let part = |i: usize| {
@@ -291,10 +293,15 @@ fn sound_parts(variable: &str) -> Value {
             .filter(|p| !p.is_empty())
             .map_or(Value::Null, |p| json!(p))
     };
+    let segment_id: Option<i32> = parts.get(4).and_then(|p| p.parse().ok());
+    let segment = match (segment_id, table) {
+        (Some(id), Some(t)) if id >= 0 && (id as usize) < t.len() => json!(t.render(&[id])),
+        _ => Value::Null,
+    };
     json!({
         "family": part(0), "target": part(1), "operation": part(2), "features": part(3),
-        "segment": part(4), "left": part(5), "right": part(6), "stress": part(7),
-        "medial": parts.get(8).is_some_and(|p| *p == "medial"),
+        "segment": segment, "segment_id": segment_id, "left": part(5), "right": part(6),
+        "stress": part(7), "medial": parts.get(8).is_some_and(|p| *p == "medial"),
     })
 }
 
@@ -378,8 +385,10 @@ pub fn change_history(simulation: &Simulation) -> Vec<Value> {
                 .fold(f64::INFINITY, f64::min);
             let mut item =
                 json!({ "kind": "sound", "variable": variable, "year": first, "groups": list });
-            if let (Some(o), Value::Object(parts)) = (item.as_object_mut(), sound_parts(&variable))
-            {
+            if let (Some(o), Value::Object(parts)) = (
+                item.as_object_mut(),
+                sound_parts(&variable, simulation.world.segments().map(|t| t.as_ref())),
+            ) {
                 o.extend(parts);
             }
             by_language.entry(language).or_default().push(item);

@@ -62,6 +62,10 @@ fn export_nese_slovnik_protojazyk_a_zmeny() {
     assert!(!sounds.is_empty(), "žádná zvuková změna");
     for change in &sounds {
         assert!(change["family"].is_string(), "{change}");
+        // hláska výsledku v IPA, ne číslo
+        if change["segment_id"].is_number() {
+            assert!(change["segment"].is_string(), "{change}");
+        }
         let groups = change["groups"].as_array().unwrap();
         assert!(!groups.is_empty());
         let year = change["year"].as_f64().unwrap();
