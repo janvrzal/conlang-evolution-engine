@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ExportV2, FrameV2, Lineage } from './export';
-import { centurySummary, endonymHistory, grammarRows, presence, riverStreams, rootRetention } from './jazyky';
+import { analogyCounts, analogyRows, centurySummary, parseFeatures, parseSym, ruleText, soundRows, endonymHistory, grammarRows, presence, riverStreams, rootRetention } from './jazyky';
 
 const frame = (year: number, groups: [string, number, string][], endo: Record<string, string> = {}): FrameV2 => ({
 	year,
@@ -44,5 +44,50 @@ describe('jazyky', () => {
 	it('mluvnice a souhrny po stoletích', () => {
 		expect(grammarRows({ PAST: { kind: 'synthetic', stage: null, exponent: 'ma', source: 'have', donor: null, order: null, reinforcer: null } }).map((r) => r.fn)).toEqual(['PAST']);
 		expect(centurySummary({ '100': { analogy: 3 }, '200': {} }, ['analogy'])).toEqual([{ century: 100, counts: [3] }]);
+	});
+});
+
+describe('zvukové změny a analogie jazyka', () => {
+	const sound = (variable: string, over: object, groups: object[]) => ({ kind: 'sound', variable, family: 'syncope', target: '{a}', operation: 'delete', features: null, segment: null, left: 'C', right: 'C', stress: 'unstressed', medial: true, year: 700, groups, ...over });
+	const result = {
+		change_history: [
+			{ language: 'L1', groups: [], changes: [
+				sound('a', { year: 800 }, [{ group: 'g1', year: 800, closed: null, relics: 0 }]),
+				sound('b', { family: 'voicing', operation: 'change', features: '+voi', left: 'V', right: 'V' }, [
+					{ group: 'g1', year: 700, closed: 750, relics: 2 },
+					{ group: 'g2', year: 710, closed: null, relics: 3 }
+				]),
+				{ kind: 'analogy', variable: 'x', operation: 'level', concept: 'water', cell: 'PL', year: 900, groups: [{ group: 'g1', year: 900 }] },
+				{ kind: 'analogy', variable: 'y', operation: 'level', concept: 'fire', cell: 'OBJ', year: 910, groups: [{ group: 'g1', year: 910 }, { group: 'g2', year: 911 }] },
+				{ kind: 'analogy', variable: 'z', operation: 'extend', concept: null, cell: null, year: 920, groups: [] }
+			] },
+			{ language: 'L2', groups: [], changes: [] }
+		]
+	} as unknown as ExportV2;
+
+	it('zvuky seřadí od nejrozšířenější a spočítá vsi, uzavření a relikty', () => {
+		const rows = soundRows(result, 'L1');
+		expect(rows.map((r) => r.key.split('#')[0])).toEqual(['b', 'a']);
+		expect(rows[0]).toMatchObject({ villages: 2, closed: 1, relics: 5, year: 700 });
+		expect(soundRows(result, 'L2')).toEqual([]);
+		expect(soundRows(result, null)).toEqual([]);
+	});
+
+	it('zapíše pravidlo a rozebere značky', () => {
+		const rows = soundRows(result, 'L1');
+		expect(ruleText(rows[0])).toBe('a → [+voi] / V_V');
+		expect(ruleText(rows[1])).toBe('a → ∅ / C_C');
+		expect(parseSym('{i,j}')).toEqual({ kind: 'ipa', items: ['i', 'j'] });
+		expect(parseSym('#')).toEqual({ kind: 'edge' });
+		expect(parseFeatures('+voi,-zzz')).toEqual([
+			{ plus: true, name: 'voi', known: true },
+			{ plus: false, name: 'zzz', known: false }
+		]);
+	});
+
+	it('analogie: řádky a souhrn podle operace', () => {
+		const rows = analogyRows(result, 'L1');
+		expect(rows[0]).toMatchObject({ concept: 'fire', villages: 2 });
+		expect(analogyCounts(rows)).toEqual([{ operation: 'level', count: 2 }, { operation: 'extend', count: 1 }]);
 	});
 });
