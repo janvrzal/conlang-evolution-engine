@@ -110,7 +110,24 @@ const core = {
 	'kind.revival': 'Obrození',
 	'kind.preserve': 'Ochrana jazyka',
 	'kind.identity': 'Svébytnost kraje',
-	'kind.immigration': 'Příchod cizinců'
+	'kind.immigration': 'Příchod cizinců',
+	'kind.settlement': 'Osídlení',
+	'kind.elite': 'Cizí elita',
+	'kind.conquest': 'Dobytí',
+	'kind.migration': 'Stěhování',
+	'kind.codification': 'Kodifikace',
+	'kind.printing': 'Tisk',
+	'kind.schooling': 'Školní docházka',
+	'kind.revival_movement': 'Obrozenecké hnutí',
+	'kind.bilingualism': 'Dvojjazyčnost',
+	'kind.nativization': 'Přechod na jazyk doma',
+	'kind.transmission_stopped': 'Přerušené předávání',
+	'kind.transmission_resumed': 'Obnovené předávání',
+	'kind.language_shift': 'Jazykový přechod',
+	'kind.language_emerged': 'Nový jazyk',
+	'kind.language_split': 'Rozštěpení jazyka',
+	'kind.language_ended': 'Zánik jazyka',
+	'kind.sound_shift': 'Hláskový posun'
 } satisfies Record<string, string | ((p: Record<string, string | number>) => string)>;
 
 const cs = {

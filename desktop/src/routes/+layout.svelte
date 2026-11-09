@@ -24,7 +24,7 @@
 	} from '$lib/ds';
 	import { API_REVISION } from '$lib/engine';
 	import { i18n, number, t, type MessageKey } from '$lib/i18n.svelte';
-	import { frameAt, speakers } from '$lib/model/languages';
+	import { frameAt, speakers, varietiesAt } from '$lib/model/languages';
 	import { app } from '$lib/state.svelte';
 
 	let { children } = $props();
@@ -166,7 +166,10 @@
 		const f = frameAt(app.frames, year);
 		if (!f) return '';
 		const sp = [...speakers(f.groups, domainOf).values()].reduce((a, b) => a + b, 0);
-		return t('shell.axis_sum', { langs: Object.keys(f.languages).length, dialects: f.dialects.length, speakers: number(sp), states: f.states.length });
+		const common = { dialects: f.dialects.length, speakers: number(sp), states: f.states.length };
+		if (app.view.allLanguages || !app.result || !app.world) return t('shell.axis_sum', { langs: Object.keys(f.languages).length, ...common });
+		const v = varietiesAt(app.world, app.result, f.groups, domainOf);
+		return t('shell.axis_sum_var', { langs: v.major.length, small: v.host.size + v.orphans.length, ...common });
 	});
 </script>
 

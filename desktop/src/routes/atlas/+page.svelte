@@ -5,6 +5,7 @@
 		Bars,
 		Button,
 		Card,
+		Checkbox,
 		Cluster,
 		Floating,
 		Ipa,
@@ -34,7 +35,7 @@
 	import { languageLabels, regionGroups } from '$lib/model/atlas';
 	import { conceptLabel } from '$lib/model/concepts';
 	import { cityMarkers, geography } from '$lib/model/geography';
-	import { frameAt, homeLanguage, lineageFamilies, lineageNames, lineagePalette, speakers } from '$lib/model/languages';
+	import { frameAt, homeLanguage, lineageFamilies, lineageNames, lineagePalette, shownLineage, speakers, varietiesAt } from '$lib/model/languages';
 	import { romanize } from '$lib/naming';
 	import { app } from '$lib/state.svelte';
 
@@ -49,8 +50,17 @@
 	const atEnd = $derived(!!result && year >= result.year);
 	const frame = $derived(frameAt(app.frames, year));
 	const domainOf = $derived(new Map((result?.groups ?? []).map((g) => [g.id, g.domain])));
-	const home = $derived(frame ? homeLanguage(frame.groups, domainOf) : new Map());
-	const spoken = $derived(frame ? speakers(frame.groups, domainOf) : new Map<string, number>());
+	const homeRaw = $derived(frame ? homeLanguage(frame.groups, domainOf) : new Map());
+	const spokenRaw = $derived(frame ? speakers(frame.groups, domainOf) : new Map<string, number>());
+	// malé jazyky jako variety příbuzného jazyka (přepínač „všechny jazyky“ ukáže stav enginu)
+	const varieties = $derived(result && world && frame ? varietiesAt(world, result, frame.groups, domainOf) : null);
+	const shown = (id: string) => shownLineage(varieties, id, app.view.allLanguages);
+	const home = $derived(new Map([...homeRaw].map(([v, h]) => [v, { ...h, lineage: shown(h.lineage) }])));
+	const spoken = $derived.by(() => {
+		const out = new Map<string, number>();
+		for (const [id, n] of spokenRaw) out.set(shown(id), (out.get(shown(id)) ?? 0) + n);
+		return out;
+	});
 
 	// jména a barvy: z výsledku; během běhu z vlastních jmen ve snímku
 	const names = $derived.by(() => {
@@ -60,6 +70,12 @@
 		return out;
 	});
 	const nameOf = (id: string | null) => (id ? (names.get(id) ?? id) : '—');
+	/** jméno jazyka skupiny; malý jazyk jako „X (varieta Y)“ */
+	const groupLanguage = (id: string | null) => {
+		if (!id) return '—';
+		const host = shown(id);
+		return host !== id ? t('shell.variety_of', { name: nameOf(id), host: nameOf(host) }) : nameOf(id);
+	};
 	const palette = $derived.by(() => {
 		if (result && world) return lineagePalette(world, result);
 		const ids = [...new Set(app.frames.flatMap((f) => Object.keys(f.languages)))];
@@ -224,6 +240,9 @@
 				<Floating>
 					<Legend items={legend}>
 						{#if layer === 'lang' && palette.size > 8}{t('atlas.shade_note')}{/if}
+						{#if layer === 'lang' && varieties}
+							<Checkbox bind:checked={app.view.allLanguages} meta={t('atlas.small_count', { n: varieties.host.size + varieties.orphans.length })}>{t('shell.all_languages')}</Checkbox>
+						{/if}
 						{#if (layer === 'literacy' || layer === 'loyalty') && !atEnd}{t('atlas.end_only')}{/if}
 					</Legend>
 				</Floating>
@@ -272,7 +291,7 @@
 							{#each list as g, i (g.group)}
 								<Tr>
 									<Td>{i === 0 ? villageName(village) : ''}</Td>
-									<Td><Swatch color={palette.get(g.lineage ?? '') ?? 'var(--ink-3)'} />{nameOf(g.lineage)}</Td>
+									<Td><Swatch color={palette.get(shown(g.lineage ?? '')) ?? 'var(--ink-3)'} />{groupLanguage(g.lineage)}</Td>
 									<Td num>{number(g.population)}</Td>
 								</Tr>
 							{/each}

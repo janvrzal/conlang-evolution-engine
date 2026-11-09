@@ -112,7 +112,24 @@ const core = {
 	'kind.revival': 'Revival',
 	'kind.preserve': 'Language protection',
 	'kind.identity': 'Regional identity',
-	'kind.immigration': 'Incoming strangers'
+	'kind.immigration': 'Incoming strangers',
+	'kind.settlement': 'Settlement',
+	'kind.elite': 'Foreign elite',
+	'kind.conquest': 'Conquest',
+	'kind.migration': 'Migration',
+	'kind.codification': 'Codification',
+	'kind.printing': 'Printing',
+	'kind.schooling': 'Schooling',
+	'kind.revival_movement': 'Revival movement',
+	'kind.bilingualism': 'Bilingualism',
+	'kind.nativization': 'Nativization',
+	'kind.transmission_stopped': 'Transmission stopped',
+	'kind.transmission_resumed': 'Transmission resumed',
+	'kind.language_shift': 'Language shift',
+	'kind.language_emerged': 'New language',
+	'kind.language_split': 'Language split',
+	'kind.language_ended': 'Language ended',
+	'kind.sound_shift': 'Sound shift'
 } satisfies Record<string, string | ((p: Record<string, string | number>) => string)>;
 
 const en: Record<keyof typeof cs, string | ((p: Record<string, string | number>) => string)> = {

@@ -55,6 +55,11 @@ export const cs = {
 	'shell.axis_sum': (p) =>
 		`${p.langs} ${plural(Number(p.langs), 'jazyk', 'jazyky', 'jazyků')}, ${p.dialects} nářečí, ${p.speakers} mluvčích doma, ${p.states} ${plural(Number(p.states), 'stát', 'státy', 'států')}`,
 	'shell.axis_density': 'sloupce: počet jazyků v čase',
+	'shell.axis_sum_var': (p) =>
+		`${p.langs} ${plural(Number(p.langs), 'jazyk', 'jazyky', 'jazyků')} + ${p.small} ${plural(Number(p.small), 'malá varieta', 'malé variety', 'malých variet')}, ${p.dialects} nářečí, ${p.speakers} mluvčích doma, ${p.states} ${plural(Number(p.states), 'stát', 'státy', 'států')}`,
+	'shell.variety_of': (p) => `${p.name} (varieta ${p.host})`,
+	'shell.all_languages': 'Všechny jazyky, jak je počítá engine',
+	'shell.all_languages_hint': 'Jinak se jazyk s méně než 1 000 mluvčími doma (nebo v jediné skupině) ukazuje jako varieta nejbližšího příbuzného jazyka.',
 	'shell.offline': 'Engine neběží',
 	'shell.outdated': (p) => `Engine je zastaralý (revize ${p.have}, potřeba ${p.need}). Restartuj ho.`,
 	'shell.offline_hint': 'Spusť engine příkazem cee ui, nebo aplikaci přes Tauri, která ho spustí sama.',
@@ -130,6 +135,11 @@ export const en: Record<keyof typeof cs, Message> = {
 	'shell.axis_sum': (p) =>
 		`${p.langs} ${s(p.langs, 'language', 'languages')}, ${p.dialects} dialects, ${p.speakers} home speakers, ${p.states} ${s(p.states, 'state', 'states')}`,
 	'shell.axis_density': 'bars: number of languages over time',
+	'shell.axis_sum_var': (p) =>
+		`${p.langs} ${s(p.langs, 'language', 'languages')} + ${p.small} small ${s(p.small, 'variety', 'varieties')}, ${p.dialects} dialects, ${p.speakers} home speakers, ${p.states} ${s(p.states, 'state', 'states')}`,
+	'shell.variety_of': (p) => `${p.name} (variety of ${p.host})`,
+	'shell.all_languages': 'All languages as the engine counts them',
+	'shell.all_languages_hint': 'Otherwise a language with fewer than 1,000 home speakers (or a single group) is shown as a variety of its closest relative.',
 	'shell.offline': 'The engine is not running',
 	'shell.outdated': (p) => `The engine is outdated (revision ${p.have}, need ${p.need}). Restart it.`,
 	'shell.offline_hint': 'Start the engine with cee ui, or run the app through Tauri, which starts it.',

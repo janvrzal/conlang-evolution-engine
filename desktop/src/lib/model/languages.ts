@@ -5,6 +5,7 @@ import { languageNames } from '$lib/naming';
 import type { WorldSpec } from '$lib/state.svelte';
 import type { ExportV2, FrameV2, Group } from './export';
 import { villageOfGroup } from './geography';
+import { groupVarieties, lexicalDistanceFrom, type Varieties } from './varieties';
 
 /** Linie → index rodiny (pořadí protojazyka v zadání), podle většiny skupin linie. */
 export function lineageFamilies(world: WorldSpec, result: ExportV2): Map<string, number> {
@@ -73,3 +74,25 @@ export function frameAt(frames: FrameV2[], year: number): FrameV2 | null {
 	for (const f of frames) if (f.year <= year && (!best || f.year > best.year)) best = f;
 	return best ?? frames[0] ?? null;
 }
+
+// ---------- malé jazyky jako variety (model/varieties.ts) ----------
+
+const lexicalCache = new WeakMap<ExportV2, (a: string, b: string) => number | null>();
+
+/**
+ * Variety v roce snímku: malé jazyky (méně než 1 000 mluvčích doma, nebo jediná skupina) připadnou
+ * nejbližšímu většímu jazyku stejné rodiny. Vzdálenost ze slovníku koncového exportu.
+ */
+export function varietiesAt(world: WorldSpec, result: ExportV2, groups: GroupLike[], domainOf?: Map<string, string>): Varieties {
+	const sp = speakers(groups, domainOf);
+	const count = new Map<string, number>();
+	for (const g of groups) {
+		const domain = g.domain ?? domainOf?.get(g.id) ?? (g.id.includes('>') ? 'public' : 'home');
+		if (domain === 'home' && g.observed_language) count.set(g.observed_language, (count.get(g.observed_language) ?? 0) + 1);
+	}
+	if (!lexicalCache.has(result)) lexicalCache.set(result, lexicalDistanceFrom(result));
+	return groupVarieties(sp, count, lineageFamilies(world, result), result.lineages, lexicalCache.get(result));
+}
+
+/** Jazyk, jak se ukazuje: malý jazyk jako jeho hostitel, pokud uživatel nechce vidět všechny. */
+export const shownLineage = (v: Varieties | null, id: string, all: boolean) => (all || !v ? id : (v.host.get(id) ?? id));

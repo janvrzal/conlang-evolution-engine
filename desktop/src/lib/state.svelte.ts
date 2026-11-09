@@ -63,6 +63,8 @@ export interface View {
 	concept: string;
 	/** index události v world.events */
 	event: number | null;
+	/** ukázat všechny jazyky, jak je počítá engine (jinak malé jazyky jako variety) */
+	allLanguages: boolean;
 }
 
 /** Druhá větev pro „Co kdyby“: upravené zadání a jeho běh. */
@@ -94,7 +96,7 @@ class App {
 	error = $state<string | null>(null);
 	/** schéma enginu (úrovně, parametry, druhy událostí, slovníky); null bez enginu */
 	schema = $state.raw<EngineSchema | null>(null);
-	view = $state<View>({ year: null, region: null, lineage: null, concept: 'water', event: null });
+	view = $state<View>({ year: null, region: null, lineage: null, concept: 'water', event: null, allLanguages: false });
 	/** větev B pro Co kdyby (A je hlavní běh) */
 	branch = $state.raw<Branch | null>(null);
 	/** zadání, ze kterého je poslední výsledek (JSON) */
@@ -154,7 +156,7 @@ class App {
 		this.undoStack = [];
 		this.redoStack = [];
 		this.lastEdit = null;
-		this.view = { year: null, region: null, lineage: null, concept: 'water', event: null };
+		this.view = { year: null, region: null, lineage: null, concept: 'water', event: null, allLanguages: false };
 		void this.check();
 	}
 

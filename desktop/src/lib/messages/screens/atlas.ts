@@ -47,7 +47,8 @@ export const cs = {
 	'atlas.run_now': 'Teď',
 	'atlas.run_now_value': (p) => `${p.langs} jazyků, ${p.dialects} nářečí, ${p.states} států, ${p.people} lidí`,
 	'atlas.unsettled': 'ves ještě neosídlená',
-	'atlas.empty': 'Svět zatím neběžel; mapa jazyků se ukáže s prvním snímkem běhu.'
+	'atlas.empty': 'Svět zatím neběžel; mapa jazyků se ukáže s prvním snímkem běhu.',
+	'atlas.small_count': (p) => `${p.n} ${plural(Number(p.n), 'malá varieta', 'malé variety', 'malých variet')}`
 } satisfies Record<string, Message>;
 
 const s = (n: number | string, one: string, many: string) => (Number(n) === 1 ? one : many);
@@ -97,5 +98,6 @@ export const en: Record<keyof typeof cs, Message> = {
 	'atlas.run_now': 'Now',
 	'atlas.run_now_value': (p) => `${p.langs} languages, ${p.dialects} dialects, ${p.states} states, ${p.people} people`,
 	'atlas.unsettled': 'village not settled yet',
-	'atlas.empty': 'The world has not run yet; the language map appears with the first snapshot.'
+	'atlas.empty': 'The world has not run yet; the language map appears with the first snapshot.',
+	'atlas.small_count': (p) => `${p.n} small ${s(p.n, 'variety', 'varieties')}`
 };
