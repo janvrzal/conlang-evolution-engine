@@ -4,6 +4,7 @@
 	import {
 		Button,
 		Card,
+		Checkbox,
 		Cluster,
 		Area,
 		Ipa,
@@ -34,11 +35,12 @@
 		endonymHistory,
 		grammarRows,
 		presence,
+		mergeVarieties,
 		riverStreams,
 		rootRetention,
 		totals
 	} from '$lib/model/jazyky';
-	import { frameAt, lineageFamilies, lineageNames, lineagePalette, speakers } from '$lib/model/languages';
+	import { frameAt, lineageFamilies, lineageNames, lineagePalette, speakers, varietiesAt } from '$lib/model/languages';
 	import { dialectNames, romanize } from '$lib/naming';
 	import { app } from '$lib/state.svelte';
 
@@ -68,11 +70,13 @@
 	const lineage = $derived(result?.lineages.find((l) => l.id === selected) ?? null);
 
 	const familyFilter = $derived(family === 'all' ? null : Number(family));
-	const river = $derived(
-		result && world
-			? riverStreams(app.frames, domainOf, result.lineages, families, names, palette, { family: familyFilter, query }, selected)
-			: { years: [], streams: [] }
-	);
+	// malé jazyky jako variety (podle koncového stavu); „všechny jazyky“ ukáže stav enginu
+	const varieties = $derived(result && world ? varietiesAt(world, result, result.groups) : null);
+	const river = $derived.by(() => {
+		if (!result || !world) return { years: [], streams: [] };
+		const all = riverStreams(app.frames, domainOf, result.lineages, families, names, palette, { family: familyFilter, query }, selected);
+		return varieties && !app.view.allLanguages ? mergeVarieties(all, varieties.host, selected) : all;
+	});
 	const familyOptions = $derived([
 		{ value: 'all', label: t('jazyky.family_all') },
 		...(world?.languages ?? []).map((l, i) => ({ value: String(i), label: l.name ?? l.id }))
@@ -133,6 +137,9 @@
 			<Cluster gap={3}>
 				<Segmented label={t('jazyky.family')} bind:value={family} options={familyOptions} />
 				<TextInput type="search" label={t('jazyky.search')} placeholder={t('jazyky.search')} bind:value={query} width="l" />
+				{#if varieties}
+					<Checkbox bind:checked={app.view.allLanguages} meta={t('atlas.small_count', { n: varieties.host.size + varieties.orphans.length })}>{t('shell.all_languages')}</Checkbox>
+				{/if}
 			</Cluster>
 			<Stage tone="land" label={t('jazyky.river', { from: formatYear(app.frames[0]?.year ?? 0), to: formatYear(endYear) })}>
 				<LanguageRiver

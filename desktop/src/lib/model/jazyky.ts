@@ -119,3 +119,19 @@ export function centurySummary(summary: Record<string, Record<string, number>> |
 export function totals(rows: { counts: number[] }[], n: number): number[] {
 	return Array.from({ length: n }, (_, i) => rows.reduce((a, r) => a + r.counts[i], 0));
 }
+
+/**
+ * Malé jazyky jako variety: proud variety se přičte k proudu hostitele (vybraný jazyk zůstává sám).
+ * Hostitel, kterého filtr skryl, nechá varietu samostatnou.
+ */
+export function mergeVarieties(river: { years: number[]; streams: RiverStream[] }, host: Map<string, string>, selected: string | null) {
+	const byId = new Map(river.streams.map((s) => [s.id, { ...s, values: [...s.values] }]));
+	for (const s of river.streams) {
+		const h = host.get(s.id);
+		if (!h || s.id === selected || !byId.has(h)) continue;
+		const target = byId.get(h)!;
+		s.values.forEach((v, i) => (target.values[i] += v));
+		byId.delete(s.id);
+	}
+	return { years: river.years, streams: river.streams.filter((s) => byId.has(s.id)).map((s) => byId.get(s.id)!) };
+}
