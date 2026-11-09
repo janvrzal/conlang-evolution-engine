@@ -12,7 +12,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use cee_engine::checkpoint::Checkpoint;
 use cee_engine::parameters::{parameter_file, LEVEL_TABLES};
 use cee_engine::spec::{self, WorldSpec};
 use cee_engine::{export, Simulation, SimulationConfig};
@@ -299,22 +298,23 @@ impl Runs {
                     None => None,
                     Some(year) => {
                         let at = if year.is_finite() { year } else { world_spec.end_year };
-                        cee_store::checkpoint_before(parent, at).map_err(|e| issue("(svět)", e, "world_failed"))?.map(|c| (parent, year, c))
+                        cee_store::checkpoint_before(parent, at).map_err(|e| issue("(svět)", e, "world_failed"))?.map(|point| (parent, year, point))
                     }
                 }
             }
         };
         let parent_id = |p: &Path| p.file_name().map(|n| n.to_string_lossy().to_string());
         let (simulation, writer, recorder, start_year) = match resume {
-            Some((parent, year, stored)) => {
+            Some((parent, year, point)) => {
                 let pid = parent_id(parent);
                 let mut writer = RunWriter::create(
                     new.dir,
                     &NewRun { name: new.name, spec: Some(new.spec), parent: pid.as_deref(), branch_year: Some(year), engine: Some(&engine) },
                 )
                 .map_err(|e| issue("(svět)", e, "world_failed"))?;
-                writer.copy_prefix(parent, stored.year).map_err(|e| issue("(svět)", e, "world_failed"))?;
-                let checkpoint = Checkpoint::from_bytes(&stored.bytes).map_err(|e| issue("(svět)", e, "world_failed"))?;
+                // snímky, slovník a záznam událostí rodiče do kontrolního bodu; bod může ležet i u prarodiče
+                writer.branch_from(&point).map_err(|e| issue("(svět)", e, "world_failed"))?;
+                let checkpoint = cee_store::load_checkpoint(&point).map_err(|e| issue("(svět)", e, "world_failed"))?;
                 let simulation = spec::resume(&world_spec, checkpoint, SimulationConfig::default()).map_err(|e| issue("(svět)", e, "world_failed"))?;
                 let recorder = Recorder::new(&simulation, RecordOptions::default());
                 (simulation, writer, recorder, world_spec.start_year)
@@ -596,5 +596,75 @@ mod fixture {
             println!("{name}: {} MB", data.to_string().len() / 1_000_000);
         }
         let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+#[cfg(test)]
+mod rezie {
+    use super::*;
+
+    /// Kolik stojí zápis běhu, rozpad podle částí (sběr, slovník, záznam událostí, kontrolní body,
+    /// snímky) a velikost složky: `cargo test --release --lib rezie -- --ignored --nocapture`.
+    /// `CEE_REZIE_DO` = rok konce (výchozí 800).
+    #[test]
+    #[ignore]
+    fn rezie_zapisu() {
+        let until: f64 = std::env::var("CEE_REZIE_DO").ok().and_then(|v| v.parse().ok()).unwrap_or(800.0);
+        let mut world: Value = serde_json::from_str(include_str!("../../static/projects/talvera.cee.json")).unwrap();
+        world["end_year"] = json!(until);
+        let events: Vec<Value> = world["events"].as_array().unwrap().iter().filter(|e| e["year"].as_f64().unwrap() <= until).cloned().collect();
+        world["events"] = json!(events);
+        let ws = WorldSpec::from_json(&world.to_string()).unwrap();
+        for record in [false, true] {
+            let (w, events) = spec::build(&ws).unwrap();
+            let mut sim = Simulation::new(w, SimulationConfig::default(), events).unwrap();
+            let dir = std::env::temp_dir().join(format!("cee-rezie-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            let mut writer = RunWriter::create(&dir, &NewRun { spec: Some(&world), ..Default::default() }).unwrap();
+            let mut recorder = Recorder::new(&sim, RecordOptions::default());
+            if record {
+                recorder.start(&sim).write(&mut writer, 0.0).unwrap();
+            }
+            let mut t = BTreeMap::<&str, f64>::new();
+            let mut add = |k: &'static str, since: Instant| *t.entry(k).or_default() += since.elapsed().as_secs_f64();
+            while sim.year() + sim.config.dt <= ws.end_year + 1e-9 {
+                let at = Instant::now();
+                sim.step().unwrap();
+                add("krok", at);
+                if !record {
+                    continue;
+                }
+                let at = Instant::now();
+                let batch = recorder.collect(&sim).unwrap();
+                add("sběr (snímek, slovník, bod)", at);
+                let at = Instant::now();
+                if let Some((year, lexicons)) = &batch.lexicon {
+                    writer.add_lexicon(*year, lexicons).unwrap();
+                }
+                add("zápis slovníku", at);
+                let at = Instant::now();
+                writer.add_events(&batch.events).unwrap();
+                add("zápis událostí", at);
+                let at = Instant::now();
+                if let Some((tick, year, n, bytes)) = &batch.checkpoint {
+                    writer.add_checkpoint(*tick, *year, *n, bytes).unwrap();
+                }
+                add("zápis bodů", at);
+                let at = Instant::now();
+                if let Some(frame) = &batch.frame {
+                    writer.add_frame(frame, 0.0).unwrap();
+                }
+                add("zápis snímků", at);
+            }
+            let total: f64 = t.values().sum();
+            println!("{} do roku {until}: celkem {total:.1} s", if record { "SE ZÁPISEM" } else { "BEZ ZÁPISU" });
+            for (k, v) in &t {
+                println!("  {k:28} {v:7.1} s");
+            }
+            if record {
+                println!("  složka (bajty): {:?}", cee_store::size(&writer.dir));
+            }
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
 }
