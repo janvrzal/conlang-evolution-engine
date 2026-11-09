@@ -54,6 +54,7 @@ export { default as CheckBadge } from './CheckBadge.svelte';
 export { default as Banner } from './Banner.svelte';
 export { default as Toast } from './Toast.svelte';
 export { default as Popover } from './Popover.svelte';
+export { default as Disclosure } from './Disclosure.svelte';
 export { default as ConfirmDialog } from './ConfirmDialog.svelte';
 
 // čas, mapy a grafy
