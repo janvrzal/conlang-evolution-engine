@@ -6,6 +6,7 @@
 		Banner,
 		Button,
 		Card,
+		Checkbox,
 		Cluster,
 		Floating,
 		Ledger,
@@ -33,13 +34,16 @@
 	import {
 		compareWords,
 		differingFamilies,
-		differingVillages,
+		differingShown,
 		domainsOf,
 		familySpeakers,
 		focusRegions,
+		languageCount,
 		matchLineages,
 		regionGroup,
+		shownHome,
 		sideHome,
+		sideVarieties,
 		withoutEvent,
 		worldDifference
 	} from '$lib/model/cokdyby';
@@ -62,19 +66,27 @@
 	const year = $derived(Math.min(app.view.year ?? result?.year ?? 0, result?.year ?? 0));
 	const frameA = $derived(frameAt(app.frames, year));
 	const frameB = $derived(branch ? frameAt(branch.frames, year) : null);
-	const homeA = $derived(frameA && result ? sideHome(frameA, result) : new Map());
-	const homeB = $derived(frameB && resultB ? sideHome(frameB, resultB) : new Map());
+	// malé jazyky jako variety hostitelského jazyka (přepínač „všechny jazyky“ vrací stav enginu)
+	const all = $derived(app.view.allLanguages);
+	const varA = $derived(frameA && world && result ? sideVarieties({ world, result }, frameA) : null);
+	const varB = $derived(frameB && worldB && resultB ? sideVarieties({ world: worldB, result: resultB }, frameB) : null);
+	const rawA = $derived(frameA && result ? sideHome(frameA, result) : new Map());
+	const rawB = $derived(frameB && resultB ? sideHome(frameB, resultB) : new Map());
+	const homeA = $derived(shownHome(rawA, varA, all));
+	const homeB = $derived(shownHome(rawB, varB, all));
 	const families = $derived(world && result && worldB && resultB ? { a: lineageFamilies(world, result), b: lineageFamilies(worldB, resultB) } : null);
 	const match = $derived(matchLineages(homeA, homeB, families ?? undefined));
-	const diff = $derived(differingVillages(homeA, homeB, match));
+	const diff = $derived(differingShown({ a: rawA, b: rawB }, { a: homeA, b: homeB }, families ?? undefined));
 
 	// rámování: rozdíl na konci běhu a kraje kolem něj
 	const endA = $derived(result ? frameAt(app.frames, result.year) : null);
 	const endB = $derived(resultB && branch ? frameAt(branch.frames, resultB.year) : null);
 	const diffEnd = $derived.by(() => {
-		if (!endA || !endB || !result || !resultB) return new Set<string>();
-		const a = sideHome(endA, result), b = sideHome(endB, resultB);
-		return differingVillages(a, b, matchLineages(a, b, families ?? undefined));
+		if (!endA || !endB || !result || !resultB || !world || !worldB) return new Set<string>();
+		const ra = sideHome(endA, result), rb = sideHome(endB, resultB);
+		const a = shownHome(ra, sideVarieties({ world, result }, endA), all);
+		const b = shownHome(rb, sideVarieties({ world: worldB, result: resultB }, endB), all);
+		return differingShown({ a: ra, b: rb }, { a, b }, families ?? undefined);
 	});
 	const regionById = $derived(new Map((geo?.regions ?? []).map((r) => [r.id, r])));
 	const focusSet = $derived(focusRegions(diffEnd, geo?.regionOf ?? new Map(), (r) => regionById.get(r)?.neighbours ?? []));
@@ -185,8 +197,11 @@
 		}
 		return best;
 	});
-	const langsA = $derived(frameA ? Object.keys(frameA.languages).length : 0);
-	const langsB = $derived(frameB ? Object.keys(frameB.languages).length : 0);
+	const countA = $derived(frameA ? languageCount(frameA, varA, all) : { langs: 0, small: 0 });
+	const countB = $derived(frameB ? languageCount(frameB, varB, all) : { langs: 0, small: 0 });
+	const langsA = $derived(countA.langs);
+	const langsB = $derived(countB.langs);
+	const smallText = (c: { small: number }) => (c.small ? ` + ${t('cokdyby.small_count', { n: c.small })}` : '');
 
 	// vsi s jinou rodinou doma ve snímcích od větvení
 	const curve = $derived.by(() => {
@@ -253,7 +268,7 @@
 					>
 				{/if}
 				<LedgerRow term={t('cokdyby.languages')}
-					>A: <Text as="span" num>{langsA}</Text> · <Text as="span" tone={langsA !== langsB ? 'red' : undefined} num>B: {langsB}</Text>
+					>A: <Text as="span" num>{langsA}</Text>{smallText(countA)} · <Text as="span" tone={langsA !== langsB || countA.small !== countB.small ? 'red' : undefined} num>B: {langsB}</Text>{smallText(countB)}
 					{#if langsA !== langsB}<Text variant="why" as="span">{t(langsB < langsA ? 'cokdyby.languages_less' : 'cokdyby.languages_more', { n: Math.abs(langsA - langsB) })}</Text>{/if}</LedgerRow
 				>
 			</Ledger>
@@ -322,6 +337,7 @@
 			{#snippet br()}
 				<Floating tight>
 					<Cluster gap={2}>
+						<Checkbox bind:checked={app.view.allLanguages}>{t('shell.all_languages')}</Checkbox>
 						{#if focus}<Text variant="small">{t('cokdyby.zoomed')}</Text>{/if}
 						<Button variant="quiet" onclick={() => (zoomed = !zoomed)}>{focus ? t('cokdyby.zoom_out') : t('cokdyby.zoom_in')}</Button>
 					</Cluster>

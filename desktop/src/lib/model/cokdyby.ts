@@ -2,7 +2,8 @@
 import type { WorldSpec } from '$lib/state.svelte';
 import type { ExportV2, FrameV2 } from './export';
 import { villageOfGroup } from './geography';
-import { homeLanguage, lineageFamilies } from './languages';
+import { homeLanguage, lineageFamilies, shownLineage, varietiesAt } from './languages';
+import type { Varieties } from './varieties';
 
 export type Home = Map<string, { lineage: string; population: number; group: string }>;
 
@@ -120,4 +121,38 @@ export function compareWords(a: ExportV2, ga: string | null, b: ExportV2, gb: st
 	const changed = shared.filter((c) => la[c].form !== lb[c].form).length;
 	const rows = concepts.filter((c) => la[c] && lb[c]).map((c) => ({ concept: c, a: la[c].form, b: lb[c].form, differs: la[c].form !== lb[c].form }));
 	return { rows, changed, total: shared.length };
+}
+
+/** Domácí jazyk vsí tak, jak se ukazuje: malý jazyk jako jeho hostitel (varieta), nebo stav enginu při `all`. */
+export function shownHome(home: Home, varieties: Varieties | null, all: boolean): Home {
+	if (all || !varieties) return home;
+	return new Map([...home].map(([v, h]) => [v, { ...h, lineage: shownLineage(varieties, h.lineage, false) }]));
+}
+
+/** Varieties jedné strany ve snímku (bez koncového exportu žádné). */
+export function sideVarieties(side: { world: WorldSpec; result: ExportV2 }, frame: FrameV2): Varieties {
+	return varietiesAt(side.world, side.result, frame.groups, domainsOf(side.result));
+}
+
+/** Počet jazyků ve snímku: samostatné jazyky a malé variety zvlášť (při `all` všechny jazyky enginu a žádné variety). */
+export function languageCount(frame: FrameV2, varieties: Varieties | null, all: boolean): { langs: number; small: number } {
+	const total = Object.keys(frame.languages).length;
+	if (all || !varieties) return { langs: total, small: 0 };
+	const small = varieties.host.size + varieties.orphans.length;
+	return { langs: Math.max(total - small, 0), small };
+}
+
+/**
+ * Vsi s rozdílným zobrazeným jazykem. Varieta téhož jazyka se může v A a B přiřadit různým hostitelům
+ * (hostitel závisí na jazycích daného běhu), takže se ves počítá, jen když se liší i jazyk enginu.
+ */
+export function differingShown(
+	raw: { a: Home; b: Home },
+	shown: { a: Home; b: Home },
+	families?: { a: Map<string, number>; b: Map<string, number> }
+): Set<string> {
+	const byEngine = differingVillages(raw.a, raw.b, matchLineages(raw.a, raw.b, families));
+	if (shown.a === raw.a && shown.b === raw.b) return byEngine;
+	const byShown = differingVillages(shown.a, shown.b, matchLineages(shown.a, shown.b, families));
+	return new Set([...byShown].filter((v) => byEngine.has(v)));
 }
