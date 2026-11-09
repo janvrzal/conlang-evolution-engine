@@ -42,7 +42,8 @@ pub struct Territory {
     /// Terén (klíč `Parameters::terrain_access`); popis krajiny pro jména a mapu.
     pub terrain: String,
     /// Prostupnost 0–1: 1 = krajina, přes kterou se snadno chodí a obchoduje, 0 = úplná izolace
-    /// (žádný kontakt přes hranici). Násobí vazby přes hranici regionu a dosah státu (dok. 31).
+    /// (žádný kontakt přes hranici). Vazby přes hranici dvou regionů násobí geometrický průměr
+    /// prostupností obou (cesta vede napůl přes každý); násobí i dosah státu (dok. 37).
     #[serde(default = "full_permeability")]
     pub permeability: f64,
     /// Původní jazyk území (linie), pokud ho scénář zná.

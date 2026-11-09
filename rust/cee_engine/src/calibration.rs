@@ -1380,6 +1380,99 @@ fn tempo_world(
     Ok(simulation)
 }
 
+/// Roky odečtu v běhu prahu jazyka.
+pub const THRESHOLD_YEARS: [f64; 5] = [250.0, 500.0, 750.0, 1000.0, 1500.0];
+
+/// Práh jazyka: dva regiony téhož prajazyka bez kontaktu (4 vesnice, staroslověnština z Evropy).
+/// Po letech odečtu vzdálenost mezi regiony a uvnitř nich (míra, kterou se vymezují jazyky)
+/// a podíl pojmů se stejným převládajícím slovem (lexikostatistika; Swadesh 1954: nářečí nad
+/// 81 % společných slov, tedy do ~5 století odděleného vývoje).
+fn threshold(seed: i64) -> Result<Report, String> {
+    let evropa: Value = serde_json::from_str(EVROPA_JSON).map_err(|e| e.to_string())?;
+    let slavic = evropa["languages"]
+        .as_array()
+        .and_then(|l| l.iter().find(|x| x["id"] == "slavic"))
+        .cloned()
+        .ok_or("slovanština ve scénáři Evropy chybí")?;
+    let regions = json!([
+        {"id": "r0", "name": "r0", "position": [0, 0], "neighbours": [], "language": "slavic", "villages": 4},
+        {"id": "r1", "name": "r1", "position": [200, 0], "neighbours": [], "language": "slavic", "villages": 4}
+    ]);
+    let end = THRESHOLD_YEARS[THRESHOLD_YEARS.len() - 1];
+    let text = json!({"format": evropa["format"], "name": "prah", "seed": seed, "start_year": 0,
+        "end_year": end, "languages": [slavic], "regions": regions, "events": [],
+        "parameters": evropa["parameters"]})
+    .to_string();
+    let spec = crate::spec::WorldSpec::from_json(&text)?;
+    let (world, events) = crate::spec::build(&spec)?;
+    let config = SimulationConfig {
+        keep_distances: true,
+        ..SimulationConfig::default()
+    };
+    let mut simulation = Simulation::new(world, config, events)?;
+    let mut report = Report::new();
+    for year in THRESHOLD_YEARS {
+        simulation.run(year)?;
+        simulation.observe_now()?;
+        let world = &simulation.world;
+        let snapshot = simulation.history.snapshots.last().ok_or("chybí snímek")?;
+        let Some(flat) = snapshot.distances.as_deref() else {
+            continue;
+        };
+        let n = snapshot.group_ids.len();
+        let region = |name: &str| name.split("-v").next().unwrap_or("").to_owned();
+        let (mut across, mut within) = (Vec::new(), Vec::new());
+        for i in 0..n {
+            for j in i + 1..n {
+                let (a, b) = (&snapshot.group_ids[i], &snapshot.group_ids[j]);
+                if region(a) == region(b) {
+                    within.push(flat[i * n + j]);
+                } else {
+                    across.push(flat[i * n + j]);
+                }
+            }
+        }
+        info(
+            &mut report,
+            &format!("{year} vzdálenost mezi regiony"),
+            mean(&across),
+        );
+        info(
+            &mut report,
+            &format!("{year} vzdálenost uvnitř regionu"),
+            mean(&within),
+        );
+        // Podíl pojmů se stejným převládajícím slovem mezi středy obou regionů.
+        let (a, b) = (group_named(world, "r0-v0"), group_named(world, "r1-v0"));
+        if let (Some(a), Some(b)) = (a, b) {
+            let (mut same, mut total) = (0.0_f64, 0.0_f64);
+            for (variable, _) in crate::gates::metrics::lexical_variables(world) {
+                let (Some(x), Some(y)) = (
+                    crate::gates::metrics::root_of(world, a, variable),
+                    crate::gates::metrics::root_of(world, b, variable),
+                ) else {
+                    continue;
+                };
+                total += 1.0;
+                if x == y {
+                    same += 1.0;
+                }
+            }
+            info(
+                &mut report,
+                &format!("{year} společná slova"),
+                same / total.max(1.0),
+            );
+        }
+        info(
+            &mut report,
+            &format!("{year} jazyků"),
+            snapshot.languages.len() as f64,
+        );
+    }
+    Ok(report)
+}
+
 /// Tempo hláskových změn: rychlost r = −ln(1 − d) za tisíciletí (d = vzdálenost tvarů
 /// zděděných slov od prajazyka), jako u skutečných dvojic IE-CoR (dok. 24).
 fn tempo(seed: i64) -> Result<Report, String> {
@@ -1426,6 +1519,12 @@ fn tempo(seed: i64) -> Result<Report, String> {
 /// Všechny kalibrační běhy.
 pub fn runs() -> Vec<Run> {
     vec![
+        Run {
+            id: "prah",
+            description: "práh jazyka: dva regiony staroslověnštiny bez kontaktu, 1 500 let",
+            measure: threshold,
+            memory_gb: 0.4,
+        },
         Run {
             id: "tempo",
             description: "tempo hláskových změn: 12 vesnic staroslověnštiny / latiny 1 000 let, bez kontaktu a pod latinským státem",

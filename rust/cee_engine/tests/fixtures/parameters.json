@@ -212,6 +212,7 @@
  "sound_actuation": 2.25,
  "standard_prestige": 1.5,
  "standing_variation": 0.3,
+ "state_cohesion": 0.0,
  "stress_strength_multiplier": 1.5,
  "terrain_access": {
   "hills": 0.6,

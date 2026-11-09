@@ -89,7 +89,9 @@ pub struct StepInputs {
 pub type Mixing = Vec<Vec<(usize, f64)>>;
 
 /// Od koho se která skupina učí (`mixing_matrix`): vlastní skupina s vahou `1 − otevřenost`,
-/// zbytek mezi sousedy úměrně síle vazby a prestiži zdroje (`prestiž ** alpha`).
+/// zbytek mezi sousedy úměrně síle vazby a prestiži zdroje (`prestiž ** alpha`). Sousedé
+/// vlastního jazyka si otevřenost dělí mezi sebou; cizí zdroje mají podíl ze všech vazeb
+/// navíc (řádek pak může dát víc než 1, `hear` normalizuje podle vah).
 pub fn mixing(world: &World, axis: &[GroupId], alpha: f64) -> Mixing {
     let n = axis.len();
     let mut place = vec![usize::MAX; world.groups.len()];
@@ -117,10 +119,28 @@ pub fn mixing(world: &World, axis: &[GroupId], alpha: f64) -> Mixing {
             0.0
         };
         let safe = if total > 0.0 { total } else { 1.0 };
+        // Otevřenost se dělí mezi mluvčí vlastního jazyka zvlášť (dok. 37): cizí vrstva
+        // (lingua franca, jazyk elity) přidává kontakt navíc, ale neubírá vstup od příbuzných
+        // sousedů. Dřív si silná cizí vazba vzala podíl otevřenosti, filtr přenositelnosti ho
+        // v `hear` z velké části zahodil a normalizace ho vrátila vlastní skupině: vesnice
+        // s cizí vrstvou se uzavřela do sebe a odplula od sousedů jako samostatný jazyk.
+        let language = world.groups.main_code(group).language;
+        let same = |column: usize| world.groups.main_code(axis[column]).language == language;
+        let kin: f64 = weights
+            .iter()
+            .filter(|&&(column, _)| column != row && same(column))
+            .map(|&(_, w)| w)
+            .sum();
+        let kin_safe = if kin > 0.0 { kin } else { safe };
         let mut entries: Vec<(usize, f64)> = Vec::with_capacity(weights.len() + 1);
         let mut own = (1.0 - openness) * 1.0;
         for (column, weight) in weights {
-            let value = openness * (weight / safe);
+            let base = if column != row && same(column) {
+                kin_safe
+            } else {
+                safe
+            };
+            let value = openness * (weight / base);
             if column == row {
                 own += value;
             } else if value != 0.0 {

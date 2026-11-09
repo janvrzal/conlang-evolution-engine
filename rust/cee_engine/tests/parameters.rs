@@ -15,13 +15,13 @@ fn soubor_pokryva_vsechna_pole_a_hodnoty_sedi() {
     assert_eq!(file.format, "cee-v2-parameters/1");
     let value = serde_json::to_value(Parameters::default()).unwrap();
     let fields = value.as_object().unwrap();
-    assert_eq!(file.parameters.len(), 88);
+    assert_eq!(file.parameters.len(), 89);
     assert_eq!(fields.len(), file.parameters.len());
     let world_count = file.by_role(Role::World).count();
     let active_count = file.by_role(Role::Active).count();
     let fixed_count = file.by_role(Role::Fixed).count();
     assert_eq!(world_count, 12);
-    assert_eq!(active_count, 26);
+    assert_eq!(active_count, 27);
     assert_eq!(fixed_count, 50);
     assert_eq!(world_count + active_count + fixed_count, file.parameters.len());
     for spec in &file.parameters {

@@ -873,21 +873,10 @@ pub struct Hysteresis<'a> {
     pub form_gate: f64,
 }
 
-/// Průměrná vazba mezi sousedícími shluky až do prahu (`observe.constrained_average_linkage`).
-/// `pairs` jsou kandidáti sloučení z :func:`candidates`. Vrací shluky jako seřazené seznamy pozic
-/// skupin, seřazené podle prvního člena.
-pub fn linkage(
-    features: &Features,
-    pairs: &[(u32, u32)],
-    threshold: f64,
-    hysteresis: Option<&Hysteresis<'_>>,
-) -> Vec<Vec<usize>> {
+/// Stav shluků po jedné skupině (začátek slučování i vzdálenosti dvojic).
+fn singletons(features: &Features, hysteresis: Option<&Hysteresis<'_>>) -> Clusters {
     let count = features.groups;
-    let mut clusters: Vec<Vec<usize>> = (0..count).map(|index| vec![index]).collect();
-    if count < 2 {
-        return clusters;
-    }
-    let mut state = Clusters {
+    Clusters {
         dim: features.dim,
         lexical: features.lexical,
         margin: hysteresis.map_or(0.0, |item| item.margin),
@@ -905,7 +894,112 @@ pub fn linkage(
                 _ => Sparse::default(),
             })
             .collect(),
-    };
+    }
+}
+
+/// Jazyky jako kontinua pod střechami (Kloss 1967: jazyk podle vzdálenosti a podle střechy).
+///
+/// Skupiny se stejnou střechou (`roofs[i]` ≥ 0: čtou spisovnou normu vlastního jazyka) jsou
+/// jeden jazyk. Ostatní se k sousedům řetězí od nejbližších dvojic, dokud je vzdálenost dvojice
+/// (`Clusters::linkage` dvou skupin, s hysterezí) pod prahem: nářeční kontinuum je jedna vlna,
+/// i když si jeho konce nerozumějí. Útvar nikdy nespojí dvě různé střechy, takže hranice jazyků
+/// vzniká tam, kde se střídají spisovné normy (stát, škola, tisk). Vrací shluky jako seřazené
+/// seznamy pozic skupin, seřazené podle prvního člena.
+pub fn continua(
+    features: &Features,
+    pairs: &[(u32, u32)],
+    threshold: f64,
+    hysteresis: Option<&Hysteresis<'_>>,
+    roofs: &[i64],
+) -> Vec<Vec<usize>> {
+    let count = features.groups;
+    let state = singletons(features, hysteresis);
+    let mut parent: Vec<usize> = (0..count).collect();
+    let mut roof: Vec<i64> = (0..count)
+        .map(|i| roofs.get(i).copied().unwrap_or(-1))
+        .collect();
+    fn find(parent: &mut [usize], mut x: usize) -> usize {
+        while parent[x] != x {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+        }
+        x
+    }
+    // 1) střecha: skupiny pod stejnou normou dohromady
+    let mut first_of: std::collections::BTreeMap<i64, usize> = std::collections::BTreeMap::new();
+    for index in 0..count {
+        let r = roof[index];
+        if r < 0 {
+            continue;
+        }
+        match first_of.get(&r) {
+            Some(&head) => {
+                let (a, b) = (find(&mut parent, head), find(&mut parent, index));
+                if a != b {
+                    let (keep, drop) = if a < b { (a, b) } else { (b, a) };
+                    parent[drop] = keep;
+                }
+            }
+            None => {
+                first_of.insert(r, index);
+            }
+        }
+    }
+    // 2) vlna: sousední dvojice od nejbližší, bez spojení dvou různých střech
+    let mut edges: Vec<(f64, u32, u32)> = pairs
+        .iter()
+        .map(|&(a, b)| {
+            let (a, b) = if a < b { (a, b) } else { (b, a) };
+            (state.linkage(a as usize, b as usize), a, b)
+        })
+        .filter(|&(value, _, _)| value <= threshold)
+        .collect();
+    edges.sort_by(|x, y| {
+        x.0.partial_cmp(&y.0)
+            .unwrap_or(Ordering::Equal)
+            .then(x.1.cmp(&y.1))
+            .then(x.2.cmp(&y.2))
+    });
+    edges.dedup_by(|x, y| x.1 == y.1 && x.2 == y.2);
+    for (_, a, b) in edges {
+        let (ra, rb) = (find(&mut parent, a as usize), find(&mut parent, b as usize));
+        if ra == rb {
+            continue;
+        }
+        let (fa, fb) = (roof[ra], roof[rb]);
+        if fa >= 0 && fb >= 0 && fa != fb {
+            continue;
+        }
+        let (keep, drop) = if ra < rb { (ra, rb) } else { (rb, ra) };
+        parent[drop] = keep;
+        roof[keep] = fa.max(fb);
+    }
+    let mut groups: std::collections::BTreeMap<usize, Vec<usize>> =
+        std::collections::BTreeMap::new();
+    for index in 0..count {
+        let head = find(&mut parent, index);
+        groups.entry(head).or_default().push(index);
+    }
+    let mut result: Vec<Vec<usize>> = groups.into_values().collect();
+    result.sort_by_key(|cluster| cluster[0]);
+    result
+}
+
+/// Průměrná vazba mezi sousedícími shluky až do prahu (`observe.constrained_average_linkage`).
+/// `pairs` jsou kandidáti sloučení z :func:`candidates`. Vrací shluky jako seřazené seznamy pozic
+/// skupin, seřazené podle prvního člena.
+pub fn linkage(
+    features: &Features,
+    pairs: &[(u32, u32)],
+    threshold: f64,
+    hysteresis: Option<&Hysteresis<'_>>,
+) -> Vec<Vec<usize>> {
+    let count = features.groups;
+    let mut clusters: Vec<Vec<usize>> = (0..count).map(|index| vec![index]).collect();
+    if count < 2 {
+        return clusters;
+    }
+    let mut state = singletons(features, hysteresis);
     let mut neighbours: Vec<Vec<u32>> = vec![Vec::new(); count];
     for &(first, second) in pairs {
         neighbours[first as usize].push(second);
