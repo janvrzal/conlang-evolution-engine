@@ -311,10 +311,13 @@
 				</Stack>
 			</Card>
 		{:else}
-			<Card label={t('atlas.overview', { langs: Object.keys(frame.languages).length, year: formatYear(year) })}>
+			{@const overview = varieties && !app.view.allLanguages
+				? t('atlas.overview_var', { langs: varieties.major.length, small: varieties.host.size + varieties.orphans.length, year: formatYear(year) })
+				: t('atlas.overview', { langs: Object.keys(frame.languages).length, year: formatYear(year) })}
+			<Card label={overview}>
 				<Stack gap={1}>
 					<Text variant="caps">{world.name ?? ''} · {formatYear(year)}</Text>
-					<Text variant="h1">{t('atlas.overview', { langs: Object.keys(frame.languages).length, year: formatYear(year) })}</Text>
+					<Text variant="h1">{overview}</Text>
 					<Text variant="why">{t('atlas.overview_hint')}</Text>
 				</Stack>
 				<Stack gap={2}>

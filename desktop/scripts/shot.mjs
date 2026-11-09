@@ -1,5 +1,5 @@
 // Snímek obrazovky aplikace v headless Chrome přes DevTools protokol + chyby z konzole.
-//   node scripts/shot.mjs URL VÝSTUP.png [šířka=1440] [výška=900] [čekat_ms=4000]
+//   node scripts/shot.mjs URL VÝSTUP.png [šířka=1440] [výška=900] [čekat_ms=4000]   (DARK=1 = tmavý režim)
 // Příklad: node scripts/shot.mjs "http://127.0.0.1:1420/atlas?fixture=talvera" /tmp/atlas.png
 import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -33,6 +33,8 @@ const send = (method, params = {}) => new Promise((r) => { const n = ++id; pendi
 await send('Runtime.enable');
 await send('Page.enable');
 await send('Emulation.setDeviceMetricsOverride', { width: +w, height: +h, deviceScaleFactor: 1, mobile: false });
+// DARK=1: tmavé schéma systému (prefers-color-scheme: dark)
+if (process.env.DARK) await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
 await send('Page.navigate', { url });
 await sleep(+wait);
 const shot = await Promise.race([send('Page.captureScreenshot', { format: 'png' }), sleep(+(process.env.SHOT_TIMEOUT ?? 15000)).then(() => null)]);
