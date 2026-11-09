@@ -101,6 +101,10 @@ class LanguageSpec(_Model):
     syllables: Literal["simple", "moderate", "complex"] | None = None
 
 
+#: Počet vesnic regionu (1–12).
+VillageCount = Annotated[int, Field(ge=1, le=12)]
+
+
 class RegionSpec(_Model):
     """Region jako síť vesnic (``scenarios.Region``)."""
 
@@ -112,7 +116,7 @@ class RegionSpec(_Model):
     density: float = Field(default=1.0, gt=0.0, le=100.0)
     neighbours: list[str] = Field(default_factory=list)
     #: Počet vesnic: číslo, nebo rozsah ``[min, max]`` vylosovaný podle semínka světa.
-    villages: int | tuple[int, int] = 4
+    villages: VillageCount | tuple[VillageCount, VillageCount] = 4
 
     @model_validator(mode="after")
     def _villages_in_range(self) -> "RegionSpec":

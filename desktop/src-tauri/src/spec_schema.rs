@@ -27,6 +27,8 @@ enum Ty {
     Map(&'static Ty),
     /// dvojice čísel (poloha)
     Point,
+    /// celé číslo, nebo rozsah [min, max] (počet vesnic regionu); meze platí pro obě podoby
+    IntRange,
     /// dvojice [text, číslo] (koncovka a váha)
     Ending,
     Ref(&'static str),
@@ -187,13 +189,17 @@ fn models() -> Vec<Model> {
                     b.le = Some(100.0)
                 }),
                 opt("neighbours", STR_LIST, || json!([])),
-                opt("villages", INT, || json!(4)).b(|b| {
+                opt("villages", Ty::IntRange, || json!(4)).b(|b| {
                     b.ge = Some(1.0);
                     b.le = Some(12.0)
                 }),
                 opt("prestige", NUM, || json!(0.5)).b(|b| b.ge = Some(0.0)),
                 null("language", STR),
                 opt("terrain", STR, || json!("plain")),
+                null("permeability", NUM).b(|b| {
+                    b.ge = Some(0.0);
+                    b.le = Some(1.0)
+                }),
                 opt("identity", STR, || json!("shared")),
                 opt("preserve", Ty::Bool, || json!(false)),
                 opt("immigration", NUM, || json!(0.0)).b(|b| {
@@ -448,6 +454,16 @@ fn type_schema(ty: Ty, bounds: &Bounds) -> Map<String, Value> {
             s.insert("prefixItems".into(), json!([{ "type": "number" }, { "type": "number" }]));
             s.insert("type".into(), json!("array"));
         }
+        Ty::IntRange => {
+            let item = Value::Object(type_schema(Ty::Int, bounds));
+            s.insert(
+                "anyOf".into(),
+                json!([
+                    item.clone(),
+                    { "maxItems": 2, "minItems": 2, "prefixItems": [item.clone(), item], "type": "array" }
+                ]),
+            );
+        }
         Ty::Ending => {
             s.insert("maxItems".into(), json!(2));
             s.insert("minItems".into(), json!(2));
@@ -651,6 +667,25 @@ impl Checker<'_> {
                     }
                 }
             },
+            Ty::IntRange => {
+                let whole = |x: &Value| x.as_f64().filter(|n| n.fract() == 0.0 && !x.is_boolean());
+                match v.as_array() {
+                    Some(a) => match (a.len(), a.first().and_then(whole), a.get(1).and_then(whole)) {
+                        (2, Some(low), Some(high)) => {
+                            self.bounds(b, low, &format!("{path}.0"));
+                            self.bounds(b, high, &format!("{path}.1"));
+                            if low > high {
+                                self.issue(path, "rozsah [min, max] musí mít min ≤ max");
+                            }
+                        }
+                        _ => self.issue(path, "musí být celé číslo nebo dvojice [min, max]"),
+                    },
+                    None => match whole(v) {
+                        Some(n) => self.bounds(b, n, path),
+                        None => self.issue(path, "musí být celé číslo nebo dvojice [min, max]"),
+                    },
+                }
+            }
             Ty::Point => {
                 if !v.as_array().is_some_and(|a| a.len() == 2 && a.iter().all(Value::is_number)) {
                     self.issue(path, "musí být dvojice čísel");
@@ -755,6 +790,27 @@ mod tests {
         let mut years = talvera();
         years["end_year"] = json!(-800);
         assert_eq!(check_shape(&years)[0].message, "end_year musí být později než start_year");
+    }
+
+    #[test]
+    fn vesnice_jako_rozsah_a_prostupnost() {
+        let mut w = talvera();
+        w["regions"][0]["villages"] = json!([2, 5]);
+        w["regions"][1]["permeability"] = json!(0.4);
+        assert!(check_shape(&w).is_empty(), "{:?}", check_shape(&w));
+        w["regions"][0]["villages"] = json!([5, 2]);
+        w["regions"][1]["villages"] = json!([1, 13]);
+        w["regions"][2]["villages"] = json!([1, 2, 3]);
+        w["regions"][3]["permeability"] = json!(1.5);
+        let issues: Vec<String> = check_shape(&w).into_iter().map(|i| format!("{}: {}", i.path, i.message)).collect();
+        for expected in [
+            "regions.0.villages: rozsah [min, max] musí mít min ≤ max",
+            "regions.1.villages.1: smí být nejvýš 12",
+            "regions.2.villages: musí být celé číslo nebo dvojice [min, max]",
+            "regions.3.permeability: smí být nejvýš 1",
+        ] {
+            assert!(issues.iter().any(|i| i == expected), "chybí „{expected}“ v {issues:#?}");
+        }
     }
 
     /// Schéma z Rustu se shoduje s pydanticem (`tests/pydantic-schema.json`, `scripts/schema.py`):

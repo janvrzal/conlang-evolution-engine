@@ -918,11 +918,32 @@
       "type": "array"
      },
      "villages": {
+      "anyOf": [
+       {
+        "maximum": 12,
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+         {
+          "maximum": 12,
+          "minimum": 1,
+          "type": "integer"
+         },
+         {
+          "maximum": 12,
+          "minimum": 1,
+          "type": "integer"
+         }
+        ],
+        "type": "array"
+       }
+      ],
       "default": 4,
-      "maximum": 12,
-      "minimum": 1,
-      "title": "Villages",
-      "type": "integer"
+      "title": "Villages"
      },
      "prestige": {
       "default": 0.5,
@@ -946,6 +967,20 @@
       "default": "plain",
       "title": "Terrain",
       "type": "string"
+     },
+     "permeability": {
+      "anyOf": [
+       {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Permeability"
      },
      "identity": {
       "default": "shared",
