@@ -33,3 +33,43 @@ describe('nabídky', () => {
 		expect(levelsInOrder(['calm', 'none', 'normal', 'turbulent'], ['none', 'calm', 'normal', 'turbulent'])).toEqual(['none', 'calm', 'normal', 'turbulent']);
 	});
 });
+
+import { addRegion, eventsUsingRegion, nextRegionId, removeRegion, toggleNeighbours } from './svet';
+
+describe('úpravy krajů', () => {
+	const world = () =>
+		({
+			format: 'cee-v2-world/1',
+			end_year: 100,
+			languages: [{ id: 'a' }],
+			regions: [
+				{ id: 'r1', position: [0, 0], neighbours: ['r2'], language: 'a' },
+				{ id: 'r2', position: [10, 0], neighbours: ['r1'], language: 'a' },
+				{ id: 'r3', position: [50, 50], neighbours: [], language: 'a', terrain: 'hills' }
+			],
+			events: [{ kind: 'identity', year: 10, regions: ['r3'], identity: 'strong' }]
+		}) as import('$lib/state.svelte').WorldSpec;
+
+	it('přidá kraj napojený na nejbližší', () => {
+		const w = world();
+		const id = addRegion(w, 48, 52, 'Nový');
+		expect(id).toBe('r4');
+		const r = w.regions.find((x) => x.id === id)!;
+		expect(r.neighbours?.[0]).toBe('r3');
+		expect(r.terrain).toBe('hills');
+		expect(w.regions.find((x) => x.id === 'r3')!.neighbours).toContain('r4');
+		expect(nextRegionId(w)).toBe('r5');
+	});
+
+	it('přepne sousedy oběma směry a smaže kraj s vazbami', () => {
+		const w = world();
+		expect(toggleNeighbours(w, 'r1', 'r2')).toBe(false);
+		expect(w.regions[0].neighbours).toEqual([]);
+		expect(toggleNeighbours(w, 'r1', 'r3')).toBe(true);
+		expect(w.regions[2].neighbours).toEqual(['r1']);
+		expect(eventsUsingRegion(w, 'r3')).toBe(1);
+		removeRegion(w, 'r3');
+		expect(w.regions.map((r) => r.id)).toEqual(['r1', 'r2']);
+		expect(w.regions[0].neighbours).toEqual([]);
+	});
+});

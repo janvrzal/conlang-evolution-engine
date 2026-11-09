@@ -48,6 +48,16 @@
 		to: string;
 		dashed?: boolean;
 	}
+	/** Úprava mapy (obrazovka Svět): režim nástroje a co se má stát. Souřadnice jsou ve světě (km). */
+	export interface MapEdit {
+		mode: 'select' | 'add' | 'move' | 'link';
+		/** klik v režimu add */
+		onadd?: (x: number, y: number) => void;
+		/** puštění taženého kraje v režimu move */
+		onmove?: (region: string, x: number, y: number) => void;
+		/** dva kraje kliknuté po sobě v režimu link (přepne sousedství) */
+		onlink?: (a: string, b: string) => void;
+	}
 
 	let {
 		regions,
@@ -67,6 +77,7 @@
 		arrows = [],
 		focus = null,
 		relief = true,
+		edit = null,
 		onpick,
 		onhover
 	}: {
@@ -95,6 +106,8 @@
 		/** přiblížit na tyto vsi; null = celý svět */
 		focus?: string[] | null;
 		relief?: boolean;
+		/** editační režim: středy krajů a vazby sousedů, přidání, posun, spojení */
+		edit?: MapEdit | null;
 		onpick?: (region: string, village: string) => void;
 		onhover?: (hit: { region: string; village: string; x: number; y: number } | null) => void;
 	} = $props();
@@ -103,12 +116,23 @@
 	let stage: HTMLDivElement;
 	let canvas: HTMLCanvasElement;
 	let keyRegion = $state<string | null>(null);
+	/** tažený kraj (v px) a první kraj spojení */
+	let drag = $state<{ region: string; x: number; y: number } | null>(null);
+	let linkFrom = $state<string | null>(null);
+	let pointer = $state<[number, number] | null>(null);
+	$effect(() => {
+		// při změně nástroje se rozpracované spojení zahodí
+		void edit?.mode;
+		linkFrom = null;
+	});
 
 	interface Layout {
 		W: number;
 		H: number;
 		dpr: number;
 		P: (x: number, y: number) => [number, number];
+		/** z px na plátně do souřadnic světa */
+		inv: (px: number, py: number) => [number, number];
 		land: Path2D;
 		rings: Path2D[];
 		shade: HTMLCanvasElement | null;
@@ -221,7 +245,8 @@
 			const a = triangles[e], b = triangles[e % 3 === 2 ? e - 2 : e + 1], t1 = Math.floor(e / 3), t2 = Math.floor(o / 3);
 			edges.push({ a, b, x1: cc[2 * t1], y1: cc[2 * t1 + 1], x2: cc[2 * t2], y2: cc[2 * t2 + 1] });
 		}
-		layout = { W, H, dpr, P, land, rings, shade, vcells, rcells, vpts, rpts, vdel, edges, vil: villages_ };
+		const inv = (px: number, py: number): [number, number] => [(px - ox) / k, (py - oy) / k];
+		layout = { W, H, dpr, P, inv, land, rings, shade, vcells, rcells, vpts, rpts, vdel, edges, vil: villages_ };
 	}
 
 	function hatchPath(c: CanvasRenderingContext2D, path: Path2D, h: Hatch) {
@@ -393,6 +418,65 @@
 				c.fill();
 			}
 		}
+		// editační režim: vazby sousedů a středy krajů (úchyty)
+		if (edit && edit.mode !== 'select') {
+			c.save();
+			c.strokeStyle = cssVar('--ink-2');
+			c.lineWidth = 1;
+			c.globalAlpha = 0.55;
+			for (const r of regions)
+				for (const n of r.neighbours ?? []) {
+					if (n < r.id) continue;
+					const a = L.rpts.get(r.id), b = L.rpts.get(n);
+					if (!a || !b) continue;
+					c.beginPath();
+					c.moveTo(...a);
+					c.lineTo(...b);
+					c.stroke();
+				}
+			c.globalAlpha = 1;
+			for (const r of regions) {
+				const at = L.rpts.get(r.id);
+				if (!at) continue;
+				const active = r.id === linkFrom || r.id === selected;
+				c.beginPath();
+				c.arc(at[0], at[1], active ? 6 : 4.5, 0, 7);
+				c.fillStyle = active ? cssVar('--ink') : cssVar('--land');
+				c.fill();
+				c.strokeStyle = cssVar('--ink');
+				c.lineWidth = 1.5;
+				c.stroke();
+			}
+			if (linkFrom && pointer) {
+				const a = L.rpts.get(linkFrom);
+				if (a) {
+					c.setLineDash([4, 3]);
+					c.strokeStyle = cssVar('--ink');
+					c.beginPath();
+					c.moveTo(...a);
+					c.lineTo(...pointer);
+					c.stroke();
+					c.setLineDash([]);
+				}
+			}
+			if (drag) {
+				const from = L.rpts.get(drag.region);
+				c.setLineDash([4, 3]);
+				c.strokeStyle = cssVar('--ink');
+				if (from) {
+					c.beginPath();
+					c.moveTo(...from);
+					c.lineTo(drag.x, drag.y);
+					c.stroke();
+				}
+				c.setLineDash([]);
+				c.beginPath();
+				c.arc(drag.x, drag.y, 7, 0, 7);
+				c.fillStyle = cssVar('--ink');
+				c.fill();
+			}
+			c.restore();
+		}
 		// popisky bez překryvů: v pořadí, jak přišly; stát zkusí náhradní polohy, ostatní se vynechají
 		const placed: [number, number, number, number][] = [];
 		const STYLE = {
@@ -440,12 +524,63 @@
 		const i = L.vdel.find(x, y);
 		return i >= 0 ? { region: L.vil[i].region, village: L.vil[i].id, x, y } : null;
 	}
-	function click(event: MouseEvent) {
-		const h = hit(event);
-		if (h) {
-			keyRegion = null;
-			onpick?.(h.region, h.village);
+	/** Nejbližší střed kraje do vzdálenosti `within` px. */
+	function nearestRegion(x: number, y: number, within: number): string | null {
+		const L = layout;
+		if (!L) return null;
+		let best: string | null = null, d = within;
+		for (const [id, [rx, ry]] of L.rpts) {
+			const q = Math.hypot(rx - x, ry - y);
+			if (q < d) [best, d] = [id, q];
 		}
+		return best;
+	}
+	function local(event: MouseEvent): [number, number] {
+		const r = canvas.getBoundingClientRect();
+		return [event.clientX - r.left, event.clientY - r.top];
+	}
+	function click(event: MouseEvent) {
+		const L = layout;
+		if (edit?.mode === 'add' && L) {
+			edit.onadd?.(...L.inv(...local(event)));
+			return;
+		}
+		if (edit?.mode === 'move') return;
+		const h = hit(event);
+		if (!h) return;
+		if (edit?.mode === 'link') {
+			const id = nearestRegion(...local(event), 24) ?? h.region;
+			if (!linkFrom) linkFrom = id;
+			else if (linkFrom === id) linkFrom = null;
+			else {
+				edit.onlink?.(linkFrom, id);
+				linkFrom = null;
+			}
+			return;
+		}
+		keyRegion = null;
+		onpick?.(h.region, h.village);
+	}
+	function down(event: PointerEvent) {
+		if (edit?.mode !== 'move') return;
+		const [x, y] = local(event);
+		const id = nearestRegion(x, y, 16);
+		if (!id) return;
+		canvas.setPointerCapture(event.pointerId);
+		drag = { region: id, x, y };
+	}
+	function move(event: PointerEvent) {
+		const [x, y] = local(event);
+		if (drag) drag = { ...drag, x, y };
+		else if (edit?.mode === 'link') pointer = [x, y];
+		else onhover?.(hit(event));
+	}
+	function up() {
+		const L = layout;
+		if (!drag || !L) return;
+		const { region, x, y } = drag;
+		drag = null;
+		edit?.onmove?.(region, ...L.inv(x, y));
 	}
 	function key(event: KeyboardEvent) {
 		const L = layout;
@@ -494,7 +629,7 @@
 	});
 	// …kreslení při změně čehokoli, co obrazovka dodává.
 	$effect(() => {
-		void [layout, fill, fillAlpha, regionFill, hatch, regionHatch, edge, highlight, selected, labels, markers, arrows, keyRegion];
+		void [layout, fill, fillAlpha, regionFill, hatch, regionHatch, edge, highlight, selected, labels, markers, arrows, keyRegion, edit, drag, linkFrom, pointer];
 		render();
 	});
 </script>
@@ -512,9 +647,15 @@
 >
 	<canvas
 		bind:this={canvas}
+		class={edit?.mode ?? 'select'}
 		onclick={click}
-		onmousemove={(e) => onhover?.(hit(e))}
-		onmouseleave={() => onhover?.(null)}
+		onpointerdown={down}
+		onpointermove={move}
+		onpointerup={up}
+		onmouseleave={() => {
+			pointer = null;
+			onhover?.(null);
+		}}
 	></canvas>
 	{#if summary}<p id="{uid}-summary" class="sr">{summary}</p>{/if}
 </div>
@@ -527,6 +668,16 @@
 	canvas {
 		display: block;
 		cursor: pointer;
+		touch-action: none;
+	}
+	canvas.add {
+		cursor: crosshair;
+	}
+	canvas.move {
+		cursor: grab;
+	}
+	canvas.move:active {
+		cursor: grabbing;
 	}
 	.sr {
 		position: absolute;

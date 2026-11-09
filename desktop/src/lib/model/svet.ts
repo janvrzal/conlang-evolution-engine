@@ -60,3 +60,65 @@ export function levelsInOrder(schemaLevels: string[] | undefined, order: string[
 	const known = order.filter((l) => schemaLevels.includes(l));
 	return [...known, ...schemaLevels.filter((l) => !order.includes(l))];
 }
+
+// ---------- úpravy krajů na mapě ----------
+type Spec = import('$lib/state.svelte').WorldSpec;
+
+/** Nové jedinečné ID kraje (r1, r2, …). */
+export function nextRegionId(world: Spec): string {
+	const used = new Set(world.regions.map((r) => r.id));
+	let n = world.regions.length + 1;
+	while (used.has(`r${n}`)) n++;
+	return `r${n}`;
+}
+
+/** Nejbližší kraje k bodu (pro napojení nového kraje). */
+export function nearestRegions(world: Spec, x: number, y: number, count: number, except?: string): string[] {
+	return world.regions
+		.filter((r) => r.id !== except)
+		.map((r) => ({ id: r.id, d: Math.hypot(r.position[0] - x, r.position[1] - y) }))
+		.sort((a, b) => a.d - b.d)
+		.slice(0, count)
+		.map((r) => r.id);
+}
+
+/** Přidá kraj na místo (x, y) napojený na `link` nejbližších krajů; vrátí jeho ID. Jazyk a krajina podle nejbližšího. */
+export function addRegion(world: Spec, x: number, y: number, name: string, link = 2): string {
+	const id = nextRegionId(world);
+	const near = nearestRegions(world, x, y, link);
+	const closest = world.regions.find((r) => r.id === near[0]);
+	world.regions.push({ id, name, position: [round(x), round(y)], neighbours: near, language: closest?.language, terrain: closest?.terrain ?? 'plain' });
+	for (const n of near) {
+		const r = world.regions.find((q) => q.id === n);
+		if (r && !(r.neighbours ?? []).includes(id)) r.neighbours = [...(r.neighbours ?? []), id];
+	}
+	return id;
+}
+
+/** Přepne sousedství dvou krajů (oběma směry). Vrátí true, když jsou teď sousedé. */
+export function toggleNeighbours(world: Spec, a: string, b: string): boolean {
+	const ra = world.regions.find((r) => r.id === a), rb = world.regions.find((r) => r.id === b);
+	if (!ra || !rb || a === b) return false;
+	const linked = (ra.neighbours ?? []).includes(b) || (rb.neighbours ?? []).includes(a);
+	if (linked) {
+		ra.neighbours = (ra.neighbours ?? []).filter((n) => n !== b);
+		rb.neighbours = (rb.neighbours ?? []).filter((n) => n !== a);
+	} else {
+		ra.neighbours = [...(ra.neighbours ?? []), b];
+		rb.neighbours = [...(rb.neighbours ?? []), a];
+	}
+	return !linked;
+}
+
+/** Smaže kraj i jeho vazby k sousedům. Události, které na kraj odkazují, ohlásí ověření zadání. */
+export function removeRegion(world: Spec, id: string) {
+	world.regions = world.regions.filter((r) => r.id !== id);
+	for (const r of world.regions) if (r.neighbours?.includes(id)) r.neighbours = r.neighbours.filter((n) => n !== id);
+}
+
+/** Kolik událostí zadání odkazuje na kraj (pro upozornění před smazáním). */
+export function eventsUsingRegion(world: Spec, id: string): number {
+	return world.events.filter((e) => JSON.stringify(e).includes(`"${id}"`)).length;
+}
+
+const round = (v: number) => Math.round(v * 10) / 10;

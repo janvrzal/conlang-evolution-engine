@@ -67,7 +67,8 @@ export {
 	type Hatch,
 	type MapLabel,
 	type MapMarker,
-	type MapArrow
+	type MapArrow,
+	type MapEdit
 } from './WorldMap.svelte';
 export type { MapRegion, MapVillage } from './map/geometry';
 export { default as LanguageRiver, type RiverStream } from './LanguageRiver.svelte';

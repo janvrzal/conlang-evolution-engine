@@ -1,5 +1,5 @@
-<!-- Svět: nastavení světa, mapa krajů (jazyk na počátku) a karta vybraného kraje s úpravou.
-     Úpravy jdou přes app.edit (Zpět/Znovu). Kreslení krajů zatím není, proto tu není ani jako ovládání. -->
+<!-- Svět: nastavení světa, mapa krajů (jazyk na počátku) s nástroji (výběr, nový kraj, posun,
+     sousedé) a karta vybraného kraje s úpravou. Úpravy jdou přes app.edit (Zpět/Znovu, Vrátit). -->
 <script lang="ts">
 	import {
 		Button,
@@ -11,6 +11,7 @@
 		Floating,
 		Ipa,
 		Kbd,
+		Select,
 		Legend,
 		Screen,
 		Segmented,
@@ -22,16 +23,18 @@
 		familyColor,
 		type LegendItem,
 		type MapLabel,
+		type MapEdit,
 		type MapMarker,
 		type MapVillage
 	} from '$lib/ds';
 	import { t, type MessageKey } from '$lib/i18n.svelte';
 	import { geography } from '$lib/model/geography';
-	import { cityOptions, hasCity, levelsInOrder, regionsPerLanguage, worldWarnings } from '$lib/model/svet';
+	import { addRegion, cityOptions, eventsUsingRegion, hasCity, levelsInOrder, regionsPerLanguage, removeRegion, toggleNeighbours, worldWarnings } from '$lib/model/svet';
 	import { app } from '$lib/state.svelte';
 
 	const world = $derived(app.world);
-	const geo = $derived(world ? geography(world, app.result) : null);
+	// vsi z běhu jen dokud zadání odpovídá běhu; po úpravě krajů se mapa kreslí ze zadání
+	const geo = $derived(world ? geography(world, app.stale ? null : app.result) : null);
 	const levels = $derived(app.schema?.levels as Record<string, string[]> | undefined);
 	const backgrounds = $derived(levelsInOrder(levels?.background_levels, ['none', 'calm', 'normal', 'turbulent']));
 	const terrains = $derived(levelsInOrder(levels?.terrain_access, ['plain', 'hills', 'mountains', 'island']));
@@ -121,7 +124,96 @@
 		});
 	};
 	const pick = (id: string) => (app.view.region = id);
+
+	// ---- nástroje mapy (V výběr, R nový kraj, M posun, S sousedé)
+	type Tool = MapEdit['mode'];
+	let tool = $state<Tool>('select');
+	const TOOLS: { value: Tool; key: string }[] = [
+		{ value: 'select', key: 'v' },
+		{ value: 'add', key: 'r' },
+		{ value: 'move', key: 'm' },
+		{ value: 'link', key: 's' }
+	];
+	const edit: MapEdit = $derived({
+		mode: tool,
+		onadd: (x, y) => {
+			let id = '';
+			app.edit(t('svet.edit.add'), (w) => (id = addRegion(w, x, y, t('svet.new_region'))));
+			app.view.region = id;
+		},
+		onmove: (id, x, y) =>
+			app.edit(t('svet.edit.move', { name: geo?.name(id) ?? id }), (w) => {
+				const r = w.regions.find((q) => q.id === id);
+				if (r) r.position = [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
+			}),
+		onlink: (a, b) => {
+			const names = { a: geo?.name(a) ?? a, b: geo?.name(b) ?? b };
+			app.edit(t('svet.edit.link', names), (w) => toggleNeighbours(w, a, b));
+			app.view.region = a;
+		}
+	});
+	function toolKey(event: KeyboardEvent) {
+		const target = event.target as HTMLElement;
+		if (event.metaKey || event.ctrlKey || event.altKey || target.closest('input, textarea, select')) return;
+		const found = TOOLS.find((x) => x.key === event.key.toLowerCase());
+		if (found) tool = found.value;
+		else if (event.key === 'Escape') tool = 'select';
+	}
+
+	// ---- osídlení, poloha, sousedé, smazání
+	const setNumber = (id: string, key: 'villages' | 'density' | 'prestige', label: string, raw: string | number, ok: (n: number) => boolean) => {
+		const n = Number(raw);
+		if (String(raw).trim() === '' || !Number.isFinite(n) || !ok(n)) return false;
+		app.edit(label, (w) => {
+			const r = w.regions.find((x) => x.id === id);
+			if (r) (r as Record<string, unknown>)[key] = n;
+		});
+		return true;
+	};
+	let villages = $state<string | number>(4), density = $state<string | number>(1), prestige = $state<string | number>(0.5);
+	let posX = $state<string | number>(0), posY = $state<string | number>(0);
+	let numberError = $state<string | null>(null);
+	$effect(() => {
+		if (!region) return;
+		villages = region.villages ?? 4;
+		density = region.density ?? 1;
+		prestige = (region.prestige as number | undefined) ?? 0.5;
+		posX = region.position[0];
+		posY = region.position[1];
+		numberError = null;
+	});
+	const commit = (key: 'villages' | 'density' | 'prestige', raw: string | number) => {
+		if (!region) return;
+		const name = geo?.name(region.id) ?? region.id;
+		const rules = { villages: (n: number) => Number.isInteger(n) && n >= 1 && n <= 12, density: (n: number) => n > 0 && n <= 100, prestige: (n: number) => n >= 0 };
+		numberError = setNumber(region.id, key, t(`svet.edit.${key}` as MessageKey, { name }), raw, rules[key]) ? null : t(`svet.bad.${key}` as MessageKey);
+	};
+	const commitPosition = () => {
+		if (!region) return;
+		const x = Number(posX), y = Number(posY), id = region.id;
+		if (!Number.isFinite(x) || !Number.isFinite(y) || (x === region.position[0] && y === region.position[1])) return;
+		app.edit(t('svet.edit.move', { name: geo?.name(id) ?? id }), (w) => {
+			const r = w.regions.find((q) => q.id === id);
+			if (r) r.position = [x, y];
+		});
+	};
+	const linkOptions = $derived(
+		region && world && geo
+			? [{ value: '', label: t('svet.neighbour_add') }, ...world.regions.filter((r) => r.id !== region.id && !(region.neighbours ?? []).includes(r.id)).map((r) => ({ value: r.id, label: geo.name(r.id) }))]
+			: []
+	);
+	const link = (a: string, b: string) => {
+		if (!b) return;
+		app.edit(t('svet.edit.link', { a: geo?.name(a) ?? a, b: geo?.name(b) ?? b }), (w) => toggleNeighbours(w, a, b));
+	};
+	const remove = (id: string) => {
+		const name = geo?.name(id) ?? id;
+		app.edit(t('svet.edit.remove', { name }), (w) => removeRegion(w, id));
+		app.view.region = null;
+	};
 </script>
+
+<svelte:window onkeydown={toolKey} />
 
 {#if !world || !geo}
 	<Screen><Stack gap={3}><Text variant="h1">{t('svet.title')}</Text><Text variant="why">{t('svet.empty_world')}</Text></Stack></Screen>
@@ -185,10 +277,18 @@
 				selected={app.view.region}
 				{labels}
 				{markers}
+				{edit}
 				onpick={pick}
 			/>
 			{#snippet tl()}
-				<Floating><Text variant="small">{t('svet.map_hint')} <Kbd>←</Kbd><Kbd>→</Kbd> <Kbd>Enter</Kbd></Text></Floating>
+				<Floating tight>
+					<Segmented
+						label={t('svet.tools')}
+						bind:value={tool}
+						options={TOOLS.map((x) => ({ value: x.value, label: `${t(`svet.tool.${x.value}` as MessageKey)} (${x.key.toUpperCase()})` }))}
+					/>
+				</Floating>
+				<Floating><Text variant="small">{t(`svet.tool_hint.${tool}` as MessageKey)}{#if tool === 'select'} <Kbd>←</Kbd><Kbd>→</Kbd> <Kbd>Enter</Kbd>{/if}</Text></Floating>
 			{/snippet}
 			{#snippet bl()}
 				<Floating>
@@ -242,18 +342,34 @@
 						onchange={(v) => setRegion(region.id, 'identity', t('svet.edit.identity', { name }), v)}
 					/>
 				</Field>
-				<Field label={t('svet.settlement')} hint={t('svet.settlement_note')}>
-					<Text variant="small">{t('svet.settlement_value', { villages: region.villages ?? 4, density: region.density ?? 1, prestige: (region.prestige as number | undefined) ?? 0.5 })}</Text>
+				<Field label={t('svet.settlement')} hint={t('svet.settlement_note')} error={numberError}>
+					<Cluster gap={2} align="end">
+						<Stack gap={0}><Text variant="small">{t('svet.villages')}</Text><TextInput type="number" width="s" min={1} max={12} step={1} label={t('svet.villages')} bind:value={villages} onchange={(v) => commit('villages', v)} /></Stack>
+						<Stack gap={0}><Text variant="small">{t('svet.density')}</Text><TextInput type="number" width="s" min={0.1} max={100} step={0.1} label={t('svet.density')} bind:value={density} onchange={(v) => commit('density', v)} /></Stack>
+						<Stack gap={0}><Text variant="small">{t('svet.prestige')}</Text><TextInput type="number" width="s" min={0} step={0.1} label={t('svet.prestige')} bind:value={prestige} onchange={(v) => commit('prestige', v)} /></Stack>
+					</Cluster>
 				</Field>
-				<Field label={t('svet.neighbours')}>
+				<Field label={t('svet.position')} hint={t('svet.position_note')}>
+					<Cluster gap={2}>
+						<TextInput type="number" width="s" step={0.5} label={t('svet.position_x')} bind:value={posX} onchange={commitPosition} />
+						<TextInput type="number" width="s" step={0.5} label={t('svet.position_y')} bind:value={posY} onchange={commitPosition} />
+						<Text as="span" tone="muted">km</Text>
+					</Cluster>
+				</Field>
+				<Field label={t('svet.neighbours')} hint={t('svet.neighbours_note')}>
 					<Cluster gap={1}>
 						{#each region.neighbours ?? [] as n (n)}
-							<Chip onclick={() => pick(n)}>{geo.name(n)}</Chip>
+							<Chip onclick={() => pick(n)} onremove={() => link(region.id, n)} removeLabel={t('svet.neighbour_remove', { name: geo.name(n) })}>{geo.name(n)}</Chip>
 						{:else}
 							<Text variant="why">{t('svet.neighbours_none')}</Text>
 						{/each}
 					</Cluster>
+					<Select label={t('svet.neighbour_add')} value="" options={linkOptions} onchange={(v) => link(region.id, v)} />
 				</Field>
+				<Stack gap={1}>
+					<Cluster><Button variant="quiet" onclick={() => remove(region.id)}>{t('svet.remove')}</Button></Cluster>
+					{#if eventsUsingRegion(world, region.id)}<Text variant="why">{t('svet.remove_note', { n: eventsUsingRegion(world, region.id) })}</Text>{/if}
+				</Stack>
 			</Card>
 		{:else}
 			<Card label={t('svet.empty_title')}>
