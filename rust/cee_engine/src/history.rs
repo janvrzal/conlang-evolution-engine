@@ -221,6 +221,34 @@ impl EventLog {
         self.text.clear();
     }
 
+    /// Připíše hotový řádek JSON (záznam uložený dřív, např. ze souboru běhu); druh vezme
+    /// z pole `kind` bez rozboru celého řádku.
+    pub fn push_line(&mut self, line: &str) {
+        let kind = line
+            .find("\"kind\":\"")
+            .map(|at| &line[at + 8..])
+            .and_then(|rest| rest.find('"').map(|end| &rest[..end]))
+            .unwrap_or("");
+        let number = match self.kind_names.iter().position(|name| name == kind) {
+            Some(found) => found,
+            None => {
+                self.kind_names.push(kind.to_owned());
+                self.kind_names.len() - 1
+            }
+        };
+        self.text.push_str(line);
+        self.ends.push(self.spilled() + self.text.len());
+        self.kinds.push(number as u16);
+        let limit = if self.limit == 0 {
+            SPILL_BYTES
+        } else {
+            self.limit
+        };
+        if self.text.len() > limit {
+            self.spill_text();
+        }
+    }
+
     pub fn extend(&mut self, events: impl IntoIterator<Item = Map<String, Value>>) {
         for event in events {
             self.push(event);
