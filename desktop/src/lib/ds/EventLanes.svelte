@@ -153,6 +153,9 @@
 	.empty {
 		position: absolute;
 		inset: 0;
+		z-index: 3;
+		padding-left: 6px;
+		background: var(--panel);
 		display: flex;
 		align-items: center;
 		font-size: 13px;
