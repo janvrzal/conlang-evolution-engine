@@ -36,7 +36,12 @@ fn example() -> (WorldSpec, Value) {
 
 /// Spočítá simulaci do `end` a zapíše ji do `writer`.
 fn record(simulation: &mut Simulation, writer: &mut RunWriter, end: f64, from_start: bool) {
-    let mut recorder = Recorder::new(simulation, RecordOptions::default());
+    // krátký svět: body po 100 letech (výchozí je 250)
+    let options = RecordOptions {
+        checkpoint_every: Some(100.0),
+        ..RecordOptions::default()
+    };
+    let mut recorder = Recorder::new(simulation, options);
     if from_start {
         recorder.start(simulation).write(writer, 0.0).unwrap();
     }

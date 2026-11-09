@@ -173,7 +173,13 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
 }
 
 fn gzip(bytes: &[u8]) -> Vec<u8> {
-    let mut gz = GzEncoder::new(Vec::new(), Compression::new(6));
+    gzip_level(bytes, 6)
+}
+
+/// Kontrolní body (stovky MB rozbalené) se balí rychle: úroveň 1 je skoro stejně malá jako 6
+/// (Talvera rok 500: 19 proti 17 MB) a dvakrát rychlejší.
+fn gzip_level(bytes: &[u8], level: u32) -> Vec<u8> {
+    let mut gz = GzEncoder::new(Vec::new(), Compression::new(level));
     gz.write_all(bytes).expect("zápis do paměti");
     gz.finish().expect("zápis do paměti")
 }
@@ -419,8 +425,8 @@ fn checkpoint_files(run: &Path) -> Result<Vec<StoredCheckpoint>, String> {
 pub fn checkpoint_before(run: &Path, year: f64) -> Result<Option<StoredCheckpoint>, String> {
     if let Some(found) = checkpoint_files(run)?
         .into_iter()
-        .filter(|c| c.year < year)
-        .last()
+        .rev()
+        .find(|c| c.year < year)
     {
         return Ok(Some(found));
     }
@@ -511,6 +517,8 @@ pub struct RunWriter {
     pub info: RunInfo,
     /// Kolik řádků záznamu událostí už je v souboru.
     pub events: usize,
+    /// Kontrolní bod, který se právě balí a zapisuje na pozadí.
+    pending: Option<std::thread::JoinHandle<Result<(), String>>>,
     /// Poslední zapsaný slovník (jazyk → pojem → tvar), aby se zapisovaly jen změny.
     last_forms: BTreeMap<String, BTreeMap<String, String>>,
 }
@@ -559,6 +567,7 @@ impl RunWriter {
             dir: run,
             info,
             events: 0,
+            pending: None,
             last_forms: BTreeMap::new(),
         })
     }
@@ -635,10 +644,27 @@ impl RunWriter {
         }
         let dir = self.dir.join(CHECKPOINTS);
         fs::create_dir_all(&dir).map_err(|e| err(&dir, e))?;
-        write_atomic(
-            &dir.join(format!("t{tick:05}_y{year}_e{events}.bin.gz")),
-            &gzip(bytes),
-        )
+        // předchozí bod musí být zapsaný (v paměti je nejvýš jeden rozbalený bod navíc)
+        self.wait()?;
+        let path = dir.join(format!("t{tick:05}_y{year}_e{events}.bin.gz"));
+        let bytes = bytes.to_vec();
+        self.pending = Some(
+            std::thread::Builder::new()
+                .name("cee-bod".into())
+                .spawn(move || write_atomic(&path, &gzip_level(&bytes, 1)))
+                .map_err(|e| err(&self.dir, e))?,
+        );
+        Ok(())
+    }
+
+    /// Počká, až se zapíše kontrolní bod balený na pozadí.
+    pub fn wait(&mut self) -> Result<(), String> {
+        match self.pending.take() {
+            Some(handle) => handle
+                .join()
+                .map_err(|_| format!("{}: zápis kontrolního bodu spadl", self.dir.display()))?,
+            None => Ok(()),
+        }
     }
 
     /// „Co kdyby“: převezme od rodiče snímky a slovník do roku bodu (včetně) a záznam událostí
@@ -687,6 +713,7 @@ impl RunWriter {
         seconds: f64,
         result: Option<&Value>,
     ) -> Result<(), String> {
+        self.wait()?;
         if let Some(result) = result {
             let bytes = serde_json::to_vec(result).map_err(|e| err(&self.dir, e))?;
             write_atomic(&self.dir.join(RESULT), &gzip(&bytes))?;
@@ -704,6 +731,12 @@ impl RunWriter {
     /// Popis pro UI (jako [`info`]).
     pub fn describe(&self) -> Value {
         json!(self.info)
+    }
+}
+
+impl Drop for RunWriter {
+    fn drop(&mut self) {
+        let _ = self.wait();
     }
 }
 

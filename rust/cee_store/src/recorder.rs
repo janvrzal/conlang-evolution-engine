@@ -24,7 +24,9 @@ pub struct RecordOptions {
 impl Default for RecordOptions {
     fn default() -> Self {
         RecordOptions {
-            checkpoint_every: Some(100.0),
+            // Talvera: bod rozbalený ~200 MB, zabalený ~19 MB; po 250 letech ~10 bodů na běh
+            // a „co kdyby“ přepočítá nejvýš 250 let
+            checkpoint_every: Some(250.0),
             lexicon: true,
         }
     }
