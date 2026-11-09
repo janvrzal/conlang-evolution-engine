@@ -1,0 +1,2472 @@
+{
+  "format": "cee-v2-world/1",
+  "name": "Talvera",
+  "seed": 1,
+  "start_year": -700,
+  "end_year": 1950,
+  "background": "none",
+  "village_spacing": 2.5,
+  "languages": [
+    {
+      "id": "seren",
+      "name": "Serenština",
+      "consonants": [
+        "p",
+        "b",
+        "t",
+        "d",
+        "k",
+        "ɡ",
+        "m",
+        "n",
+        "f",
+        "s",
+        "z",
+        "h",
+        "l",
+        "r",
+        "j",
+        "w"
+      ],
+      "vowels": [
+        "a",
+        "e",
+        "i",
+        "o",
+        "u"
+      ],
+      "syllables": "moderate",
+      "grammar": "full",
+      "stress": "penult",
+      "endonym": [
+        "person",
+        "language"
+      ]
+    },
+    {
+      "id": "talmur",
+      "name": "Talmurština",
+      "consonants": [
+        "p",
+        "t",
+        "k",
+        "q",
+        "m",
+        "n",
+        "ŋ",
+        "s",
+        "ʃ",
+        "x",
+        "h",
+        "l",
+        "r",
+        "j",
+        "w"
+      ],
+      "vowels": [
+        "a",
+        "e",
+        "i",
+        "o",
+        "u"
+      ],
+      "syllables": "complex",
+      "grammar": "default",
+      "stress": "initial",
+      "endonym": [
+        "mountain",
+        "language"
+      ]
+    },
+    {
+      "id": "veret",
+      "name": "Veretština",
+      "consonants": [
+        "p",
+        "t",
+        "k",
+        "m",
+        "n",
+        "ŋ",
+        "s",
+        "h",
+        "l",
+        "j",
+        "w"
+      ],
+      "vowels": [
+        "a",
+        "e",
+        "i",
+        "o",
+        "u"
+      ],
+      "syllables": "simple",
+      "grammar": "substrate",
+      "stress": "penult",
+      "endonym": [
+        "sea",
+        "language"
+      ]
+    },
+    {
+      "id": "idar",
+      "name": "Idarština",
+      "consonants": [
+        "p",
+        "b",
+        "t",
+        "d",
+        "k",
+        "m",
+        "n",
+        "s",
+        "h",
+        "l",
+        "r",
+        "j"
+      ],
+      "vowels": [
+        "a",
+        "i",
+        "u",
+        "ə"
+      ],
+      "syllables": "moderate",
+      "grammar": "default",
+      "stress": "final",
+      "endonym": [
+        "water",
+        "language"
+      ]
+    }
+  ],
+  "regions": [
+    {
+      "id": "m01-01",
+      "name": "Delta Erenu · 1",
+      "position": [
+        46,
+        70
+      ],
+      "neighbours": [
+        "m01-02",
+        "m02-08"
+      ],
+      "terrain": "plain",
+      "density": 1.5,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.42,
+      "city": 0
+    },
+    {
+      "id": "m01-02",
+      "name": "Delta Erenu · 2",
+      "position": [
+        53,
+        70
+      ],
+      "neighbours": [
+        "m01-01",
+        "m01-03",
+        "m01-05",
+        "m02-06"
+      ],
+      "terrain": "plain",
+      "density": 1.5,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.5,
+      "city": 0
+    },
+    {
+      "id": "m01-03",
+      "name": "Delta Erenu · 3",
+      "position": [
+        60,
+        70
+      ],
+      "neighbours": [
+        "m01-02",
+        "m01-04",
+        "m01-06"
+      ],
+      "terrain": "plain",
+      "density": 1.5,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.65,
+      "city": 0
+    },
+    {
+      "id": "m01-04",
+      "name": "Varad",
+      "position": [
+        62,
+        77
+      ],
+      "neighbours": [
+        "m01-03",
+        "m01-05",
+        "m07-02"
+      ],
+      "terrain": "plain",
+      "density": 1.5,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.95,
+      "city": 6
+    },
+    {
+      "id": "m01-05",
+      "name": "Delta Erenu · 5",
+      "position": [
+        56,
+        77
+      ],
+      "neighbours": [
+        "m01-02",
+        "m01-04",
+        "m01-06",
+        "m09-01"
+      ],
+      "terrain": "plain",
+      "density": 1.5,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.65,
+      "city": 0
+    },
+    {
+      "id": "m01-06",
+      "name": "Delta Erenu · 6",
+      "position": [
+        49,
+        77
+      ],
+      "neighbours": [
+        "m01-03",
+        "m01-05",
+        "m01-07"
+      ],
+      "terrain": "plain",
+      "density": 1.5,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.5,
+      "city": 0
+    },
+    {
+      "id": "m01-07",
+      "name": "Delta Erenu · 7",
+      "position": [
+        49,
+        84
+      ],
+      "neighbours": [
+        "m01-06",
+        "m01-08"
+      ],
+      "terrain": "plain",
+      "density": 1.5,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.45,
+      "city": 0
+    },
+    {
+      "id": "m01-08",
+      "name": "Delta Erenu · 8",
+      "position": [
+        58,
+        84
+      ],
+      "neighbours": [
+        "m01-07"
+      ],
+      "terrain": "plain",
+      "density": 0.975,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.4,
+      "city": 0,
+      "identity": "distinct"
+    },
+    {
+      "id": "m02-01",
+      "name": "Dolní Eren · 1",
+      "position": [
+        46,
+        50
+      ],
+      "neighbours": [
+        "m02-02",
+        "m03-08"
+      ],
+      "terrain": "plain",
+      "density": 1.3,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.45,
+      "city": 0
+    },
+    {
+      "id": "m02-02",
+      "name": "Dolní Eren · 2",
+      "position": [
+        53,
+        50
+      ],
+      "neighbours": [
+        "m02-01",
+        "m02-03",
+        "m02-05",
+        "m03-07"
+      ],
+      "terrain": "plain",
+      "density": 1.3,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.62,
+      "city": 0
+    },
+    {
+      "id": "m02-03",
+      "name": "Dolní Eren · 3",
+      "position": [
+        60,
+        50
+      ],
+      "neighbours": [
+        "m02-02",
+        "m02-04",
+        "m02-06"
+      ],
+      "terrain": "plain",
+      "density": 1.3,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.9,
+      "city": 3
+    },
+    {
+      "id": "m02-04",
+      "name": "Dolní Eren · 4",
+      "position": [
+        62,
+        57
+      ],
+      "neighbours": [
+        "m02-03",
+        "m02-05"
+      ],
+      "terrain": "plain",
+      "density": 1.3,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.62,
+      "city": 0
+    },
+    {
+      "id": "m02-05",
+      "name": "Dolní Eren · 5",
+      "position": [
+        56,
+        57
+      ],
+      "neighbours": [
+        "m02-02",
+        "m02-04",
+        "m02-06",
+        "m07-06"
+      ],
+      "terrain": "plain",
+      "density": 1.3,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.5,
+      "city": 0
+    },
+    {
+      "id": "m02-06",
+      "name": "Dolní Eren · 6",
+      "position": [
+        49,
+        57
+      ],
+      "neighbours": [
+        "m01-02",
+        "m02-03",
+        "m02-05",
+        "m02-07"
+      ],
+      "terrain": "plain",
+      "density": 1.3,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.65,
+      "city": 0
+    },
+    {
+      "id": "m02-07",
+      "name": "Dolní Eren · 7",
+      "position": [
+        49,
+        64
+      ],
+      "neighbours": [
+        "m02-06",
+        "m02-08"
+      ],
+      "terrain": "plain",
+      "density": 1.3,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.48,
+      "city": 0
+    },
+    {
+      "id": "m02-08",
+      "name": "Dolní Eren · 8",
+      "position": [
+        58,
+        64
+      ],
+      "neighbours": [
+        "m01-01",
+        "m02-07"
+      ],
+      "terrain": "plain",
+      "density": 1.3,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.42,
+      "city": 0
+    },
+    {
+      "id": "m03-01",
+      "name": "Střední Eren · 1",
+      "position": [
+        44,
+        30
+      ],
+      "neighbours": [
+        "m03-02"
+      ],
+      "terrain": "plain",
+      "density": 1.1,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.45,
+      "city": 0
+    },
+    {
+      "id": "m03-02",
+      "name": "Střední Eren · 2",
+      "position": [
+        51,
+        30
+      ],
+      "neighbours": [
+        "m03-01",
+        "m03-03",
+        "m03-05",
+        "m04-07"
+      ],
+      "terrain": "plain",
+      "density": 1.1,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.65,
+      "city": 0
+    },
+    {
+      "id": "m03-03",
+      "name": "Střední Eren · 3",
+      "position": [
+        58,
+        30
+      ],
+      "neighbours": [
+        "m03-02",
+        "m03-04",
+        "m03-06"
+      ],
+      "terrain": "plain",
+      "density": 1.1,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.65,
+      "city": 0
+    },
+    {
+      "id": "m03-04",
+      "name": "Střední Eren · 4",
+      "position": [
+        60,
+        37
+      ],
+      "neighbours": [
+        "m03-03",
+        "m03-05"
+      ],
+      "terrain": "plain",
+      "density": 1.1,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.9,
+      "city": 3
+    },
+    {
+      "id": "m03-05",
+      "name": "Střední Eren · 5",
+      "position": [
+        54,
+        37
+      ],
+      "neighbours": [
+        "m03-02",
+        "m03-04",
+        "m03-06",
+        "m10-01"
+      ],
+      "terrain": "plain",
+      "density": 1.1,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.65,
+      "city": 0
+    },
+    {
+      "id": "m03-06",
+      "name": "Střední Eren · 6",
+      "position": [
+        47,
+        37
+      ],
+      "neighbours": [
+        "m03-03",
+        "m03-05",
+        "m03-07",
+        "m05-03"
+      ],
+      "terrain": "plain",
+      "density": 1.1,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.52,
+      "city": 0
+    },
+    {
+      "id": "m03-07",
+      "name": "Střední Eren · 7",
+      "position": [
+        47,
+        44
+      ],
+      "neighbours": [
+        "m02-02",
+        "m03-06",
+        "m03-08"
+      ],
+      "terrain": "plain",
+      "density": 1.1,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.48,
+      "city": 0
+    },
+    {
+      "id": "m03-08",
+      "name": "Střední Eren · 8",
+      "position": [
+        56,
+        44
+      ],
+      "neighbours": [
+        "m02-01",
+        "m03-07"
+      ],
+      "terrain": "plain",
+      "density": 1.1,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.42,
+      "city": 0
+    },
+    {
+      "id": "m04-01",
+      "name": "Severní předpolí · 1",
+      "position": [
+        41,
+        6
+      ],
+      "neighbours": [
+        "m04-02"
+      ],
+      "terrain": "hills",
+      "density": 0.85,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.45,
+      "city": 0
+    },
+    {
+      "id": "m04-02",
+      "name": "Severní předpolí · 2",
+      "position": [
+        48,
+        6
+      ],
+      "neighbours": [
+        "m04-01",
+        "m04-03",
+        "m04-05"
+      ],
+      "terrain": "hills",
+      "density": 0.85,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.6,
+      "city": 0
+    },
+    {
+      "id": "m04-03",
+      "name": "Severní předpolí · 3",
+      "position": [
+        55,
+        6
+      ],
+      "neighbours": [
+        "m04-02",
+        "m04-04",
+        "m04-06"
+      ],
+      "terrain": "hills",
+      "density": 0.85,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.85,
+      "city": 2
+    },
+    {
+      "id": "m04-04",
+      "name": "Severní předpolí · 4",
+      "position": [
+        57,
+        13
+      ],
+      "neighbours": [
+        "m04-03",
+        "m04-05",
+        "m05-02"
+      ],
+      "terrain": "hills",
+      "density": 0.85,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.6,
+      "city": 0
+    },
+    {
+      "id": "m04-05",
+      "name": "Severní předpolí · 5",
+      "position": [
+        51,
+        13
+      ],
+      "neighbours": [
+        "m04-02",
+        "m04-04",
+        "m04-06",
+        "m06-04"
+      ],
+      "terrain": "hills",
+      "density": 0.85,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.45,
+      "city": 0
+    },
+    {
+      "id": "m04-06",
+      "name": "Severní předpolí · 6",
+      "position": [
+        44,
+        13
+      ],
+      "neighbours": [
+        "m04-03",
+        "m04-05",
+        "m04-07"
+      ],
+      "terrain": "hills",
+      "density": 0.85,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.52,
+      "city": 0
+    },
+    {
+      "id": "m04-07",
+      "name": "Severní předpolí · 7",
+      "position": [
+        44,
+        20
+      ],
+      "neighbours": [
+        "m03-02",
+        "m04-06",
+        "m04-08"
+      ],
+      "terrain": "hills",
+      "density": 0.85,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.8,
+      "city": 2
+    },
+    {
+      "id": "m04-08",
+      "name": "Severní předpolí · 8",
+      "position": [
+        53,
+        20
+      ],
+      "neighbours": [
+        "m04-07"
+      ],
+      "terrain": "hills",
+      "density": 0.85,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.45,
+      "city": 0
+    },
+    {
+      "id": "m05-01",
+      "name": "Vnitřní jezera · 1",
+      "position": [
+        21,
+        28
+      ],
+      "neighbours": [
+        "m05-02"
+      ],
+      "terrain": "hills",
+      "density": 1.1,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.42,
+      "city": 0
+    },
+    {
+      "id": "m05-02",
+      "name": "Vnitřní jezera · 2",
+      "position": [
+        28,
+        28
+      ],
+      "neighbours": [
+        "m04-04",
+        "m05-01",
+        "m05-03",
+        "m05-05",
+        "m06-05"
+      ],
+      "terrain": "hills",
+      "density": 1.1,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.5,
+      "city": 0
+    },
+    {
+      "id": "m05-03",
+      "name": "Vnitřní jezera · 3",
+      "position": [
+        35,
+        28
+      ],
+      "neighbours": [
+        "m03-06",
+        "m05-02",
+        "m05-04",
+        "m05-06"
+      ],
+      "terrain": "hills",
+      "density": 1.1,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.65,
+      "city": 0
+    },
+    {
+      "id": "m05-04",
+      "name": "Istren",
+      "position": [
+        37,
+        35
+      ],
+      "neighbours": [
+        "m05-03",
+        "m05-05"
+      ],
+      "terrain": "hills",
+      "density": 1.1,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.9,
+      "city": 3
+    },
+    {
+      "id": "m05-05",
+      "name": "Vnitřní jezera · 5",
+      "position": [
+        31,
+        35
+      ],
+      "neighbours": [
+        "m05-02",
+        "m05-04",
+        "m05-06"
+      ],
+      "terrain": "hills",
+      "density": 1.1,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.65,
+      "city": 0
+    },
+    {
+      "id": "m05-06",
+      "name": "Vnitřní jezera · 6",
+      "position": [
+        24,
+        35
+      ],
+      "neighbours": [
+        "m05-03",
+        "m05-05",
+        "m05-07"
+      ],
+      "terrain": "hills",
+      "density": 1.1,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.78,
+      "city": 2
+    },
+    {
+      "id": "m05-07",
+      "name": "Vnitřní jezera · 7",
+      "position": [
+        24,
+        42
+      ],
+      "neighbours": [
+        "m05-06",
+        "m05-08",
+        "m07-03"
+      ],
+      "terrain": "hills",
+      "density": 1.1,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.55,
+      "city": 0
+    },
+    {
+      "id": "m05-08",
+      "name": "Vnitřní jezera · 8",
+      "position": [
+        33,
+        42
+      ],
+      "neighbours": [
+        "m05-07"
+      ],
+      "terrain": "hills",
+      "density": 1.1,
+      "villages": 2,
+      "language": "seren",
+      "prestige": 0.45,
+      "city": 0
+    },
+    {
+      "id": "m06-01",
+      "name": "Sedlová vrchovina · 1",
+      "position": [
+        15,
+        6
+      ],
+      "neighbours": [
+        "m06-02"
+      ],
+      "terrain": "mountains",
+      "density": 0.7,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.45,
+      "city": 0
+    },
+    {
+      "id": "m06-02",
+      "name": "Sedlová vrchovina · 2",
+      "position": [
+        22,
+        6
+      ],
+      "neighbours": [
+        "m06-01",
+        "m06-03",
+        "m06-05"
+      ],
+      "terrain": "mountains",
+      "density": 0.7,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.62,
+      "city": 0
+    },
+    {
+      "id": "m06-03",
+      "name": "Tarem",
+      "position": [
+        29,
+        6
+      ],
+      "neighbours": [
+        "m06-02",
+        "m06-04"
+      ],
+      "terrain": "mountains",
+      "density": 0.7,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.9,
+      "city": 3
+    },
+    {
+      "id": "m06-04",
+      "name": "Sedlová vrchovina · 4",
+      "position": [
+        31,
+        13
+      ],
+      "neighbours": [
+        "m04-05",
+        "m06-03",
+        "m06-05"
+      ],
+      "terrain": "mountains",
+      "density": 0.7,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.62,
+      "city": 0
+    },
+    {
+      "id": "m06-05",
+      "name": "Sedlová vrchovina · 5",
+      "position": [
+        25,
+        13
+      ],
+      "neighbours": [
+        "m05-02",
+        "m06-02",
+        "m06-04",
+        "m06-06"
+      ],
+      "terrain": "mountains",
+      "density": 0.7,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.62,
+      "city": 0
+    },
+    {
+      "id": "m06-06",
+      "name": "Sedlová vrchovina · 6",
+      "position": [
+        18,
+        13
+      ],
+      "neighbours": [
+        "m06-05",
+        "m06-07",
+        "m11-01"
+      ],
+      "terrain": "mountains",
+      "density": 0.7,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.48,
+      "city": 0
+    },
+    {
+      "id": "m06-07",
+      "name": "Sedlová vrchovina · 7",
+      "position": [
+        18,
+        20
+      ],
+      "neighbours": [
+        "m06-06",
+        "m06-08"
+      ],
+      "terrain": "mountains",
+      "density": 0.7,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.45,
+      "city": 0
+    },
+    {
+      "id": "m06-08",
+      "name": "Sedlová vrchovina · 8",
+      "position": [
+        27,
+        20
+      ],
+      "neighbours": [
+        "m06-07"
+      ],
+      "terrain": "mountains",
+      "density": 0.455,
+      "villages": 2,
+      "language": "talmur",
+      "prestige": 0.4,
+      "city": 0,
+      "identity": "distinct"
+    },
+    {
+      "id": "m07-01",
+      "name": "Západní zátoky · 1",
+      "position": [
+        1,
+        43
+      ],
+      "neighbours": [
+        "m07-02"
+      ],
+      "terrain": "hills",
+      "density": 1.05,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.42,
+      "city": 0
+    },
+    {
+      "id": "m07-02",
+      "name": "Západní zátoky · 2",
+      "position": [
+        8,
+        43
+      ],
+      "neighbours": [
+        "m01-04",
+        "m07-01",
+        "m07-03",
+        "m07-05"
+      ],
+      "terrain": "hills",
+      "density": 1.05,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.54,
+      "city": 0
+    },
+    {
+      "id": "m07-03",
+      "name": "Západní zátoky · 3",
+      "position": [
+        15,
+        43
+      ],
+      "neighbours": [
+        "m05-07",
+        "m07-02",
+        "m07-04",
+        "m07-06"
+      ],
+      "terrain": "hills",
+      "density": 1.05,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.68,
+      "city": 0
+    },
+    {
+      "id": "m07-04",
+      "name": "Selva",
+      "position": [
+        17,
+        50
+      ],
+      "neighbours": [
+        "m07-03",
+        "m07-05",
+        "m08-03"
+      ],
+      "terrain": "hills",
+      "density": 1.05,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.92,
+      "city": 4
+    },
+    {
+      "id": "m07-05",
+      "name": "Západní zátoky · 5",
+      "position": [
+        11,
+        50
+      ],
+      "neighbours": [
+        "m07-02",
+        "m07-04",
+        "m07-06"
+      ],
+      "terrain": "hills",
+      "density": 1.05,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.68,
+      "city": 0
+    },
+    {
+      "id": "m07-06",
+      "name": "Západní zátoky · 6",
+      "position": [
+        4,
+        50
+      ],
+      "neighbours": [
+        "m02-05",
+        "m07-03",
+        "m07-05",
+        "m07-07",
+        "m08-04"
+      ],
+      "terrain": "hills",
+      "density": 1.05,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.54,
+      "city": 0
+    },
+    {
+      "id": "m07-07",
+      "name": "Západní zátoky · 7",
+      "position": [
+        4,
+        57
+      ],
+      "neighbours": [
+        "m07-06",
+        "m07-08"
+      ],
+      "terrain": "hills",
+      "density": 1.05,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.48,
+      "city": 0
+    },
+    {
+      "id": "m07-08",
+      "name": "Západní zátoky · 8",
+      "position": [
+        13,
+        57
+      ],
+      "neighbours": [
+        "m07-07"
+      ],
+      "terrain": "hills",
+      "density": 1.05,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.42,
+      "city": 0
+    },
+    {
+      "id": "m08-01",
+      "name": "Solné ostrovy · 1",
+      "position": [
+        -17,
+        59
+      ],
+      "neighbours": [
+        "m08-02"
+      ],
+      "terrain": "island",
+      "density": 0.7,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.44,
+      "city": 0
+    },
+    {
+      "id": "m08-02",
+      "name": "Solné ostrovy · 2",
+      "position": [
+        -10,
+        59
+      ],
+      "neighbours": [
+        "m08-01",
+        "m08-03",
+        "m08-05"
+      ],
+      "terrain": "island",
+      "density": 0.7,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.62,
+      "city": 0
+    },
+    {
+      "id": "m08-03",
+      "name": "Solné ostrovy · 3",
+      "position": [
+        -3,
+        59
+      ],
+      "neighbours": [
+        "m07-04",
+        "m08-02",
+        "m08-04"
+      ],
+      "terrain": "island",
+      "density": 0.7,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.85,
+      "city": 2.5
+    },
+    {
+      "id": "m08-04",
+      "name": "Solné ostrovy · 4",
+      "position": [
+        -1,
+        66
+      ],
+      "neighbours": [
+        "m07-06",
+        "m08-03",
+        "m08-05",
+        "m09-02"
+      ],
+      "terrain": "island",
+      "density": 0.7,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.62,
+      "city": 0
+    },
+    {
+      "id": "m08-05",
+      "name": "Solné ostrovy · 5",
+      "position": [
+        -7,
+        66
+      ],
+      "neighbours": [
+        "m08-02",
+        "m08-04",
+        "m08-06"
+      ],
+      "terrain": "island",
+      "density": 0.7,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.52,
+      "city": 0
+    },
+    {
+      "id": "m08-06",
+      "name": "Solné ostrovy · 6",
+      "position": [
+        -14,
+        66
+      ],
+      "neighbours": [
+        "m08-05",
+        "m08-07"
+      ],
+      "terrain": "island",
+      "density": 0.7,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.48,
+      "city": 0
+    },
+    {
+      "id": "m08-07",
+      "name": "Solné ostrovy · 7",
+      "position": [
+        -14,
+        73
+      ],
+      "neighbours": [
+        "m08-06",
+        "m08-08"
+      ],
+      "terrain": "island",
+      "density": 0.7,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.44,
+      "city": 0
+    },
+    {
+      "id": "m08-08",
+      "name": "Solné ostrovy · 8",
+      "position": [
+        -5,
+        73
+      ],
+      "neighbours": [
+        "m08-07"
+      ],
+      "terrain": "island",
+      "density": 0.455,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.4,
+      "city": 0,
+      "identity": "distinct"
+    },
+    {
+      "id": "m09-01",
+      "name": "Jižní monzun · 1",
+      "position": [
+        61,
+        91
+      ],
+      "neighbours": [
+        "m01-05",
+        "m09-02"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.45,
+      "city": 0
+    },
+    {
+      "id": "m09-02",
+      "name": "Jižní monzun · 2",
+      "position": [
+        68,
+        91
+      ],
+      "neighbours": [
+        "m08-04",
+        "m09-01",
+        "m09-03",
+        "m09-05"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.58,
+      "city": 0
+    },
+    {
+      "id": "m09-03",
+      "name": "Jižní monzun · 3",
+      "position": [
+        75,
+        91
+      ],
+      "neighbours": [
+        "m09-02",
+        "m09-04",
+        "m09-06"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.82,
+      "city": 2
+    },
+    {
+      "id": "m09-04",
+      "name": "Jižní monzun · 4",
+      "position": [
+        77,
+        98
+      ],
+      "neighbours": [
+        "m09-03",
+        "m09-05"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.58,
+      "city": 0
+    },
+    {
+      "id": "m09-05",
+      "name": "Naret",
+      "position": [
+        71,
+        98
+      ],
+      "neighbours": [
+        "m09-02",
+        "m09-04",
+        "m09-06",
+        "m12-02"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.9,
+      "city": 3
+    },
+    {
+      "id": "m09-06",
+      "name": "Jižní monzun · 6",
+      "position": [
+        64,
+        98
+      ],
+      "neighbours": [
+        "m09-03",
+        "m09-05",
+        "m09-07"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.62,
+      "city": 0
+    },
+    {
+      "id": "m09-07",
+      "name": "Jižní monzun · 7",
+      "position": [
+        64,
+        105
+      ],
+      "neighbours": [
+        "m09-06",
+        "m09-08",
+        "m10-06"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.48,
+      "city": 0
+    },
+    {
+      "id": "m09-08",
+      "name": "Jižní monzun · 8",
+      "position": [
+        73,
+        105
+      ],
+      "neighbours": [
+        "m09-07"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.48,
+      "city": 0
+    },
+    {
+      "id": "m10-01",
+      "name": "Východní úval · 1",
+      "position": [
+        84,
+        42
+      ],
+      "neighbours": [
+        "m03-05",
+        "m10-02"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.44,
+      "city": 0
+    },
+    {
+      "id": "m10-02",
+      "name": "Východní úval · 2",
+      "position": [
+        91,
+        42
+      ],
+      "neighbours": [
+        "m10-01",
+        "m10-03",
+        "m10-05",
+        "m11-06"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.52,
+      "city": 0
+    },
+    {
+      "id": "m10-03",
+      "name": "Východní úval · 3",
+      "position": [
+        98,
+        42
+      ],
+      "neighbours": [
+        "m10-02",
+        "m10-04",
+        "m10-06",
+        "m11-07"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.65,
+      "city": 0
+    },
+    {
+      "id": "m10-04",
+      "name": "Východní úval · 4",
+      "position": [
+        100,
+        49
+      ],
+      "neighbours": [
+        "m10-03",
+        "m10-05"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.88,
+      "city": 2.5
+    },
+    {
+      "id": "m10-05",
+      "name": "Východní úval · 5",
+      "position": [
+        94,
+        49
+      ],
+      "neighbours": [
+        "m10-02",
+        "m10-04",
+        "m10-06"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.65,
+      "city": 0
+    },
+    {
+      "id": "m10-06",
+      "name": "Východní úval · 6",
+      "position": [
+        87,
+        49
+      ],
+      "neighbours": [
+        "m09-07",
+        "m10-03",
+        "m10-05",
+        "m10-07"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.52,
+      "city": 0
+    },
+    {
+      "id": "m10-07",
+      "name": "Východní úval · 7",
+      "position": [
+        87,
+        56
+      ],
+      "neighbours": [
+        "m10-06",
+        "m10-08",
+        "m12-04"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.46,
+      "city": 0
+    },
+    {
+      "id": "m10-08",
+      "name": "Východní úval · 8",
+      "position": [
+        96,
+        56
+      ],
+      "neighbours": [
+        "m10-07"
+      ],
+      "terrain": "plain",
+      "density": 1.15,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.42,
+      "city": 0
+    },
+    {
+      "id": "m11-01",
+      "name": "Deštné hory · 1",
+      "position": [
+        71,
+        14
+      ],
+      "neighbours": [
+        "m06-06",
+        "m11-02"
+      ],
+      "terrain": "mountains",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.44,
+      "city": 0
+    },
+    {
+      "id": "m11-02",
+      "name": "Deštné hory · 2",
+      "position": [
+        78,
+        14
+      ],
+      "neighbours": [
+        "m11-01",
+        "m11-03",
+        "m11-05"
+      ],
+      "terrain": "mountains",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.5,
+      "city": 0
+    },
+    {
+      "id": "m11-03",
+      "name": "Deštné hory · 3",
+      "position": [
+        85,
+        14
+      ],
+      "neighbours": [
+        "m11-02",
+        "m11-04"
+      ],
+      "terrain": "mountains",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.6,
+      "city": 0
+    },
+    {
+      "id": "m11-04",
+      "name": "Deštné hory · 4",
+      "position": [
+        87,
+        21
+      ],
+      "neighbours": [
+        "m11-03",
+        "m11-05"
+      ],
+      "terrain": "mountains",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.82,
+      "city": 2
+    },
+    {
+      "id": "m11-05",
+      "name": "Deštné hory · 5",
+      "position": [
+        81,
+        21
+      ],
+      "neighbours": [
+        "m11-02",
+        "m11-04",
+        "m11-06"
+      ],
+      "terrain": "mountains",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.6,
+      "city": 0
+    },
+    {
+      "id": "m11-06",
+      "name": "Deštné hory · 6",
+      "position": [
+        74,
+        21
+      ],
+      "neighbours": [
+        "m10-02",
+        "m11-05",
+        "m11-07"
+      ],
+      "terrain": "mountains",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.5,
+      "city": 0
+    },
+    {
+      "id": "m11-07",
+      "name": "Deštné hory · 7",
+      "position": [
+        74,
+        28
+      ],
+      "neighbours": [
+        "m10-03",
+        "m11-06",
+        "m11-08"
+      ],
+      "terrain": "mountains",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.46,
+      "city": 0
+    },
+    {
+      "id": "m11-08",
+      "name": "Deštné hory · 8",
+      "position": [
+        83,
+        28
+      ],
+      "neighbours": [
+        "m11-07"
+      ],
+      "terrain": "mountains",
+      "density": 0.423,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.4,
+      "city": 0,
+      "identity": "distinct"
+    },
+    {
+      "id": "m12-01",
+      "name": "Vnější ostrovy · 1",
+      "position": [
+        102,
+        81
+      ],
+      "neighbours": [
+        "m12-02"
+      ],
+      "terrain": "island",
+      "density": 0.65,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.48,
+      "city": 0
+    },
+    {
+      "id": "m12-02",
+      "name": "Vnější ostrovy · 2",
+      "position": [
+        109,
+        81
+      ],
+      "neighbours": [
+        "m09-05",
+        "m12-01",
+        "m12-03",
+        "m12-05"
+      ],
+      "terrain": "island",
+      "density": 0.65,
+      "villages": 2,
+      "language": "veret",
+      "prestige": 0.75,
+      "city": 2
+    },
+    {
+      "id": "m12-03",
+      "name": "Vnější ostrovy · 3",
+      "position": [
+        116,
+        81
+      ],
+      "neighbours": [
+        "m12-02",
+        "m12-04"
+      ],
+      "terrain": "island",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.48,
+      "city": 0
+    },
+    {
+      "id": "m12-04",
+      "name": "Vnější ostrovy · 4",
+      "position": [
+        118,
+        88
+      ],
+      "neighbours": [
+        "m10-07",
+        "m12-03",
+        "m12-05"
+      ],
+      "terrain": "island",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.6,
+      "city": 0
+    },
+    {
+      "id": "m12-05",
+      "name": "Vnější ostrovy · 5",
+      "position": [
+        112,
+        88
+      ],
+      "neighbours": [
+        "m12-02",
+        "m12-04",
+        "m12-06"
+      ],
+      "terrain": "island",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.82,
+      "city": 2
+    },
+    {
+      "id": "m12-06",
+      "name": "Vnější ostrovy · 6",
+      "position": [
+        105,
+        88
+      ],
+      "neighbours": [
+        "m12-05",
+        "m12-07"
+      ],
+      "terrain": "island",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.6,
+      "city": 0
+    },
+    {
+      "id": "m12-07",
+      "name": "Vnější ostrovy · 7",
+      "position": [
+        105,
+        95
+      ],
+      "neighbours": [
+        "m12-06",
+        "m12-08"
+      ],
+      "terrain": "island",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.48,
+      "city": 0
+    },
+    {
+      "id": "m12-08",
+      "name": "Vnější ostrovy · 8",
+      "position": [
+        114,
+        95
+      ],
+      "neighbours": [
+        "m12-07"
+      ],
+      "terrain": "island",
+      "density": 0.65,
+      "villages": 2,
+      "language": "idar",
+      "prestige": 0.42,
+      "city": 0
+    }
+  ],
+  "events": [
+    {
+      "kind": "state",
+      "year": -475,
+      "id": "varad",
+      "name": "Varadská říše",
+      "capital": "m01-04",
+      "regions": [
+        "m01-01",
+        "m01-02",
+        "m01-03",
+        "m01-04",
+        "m01-05",
+        "m01-06",
+        "m02-01",
+        "m02-02",
+        "m02-03",
+        "m02-04"
+      ],
+      "policy": "tolerant"
+    },
+    {
+      "kind": "annexation",
+      "year": -225,
+      "state": "varad",
+      "regions": [
+        "m03-02",
+        "m03-04",
+        "m03-06",
+        "m07-02"
+      ]
+    },
+    {
+      "kind": "settlement",
+      "year": -200,
+      "from": "m02-03",
+      "to": "m03-04",
+      "share": 0.12,
+      "settlements": 1
+    },
+    {
+      "kind": "settlement",
+      "year": -175,
+      "from": "m01-05",
+      "to": "m07-02",
+      "share": 0.12,
+      "settlements": 1
+    },
+    {
+      "kind": "elite",
+      "year": -175,
+      "from": "m01-04",
+      "seat": "m07-02",
+      "subjects": [
+        "m07-02"
+      ],
+      "population": 75,
+      "prestige": 1.5
+    },
+    {
+      "kind": "standard",
+      "year": 25,
+      "of": "varad",
+      "literacy": "elite"
+    },
+    {
+      "kind": "lingua_franca",
+      "year": 25,
+      "source": "m01-04",
+      "regions": [
+        "m07-01",
+        "m07-03"
+      ],
+      "spread": "rare",
+      "nativize": false
+    },
+    {
+      "kind": "settlement",
+      "year": 300,
+      "from": "m02-02",
+      "to": "m05-07",
+      "share": 0.12,
+      "settlements": 1
+    },
+    {
+      "kind": "settlement",
+      "year": 325,
+      "from": "m07-02",
+      "to": "m08-02",
+      "share": 0.12,
+      "settlements": 1
+    },
+    {
+      "kind": "collapse",
+      "year": 400,
+      "state": "varad"
+    },
+    {
+      "kind": "state",
+      "year": 400,
+      "id": "varadska_obec",
+      "name": "Varadská obec",
+      "capital": "m01-04",
+      "regions": [
+        "m01-01",
+        "m01-02",
+        "m01-03",
+        "m01-04",
+        "m01-05",
+        "m01-06"
+      ]
+    },
+    {
+      "kind": "state",
+      "year": 400,
+      "id": "dolni_eren",
+      "name": "Dolní Eren",
+      "capital": "m02-03",
+      "regions": [
+        "m02-01",
+        "m02-02",
+        "m02-03",
+        "m02-04"
+      ]
+    },
+    {
+      "kind": "state",
+      "year": 400,
+      "id": "brodska_mesta",
+      "name": "Brodská města",
+      "capital": "m03-04",
+      "regions": [
+        "m03-02",
+        "m03-04"
+      ]
+    },
+    {
+      "kind": "settlement",
+      "year": 450,
+      "from": "m03-06",
+      "to": "m05-02",
+      "share": 0.12,
+      "settlements": 1
+    },
+    {
+      "kind": "settlement",
+      "year": 525,
+      "from": "m06-04",
+      "to": "m04-05",
+      "share": 0.15,
+      "settlements": 1
+    },
+    {
+      "kind": "settlement",
+      "year": 525,
+      "from": "m06-05",
+      "to": "m05-03",
+      "share": 0.12,
+      "settlements": 1
+    },
+    {
+      "kind": "state",
+      "year": 600,
+      "id": "tarem",
+      "name": "Sedlový svaz",
+      "capital": "m06-03",
+      "regions": [
+        "m06-02",
+        "m06-03",
+        "m06-04",
+        "m06-05",
+        "m05-02",
+        "m05-03",
+        "m04-05"
+      ]
+    },
+    {
+      "kind": "standard",
+      "year": 650,
+      "of": "tarem",
+      "literacy": "elite"
+    },
+    {
+      "kind": "schools",
+      "year": 675,
+      "of": "tarem",
+      "coverage": "towns",
+      "diglossic": true,
+      "printing": false
+    },
+    {
+      "kind": "annexation",
+      "year": 750,
+      "state": "tarem",
+      "regions": [
+        "m03-06"
+      ]
+    },
+    {
+      "kind": "border_policy",
+      "year": 750,
+      "state": "brodska_mesta",
+      "border": "closed"
+    },
+    {
+      "kind": "elite",
+      "year": 750,
+      "from": "m06-03",
+      "seat": "m03-06",
+      "subjects": [
+        "m03-06"
+      ],
+      "population": 60,
+      "prestige": 1.4
+    },
+    {
+      "kind": "annexation",
+      "year": 850,
+      "state": "brodska_mesta",
+      "regions": [
+        "m03-06"
+      ]
+    },
+    {
+      "kind": "border_policy",
+      "year": 850,
+      "state": "brodska_mesta",
+      "border": "normal"
+    },
+    {
+      "kind": "lingua_franca",
+      "year": 925,
+      "source": "m07-04",
+      "regions": [
+        "m05-07",
+        "m05-08",
+        "m01-02"
+      ],
+      "spread": "common",
+      "nativize": false
+    },
+    {
+      "kind": "settlement",
+      "year": 975,
+      "from": "m05-03",
+      "to": "m07-02",
+      "share": 0.1,
+      "settlements": 1
+    },
+    {
+      "kind": "state",
+      "year": 1050,
+      "id": "selva",
+      "name": "Přístavní liga",
+      "capital": "m07-04",
+      "regions": [
+        "m07-02",
+        "m07-04",
+        "m07-06",
+        "m08-03"
+      ],
+      "centralization": "weak",
+      "border": "open"
+    },
+    {
+      "kind": "standard",
+      "year": 1125,
+      "of": "selva",
+      "literacy": "elite"
+    },
+    {
+      "kind": "schools",
+      "year": 1150,
+      "of": "selva",
+      "coverage": "towns",
+      "diglossic": true,
+      "printing": false
+    },
+    {
+      "kind": "lingua_franca",
+      "year": 1150,
+      "source": "m07-04",
+      "regions": [
+        "m02-02",
+        "m02-04",
+        "m09-05",
+        "m10-02"
+      ],
+      "spread": "common",
+      "nativize": false
+    },
+    {
+      "kind": "annexation",
+      "year": 1225,
+      "state": "selva",
+      "regions": [
+        "m08-04"
+      ]
+    },
+    {
+      "kind": "settlement",
+      "year": 1275,
+      "from": "m08-03",
+      "to": "m07-06",
+      "share": 0.15,
+      "settlements": 1
+    },
+    {
+      "kind": "secession",
+      "year": 1300,
+      "id": "pruliv",
+      "name": "Solná brána",
+      "capital": "m08-03",
+      "regions": [
+        "m08-03"
+      ]
+    },
+    {
+      "kind": "identity",
+      "year": 1350,
+      "regions": [
+        "m08-08"
+      ],
+      "identity": "strong"
+    },
+    {
+      "kind": "settlement",
+      "year": 1425,
+      "from": "m07-06",
+      "to": "m09-06",
+      "share": 0.12,
+      "settlements": 1
+    },
+    {
+      "kind": "settlement",
+      "year": 1475,
+      "from": "m09-04",
+      "to": "m12-03",
+      "share": 0.12,
+      "settlements": 1
+    },
+    {
+      "kind": "settlement",
+      "year": 1525,
+      "from": "m10-04",
+      "to": "m09-07",
+      "share": 0.12,
+      "settlements": 2
+    },
+    {
+      "kind": "settlement",
+      "year": 1550,
+      "from": "m09-05",
+      "to": "m09-08",
+      "share": 0.12,
+      "settlements": 2
+    },
+    {
+      "kind": "state",
+      "year": 1575,
+      "id": "naret",
+      "name": "Naretský svaz",
+      "capital": "m09-05",
+      "regions": [
+        "m09-05",
+        "m09-06",
+        "m09-07",
+        "m09-08",
+        "m12-02",
+        "m12-03"
+      ],
+      "language": "idar"
+    },
+    {
+      "kind": "border_policy",
+      "year": 1575,
+      "state": "pruliv",
+      "border": "closed"
+    },
+    {
+      "kind": "border_policy",
+      "year": 1600,
+      "state": "pruliv",
+      "border": "open"
+    },
+    {
+      "kind": "lingua_franca",
+      "year": 1600,
+      "source": "m12-03+m09-04-0",
+      "regions": [
+        "m12-03",
+        "m12-04"
+      ],
+      "spread": "universal",
+      "nativize": true
+    },
+    {
+      "kind": "settlement",
+      "year": 1650,
+      "from": "m12-02",
+      "to": "m09-08",
+      "share": 0.12,
+      "settlements": 1
+    },
+    {
+      "kind": "standard",
+      "year": 1675,
+      "of": "naret",
+      "literacy": "towns"
+    },
+    {
+      "kind": "schools",
+      "year": 1700,
+      "of": "naret",
+      "coverage": "towns",
+      "diglossic": true,
+      "printing": false
+    },
+    {
+      "kind": "state",
+      "year": 1775,
+      "id": "istren",
+      "name": "Jezerní svaz",
+      "capital": "m05-04",
+      "regions": [
+        "m05-04",
+        "m05-05",
+        "m05-06"
+      ],
+      "language": "talmur"
+    },
+    {
+      "kind": "settlement",
+      "year": 1800,
+      "from": "m03-07",
+      "to": "m05-05",
+      "share": 0.1,
+      "settlements": 1
+    },
+    {
+      "kind": "settlement",
+      "year": 1800,
+      "from": "m07-03",
+      "to": "m05-06",
+      "share": 0.08,
+      "settlements": 1
+    },
+    {
+      "kind": "immigration",
+      "year": 1800,
+      "regions": [
+        "m05-04"
+      ],
+      "immigration": 0.18
+    },
+    {
+      "kind": "standard",
+      "year": 1825,
+      "of": "istren",
+      "literacy": "towns"
+    },
+    {
+      "kind": "annexation",
+      "year": 1850,
+      "state": "istren",
+      "regions": [
+        "m05-07"
+      ]
+    },
+    {
+      "kind": "border_policy",
+      "year": 1850,
+      "state": "istren",
+      "border": "closed"
+    },
+    {
+      "kind": "settlement",
+      "year": 1850,
+      "from": "m05-07",
+      "to": "m02-06",
+      "share": 0.12,
+      "settlements": 1
+    },
+    {
+      "kind": "border_policy",
+      "year": 1875,
+      "state": "istren",
+      "border": "normal"
+    },
+    {
+      "kind": "schools",
+      "year": 1875,
+      "of": "istren",
+      "coverage": "mass",
+      "diglossic": false,
+      "printing": true
+    },
+    {
+      "kind": "language_policy",
+      "year": 1875,
+      "state": "istren",
+      "policy": "enforced"
+    },
+    {
+      "kind": "standard",
+      "year": 1925,
+      "of": "m11-08",
+      "literacy": "elite"
+    },
+    {
+      "kind": "identity",
+      "year": 1925,
+      "regions": [
+        "m11-08"
+      ],
+      "identity": "strong"
+    },
+    {
+      "kind": "revival",
+      "year": 1925,
+      "regions": [
+        "m05-07"
+      ],
+      "language": "seren",
+      "strength": "movement"
+    }
+  ],
+  "parameters": {
+    "leveling_beyond_region": 1.0,
+    "leveling_rate": 0.8,
+    "border_link_scale": 1.8
+  }
+}

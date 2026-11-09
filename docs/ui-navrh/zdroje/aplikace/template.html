@@ -252,6 +252,7 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 
 // ---------- svět a běhy ----------
 const REG = W.regions, RI = Object.fromEntries(REG.map((r, i) => [r.id, i]));
+const showRegion = (r) => REG.length <= 40 || ((r.city ?? 0) > 0 && !String(r.name).includes('·'));
 const regionName = (id) => REG[RI[id]]?.name ?? id;
 const LANG0 = W.languages;
 const KIND = {
@@ -309,7 +310,29 @@ function assignColors(R) {
   }
 }
 assignColors(A); assignColors(B);
-const lcolor = (R, li) => (li == null ? css('--ink-3') : css('--l' + R.color[li]));
+// Mnoho jazyků (Talvera): odstín nese rodina (protojazyk), světlost jazyk v rodině.
+function assignFamilies(R) {
+  const count = {};
+  for (const f of R.frames) for (const [l, gs] of Object.entries(f.langs)) for (const g of gs) { const code = f.s[g]?.[5]; if (code) { (count[l] ||= {})[code] = (count[l][code] || 0) + 1; } }
+  R.family = {}; R.shade = {}; const rank = {};
+  for (const l of [...R.lin].sort((a, b) => a.start - b.start || a.i - b.i)) {
+    const c = count[l.i] || {}, code = Object.keys(c).sort((a, b) => c[b] - c[a])[0];
+    const fi = Math.max(0, LANG0.findIndex((x) => x.id === code));
+    R.family[l.i] = fi; R.shade[l.i] = rank[fi] = (rank[fi] ?? -1) + 1;
+  }
+  R.byFamily = R.lin.length > 8;
+}
+assignFamilies(A); assignFamilies(B);
+function shadeOf(hex, n) {
+  const v = parseInt(hex.replace('#', ''), 16), r = (v >> 16) / 255, g = ((v >> 8) & 255) / 255, b = (v & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = 0; if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  const steps = [0, 0.13, -0.11, 0.24, -0.2, 0.06, -0.05, 0.18, -0.15, 0.3];
+  const L = Math.max(0.18, Math.min(0.82, l + steps[n % steps.length]));
+  return `hsl(${Math.round(h * 60 + 360) % 360} ${Math.round(sat * 100)}% ${Math.round(L * 100)}%)`;
+}
+const lcolor = (R, li) => (li == null ? css('--ink-3') : R.byFamily ? shadeOf(css('--l' + R.family[li]), R.shade[li]) : css('--l' + R.color[li]));
 
 // ---------- stav ----------
 const state = { route: 'atlas', year: 1300, layer: 'lang', region: null, lineage: null, concept: 'stone', place: null,
@@ -327,14 +350,49 @@ function vnoise(x, y) {
   const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1);
   return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
 }
-const GP = VILLAGES.filter((v) => !v.id.includes('+')).map((v) => [v.x, v.y, v.island]);
+// Měřítko světa: krajina se kreslí podle typické vzdálenosti sousedních krajů (Poloostrov ~45 km, Talvera ~7 km).
+const GEO_K = (() => { const d = []; for (const r of REG) for (const n of r.neighbours || []) if (RI[n] != null) d.push(Math.hypot(r.position[0] - REG[RI[n]].position[0], r.position[1] - REG[RI[n]].position[1])); d.sort((a, b) => a - b); return Math.max(0.08, Math.min(2, (d[d.length >> 1] || 45) / 45)); })();
+// Typická vzdálenost sousedů v km; měřítko pobřeží, reliéfu a hranic.
+const GEO_D = 45 * GEO_K, GEO_D_RAW = GEO_D;
+function fbm(x, y) { return vnoise(x, y) * 0.55 + vnoise(x * 2.1 + 17, y * 2.1 - 9) * 0.3 + vnoise(x * 4.3 - 5, y * 4.3 + 23) * 0.15; }
+// Kostra pevniny: spoje sousedních krajů po souši (ostrovy jen jako body) a vsi.
+const SKEL = []; const ISL = [];
+for (const r of REG) {
+  if (r.terrain === 'island') { ISL.push(r.position); continue; }
+  for (const n of r.neighbours || []) { const o = REG[RI[n]]; if (!o || o.terrain === 'island' || o.id < r.id) continue; if (Math.hypot(o.position[0] - r.position[0], o.position[1] - r.position[1]) > 2.6 * GEO_D_RAW) continue; SKEL.push([r.position[0], r.position[1], o.position[0], o.position[1]]); }
+  SKEL.push([r.position[0], r.position[1], r.position[0], r.position[1]]);
+}
+const VPTS = VILLAGES.map((v) => [v.x, v.y]);
+function segDist(px, py, ax, ay, bx, by) { const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy; const t = l ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l)) : 0; return Math.hypot(px - ax - t * dx, py - ay - t * dy); }
+// Vnitrozemí: trojúhelníky mezi blízkými kraji pevniny (alfa-tvar), aby se pásy krajů slily v souvislou zemi.
+const TRI = (() => {
+  const main = REG.filter((r) => r.terrain !== 'island').map((r) => r.position);
+  if (main.length < 3) return [];
+  const del = d3.Delaunay.from(main), out = [];
+  for (let t = 0; t < del.triangles.length; t += 3) {
+    const p = [0, 1, 2].map((q) => main[del.triangles[t + q]]);
+    const e = Math.max(Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]), Math.hypot(p[1][0] - p[2][0], p[1][1] - p[2][1]), Math.hypot(p[2][0] - p[0][0], p[2][1] - p[0][1]));
+    if (e <= 3.4 * GEO_D) out.push(p);
+  }
+  return out;
+})();
+function triDist(x, y, [a, b, c]) {
+  const s1 = (b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]), s2 = (c[0] - b[0]) * (y - b[1]) - (c[1] - b[1]) * (x - b[0]), s3 = (a[0] - c[0]) * (y - c[1]) - (a[1] - c[1]) * (x - c[0]);
+  if ((s1 >= 0 && s2 >= 0 && s3 >= 0) || (s1 <= 0 && s2 <= 0 && s3 <= 0)) return 0;
+  return Math.min(segDist(x, y, a[0], a[1], b[0], b[1]), segDist(x, y, b[0], b[1], c[0], c[1]), segDist(x, y, c[0], c[1], a[0], a[1]));
+}
 function landField(x, y) {
-  let main = Infinity, island = Infinity;
-  for (const [px, py, isl] of GP) { const d = (px - x) ** 2 + (py - y) ** 2; if (isl) { if (d < island) island = d; } else if (d < main) main = d; }
-  const noise = vnoise(x / 24, y / 24) * 8 + vnoise(x / 8 + 40, y / 8) * 2.6;
-  const fm = 34 - Math.sqrt(main) + noise, fi = 34 - Math.sqrt(island) + noise;
-  if (fm > -14 && fi > -14) return Math.min(Math.max(fm, fi), -3 - Math.min(Math.abs(fm - fi), 6));
-  return Math.max(fm, fi);
+  const D = GEO_D;
+  // pokřivení prostoru, aby pobřeží nebylo z kružnic
+  const wx = x + fbm(x / (1.3 * D), y / (1.3 * D)) * 0.45 * D, wy = y + fbm(x / (1.3 * D) + 40, y / (1.3 * D) + 11) * 0.45 * D;
+  let d = Infinity;
+  for (const [ax, ay, bx, by] of SKEL) { const q = segDist(wx, wy, ax, ay, bx, by); if (q < d) d = q; }
+  for (const t of TRI) { if (d === 0) break; const q = triDist(wx, wy, t); if (q < d) d = q; }
+  let di = Infinity; for (const [ix, iy] of ISL) { const q = Math.hypot(wx - ix, wy - iy); if (q < di) di = q; }
+  let dv = Infinity; for (const [vx, vy] of VPTS) { const q = Math.hypot(x - vx, y - vy); if (q < dv) dv = q; }
+  const rough = fbm(x / (0.35 * D) + 3, y / (0.35 * D) - 7) * 0.16 * D;
+  const main = 0.58 * D - d + rough, isl = 0.5 * D - di + rough, vil = 0.32 * D - dv;
+  return Math.max(main, isl, vil);
 }
 const MOUNT = REG.filter((r) => r.terrain === 'mountains').map((r) => r.position), HILL = REG.filter((r) => r.terrain === 'hills').map((r) => r.position);
 
@@ -346,7 +404,9 @@ function makeMap(stage, opts = {}) {
     const Wd = stage.clientWidth, H = stage.clientHeight; if (!Wd || !H) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     cv.width = Math.round(Wd * dpr); cv.height = Math.round(H * dpr); cv.style.width = Wd + 'px'; cv.style.height = H + 'px';
-    const minx = -12, maxx = 345, miny = 48, maxy = 338;
+    // Přiblížení: mapa se může rámovat jen na vybrané vsi (např. kde se větve liší); jinak celý svět.
+    const fv = (opts.focus && opts.focus()) || null, FV = fv && fv.length ? fv.map((i) => VILLAGES[i]) : VILLAGES;
+    const pad = (fv && fv.length ? 95 : 44) * GEO_K, minx = d3.min(FV, (v) => v.x) - pad, maxx = d3.max(FV, (v) => v.x) + pad, miny = d3.min(FV, (v) => v.y) - pad, maxy = d3.max(FV, (v) => v.y) + pad;
     const k = Math.min((Wd - 20) / (maxx - minx), (H - 20) / (maxy - miny));
     const ox = (Wd - k * (maxx - minx)) / 2 - k * minx, oy = (H - k * (maxy - miny)) / 2 - k * miny;
     Object.assign(m, { W: Wd, H, dpr, k, ox, oy });
@@ -355,18 +415,56 @@ function makeMap(stage, opts = {}) {
     const g = 3, nx = Math.ceil(Wd / g) + 1, ny = Math.ceil(H / g) + 1, values = new Float64Array(nx * ny);
     for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) values[j * nx + i] = landField((i * g - ox) / k, (j * g - oy) / k);
     const path = d3.geoPath(d3.geoTransform({ point(x, y) { this.stream.point(x * g, y * g); } }));
-    const cs = d3.contours().size([nx, ny]).thresholds([0, -5, -11, -18])(values).sort((a, b) => b.value - a.value);
+    const cs = d3.contours().size([nx, ny]).thresholds([0, -5 * GEO_K, -11 * GEO_K, -18 * GEO_K])(values).sort((a, b) => b.value - a.value);
     m.land = new Path2D(path(cs[0])); m.rings = cs.slice(1).map((c) => new Path2D(path(c)));
+    // Reliéf: výška z terénu krajů (hory, pahorky), jemně zvrásněná; stín ze severozápadu.
+    const TH = { mountains: 1, hills: 0.42, island: 0.16, plain: 0.05 }, sig = 0.62 * GEO_D, hgt = new Float32Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const x = (i * g - ox) / k, y = (j * g - oy) / k; let h = 0;
+      for (const r of REG) { const dx = x - r.position[0], dy = y - r.position[1], q = dx * dx + dy * dy; if (q < 9 * sig * sig) h += (TH[r.terrain] ?? 0.05) * Math.exp(-q / (2 * sig * sig)); }
+      const t = Math.min(1, h);
+      hgt[j * nx + i] = h + (0.02 + 0.32 * t) * fbm(x / (0.4 * GEO_D), y / (0.4 * GEO_D)) + 0.06 * t * fbm(x / (0.13 * GEO_D) + 9, y / (0.13 * GEO_D) - 4);
+    }
+    const sh = document.createElement('canvas'); sh.width = nx; sh.height = ny; const sx = sh.getContext('2d'), img = sx.createImageData(nx, ny);
+    const gain = 2.2;
+    for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+      const o = j * nx + i, dxh = hgt[o + 1] - hgt[o - 1], dyh = hgt[o + nx] - hgt[o - nx];
+      const lit = (-dxh * 0.7 - dyh * 0.7) * gain; const p = o * 4;
+      if (values[o] < 0) continue;
+      if (lit < 0) { img.data[p] = 40; img.data[p + 1] = 52; img.data[p + 2] = 60; img.data[p + 3] = Math.min(115, -lit * 200); }
+      else { img.data[p] = 255; img.data[p + 1] = 255; img.data[p + 2] = 250; img.data[p + 3] = Math.min(80, lit * 140); }
+    }
+    sx.putImageData(img, 0, 0); m.shade = sh;
     const vp = VILLAGES.map((v) => m.P(v.x, v.y)), vdel = d3.Delaunay.from(vp), vvor = vdel.voronoi([0, 0, Wd, H]);
     m.vcells = VILLAGES.map((_, i) => poly(vvor.cellPolygon(i)));
+    m.vpolys = VILLAGES.map((_, i) => vvor.cellPolygon(i));
     m.vdel = vdel; m.vvor = vvor; m.vpts = vp;
     const rp = REG.map((r) => m.P(...r.position)), rdel = d3.Delaunay.from(rp), rvor = rdel.voronoi([0, 0, Wd, H]);
-    m.rcells = REG.map((_, i) => poly(rvor.cellPolygon(i)));
+    // Kraj = sjednocení buněk jeho vsí, takže hranice krajů, jazyků i států leží na stejných čarách.
+    m.rcells = REG.map(() => new Path2D());
+    VILLAGES.forEach((v, i) => { const ri = RI[v.region]; if (ri != null) m.rcells[ri].addPath(m.vcells[i]); });
     m.rdel = rdel; m.rvor = rvor; m.rpts = rp;
-    m.redges = edgesOf(rdel, rvor); m.vedges = edgesOf(vdel, rvor === null ? null : vvor);
+    m.vedges = edgesOf(vdel, vvor);
+    m.redges = m.vedges.filter((e) => VILLAGES[e.a].region !== VILLAGES[e.b].region).map((e) => ({ ...e, a: RI[VILLAGES[e.a].region], b: RI[VILLAGES[e.b].region] })).filter((e) => e.a != null && e.b != null);
     m.render();
   };
-  function poly(pg) { const p = new Path2D(); if (!pg) return p; pg.forEach(([x, y], n) => (n ? p.lineTo(x, y) : p.moveTo(x, y))); p.closePath(); return p; }
+  // Hranice jako přírodní čáry: každá hrana se zvlní podle svých konců, takže obě sousední buňky sdílejí stejnou čáru.
+  function wob(ax, ay, bx, by) {
+    const flip = ax > bx || (ax === bx && ay > by); if (flip) [ax, ay, bx, by] = [bx, by, ax, ay];
+    const len = Math.hypot(bx - ax, by - ay), n = Math.max(2, Math.min(14, Math.round(len / 5))), nx2 = -(by - ay) / (len || 1), ny2 = (bx - ax) / (len || 1);
+    const seed = hash(Math.round(ax * 2 + bx * 3), Math.round(ay * 2 + by * 3)) * 100, amp = Math.min(0.16 * len, 5);
+    const pts = [];
+    for (let t = 0; t <= n; t++) { const u = t / n, w = Math.sin(Math.PI * u) * (vnoise(seed + u * 2.2, seed * 0.7) * 1.0 + vnoise(seed + u * 6, seed) * 0.35) * amp; pts.push([ax + (bx - ax) * u + nx2 * w, ay + (by - ay) * u + ny2 * w]); }
+    return flip ? pts.reverse() : pts;
+  }
+  m.wob = wob;
+  m.outline = (c, ri) => { for (const e of m.redges) if (e.a === ri || e.b === ri) m.edge(c, e); };
+  m.edge = (c, e) => { const p = wob(e.x1, e.y1, e.x2, e.y2); c.beginPath(); p.forEach(([x, y], n) => (n ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke(); };
+  function poly(pg) {
+    const p = new Path2D(); if (!pg) return p;
+    for (let n = 0; n < pg.length - 1; n++) { const seg = wob(pg[n][0], pg[n][1], pg[n + 1][0], pg[n + 1][1]); seg.forEach(([x, y], q) => (n === 0 && q === 0 ? p.moveTo(x, y) : p.lineTo(x, y))); }
+    p.closePath(); return p;
+  }
   function edgesOf(del, vor) {
     const out = [], { halfedges, triangles } = del, cc = vor.circumcenters;
     for (let e = 0; e < halfedges.length; e++) {
@@ -386,11 +484,12 @@ function makeMap(stage, opts = {}) {
     for (const r of m.rings) c.stroke(r);
     c.fillStyle = css('--land'); c.fill(m.land);
     c.save(); c.clip(m.land); m.draw(c, m); c.restore();
-    c.strokeStyle = css('--ink'); c.lineWidth = 1.1; c.stroke(m.land);
+    c.save(); c.clip(m.land); c.strokeStyle = css('--sea-line'); c.globalAlpha = 0.55; c.lineWidth = 6; c.stroke(m.land); c.restore();
+    c.strokeStyle = css('--ink'); c.lineWidth = 1; c.stroke(m.land);
     if (m.after) m.after(c, m);
   };
   m.village = (px, py) => m.vdel.find(px, py);
-  m.regionAt = (px, py) => m.rdel.find(px, py);
+  m.regionAt = (px, py) => RI[VILLAGES[m.vdel.find(px, py)].region];
   cv.addEventListener('click', (e) => { const r = cv.getBoundingClientRect(); m.onPick && m.onPick(e.clientX - r.left, e.clientY - r.top); });
   cv.addEventListener('mousemove', (e) => { const r = cv.getBoundingClientRect(); m.onHover && m.onHover(e.clientX - r.left, e.clientY - r.top); });
   cv.addEventListener('mouseleave', () => m.onHover && m.onHover(null));
@@ -398,10 +497,8 @@ function makeMap(stage, opts = {}) {
   return m;
 }
 function relief(c, m) {
-  c.strokeStyle = css('--ink-2'); c.lineWidth = 0.8; c.globalAlpha = 0.45;
-  for (const [x, y] of MOUNT) for (let n = 0; n < 5; n++) { const [px, py] = m.P(x + (n - 2) * 7, y + ((n * 37) % 11) - 5); const s = 5 * Math.min(1.4, m.k / 2); c.beginPath(); c.moveTo(px - s, py + s * 0.6); c.lineTo(px, py - s * 0.6); c.lineTo(px + s, py + s * 0.6); c.stroke(); }
-  for (const [x, y] of HILL) for (let n = 0; n < 4; n++) { const [px, py] = m.P(x + (n - 1.5) * 8, y + ((n * 29) % 9) - 4); const s = 4 * Math.min(1.4, m.k / 2); c.beginPath(); c.arc(px, py + s * 0.5, s, Math.PI * 1.15, Math.PI * 1.85); c.stroke(); }
-  c.globalAlpha = 1;
+  if (!m.shade) return;
+  c.save(); c.imageSmoothingEnabled = true; c.drawImage(m.shade, 0, 0, m.W, m.H); c.restore();
 }
 function label(c, text, x, y, opts = {}) {
   c.font = opts.font || `600 10px ${css('--f-ui')}`;
@@ -633,7 +730,7 @@ screens.atlas = {
       const cell = m.vcells[i];
       if (state.layer === 'lang' || state.layer === 'public') {
         c.fillStyle = lcolor(A, h.lin);
-        const d = dial[h.gi]; c.globalAlpha = state.layer === 'public' ? 0.22 : 0.42 + ((d ?? 0) % 3) * 0.13;
+        const d = dial[h.gi]; c.globalAlpha = state.layer === 'public' ? 0.22 : VILLAGES.length > 120 ? 0.6 + ((d ?? 0) % 3) * 0.05 : 0.42 + ((d ?? 0) % 3) * 0.13;
         c.fill(cell); c.globalAlpha = 1;
       } else if (state.layer === 'write') {
         const s = f.s[h.gi]; const lit = s ? s[1] : 0, sch = s ? s[2] : 0;
@@ -665,32 +762,39 @@ screens.atlas = {
       if (la !== lb && (state.layer === 'lang' || state.layer === 'public')) { c.strokeStyle = css('--ink'); c.lineWidth = 1.5; c.setLineDash([]); }
       else if (state.layer === 'lang' && homeDial(e.a) !== homeDial(e.b)) { c.strokeStyle = css('--ink-2'); c.lineWidth = 0.8; c.setLineDash([1.5, 2.5]); }
       else continue;
-      c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke();
+      m.edge(c, e);
     }
     c.setLineDash([]);
     for (const e of m.redges) {
       const sa = st[REG[e.a].id]?.id, sb = st[REG[e.b].id]?.id; if (sa === sb || (!sa && !sb)) continue;
       c.strokeStyle = css('--ink'); c.lineWidth = state.layer === 'state' ? 1.8 : 1.1; c.setLineDash([8, 3, 1.5, 3]);
-      c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke();
+      m.edge(c, e);
     }
     c.setLineDash([]);
     // vsi
-    VILLAGES.forEach((v, i) => { const [x, y] = m.vpts[i]; c.fillStyle = css('--ink'); c.beginPath(); c.arc(x, y, v.id.includes('+') ? 2.6 : 1.6, 0, 7); c.fill(); });
+    VILLAGES.forEach((v, i) => { const [x, y] = m.vpts[i]; c.fillStyle = css('--ink'); if ((D.toponyms || {})[v.id]?.urban) { c.fillRect(x - 3.2, y - 3.2, 6.4, 6.4); c.fillStyle = css('--land'); c.fillRect(x - 1.4, y - 1.4, 2.8, 2.8); return; } c.beginPath(); c.arc(x, y, v.id.includes('+') ? 2.6 : 1.6, 0, 7); c.fill(); });
     // výběr kraje
-    if (state.region != null) { const i = RI[state.region]; c.save(); c.clip(m.land); c.strokeStyle = css('--red'); c.lineWidth = 2.4; c.stroke(m.rcells[i]); c.restore(); }
+    if (state.region != null) { const i = RI[state.region]; c.save(); c.clip(m.land); c.strokeStyle = css('--red'); c.lineWidth = 2.4; m.outline(c, i); c.restore(); }
     // popisky jazyků a států
     m.after = (cc) => {
       if (state.layer === 'state') {
         f.states.forEach((s) => { const pts = s.regions.map((r) => m.rpts[RI[r]]); const x = d3.mean(pts, (p) => p[0]), y = d3.mean(pts, (p) => p[1]); label(cc, s.name.toUpperCase(), x, y + 14, { font: `600 11px ${css('--f-ui')}`, spacing: '2px' }); });
         f.states.forEach((s) => { const cap = W.events.find((e) => (e.kind === 'state' || e.kind === 'secession') && e.id === s.id)?.capital; if (!cap) return; const [x, y] = m.rpts[RI[cap]]; cc.fillStyle = css('--ink'); cc.fillRect(x - 3.5, y - 3.5, 7, 7); });
       } else if (state.layer === 'lang' || state.layer === 'public') {
-        for (const [lin, cells] of Object.entries(linCells)) {
-          if (cells.length < 2 && !VILLAGES[cells[0]].id.includes('+')) continue;
-          const x = d3.mean(cells, (i) => m.vpts[i][0]), y = d3.mean(cells, (i) => m.vpts[i][1]);
-          label(cc, (A.names.get(+lin) || '').toUpperCase(), x, y, { font: `700 11px ${css('--f-ui')}`, spacing: '2.5px', halo: 4 });
+        // Popisky jazyků od největšího; menší, které by se překryly, se vynechají (najdou se v legendě a na najetí).
+        const many = Object.keys(linCells).length > 12, placed = [];
+        const font = many ? `700 9.5px ${css('--f-ui')}` : `700 11px ${css('--f-ui')}`, sp = many ? '1.5px' : '2.5px';
+        for (const [lin, cells] of Object.entries(linCells).sort((a, b) => b[1].length - a[1].length)) {
+          if (cells.length < (many ? 4 : 2) && !VILLAGES[cells[0]].id.includes('+')) continue;
+          const x = d3.mean(cells, (i) => m.vpts[i][0]), y = d3.mean(cells, (i) => m.vpts[i][1]), text = (A.names.get(+lin) || '').toUpperCase();
+          cc.font = font; cc.letterSpacing = sp; const w = cc.measureText(text).width + 6; cc.letterSpacing = '0px';
+          const box = [x - w / 2, y - 8, x + w / 2, y + 8];
+          if (placed.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) continue;
+          placed.push(box);
+          label(cc, text, x, y, { font, spacing: sp, halo: 4 });
         }
       } else {
-        REG.forEach((r, i) => { const [x, y] = m.rpts[i]; label(cc, r.name.toUpperCase(), x, y - 9, { font: `600 8.5px ${css('--f-ui')}`, spacing: '1.5px', color: css('--ink-2') }); });
+        REG.forEach((r, i) => { if (!showRegion(r)) return; const [x, y] = m.rpts[i]; label(cc, r.name.toUpperCase(), x, y - 9, { font: `600 8.5px ${css('--f-ui')}`, spacing: '1.5px', color: css('--ink-2') }); });
       }
     };
     this.legend(f);
@@ -765,14 +869,14 @@ screens.jazyky = {
   update() { this.river(); this.card(); },
   river() {
     const el = $('river'), w = el.clientWidth, h = el.clientHeight; if (!w) return;
-    const order = [...A.lin].sort((a, b) => a.start - b.start || a.i - b.i).map((l) => l.i);
+    const order = [...A.lin].sort((a, b) => (A.byFamily ? A.family[a.i] - A.family[b.i] : 0) || a.start - b.start || a.i - b.i).map((l) => l.i);
     const rows = A.frames.map((f) => { const sp = speakers(A, f); return Object.fromEntries([['y', f.y], ...order.map((l) => [l, sp[l] || 0])]); });
     const stack = d3.stack().keys(order).offset(d3.stackOffsetSilhouette).order(d3.stackOrderNone)(rows);
-    const x = d3.scaleLinear([100, 2000], [40, w - 150]), max = d3.max(stack, (s) => d3.max(s, (d) => d[1])), min = d3.min(stack, (s) => d3.min(s, (d) => d[0]));
+    const y0 = A.years[0], y1 = A.years[A.years.length - 1], x = d3.scaleLinear([y0, y1], [40, w - 150]), max = d3.max(stack, (s) => d3.max(s, (d) => d[1])), min = d3.min(stack, (s) => d3.min(s, (d) => d[0]));
     const y = d3.scaleLinear([min, max], [h - 30, 16]);
     const area = d3.area().x((d) => x(d.data.y)).y0((d) => y(d[0])).y1((d) => y(d[1])).curve(d3.curveMonotoneX);
     let s = '';
-    for (let yy = 500; yy <= 2000; yy += 500) s += `<line x1="${x(yy)}" x2="${x(yy)}" y1="10" y2="${h - 24}" stroke="${css('--rule')}"/><text x="${x(yy)}" y="${h - 8}" font-size="11" text-anchor="middle" fill="${css('--ink-2')}">${yy}</text>`;
+    for (let yy = Math.ceil(y0 / 500) * 500; yy <= y1; yy += 500) s += `<line x1="${x(yy)}" x2="${x(yy)}" y1="10" y2="${h - 24}" stroke="${css('--rule')}"/><text x="${x(yy)}" y="${h - 8}" font-size="11" text-anchor="middle" fill="${css('--ink-2')}">${yy}</text>`;
     const labels = [];
     stack.forEach((layer) => {
       const li = +layer.key, sel = li === state.lineage;
@@ -785,9 +889,11 @@ screens.jazyky = {
         if (y(widest[0]) - y(widest[1]) > 15) s += `<text data-l="${li}" x="${x(widest.data.y)}" y="${y((widest[0] + widest[1]) / 2) + 4}" text-anchor="middle" font-size="11.5" font-style="italic" fill="${css('--ink')}" style="cursor:pointer">${esc(A.names.get(li))} †${A.linBy[li].end}</text>`;
       }
     });
+    // U mnoha jazyků jen popisky, které se vejdou k vlastnímu proudu (ostatní mají název v titulku proudu).
     labels.sort((a, b) => a.y - b.y);
-    for (let i = 1; i < labels.length; i++) labels[i].y = Math.max(labels[i].y, labels[i - 1].y + 15);
-    for (const l of labels) s += `<text data-l="${l.li}" x="${x(2000) + 8}" y="${l.y + 4}" font-size="12.5" fill="${css('--ink')}" style="cursor:pointer;font-weight:${l.sel ? 700 : 400}">${esc(A.names.get(l.li))}</text>`;
+    const shown = [];
+    for (const l of labels) { const prev = shown[shown.length - 1]; const y = prev ? Math.max(l.y, prev.y + 15) : l.y; if (l.sel || y - l.y < 10) { l.y = y; shown.push(l); } }
+    for (const l of shown) s += `<text data-l="${l.li}" x="${x(y1) + 8}" y="${l.y + 4}" font-size="12.5" fill="${css('--ink')}" style="cursor:pointer;font-weight:${l.sel ? 700 : 400}">${esc(A.names.get(l.li))}</text>`;
     s += `<line x1="${x(state.year)}" x2="${x(state.year)}" y1="8" y2="${h - 26}" stroke="${css('--red')}" stroke-width="1.5"/>`;
     $('river-svg').innerHTML = s;
   },
@@ -864,13 +970,13 @@ screens.slova = {
     relief(c, m);
     // izoglosy: hrana mezi kraji s jiným tvarem
     c.strokeStyle = css('--red'); c.lineWidth = 2;
-    for (const e of m.redges) { const a = rf[REG[e.a].id]?.form, b = rf[REG[e.b].id]?.form; if (!a || !b || a === b) continue; c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke(); }
-    if (state.place) { c.strokeStyle = css('--ink'); c.lineWidth = 2.4; c.stroke(m.rcells[RI[state.place]]); }
+    for (const e of m.redges) { const a = rf[REG[e.a].id]?.form, b = rf[REG[e.b].id]?.form; if (!a || !b || a === b) continue; m.edge(c, e); }
+    if (state.place) { c.strokeStyle = css('--ink'); c.lineWidth = 2.4; m.outline(c, RI[state.place]); }
     m.after = (cc) => REG.forEach((r, i) => {
       const x = rf[r.id]; if (!x) return; const [px, py] = m.rpts[i];
-      label(cc, r.name.toUpperCase(), px, py - 15, { font: `600 8px ${css('--f-ui')}`, spacing: '1.5px', color: css('--ink-2') });
+      if (showRegion(r)) label(cc, r.name.toUpperCase(), px, py - 15, { font: `600 8px ${css('--f-ui')}`, spacing: '1.5px', color: css('--ink-2') });
       const o = originOf(f, x.gi, ci);
-      label(cc, x.form, px, py + 2, { font: `${o && o[1] !== LANG0[0].id && o[1] !== LANG0[1].id ? 'italic ' : ''}19px ${css('--f-ipa')}`, halo: 4, color: o && o[0] !== 'inherited' ? css('--red') : css('--ink') });
+      label(cc, x.form, px, py + 2, { font: `${o && o[1] !== LANG0[0].id && o[1] !== LANG0[1].id ? 'italic ' : ''}${REG.length > 40 ? 10.5 : 19}px ${css('--f-ipa')}`, halo: REG.length > 40 ? 2.5 : 4, color: o && o[0] !== 'inherited' ? css('--red') : css('--ink') });
     });
     $('legend').innerHTML = `<div><svg width="26" height="6" aria-hidden="true"><line x1="0" x2="26" y1="3" y2="3" stroke="var(--red)" stroke-width="2.2"/></svg> izoglosa: za čarou se slovo říká jinak</div><div class="why">červený tvar: výpůjčka nebo nové slovo · ${forms.length} tvarů v ${Object.keys(rf).length} krajích</div>`;
   },
@@ -941,15 +1047,39 @@ screens.vetve = {
       const colorOf = (lin) => (R === A ? lcolor(A, lin) : map[lin] != null ? lcolor(A, map[lin]) : lcolor(B, lin));
       VILLAGES.forEach((v, i) => { const h = home[v.id]; if (!h) return; c.fillStyle = colorOf(h.lin); c.globalAlpha = 0.55; c.fill(m.vcells[i]); c.globalAlpha = 1; });
       relief(c, m);
-      VILLAGES.forEach((v, i) => { const a = ha[v.id], b = hb[v.id]; if (!a || !b) return; if (a.lin !== map[b.lin]) { c.strokeStyle = css('--red'); c.lineWidth = 2; c.stroke(m.vcells[i]); } });
+      // Vsi, kde se doma mluví jinak: jemná šrafa uvnitř a jeden společný červený obrys kolem celé skupiny.
+      const dif = VILLAGES.map((v) => { const a = ha[v.id], b = hb[v.id]; return !!(a && b && a.lin !== map[b.lin]); });
+      VILLAGES.forEach((v, i) => { if (dif[i]) hatch(c, m.vcells[i], -Math.PI / 4, css('--red'), 7, 0.8); });
+      c.strokeStyle = css('--red'); c.lineWidth = 2.6; c.lineCap = 'round';
+      for (const e of m.vedges) if (dif[e.a] !== dif[e.b]) m.edge(c, e);
+      c.lineCap = 'butt';
       const st = statesAt(f);
-      for (const e of m.redges) { const sa = st[REG[e.a].id]?.id, sb = st[REG[e.b].id]?.id; if (sa === sb) continue; c.strokeStyle = css('--ink'); c.lineWidth = 1.1; c.setLineDash([8, 3, 1.5, 3]); c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke(); }
+      for (const e of m.redges) { const sa = st[REG[e.a].id]?.id, sb = st[REG[e.b].id]?.id; if (sa === sb) continue; c.strokeStyle = css('--ink'); c.lineWidth = 1.1; c.setLineDash([8, 3, 1.5, 3]); m.edge(c, e); }
       c.setLineDash([]);
-      m.after = null;
+      // Popisky krajů v přiblížení: kraje s rozdílem a jejich sousedé.
+      m.after = (cc, mm) => {
+        if (!this.focusSet) return;
+        const placed = [];
+        REG.forEach((r, i) => {
+          if (!this.focusRegs.has(r.id)) return; const [x, y] = mm.rpts[i]; if (x < 0 || y < 0 || x > mm.W || y > mm.H) return;
+          const strong = this.diffRegs.has(r.id), text = String(r.name).toUpperCase(), font = `600 ${strong ? 11 : 9}px ${css('--f-ui')}`;
+          cc.font = font; cc.letterSpacing = '1.5px'; const w = cc.measureText(text).width + 8; cc.letterSpacing = '0px';
+          const box = [x - w / 2, y - 9, x + w / 2, y + 9]; if (placed.some((q) => box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1])) return; placed.push(box);
+          label(cc, text, x, y, { font, spacing: '1.5px', color: strong ? css('--ink') : css('--ink-2'), halo: 4 });
+        });
+      };
     };
-    this.ma = makeMap($('sa'), { draw: drawFor(A), onPick: (x, y) => { state.place = REG[this.ma.regionAt(x, y)].id; this.card(); } });
-    this.mb = makeMap($('sb'), { draw: drawFor(B), onPick: (x, y) => { state.place = REG[this.mb.regionAt(x, y)].id; this.card(); } });
-    if (!state.place) state.place = 'corrin';
+    // Rámování na rozdíl na konci běhu: vsi s jiným jazykem doma plus kraje kolem nich.
+    {
+      const fa = frameAt(A, A.frames[A.frames.length - 1].y), fb = frameAt(B, B.frames[B.frames.length - 1].y), map = matchB(fa, fb), ha = homeGroups(A, fa), hb = homeGroups(B, fb);
+      this.diffRegs = new Set(VILLAGES.filter((v) => ha[v.id] && hb[v.id] && ha[v.id].lin !== map[hb[v.id].lin]).map((v) => v.region));
+      this.focusRegs = new Set(this.diffRegs); for (const id of this.diffRegs) for (const n of REG[RI[id]]?.neighbours || []) this.focusRegs.add(n);
+      this.focusSet = this.diffRegs.size > 0 && state.zoomDiff !== false;
+    }
+    const focus = () => (this.focusSet ? VILLAGES.map((v, i) => (this.focusRegs.has(v.region) ? i : -1)).filter((i) => i >= 0) : null);
+    this.ma = makeMap($('sa'), { focus, draw: drawFor(A), onPick: (x, y) => { state.place = REG[this.ma.regionAt(x, y)].id; this.card(); } });
+    this.mb = makeMap($('sb'), { focus, draw: drawFor(B), onPick: (x, y) => { state.place = REG[this.mb.regionAt(x, y)].id; this.card(); } });
+    if (!state.place || RI[state.place] == null) state.place = [...this.diffRegs][0] || REG[0].id;
     requestAnimationFrame(() => { this.ma.layout(); this.mb.layout(); }); this.card();
   },
   update() { this.ma.render(); this.mb.render(); this.card(); },
@@ -965,7 +1095,9 @@ screens.vetve = {
     $('card').innerHTML = `<div><span class="caps">V roce ${state.year}</span><h1>${diff} ${diff === 1 ? 'ves mluví' : diff >= 2 && diff < 5 ? 'vsi mluví' : 'vsí mluví'} jinak</h1><p class="why" style="margin:4px 0 0">Obě větve sdílejí svět, protojazyky i seed; liší se jedinou událostí. Červeně obtažené vsi mají v B jiný jazyk.</p></div>
       <table class="t"><thead><tr><th>jazyk</th><th class="num">A</th><th class="num">B</th></tr></thead><tbody>${[...names].map((n) => `<tr><td>${esc(n)}</td><td class="num">${na[n] ? fmt(na[n]) : '—'}</td><td class="num ${(na[n] || 0) !== (nb[n] || 0) ? 'red' : ''}">${nb[n] ? fmt(nb[n]) : '—'}</td></tr>`).join('')}</tbody></table>
       <div><span class="caps">Slova kraje ${esc(regionName(state.place))}</span><table class="t"><thead><tr><th>význam</th><th>A</th><th>B</th></tr></thead><tbody>${words.map((c) => { const ci = C.indexOf(c), a = ga ? formOf(A, fa, ga.gi, ci) : '', b = gb ? formOf(B, fb, gb.gi, ci) : ''; return `<tr><td>${esc(GL[c])}</td><td class="ipa">${esc(a)}</td><td class="ipa ${a !== b ? 'red' : ''}">${esc(b)}</td></tr>`; }).join('')}</tbody></table></div>
+      <button class="btn quiet" id="zoom-diff">${this.focusSet ? 'Ukázat celou mapu' : 'Přiblížit rozdíl'}</button>
       <button class="btn" id="new-branch">+ Nová větev z roku ${state.year}</button><p class="why" style="margin:0">Větev začne jako kopie zadání; změníš v ní dějiny a engine ji spočítá. Přepočet od roku větvení čeká na kontrolní body v API.</p>`;
+    $('zoom-diff').addEventListener('click', () => { state.zoomDiff = !this.focusSet; this.focusSet = state.zoomDiff && this.diffRegs.size > 0; this.ma.layout(); this.mb.layout(); this.card(); });
     $('new-branch').addEventListener('click', () => toast('Větev by se otevřela v Dějinách jako kopie zadání.'));
   },
 };
@@ -1003,18 +1135,18 @@ screens.svet = {
     w.regions.forEach((r, i) => { const li = LANG0.findIndex((l) => l.id === (r.language || LANG0[0].id)); c.fillStyle = css('--l' + li); c.globalAlpha = 0.16; c.fill(m.rcells[i]); c.globalAlpha = 1; });
     relief(c, m);
     c.strokeStyle = css('--ink-2'); c.lineWidth = 0.7; c.setLineDash([2, 3]);
-    for (const e of m.redges) { c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke(); }
+    for (const e of m.redges) { m.edge(c, e); }
     c.setLineDash([]);
     // spoje
     c.strokeStyle = css('--ink-2'); c.lineWidth = 1;
-    w.regions.forEach((r, i) => (r.neighbours || []).forEach((n) => { const j = RI[n]; if (j > i) { const [x1, y1] = m.rpts[i], [x2, y2] = m.rpts[j]; c.globalAlpha = 0.5; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); c.globalAlpha = 1; } }));
-    const i = RI[state.sel.region]; if (i != null) { c.strokeStyle = css('--red'); c.lineWidth = 2.4; c.stroke(m.rcells[i]); }
+    w.regions.forEach((r, i) => (r.neighbours || []).forEach((n) => { const j = RI[n]; if (j > i) { const [x1, y1] = m.rpts[i], [x2, y2] = m.rpts[j]; c.globalAlpha = REG.length > 40 ? 0.22 : 0.5; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); c.globalAlpha = 1; } }));
+    const i = RI[state.sel.region]; if (i != null) { c.strokeStyle = css('--red'); c.lineWidth = 2.4; m.outline(c, i); }
     m.after = (cc) => w.regions.forEach((r, k) => {
       const [x, y] = m.rpts[k];
       if (r.identity && r.identity !== 'shared') { cc.strokeStyle = css('--ink'); cc.lineWidth = r.identity === 'strong' ? 1.8 : 1; cc.beginPath(); cc.arc(x, y, 9, 0, 7); cc.stroke(); }
-      cc.fillStyle = k === i ? css('--red') : css('--ink'); cc.beginPath(); cc.arc(x, y, 4, 0, 7); cc.fill();
+      cc.fillStyle = k === i ? css('--red') : css('--ink'); cc.beginPath(); cc.arc(x, y, REG.length > 40 ? 2.6 : 4, 0, 7); cc.fill();
       if (r.immigration) { cc.strokeStyle = css('--ink'); cc.lineWidth = 1; cc.strokeRect(x - 6, y - 6, 12, 12); }
-      label(cc, r.name.toUpperCase(), x, y - 15, { font: `600 9px ${css('--f-ui')}`, spacing: '1.5px' });
+      if (showRegion(r)) label(cc, r.name.toUpperCase(), x, y - 15, { font: `600 9px ${css('--f-ui')}`, spacing: '1.5px' });
     });
   },
   card() {
@@ -1182,11 +1314,12 @@ screens.dejiny = {
     $('ov-y').textContent = y; $('ov-s').textContent = `${sts.length} ${sts.length === 1 ? 'stát' : sts.length < 5 ? 'státy' : 'států'}, ${REG.filter((r) => !owner[r.id]).length} krajů bez vlády`;
     REG.forEach((r, i) => { const o = owner[r.id]; if (!o) return; const pol = o.s.policy; c.fillStyle = css('--ink'); c.globalAlpha = pol === 'enforced' ? 0.16 : pol === 'promoted' ? 0.08 : 0.03; c.fill(m.rcells[i]); c.globalAlpha = 1; hatch(c, m.rcells[i], [0.6, -0.6, 1.4, 0.2][o.n % 4], css('--ink-2'), 7, 0.6); });
     relief(c, m);
-    for (const e of m.redges) { const a = owner[REG[e.a].id]?.s.id, b = owner[REG[e.b].id]?.s.id; if (a === b) continue; c.strokeStyle = css('--ink'); c.lineWidth = 1.5; c.setLineDash([8, 3, 1.5, 3]); c.beginPath(); c.moveTo(e.x1, e.y1); c.lineTo(e.x2, e.y2); c.stroke(); }
+    for (const e of m.redges) { const a = owner[REG[e.a].id]?.s.id, b = owner[REG[e.b].id]?.s.id; if (a === b) continue; c.strokeStyle = css('--ink'); c.lineWidth = 1.5; c.setLineDash([8, 3, 1.5, 3]); m.edge(c, e); }
     c.setLineDash([]);
     const ev = state.world.events[state.sel.event];
-    const highlight = ev ? [...(ev.regions || []), ...(ev.subjects || []), ev.to, ev.seat, ev.source, ev.capital].filter(Boolean) : [];
-    for (const r of highlight) { const i = RI[r]; if (i == null) continue; c.fillStyle = css('--tint'); c.fill(m.rcells[i]); c.strokeStyle = css('--red'); c.lineWidth = 2; c.stroke(m.rcells[i]); }
+    const ofState = ev && ev.of ? sts.find((x) => x.id === ev.of) : null;
+    const highlight = ev ? [...(ev.regions || []), ...(ev.subjects || []), ev.to, ev.seat, ev.source, ev.capital, ...(ofState ? ofState.regions : RI[ev.of] != null ? [ev.of] : [])].filter(Boolean) : [];
+    for (const r of highlight) { const i = RI[r]; if (i == null) continue; c.fillStyle = css('--tint'); c.fill(m.rcells[i]); c.strokeStyle = css('--red'); c.lineWidth = 2; m.outline(c, i); }
     m.after = (cc) => {
       if (ev && (ev.kind === 'settlement' || ev.kind === 'elite' || ev.kind === 'lingua_franca')) {
         const from = m.rpts[RI[ev.from || ev.source]], tos = (ev.kind === 'lingua_franca' ? ev.regions : [ev.to || ev.seat]).map((r) => m.rpts[RI[r]]);
@@ -1194,8 +1327,13 @@ screens.dejiny = {
         for (const to of tos) { cc.beginPath(); cc.moveTo(...from); cc.quadraticCurveTo((from[0] + to[0]) / 2, Math.min(from[1], to[1]) - 30, ...to); cc.stroke(); }
         cc.setLineDash([]);
       }
-      REG.forEach((r, i) => { const [x, yy] = m.rpts[i]; const cap = sts.some((s) => s.capital === r.id); if (cap) { cc.fillStyle = css('--ink'); cc.fillRect(x - 3.5, yy - 3.5, 7, 7); } else { cc.fillStyle = css('--ink-2'); cc.beginPath(); cc.arc(x, yy, 2.2, 0, 7); cc.fill(); } label(cc, r.name.toUpperCase(), x, yy - 11, { font: `600 8.5px ${css('--f-ui')}`, spacing: '1.5px', color: css('--ink-2') }); });
-      sts.forEach((s) => { const pts = s.regions.map((r) => m.rpts[RI[r]]); if (!pts.length) return; label(cc, (s.name || s.id).toUpperCase(), d3.mean(pts, (p) => p[0]), d3.mean(pts, (p) => p[1]) + 16, { font: `700 10.5px ${css('--f-ui')}`, spacing: '2px' }); });
+      // Popisky: nejdřív státy (s náhradními pozicemi, když se srazí), pak kraje jen tam, kde je místo.
+      const placed = [], fits = (t, x, y, font, sp) => { cc.font = font; cc.letterSpacing = sp; const w = cc.measureText(t).width + 8; cc.letterSpacing = '0px'; const b = [x - w / 2, y - 8, x + w / 2, y + 8]; if (placed.some((q) => b[0] < q[2] && b[2] > q[0] && b[1] < q[3] && b[3] > q[1])) return false; placed.push(b); return true; };
+      const regLabels = [];
+      REG.forEach((r, i) => { const [x, yy] = m.rpts[i]; const cap = sts.some((s) => s.capital === r.id); if (cap) { cc.fillStyle = css('--ink'); cc.fillRect(x - 3.5, yy - 3.5, 7, 7); } else { cc.fillStyle = css('--ink-2'); cc.beginPath(); cc.arc(x, yy, 2.2, 0, 7); cc.fill(); } if (showRegion(r)) regLabels.push([r.name.toUpperCase(), x, yy - 11]); });
+      sts.forEach((s) => { const pts = s.regions.map((r) => m.rpts[RI[r]]); if (!pts.length) return; const x = d3.mean(pts, (p) => p[0]), y0 = d3.mean(pts, (p) => p[1]), t = (s.name || s.id).toUpperCase(), font = `700 10.5px ${css('--f-ui')}`;
+        for (const dy of [16, -20, 34, -38, 52]) if (fits(t, x, y0 + dy, font, '2px')) { label(cc, t, x, y0 + dy, { font, spacing: '2px' }); break; } });
+      for (const [t, x, y] of regLabels) { const font = `600 8.5px ${css('--f-ui')}`; if (fits(t, x, y, font, '1.5px')) label(cc, t, x, y, { font, spacing: '1.5px', color: css('--ink-2') }); }
     };
     $('legend').innerHTML = sts.map((s) => `<div><b style="font-weight:500">${esc(s.name || s.id)}</b> <span class="why">${LEVEL.policy[s.policy] || ''}, hranice ${LEVEL.border[s.border] || ''}</span></div>`).join('') || '<div class="why">žádný stát</div>';
   },

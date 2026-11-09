@@ -40,9 +40,10 @@ export const i18n = {
 	}
 };
 
-/** Text pro klíč v aktuálním jazyce; parametry se dosadí do {jmen}. */
+/** Text pro klíč v aktuálním jazyce; parametry se dosadí do {jmen}. Chybějící klíč vrátí sám sebe. */
 export function t(key: MessageKey, params: Params = {}): string {
 	const message = catalogs[current][key] ?? catalogs.cs[key];
+	if (message == null) return String(key);
 	if (typeof message === 'function') return message(params);
 	return message.replace(/\{(\w+)\}/g, (_, name) => String(params[name] ?? `{${name}}`));
 }

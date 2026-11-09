@@ -40,6 +40,7 @@ INNOVATION_GROUP = {
     "periphrasis": "mluvnice", "category_loss": "mluvnice", "cliticization": "mluvnice", "order_fixation": "mluvnice",
     "order_relaxation": "mluvnice", "negation_reinforcement": "mluvnice", "negation_renewal": "mluvnice",
     "stress_shift": "přízvuk", "stress_strength": "přízvuk",
+    "renewal": "nová slova", "clipping": "nová slova", "metathesis": "zvuky", "dissimilation": "zvuky",
 }
 
 # Události, které stránka ukazuje jednotlivě (ostatní jen jako souhrn po stoletích).
@@ -49,7 +50,7 @@ SINGLE = {
     "plague", "recovery", "resettlement", "trade", "prestige", "foreign_elite", "elite_assimilation", "migration",
     "conquest", "bilingualism", "nativization", "transmission_stopped", "transmission_resumed", "language_shift",
     "language_emerged", "language_split", "language_ended", "stress_rule_changed", "stress_strength_changed",
-    "grammaticalized", "exapted", "refinement", "war", "epidemic", "state_collapse",
+    "grammaticalized", "exapted", "refinement", "war", "epidemic", "state_collapse", "sound_shift",
 }
 
 
@@ -211,7 +212,7 @@ def compact(run: dict, concepts: list[str], with_lex: bool) -> dict:
     for lin, items in sound.items():
         ranked = sorted(items.items(), key=lambda kv: (-len(kv[1]["groups"]), kv[1]["first"]))[:60]
         sound_out[str(lin)] = [dict(change_label(v), first=int(d["first"]), groups=len(d["groups"])) for v, d in ranked]
-    analogy_out = {str(l): {"ops": dict(c), "examples": sorted({tuple(x[1:3]): x for x in analogy_examples[l]}.values())[:24]}
+    analogy_out = {str(l): {"ops": dict(c), "examples": sorted({tuple(map(str, x[1:3])): x for x in analogy_examples[l]}.values(), key=lambda x: (x[0], str(x[1]), str(x[2])))[:24]}
                    for l, c in analogy.items()}
     return {
         "groups": ginfo, "forms": list(forms), "frames": out_frames, "lineages": lineages,
@@ -234,10 +235,18 @@ def main() -> None:
         group = f"{first}-v0"
         proto[lang["id"]] = {"lex": [tick0["lexicon"][group][c]["form"] for c in concepts],
                              "grammar": {k: v["kind"] for k, v in tick0["grammar"][group].items()}}
+    names = {t["id"]: t.get("name") for t in a["export"]["territories"] if t.get("level") == "region" and t.get("name")}
+    for r in world["regions"]:
+        r["label"] = r.get("name") or r["id"]
+        if names.get(r["id"]) and "·" in r["label"]:
+            r["name"] = names[r["id"]]
     data = {
         "world": world, "concepts": concepts, "gloss": {c: gloss.get(c, c) for c in concepts},
         "proto": proto, "grammar_catalog": GRAMMAR,
         "villages": [t for t in a["export"]["territories"] if t["level"] == "settlement"],
+        # Jména míst z onomastiky enginu (toponyma s významem); formát se ještě mění.
+        "toponyms": {k: {"name": v.get("name"), "ipa": v.get("ipa"), "meaning": v.get("meaning"), "urban": v.get("urban")}
+                     for k, v in (a["export"].get("onomastics") or {}).get("toponyms", {}).items()},
         "a": compact(a, concepts, True), "b": compact(b, concepts, True),
     }
     out.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

@@ -1,9 +1,21 @@
 // English message catalogue. Keys must match cs.ts (checked by the type).
 import type cs from './cs';
+import * as s_projekty from './screens/projekty';
+import * as s_svet from './screens/svet';
+import * as s_protojazyky from './screens/protojazyky';
+import * as s_pojmy from './screens/pojmy';
+import * as s_dejiny from './screens/dejiny';
+import * as s_model from './screens/model';
+import * as s_atlas from './screens/atlas';
+import * as s_jazyky from './screens/jazyky';
+import * as s_slova from './screens/slova';
+import * as s_kronika from './screens/kronika';
+import * as s_cokdyby from './screens/cokdyby';
+import * as s_shell from './screens/shell';
 
 const s = (n: number | string, one: string, many: string) => (Number(n) === 1 ? one : many);
 
-const en: Record<keyof typeof cs, string | ((p: Record<string, string | number>) => string)> = {
+const core = {
 	'app.name': 'CEE',
 	'app.tagline': 'Languages evolving through time and landscape',
 	'locale.switch': 'Interface language',
@@ -100,7 +112,40 @@ const en: Record<keyof typeof cs, string | ((p: Record<string, string | number>)
 	'kind.revival': 'Revival',
 	'kind.preserve': 'Language protection',
 	'kind.identity': 'Regional identity',
-	'kind.immigration': 'Incoming strangers'
+	'kind.immigration': 'Incoming strangers',
+	'kind.settlement': 'Settlement',
+	'kind.elite': 'Foreign elite',
+	'kind.conquest': 'Conquest',
+	'kind.migration': 'Migration',
+	'kind.codification': 'Codification',
+	'kind.printing': 'Printing',
+	'kind.schooling': 'Schooling',
+	'kind.revival_movement': 'Revival movement',
+	'kind.bilingualism': 'Bilingualism',
+	'kind.nativization': 'Nativization',
+	'kind.transmission_stopped': 'Transmission stopped',
+	'kind.transmission_resumed': 'Transmission resumed',
+	'kind.language_shift': 'Language shift',
+	'kind.language_emerged': 'New language',
+	'kind.language_split': 'Language split',
+	'kind.language_ended': 'Language ended',
+	'kind.sound_shift': 'Sound shift'
+} satisfies Record<string, string | ((p: Record<string, string | number>) => string)>;
+
+const en: Record<keyof typeof cs, string | ((p: Record<string, string | number>) => string)> = {
+	...core,
+	...s_projekty.en,
+	...s_svet.en,
+	...s_protojazyky.en,
+	...s_pojmy.en,
+	...s_dejiny.en,
+	...s_model.en,
+	...s_atlas.en,
+	...s_jazyky.en,
+	...s_slova.en,
+	...s_kronika.en,
+	...s_cokdyby.en,
+	...s_shell.en,
 };
 
 export default en;
