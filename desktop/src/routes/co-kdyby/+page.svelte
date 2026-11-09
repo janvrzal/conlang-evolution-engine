@@ -32,16 +32,21 @@
 	} from '$lib/ds';
 	import { i18n, number, t, type MessageKey } from '$lib/i18n.svelte';
 	import {
+		branchesOf,
+		branchYearOf,
+		compareForms,
 		compareWords,
 		differingFamilies,
 		differingShown,
 		domainsOf,
 		familySpeakers,
 		focusRegions,
+		groupLanguage,
 		languageCount,
 		matchLineages,
 		regionGroup,
 		shownHome,
+		storedBranch,
 		sideHome,
 		sideVarieties,
 		withoutEvent,
@@ -221,11 +226,48 @@
 	// slova vybraného kraje
 	const CONCEPTS = ['water', 'stone', 'mother', 'king', 'fire', 'person', 'dog', 'eye'];
 	const atEnd = $derived(!!result && year >= result.year);
-	const words = $derived.by(() => {
+	const endWords = $derived.by(() => {
 		if (!selected || !geo || !result || !resultB || !endA || !endB || !atEnd) return null;
 		const ga = regionGroup(endA, result, geo.villages, selected), gb = regionGroup(endB, resultB, geo.villages, selected);
 		return compareWords(result, ga, resultB, gb, CONCEPTS);
 	});
+	// v průběžném roce slovník z uloženého běhu (`app.lexicon`); bez něj poctivě jen koncový snímek
+	let yearWords = $state.raw<ReturnType<typeof compareForms>>(null);
+	$effect(() => {
+		const sel = selected, y = year, geoNow = geo, fa = frameA, fb = frameB;
+		yearWords = null;
+		if (atEnd || !sel || !geoNow || !result || !resultB || !fa || !fb) return;
+		const la = groupLanguage(fa, regionGroup(fa, result, geoNow.villages, sel));
+		const lb = groupLanguage(fb, regionGroup(fb, resultB, geoNow.villages, sel));
+		if (!la || !lb) return;
+		let stale = false;
+		void Promise.all([app.lexicon(la, y, 'A'), app.lexicon(lb, y, 'B')]).then(([a, b]) => {
+			if (!stale) yearWords = compareForms(a?.forms, b?.forms, CONCEPTS);
+		});
+		return () => (stale = true);
+	});
+	const words = $derived(atEnd ? endWords : yearWords);
+
+	// uložené větve běhu A a rok větvení
+	const stored = $derived(branchesOf(app.storedRuns, app.run?.id));
+	const storedB = $derived(storedBranch(app.storedRuns, branch?.run?.id));
+	// vzorek: rok větvení je v `info.branch_year` souboru větve
+	let fixtureYear = $state<number | null>(null);
+	$effect(() => {
+		const id = branch?.run?.id;
+		fixtureYear = null;
+		if (!id?.startsWith('fixture:')) return;
+		let stale = false;
+		fetch(`/fixtures/${id.slice(8)}.json`)
+			.then((r) => r.json())
+			.then((d) => !stale && (fixtureYear = d.info?.branch_year ?? null))
+			.catch(() => undefined);
+		return () => (stale = true);
+	});
+	const branchYear = $derived(branchYearOf(storedB, fixtureYear, difference?.year ?? null));
+	const branchName = $derived(storedB?.name ?? branch?.label ?? 'B');
+	const statusText = (s: string) => t(`cokdyby.status_${s}` as MessageKey);
+	const openStored = (run: (typeof stored)[number]) => void app.openBranch(run);
 
 	// nová větev
 	const events = $derived((world?.events ?? []).map((e, i) => ({ value: i, label: eventLabel(e), year: e.year })).sort((a, b) => a.year - b.year));
@@ -237,7 +279,35 @@
 		void app.startBranch(t('cokdyby.branch_label', { event: eventLabel(event) }), withoutEvent(world, pickEvent));
 	}
 	const pick = (r: string) => (app.view.region = r);
+	// nová větev se počítá z kontrolního bodu A před rokem větvení, když je A uložený běh
+	const fromSaved = $derived(!!app.run && !app.run.id.startsWith('fixture:'));
+	const pickedYear = $derived(pickEvent >= 0 ? (world?.events[pickEvent]?.year ?? null) : null);
+	const runningYear = $derived(branchYear ?? (branch ? (difference?.year ?? null) : null));
 </script>
+
+{#snippet picker()}
+	{#if stored.length || ready}
+		<Stack gap={1}>
+			<Text variant="caps">{t('cokdyby.pick_caps')}</Text>
+			{#if stored.length}
+				<Stack gap={1} role="group" label={t('cokdyby.pick_label')}>
+					{#each stored as run (run.path)}
+						{@const current = run.id === storedB?.id}
+						<Button
+							variant="quiet"
+							disabled={current}
+							title={t('cokdyby.pick_open')}
+							onclick={() => openStored(run)}
+							>{run.name ?? run.id} · {run.branch_year != null ? t('cokdyby.pick_year', { year: formatYear(run.branch_year) }) : ''} · {statusText(run.status)}{current ? ` · ${t('cokdyby.pick_current')}` : ''}</Button
+						>
+					{/each}
+				</Stack>
+			{:else}
+				<Text variant="why">{t('cokdyby.pick_none')}</Text>
+			{/if}
+		</Stack>
+	{/if}
+{/snippet}
 
 {#if !world}
 	<Screen><Text variant="why">{t('cokdyby.none_explain')}</Text></Screen>
@@ -252,6 +322,7 @@
 		<Card label={t('cokdyby.card')} rowSpan={3}>
 			<Stack gap={1}>
 				<Text variant="caps">{t('cokdyby.caps', { year: formatYear(year) })}</Text>
+				<Text variant="caps">{branchYear != null ? t('cokdyby.card_head', { name: branchName, year: formatYear(branchYear) }) : t('cokdyby.card_head_noyear', { name: branchName })}</Text>
 				<Text variant="h1">{t('cokdyby.card_title', { n: diff.size })}</Text>
 				<Text variant="why">{cardWhy}</Text>
 			</Stack>
@@ -279,10 +350,11 @@
 					<Text variant="why">{t('cokdyby.curve_note')}</Text>
 				</Stack>
 			{/if}
+			{@render picker()}
 			{#if selected}
 				<Stack gap={1}>
 					<Text variant="caps">{t('cokdyby.words', { region: geo.name(selected) })}{words ? ` · ${t('cokdyby.words_count', { changed: words.changed, total: words.total })}` : ''}</Text>
-					{#if !atEnd}
+					{#if !atEnd && !words}
 						<Text variant="why">{t('cokdyby.words_end')}</Text>
 					{:else if words && words.rows.length}
 						<Table head={[{ label: t('cokdyby.words_col_meaning') }, { label: 'A' }, { label: 'B' }]}>
@@ -295,6 +367,7 @@
 							{/each}
 						</Table>
 						<Text variant="why">{t('cokdyby.words_why')}</Text>
+						{#if !atEnd}<Text variant="why">{t('cokdyby.words_year', { year: formatYear(year) })}</Text>{/if}
 					{:else}
 						<Text variant="why">{t('cokdyby.words_none')}</Text>
 					{/if}
@@ -356,6 +429,7 @@
 				{#if branch && !resultB && branch.run?.status !== 'failed'}
 					<Text variant="h1">{t('cokdyby.running_title')}</Text>
 					<Text variant="why">{t('cokdyby.running_note', { pct: Math.round((branch.run?.progress ?? 0) * 100), year: formatYear(branch.run?.year ?? 0) })}</Text>
+					<Text variant="why">{fromSaved && runningYear != null ? t('cokdyby.from_checkpoint', { year: formatYear(runningYear) }) : t('cokdyby.from_start')}</Text>
 				{:else}
 					<Text variant="h1">{t('cokdyby.none_title')}</Text>
 					<Text>{t('cokdyby.none_explain')}</Text>
@@ -364,6 +438,7 @@
 			{#if branch?.run?.status === 'failed'}
 				<Banner tone="error">{t('cokdyby.failed', { error: branch.run.error ?? '' })}</Banner>
 			{/if}
+			{@render picker()}
 			{#if !branch || branch.run?.status === 'failed'}
 				<Stack gap={2}>
 					<Text variant="why">{t('cokdyby.none_how')}</Text>
@@ -377,6 +452,9 @@
 							<Button variant="primary" disabled={!canStart || pickEvent < 0} title={reason || undefined} onclick={start}>{t('cokdyby.start')}</Button>
 						</Cluster>
 						{#if reason}<Text variant="why">{reason}</Text>{/if}
+						{#if pickedYear != null}
+							<Text variant="why">{fromSaved ? t('cokdyby.from_checkpoint', { year: formatYear(pickedYear) }) : t('cokdyby.from_start')}</Text>
+						{/if}
 					{:else}
 						<Text variant="why">{t('cokdyby.no_events')}</Text>
 					{/if}
