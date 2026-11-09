@@ -533,3 +533,68 @@ mod tempo {
         }
     }
 }
+
+#[cfg(test)]
+mod fixture {
+    use super::*;
+
+    /// Schéma enginu pro vývoj v prohlížeči (`static/fixtures/schema.json`).
+    #[test]
+    #[ignore]
+    fn schema_vzorku() {
+        let out = PathBuf::from(std::env::var("CEE_FIXTURES").expect("CEE_FIXTURES"));
+        std::fs::write(out.join("schema.json"), schema().to_string()).unwrap();
+    }
+
+    /// Vzorek dat pro vývoj UI v prohlížeči ze skutečných běhů uložených přes `cee_store`:
+    /// Talvera a větev „bez tvrdé politiky 1875“ z kontrolního bodu. Slovník v čase je rozbalený
+    /// po rocích (`lexicon_years`), aby ho UI umělo i bez příkazů Tauri.
+    /// `CEE_FIXTURES=~/Documents/CEE-worktrees/_fixtures cargo test --release --lib fixture -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn vzorek_talvery() {
+        let out = PathBuf::from(std::env::var("CEE_FIXTURES").expect("CEE_FIXTURES"));
+        let world: Value = serde_json::from_str(include_str!("../../static/projects/talvera.cee.json")).unwrap();
+        let dir = std::env::temp_dir().join(format!("cee-vzorek-{}", std::process::id()));
+        let runs = Runs::default();
+        let wait = |run: &Run| {
+            while run.status(0)["status"] == "running" {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
+            assert_eq!(run.status(0)["status"], "done");
+        };
+        let t = Instant::now();
+        let a = runs.start(StartRun { spec: &world, dir: &dir, name: Some("Talvera"), parent: None }).unwrap();
+        wait(&a);
+        println!("A {:.0} s", t.elapsed().as_secs_f64());
+        let mut b_world = world.clone();
+        b_world["events"] = json!(world["events"].as_array().unwrap().iter().filter(|e| !(e["kind"] == "language_policy" && e["policy"] == "enforced" && e["year"] == 1875.0)).cloned().collect::<Vec<_>>());
+        let t = Instant::now();
+        let b = runs.start(StartRun { spec: &b_world, dir: &dir, name: Some("bez tvrdé politiky 1875"), parent: Some(&a.dir) }).unwrap();
+        wait(&b);
+        println!("B (z kontrolního bodu) {:.0} s", t.elapsed().as_secs_f64());
+        for (run, name) in [(&a, "talvera"), (&b, "talvera-bez-politiky")] {
+            let years: Vec<Value> = cee_store::lexicon_years(&run.dir)
+                .unwrap()
+                .into_iter()
+                .map(|(year, languages)| {
+                    let langs: Map<String, Value> = languages
+                        .iter()
+                        .filter_map(|l| cee_store::lexicon(&run.dir, l, year).ok().flatten().map(|x| (l.clone(), json!({ "group": x.group, "forms": x.forms }))))
+                        .collect();
+                    json!({ "year": year, "languages": langs })
+                })
+                .collect();
+            let data = json!({
+                "world": cee_store::spec(&run.dir).unwrap(),
+                "info": cee_store::info(&run.dir).unwrap(),
+                "frames": cee_store::frames(&run.dir, 0).unwrap(),
+                "result": *run.result().unwrap(),
+                "lexicon_years": years,
+            });
+            std::fs::write(out.join(format!("{name}.json")), data.to_string()).unwrap();
+            println!("{name}: {} MB", data.to_string().len() / 1_000_000);
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
