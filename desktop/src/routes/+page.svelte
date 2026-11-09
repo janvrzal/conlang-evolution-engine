@@ -1,6 +1,7 @@
 <!-- Projekty (úvodní obrazovka): otevřený projekt se souhrnem a stavem běhu, odkazy na Svět a Atlas,
      ukázkové světy ze static/projects a otevření souboru .cee. Nic nenabízí, co aplikace neumí. -->
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { Area, Button, Cluster, FilePicker, Floating, Ledger, LedgerRow, List, ListItem, Screen, Stack, Text, TextInput, formatYear } from '$lib/ds';
 	import { i18n, number, t } from '$lib/i18n.svelte';
@@ -205,7 +206,7 @@
 									{:else}
 										<Cluster gap={2}>
 											<Button disabled={!run.has_result || isOpen(run)} onclick={() => guarded(() => app.openRun(run))}>{t('projekty.run_open')}</Button>
-											<Button disabled={!run.has_result} href="/co-kdyby" onclick={() => guarded(() => app.openBranch(run))}>{t('projekty.run_branch_b')}</Button>
+											<Button disabled={!run.has_result} onclick={() => guarded(async () => { await app.openBranch(run); await goto('/co-kdyby'); })}>{t('projekty.run_branch_b')}</Button>
 											<Button variant="quiet" onclick={() => startRename(run)}>{t('projekty.run_rename')}</Button>
 											<Button variant="quiet" onclick={() => removeRun(run)}>{t('projekty.run_delete')}</Button>
 										</Cluster>
