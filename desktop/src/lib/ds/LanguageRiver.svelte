@@ -19,8 +19,18 @@
 		selected = null,
 		cursor,
 		label,
+		dimmed = null,
 		onselect
-	}: { years: number[]; streams: RiverStream[]; selected?: string | null; cursor?: number; label: string; onselect?: (id: string) => void } = $props();
+	}: {
+		years: number[];
+		streams: RiverStream[];
+		selected?: string | null;
+		cursor?: number;
+		label: string;
+		/** proudy, které filtr nevybral: zůstanou v řece, ale ztlumené */
+		dimmed?: Set<string> | null;
+		onselect?: (id: string) => void;
+	} = $props();
 
 	let box: HTMLDivElement;
 	let w = $state(0);
@@ -91,6 +101,7 @@
 					d={p.d}
 					fill={p.stream.color}
 					class:sel={p.id === selected}
+					class:dim={dimmed?.has(p.id) && p.id !== selected}
 					role="button"
 					tabindex="0"
 					aria-label={p.stream.label}
@@ -131,8 +142,11 @@
 	}
 	path.sel {
 		fill-opacity: 0.95;
-		stroke: var(--red);
+		stroke: var(--ink);
 		stroke-width: 2;
+	}
+	path.dim {
+		fill-opacity: 0.15;
 	}
 	path:focus-visible {
 		outline: none;
@@ -148,7 +162,7 @@
 		font-weight: 700;
 	}
 	.cursor {
-		stroke: var(--red);
+		stroke: var(--ink);
 		stroke-width: 1.5;
 	}
 </style>

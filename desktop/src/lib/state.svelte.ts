@@ -30,7 +30,8 @@ export interface WorldSpec {
 		[key: string]: unknown;
 	}[];
 	events: { kind: string; year: number; [key: string]: unknown }[];
-	parameters?: Record<string, number>;
+	/** přepisy parametrů enginu: číslo, nebo celá tabulka u slovních úrovní */
+	parameters?: Record<string, unknown>;
 	[key: string]: unknown;
 }
 

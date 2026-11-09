@@ -33,6 +33,7 @@ export { default as Range } from './Range.svelte';
 export { default as Select } from './Select.svelte';
 export { default as FilePicker } from './FilePicker.svelte';
 export { default as Chip } from './Chip.svelte';
+export { default as ParamRow } from './ParamRow.svelte';
 
 // data
 export { default as Ledger } from './Ledger.svelte';
