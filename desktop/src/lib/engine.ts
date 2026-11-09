@@ -18,13 +18,54 @@ export interface Health {
 
 export interface Issue {
 	path: string;
+	/** česká zpráva enginu (výchozí text) */
 	message: string;
 	severity?: 'error' | 'warning';
+	/** stálý kód pro překlad (dok. 36), dosazované hodnoty */
+	code?: string;
+	args?: Record<string, string>;
+}
+
+/** Běh uložený ve složce projektu (`cee_store::RunInfo` + `matches`, `path`). */
+export interface StoredRun {
+	/** jméno složky (čas spuštění) */
+	id: string;
+	/** cesta ke složce = id běhu pro příkazy */
+	path: string;
+	name: string | null;
+	spec_hash: string;
+	parent: string | null;
+	branch_year: number | null;
+	start_year: number;
+	end_year: number;
+	year: number;
+	status: 'running' | 'done' | 'failed' | 'cancelled' | 'interrupted';
+	error: string | null;
+	seconds: number;
+	/** sekundy od 1970 */
+	created: number;
+	finished: number | null;
+	engine: string | null;
+	frames: number;
+	checkpoints: number;
+	has_result: boolean;
+	/** běh vznikl z tohoto zadání */
+	matches: boolean;
+	/** velikost složky po částech v bajtech (frames, events, lexicon, result, checkpoints) */
+	size?: Record<string, number>;
+}
+
+export interface StartOptions {
+	/** cesta k projektu (běh se uloží vedle něj); null = dočasná složka neuloženého projektu */
+	project?: string | null;
+	name?: string | null;
+	/** „co kdyby“: cesta k rodičovskému běhu */
+	parent?: string | null;
 }
 
 export interface RunStatus {
 	id: string;
-	status: 'running' | 'done' | 'failed' | 'cancelled';
+	status: 'running' | 'done' | 'failed' | 'cancelled' | 'interrupted';
 	year: number;
 	progress: number;
 	start_year: number;
@@ -135,8 +176,8 @@ export class Engine {
 		return this.request('/validate', { method: 'POST', body: JSON.stringify(spec) });
 	}
 
-	start(spec: unknown): Promise<{ run_id: string; status: string }> {
-		if (this.native) return this.call('run_start', { spec });
+	start(spec: unknown, options: StartOptions = {}): Promise<{ run_id: string; status: string }> {
+		if (this.native) return this.call('run_start', { spec, project: options.project ?? null, name: options.name ?? null, parent: options.parent ?? null });
 		return this.request('/runs', { method: 'POST', body: JSON.stringify(spec) });
 	}
 
@@ -148,6 +189,40 @@ export class Engine {
 	result(runId: string): Promise<ExportV2> {
 		if (this.native) return this.call('run_result', { id: runId });
 		return this.request(`/runs/${runId}/result`);
+	}
+
+	/** Běhy projektu (jen v aplikaci). */
+	runs(project: string | null, spec: unknown): Promise<{ dir: string; runs: StoredRun[] }> {
+		if (!this.native) return Promise.resolve({ dir: '', runs: [] });
+		return this.call('runs_list', { project, spec });
+	}
+
+	/** Slovník jazyka v roce ze složky běhu (jen v aplikaci). */
+	lexicon(runId: string, language: string, year: number): Promise<{ group: string; forms: Record<string, string> } | null> {
+		if (!this.native) return Promise.resolve(null);
+		return this.call('run_lexicon', { id: runId, language, year });
+	}
+
+	lexiconYears(runId: string): Promise<{ year: number; languages: string[] }[]> {
+		if (!this.native) return Promise.resolve([]);
+		return this.call('run_lexicon_years', { id: runId });
+	}
+
+	wordHistory(runId: string, language: string, concept: string): Promise<{ year: number; form: string | null }[]> {
+		if (!this.native) return Promise.resolve([]);
+		return this.call('run_word_history', { id: runId, language, concept });
+	}
+
+	renameRun(runId: string, name: string | null): Promise<void> {
+		return this.call('run_rename', { id: runId, name });
+	}
+
+	dropCheckpoints(runId: string): Promise<void> {
+		return this.call('run_drop_checkpoints', { id: runId });
+	}
+
+	deleteRun(runId: string): Promise<void> {
+		return this.call('run_delete', { id: runId });
 	}
 
 	cancel(runId: string): Promise<unknown> {

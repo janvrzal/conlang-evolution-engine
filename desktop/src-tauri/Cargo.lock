@@ -300,6 +300,7 @@ name = "cee-desktop"
 version = "0.1.0"
 dependencies = [
  "cee_engine",
+ "cee_store",
  "flate2",
  "serde",
  "serde_json",
@@ -327,6 +328,16 @@ dependencies = [
  "serde_json",
  "sha2",
  "unicode-normalization",
+]
+
+[[package]]
+name = "cee_store"
+version = "0.1.0"
+dependencies = [
+ "cee_engine",
+ "flate2",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

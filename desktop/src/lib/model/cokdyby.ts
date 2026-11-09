@@ -1,4 +1,5 @@
 // Výpočty obrazovky Co kdyby: porovnání dvou běhů (A hlavní, B větev) nad snímkem roku.
+import type { StoredRun } from '$lib/engine';
 import type { WorldSpec } from '$lib/state.svelte';
 import type { ExportV2, FrameV2 } from './export';
 import { villageOfGroup } from './geography';
@@ -155,4 +156,46 @@ export function differingShown(
 	if (shown.a === raw.a && shown.b === raw.b) return byEngine;
 	const byShown = differingVillages(shown.a, shown.b, matchLineages(shown.a, shown.b, families));
 	return new Set([...byShown].filter((v) => byEngine.has(v)));
+}
+
+/** Jméno složky běhu (poslední díl cesty); id vzorku `fixture:…` nemá složku. */
+export function folderName(id: string | null | undefined): string | null {
+	if (!id || id.startsWith('fixture:')) return null;
+	return id.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || null;
+}
+
+/** Uložené větve běhu A: běhy projektu, jejichž `parent` je složka běhu A (nejnovější první). */
+export function branchesOf(runs: StoredRun[], runId: string | null | undefined): StoredRun[] {
+	const folder = folderName(runId);
+	if (!folder) return [];
+	return runs.filter((r) => r.parent === folder).sort((a, b) => b.created - a.created);
+}
+
+/** Uložený běh, kterým je právě otevřená větev B (podle cesty nebo jména složky). */
+export function storedBranch(runs: StoredRun[], branchRunId: string | null | undefined): StoredRun | null {
+	const folder = folderName(branchRunId);
+	return folder ? (runs.find((r) => r.id === folder) ?? null) : null;
+}
+
+/**
+ * Rok větvení: z uloženého běhu (`branch_year`), jinak ze vzorku (`info.branch_year`), jinak rok první
+ * události, kterou se zadání liší.
+ */
+export function branchYearOf(stored: { branch_year: number | null } | null, info: number | null | undefined, difference: number | null): number | null {
+	return stored?.branch_year ?? info ?? difference;
+}
+
+/** Porovnání tvarů dvou slovníků jazyka v roce (z `app.lexicon`); stejný tvar výsledku jako `compareWords`. */
+export function compareForms(a: Record<string, string> | undefined, b: Record<string, string> | undefined, concepts: string[]) {
+	if (!a || !b) return null;
+	const shared = Object.keys(a).filter((c) => c in b);
+	const changed = shared.filter((c) => a[c] !== b[c]).length;
+	const rows = concepts.filter((c) => c in a && c in b).map((c) => ({ concept: c, a: a[c], b: b[c], differs: a[c] !== b[c] }));
+	return { rows, changed, total: shared.length };
+}
+
+/** Jazyk domácí skupiny ve snímku (linie, jejíž slovník skupina mluví). */
+export function groupLanguage(frame: FrameV2 | null, group: string | null): string | null {
+	if (!frame || !group) return null;
+	return frame.groups.find((g) => g.id === group)?.observed_language ?? null;
 }

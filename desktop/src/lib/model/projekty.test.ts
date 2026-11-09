@@ -35,3 +35,37 @@ describe('čtení souboru', () => {
 		expect(parseProject(null)).toBeNull();
 	});
 });
+
+import { formatDuration, normalizeRunName, parentTitle, runStatusKey, runTitle, sortRuns } from './projekty';
+import type { StoredRun } from '../engine';
+
+const run = (o: Partial<StoredRun>): StoredRun =>
+	({ id: 'a', path: '/p/a', name: null, parent: null, branch_year: null, status: 'done', created: 100, ...o }) as StoredRun;
+
+describe('běhy projektu', () => {
+	it('řadí nejnovější první', () => {
+		expect(sortRuns([run({ id: 'a', created: 1 }), run({ id: 'b', created: 3 }), run({ id: 'c', created: 2 })]).map((r) => r.id)).toEqual(['b', 'c', 'a']);
+	});
+	it('stav: neznámý je přerušený', () => {
+		expect(runStatusKey(run({ status: 'failed' }))).toBe('failed');
+		expect(runStatusKey(run({ status: 'x' as never }))).toBe('interrupted');
+	});
+	it('doba', () => {
+		expect(formatDuration(45)).toBe('45 s');
+		expect(formatDuration(200)).toBe('3 min 20 s');
+		expect(formatDuration(180)).toBe('3 min');
+		expect(formatDuration(3900)).toBe('1 h 05 min');
+	});
+	it('jméno, jinak čas; rodič', () => {
+		expect(runTitle(run({ name: ' Moje ' }), 'cs')).toBe('Moje');
+		expect(runTitle(run({ name: null, created: 0 }), 'cs')).toMatch(/1970/);
+		const parent = run({ id: 'p', path: '/p/p', name: 'Základ' });
+		expect(parentTitle(run({ parent: 'p' }), [parent], 'cs')).toBe('Základ');
+		expect(parentTitle(run({ parent: 'zmizel' }), [parent], 'cs')).toBe('zmizel');
+		expect(parentTitle(run({}), [parent], 'cs')).toBeNull();
+	});
+	it('prázdné jméno ruší jméno', () => {
+		expect(normalizeRunName('  ')).toBeNull();
+		expect(normalizeRunName(' A ')).toBe('A');
+	});
+});

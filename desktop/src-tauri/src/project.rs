@@ -1,29 +1,17 @@
-//! Projekty na disku: zadání světa (`*.cee.json`), výsledek běhu vedle něj
-//! (`*.cee.vysledek.json.gz`: zadání, snímky, export) a seznam nedávných projektů.
+//! Projekty na disku: zadání světa (`*.cee.json`), jeho běhy ve složce vedle něj
+//! (`*.cee.behy/`, zapisuje `cee_store`) a seznam nedávných projektů.
 //!
-//! Výsledek nese zadání, ze kterého vznikl; po otevření UI pozná, jestli ještě sedí
-//! (jinak ho ukáže jako zastaralý). Zápis jde přes dočasný soubor a přejmenování,
-//! aby pád uprostřed nezanechal rozbitý projekt.
+//! Každý běh nese zadání, ze kterého vznikl (`spec_hash`); UI podle toho pozná, jestli
+//! ještě sedí. Zadání se zapisuje přes dočasný soubor a přejmenování.
 
 use std::fs;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use flate2::read::GzDecoder;
-use flate2::write::GzEncoder;
-use flate2::Compression;
 use serde_json::{json, Value};
 
 /// Kolik nedávných projektů si aplikace pamatuje.
 const RECENT: usize = 12;
-pub const RUN_FORMAT: &str = "cee-run/1";
-
-/// Soubor s výsledkem vedle projektu: `svet.cee.json` → `svet.cee.vysledek.json.gz`.
-pub fn result_path(project: &Path) -> PathBuf {
-    let name = project.file_name().and_then(|n| n.to_str()).unwrap_or("svet.cee.json");
-    let stem = name.strip_suffix(".json").unwrap_or(name);
-    project.with_file_name(format!("{stem}.vysledek.json.gz"))
-}
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
@@ -37,18 +25,7 @@ pub fn save_world(path: &Path, world: &Value) -> Result<(), String> {
     write_atomic(path, format!("{text}\n").as_bytes())
 }
 
-/// Uloží výsledek běhu vedle projektu (gzip).
-pub fn save_result(project: &Path, spec: &Value, frames: &Value, result: &Value, seconds: f64) -> Result<PathBuf, String> {
-    let payload = json!({ "format": RUN_FORMAT, "spec": spec, "seconds": seconds, "frames": frames, "result": result });
-    let mut gz = GzEncoder::new(Vec::new(), Compression::new(6));
-    serde_json::to_writer(&mut gz, &payload).map_err(|e| e.to_string())?;
-    let bytes = gz.finish().map_err(|e| e.to_string())?;
-    let path = result_path(project);
-    write_atomic(&path, &bytes)?;
-    Ok(path)
-}
-
-/// Otevře projekt: zadání a (je-li) uložený výsledek s příznakem, zda k zadání sedí.
+/// Otevře projekt: zadání (čisté nebo v obálce `cee-project/1`).
 pub fn open(path: &Path) -> Result<Value, String> {
     let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let parsed: Value = serde_json::from_str(&text).map_err(|_| "Soubor není popis světa CEE.".to_string())?;
@@ -56,20 +33,65 @@ pub fn open(path: &Path) -> Result<Value, String> {
     if world["format"] != "cee-v2-world/1" {
         return Err("Soubor není popis světa CEE.".into());
     }
-    let run = load_result(path).ok();
-    let matches = run.as_ref().is_some_and(|r| r["spec"] == world);
-    Ok(json!({ "path": path, "world": world, "run": run, "run_matches": matches }))
+    Ok(world)
 }
 
-fn load_result(project: &Path) -> Result<Value, String> {
-    let file = fs::File::open(result_path(project)).map_err(|e| e.to_string())?;
-    let mut text = String::new();
-    GzDecoder::new(file).read_to_string(&mut text).map_err(|e| e.to_string())?;
-    let run: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    if run["format"] != RUN_FORMAT {
-        return Err("neznámý formát výsledku".into());
+/// Běhy projektu pro UI: složka a seznam (nejnovější první) s příznakem, zda běh sedí k zadání.
+pub fn runs(dir: &Path, world: &Value) -> Result<Value, String> {
+    let hash = cee_store::spec_hash(world);
+    let list = if dir.is_dir() { cee_store::list(dir)? } else { Vec::new() };
+    let runs: Vec<Value> = list
+        .into_iter()
+        .map(|info| {
+            let matches = info.spec_hash == hash;
+            let mut v = serde_json::to_value(&info).unwrap_or(Value::Null);
+            v["matches"] = json!(matches);
+            v["path"] = json!(dir.join(&info.id));
+            // velikost po částech (bajty); kontrolní body jsou největší a dají se smazat
+            v["size"] = json!(cee_store::size(&dir.join(&info.id)));
+            v
+        })
+        .collect();
+    Ok(json!({ "dir": dir, "runs": runs }))
+}
+
+/// Přesune běhy (složku `*.behy`) k jinému projektu, např. z dočasné složky neuloženého
+/// projektu nebo při „Uložit jako“. Existující cílová složka se doplní po bězích.
+pub fn move_runs(from: &Path, to: &Path) -> Result<(), String> {
+    if !from.is_dir() || from == to {
+        return Ok(());
     }
-    Ok(run)
+    if !to.exists() {
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        if fs::rename(from, to).is_ok() {
+            return Ok(());
+        }
+    }
+    fs::create_dir_all(to).map_err(|e| e.to_string())?;
+    for entry in fs::read_dir(from).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let target = to.join(entry.file_name());
+        if !target.exists() {
+            fs::rename(entry.path(), &target).or_else(|_| copy_dir(&entry.path(), &target)).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
 }
 
 /// Nedávné projekty (nejnovější první), uložené v konfigurační složce aplikace.
@@ -88,9 +110,9 @@ impl Recent {
             .into_iter()
             .map(|mut item| {
                 let exists = item["path"].as_str().is_some_and(|p| Path::new(p).is_file());
-                let has_result = item["path"].as_str().is_some_and(|p| result_path(Path::new(p)).is_file());
+                let runs = item["path"].as_str().map(|p| cee_store::runs_dir(Path::new(p))).filter(|d| d.is_dir()).and_then(|d| cee_store::list(&d).ok()).map_or(0, |l| l.len());
                 item["exists"] = json!(exists);
-                item["has_result"] = json!(has_result);
+                item["runs"] = json!(runs);
                 item
             })
             .collect()
@@ -130,26 +152,25 @@ mod tests {
     }
 
     #[test]
-    fn ulozeni_a_otevreni_projektu_s_vysledkem() {
+    fn ulozeni_otevreni_a_presun_behu() {
         let d = dir();
         let path = d.join("talvera.cee.json");
         let world: Value = serde_json::from_str(include_str!("../../static/projects/talvera.cee.json")).unwrap();
         save_world(&path, &world).unwrap();
-        let opened = open(&path).unwrap();
-        assert_eq!(opened["world"], world);
-        assert!(opened["run"].is_null());
-
-        let saved = save_result(&path, &world, &json!([{ "year": -700 }]), &json!({ "format": "cee-v2/1", "year": 1950 }), 12.5).unwrap();
-        assert_eq!(saved.file_name().unwrap(), "talvera.cee.vysledek.json.gz");
-        let opened = open(&path).unwrap();
-        assert_eq!(opened["run"]["result"]["year"], 1950);
-        assert_eq!(opened["run_matches"], true);
-
-        // změněné zadání: výsledek se načte, ale nesedí
+        assert_eq!(open(&path).unwrap(), world);
+        // běh v dočasné složce se při uložení přesune k projektu
+        let tmp = d.join("neulozeno.cee.behy");
+        let mut writer = cee_store::RunWriter::create(&tmp, &cee_store::NewRun { spec: Some(&world), ..Default::default() }).unwrap();
+        writer.finish(cee_store::Status::Done, None, 1.0, None).unwrap();
+        let target = cee_store::runs_dir(&path);
+        move_runs(&tmp, &target).unwrap();
+        assert!(!tmp.exists());
+        let listed = runs(&target, &world).unwrap();
+        assert_eq!(listed["runs"].as_array().unwrap().len(), 1);
+        assert_eq!(listed["runs"][0]["matches"], true);
         let mut changed = world.clone();
         changed["seed"] = json!(2);
-        save_world(&path, &changed).unwrap();
-        assert_eq!(open(&path).unwrap()["run_matches"], false);
+        assert_eq!(runs(&target, &changed).unwrap()["runs"][0]["matches"], false);
         fs::remove_dir_all(d).unwrap();
     }
 
@@ -158,7 +179,7 @@ mod tests {
         let d = dir();
         let path = d.join("x.json");
         fs::write(&path, r#"{"format":"cee-project/1","world":{"format":"cee-v2-world/1","end_year":10,"languages":[],"regions":[]}}"#).unwrap();
-        assert_eq!(open(&path).unwrap()["world"]["end_year"], 10);
+        assert_eq!(open(&path).unwrap()["end_year"], 10);
         fs::write(&path, r#"{"hello":1}"#).unwrap();
         assert!(open(&path).is_err());
         fs::remove_dir_all(d).unwrap();

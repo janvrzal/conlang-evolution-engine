@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EngineSchema } from '$lib/engine';
-import { arrowsOf, defaultEvent, fieldsOf, highlightOf, insertIndex, laneOf, outcomesOf, resolveRegion, snapYear, statesAt, type WorldEvent } from './dejiny';
+import { arrowsOf, caseLabelOf, defaultEvent, fieldsOf, highlightOf, insertIndex, isStudyCase, laneOf, outcomesOf, resolveRegion, snapYear, statesAt, type WorldEvent } from './dejiny';
 
 const regions = ['m01-01', 'm01-02', 'm03-06', 'm06-03'];
 const schema = {
@@ -20,6 +20,15 @@ const schema = {
 } as unknown as EngineSchema;
 
 describe('dějiny', () => {
+	it('studijní případ je události s neprázdným study_case; štítek je ten text', () => {
+		const labelled = { kind: 'elite', year: 1800, study_case: 'Posádka na brodu' } as WorldEvent;
+		expect(isStudyCase(labelled)).toBe(true);
+		expect(caseLabelOf(labelled)).toBe('Posádka na brodu');
+		expect(isStudyCase({ kind: 'elite', year: 1800, study_case: '' } as WorldEvent)).toBe(false);
+		expect(isStudyCase({ kind: 'elite', year: 1800, study_case: null } as WorldEvent)).toBe(false);
+		expect(caseLabelOf({ kind: 'elite', year: 1800 } as WorldEvent)).toBe('');
+	});
+
 	it('zařadí druhy do pruhů', () => {
 		expect(laneOf('annexation')).toBe('states');
 		expect(laneOf('standard')).toBe('society');

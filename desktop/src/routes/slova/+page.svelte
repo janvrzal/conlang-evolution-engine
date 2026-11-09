@@ -1,5 +1,6 @@
-<!-- Slova: tvary jednoho pojmu na mapě vsí, červené izoglosy tam, kde se tvar mění; karta s tvary v největších
-     jazycích a vrtem kraje. Slovník nese jen koncový export, proto mapa ukazuje koncový snímek. -->
+<!-- Slova: tvary jednoho pojmu na mapě vsí v roce časové osy, červené izoglosy tam, kde se tvar mění; karta s tvary
+     v největších jazycích a vrtem kraje jako skutečnou historií. V koncovém roce se tvary berou přesně z exportu,
+     v dřívějších ze slovníku jazyka v roce (`app.lexicon`), uloženého do cache po rocích a liniích. -->
 <script lang="ts">
 	import {
 		Card,
@@ -26,17 +27,21 @@
 		type MapVillage,
 		type Stratum
 	} from '$lib/ds';
+	import { SvelteMap } from 'svelte/reactivity';
 	import { i18n, t, type MessageKey } from '$lib/i18n.svelte';
 	import { conceptLabel } from '$lib/model/concepts';
 	import { cityMarkers, geography } from '$lib/model/geography';
 	import { frameAt, homeLanguage, lineageNames, lineagePalette, speakers } from '$lib/model/languages';
-	import { conceptList, formAreas, shortMorpheme, villageForms } from '$lib/model/slova';
+	import { conceptList, formAreas, historyLayers, lineageChain, protoOf, shortMorpheme, villageForms, villageFormsAt } from '$lib/model/slova';
 	import { app } from '$lib/state.svelte';
 
 	const world = $derived(app.world);
 	const result = $derived(app.result);
 	const geo = $derived(world ? geography(world, result) : null);
-	const year = $derived(result?.year ?? 0);
+	const endYear = $derived(result?.year ?? 0);
+	const year = $derived(Math.min(app.view.year ?? endYear, endYear));
+	const atEnd = $derived(year >= endYear);
+	const runId = $derived(app.run?.id ?? '');
 	const frame = $derived(result ? frameAt(app.frames, year) : null);
 	const domainOf = $derived(new Map((result?.groups ?? []).map((g) => [g.id, g.domain])));
 	const home = $derived(frame ? homeLanguage(frame.groups, domainOf) : new Map());
@@ -50,7 +55,25 @@
 	const palette = $derived(result && world ? lineagePalette(world, result) : new Map<string, string>());
 	const familyName = (code: string) => world?.languages.find((l) => l.id === code)?.name ?? code;
 
-	const forms = $derived(result ? villageForms(result, home, concept) : new Map());
+	// slovníky jazyků v roce: cache rok × linie (klíč nese i běh)
+	const lexCache = new SvelteMap<string, Record<string, string> | null>();
+	const asked = new Set<string>();
+	const lexKey = (lineage: string) => `${runId}|${year}|${lineage}`;
+	const lineagesNow = $derived([...new Set([...home.values()].map((h) => h.lineage))]);
+	$effect(() => {
+		if (atEnd) return;
+		for (const l of lineagesNow) {
+			const k = lexKey(l);
+			if (asked.has(k)) continue;
+			asked.add(k);
+			void app.lexicon(l, year).then((lex) => lexCache.set(k, lex?.forms ?? null));
+		}
+	});
+	const loading = $derived(!atEnd && lineagesNow.some((l) => !lexCache.has(lexKey(l))));
+
+	const forms = $derived(
+		result ? (atEnd ? villageForms(result, home, concept) : villageFormsAt(home, concept, (l) => lexCache.get(lexKey(l)))) : new Map()
+	);
 	const areas = $derived(formAreas(forms));
 	const regionsWithForm = $derived(new Set([...forms.keys()].map((v) => geo?.villages.find((x) => x.id === v)?.region)).size);
 
@@ -75,7 +98,7 @@
 		{ label: t('slova.region_border'), kind: 'dashed', color: 'var(--ink-2)' }
 	]);
 
-	// největší jazyky: lineage → největší domácí skupina
+	// největší jazyky: v koncovém roce z exportu (největší domácí skupina linie), jinak ze slovníku jazyka v roce
 	const largest = $derived.by(() => {
 		if (!frame) return [];
 		const spoke = speakers(frame.groups, domainOf);
@@ -88,34 +111,69 @@
 		}
 		return [...spoke.entries()]
 			.sort((a, b) => b[1] - a[1])
-			.map(([lineage]) => ({ lineage, entry: result?.lexicon[best.get(lineage)?.group ?? '']?.[concept], group: best.get(lineage)?.group }))
-			.filter((r) => r.entry)
+			.map(([lineage]) => {
+				const entry = atEnd ? result?.lexicon[best.get(lineage)?.group ?? '']?.[concept] : undefined;
+				return { lineage, entry, form: atEnd ? entry?.form : lexCache.get(lexKey(lineage))?.[concept] };
+			})
+			.filter((r) => r.form)
 			.slice(0, 6);
 	});
 	const originLabel = (o: string, loan: boolean) => t(`origin.${loan ? 'loan' : o}` as MessageKey);
 	const originOf = (r: { entry?: { origin: string; loan: boolean; language: string } }) =>
 		r.entry ? (r.entry.language && r.entry.origin !== 'inherited' ? t('slova.origin_from', { origin: originLabel(r.entry.origin, r.entry.loan), family: familyName(r.entry.language) }) : originLabel(r.entry.origin, r.entry.loan)) : '';
 
-	// vrt kraje: tvary ve vsích kraje podle koncového exportu
+	// vrt kraje: skutečná historie slova v jazyce kraje v roce a v jeho předcích až k protojazyku
 	const region = $derived(app.view.region && geo ? geo.regions.find((r) => r.id === app.view.region) : null);
-	const strata: Stratum[] = $derived.by(() => {
-		if (!region || !geo) return [];
+	const regionLineage = $derived.by(() => {
+		if (!region || !geo) return null;
 		const inRegion = new Set(geo.villages.filter((v) => v.region === region.id).map((v) => v.id));
-		const rows: Stratum[] = [];
-		const seen = new Set<string>();
-		for (const [, f] of [...forms.entries()].filter(([v]) => inRegion.has(v)).sort((a, b) => a[0].localeCompare(b[0]))) {
-			const key = `${f.form}|${f.lineage}`;
-			if (seen.has(key)) continue;
-			seen.add(key);
-			const e = f.entry;
-			const bits = [nameOf(f.lineage)];
-			if (e.origin !== 'inherited' || e.loan) bits.push(originOf({ entry: e }));
-			if (e.base) bits.push(t('slova.core_base', { base: shortMorpheme(e.base) ?? '' }));
-			else if (e.root) bits.push(t('slova.core_root', { root: shortMorpheme(e.root) ?? '' }));
-			rows.push({ form: f.form, note: bits.join(' · '), changed: e.origin !== 'inherited' || e.loan });
-		}
-		return rows;
+		let best: { lineage: string; population: number } | null = null;
+		for (const [v, h] of home) if (inRegion.has(v) && (!best || h.population > best.population)) best = h;
+		return best?.lineage ?? null;
 	});
+	const chain = $derived.by(() => {
+		if (!result || !regionLineage) return [];
+		const c = lineageChain(result.lineages, regionLineage);
+		return c.length ? c : [regionLineage];
+	});
+	const histCache = new SvelteMap<string, { year: number; form: string | null }[]>();
+	const histAsked = new Set<string>();
+	const histKey = (lineage: string) => `${runId}|${lineage}|${concept}`;
+	$effect(() => {
+		for (const l of chain) {
+			const k = histKey(l);
+			if (histAsked.has(k)) continue;
+			histAsked.add(k);
+			void app.wordHistory(l, concept).then((h) => histCache.set(k, h));
+		}
+	});
+	const histLoading = $derived(chain.some((l) => !histCache.has(histKey(l))));
+	const layers = $derived.by(() => {
+		if (!result || !chain.length || histLoading) return [];
+		const code = protoOf(result, chain[chain.length - 1]);
+		const form = code ? result.proto_lexicon?.[code]?.forms[concept] : null;
+		const start = world?.start_year ?? app.run?.start_year ?? 0;
+		return historyLayers(
+			chain.map((id) => ({ id, history: histCache.get(histKey(id)) ?? [] })),
+			code ? { language: code, form: form ?? null, year: start } : null,
+			year
+		);
+	});
+	const strata: Stratum[] = $derived(
+		layers.map((l) => ({
+			form: l.proto ? `*${l.form}` : l.form,
+			note: [formatYear(l.year), l.proto ? t('slova.proto_note', { language: familyName(l.language) }) : nameOf(l.language), l.changed ? t('slova.core_switch') : '']
+				.filter(Boolean)
+				.join(' · '),
+			changed: l.changed
+		}))
+	);
+	// protoformy pojmu ve všech protojazycích zadání
+	const protoForms = $derived(
+		Object.entries(result?.proto_lexicon ?? {})
+			.map(([id, l]) => ({ id, form: l.forms[concept] }))
+			.filter((p) => p.form)
+	);
 	const pick = (r: string) => (app.view.region = r);
 	const setConcept = (c: string) => (app.view.concept = c);
 </script>
@@ -144,6 +202,13 @@
 				<Floating>
 					<Text variant="caps">{t('slova.word')}</Text>
 					<Text variant="big">{word.toUpperCase()}</Text>
+					{#if protoForms.length}
+						<Cluster gap={2} align="baseline" label={t('slova.proto_forms')}>
+							{#each protoForms as p (p.id)}
+								<Cluster gap={1} align="baseline"><Ipa text={`*${p.form}`} size="m" /><Text variant="small" as="span">{p.id}.</Text></Cluster>
+							{/each}
+						</Cluster>
+					{/if}
 					{#each areas.slice(0, 4) as a (a.form)}
 						<Cluster gap={2} align="baseline">
 							{#if a.foreign}<i><Ipa text={a.form} size="m" /></i>{:else}<Ipa text={a.form} size="m" />{/if}
@@ -175,7 +240,7 @@
 			<Stack gap={1}>
 				<Text variant="caps">{t('slova.word')}</Text>
 				<Text variant="h1">‘{word}’</Text>
-				{#if app.view.year != null && app.view.year !== year}<Text variant="why">{t('slova.end_only', { year: formatYear(year) })}</Text>{/if}
+				{#if !atEnd}<Text variant="why">{t('slova.end_only', { year: formatYear(year) })}</Text>{/if}
 			</Stack>
 			<Stack gap={1}>
 				<Text variant="caps">{t('slova.largest', { year: formatYear(year) })}</Text>
@@ -183,12 +248,12 @@
 					{#each largest as r (r.lineage)}
 						<Tr>
 							<Td><Swatch color={palette.get(r.lineage) ?? 'var(--ink-3)'} />{nameOf(r.lineage)}</Td>
-							<Td><Ipa text={r.entry?.form ?? ''} size="m" /></Td>
+							<Td><Ipa text={r.form ?? ''} size="m" /></Td>
 							<Td><Text variant="why" as="span">{originOf(r)}</Text></Td>
 						</Tr>
 					{/each}
 				</Table>
-				<Text variant="why">{t('slova.origin_note')}</Text>
+				<Text variant="why">{loading ? t('slova.loading') : t('slova.origin_note')}</Text>
 			</Stack>
 			<Stack gap={1}>
 				{#if region}
@@ -197,12 +262,13 @@
 						<Button variant="quiet" onclick={() => (app.view.region = null)}>{t('slova.clear')}</Button>
 					</Cluster>
 					<Text variant="why">{t('slova.core_hint')}</Text>
-					{#if strata.length}
+					{#if histLoading}
+						<Text variant="why">{t('slova.loading')}</Text>
+					{:else if strata.length}
 						<Strata items={strata} label={t('slova.core_caps', { region: region.name })} />
 					{:else}
 						<Text variant="why">{t('slova.no_form')}</Text>
 					{/if}
-					<Text variant="why">{t('slova.core_pending')}</Text>
 				{:else}
 					<Text variant="caps">{t('slova.core')}</Text>
 					<Text variant="why">{t('slova.core_pick')}</Text>

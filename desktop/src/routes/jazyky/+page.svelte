@@ -14,11 +14,13 @@
 		List,
 		ListItem,
 		Screen,
+		Disclosure,
 		Segmented,
 		Stack,
 		Stage,
 		Swatch,
 		Table,
+		Term,
 		Tabs,
 		Td,
 		Text,
@@ -30,13 +32,21 @@
 	import { conceptLabel } from '$lib/model/concepts';
 	import { geography } from '$lib/model/geography';
 	import {
+		CELL_FUNCTION,
+		analogyCounts,
+		analogyRows,
 		biggestGroup,
 		centurySummary,
 		endonymHistory,
 		grammarRows,
 		presence,
 		mergeVarieties,
+		parseFeatures,
 		riverStreams,
+		ruleText,
+		soundRows,
+		symText,
+		type Sym,
 		rootRetention,
 		totals
 	} from '$lib/model/jazyky';
@@ -126,6 +136,25 @@
 	const analogyKinds = ['analogy', 'grammaticalized'];
 	const sounds = $derived(centurySummary(result?.event_summary, soundKinds));
 	const analogies = $derived(centurySummary(result?.event_summary, analogyKinds));
+
+	// zvuky a analogie vybraného jazyka (change_history), nejrozšířenější první
+	const PAGE = 30;
+	let soundShown = $state(PAGE);
+	let analogyShown = $state(PAGE);
+	$effect(() => {
+		void selected;
+		soundShown = PAGE;
+		analogyShown = PAGE;
+	});
+	const soundList = $derived(soundRows(result, selected));
+	const analogyList = $derived(analogyRows(result, selected));
+	const analogyTotals = $derived(analogyCounts(analogyList));
+	const featureExplain = (spec: string) =>
+		parseFeatures(spec)
+			.map((f) => (f.known ? t(`jazyky.feat.${f.name}.${f.plus ? 'plus' : 'minus'}` as MessageKey) : (f.plus ? '+' : '−') + f.name))
+			.join(', ');
+	const classText = (s: Sym) => (s.kind === 'class' ? t(`jazyky.cls.${s.id}` as MessageKey) : t('jazyky.cls.edge'));
+	const cellText = (cell: string | null) => (cell ? (CELL_FUNCTION[cell] ? t(`jazyky.fn.${CELL_FUNCTION[cell]}` as MessageKey) : cell) : '—');
 	const unit = (rows: { counts: number[] }[], n: number) => totals(rows, n);
 </script>
 
@@ -222,36 +251,61 @@
 				{:else if tab === 'sounds'}
 					<Stack gap={2}>
 						<Text variant="why">{t('jazyky.sounds_intro')}</Text>
-						{#if sounds.length}
-							<Table
-								caption={t('jazyky.world_wide')}
-								head={[{ label: t('jazyky.col.century'), num: true }, { label: t('jazyky.col.innovation'), num: true }, { label: t('jazyky.col.established'), num: true }, { label: t('jazyky.col.closed'), num: true }]}
-							>
-								{#each sounds as r (r.century)}
-									<Tr><Td num>{formatYear(r.century)}</Td>{#each r.counts as n, i (i)}<Td num>{number(n)}</Td>{/each}</Tr>
+						{#if soundList.length}
+							<Text variant="why">{t('jazyky.sounds_total', { n: number(soundList.length) })}</Text>
+							<Table head={[{ label: t('jazyky.col.from_year'), num: true }, { label: t('jazyky.col.change') }, { label: t('jazyky.col.villages'), num: true }]}>
+								{#each soundList.slice(0, soundShown) as r (r.key)}
+									<Tr>
+										<Td num>{formatYear(r.year)}</Td>
+										<Td>
+											<Text variant="strong">{t(`jazyky.sfam.${r.family}` as MessageKey)}</Text><br />
+											{@render sym(r.target)} {t(`jazyky.sop.${r.operation}` as MessageKey)}{#if r.features}{' '}<Term explain={featureExplain(r.features)}>[{r.features.replaceAll('-', '−')}]</Term>{/if}
+											{#each [['left', r.left], ['right', r.right]] as const as [side, s] (side)}{#if s}
+													{' · '}{t(`jazyky.ctx.${side}` as MessageKey)}{' '}{@render sym(s)}{/if}{/each}{#if r.stress}
+{' · '}{t(`jazyky.ctx.${r.stress}` as MessageKey)}{/if}{#if r.medial}
+{' · '}{t('jazyky.ctx.medial')}{/if}<br />
+											<Ipa text={ruleText(r)} tone="muted" />{#if r.hiddenResult}
+												<Term explain={t('jazyky.sound_hidden')}>…</Term>{/if}<br />
+											<Text variant="why" as="span">{t('jazyky.sound_meta', { closed: r.closed, n: r.villages, relics: r.relics })}</Text>
+										</Td>
+										<Td num>{number(r.villages)}</Td>
+									</Tr>
 								{/each}
-								<Tr><Td num>{t('jazyky.total')}</Td>{#each unit(sounds, soundKinds.length) as n, i (i)}<Td num>{number(n)}</Td>{/each}</Tr>
 							</Table>
+							{#if soundList.length > soundShown}
+								<Button variant="quiet" onclick={() => (soundShown += PAGE)}>{t('jazyky.more_n', { n: Math.min(PAGE, soundList.length - soundShown) })}</Button>
+							{/if}
 						{:else}
-							<Text variant="why">{t('jazyky.summary_none')}</Text>
+							<Text variant="why">{t('jazyky.sounds_none')}</Text>
 						{/if}
+						{@render worldTable(sounds, soundKinds, ['innovation', 'established', 'closed'])}
 					</Stack>
 				{:else}
 					<Stack gap={2}>
 						<Text variant="why">{t('jazyky.analogy_intro')}</Text>
-						{#if analogies.length}
-							<Table
-								caption={t('jazyky.world_wide')}
-								head={[{ label: t('jazyky.col.century'), num: true }, { label: t('jazyky.col.analogy'), num: true }, { label: t('jazyky.col.gram'), num: true }]}
-							>
-								{#each analogies as r (r.century)}
-									<Tr><Td num>{formatYear(r.century)}</Td>{#each r.counts as n, i (i)}<Td num>{number(n)}</Td>{/each}</Tr>
+						{#if analogyList.length}
+							<Text variant="why">
+								{t('jazyky.analogy_total', { n: number(analogyList.length) })}:
+								{#each analogyTotals as a, i (a.operation)}{i ? ', ' : ''}{t('jazyky.analogy_count', { n: number(a.count) })} {t(`jazyky.aop.${a.operation}` as MessageKey)}{/each}.
+							</Text>
+							<Table head={[{ label: t('jazyky.col.from_year'), num: true }, { label: t('jazyky.col.operation') }, { label: t('jazyky.col.concept') }, { label: t('jazyky.col.cell') }, { label: t('jazyky.col.villages'), num: true }]}>
+								{#each analogyList.slice(0, analogyShown) as r (r.key)}
+									<Tr>
+										<Td num>{formatYear(r.year)}</Td>
+										<Td>{t(`jazyky.aop.${r.operation}` as MessageKey)}</Td>
+										<Td>{r.concept ? conceptLabel(r.concept, i18n.locale) : '—'}</Td>
+										<Td>{cellText(r.cell)}</Td>
+										<Td num>{number(r.villages)}</Td>
+									</Tr>
 								{/each}
-								<Tr><Td num>{t('jazyky.total')}</Td>{#each unit(analogies, analogyKinds.length) as n, i (i)}<Td num>{number(n)}</Td>{/each}</Tr>
 							</Table>
+							{#if analogyList.length > analogyShown}
+								<Button variant="quiet" onclick={() => (analogyShown += PAGE)}>{t('jazyky.more_n', { n: Math.min(PAGE, analogyList.length - analogyShown) })}</Button>
+							{/if}
 						{:else}
-							<Text variant="why">{t('jazyky.summary_none')}</Text>
+							<Text variant="why">{t('jazyky.analogy_none')}</Text>
 						{/if}
+						{@render worldTable(analogies, analogyKinds, ['analogy', 'gram'])}
 					</Stack>
 				{/if}
 			</Card>
@@ -260,3 +314,25 @@
 		{/if}
 	</Screen>
 {/if}
+
+{#snippet sym(s: Sym | null)}
+	{#if s?.kind === 'ipa'}<Ipa text={symText(s)} />{:else if s?.kind === 'features'}<Term explain={featureExplain(s.spec)}>[{s.spec.replaceAll('-', '−')}]</Term>{:else if s}{classText(s)}{/if}
+{/snippet}
+
+<!-- souhrn po stoletích za celý svět, jako doplněk pod jazykem -->
+{#snippet worldTable(rows: { century: number; counts: number[] }[], kinds: string[], cols: string[])}
+	{#if rows.length}
+		<Disclosure>
+			{#snippet summary()}{t('jazyky.world_summary')}{/snippet}
+			<Table
+				caption={t('jazyky.world_wide')}
+				head={[{ label: t('jazyky.col.century'), num: true }, ...cols.map((c) => ({ label: t(`jazyky.col.${c}` as MessageKey), num: true }))]}
+			>
+				{#each rows as r (r.century)}
+					<Tr><Td num>{formatYear(r.century)}</Td>{#each r.counts as n, i (i)}<Td num>{number(n)}</Td>{/each}</Tr>
+				{/each}
+				<Tr><Td num>{t('jazyky.total')}</Td>{#each unit(rows, kinds.length) as n, i (i)}<Td num>{number(n)}</Td>{/each}</Tr>
+			</Table>
+		</Disclosure>
+	{/if}
+{/snippet}

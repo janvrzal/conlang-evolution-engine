@@ -1,11 +1,13 @@
 <!-- Projekty (úvodní obrazovka): otevřený projekt se souhrnem a stavem běhu, odkazy na Svět a Atlas,
      ukázkové světy ze static/projects a otevření souboru .cee. Nic nenabízí, co aplikace neumí. -->
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { Area, Button, Cluster, FilePicker, Floating, Ledger, LedgerRow, List, ListItem, Screen, Stack, Text, formatYear } from '$lib/ds';
-	import { number, t } from '$lib/i18n.svelte';
+	import { Area, Button, Cluster, FilePicker, Floating, Ledger, LedgerRow, List, ListItem, Screen, Stack, Text, TextInput, formatYear } from '$lib/ds';
+	import { i18n, number, t } from '$lib/i18n.svelte';
 	import { baseName, inApp } from '$lib/files';
-	import { SAMPLES, parseProject, summarize, type WorldSummary } from '$lib/model/projekty';
+	import { SAMPLES, formatDuration, formatRunTime, normalizeRunName, parentTitle, parseProject, runStatusKey, runTitle, sortRuns, summarize, type WorldSummary } from '$lib/model/projekty';
+	import type { StoredRun } from '$lib/engine';
 	import { app, type WorldSpec } from '$lib/state.svelte';
 
 	// Ukázky: svět se načte při startu kvůli počtům; otevření použije kopii, aby původní zůstal nedotčený.
@@ -73,6 +75,63 @@
 			notice = { text: String(error), bad: true };
 		}
 	}
+
+	// Běhy projektu (jen v aplikaci; ve vzorku dat je seznam prázdný).
+	const locale = $derived(i18n.locale);
+	const runs = $derived(sortRuns(app.storedRuns));
+	let renaming = $state<string | null>(null);
+	let draft = $state('');
+	const isOpen = (run: StoredRun) => app.run?.id === run.path;
+	const statusText = (run: StoredRun) =>
+		run.status === 'failed' && run.error ? `${t('projekty.status_failed')}: ${run.error}` : t(`projekty.status_${runStatusKey(run)}`);
+	const branchText = (run: StoredRun) => {
+		const parent = parentTitle(run, runs, locale);
+		if (!parent) return null;
+		return run.branch_year == null ? t('projekty.run_branch_noyear', { parent }) : t('projekty.run_branch', { parent, year: formatYear(run.branch_year) });
+	};
+	async function guarded(action: () => Promise<void>) {
+		try {
+			await action();
+		} catch (error) {
+			notice = { text: t('projekty.run_action_failed', { error: String(error) }), bad: true };
+		}
+	}
+	function startRename(run: StoredRun) {
+		renaming = run.id;
+		draft = run.name ?? '';
+	}
+	async function saveRename(run: StoredRun) {
+		renaming = null;
+		await guarded(() => app.renameRun(run, normalizeRunName(draft)));
+	}
+	async function removeRun(run: StoredRun) {
+		const ok = await app.confirm({
+			title: t('projekty.run_delete_title'),
+			message: t('projekty.run_delete_message', { name: runTitle(run, locale) }),
+			confirm: t('projekty.run_delete_confirm'),
+			cancel: t('projekty.run_delete_cancel'),
+			danger: true
+		});
+		if (ok) await guarded(() => app.deleteRun(run));
+	}
+
+	// velikost běhu: celkem a z toho kontrolní body (dají se smazat)
+	const mb = (bytes: number) => (bytes / 1_000_000).toLocaleString(locale === 'cs' ? 'cs-CZ' : 'en-GB', { maximumFractionDigits: bytes < 10_000_000 ? 1 : 0 });
+	const sizeText = (run: StoredRun) => {
+		if (!run.size) return '';
+		const total = Object.values(run.size).reduce((a, b) => a + b, 0), points = run.size.checkpoints ?? 0;
+		return points ? t('projekty.run_size_points', { total: mb(total), points: mb(points) }) : t('projekty.run_size', { total: mb(total) });
+	};
+	async function dropPoints(run: StoredRun) {
+		const ok = await app.confirm({
+			title: t('projekty.run_points_title'),
+			message: t('projekty.run_points_message', { size: mb(run.size?.checkpoints ?? 0) }),
+			confirm: t('projekty.run_points_confirm'),
+			cancel: t('projekty.run_delete_cancel')
+		});
+		if (ok) await guarded(() => app.dropCheckpoints(run));
+	}
+
 	const when = (seconds: number) => new Date(seconds * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'numeric', year: 'numeric' });
 
 	async function openSample(id: string) {
@@ -139,6 +198,45 @@
 				{/if}
 			</Stack>
 
+			<Stack gap={2}>
+				<Text variant="caps">{t('projekty.runs')}</Text>
+				{#if !app_}
+					<Text variant="why">{t('projekty.runs_web')}</Text>
+				{:else if !runs.length}
+					<Text variant="why">{app.filePath ? t('projekty.runs_none') : t('projekty.runs_nosave')}</Text>
+				{:else}
+					<List label={t('projekty.runs')}>
+						{#each runs as run (run.id)}
+							<ListItem current={isOpen(run)} meta={`${formatRunTime(run.created, locale)}`}>
+								<Stack gap={2}>
+									<Text variant="h3">{runTitle(run, locale)}{isOpen(run) ? ` · ${t('projekty.run_opened')}` : ''}</Text>
+									<Text variant="small" tone={run.status === 'failed' ? 'red' : undefined}>
+										{statusText(run)} · {t('projekty.run_year', { year: formatYear(run.year) })} · {formatDuration(run.seconds)} · {run.matches ? t('projekty.run_matches') : t('projekty.run_older')}
+									</Text>
+									{#if branchText(run)}<Text variant="small">{branchText(run)}</Text>{/if}
+									{#if sizeText(run)}<Text variant="small">{sizeText(run)}</Text>{/if}
+									{#if renaming === run.id}
+										<Cluster gap={2}>
+											<TextInput bind:value={draft} label={t('projekty.run_rename_label')} width="m" onchange={() => saveRename(run)} />
+											<Button variant="primary" onclick={() => saveRename(run)}>{t('projekty.run_rename_save')}</Button>
+											<Button variant="quiet" onclick={() => (renaming = null)}>{t('projekty.run_rename_cancel')}</Button>
+										</Cluster>
+									{:else}
+										<Cluster gap={2}>
+											<Button disabled={!run.has_result || isOpen(run)} onclick={() => guarded(() => app.openRun(run))}>{t('projekty.run_open')}</Button>
+											<Button disabled={!run.has_result} onclick={() => guarded(async () => { await app.openBranch(run); await goto('/co-kdyby'); })}>{t('projekty.run_branch_b')}</Button>
+											<Button variant="quiet" onclick={() => startRename(run)}>{t('projekty.run_rename')}</Button>
+											{#if (run.size?.checkpoints ?? 0) > 0}<Button variant="quiet" onclick={() => dropPoints(run)}>{t('projekty.run_points')}</Button>{/if}
+											<Button variant="quiet" onclick={() => removeRun(run)}>{t('projekty.run_delete')}</Button>
+										</Cluster>
+									{/if}
+								</Stack>
+							</ListItem>
+						{/each}
+					</List>
+				{/if}
+			</Stack>
+
 			{#if app_ && app.recent.length}
 				<Stack gap={2}>
 					<Text variant="caps">{t('projekty.recent')}</Text>
@@ -148,7 +246,7 @@
 								<ListItem
 									onclick={() => openRecent(item.path)}
 									current={app.filePath === item.path}
-									meta={`${when(item.opened)}${item.has_result ? ` · ${t('projekty.recent_result')}` : ''}`}
+									meta={`${when(item.opened)}${item.runs ? ` · ${t('projekty.recent_runs', { n: item.runs })}` : ''}`}
 								>
 									<Stack gap={1}>
 										<Text variant="h3">{item.name ?? baseName(item.path)}</Text>

@@ -97,10 +97,51 @@ describe('kronika: události a řádky', () => {
 	});
 
 	it('filtr podle třídy a hledání', () => {
-		const onlyAuthor = filterEvents(events, { show: { author: true, soc: false, lang: false }, query: '' });
+		const onlyAuthor = filterEvents(events, { show: { author: true, soc: false, lang: false, case: true }, query: '' });
 		expect(onlyAuthor.every((e) => e.source === 'author')).toBe(true);
-		const found = filterEvents(events, { show: { author: true, soc: true, lang: true }, query: 'istren' });
+		const found = filterEvents(events, { show: { author: true, soc: true, lang: true, case: true }, query: 'istren' });
 		expect(found.map((e) => e.kind)).toEqual(['state']);
+	});
+});
+
+describe('kronika: studijní případy', () => {
+	const worldCases: RawEvent[] = [
+		{ kind: 'annexation', year: 1875, state: 'istren', regions: ['m02-02'], study_case: 'Tvrdá politika Istrenu' },
+		{ kind: 'annexation', year: 1875, state: 'istren', regions: ['m02-03'], study_case: '' }
+	];
+	const historyCase: RawEvent[] = [{ kind: 'study_case', year: 1900, label: 'Obrození serenštiny', event_kind: 'revival', spec_event: 4 }];
+	const cases = listEvents(worldCases, historyCase, ctx);
+
+	it('událost zadání se štítkem je třídy case a nese štítek jako první údaj karty', () => {
+		const tvrda = cases.find((e) => e.index === 0 && e.source === 'author')!;
+		expect(tvrda.cls).toBe('case');
+		expect(tvrda.caseLabel).toBe('Tvrdá politika Istrenu');
+		expect(tvrda.details[0]).toEqual({ term: 'kronika.term.case', value: 'Tvrdá politika Istrenu' });
+		expect(tvrda.specEvent).toBeNull();
+	});
+
+	it('prázdný štítek znamená obyčejnou událost dějin autora', () => {
+		const plain = cases.find((e) => e.index === 1 && e.source === 'author')!;
+		expect(plain.cls).toBe('author');
+		expect(plain.caseLabel).toBe('');
+	});
+
+	it('studijní případ běhu má nadpis z label a odkaz na událost zadání (spec_event)', () => {
+		const run = cases.find((e) => e.source === 'history')!;
+		expect(run).toMatchObject({ cls: 'case', kindLabel: 'kronika.kind.study_case', title: 'Obrození serenštiny', caseLabel: 'Obrození serenštiny', specEvent: 4 });
+	});
+
+	it('filtr případů skryje jen případy; obyčejná událost zůstane', () => {
+		const shown = filterEvents(cases, { show: { author: true, soc: true, lang: true, case: false }, query: '' });
+		expect(shown.map((e) => e.key)).toEqual(['a1']);
+	});
+
+	it('případ a obyčejná událost stejného roku a druhu se nesloučí do jednoho řádku', () => {
+		const rows = mergeRows(cases.filter((e) => e.source === 'author'));
+		expect(rows.filter((r) => r.kind === 'annexation').map((r) => [r.cls, r.count])).toEqual([
+			['case', 1],
+			['author', 1]
+		]);
 	});
 });
 

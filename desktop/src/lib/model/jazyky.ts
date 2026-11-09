@@ -135,3 +135,147 @@ export function mergeVarieties(river: { years: number[]; streams: RiverStream[] 
 	}
 	return { years: river.years, streams: river.streams.filter((s) => byId.has(s.id)).map((s) => byId.get(s.id)!) };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Zvukové změny a analogie jazyka (`result.change_history`)
+
+/** Značka v zápisu pravidla: hlásky (IPA), třída (C, V), hranice slova nebo soubor rysů. */
+export type Sym =
+	| { kind: 'ipa'; items: string[] }
+	| { kind: 'class'; id: 'C' | 'V' }
+	| { kind: 'edge' }
+	| { kind: 'features'; spec: string };
+
+/** Rozbor značky z exportu: `{a}`, `{i,j}`, `C`, `V`, `#`, `-son,-syl,+voi`. */
+export function parseSym(s: string | null): Sym | null {
+	if (!s) return null;
+	if (s === '#') return { kind: 'edge' };
+	if (s === 'C' || s === 'V') return { kind: 'class', id: s };
+	const set = /^\{(.*)\}$/.exec(s);
+	if (set) return { kind: 'ipa', items: set[1].split(',').filter(Boolean) };
+	if (/^[+-]/.test(s)) return { kind: 'features', spec: s };
+	return { kind: 'ipa', items: [s] };
+}
+
+/** Rysy, které umíme vysvětlit (klíč `jazyky.feat.<rys>.plus|minus`). */
+export const KNOWN_FEATURES = ['voi', 'hi', 'lo', 'back', 'round', 'nas', 'cont', 'strid', 'delrel', 'son', 'syl', 'lab', 'cor', 'ant', 'distr', 'lat', 'cons', 'sg', 'x_tone'] as const;
+
+/** Soubor rysů „+voi,-son“ → [{plus, name}]. */
+export function parseFeatures(spec: string): { plus: boolean; name: string; known: boolean }[] {
+	return spec
+		.split(',')
+		.map((x) => x.trim())
+		.filter(Boolean)
+		.map((x) => {
+			const name = x.replace(/^[+-]/, '');
+			return { plus: !x.startsWith('-'), name, known: (KNOWN_FEATURES as readonly string[]).includes(name) };
+		});
+}
+
+/** Text značky pro zápis pravidla (`{i,j}`, `C`, `#`, `[+voi]`). */
+export function symText(s: Sym | null): string {
+	if (!s) return '';
+	if (s.kind === 'ipa') return s.items.length > 1 ? `{${s.items.join(',')}}` : s.items[0];
+	if (s.kind === 'class') return s.id;
+	if (s.kind === 'edge') return '#';
+	return `[${s.spec.replace(/-/g, '−')}]`;
+}
+
+export interface SoundRow {
+	key: string;
+	family: string;
+	operation: string;
+	target: Sym | null;
+	features: string | null;
+	left: Sym | null;
+	right: Sym | null;
+	stress: string | null;
+	medial: boolean;
+	/** výsledná hláska v IPA (nahrazení, vložení, splynutí) */
+	result: string | null;
+	/** výsledek je v exportu jen jako číslo hlásky, ne IPA (starší běhy) */
+	hiddenResult: boolean;
+	year: number;
+	/** vsi, kde se změna ustálila */
+	villages: number;
+	/** vsi, kde se proces uzavřel */
+	closed: number;
+	relics: number;
+}
+
+/** Záznam změn jazyka (language = id linie). */
+export function languageChanges(result: ExportV2 | null, id: string | null) {
+	return result?.change_history?.find((h) => h.language === id)?.changes ?? [];
+}
+
+/** Zvukové změny jazyka od nejrozšířenější (počet vsí, pak starší, pak podle klíče). */
+export function soundRows(result: ExportV2 | null, id: string | null): SoundRow[] {
+	const rows: SoundRow[] = [];
+	languageChanges(result, id).forEach((c, i) => {
+		if (c.kind !== 'sound') return;
+		rows.push({
+			key: `${c.variable}#${i}`,
+			family: c.family,
+			operation: c.operation,
+			target: parseSym(c.target),
+			features: typeof c.features === 'string' ? c.features : null,
+			left: parseSym(c.left),
+			right: parseSym(c.right),
+			stress: c.stress,
+			medial: c.medial === true,
+			// starší export měl v `segment` číslo hlásky; nový má IPA a číslo v `segment_id`
+			result: typeof c.segment === 'string' && c.segment ? c.segment : null,
+			hiddenResult: typeof c.segment === 'number' || (c.segment == null && c.segment_id != null),
+			year: c.year,
+			villages: c.groups.length,
+			closed: c.groups.filter((g) => g.closed != null).length,
+			relics: c.groups.reduce((a, g) => a + (typeof g.relics === 'number' ? g.relics : 0), 0)
+		});
+	});
+	return rows.sort((a, b) => b.villages - a.villages || a.year - b.year || a.key.localeCompare(b.key));
+}
+
+/** Zápis pravidla: cíl → výsledek / levé _ pravé (bez IPA výsledku ve starším exportu se značí …). */
+export function ruleText(r: SoundRow): string {
+	const target = symText(r.target);
+	const ctx = r.left || r.right ? ` / ${symText(r.left)}_${symText(r.right)}` : '';
+	const result = r.result ?? (r.features ? symText({ kind: 'features', spec: r.features }) : '…');
+	switch (r.operation) {
+		case 'delete':
+			return `${target} → ∅${ctx}`;
+		case 'insert_before':
+			return `∅ → ${result} / ${symText(r.left)}_${target}`;
+		case 'merge_next':
+			return `${target}+ → ${result}${ctx}`;
+		default:
+			return `${target} → ${result}${ctx}`;
+	}
+}
+
+export interface AnalogyRow {
+	key: string;
+	operation: string;
+	concept: string | null;
+	cell: string | null;
+	year: number;
+	villages: number;
+}
+
+export function analogyRows(result: ExportV2 | null, id: string | null): AnalogyRow[] {
+	const rows: AnalogyRow[] = [];
+	languageChanges(result, id).forEach((c, i) => {
+		if (c.kind !== 'analogy') return;
+		rows.push({ key: `${c.variable}#${i}`, operation: c.operation, concept: c.concept, cell: c.cell, year: c.year, villages: c.groups.length });
+	});
+	return rows.sort((a, b) => b.villages - a.villages || a.year - b.year || a.key.localeCompare(b.key));
+}
+
+/** Počet analogií podle operace, od nejčastější. */
+export function analogyCounts(rows: AnalogyRow[]): { operation: string; count: number }[] {
+	const m = new Map<string, number>();
+	for (const r of rows) m.set(r.operation, (m.get(r.operation) ?? 0) + 1);
+	return [...m].map(([operation, count]) => ({ operation, count })).sort((a, b) => b.count - a.count || a.operation.localeCompare(b.operation));
+}
+
+/** Buňky mluvnice z analogií (PL, OBJ, PAST, FUT, DEF) → funkce `jazyky.fn.*`. */
+export const CELL_FUNCTION: Record<string, string> = { PL: 'PL', OBJ: 'OBJ', PAST: 'PAST', FUT: 'FUTURE', DEF: 'DEFINITE' };

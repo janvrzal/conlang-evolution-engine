@@ -1,10 +1,14 @@
 // Výpočty obrazovky Kronika: události dějin autora (zadání) a dějin běhu (výsledek), jejich popisky,
 // sloučení stejných událostí roku a souhrn drobných změn po stoletích (result.event_summary).
 import type { MessageKey } from '$lib/i18n.svelte';
+import { caseLabelOf, isStudyCase } from './dejiny';
 
 export type Source = 'author' | 'history';
-/** Filtr kroniky: dějiny autora, společnost (přechody, kodifikace, osady), jazyky (vznik a zánik). */
-export type Cls = 'author' | 'soc' | 'lang';
+/**
+ * Filtr kroniky: dějiny autora, společnost (přechody, kodifikace, osady), jazyky (vznik a zánik),
+ * studijní případy (události zadání se `study_case` a události běhu `study_case`; mají přednost před třídou zdroje).
+ */
+export type Cls = 'author' | 'soc' | 'lang' | 'case';
 export type SummaryId = 'sound' | 'stress' | 'analogy' | 'innovation' | 'grammar' | 'extinct';
 export type Tr = (key: MessageKey, params?: Record<string, string | number>) => string;
 
@@ -29,6 +33,10 @@ export interface KEvent {
 	title: string;
 	text: string;
 	details: Detail[];
+	/** štítek studijního případu (text z `study_case` zadání nebo `label` běhu), jinak prázdný */
+	caseLabel: string;
+	/** u studijního případu běhu: index události zadání (`spec_event`), na kterou odkazuje Dějiny */
+	specEvent: number | null;
 	/** text pro hledání (malá písmena) */
 	search: string;
 }
@@ -108,7 +116,7 @@ const CORE_KIND = new Set([
 /** Druhy jen z této obrazovky (kronika.kind.*), včetně těch, které jsou jen v souhrnu století. */
 const OWN_KIND = new Set([
 	'stress_rule_changed', 'stress_strength_changed', 'grammaticalized', 'exapted', 'innovation', 'extinct', 'analogy',
-	'established', 'phonologized', 'milestone', 'process_closed'
+	'established', 'phonologized', 'milestone', 'process_closed', 'study_case'
 ]);
 /** Druhy rozpisu, které jdou na konec století (v tomto pořadí) s vysvětlením. */
 const LAST_KINDS = ['milestone', 'process_closed'] as const;
@@ -365,6 +373,10 @@ function describe(kind: string, e: RawEvent, ctx: KronikaContext): { title: stri
 		case 'language_ended':
 			add('kronika.term.language', lineage(e.lineage));
 			return { title: T('kronika.ev.language_ended.title', { language: lineage(e.lineage) }), text: T('kronika.ev.language_ended.text'), details };
+		case 'study_case':
+			// studijní případ běhu: nadpis je štítek, druh události je v rozpisu karty
+			add('kronika.term.event_kind', kindLabel(str(e.event_kind), tr));
+			return { title: str(e.label) || kindLabel(kind, tr), text: '', details };
 		default: {
 			// neznámý druh: nadpis je jeho název, bez popisu
 			const label = kindLabel(kind, tr);
@@ -376,18 +388,29 @@ function describe(kind: string, e: RawEvent, ctx: KronikaContext): { title: stri
 function toEvent(e: RawEvent, index: number, source: Source, ctx: KronikaContext): KEvent {
 	const { title, text, details } = describe(e.kind, e, ctx);
 	const label = kindLabel(e.kind, ctx.tr);
+	const T = (key: string) => ctx.tr(key as MessageKey);
+	// studijní případ: zadání ho nese jako `study_case` (text), běh jako událost `study_case` s `label` a `spec_event`
+	const isCase = source === 'author' ? isStudyCase(e) : e.kind === 'study_case';
+	const caseLabel = source === 'author' ? caseLabelOf(e) : str(e.label);
+	const specEvent = source === 'history' && e.kind === 'study_case' && typeof e.spec_event === 'number' ? e.spec_event : null;
+	if (isCase && source === 'author') {
+		if (caseLabel) details.unshift({ term: T('kronika.term.case'), value: caseLabel });
+		details.push({ term: T('kronika.term.kind'), value: label });
+	}
 	return {
 		key: `${source === 'author' ? 'a' : 'h'}${index}`,
 		index,
 		source,
-		cls: classOf(source, e.kind),
+		cls: isCase ? 'case' : classOf(source, e.kind),
 		year: Math.round(Number(e.year)),
 		kind: e.kind,
 		kindLabel: label,
 		title,
 		text,
 		details,
-		search: [label, title, text, ...details.map((d) => d.value)].join(' ').toLowerCase()
+		caseLabel,
+		specEvent,
+		search: [label, caseLabel, title, text, ...details.map((d) => d.value)].join(' ').toLowerCase()
 	};
 }
 
@@ -408,14 +431,15 @@ export function filterEvents(events: KEvent[], filter: { show: Record<Cls, boole
 }
 
 /**
- * Stejné události jednoho roku a druhu (dějiny autora i běhu) se sloučí do jednoho řádku s počtem.
+ * Stejné události jednoho roku a druhu (dějiny autora i běhu) se sloučí do jednoho řádku s počtem;
+ * studijní případ se nesloučí s obyčejnou událostí (jeho rámeček a odkaz by se ztratily).
  * Řádek nese popisek prvního člena; při počtu víc než jedna se popisek nahradí názvem druhu,
  * protože jeden člen by o celé skupině nic neřekl (jednotlivé události jsou ve Kartě vybrané události).
  */
 export function mergeRows(events: KEvent[]): KRow[] {
 	const rows = new Map<string, KRow>();
 	for (const e of events) {
-		const id = `${e.year}|${e.kind}`;
+		const id = `${e.year}|${e.kind}|${e.cls === 'case'}`;
 		const row = rows.get(id);
 		if (row) {
 			row.count += 1;

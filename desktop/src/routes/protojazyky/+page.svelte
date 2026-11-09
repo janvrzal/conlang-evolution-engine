@@ -32,6 +32,7 @@
 	import { geography } from '$lib/model/geography';
 	import { frameAt, lineageFamilies, lineageNames, lineagePalette } from '$lib/model/languages';
 	import {
+		BASIC_CONCEPTS,
 		CONSTRUCTION_KINDS,
 		FUNCTIONS,
 		GRAMMARS,
@@ -46,10 +47,13 @@
 		cell,
 		descendants,
 		extraSegments,
+		formRows,
 		newLanguageId,
+		protoForms,
 		regionCount,
 		toggleSegment,
 		wordConcepts,
+		type FormRow,
 		type ProtoLanguage
 	} from '$lib/model/protojazyky';
 	import { app } from '$lib/state.svelte';
@@ -134,11 +138,18 @@
 	let newWord = $state<string | number>('');
 	let endonymAdd = $state('');
 	const concepts = $derived(lang ? wordConcepts(lang, result) : []);
+	// tvary z běhu (proto_lexicon) a zdroj každého slova: autor, nebo engine
+	const forms = $derived(protoForms(result, lang?.id));
+	const formsStale = $derived(!!result && app.stale);
+	const startYear = $derived(result ? formatYear(result.start_year) : '');
+	const basic = $derived(lang ? formRows(lang, forms, BASIC_CONCEPTS).filter((r): r is FormRow & { form: string } => r.form !== null) : []);
+	const basicOf = (origin: FormRow['origin']) => basic.filter((r) => r.origin === origin).map((r) => `‘${conceptLabel(r.concept, i18n.locale)}’`).join(', ');
 	const rows = $derived.by(() => {
 		const q = String(query).trim().toLowerCase();
-		return concepts
-			.map((c) => ({ id: c, label: conceptLabel(c, i18n.locale) }))
-			.filter((r) => !q || r.label.toLowerCase().includes(q) || r.id.includes(q));
+		return (lang ? formRows(lang, forms, concepts) : [])
+			.map((r) => ({ ...r, id: r.concept, label: conceptLabel(r.concept, i18n.locale) }))
+			.filter((r) => !q || r.label.toLowerCase().includes(q) || r.concept.includes(q))
+			.sort((a, b) => a.label.localeCompare(b.label, i18n.locale));
 	});
 	const endonym = $derived(lang?.endonym ?? []);
 	function setWord(concept: string, value: string) {
@@ -304,9 +315,11 @@
 									</Stack>
 									<Stack gap={2}>
 										<Text variant="h2">{t('protojazyky.sound')}</Text>
-										{#if authorWords.length}
-											<Text variant="big"><Ipa text={authorWords.map(([, v]) => v).join(' · ')} size="l" /></Text>
-											<Text variant="why">{t('protojazyky.sound_words')}</Text>
+										{#if basic.length}
+											<Text variant="big"><Ipa text={basic.map((r) => r.form).join(' · ')} size="l" /></Text>
+											{#if basicOf('engine')}<Text variant="why">{t('protojazyky.sound_from_engine', { list: basicOf('engine'), year: startYear })}</Text>{/if}
+											{#if basicOf('author')}<Text variant="why">{t('protojazyky.sound_from_author', { list: basicOf('author') })}</Text>{/if}
+											{#if formsStale}<Text variant="why" tone="red">{t('protojazyky.forms_stale')}</Text>{/if}
 										{:else}
 											<Text variant="why">{t('protojazyky.sound_none')}</Text>
 										{/if}
@@ -444,18 +457,26 @@
 									<Stack gap={2}>
 										<Text variant="h2">{t('protojazyky.words')} <Text variant="why" as="span">{authorWords.length}</Text></Text>
 										<Text variant="why">{t('protojazyky.words_hint')}</Text>
+										{#if !forms}
+											<Text variant="why">{t('protojazyky.forms_none')}</Text>
+										{:else if formsStale}
+											<Text variant="why" tone="red">{t('protojazyky.forms_stale')}</Text>
+										{/if}
 										<Cluster gap={2}>
 											<TextInput type="search" width="m" label={t('protojazyky.words_search')} placeholder={t('protojazyky.words_search')} bind:value={query} />
 											<TextInput width="m" label={t('protojazyky.word_new')} placeholder={t('protojazyky.word_new')} bind:value={newWord} onchange={addWord} />
 											<Button onclick={addWord}>{t('protojazyky.word_add')}</Button>
 										</Cluster>
+										<Text variant="why">{t('protojazyky.words_shown', { shown: rows.length, total: concepts.length })}</Text>
 									</Stack>
 								</Area>
 							</Screen>
-							<Table head={[{ label: t('protojazyky.col.meaning') }, { label: t('protojazyky.col.form') }]}>
+							<Table head={[{ label: t('protojazyky.col.meaning') }, { label: t('protojazyky.col.engine_form') }, { label: t('protojazyky.col.origin') }, { label: t('protojazyky.col.form') }]}>
 								{#each rows as r (r.id)}
 									<Tr>
 										<Td>{r.label}{#if endonym.includes(r.id)} <Text variant="why" as="span">{t('protojazyky.word_name')}</Text>{/if}</Td>
+										<Td ipa>{r.form ?? '—'}</Td>
+										<Td tone="muted">{r.origin ? t(`protojazyky.origin.${r.origin}` as MessageKey) : '—'}</Td>
 										<Td>
 											<TextInput width="m" label={t('protojazyky.word_input', { concept: r.label })} value={lang.words?.[r.id] ?? ''} onchange={(v) => setWord(r.id, String(v))} />
 										</Td>

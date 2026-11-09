@@ -117,7 +117,56 @@ export interface EngineEvent {
 	kind: string;
 	year: number;
 	tick?: number;
+	/** u `study_case`: štítek, druh události zadání a její pořadí v zadání */
+	label?: string;
+	event_kind?: string;
+	spec_event?: number;
 	[key: string]: unknown;
+}
+
+/** Slovník jazyka: skupina, podle které se tvary berou, a pojem → tvar (IPA). */
+export interface LanguageLexicon {
+	group: string;
+	forms: Record<string, string>;
+}
+
+/** Zvuková změna jazyka (`change_history`, kind sound). */
+export interface SoundChange {
+	kind: 'sound';
+	variable: string;
+	family: string;
+	target: string;
+	operation: string;
+	features: unknown;
+	/** IPA výsledné hlásky (nahrazení, vložení, splynutí); `segment_id` je její číslo */
+	segment: string | null;
+	segment_id?: number | null;
+	left: string | null;
+	right: string | null;
+	stress: string | null;
+	medial: boolean | null;
+	/** rok vzniku */
+	year: number;
+	/** vsi (skupiny): rok ustálení, rok uzavření, relikty */
+	groups: { group: string; year: number; closed: number | null; relics: unknown }[];
+}
+
+/** Analogie v jazyce (`change_history`, kind analogy). */
+export interface AnalogyChange {
+	kind: 'analogy';
+	variable: string;
+	operation: string;
+	concept: string | null;
+	cell: string | null;
+	year: number;
+	groups: { group: string; year: number }[];
+}
+
+/** Změny po jazycích; `language: null` = skupiny, které už nežijí. */
+export interface ChangeHistory {
+	language: string | null;
+	groups: string[];
+	changes: (SoundChange | AnalogyChange)[];
 }
 
 export interface ExportV2 {
@@ -140,6 +189,12 @@ export interface ExportV2 {
 	standards: Record<string, string>;
 	onomastics: { toponyms: Record<string, Toponym>; states: Record<string, unknown>; [key: string]: unknown };
 	snapshots: { year: number; tick: number; languages: Record<string, string[]>; dialects: string[][] }[];
+	/** Slovník protojazyků na startu: jazyk zadání → tvary. */
+	proto_lexicon?: Record<string, LanguageLexicon>;
+	/** Dnešní slovník každého pozorovaného jazyka (linie) podle největší domácí skupiny. */
+	lexicon_by_language?: Record<string, LanguageLexicon>;
+	/** Zvukové změny a analogie po jazycích s roky a vesnicemi. */
+	change_history?: ChangeHistory[];
 	/** Události. Plný export jich má miliony (milníky zvukových změn); aplikace dostává jen dějinné a jazykové. */
 	events: EngineEvent[];
 	/** Souhrn všech událostí po stoletích: „1800“ → druh → počet. Zatím jen ve vzorku (scripts/fixture.py), server ho má doplnit. */
