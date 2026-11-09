@@ -4,6 +4,7 @@
 //! cee run <spec.json> -o export.json [--threads N] [--phase-times]
 //! cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--history log.jsonl]
 //! cee export-tick0 <scénář|spec.json> [-o tick0.json]
+//! cee names <scénář|spec.json> --until <rok> [--region R --year Y[,Y2…] [--count N] [--village|--people]] [-o names.json]
 //! cee scenarios
 //! cee behavior [scénář ...] [--seeds 1..3] [-o behavior.json]
 //! cee gates [--seeds 201] [--only m4b,m5::s3_substrat] [--list] [-o values.jsonl]
@@ -20,7 +21,7 @@ use cee_engine::spec::{self, WorldSpec};
 use cee_engine::{Simulation, SimulationConfig};
 
 fn usage() -> String {
-    "Použití:\n  cee run <spec.json> -o export.json [--threads N] [--phase-times]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--phase-times] [--history log.jsonl]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee scenarios\n  cee behavior [scénář ...] [--seeds 1..3] [-o behavior.json]\n  cee gates [--seeds 201] [--only m4b,m5::s3_substrat] [--list] [-o values.jsonl]\n  cee calibrate [--seeds 1] [--only typologie,m7::retence] [--set jméno=hodnota ...] [--variants varianty.json] [--list] [-o values.jsonl]".to_owned()
+    "Použití:\n  cee run <spec.json> -o export.json [--threads N] [--phase-times]\n  cee scenario <jméno> --until <rok> [-o export.json] [--threads N] [--phase-times] [--history log.jsonl]\n  cee export-tick0 <scénář|spec.json> [-o tick0.json]\n  cee names <scénář|spec.json> --until <rok> [--region R --year Y[,Y2…] [--count N] [--village|--people] [--attempt K]] [-o names.json]\n  cee scenarios\n  cee behavior [scénář ...] [--seeds 1..3] [-o behavior.json]\n  cee gates [--seeds 201] [--only m4b,m5::s3_substrat] [--list] [-o values.jsonl]\n  cee calibrate [--seeds 1] [--only typologie,m7::retence] [--set jméno=hodnota ...] [--variants varianty.json] [--list] [-o values.jsonl]".to_owned()
 }
 
 struct Options {
@@ -36,6 +37,12 @@ struct Options {
     sets: Vec<String>,
     variants: Option<String>,
     phase_times: bool,
+    region: Option<String>,
+    year: Option<String>,
+    count: Option<usize>,
+    village: bool,
+    people: bool,
+    attempt: u64,
 }
 
 fn parse(args: &[String]) -> Result<Options, String> {
@@ -52,6 +59,12 @@ fn parse(args: &[String]) -> Result<Options, String> {
         sets: Vec::new(),
         variants: None,
         phase_times: false,
+        region: None,
+        year: None,
+        count: None,
+        village: false,
+        people: false,
+        attempt: 0,
     };
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -84,6 +97,16 @@ fn parse(args: &[String]) -> Result<Options, String> {
             "--set" => options.sets.push(value("--set")?),
             "--variants" => options.variants = Some(value("--variants")?),
             "--phase-times" => options.phase_times = true,
+            "--region" => options.region = Some(value("--region")?),
+            "--year" => options.year = Some(value("--year")?),
+            "--count" => {
+                options.count = Some(value("--count")?.parse().map_err(|_| "--count chce číslo")?)
+            }
+            "--attempt" => {
+                options.attempt = value("--attempt")?.parse().map_err(|_| "--attempt chce číslo")?
+            }
+            "--village" => options.village = true,
+            "--people" => options.people = true,
             other if other.starts_with('-') => return Err(format!("neznámý přepínač {other}")),
             other => options.positional.push(other.to_owned()),
         }
@@ -123,6 +146,24 @@ fn calibration_variants(
         }
     }
     Ok(variants)
+}
+
+/// Konfigurace běhů pro export: výchozí a s modulem jmen.
+fn named() -> SimulationConfig {
+    SimulationConfig {
+        names: true,
+        ..SimulationConfig::default()
+    }
+}
+
+/// Svět ze scénáře nebo ze souboru popisu (`.json`).
+fn world_of(name: &str) -> Result<(cee_engine::world::World, Vec<Box<dyn cee_engine::events::WorldEvent>>), String> {
+    if name.ends_with(".json") {
+        let text = std::fs::read_to_string(name).map_err(|e| format!("{name}: {e}"))?;
+        spec::build(&WorldSpec::from_json(&text)?)
+    } else {
+        scenarios::by_name(name)
+    }
 }
 
 fn write(path: &Option<String>, value: &serde_json::Value) -> Result<(), String> {
@@ -183,14 +224,14 @@ fn main() -> ExitCode {
                 let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
                 let world_spec = WorldSpec::from_json(&text)?;
                 let (world, events) = spec::build(&world_spec)?;
-                let simulation = Simulation::new(world, SimulationConfig::default(), events)?;
+                let simulation = Simulation::new(world, named(), events)?;
                 run_simulation(simulation, world_spec.end_year, &options)
             }
             "scenario" => {
                 let name = options.positional.first().ok_or("chybí jméno scénáře")?;
                 let until = options.until.ok_or("chybí --until <rok>")?;
                 let (world, events) = scenarios::by_name(name)?;
-                let simulation = Simulation::new(world, SimulationConfig::default(), events)?;
+                let simulation = Simulation::new(world, named(), events)?;
                 run_simulation(simulation, until, &options)
             }
             "export-tick0" => {
@@ -202,8 +243,43 @@ fn main() -> ExitCode {
                 } else {
                     scenarios::by_name(name)?
                 };
-                let simulation = Simulation::new(world, SimulationConfig::default(), events)?;
+                let simulation = Simulation::new(world, named(), events)?;
                 write(&options.output, &export::export(&simulation, true))
+            }
+            "names" => {
+                let name = options.positional.first().ok_or("chybí scénář nebo popis světa")?;
+                let until = options.until.ok_or("chybí --until <rok>")?;
+                let (world, events) = world_of(name)?;
+                let mut simulation = Simulation::new(world, named(), events)?;
+                simulation.run(until)?;
+                simulation.observe_now()?;
+                eprint!("{}", cee_engine::timing::report());
+                let names = simulation.names.as_ref().ok_or("modul jmen neběžel")?;
+                let value = match (&options.region, &options.year) {
+                    (Some(region), Some(years)) => {
+                        let mut found = Vec::new();
+                        for year in years.split(',') {
+                            let year: f64 =
+                                year.trim().parse().map_err(|_| "--year chce čísla oddělená čárkou")?;
+                            found.push(names.generate(
+                                &simulation.world,
+                                &cee_engine::names::generate::Query {
+                                    region: region.clone(),
+                                    year,
+                                    count: options.count.unwrap_or(5),
+                                    until: Some(until),
+                                    urban: !options.village,
+                                    attempt: options.attempt,
+                                    kind: if options.people { "person" } else { "place" }.into(),
+                                },
+                            )?);
+                        }
+                        serde_json::Value::Array(found)
+                    }
+                    (None, None) => names.export(),
+                    _ => return Err("generátor chce --region i --year".into()),
+                };
+                write(&options.output, &value)
             }
             "gates" => {
                 if options.list {

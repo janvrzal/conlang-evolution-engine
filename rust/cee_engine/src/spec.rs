@@ -115,6 +115,14 @@ pub struct LanguageSpec {
     pub words: HashMap<String, String>,
     #[serde(default)]
     pub endonym: Vec<String>,
+    /// Uzamčené vlastní jméno prajazyka (IPA): generátor ho při dalším běhu nevylosuje znovu,
+    /// hláskový vývoj jména pokračuje (modul jmen, dok. 34).
+    #[serde(default)]
+    pub endonym_form: Option<String>,
+    /// Tradice osobních jmen (paradigma katalogu `v2_onomastics.json`, např. `house_surety`);
+    /// `None` = vylosuje se z tradic bez institucí (modul jmen, dok. 34).
+    #[serde(default)]
+    pub person_names: Option<String>,
     #[serde(default)]
     pub tones: Vec<String>,
     /// Přepisy konstrukcí profilu podle funkce (`{"FUTURE": {"kind": "synthetic"}}`); funkce,
@@ -293,6 +301,18 @@ fn proto_language(spec: &LanguageSpec, table: &SegmentTable) -> Result<ProtoLang
         })?);
     }
     language.endonym = spec.endonym.clone();
+    if let Some(form) = &spec.endonym_form {
+        table
+            .parse(form)
+            .map_err(|e| format!("languages.{}.endonym_form: {e}", spec.id))?;
+    }
+    language.endonym_form = spec.endonym_form.clone();
+    if let Some(paradigm) = &spec.person_names {
+        if !crate::onomastics::catalog().anthroponym_paradigms.contains_key(paradigm) {
+            return Err(format!("languages.{}.person_names: neznámá tradice '{paradigm}'", spec.id));
+        }
+    }
+    language.person_names = spec.person_names.clone();
     language.tones = spec.tones.clone();
     for (function, given) in &spec.constructions {
         let name = crate::grammar::FUNCTIONS
@@ -810,6 +830,34 @@ fn word_issues(spec: &WorldSpec, known: &HashSet<String>) -> Vec<Issue> {
                     format!("languages.{index}.endonym.{position}"),
                     format!("neznámý pojem '{concept}'"),
                 ));
+            }
+        }
+        if let Some(paradigm) = &language.person_names {
+            let known = &crate::onomastics::catalog().anthroponym_paradigms;
+            if !known.contains_key(paradigm) {
+                let mut names: Vec<&String> = known.keys().collect();
+                names.sort();
+                issues.push(Issue::error(
+                    format!("languages.{index}.person_names"),
+                    format!(
+                        "neznámá tradice osobních jmen '{paradigm}'; možnosti: {}",
+                        names.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                    ),
+                ));
+            }
+        }
+        if let Some(form) = &language.endonym_form {
+            let path = format!("languages.{index}.endonym_form");
+            match table.lossless(form) {
+                Err(_) => issues.push(Issue::error(
+                    path,
+                    format!("engine nezná některou hlásku ve jméně '{form}'"),
+                )),
+                Ok(Some(rendered)) => issues.push(Issue::error(
+                    path,
+                    format!("jméno '{form}' by se zapsalo jako '{rendered}'"),
+                )),
+                Ok(None) => {}
             }
         }
         let mut words: Vec<(&String, &String)> = language.words.iter().collect();

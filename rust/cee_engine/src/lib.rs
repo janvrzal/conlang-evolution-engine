@@ -24,6 +24,7 @@ pub mod json_string;
 pub mod legacy_numpy;
 pub mod model;
 pub mod morphology;
+pub mod names;
 pub mod naming;
 pub mod observe;
 pub mod onomastics;

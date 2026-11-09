@@ -179,6 +179,11 @@ impl EventLog {
         self.spill.as_ref().map_or(0, |spill| spill.bytes)
     }
 
+    /// Druh záznamu bez sestavení objektu (`None` mimo rozsah).
+    pub fn kind_of(&self, index: usize) -> Option<&str> {
+        (index < self.kinds.len()).then(|| self.kind_name(index))
+    }
+
     fn kind_name(&self, index: usize) -> &str {
         &self.kind_names[self.kinds[index] as usize]
     }

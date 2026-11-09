@@ -13,7 +13,7 @@ use crate::history::History;
 use crate::world::World;
 
 /// Verze formátu kontrolního bodu; mění se s rozložením uložených struktur.
-pub const CHECKPOINT_VERSION: u32 = 1;
+pub const CHECKPOINT_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint {
@@ -21,6 +21,8 @@ pub struct Checkpoint {
     pub year: f64,
     pub world: World,
     pub history: History,
+    /// Jména s historií (modul jmen), pokud byl zapnutý.
+    pub names: Option<crate::names::NameState>,
 }
 
 impl Checkpoint {

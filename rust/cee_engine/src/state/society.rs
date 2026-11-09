@@ -55,6 +55,12 @@ pub struct SocietyState {
     pub standards: BTreeMap<String, GroupId>,
     /// Pojmy, ze kterých se skládá vlastní jméno jazyka (jen pro export).
     pub endonyms: BTreeMap<LanguageId, Vec<ConceptId>>,
+    /// Uzamčená vlastní jména prajazyků (IPA), jen pro modul jmen.
+    #[serde(default)]
+    pub endonym_forms: BTreeMap<LanguageId, String>,
+    /// Zadané tradice osobních jmen prajazyků (paradigma katalogu), jen pro modul jmen.
+    #[serde(default)]
+    pub person_traditions: BTreeMap<LanguageId, String>,
     /// Vazby oslabené hranicí států: (zdroj, cíl) → použitý násobek.
     pub border_factors: BTreeMap<(GroupId, GroupId), f64>,
     /// Základní prestiž skupin před vlivem států a spisovných jazyků.
