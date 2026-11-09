@@ -1,0 +1,4 @@
+{
+	"$comment": "Výjimky ze sentinelu design systému (src/lib/ds/sentinel.test.ts). Každá výjimka: soubor (cesta od desktop/src), pravidlo a důvod. Přidává jen správce ds, ne obrazovky.",
+	"exceptions": []
+}

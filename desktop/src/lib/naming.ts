@@ -21,12 +21,21 @@ const ROMAN: Record<string, string> = {
 	kʷ: 'kw', ɡʷ: 'gw', ɡ: 'g', ʃ: 'š', ʒ: 'ž', 't͡ʃ': 'č', 'd͡ʒ': 'dž', 't͡s': 'c', 'd͡z': 'dz', ŋ: 'ng', ɲ: 'ň',
 	θ: 'th', ð: 'dh', x: 'ch', ɣ: 'gh', ʔ: '’', ə: 'e', ɛ: 'e', æ: 'ä', ø: 'ö', ɔ: 'o', ʊ: 'u', ɪ: 'i', y: 'ü',
 	ɨ: 'y', β: 'v', ɸ: 'f', χ: 'ch', ʁ: 'r', ħ: 'h', ɦ: 'h', ʎ: 'ľ', ɬ: 'hl', c: 'ť', ɟ: 'ď', ɢ: 'g', ʋ: 'v',
-	ɹ: 'r', ɰ: 'g', ʝ: 'j', ɑ: 'a', ɒ: 'o', ʌ: 'a'
+	ɹ: 'r', ɰ: 'g', ʝ: 'j', ɑ: 'a', ɒ: 'o', ʌ: 'a', ɯ: 'y', ɤ: 'e', œ: 'ö', ɘ: 'e', ɵ: 'ö', ʉ: 'ü', ɾ: 'r', ɱ: 'm',
+	ɐ: 'a', ɜ: 'e', ɞ: 'ö', ʏ: 'ü', ɶ: 'ö', ʍ: 'w', ɕ: 'š', ʑ: 'ž', ʂ: 'š', ʐ: 'ž', ɭ: 'l', ɳ: 'n', ʈ: 't', ɖ: 'd', ɻ: 'r'
 };
+const MODS = new RegExp(MOD.source, 'g');
 
 /** Přepis IPA do latinky s velkým počátečním písmenem. */
 export function romanize(ipa: string): string {
-	const text = segments(ipa).map((s) => ROMAN[s] ?? s).join('');
+	// Znaménka (délka, nosovost, přídech) se v latince vynechají, pokud segment nemá vlastní přepis.
+	const text = segments(ipa)
+		.map((s) => {
+			if (ROMAN[s]) return ROMAN[s];
+			const base = s.replace(MODS, '');
+			return ROMAN[base] ?? base;
+		})
+		.join('');
 	return text.charAt(0).toUpperCase() + text.slice(1);
 }
 

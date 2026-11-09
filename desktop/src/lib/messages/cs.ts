@@ -1,7 +1,19 @@
 // Český katalog popisků. Klíče jsou společné s en.ts.
 import { plural } from '../plural';
+import * as s_projekty from './screens/projekty';
+import * as s_svet from './screens/svet';
+import * as s_protojazyky from './screens/protojazyky';
+import * as s_pojmy from './screens/pojmy';
+import * as s_dejiny from './screens/dejiny';
+import * as s_model from './screens/model';
+import * as s_atlas from './screens/atlas';
+import * as s_jazyky from './screens/jazyky';
+import * as s_slova from './screens/slova';
+import * as s_kronika from './screens/kronika';
+import * as s_cokdyby from './screens/cokdyby';
+import * as s_shell from './screens/shell';
 
-const cs = {
+const core = {
 	'app.name': 'CEE',
 	'app.tagline': 'Vývoj jazyků v čase a krajině',
 	'locale.switch': 'Jazyk rozhraní',
@@ -100,5 +112,21 @@ const cs = {
 	'kind.identity': 'Svébytnost kraje',
 	'kind.immigration': 'Příchod cizinců'
 } satisfies Record<string, string | ((p: Record<string, string | number>) => string)>;
+
+const cs = {
+	...core,
+	...s_projekty.cs,
+	...s_svet.cs,
+	...s_protojazyky.cs,
+	...s_pojmy.cs,
+	...s_dejiny.cs,
+	...s_model.cs,
+	...s_atlas.cs,
+	...s_jazyky.cs,
+	...s_slova.cs,
+	...s_kronika.cs,
+	...s_cokdyby.cs,
+	...s_shell.cs,
+};
 
 export default cs;

@@ -1,5 +1,7 @@
-/* Vizuální jazyk CEE (docs/ui-navrh): papír „Břidlice“, inkoust, červený inkoust
-   jen pro změnu a ruku autora. Barvy jazyků jsou ověřené na barvoslepost a kontrast. */
+/* Design systém CEE (docs/ui-navrh, plátno „CEE Talvera · obrazovky“).
+   Papír a inkoust; červený inkoust jen pro změnu (izoglosa, rozdíl, zastaralé, chyba).
+   Výběr a aktivní položka jsou inkoustem. Barvy jazyků jsou ověřené na barvoslepost a kontrast.
+   Tento soubor patří design systému: obrazovky ho nenačítají samy, dělá to <Shell>. */
 
 /* IPA: Charis 7 (SIL, OFL 1.1) v úplné, neupravené podobě, aby fungovala veškerá
    kombinační diakritika a skládání znamének (t͡ʃ, n̪, ŋ̊). Fontsource ji ořezává.
@@ -32,13 +34,18 @@
 	--land: #fbfbf9;
 	--ink: #1b2830;
 	--ink-2: #56656e;
-	--ink-3: #a7b3b9;
+	/* UX audit: --ink-3 musí mít aspoň 4,5 : 1 na --panel */
+	--ink-3: #5f6b72;
 	--rule: #d1d9dc;
 	--panel: #eef1f2;
 	--field: #f7f9f9;
+	--halo: rgba(251, 251, 249, 0.92);
 	--red: #ae2a1f;
-	--warn: #9a6a12;
-	--halo: rgba(251, 251, 249, 0.9);
+	--tint: rgba(174, 42, 31, 0.08);
+	--sel: rgba(27, 40, 48, 0.07);
+	--warn: #8a5d0c;
+	--shade: rgba(27, 40, 48, 0.22);
+	/* základní barvy rodin jazyků; odstín nese rodinu, světlost jazyk (ds/color.ts) */
 	--l0: #2a6fc9;
 	--l1: #c48a12;
 	--l2: #16956a;
@@ -47,23 +54,32 @@
 	--l5: #c4508a;
 	--f-ui: 'Piazzolla', Georgia, serif;
 	--f-ipa: 'Charis CEE', 'Charis SIL', 'Gentium Book Plus', 'Noto Serif', serif;
+	--gap-1: 4px;
+	--gap-2: 8px;
+	--gap-3: 12px;
+	--gap-4: 16px;
+	--gap-5: 24px;
+	--radius: 2px;
 	color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-	:root {
+	:root:not([data-theme='light']) {
 		--sea: #0d141b;
 		--sea-line: #2c4556;
 		--land: #17202a;
 		--ink: #ecdfc5;
-		--ink-2: #8e99a3;
-		--ink-3: #4d5a65;
+		--ink-2: #9aa5ae;
+		--ink-3: #8a96a0;
 		--rule: #26323d;
 		--panel: #111a22;
 		--field: #16212b;
+		--halo: rgba(23, 32, 42, 0.9);
 		--red: #e8806f;
+		--tint: rgba(232, 128, 111, 0.1);
+		--sel: rgba(236, 223, 197, 0.08);
 		--warn: #d9a54a;
-		--halo: rgba(23, 32, 42, 0.86);
+		--shade: rgba(0, 0, 0, 0.5);
 		--l0: #4f8de0;
 		--l1: #b47e18;
 		--l2: #22a074;
@@ -73,8 +89,34 @@
 		color-scheme: dark;
 	}
 }
+:root[data-theme='dark'] {
+	--sea: #0d141b;
+	--sea-line: #2c4556;
+	--land: #17202a;
+	--ink: #ecdfc5;
+	--ink-2: #9aa5ae;
+	--ink-3: #8a96a0;
+	--rule: #26323d;
+	--panel: #111a22;
+	--field: #16212b;
+	--halo: rgba(23, 32, 42, 0.9);
+	--red: #e8806f;
+	--tint: rgba(232, 128, 111, 0.1);
+	--sel: rgba(236, 223, 197, 0.08);
+	--warn: #d9a54a;
+	--shade: rgba(0, 0, 0, 0.5);
+	--l0: #4f8de0;
+	--l1: #b47e18;
+	--l2: #22a074;
+	--l3: #9a72dc;
+	--l4: #869217;
+	--l5: #d05f98;
+	color-scheme: dark;
+}
 
-* {
+*,
+*::before,
+*::after {
 	box-sizing: border-box;
 }
 html,
@@ -91,67 +133,18 @@ body {
 }
 button,
 input,
-select {
+select,
+textarea {
 	font: inherit;
 	color: inherit;
 }
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-a:focus-visible {
-	outline: 2px solid var(--red);
+:focus-visible {
+	outline: 2px solid var(--ink);
 	outline-offset: 2px;
 }
-.ipa {
-	font-family: var(--f-ipa);
+a {
+	color: inherit;
 }
-.caps {
-	text-transform: uppercase;
-	letter-spacing: 0.14em;
-	font-size: 11px;
-	font-weight: 700;
-	color: var(--ink-2);
-}
-.why {
-	font-size: 13px;
-	color: var(--ink-2);
-	font-style: italic;
+p {
 	margin: 0;
-}
-.btn {
-	border: 1px solid var(--ink);
-	background: none;
-	padding: 5px 14px;
-	border-radius: 2px;
-	cursor: pointer;
-	font-size: 14px;
-}
-.btn.primary {
-	background: var(--ink);
-	color: var(--panel);
-}
-.btn.primary:hover:not(:disabled) {
-	background: var(--red);
-	border-color: var(--red);
-}
-.btn:disabled {
-	opacity: 0.45;
-	cursor: default;
-}
-table.ledger {
-	border-collapse: collapse;
-	width: 100%;
-}
-.ledger th {
-	text-align: left;
-	font-weight: 500;
-	font-size: 12px;
-	color: var(--ink-2);
-	border-bottom: 1px solid var(--ink);
-	padding: 4px 8px 4px 0;
-}
-.ledger td {
-	border-bottom: 1px solid var(--rule);
-	padding: 5px 8px 5px 0;
-	vertical-align: top;
 }

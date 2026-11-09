@@ -1,3 +1,5 @@
+import type { ExportV2, FrameV2 } from './model/export';
+
 // Spojení s enginem (Python, /api/v2). V Tauri engine spustí aplikace a adresu
 // dá příkazem engine_url; v prohlížeči se hledá na obvyklých portech.
 
@@ -29,43 +31,7 @@ export interface RunStatus {
 	seconds: number;
 	error: string | null;
 	frame_count: number;
-	frames: Frame[];
-}
-
-export interface Frame {
-	year: number;
-	languages: Record<string, string[]>;
-	endonyms: Record<string, string | null>;
-	census: Record<string, { home: Record<string, number>; public: Record<string, number>; state: string | null }>;
-}
-
-export interface Lineage {
-	id: string;
-	parent: string | null;
-	start_year: number;
-	end_year: number | null;
-	groups_at_start: string[];
-	groups: string[];
-	endonym: string | null;
-	origin_region: string | null;
-}
-
-export interface DialectFact {
-	groups: string[];
-	lineage: string | null;
-	regions: string[];
-	direction: string;
-	terrain: string | null;
-	sole: boolean;
-}
-
-export interface RunResult {
-	year: number;
-	groups: { id: string; territory: string; population: number; domain: string; written: boolean }[];
-	territories: { id: string; level: string; parent: string | null; position: [number, number] | null }[];
-	lineages: Lineage[];
-	dialect_facts: DialectFact[];
-	events: { kind: string; year: number; [key: string]: unknown }[];
+	frames: FrameV2[];
 }
 
 export class EngineError extends Error {
@@ -141,7 +107,7 @@ export class Engine {
 		return this.request(`/runs/${runId}?since=${since}`);
 	}
 
-	result(runId: string): Promise<RunResult> {
+	result(runId: string): Promise<ExportV2> {
 		return this.request(`/runs/${runId}/result`);
 	}
 

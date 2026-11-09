@@ -9,13 +9,17 @@
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"test": "vitest run",
-		"tauri": "tauri"
+		"tauri": "tauri",
+		"check:ds": "vitest run src/lib/ds/sentinel.test.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-static": "3.0.10",
 		"@sveltejs/kit": "2.70.3",
 		"@sveltejs/vite-plugin-svelte": "7.3.0",
 		"@tauri-apps/cli": "2.12.3",
+		"@types/d3-contour": "3.0.6",
+		"@types/d3-delaunay": "6.0.4",
+		"@types/d3-shape": "3.1.7",
 		"@types/node": "24.13.3",
 		"svelte": "5.56.10",
 		"svelte-check": "4.7.6",
@@ -25,6 +29,9 @@
 	},
 	"dependencies": {
 		"@fontsource/piazzolla": "5.3.0",
-		"@tauri-apps/api": "2.12.4"
+		"@tauri-apps/api": "2.12.4",
+		"d3-contour": "4.0.2",
+		"d3-delaunay": "6.0.4",
+		"d3-shape": "3.2.0"
 	}
 }
