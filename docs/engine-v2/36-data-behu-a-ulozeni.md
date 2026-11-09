@@ -11,7 +11,7 @@ o databázi rozhodl uživatel: „Ano, soubory“.
 |---|---|
 | `proto_lexicon` | slovník protojazyků na startu: jazyk popisu → `{group, forms: {pojem: IPA}}` (`History::proto`, počítá `Simulation::new`) |
 | `lexicon_by_language` | dnešní slovník každého pozorovaného jazyka (linie posledního snímku) podle největší domácí skupiny |
-| `change_history` | po jazycích: zvukové změny (`kind: sound`: rodina, cíl, operace, rysy, okolí, rok, vesnice s rokem ustálení, rokem uzavření a relikty) a analogie (`kind: analogy`: proměnná, operace, pojem, buňka, vesnice s rokem); skupiny, které už nežijí, jsou pod `language: null` |
+| `change_history` | po jazycích: zvukové změny (`kind: sound`: rodina, cíl, operace, rysy, výsledná hláska `segment` v IPA a `segment_id`, okolí, rok, vesnice s rokem ustálení, rokem uzavření a relikty) a analogie (`kind: analogy`: proměnná, operace, pojem, buňka, vesnice s rokem); skupiny, které už nežijí, jsou pod `language: null` |
 | událost `study_case` | studijní případ na časové ose: `label`, `event_kind`, `spec_event` (pořadí v zadání) |
 
 Slovník v čase (každý snímek pozorování, tj. po 100 letech) nejde do exportu ani do snímků
