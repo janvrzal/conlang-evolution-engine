@@ -35,3 +35,51 @@ describe('Co kdyby', () => {
 		expect(w.events).toHaveLength(2);
 	});
 });
+
+// ---------- malé jazyky jako variety (talvera vs. talvera-bez-politiky) ----------
+import { existsSync, readFileSync } from 'node:fs';
+import { frameAt, lineageFamilies } from './languages';
+import { geography } from './geography';
+import { differingShown, languageCount, shownHome, sideHome, sideVarieties, type Side } from './cokdyby';
+import type { FrameV2 } from './export';
+
+const fx = (name: string) => new URL(`../../../static/fixtures/${name}.json`, import.meta.url);
+const have = existsSync(fx('talvera')) && existsSync(fx('talvera-bez-politiky'));
+
+describe.skipIf(!have)('Co kdyby: variety na Talveře', () => {
+	const load = (n: string) => JSON.parse(readFileSync(fx(n), 'utf8')) as Side & { frames: FrameV2[] };
+	const A = have ? load('talvera') : (null as never), B = have ? load('talvera-bez-politiky') : (null as never);
+	const end = (s: Side & { frames: FrameV2[] }) => frameAt(s.frames, s.result.year)!;
+	const diff = (all: boolean) => {
+		const ra = sideHome(end(A), A.result), rb = sideHome(end(B), B.result);
+		const a = shownHome(ra, sideVarieties(A, end(A)), all), b = shownHome(rb, sideVarieties(B, end(B)), all);
+		const fam = { a: lineageFamilies(A.world, A.result), b: lineageFamilies(B.world, B.result) };
+		return { a, b, d: differingShown({ a: ra, b: rb }, { a, b }, fam) };
+	};
+
+	it('malé jazyky se ukážou jako variety hostitele a přepínač vrací stav enginu', () => {
+		const v = sideVarieties(A, end(A));
+		expect(v.host.size).toBeGreaterThan(0);
+		const shown = shownHome(sideHome(end(A), A.result), v, false), raw = sideHome(end(A), A.result);
+		const langs = (h: Home) => new Set([...h.values()].map((x) => x.lineage));
+		expect(langs(shown).size).toBeLessThan(langs(raw).size);
+		for (const [vil, h] of shown) expect(v.host.has(h.lineage)).toBe(false);
+		expect(shownHome(raw, v, true)).toBe(raw);
+		const c = languageCount(end(A), v, false);
+		expect(c.small).toBe(v.host.size + v.orphans.length);
+		expect(c.langs + c.small).toBe(Object.keys(end(A).languages).length);
+		expect(languageCount(end(A), v, true)).toEqual({ langs: Object.keys(end(A).languages).length, small: 0 });
+	});
+
+	it('rozdíl Utjipengu a Luji (7 vsí, Talmurština vs. Serenština) zůstává', () => {
+		const { d } = diff(false);
+		const geo = geography(A.world, A.result);
+		const regions = new Set([...d].map((v) => geo.name(geo.regionOf.get(v)!)));
+		expect(d.size).toBe(7);
+		expect(regions.has('Luji') && regions.has('Utjipeng')).toBe(true);
+		expect(diff(true).d.size).toBe(7);
+		// bez ochrany by se tytéž malé jazyky přiřazené v A a B různým hostitelům počítaly jako rozdíl
+		const a = diff(false);
+		expect(differingVillages(a.a, a.b, matchLineages(a.a, a.b, { a: lineageFamilies(A.world, A.result), b: lineageFamilies(B.world, B.result) })).size).toBeGreaterThan(7);
+	});
+});
