@@ -6,6 +6,7 @@
 		Card,
 		Checkbox,
 		Cluster,
+		Disclosure,
 		Floating,
 		Ledger,
 		LedgerRow,
@@ -61,7 +62,7 @@
 	let query = $state<string | number>('');
 	const rows = $derived(mergeRows(filterEvents(all, { show, query: String(query) })));
 	const blocks = $derived(
-		centuries(world?.start_year ?? result?.start_year ?? 0, endYear, result?.event_summary, rows).filter((c) => c.rows.length || c.summary.length || c.key === nowKey)
+		centuries(world?.start_year ?? result?.start_year ?? 0, endYear, result?.event_summary, rows, t).filter((c) => c.rows.length || c.summary.length || c.key === nowKey)
 	);
 
 	// výběr: podle výběru Atlasu (app.view.event) nebo posledního kliknutí na řádek
@@ -90,12 +91,27 @@
 {#snippet century(c: KCentury)}
 	<Stack gap={1}>
 		<Text variant="big">{formatYear(c.from)}–{formatYear(c.to)}</Text>
-		{#if c.summary.length}
-			<Cluster gap={3}>
-				{#each c.summary as s (s.id)}
-					<Text variant="small">{t(`kronika.summary.${s.id}`)} <Text variant="strong">{number(s.value)}</Text></Text>
-				{/each}
-			</Cluster>
+		{#if c.kinds.length}
+			<Disclosure>
+				{#snippet summary()}
+					{#if c.summary.length}
+						{#each c.summary as s, i (s.id)}
+							{#if i > 0}<Text as="span" variant="small" tone="muted">{' · '}</Text>{/if}
+							<Text as="span" variant="small">{t(`kronika.summary.${s.id}`)} <Text as="span" variant="strong">{number(s.value)}</Text></Text>
+						{/each}
+					{:else}
+						<Text as="span" variant="small">{t('kronika.summary.other')}</Text>
+					{/if}
+				{/snippet}
+				<Ledger termWidth={200}>
+					{#each c.kinds as k (k.kind)}
+						<LedgerRow term={k.label}>
+							<Text as="span" num>{number(k.value)}</Text>
+							{#if k.why}<Text variant="why">{k.why}</Text>{/if}
+						</LedgerRow>
+					{/each}
+				</Ledger>
+			</Disclosure>
 		{/if}
 		{#if c.rows.length}
 			<Table>

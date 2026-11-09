@@ -4,6 +4,7 @@ import {
 	centuries,
 	classOf,
 	filterEvents,
+	kindCounts,
 	kindKey,
 	listEvents,
 	mergeRows,
@@ -36,9 +37,12 @@ describe('kronika: id kraje', () => {
 });
 
 describe('kronika: druhy a třídy', () => {
-	it('názvy z kind.* a z kronika.kind.*, neznámé zůstanou', () => {
+	it('názvy ze sdíleného kind.* a jen z kronika.kind.* (přízvuk, souhrnové druhy), neznámé zůstanou', () => {
 		expect(kindKey('state')).toBe('kind.state');
-		expect(kindKey('settlement')).toBe('kronika.kind.settlement');
+		expect(kindKey('settlement')).toBe('kind.settlement');
+		expect(kindKey('language_ended')).toBe('kind.language_ended');
+		expect(kindKey('stress_rule_changed')).toBe('kronika.kind.stress_rule_changed');
+		expect(kindKey('milestone')).toBe('kronika.kind.milestone');
 		expect(kindKey('unknown_kind')).toBeNull();
 	});
 
@@ -80,7 +84,7 @@ describe('kronika: události a řádky', () => {
 		const rows = mergeRows(events);
 		const settlements = rows.find((r) => r.kind === 'settlement')!;
 		expect(settlements.count).toBe(2);
-		expect(settlements.title).toBe('kronika.kind.settlement');
+		expect(settlements.title).toBe('kind.settlement');
 		expect(settlements.members.map((m) => m.key)).toEqual(['a0', 'a1']);
 		expect(rows.find((r) => r.kind === 'codification')!.count).toBe(1);
 		const withEcho = mergeRows(listEvents(world, [{ kind: 'state', year: 1875, id: 'istren', name: 'Istren', policy: 'enforced', border: 'closed', regions: [] }], ctx));
@@ -100,6 +104,23 @@ describe('kronika: události a řádky', () => {
 	});
 });
 
+describe('kronika: rozpis drobných změn', () => {
+	it('druhy s nulovým počtem nejsou; neznámý druh zůstane jako text', () => {
+		const out = kindCounts({ innovation: 0, analogy: 4, mystery: 2 }, tr);
+		expect(out.map((k) => [k.kind, k.value])).toEqual([
+			['analogy', 4],
+			['mystery', 2]
+		]);
+		expect(out[1].label).toBe('mystery');
+		expect(out.every((k) => k.why === '')).toBe(true);
+	});
+
+	it('shodný počet se řadí podle názvu druhu, prázdný vstup dá prázdný rozpis', () => {
+		expect(kindCounts({ state: 1, annexation: 1 }, tr).map((k) => k.kind)).toEqual(['annexation', 'state']);
+		expect(kindCounts(undefined, tr)).toEqual([]);
+	});
+});
+
 describe('kronika: století a souhrn', () => {
 	const summary = {
 		'1800': { phonologized: 20, established: 7, analogy: 3, stress_rule_changed: 2, stress_strength_changed: 1, innovation: 0 },
@@ -108,7 +129,7 @@ describe('kronika: století a souhrn', () => {
 
 	it('souhrn sčítá zvuk (established + phonologized) a přízvuk, nuly vynechá', () => {
 		const rows = mergeRows(listEvents(world, history, ctx));
-		const blocks = centuries(-700, 1950, summary, rows);
+		const blocks = centuries(-700, 1950, summary, rows, tr);
 		const c1800 = blocks.find((c) => c.key === 1800)!;
 		expect(c1800.summary).toEqual([
 			{ id: 'sound', value: 27 },
@@ -119,8 +140,18 @@ describe('kronika: století a souhrn', () => {
 		expect(blocks.find((c) => c.key === 1900)!.summary.map((s) => s.id)).toEqual(['grammar', 'extinct']);
 	});
 
+	it('rozpis století jde od nejčastějšího druhu, milníky a uzavřené procesy jsou poslední s vysvětlením', () => {
+		const mixed = {
+			'1800': { milestone: 9, process_closed: 2, phonologized: 20, established: 7, analogy: 3, stress_rule_changed: 2, innovation: 0 }
+		};
+		const c = centuries(-700, 1950, mixed, [], tr).find((b) => b.key === 1800)!;
+		expect(c.kinds.map((k) => k.kind)).toEqual(['phonologized', 'established', 'analogy', 'stress_rule_changed', 'milestone', 'process_closed']);
+		expect(c.kinds.at(-2)).toMatchObject({ label: 'kronika.kind.milestone', value: 9, why: 'kronika.why.milestone' });
+		expect(c.kinds.at(-1)).toMatchObject({ label: 'kronika.kind.process_closed', value: 2, why: 'kronika.why.process_closed' });
+	});
+
 	it('rozsah od začátku do konce běhu, poslední století končí koncem běhu', () => {
-		const blocks = centuries(-700, 1950, undefined, []);
+		const blocks = centuries(-700, 1950, undefined, [], tr);
 		expect(blocks[0]).toMatchObject({ key: -700, from: -700, to: -601 });
 		expect(blocks.at(-1)).toMatchObject({ key: 1900, from: 1900, to: 1950 });
 		expect(blocks.length).toBe(27);
