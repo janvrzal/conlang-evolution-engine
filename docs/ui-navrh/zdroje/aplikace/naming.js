@@ -13,10 +13,10 @@ const NAMING = (() => {
     'kʷ': 'kw', 'ɡʷ': 'gw', 'ɡ': 'g', 'ʃ': 'š', 'ʒ': 'ž', 't͡ʃ': 'č', 'd͡ʒ': 'dž', 't͡s': 'c', 'd͡z': 'dz', 'ŋ': 'ng', 'ɲ': 'ň',
     'θ': 'th', 'ð': 'dh', 'x': 'ch', 'ɣ': 'gh', 'ʔ': '’', 'ə': 'e', 'ɛ': 'e', 'æ': 'ä', 'ø': 'ö', 'ɔ': 'o', 'ʊ': 'u', 'ɪ': 'i', 'y': 'ü',
     'ɨ': 'y', 'β': 'v', 'ɸ': 'f', 'χ': 'ch', 'ʁ': 'r', 'ħ': 'h', 'ɦ': 'h', 'ʎ': 'ľ', 'ɬ': 'hl', 'c': 'ť', 'ɟ': 'ď', 'ɢ': 'g', 'ʋ': 'v',
-    'ɹ': 'r', 'ɰ': 'g', 'ʝ': 'j', 'ɑ': 'a', 'ɒ': 'o', 'ʌ': 'a',
+    'ɹ': 'r', 'ɰ': 'g', 'ʝ': 'j', 'ɑ': 'a', 'ɒ': 'o', 'ʌ': 'a', 'ɯ': 'y', 'ɤ': 'e', 'œ': 'ö', 'ɘ': 'e', 'ɵ': 'ö', 'ʉ': 'ü', 'ɾ': 'r', 'ɦ': 'h', 'ɱ': 'm', 'ʋ': 'v', 'ɐ': 'a', 'ɜ': 'e', 'ɞ': 'ö', 'ʏ': 'ü', 'ɶ': 'ö', 'ʍ': 'w', 'ɕ': 'š', 'ʑ': 'ž', 'ʂ': 'š', 'ʐ': 'ž', 'ɭ': 'l', 'ɳ': 'n', 'ʈ': 't', 'ɖ': 'd', 'ɻ': 'r',
   };
   function romanize(ipa) {
-    const text = segments(ipa).map((s) => ROMAN[s] ?? s.replace(MOD, '')).join('');
+    const text = segments(ipa).map((s) => { if (ROMAN[s]) return ROMAN[s]; const base = s.replace(MOD, ''); return ROMAN[base] ?? base; }).join('');
     return text.charAt(0).toUpperCase() + text.slice(1);
   }
   const stem = (name) => {
