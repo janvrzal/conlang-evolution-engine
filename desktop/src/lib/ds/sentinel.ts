@@ -56,6 +56,7 @@ export function scanSource(file: string, source: string, isModule: ModuleCheck =
 export function walk(dir: string): string[] {
 	const out: string[] = [];
 	for (const name of readdirSync(dir)) {
+		if (name.startsWith('.') || name === 'node_modules') continue;
 		const path = join(dir, name);
 		if (statSync(path).isDirectory()) out.push(...walk(path));
 		else if (/\.(svelte|ts|js)$/.test(name) && !/\.test\.ts$/.test(name)) out.push(path);
