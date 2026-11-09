@@ -34,6 +34,23 @@ export interface RunStatus {
 	frames: FrameV2[];
 }
 
+/** GET /api/v2/schema: JSON schéma světa, slovní úrovně, parametry podle rolí, druhy událostí, slovníky. */
+export interface EngineSchema {
+	format: string;
+	json_schema: Record<string, unknown>;
+	/** možné hodnoty slovních úrovní (policy_levels, terrain_access, background_levels, …) */
+	levels: Record<string, string[]>;
+	parameters: ParameterSchema;
+	/** world = slovní úrovně světa, active = pro pokročilé, fixed = skryté */
+	parameters_by_role: { world: ParameterSchema; active: ParameterSchema; fixed: ParameterSchema };
+	event_kinds: string[];
+	vocabulary: { default: number; max: number; presets: number[]; domains: string[]; word_classes: string[]; relation_kinds: string[]; relation_directions: string[]; [key: string]: unknown };
+}
+export interface ParameterSchema {
+	groups: { id: string; title: string }[];
+	items: { name: string; kind: string; default: unknown; group?: string; title?: string; [key: string]: unknown }[];
+}
+
 export class EngineError extends Error {
 	constructor(
 		message: string,
@@ -93,6 +110,10 @@ export class Engine {
 			throw new EngineError(typeof detail === 'string' ? detail : response.statusText, detail?.issues ?? []);
 		}
 		return body as T;
+	}
+
+	schema(): Promise<EngineSchema> {
+		return this.request('/schema');
 	}
 
 	validate(spec: unknown): Promise<{ ok: boolean; issues: Issue[] }> {

@@ -22,10 +22,16 @@ world = json.load(open(f"{src}/world.json"))
 frames = [{k: f[k] for k in FRAME_KEYS if k in f} for f in json.load(open(f"{src}/frames.json"))]
 export = json.load(open(f"{src}/export.json"))
 counts = {}
+summary = {}
 for e in export["events"]:
     counts[e["kind"]] = counts.get(e["kind"], 0) + 1
+    century = str(int(e["year"] // 100 * 100))
+    row = summary.setdefault(century, {})
+    row[e["kind"]] = row.get(e["kind"], 0) + 1
 export["events"] = [e for e in export["events"] if e["kind"] in KEEP]
 export["event_counts"] = counts
+# souhrn po stoletích (století → druh → počet); server by ho měl posílat místo milionů událostí
+export["event_summary"] = summary
 export.pop("links", None)
 json.dump({"world": world, "frames": frames, "result": export}, open(out, "w"), ensure_ascii=False, separators=(",", ":"))
 print(out, len(export["events"]), "událostí")

@@ -1,5 +1,5 @@
 // Stav aplikace: otevřený svět (popis cee-v2-world/1), spojení s enginem, běh a výběr ve Výsledku.
-import { API_REVISION, Engine, EngineError, connect, type Health, type Issue, type RunStatus } from './engine';
+import { API_REVISION, Engine, EngineError, connect, type EngineSchema, type Health, type Issue, type RunStatus } from './engine';
 import type { ExportV2, FrameV2 } from './model/export';
 
 export interface WorldSpec {
@@ -67,6 +67,8 @@ class App {
 	frames = $state.raw<FrameV2[]>([]);
 	result = $state.raw<ExportV2 | null>(null);
 	error = $state<string | null>(null);
+	/** schéma enginu (úrovně, parametry, druhy událostí, slovníky); null bez enginu */
+	schema = $state.raw<EngineSchema | null>(null);
 	view = $state<View>({ year: null, region: null, lineage: null, concept: 'water', event: null });
 	/** větev B pro Co kdyby (A je hlavní běh) */
 	branch = $state.raw<Branch | null>(null);
@@ -112,6 +114,7 @@ class App {
 			found.health.api_revision < API_REVISION || found.health.v2_binding_fresh === false
 				? { phase: 'outdated', health: found.health }
 				: { phase: 'ready', health: found.health };
+		this.schema = await this.engine.schema().catch(() => this.schema);
 		if (this.world) await this.check();
 	}
 
@@ -138,6 +141,7 @@ class App {
 	/** Vývoj: načte vzorek skutečného běhu ze static/fixtures (scripts/fixture.py), volitelně i větev B. */
 	async loadFixture(name: string, branch?: string) {
 		const data = await (await fetch(`/fixtures/${name}.json`)).json();
+		this.schema = await fetch('/fixtures/schema.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
 		this.load(data.world, `${name}.cee.json`);
 		this.frames = data.frames;
 		this.result = data.result;

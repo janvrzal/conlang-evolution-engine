@@ -140,8 +140,13 @@ export interface ExportV2 {
 	standards: Record<string, string>;
 	onomastics: { toponyms: Record<string, Toponym>; states: Record<string, unknown>; [key: string]: unknown };
 	snapshots: { year: number; tick: number; languages: Record<string, string[]>; dialects: string[][] }[];
+	/** Události. Plný export jich má miliony (milníky zvukových změn); aplikace dostává jen dějinné a jazykové. */
 	events: EngineEvent[];
-	links: { kind: string; source: string; target: string; strength: number }[];
+	/** Souhrn všech událostí po stoletích: „1800“ → druh → počet. Zatím jen ve vzorku (scripts/fixture.py), server ho má doplnit. */
+	event_summary?: Record<string, Record<string, number>>;
+	/** Počet událostí podle druhu za celý běh. */
+	event_counts?: Record<string, number>;
+	links?: { kind: string; source: string; target: string; strength: number }[];
 }
 
 /** Průběžný snímek běhu (po 100 letech a v end_year). Bez slovníku a mluvnice. */
