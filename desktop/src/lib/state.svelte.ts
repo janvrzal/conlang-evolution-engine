@@ -8,6 +8,12 @@ export interface WorldSpec {
 	seed?: number;
 	start_year?: number;
 	end_year: number;
+	background?: string;
+	generation_years?: number;
+	village_spacing?: number;
+	semantics?: boolean;
+	vocabulary?: number;
+	concepts?: Record<string, unknown>[];
 	languages: { id: string; name?: string; consonants?: string[]; vowels?: string[]; grammar?: string; stress?: string; words?: Record<string, string>; endonym?: string[]; [key: string]: unknown }[];
 	regions: {
 		id: string;
@@ -19,7 +25,8 @@ export interface WorldSpec {
 		language?: string;
 		terrain?: string;
 		identity?: string;
-		city?: number;
+		city?: number | null;
+		prestige?: number;
 		[key: string]: unknown;
 	}[];
 	events: { kind: string; year: number; [key: string]: unknown }[];

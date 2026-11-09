@@ -2,13 +2,37 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
-	let { state = 'default', onclick, title, children }: { state?: 'default' | 'on' | 'off'; onclick?: () => void; title?: string; children: Snippet } = $props();
+	let {
+		state = 'default',
+		onclick,
+		onremove,
+		removeLabel,
+		title,
+		children
+	}: {
+		state?: 'default' | 'on' | 'off';
+		onclick?: () => void;
+		/** štítek jde odebrat (×) */
+		onremove?: () => void;
+		/** aria-label tlačítka ×, např. „Odebrat souseda Njingen“ */
+		removeLabel?: string;
+		title?: string;
+		children: Snippet;
+	} = $props();
 </script>
+
+{#if onremove}
+	<span class="chip {state} rm" {title}>
+		{#if onclick}<button type="button" class="in" {onclick}>{@render children()}</button>{:else}{@render children()}{/if}
+		<button type="button" class="x" aria-label={removeLabel} title={removeLabel} onclick={onremove}>×</button>
+	</span>
+{:else}
 
 {#if onclick}
 	<button type="button" class="chip {state}" {title} aria-pressed={state === 'on' ? 'true' : undefined} {onclick}>{@render children()}</button>
 {:else}
 	<span class="chip {state}" {title}>{@render children()}</span>
+{/if}
 {/if}
 
 <style>
@@ -28,6 +52,29 @@
 	}
 	button.chip:hover {
 		border-color: var(--ink-2);
+	}
+	.rm {
+		padding-right: 2px;
+	}
+	.in {
+		background: none;
+		border: 0;
+		padding: 0;
+		cursor: pointer;
+		font: inherit;
+	}
+	.x {
+		background: none;
+		border: 0;
+		min-width: 24px;
+		min-height: 24px;
+		cursor: pointer;
+		color: var(--ink-2);
+		font-size: 15px;
+		line-height: 1;
+	}
+	.x:hover {
+		color: var(--red);
 	}
 	.on {
 		border-color: var(--ink);

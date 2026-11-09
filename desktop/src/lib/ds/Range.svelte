@@ -7,11 +7,12 @@
 		step = 1,
 		label,
 		id,
-		oninput
-	}: { value: number; min: number; max: number; step?: number; label?: string; id?: string; oninput?: (value: number) => void } = $props();
+		oninput,
+		onchange
+	}: { value: number; min: number; max: number; step?: number; label?: string; id?: string; oninput?: (value: number) => void; /** po puštění posuvníku */ onchange?: (value: number) => void } = $props();
 </script>
 
-<input type="range" {id} {min} {max} {step} aria-label={label} bind:value oninput={() => oninput?.(value)} />
+<input type="range" {id} {min} {max} {step} aria-label={label} bind:value oninput={() => oninput?.(value)} onchange={() => onchange?.(value)} />
 
 <style>
 	input {

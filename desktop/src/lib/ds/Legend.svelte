@@ -5,7 +5,8 @@
 	export interface LegendItem {
 		label: string;
 		color?: string;
-		kind?: 'fill' | 'line' | 'dashed' | 'outline' | 'square' | 'hatch';
+		/** isogloss = červená čára (za ní se slovo říká jinak) */
+		kind?: 'fill' | 'line' | 'dashed' | 'outline' | 'square' | 'hatch' | 'isogloss';
 	}
 	let { items, children }: { items: LegendItem[]; children?: Snippet } = $props();
 </script>
@@ -41,6 +42,10 @@
 	.line {
 		height: 2px;
 		background: var(--c);
+	}
+	.isogloss {
+		height: 2px;
+		background: var(--red);
 	}
 	.dashed {
 		height: 0;

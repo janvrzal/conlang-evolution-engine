@@ -31,6 +31,10 @@
 		x?: number;
 		y?: number;
 		kind?: 'region' | 'language' | 'state' | 'strong';
+		/** výslovnost: písmo Charis, bez převodu na velká písmena */
+		ipa?: boolean;
+		/** kurzíva (slovo z jiné rodiny) */
+		italic?: boolean;
 		/** posun dolů v px */
 		dy?: number;
 	}
@@ -398,7 +402,12 @@
 			strong: { font: `600 11px ${cssVar('--f-ui')}`, spacing: '1.5px', color: cssVar('--ink'), upper: true }
 		} as const;
 		for (const l of labels) {
-			const st = STYLE[l.kind ?? 'region'];
+			const base = STYLE[l.kind ?? 'region'];
+			const st = l.ipa
+				? { font: `${l.italic ? 'italic ' : ''}400 14px ${cssVar('--f-ipa')}`, spacing: '0px', color: cssVar('--ink'), upper: false }
+				: l.italic
+					? { ...base, font: `italic ${base.font}` }
+					: base;
 			let at: [number, number] | undefined;
 			if (l.region) at = L.rpts.get(l.region);
 			else if (l.villages?.length) {
