@@ -160,7 +160,10 @@
 				place = t('shell.place.parameters');
 				link = '/model';
 			}
-			return { severity: issue.severity === 'warning' ? 'warning' : 'error', place, href: link, message: issue.message, code: issue.path };
+			// česky přesná zpráva enginu; v jiném jazyce šablona podle stálého kódu (dok. 36)
+			const key = `issue.${issue.code}` as MessageKey;
+			const message = i18n.locale !== 'cs' && issue.code && t(key) !== key ? t(key, issue.args ?? {}) : issue.message;
+			return { severity: issue.severity === 'warning' ? 'warning' : 'error', place, href: link, message, code: issue.path };
 		})
 	);
 

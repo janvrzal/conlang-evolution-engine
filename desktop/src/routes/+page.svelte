@@ -148,7 +148,7 @@
 								<ListItem
 									onclick={() => openRecent(item.path)}
 									current={app.filePath === item.path}
-									meta={`${when(item.opened)}${item.has_result ? ` · ${t('projekty.recent_result')}` : ''}`}
+									meta={`${when(item.opened)}${item.runs ? ` · ${t('projekty.recent_runs', { n: item.runs })}` : ''}`}
 								>
 									<Stack gap={1}>
 										<Text variant="h3">{item.name ?? baseName(item.path)}</Text>

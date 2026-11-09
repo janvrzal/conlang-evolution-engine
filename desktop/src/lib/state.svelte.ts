@@ -1,6 +1,6 @@
 // Stav aplikace: otevřený svět (popis cee-v2-world/1), spojení s enginem, běh a výběr ve Výsledku.
-import { API_REVISION, Engine, EngineError, connect, type EngineSchema, type Health, type Issue, type RunStatus } from './engine';
-import { baseName, forgetRecent, inApp, openProject, pickOpen, pickSave, recentProjects, saveProject, saveResult, type RecentProject } from './files';
+import { API_REVISION, Engine, EngineError, connect, type EngineSchema, type Health, type Issue, type RunStatus, type StoredRun } from './engine';
+import { baseName, forgetRecent, inApp, openProject, pickOpen, pickSave, recentProjects, saveProject, type RecentProject } from './files';
 import type { ExportV2, FrameV2 } from './model/export';
 
 export interface WorldSpec {
@@ -62,6 +62,9 @@ export interface View {
 	allLanguages: boolean;
 }
 
+/** Slovník v čase ve vzorku dat (vývoj v prohlížeči): rok → jazyk → slovník. */
+type FixtureLexicon = { year: number; languages: Record<string, { group: string; forms: Record<string, string> }> }[];
+
 /** Druhá větev pro „Co kdyby“: upravené zadání a jeho běh. */
 export interface Branch {
 	label: string;
@@ -113,6 +116,11 @@ class App {
 	view = $state<View>({ year: null, region: null, lineage: null, concept: 'water', event: null, allLanguages: false });
 	/** větev B pro Co kdyby (A je hlavní běh) */
 	branch = $state.raw<Branch | null>(null);
+	/** složka běhů projektu a uložené běhy (nejnovější první; jen v aplikaci) */
+	runsDir = $state<string | null>(null);
+	storedRuns = $state<StoredRun[]>([]);
+	/** slovník v čase ze vzorku dat podle id běhu (jen vývoj v prohlížeči) */
+	private fixtureLexicon = new Map<string, FixtureLexicon>();
 	/** zadání, ze kterého je poslední výsledek (JSON) */
 	private ranSpec = $state<string | null>(null);
 	private undoStack = $state.raw<Snapshot[]>([]);
@@ -172,6 +180,8 @@ class App {
 		this.undoStack = [];
 		this.redoStack = [];
 		this.lastEdit = null;
+		this.branch = null;
+		this.storedRuns = [];
 		this.view = { year: null, region: null, lineage: null, concept: 'water', event: null, allLanguages: false };
 		void this.check();
 	}
@@ -204,19 +214,104 @@ class App {
 		if (inApp()) this.recent = await recentProjects().catch(() => []);
 	}
 
-	/** Otevře projekt z disku i s uloženým výsledkem (je-li). */
+	/** Otevře projekt z disku a načte poslední hotový běh (přednostně ten, který sedí k zadání). */
 	async openPath(path: string) {
 		const opened = await openProject(path);
 		this.load(opened.world, baseName(path), opened.path);
-		if (opened.run) {
-			this.frames = opened.run.frames;
-			this.result = opened.run.result;
-			// výsledek je ze zadání, se kterým vznikl; liší-li se, ukáže se jako zastaralý
-			this.ranSpec = JSON.stringify(opened.run.spec);
-			const start = opened.run.spec.start_year ?? 0, end = opened.run.spec.end_year;
-			this.run = { id: `file:${opened.path}`, status: 'done', year: end, progress: 1, start_year: start, end_year: end, seconds: opened.run.seconds, error: null, frame_count: opened.run.frames.length, frames: [] };
-		}
+		this.runsDir = opened.runs.dir;
+		this.storedRuns = opened.runs.runs;
+		const done = opened.runs.runs.filter((r) => r.status === 'done' && r.has_result && !r.parent);
+		const pick = done.find((r) => r.matches) ?? done[0];
+		if (pick) await this.openRun(pick);
 		await this.refreshRecent();
+	}
+
+	/** Načte uložený běh (snímky a výsledek) jako hlavní běh A. */
+	async openRun(run: StoredRun) {
+		if (!this.engine) return;
+		if (this.polling) clearTimeout(this.polling);
+		const status = await this.engine.status(run.path, 0);
+		this.frames = status.frames;
+		this.result = run.has_result ? await this.engine.result(run.path) : null;
+		this.run = { ...status, frames: [] };
+		// stale: běh z jiného zadání se ukáže jako zastaralý
+		this.ranSpec = run.matches && this.world ? JSON.stringify(this.world) : `run:${run.id}`;
+		this.view.year = null;
+	}
+
+	/** Načte uložený běh jako větev B (Co kdyby). */
+	async openBranch(run: StoredRun) {
+		if (!this.engine) return;
+		const status = await this.engine.status(run.path, 0);
+		const result = run.has_result ? await this.engine.result(run.path) : null;
+		this.branch = { label: run.name ?? run.id, world: this.world as WorldSpec, run: { ...status, frames: [] }, frames: status.frames, result };
+	}
+
+	/** Seznam běhů projektu znovu z disku. */
+	async refreshRuns() {
+		if (!this.engine || !this.world || !inApp()) return;
+		const listed = await this.engine.runs(this.filePath, $state.snapshot(this.world)).catch(() => null);
+		if (listed) {
+			this.runsDir = listed.dir;
+			this.storedRuns = listed.runs;
+		}
+	}
+
+	async renameRun(run: StoredRun, name: string | null) {
+		await this.engine?.renameRun(run.path, name);
+		await this.refreshRuns();
+	}
+
+	async deleteRun(run: StoredRun) {
+		await this.engine?.deleteRun(run.path);
+		if (this.run?.id === run.path) {
+			this.run = null;
+			this.result = null;
+			this.frames = [];
+			this.ranSpec = null;
+		}
+		if (this.branch?.run?.id === run.path) this.branch = null;
+		await this.refreshRuns();
+	}
+
+	/** Slovník jazyka (linie nebo protojazyka) v roce: z běhu A, nebo z větve B. */
+	async lexicon(language: string, year: number, side: 'A' | 'B' = 'A'): Promise<{ group: string; forms: Record<string, string> } | null> {
+		const id = side === 'A' ? this.run?.id : this.branch?.run?.id;
+		if (!id) return null;
+		const fixture = this.fixtureLexicon.get(id);
+		if (fixture) {
+			let found: { group: string; forms: Record<string, string> } | null = null;
+			for (const row of fixture) if (row.year <= year && row.languages[language]) found = row.languages[language];
+			return found;
+		}
+		return this.engine ? this.engine.lexicon(id, language, year).catch(() => null) : null;
+	}
+
+	/** Roky se slovníkem a jazyky v nich. */
+	async lexiconYears(side: 'A' | 'B' = 'A'): Promise<{ year: number; languages: string[] }[]> {
+		const id = side === 'A' ? this.run?.id : this.branch?.run?.id;
+		if (!id) return [];
+		const fixture = this.fixtureLexicon.get(id);
+		if (fixture) return fixture.map((r) => ({ year: r.year, languages: Object.keys(r.languages) }));
+		return this.engine ? this.engine.lexiconYears(id).catch(() => []) : [];
+	}
+
+	/** Historie slova v jazyce: od kterého roku jaký tvar (null = jazyk pojem nemá). */
+	async wordHistory(language: string, concept: string, side: 'A' | 'B' = 'A'): Promise<{ year: number; form: string | null }[]> {
+		const id = side === 'A' ? this.run?.id : this.branch?.run?.id;
+		if (!id) return [];
+		const fixture = this.fixtureLexicon.get(id);
+		if (fixture) {
+			const out: { year: number; form: string | null }[] = [];
+			for (const row of fixture) {
+				const lex = row.languages[language];
+				if (!lex) continue;
+				const form = lex.forms[concept] ?? null;
+				if (!out.length || out[out.length - 1].form !== form) out.push({ year: row.year, form });
+			}
+			return out;
+		}
+		return this.engine ? this.engine.wordHistory(id, language, concept).catch(() => []) : [];
 	}
 
 	/** Dialog „Otevřít“ (v aplikaci); vrátí false, když uživatel nic nevybral. */
@@ -227,7 +322,7 @@ class App {
 		return true;
 	}
 
-	/** Uloží projekt: v aplikaci na disk (s výsledkem běhu vedle), v prohlížeči stažením. */
+	/** Uloží projekt: v aplikaci na disk (běhy neuloženého projektu se přesunou k němu), v prohlížeči stažením. */
 	async save(as = false): Promise<boolean> {
 		if (!this.world) return false;
 		if (!inApp()) {
@@ -242,18 +337,22 @@ class App {
 		}
 		const path = !as && this.filePath ? this.filePath : await pickSave(this.fileName ?? `${(this.world.name ?? 'svet').toLowerCase()}.cee.json`);
 		if (!path) return false;
-		const fromEngine = this.run?.status === 'done' && !this.run.id.startsWith('file:') && !!this.result;
-		await saveProject({
-			path,
-			world: $state.snapshot(this.world) as WorldSpec,
-			runId: fromEngine ? this.run!.id : null,
-			spec: fromEngine && this.ranSpec ? JSON.parse(this.ranSpec) : null,
-			resultFrom: this.run?.id.startsWith('file:') ? this.run.id.slice(5) : null
-		});
-		if (this.run?.id.startsWith('file:')) this.run = { ...this.run, id: `file:${path}` };
+		// běhy se přesouvají při prvním uložení a při „Uložit jako“ (ne během počítání)
+		const move = (!this.filePath || path !== this.filePath) && !!this.runsDir;
+		if (move && (this.running || this.branch?.run?.status === 'running')) throw new Error('Běh ještě počítá; ulož projekt na nové místo, až doběhne.');
+		const oldDir = this.runsDir;
+		const saved = await saveProject({ path, world: $state.snapshot(this.world) as WorldSpec, runsFrom: move ? oldDir : null });
 		this.filePath = path;
 		this.fileName = baseName(path);
 		this.dirty = false;
+		this.runsDir = saved.runs.dir;
+		this.storedRuns = saved.runs.runs;
+		// otevřené běhy teď leží v nové složce
+		if (move && oldDir) {
+			const moved = (id: string | undefined) => (id && id.startsWith(oldDir) ? saved.runs.dir + id.slice(oldDir.length) : id);
+			if (this.run) this.run = { ...this.run, id: moved(this.run.id)! };
+			if (this.branch?.run) this.branch = { ...this.branch, run: { ...this.branch.run, id: moved(this.branch.run.id)! } };
+		}
 		await this.refreshRecent();
 		return true;
 	}
@@ -263,7 +362,7 @@ class App {
 		await this.refreshRecent();
 	}
 
-	/** Vývoj: načte vzorek skutečného běhu ze static/fixtures (scripts/fixture.py), volitelně i větev B. */
+	/** Vývoj: načte vzorek skutečného běhu ze static/fixtures (src-tauri: test fixture::vzorek_talvery), volitelně i větev B. */
 	async loadFixture(name: string, branch?: string) {
 		const data = await (await fetch(`/fixtures/${name}.json`)).json();
 		this.schema = await fetch('/fixtures/schema.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -272,24 +371,31 @@ class App {
 		this.result = data.result;
 		this.ranSpec = JSON.stringify(this.world);
 		const end = data.world.end_year, start = data.world.start_year ?? 0;
-		this.run = { id: `fixture:${name}`, status: 'done', year: end, progress: 1, start_year: start, end_year: end, seconds: 0, error: null, frame_count: data.frames.length, frames: [] };
+		this.run = { id: `fixture:${name}`, status: 'done', year: end, progress: 1, start_year: start, end_year: end, seconds: data.info?.seconds ?? 0, error: null, frame_count: data.frames.length, frames: [] };
+		if (data.lexicon_years) this.fixtureLexicon.set(this.run.id, data.lexicon_years);
 		if (branch) {
 			const b = await (await fetch(`/fixtures/${branch}.json`)).json();
-			this.branch = { label: branch, world: b.world, run: { ...this.run, id: `fixture:${branch}` }, frames: b.frames, result: b.result };
+			const id = `fixture:${branch}`;
+			if (b.lexicon_years) this.fixtureLexicon.set(id, b.lexicon_years);
+			this.branch = { label: b.info?.name ?? branch, world: b.world, run: { ...this.run, id }, frames: b.frames, result: b.result };
 		}
 	}
 
-	/** Spustí větev B s upraveným zadáním (Co kdyby). */
+	/** Spustí větev B s upraveným zadáním (Co kdyby): z kontrolního bodu běhu A, je-li uložený. */
 	async startBranch(label: string, world: WorldSpec) {
 		if (!this.engine) return;
 		this.branch = { label, world, run: null, frames: [], result: null };
-		const { run_id } = await this.engine.start(world);
+		const parent = this.run && !this.run.id.startsWith('fixture:') ? this.run.id : null;
+		const { run_id } = await this.engine.start(world, { project: this.filePath, name: label, parent });
 		const poll = async () => {
 			if (!this.engine || !this.branch) return;
 			const status = await this.engine.status(run_id, this.branch.frames.length);
 			this.branch = { ...this.branch, frames: [...this.branch.frames, ...status.frames], run: { ...status, frames: [] } };
 			if (status.status === 'running') setTimeout(() => void poll(), 500);
-			else if (status.status === 'done') this.branch = { ...this.branch, result: await this.engine.result(run_id) };
+			else {
+				if (status.status === 'done') this.branch = { ...this.branch, result: await this.engine.result(run_id) };
+				await this.refreshRuns();
+			}
 		};
 		await poll();
 	}
@@ -349,7 +455,7 @@ class App {
 		this.frames = [];
 		const spec = JSON.stringify(this.world);
 		try {
-			const { run_id } = await this.engine.start(this.world);
+			const { run_id } = await this.engine.start(this.world, { project: this.filePath });
 			this.ranSpec = spec;
 			await this.poll(run_id);
 		} catch (error) {
@@ -367,13 +473,9 @@ class App {
 			this.polling = setTimeout(() => void this.poll(runId), 500);
 			return;
 		}
-		if (status.status === 'done') {
-			this.result = await this.engine.result(runId);
-			// výsledek hned vedle uloženého projektu, aby po zavření nezmizel
-			if (inApp() && this.filePath && this.ranSpec) {
-				await saveResult(this.filePath, runId, JSON.parse(this.ranSpec)).catch((error) => (this.notice = String(error)));
-			}
-		}
+		if (status.status === 'done') this.result = await this.engine.result(runId);
+		// běh se zapisuje na disk sám; seznam běhů projektu se obnoví
+		await this.refreshRuns();
 	}
 
 	async cancel() {
