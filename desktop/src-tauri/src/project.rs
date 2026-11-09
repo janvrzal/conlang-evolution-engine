@@ -143,7 +143,10 @@ mod tests {
     use super::*;
 
     fn dir() -> PathBuf {
-        let d = std::env::temp_dir().join(format!("cee-project-test-{}-{}", std::process::id(), rand_suffix()));
+        // souběžné testy: čas sám nestačí (na macOS má hrubé rozlišení), proto i počítadlo
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let d = std::env::temp_dir().join(format!("cee-project-test-{}-{}-{n}", std::process::id(), rand_suffix()));
         fs::create_dir_all(&d).unwrap();
         d
     }

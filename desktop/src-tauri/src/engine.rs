@@ -457,7 +457,7 @@ mod tests {
     }
 
     fn temp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("cee-engine-test-{name}-{}-{}", std::process::id(), Instant::now().elapsed().as_nanos()));
+        let d = std::env::temp_dir().join(format!("cee-engine-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         d
     }
