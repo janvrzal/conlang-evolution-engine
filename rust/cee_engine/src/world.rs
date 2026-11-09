@@ -382,29 +382,19 @@ impl World {
         // a do repertoárů ji zapíše `release` nebo `materialize` před větvením kódu. Dřív se
         // zapisovaly všechny skupiny × všechny živé proměnné při každé změně osy (24 % běhu
         // Evropy při realistickém tempu hláskových změn).
-        let variables = self.live.variable_ids();
-        let names = &self.registry.variants;
-        let dists: Vec<Vec<Option<Distribution>>> = variables
+        // Živá skupina převezme rozdělení z fondu (nemá-li proměnnou ve fondu, z repertoáru),
+        // nová skupina z repertoáru.
+        let kept: Vec<Option<usize>> = ids
             .iter()
-            .map(|&variable| {
-                ids.iter()
-                    .map(|&g| {
-                        if self.live.column(g).is_some() && self.groups.contains(g) {
-                            self.live
-                                .get(g, variable, names)
-                                .or_else(|| self.stored(g, variable))
-                        } else {
-                            self.stored(g, variable)
-                        }
-                    })
-                    .collect()
-            })
+            .map(|&g| self.live.column(g).filter(|_| self.groups.contains(g)))
             .collect();
         let mut live = std::mem::take(&mut self.live);
-        live.set_axis(ids.clone());
-        for (variable, dists) in variables.into_iter().zip(dists) {
-            live.load(variable, &dists, &self.registry.variants)?;
-        }
+        live.reaxis(
+            ids.clone(),
+            &kept,
+            |column, variable| self.stored(ids[column], variable),
+            &self.registry.variants,
+        );
         self.live = live;
         Ok(true)
     }

@@ -99,6 +99,35 @@ fn main() {
                 live as f64 / codes as f64,
                 queued as f64 / codes as f64
             );
+            // Živé proměnné: kolik je všude ustálených (každá skupina jednu variantu) a kolik buněk
+            // (proměnná × skupina) má víc variant; druhé číslo také bez podílů pod 5 %.
+            let (mut settled, mut cells, mut mixed, mut mixed5) = (0, 0, 0, 0);
+            for block in sim.world.live.iter_blocks() {
+                for row in 0..block.len() {
+                    let mut all = true;
+                    for column in 0..block.groups {
+                        if !block.present[row][column] {
+                            continue;
+                        }
+                        let found = block.cell(row, column);
+                        cells += 1;
+                        if found.len() > 1 {
+                            mixed += 1;
+                            all = false;
+                            if found.iter().filter(|(_, share, _)| *share >= 0.05).count() > 1 {
+                                mixed5 += 1;
+                            }
+                        }
+                    }
+                    if all {
+                        settled += 1;
+                    }
+                }
+            }
+            println!(
+                "#  živé proměnné: všude ustálených {settled} z {}, buněk s víc variantami {mixed} ({mixed5} nad 5 %) z {cells}",
+                sim.world.live.len()
+            );
             print!("{}", cee_engine::timing::report());
             t = Instant::now();
             steps = 0;
