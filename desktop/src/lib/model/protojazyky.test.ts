@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ExportV2, FrameV2 } from './export';
-import { cell, descendants, extraSegments, MANNERS, newLanguageId, PLACES, regionCount, toggleSegment } from './protojazyky';
+import { BASIC_CONCEPTS, cell, descendants, extraSegments, formRows, MANNERS, newLanguageId, PLACES, protoForms, regionCount, toggleSegment, type Language } from './protojazyky';
 import type { WorldSpec } from '$lib/state.svelte';
 
 const world = {
@@ -46,5 +46,31 @@ describe('potomci', () => {
 		const families = new Map([['L1', 0], ['L2', 0], ['L3', 1]]);
 		expect(descendants(frame, result, families, 0)).toEqual([{ id: 'L2', speakers: 30 }, { id: 'L1', speakers: 10 }]);
 		expect(descendants(null, result, families, 0)).toEqual([]);
+	});
+});
+
+describe('tvary protojazyka', () => {
+	const lang = { id: 'seren', words: { fire: 'kuru' } } as unknown as Language;
+	const result = {
+		proto_lexicon: { seren: { group: 'g', forms: { water: 'ato', fire: 'bimkilu', stone: 'tan' } } }
+	} as unknown as ExportV2;
+	it('bere tvary jen z běhu a jen pro daný jazyk', () => {
+		expect(protoForms(result, 'seren')).toEqual({ water: 'ato', fire: 'bimkilu', stone: 'tan' });
+		expect(protoForms(result, 'idar')).toBeNull();
+		expect(protoForms(null, 'seren')).toBeNull();
+	});
+	it('řádky říkají, kdo slovo složil', () => {
+		const rows = formRows(lang, protoForms(result, 'seren'), ['fire', 'water', 'moon']);
+		expect(rows).toEqual([
+			{ concept: 'fire', form: 'bimkilu', origin: 'author' },
+			{ concept: 'water', form: 'ato', origin: 'engine' },
+			{ concept: 'moon', form: null, origin: null }
+		]);
+		expect(formRows(lang, null, ['fire'])).toEqual([{ concept: 'fire', form: null, origin: 'author' }]);
+	});
+	it('ukázka bere základní pojmy, které běh zná', () => {
+		const forms = protoForms(result, 'seren');
+		const shown = BASIC_CONCEPTS.filter((c) => forms?.[c]);
+		expect(shown).toEqual(['water', 'fire', 'stone']);
 	});
 });

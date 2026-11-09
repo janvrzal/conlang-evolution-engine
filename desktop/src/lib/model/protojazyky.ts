@@ -102,10 +102,39 @@ export function descendants(frame: FrameV2 | null, result: ExportV2 | null, fami
 		.sort((a, b) => b.speakers - a.speakers);
 }
 
-/** Pojmy, k nimž jde zadat vlastní slovo: slova autora a pojmy slovníku z výsledku. */
+/** Pojmy, k nimž jde zadat vlastní slovo: slova autora, tvary protojazyka z běhu a pojmy slovníku. */
 export function wordConcepts(lang: Language, result: ExportV2 | null): string[] {
 	const ids = new Set(Object.keys(lang.words ?? {}));
+	for (const c of Object.keys(protoForms(result, lang.id) ?? {})) ids.add(c);
 	const sample = result ? Object.values(result.lexicon)[0] : undefined;
 	for (const c of Object.keys(sample ?? {})) ids.add(c);
 	return [...ids];
+}
+
+/** Pojmy pro ukázku „Jak jazyk zní“ (základní slovní zásoba). */
+export const BASIC_CONCEPTS = ['water', 'fire', 'stone', 'person', 'sun', 'moon', 'mother', 'father', 'dog', 'eye', 'hand', 'tree'];
+
+/** Tvary protojazyka `id` ze slovníku protojazyků na startu; null bez běhu nebo bez tohoto jazyka v něm. */
+export function protoForms(result: ExportV2 | null, id: string | undefined): Record<string, string> | null {
+	if (!result || !id) return null;
+	return result.proto_lexicon?.[id]?.forms ?? null;
+}
+
+/** Původ tvaru: slovo zadal autor (`words`), nebo ho složil engine; bez tvaru a bez autora null. */
+export type FormOrigin = 'author' | 'engine' | null;
+
+export interface FormRow {
+	concept: string;
+	/** tvar z běhu (IPA), null bez běhu */
+	form: string | null;
+	origin: FormOrigin;
+}
+
+/** Řádky pro pojmy: tvar z běhu a zdroj (autor, nebo engine, pokud tvar je). */
+export function formRows(lang: Language, forms: Record<string, string> | null, concepts: readonly string[]): FormRow[] {
+	return concepts.map((concept) => {
+		const author = !!lang.words?.[concept];
+		const form = forms?.[concept] ?? null;
+		return { concept, form, origin: author ? 'author' : form ? 'engine' : null };
+	});
 }
