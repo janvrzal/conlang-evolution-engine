@@ -9,6 +9,18 @@
       "title": "Year",
       "type": "number"
      },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
+     },
      "kind": {
       "const": "annexation",
       "title": "Kind",
@@ -43,6 +55,18 @@
       "title": "Year",
       "type": "number"
      },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
+     },
      "kind": {
       "const": "border_policy",
       "title": "Kind",
@@ -72,6 +96,18 @@
      "year": {
       "title": "Year",
       "type": "number"
+     },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
      },
      "kind": {
       "const": "collapse",
@@ -288,6 +324,18 @@
       "title": "Year",
       "type": "number"
      },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
+     },
      "kind": {
       "const": "elite",
       "title": "Kind",
@@ -377,6 +425,18 @@
       "title": "Year",
       "type": "number"
      },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
+     },
      "kind": {
       "const": "identity",
       "title": "Kind",
@@ -410,6 +470,18 @@
      "year": {
       "title": "Year",
       "type": "number"
+     },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
      },
      "kind": {
       "const": "immigration",
@@ -475,6 +547,18 @@
      "year": {
       "title": "Year",
       "type": "number"
+     },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
      },
      "kind": {
       "const": "language_policy",
@@ -677,6 +761,18 @@
       "title": "Year",
       "type": "number"
      },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
+     },
      "kind": {
       "const": "lingua_franca",
       "title": "Kind",
@@ -720,6 +816,18 @@
      "year": {
       "title": "Year",
       "type": "number"
+     },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
      },
      "kind": {
       "const": "preserve",
@@ -941,6 +1049,18 @@
       "title": "Year",
       "type": "number"
      },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
+     },
      "kind": {
       "const": "revival",
       "title": "Kind",
@@ -987,6 +1107,18 @@
       "title": "Year",
       "type": "number"
      },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
+     },
      "kind": {
       "const": "schools",
       "title": "Kind",
@@ -1026,6 +1158,18 @@
      "year": {
       "title": "Year",
       "type": "number"
+     },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
      },
      "kind": {
       "const": "secession",
@@ -1107,6 +1251,18 @@
       "title": "Year",
       "type": "number"
      },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
+     },
      "kind": {
       "const": "settlement",
       "title": "Kind",
@@ -1164,6 +1320,18 @@
      "year": {
       "title": "Year",
       "type": "number"
+     },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
      },
      "kind": {
       "const": "sound_shift",
@@ -1223,6 +1391,18 @@
       "title": "Year",
       "type": "number"
      },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
+     },
      "kind": {
       "const": "standard",
       "title": "Kind",
@@ -1252,6 +1432,18 @@
      "year": {
       "title": "Year",
       "type": "number"
+     },
+     "study_case": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Study Case"
      },
      "kind": {
       "const": "state",

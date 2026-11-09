@@ -136,7 +136,7 @@ fn models() -> Vec<Model> {
             null("language", STR),
         ],
     };
-    vec![
+    let mut all = vec![
         Model {
             name: "ConstructionSpec",
             doc: Some("Konstrukce gramatické funkce (druh, zdrojové slovo, stadium, pořadí, posila)."),
@@ -368,7 +368,12 @@ fn models() -> Vec<Model> {
                 opt("background", STR, || json!("none")),
             ],
         },
-    ]
+    ];
+    // studijní případ: volitelný štítek u každé události (engine zapíše `study_case`)
+    for model in all.iter_mut().filter(|m| EVENT_MODELS.contains(&m.name)) {
+        model.fields.push(null("study_case", STR));
+    }
+    all
 }
 
 // ---------- JSON schéma (tvar jako `WorldSpec.model_json_schema()` z pydanticu) ----------

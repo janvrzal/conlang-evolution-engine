@@ -167,6 +167,8 @@ class ConceptSpec(_Model):
 
 class _Event(_Model):
     year: float
+    # Studijní případ: krátký štítek; běh zapíše záznam `study_case` (dok. 36).
+    study_case: str | None = None
 
 
 class StateSpec(_Event):
