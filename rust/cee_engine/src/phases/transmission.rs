@@ -175,6 +175,17 @@ pub fn run(
                 variant: Some(variant),
             });
         }
+        for &(variable, group, variant, forget) in &outcome.forgotten {
+            let memory = &mut ctx.world.transfer.forgotten;
+            if forget {
+                memory.entry(variable.0).or_default().insert((group.0, variant.0));
+            } else if let Some(entries) = memory.get_mut(&variable.0) {
+                entries.remove(&(group.0, variant.0));
+                if entries.is_empty() {
+                    memory.remove(&variable.0);
+                }
+            }
+        }
         for &(variant, group, share) in &outcome.trace {
             ctx.history
                 .trajectories

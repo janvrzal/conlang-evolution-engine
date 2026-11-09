@@ -284,7 +284,7 @@ fn aktivace_naplni_frontu_a_fonologizace_prepise_tvary_a_proces_se_uzavre() {
 }
 
 #[test]
-fn proces_pod_prahem_nepise_a_neuzavre_se() {
+fn proces_pod_prahem_nepise_a_uzavre_se_jako_odumrely() {
     let mut sim = simulation();
     let group = sim.world.group_ids()[0];
     let family = richest_family(&sim.world, group);
@@ -332,7 +332,16 @@ fn proces_pod_prahem_nepise_a_neuzavre_se() {
             .count()
     };
     assert_eq!(mine("phonologized"), 0);
-    assert_eq!(mine("process_closed"), 0);
+    // Změna pod `activation_share` ve skupině odumřela: po `closure_generations` se proces
+    // uzavře jako odumřelý (ne dokončený) a nic nepřepsal.
+    let closed: Vec<_> = sim
+        .history
+        .of_kind("process_closed")
+        .filter(|e| e["variable"] == name.as_str() && e["group"] == group_name.as_str())
+        .collect();
+    assert_eq!(closed.len(), 1);
+    assert_eq!(closed[0]["faded"], true);
+    assert_eq!(closed[0]["restructured"], 0);
     let proc = &sim
         .world
         .groups
@@ -342,7 +351,7 @@ fn proces_pod_prahem_nepise_a_neuzavre_se() {
         .queues
         .state
         .procs[0];
-    assert!(proc.live && proc.fixed_since.is_none());
+    assert!(!proc.live);
 }
 
 #[test]

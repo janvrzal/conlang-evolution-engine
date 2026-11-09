@@ -33,7 +33,7 @@ fn main() {
         if c != century {
             let w = &sim.world;
             println!(
-                "## {:>6} s/krok {:.3} skupin {}/{} tvarů {} morfémů {} procesů {}/{} proměnných {} variant {} živých {} záznamů {}",
+                "## {:>6} s/krok {:.3} skupin {}/{} tvarů {} morfémů {} procesů {}/{} proměnných {} variant {} živých {} zapomenutých {} záznamů {}",
                 century * 100.0,
                 t.elapsed().as_secs_f64() / steps as f64,
                 w.group_ids().len(),
@@ -45,6 +45,7 @@ fn main() {
                 w.variables.len(),
                 w.variants.len(),
                 w.live.len(),
+                w.transfer.forgotten.values().map(|set| set.len()).sum::<usize>(),
                 sim.history.events.len()
             );
             let (mut vocab, mut procs, mut live, mut queued, mut codes) = (0, 0, 0, 0, 0);
