@@ -147,6 +147,9 @@ export function epochOf(years: number[], year: number): number | null {
 	return found ?? years[0] ?? null;
 }
 
+/** Klíč objektu linie v `names.objects`; id linie z exportu už předponu `lineage:` nese. */
+export const lineageObject = (id: string) => (id.startsWith('lineage:') ? id : `lineage:${id}`);
+
 /** Historie jména objektu z exportu: současné endonymum, dřívější endonyma a exonyma podle linií. */
 export interface NameHistory {
 	current: NameRecord | null;

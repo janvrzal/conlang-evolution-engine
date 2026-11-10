@@ -161,7 +161,10 @@
 						options={(['city', 'village'] as const).map((s) => ({ value: s, label: t(`jmena.size.${s}` as MessageKey) }))}
 					/>
 				{/if}
-				<Range bind:value={count} min={1} max={12} label={t('jmena.count', { n: count })} />
+				<Stack gap={0}>
+					<Text variant="small">{t('jmena.count', { n: count })}</Text>
+					<Range bind:value={count} min={1} max={12} label={t('jmena.count', { n: count })} />
+				</Stack>
 				<Cluster gap={2}>
 					<Button disabled={!app.view.region} onclick={() => attempt++}>{t('jmena.again')}</Button>
 					<Button variant="quiet" disabled={!generated?.names.length} onclick={copy}>{copied ? t('jmena.copied') : t('jmena.copy')}</Button>
@@ -179,8 +182,7 @@
 					>
 					<Ledger termWidth={90}>
 						<LedgerRow term={t('jmena.tradition')}
-							>{generated.tradition_label ?? generated.tradition}{#if generated.tradition_since != null}
-								<Text variant="why" as="span">{t('jmena.tradition_since', { year: formatYear(generated.tradition_since) })}</Text>{/if}</LedgerRow
+							>{generated.tradition_label ?? tradition(generated.tradition)}{#if generated.tradition_since != null}{' '}<Text variant="why" as="span">{t('jmena.tradition_since', { year: formatYear(generated.tradition_since) })}</Text>{/if}</LedgerRow
 						>
 					</Ledger>
 				</Stack>
@@ -189,7 +191,8 @@
 					{#each generated.names as n (n.name)}
 						<Stack gap={0}>
 							<Text variant="h3">{n.name}</Text>
-							<Text><Ipa text={n.ipa} slashes />{#if n.meaning} <Text variant="why" as="span">{t('jmena.meaning', { meaning: n.meaning })}</Text>{/if}</Text>
+							<Text><Ipa text={n.ipa} slashes /></Text>
+							{#if n.meaning}<Text variant="why">{n.meaning}</Text>{/if}
 						</Stack>
 					{/each}
 				</Stack>
@@ -219,8 +222,7 @@
 							</Cluster>
 							<Text><Ipa text={n.ipa} slashes /></Text>
 							<Text variant="small"
-								>{t('jmena.founded', { year: formatYear(n.founded.year) })} <b>{n.founded.name}</b> <Ipa text={n.founded.ipa} slashes />
-								<Text variant="why" as="span">{t('jmena.meaning', { meaning: n.founded.meaning })}</Text></Text
+								>{t('jmena.founded', { year: formatYear(n.founded.year) })}{' '}<b>{n.founded.name}</b>{' '}<Ipa text={n.founded.ipa} slashes />{' '}<Text variant="why" as="span">{t('jmena.meaning', { meaning: n.founded.meaning })}</Text></Text
 							>
 							{#if n.timeline.length}
 								<Disclosure>
@@ -228,7 +230,7 @@
 									<Ledger termWidth={70}>
 										{#each n.timeline as step, i (i)}
 											<LedgerRow term={formatYear(step.year)}
-												><Ipa text={step.ipa} /> {step.name} <Text variant="why" as="span">{cause(step)}</Text></LedgerRow
+												><Ipa text={step.ipa} />{' '}{step.name}{' '}<Text variant="why" as="span">{cause(step)}</Text></LedgerRow
 											>
 										{/each}
 									</Ledger>

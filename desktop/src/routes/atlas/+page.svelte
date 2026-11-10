@@ -237,10 +237,10 @@
 			<Stack gap={2}>
 				<Ledger termWidth={110}>
 					<LedgerRow term={t('name.motivation')}
-						>{motivation(cur.motivation)}{#if cur.meaning} <Text variant="why" as="span">{t('jmena.meaning', { meaning: cur.meaning })}</Text>{/if}</LedgerRow
+						>{motivation(cur.motivation)}{#if cur.meaning}{' '}<Text variant="why" as="span">{t('jmena.meaning', { meaning: cur.meaning })}</Text>{/if}</LedgerRow
 					>
 					{#each cur.timeline as step, i (i)}
-						<LedgerRow term={formatYear(step.year)}><Ipa text={step.ipa} /> {step.name} <Text variant="why" as="span">{causeText(step.cause)}</Text></LedgerRow>
+						<LedgerRow term={formatYear(step.year)}><Ipa text={step.ipa} />{' '}{step.name}{' '}<Text variant="why" as="span">{causeText(step.cause)}</Text></LedgerRow>
 					{/each}
 				</Ledger>
 				{#if h.earlier.length}
@@ -248,7 +248,7 @@
 					<Ledger termWidth={110}>
 						{#each h.earlier as r (r.id)}
 							<LedgerRow term={t('name.ended', { from: formatYear(r.founded), to: r.ended != null ? formatYear(r.ended) : '…' })}
-								>{r.name} <Ipa text={r.ipa} /> <Text variant="why" as="span">{motivation(r.motivation)}</Text></LedgerRow
+								>{r.name}{' '}<Ipa text={r.ipa} />{' '}<Text variant="why" as="span">{motivation(r.motivation)}</Text></LedgerRow
 							>
 						{/each}
 					</Ledger>
@@ -257,7 +257,7 @@
 					<Text variant="caps">{t('name.exonyms')}</Text>
 					<Ledger termWidth={110}>
 						{#each h.exonyms as e (e.lineage)}
-							<LedgerRow term={exonymSpeaker(e.lineage)}>{e.record.name} <Ipa text={e.record.ipa} /></LedgerRow>
+							<LedgerRow term={exonymSpeaker(e.lineage)}>{e.record.name}{' '}<Ipa text={e.record.ipa} /></LedgerRow>
 						{/each}
 					</Ledger>
 				{/if}
@@ -337,7 +337,9 @@
 						<Button variant="quiet" onclick={() => (app.view.region = null)}>{t('atlas.clear')}</Button>
 					</Cluster>
 					<Text variant="h1">{region.name}</Text>
-					{#if toponym}<Text><Ipa text={toponym.ipa} slashes /> <Text variant="why" as="span">{t('atlas.meaning', { meaning: toponym.meaning })}</Text></Text>{/if}
+					{#if history?.current}
+						<Text>{history.current.name}{' '}<Ipa text={history.current.ipa} slashes />{' '}<Text variant="why" as="span">{t('jmena.meaning', { meaning: history.current.meaning })}</Text></Text>
+					{:else if toponym}<Text><Ipa text={toponym.ipa} slashes /> <Text variant="why" as="span">{t('atlas.meaning', { meaning: toponym.meaning })}</Text></Text>{/if}
 				</Stack>
 				{@render nameHistoryBlock(history)}
 				<Button variant="quiet" href="/jmena">{t('name.generate_here')}</Button>

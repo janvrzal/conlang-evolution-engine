@@ -28,7 +28,7 @@
 		Tr,
 		formatYear
 	} from '$lib/ds';
-	import { causeMessage, nameHistory, type NameHistory } from '$lib/model/jmena';
+	import { causeMessage, lineageObject, nameHistory, type NameHistory } from '$lib/model/jmena';
 	import { i18n, number, t, type MessageKey } from '$lib/i18n.svelte';
 	import { conceptLabel } from '$lib/model/concepts';
 	import { geography } from '$lib/model/geography';
@@ -97,7 +97,7 @@
 	// karta jazyka
 	const familyName = $derived(world && lineage ? (world.languages[families.get(lineage.id) ?? 0]?.name ?? '') : '');
 	const endonyms = $derived(lineage ? endonymHistory(app.frames, lineage.id) : []);
-	const history = $derived(lineage ? nameHistory(result?.names, `lineage:${lineage.id}`) : null);
+	const history = $derived(lineage ? nameHistory(result?.names, lineageObject(lineage.id)) : null);
 	// historie jména z modulu jmen (export `names`)
 	const motivation = (key: string) => {
 		const label = t(`name.mot.${key}` as MessageKey);
@@ -178,10 +178,10 @@
 			<Stack gap={2}>
 				<Ledger termWidth={110}>
 					<LedgerRow term={t('name.motivation')}
-						>{motivation(cur.motivation)}{#if cur.meaning} <Text variant="why" as="span">{t('jmena.meaning', { meaning: cur.meaning })}</Text>{/if}</LedgerRow
+						>{motivation(cur.motivation)}{#if cur.meaning}{' '}<Text variant="why" as="span">{t('jmena.meaning', { meaning: cur.meaning })}</Text>{/if}</LedgerRow
 					>
 					{#each cur.timeline as step, i (i)}
-						<LedgerRow term={formatYear(step.year)}><Ipa text={step.ipa} /> {step.name} <Text variant="why" as="span">{causeText(step.cause)}</Text></LedgerRow>
+						<LedgerRow term={formatYear(step.year)}><Ipa text={step.ipa} />{' '}{step.name}{' '}<Text variant="why" as="span">{causeText(step.cause)}</Text></LedgerRow>
 					{/each}
 				</Ledger>
 				{#if h.earlier.length}
@@ -189,7 +189,7 @@
 					<Ledger termWidth={110}>
 						{#each h.earlier as r (r.id)}
 							<LedgerRow term={t('name.ended', { from: formatYear(r.founded), to: r.ended != null ? formatYear(r.ended) : '…' })}
-								>{r.name} <Ipa text={r.ipa} /> <Text variant="why" as="span">{motivation(r.motivation)}</Text></LedgerRow
+								>{r.name}{' '}<Ipa text={r.ipa} />{' '}<Text variant="why" as="span">{motivation(r.motivation)}</Text></LedgerRow
 							>
 						{/each}
 					</Ledger>
@@ -198,7 +198,7 @@
 					<Text variant="caps">{t('name.exonyms')}</Text>
 					<Ledger termWidth={110}>
 						{#each h.exonyms as e (e.lineage)}
-							<LedgerRow term={exonymSpeaker(e.lineage)}>{e.record.name} <Ipa text={e.record.ipa} /></LedgerRow>
+							<LedgerRow term={exonymSpeaker(e.lineage)}>{e.record.name}{' '}<Ipa text={e.record.ipa} /></LedgerRow>
 						{/each}
 					</Ledger>
 				{/if}

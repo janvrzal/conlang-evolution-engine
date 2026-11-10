@@ -67,7 +67,19 @@ export const cs = {
 	'name.mot.eponym': 'podle zakladatele',
 	'name.mot.predecessor': 'po předchůdci',
 	'name.mot.exonym_adopted': 'přijaté cizí jméno',
-	'name.mot.authored': 'ze zadání'
+	'name.mot.authored': 'ze zadání',
+	'name.mot.descriptive_terrain': 'popis krajiny',
+	'name.mot.eponymous_founder': 'po zakladateli',
+	'name.mot.habitative_formant': 'sídlo s příponou',
+	'name.mot.hydro_crossing': 'podle vody a brodu',
+	'name.mot.transfer_new': 'přenesené z domova (Nový …)',
+	'name.mot.capital': 'podle hlavního města',
+	'name.mot.oldest_empire_exonym': 'cizí jméno nejstarší říše',
+	'name.mot.house': 'jméno domu',
+	'name.mot.house_surety': 'dům ručitele',
+	'name.mot.crew_byname': 'přezdívka posádky',
+	'name.mot.journey_name': 'jméno po cestě',
+	'name.mot.birth_rite': 'jméno podle narození'
 } satisfies Record<string, Message>;
 
 export const en: Record<keyof typeof cs, Message> = {
@@ -134,5 +146,17 @@ export const en: Record<keyof typeof cs, Message> = {
 	'name.mot.eponym': 'after the founder',
 	'name.mot.predecessor': 'after a predecessor',
 	'name.mot.exonym_adopted': 'adopted foreign name',
-	'name.mot.authored': 'from the setup'
+	'name.mot.authored': 'from the setup',
+	'name.mot.descriptive_terrain': 'describing the land',
+	'name.mot.eponymous_founder': 'after the founder',
+	'name.mot.habitative_formant': 'settlement with a suffix',
+	'name.mot.hydro_crossing': 'after water and a ford',
+	'name.mot.transfer_new': 'carried from home (New …)',
+	'name.mot.capital': 'after the capital',
+	'name.mot.oldest_empire_exonym': 'foreign name of the oldest empire',
+	'name.mot.house': 'house name',
+	'name.mot.house_surety': 'surety house',
+	'name.mot.crew_byname': 'crew byname',
+	'name.mot.journey_name': 'journey name',
+	'name.mot.birth_rite': 'birth name'
 };

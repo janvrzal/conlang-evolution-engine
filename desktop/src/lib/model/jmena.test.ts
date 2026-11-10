@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { causeMessage, epochOf,isPersons, nameHistory, namesAsText, soundChanges, stepCause, type NameRecord, type NamesExport, type PlaceNames } from './jmena';
+import { causeMessage, epochOf, isPersons, lineageObject, nameHistory, namesAsText, soundChanges, stepCause, type NameRecord, type NamesExport, type PlaceNames } from './jmena';
 
 const record = (id: string, over: Partial<NameRecord> = {}): NameRecord => ({
 	id,
@@ -68,6 +68,10 @@ describe('historie jména z exportu', () => {
 		expect(h.current?.id).toBe('Ävegä');
 		expect(h.earlier.map((r) => r.id)).toEqual(['Avika']);
 		expect(h.exonyms.map((e) => e.lineage)).toEqual(['L2', 'L3']);
+	});
+	it('klíč linie nezdvojí předponu', () => {
+		expect(lineageObject('lineage:0a2b')).toBe('lineage:0a2b');
+		expect(lineageObject('0a2b')).toBe('lineage:0a2b');
 	});
 	it('bez modulu jmen nebo neznámý objekt', () => {
 		expect(nameHistory(null, 'territory:m01-04')).toBeNull();
