@@ -5,7 +5,7 @@ import type { NamesQuery, NamesResult } from './model/jmena';
 // (src-tauri/src/lib.rs); v prohlížeči (vývoj UI) se hledá Python server /api/v2 na obvyklých portech.
 // Tvary odpovědí jsou v obou případech stejné.
 
-export const API_REVISION = 10;
+export const API_REVISION = 11;
 const SIGNATURE = 'Conlang Evolution Engine';
 const PORTS = Array.from({ length: 20 }, (_, i) => 8000 + i);
 

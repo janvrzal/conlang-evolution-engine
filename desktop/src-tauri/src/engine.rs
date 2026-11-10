@@ -22,7 +22,7 @@ use serde_json::{json, Map, Value};
 
 /// Kolik dokončených běhů aplikace drží v paměti.
 const KEEP_RUNS: usize = 8;
-pub const API_REVISION: u32 = 10;
+pub const API_REVISION: u32 = 11;
 
 /// Hláška ověření: cesta k poli, česká zpráva, závažnost, stálý kód pro překlad a dosazované hodnoty.
 #[derive(Clone, Debug, Serialize, PartialEq)]

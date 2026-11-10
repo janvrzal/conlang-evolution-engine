@@ -24,7 +24,8 @@ ENGINE_SIGNATURE = "Conlang Evolution Engine"
 # 8: + /api/v2 (engine v2: schéma světa, ověření, běhy s průběhem a export)
 # 10: + velikost slovníku a vlastní pojmy ve světě; položky ověření mají ``severity``
 #     (``error`` / ``warning``) a ``/api/v2/schema`` vrací ``vocabulary``
-API_REVISION = 10
+# 11: + ``POST /api/v2/runs/{id}/names`` (generátor jmen sídel a osob podle kraje a epochy)
+API_REVISION = 11
 
 
 def is_port_free(port: int, host: str = "127.0.0.1") -> bool:
