@@ -32,7 +32,7 @@
 	let { children } = $props();
 
 	const SPEC = ['svet', 'protojazyky', 'pojmy', 'dejiny', 'model'] as const;
-	const RESULTS = ['atlas', 'jazyky', 'slova', 'kronika', 'cokdyby'] as const;
+	const RESULTS = ['atlas', 'jazyky', 'slova', 'jmena', 'kronika', 'cokdyby'] as const;
 	const href = (id: string) => (id === 'cokdyby' ? '/co-kdyby' : `/${id}`);
 	const route = $derived(page.url.pathname.split('/')[1] ?? '');
 	const inSpec = $derived((SPEC as readonly string[]).includes(route));

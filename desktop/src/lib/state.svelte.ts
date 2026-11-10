@@ -2,6 +2,7 @@
 import { API_REVISION, Engine, EngineError, connect, type EngineSchema, type Health, type Issue, type RunStatus, type StoredRun } from './engine';
 import { baseName, forgetRecent, inApp, openProject, pickOpen, pickSave, recentProjects, saveProject, type RecentProject } from './files';
 import type { ExportV2, FrameV2 } from './model/export';
+import type { NamesQuery, NamesResult } from './model/jmena';
 
 export interface WorldSpec {
 	format: 'cee-v2-world/1';
@@ -323,6 +324,13 @@ class App {
 			return out;
 		}
 		return this.engine ? this.engine.wordHistory(id, language, concept).catch(() => []) : [];
+	}
+
+	/** Generátor jmen nad hlavním během (modul jmen enginu); chyba enginu jde volajícímu. */
+	async names(query: NamesQuery): Promise<NamesResult> {
+		const id = this.run?.id;
+		if (!id || this.fixtureLexicon.has(id) || !this.engine) throw new EngineError('no_engine');
+		return this.engine.names(id, query);
 	}
 
 	/** Dialog „Otevřít“ (v aplikaci); vrátí false, když uživatel nic nevybral. */

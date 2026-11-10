@@ -11,6 +11,7 @@ import * as s_jazyky from './screens/jazyky';
 import * as s_slova from './screens/slova';
 import * as s_kronika from './screens/kronika';
 import * as s_cokdyby from './screens/cokdyby';
+import * as s_jmena from './screens/jmena';
 import * as s_shell from './screens/shell';
 
 const core = {
@@ -143,6 +144,7 @@ const cs = {
 	...s_slova.cs,
 	...s_kronika.cs,
 	...s_cokdyby.cs,
+	...s_jmena.cs,
 	...s_shell.cs,
 };
 
