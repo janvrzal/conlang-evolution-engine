@@ -94,6 +94,14 @@ def test_generator_jmen_sidel_a_osob():
     assert missing.value.status_code == 404
 
 
+def test_udalost_s_polem_from_dojde_do_enginu():
+    # pydantic má pole jako ``from_`` s aliasem ``from``; engine dostane ``from``
+    spec = {**SPEC, "events": [*SPEC["events"], {"kind": "settlement", "year": 50, "from": "x", "to": "c", "share": 0.1}]}
+    assert v2.validate(spec)["ok"] is True
+    run_id = v2.start_run(spec)["run_id"]
+    assert wait(run_id)["status"] == "done"
+
+
 def test_nedokonceny_beh_nema_vysledek_a_jde_zrusit():
     run_id = v2.start_run({**SPEC, "end_year": 5000})["run_id"]
     with pytest.raises(HTTPException) as early:
