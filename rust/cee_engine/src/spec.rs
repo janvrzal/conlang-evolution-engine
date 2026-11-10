@@ -219,6 +219,10 @@ pub struct WorldSpec {
     pub format: String,
     #[serde(default)]
     pub name: Option<String>,
+    /// Uzamčené vlastní jméno světa (IPA): modul jmen ho použije, až svět pojmenuje
+    /// (exonymum nejstarší říše, dok. 34); `name` zůstává popiskem pro čtenáře.
+    #[serde(default)]
+    pub name_form: Option<String>,
     #[serde(default = "default_seed")]
     pub seed: i64,
     #[serde(default)]
@@ -487,7 +491,13 @@ pub fn build(spec: &WorldSpec) -> Result<(World, Vec<Box<dyn WorldEvent>>), Stri
         return Err(format!("neznámá míra pozadí dějin '{}'", spec.background));
     }
     let params_for_background = params.clone();
-    let world = make_world(spec, params)?;
+    let mut world = make_world(spec, params)?;
+    if let Some(form) = &spec.name_form {
+        if let Some(table) = world.table.as_ref() {
+            table.parse(form).map_err(|e| format!("name_form: {e}"))?;
+        }
+        world.society.world_name_form = Some(form.clone());
+    }
     let mut order: Vec<usize> = (0..spec.events.len()).collect();
     order.sort_by(|&a, &b| {
         spec.events[a]
@@ -796,6 +806,19 @@ fn word_issues(spec: &WorldSpec, known: &HashSet<String>) -> Vec<Issue> {
     let table = SegmentTable::default_table();
     let tones = table.tone_symbols();
     let mut issues = Vec::new();
+    if let Some(form) = &spec.name_form {
+        match table.lossless(form) {
+            Err(_) => issues.push(Issue::error(
+                "name_form",
+                format!("engine nezná některou hlásku ve jméně '{form}'"),
+            )),
+            Ok(Some(rendered)) => issues.push(Issue::error(
+                "name_form",
+                format!("jméno '{form}' by se zapsalo jako '{rendered}'"),
+            )),
+            Ok(None) => {}
+        }
+    }
     for (index, language) in spec.languages.iter().enumerate() {
         for (position, tone) in language.tones.iter().enumerate() {
             if !tones.contains(tone) {

@@ -1866,6 +1866,7 @@ impl NameState {
             self.exonyms_from_contact(world, &member, &representative, tick, year);
         }
         self.prestige(world, &lineages, &representative, tick, year);
+        self.name_world(world, &lineages, &representative, tick, year);
         self.follow_traditions(world, &lineages, year);
         let _t = crate::timing::scope("names/observe/epoch");
         self.epoch(world, &lineages, &representative, &member, tick, year);
@@ -1910,6 +1911,8 @@ impl NameState {
             }
             let owner = if object.starts_with("lineage:") {
                 Some(object.clone())
+            } else if object == "world" {
+                member.get(&record.carrier).cloned()
             } else if object.starts_with("state:") || object.starts_with("territory:") {
                 if let Some(t) = object.strip_prefix("territory:") {
                     let urban = world
@@ -1981,6 +1984,128 @@ impl NameState {
                 self.exonyms.insert(key, new);
             }
         }
+    }
+
+    /// Jméno světa: exonymum nejstarší říše v nejrozšířenějším jazyce, který ji jmenoval
+    /// (jako *Asie* nebo *Řecko* z cizího jména). Ostatní jazyky ho převezmou stykem jako jiná
+    /// jména. Když jeho linie zanikne, jméno dál nese nejrozšířenější linie, která ho převzala.
+    fn name_world(
+        &mut self,
+        world: &World,
+        lineages: &BTreeMap<String, Vec<String>>,
+        representative: &BTreeMap<String, GroupId>,
+        tick: u32,
+        year: f64,
+    ) {
+        if let Some(&index) = self.current.get("world") {
+            let holder = self.records[index].lineage.clone();
+            match holder.as_ref().and_then(|l| representative.get(l)) {
+                Some(&group) => {
+                    if self.records[index].language == language_name(world, group) {
+                        self.set_carrier(world, index, group);
+                    }
+                }
+                None => {
+                    let heir = self
+                        .exonyms
+                        .iter()
+                        .filter_map(|(k, &i)| k.strip_prefix("world|").map(|l| (l.to_owned(), i)))
+                        .filter(|(l, i)| {
+                            lineages.contains_key(l) && self.records[*i].ended.is_none()
+                        })
+                        .max_by(|a, b| {
+                            lineages[&a.0]
+                                .len()
+                                .cmp(&lineages[&b.0].len())
+                                .then(b.0.cmp(&a.0))
+                        });
+                    if let Some((lineage, heir)) = heir {
+                        self.end(index, year);
+                        self.exonyms.remove(&exonym_key("world", &lineage));
+                        self.records[heir].role = Role::Endonym;
+                        self.records[heir].cause = Some("world_name_inherited".into());
+                        self.current.insert("world".into(), heir);
+                    }
+                }
+            }
+            return;
+        }
+        let Some(state) = self
+            .states
+            .iter()
+            .min_by(|a, b| {
+                a.1.founded
+                    .partial_cmp(&b.1.founded)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(a.0.cmp(b.0))
+            })
+            .map(|(id, _)| id.clone())
+        else {
+            return;
+        };
+        let prefix = format!("state:{state}|");
+        let Some((namer, exonym)) = self
+            .exonyms
+            .iter()
+            .filter_map(|(k, &i)| k.strip_prefix(&prefix).map(|l| (l.to_owned(), i)))
+            .filter(|(l, _)| representative.contains_key(l))
+            .max_by(|a, b| {
+                lineages[&a.0]
+                    .len()
+                    .cmp(&lineages[&b.0].len())
+                    .then(b.0.cmp(&a.0))
+            })
+        else {
+            return;
+        };
+        let group = representative[&namer];
+        let empire = self
+            .records
+            .iter()
+            .find(|r| r.object == format!("state:{state}") && r.role == Role::Endonym)
+            .and_then(|r| r.ipa_at(year).or(r.timeline.last().map(|s| s.ipa.as_str())))
+            .map(romanize)
+            .unwrap_or_default();
+        let donor = &self.records[exonym];
+        let source = SourceRef {
+            record: donor.id.clone(),
+            ipa: self.ipa(exonym).to_owned(),
+            language: donor.language.clone(),
+        };
+        let meaning = format!(
+            "jméno, kterým jazyk {} říkal nejstarší říši ({empire}); přešlo na celou zemi",
+            donor.language
+        );
+        let mut form = donor.form.clone();
+        let mut cause = None;
+        if let Some(locked) = world
+            .society
+            .world_name_form
+            .as_ref()
+            .and_then(|text| world.table.as_ref()?.parse(text).ok())
+        {
+            form = locked;
+            cause = Some("authored".to_owned());
+        }
+        let index = self.push(
+            world,
+            "world".into(),
+            Role::Endonym,
+            group,
+            Some(namer),
+            tick,
+            year,
+            "oldest_empire_exonym",
+            cause,
+            Composed {
+                form,
+                pattern: "oldest_empire_exonym".into(),
+                meaning,
+                recipe: Vec::new(),
+            },
+            Some(source),
+        );
+        self.current.insert("world".into(), index);
     }
 
     /// Linie, která dlouho leží ve státě s jiným úředním jazykem, může převzít jméno, kterým

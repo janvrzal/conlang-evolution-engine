@@ -1,6 +1,6 @@
 # 34. Jména jako slova s vlastní historií
 
-Stav: **zapsáno na větvi `jmena-historie`** (9. 11. 2026), nesloučeno.
+Stav: **zapsáno na větvi `jmena-historie`** (9.–10. 11. 2026), nesloučeno.
 
 Podnět uživatele: „Jak přesně fungují ta jména? Možná by měla fungovat jako slova? Endonyma
 a exonyma. Někdy mohou převzít název exonyma jako endonymum? Odkazovat na minulý národ, co tam
@@ -22,7 +22,7 @@ Modul `names` (`rust/cee_engine/src/names/`) vede jména jako samostatné zázna
 
 | Pole | Obsah |
 |---|---|
-| objekt | `language:<id>` (prajazyk), `lineage:<id>`, `territory:<id>`, `state:<id>`, `person:<klíč>`, `house:<klíč>` |
+| objekt | `world`, `language:<id>` (prajazyk), `lineage:<id>`, `territory:<id>`, `state:<id>`, `person:<klíč>`, `house:<klíč>` |
 | role | **endonymum** (jméno, které objekt užívá pro sebe), nebo **exonymum** (jméno v řeči sousedů) |
 | uživatelé | jazyk kódu, linie a *nositel*, tj. skupina, jejíž výslovnost jméno sleduje |
 | vznik | tik a rok, motivace, příčina, tradice (u míst), význam česky, recept (pojmy a jejich tehdejší tvary) |
@@ -132,6 +132,17 @@ se dál vyvíjejí v řeči komunity, která si je pamatuje (zakladatel v pověs
 jmen v `onomastics` (`standards_personal_names`, `paradigm_catalog`) teď skládá stejná
 paradigmata (`names::persons::person_name`) z dnešních slov.
 
+### Svět
+
+Jméno světa (objekt `world`) vznikne jako **exonymum nejstarší říše**, jako *Asie* nebo *Řecko*
+z cizího jména. Rozhoduje první pozorování, kdy má nejstarší stát (podle roku vzniku) jméno
+v cizí řeči. Ze všech jazyků, které ho tak jmenují, vyhraje ten s nejvíc skupinami. Jeho tvar
+přejde na celou zemi (motivace `oldest_empire_exonym`). Ostatní jazyky ho převezmou stykem jako
+jiná jména. Když linie, která jméno nese, zanikne, jméno dál nese nejrozšířenější linie, která ho
+převzala. Autor může tvar uzamknout (`WorldSpec.name_form`, IPA). `name` zůstává popiskem.
+Export má `world_name`. Tento způsob zvolil uživatel 10. 11. 2026 z dvou návrhů. Druhým bylo jméno
+jednoho kraje rozšířené na celek.
+
 ### Exonyma
 
 Při pozorování si linie, které spojuje vazba o síle aspoň 0,05, pojmenují jazyky, města
@@ -192,6 +203,8 @@ Otisk historie je stejný jako bez modulu jmen.
   - Dolní Eren převzal jméno zaniklé říše (`predecessor`).
   - Brodská města, Varadská obec, Tarem, Selva a Istren mají jméno podle hlavního města.
   - Sousedé Varad jmenují po svém: talmursky *Jamen*, veretsky *Eju*, idarsky *Ymny*.
+- **Svět** se jmenuje *Imini*. Je to idarské exonymum Varadské říše z roku −400; v roce 1950
+  idarsky *Ymny*, serensky *Imi*, veretsky *Umi*.
 - **Tradice osobních jmen** podle zadání: hrázové obce mají dům ručitele (*Janbaja Ame*), pastevci
   jméno po cestě (*Korming, Qiatngim*). Šest linií tradici změnilo. Talmurské linie pod istrenskou
   normou přešly v roce 1900 na dvorská jména. Jedna veretská linie převzala idarské jméno podle

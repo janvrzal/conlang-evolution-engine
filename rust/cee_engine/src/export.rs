@@ -464,6 +464,10 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
         "dialect_facts": dialect_facts(simulation),
         "onomastics": onomastics,
         "names": simulation.names.as_ref().map_or(Value::Null, |n| n.export()),
+        "world_name": simulation.names.as_ref().and_then(|n| n.current_of("world")).map_or(Value::Null, |r| {
+            let ipa = r.timeline.last().map_or("", |s| s.ipa.as_str());
+            json!({"name": crate::onomastics::romanize(ipa), "ipa": ipa, "record": r.id, "meaning": r.meaning, "since": r.founded_year})
+        }),
         "census": polity::language_census(world),
         "events": events,
     })

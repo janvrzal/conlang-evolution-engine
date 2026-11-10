@@ -1,6 +1,8 @@
-# Talvera
+# Imini (pracovně Talvera)
 
-Talvera je subkontinent mezi severní vrchovinou a dvěma moři. Řeka Eren teče ze severu k jihu a v rovinách se větví do splavných ramen. Západ má chráněné přístavy a Solné ostrovy, jih deště a sezónní plavbu, východ široký úval za deštnými horami. Mezi řekou a západem leží odtoková jezera a staré průsmyky. Východní oceán uzavírají Vnější ostrovy. Dlouhodobě soupeří tři cesty pro dopravu lidí a zboží. Říční cesta zvýhodňuje deltu, souš horská sedla, moře pobřežní uzly.
+Svět se vlastním jménem jmenuje **Imini** (IPA *imini*). Jméno vygeneroval modul jmen ([dok. 34](../engine-v2/34-jmena-s-historii.md)) jako exonymum nejstarší říše. Varadské říši (serensky *Emeni*, „dům zakladatele Ely Ame“) říkali idarsky *imini*. V roce −400, kdy jméno vzniklo, měla idarština ze všech jazyků, které říši jmenovaly, nejvíc mluvčích. Odtud jméno přešlo na celou zemi, jako *Asie* nebo *Řecko*. V idarštině se dnes vyslovuje *ɨmnɨ* (Ymny), serensky *Imi* nebo *Emene*, veretsky *Umi*. Ve [world.json](talvera.world.json) je uzamčené v poli `name_form`. Pracovní název Talvera zůstává v názvech souborů a starších rozborech.
+
+Imini je subkontinent mezi severní vrchovinou a dvěma moři. Řeka Eren teče ze severu k jihu a v rovinách se větví do splavných ramen. Západ má chráněné přístavy a Solné ostrovy, jih deště a sezónní plavbu, východ široký úval za deštnými horami. Mezi řekou a západem leží odtoková jezera a staré průsmyky. Východní oceán uzavírají Vnější ostrovy. Dlouhodobě soupeří tři cesty pro dopravu lidí a zboží. Říční cesta zvýhodňuje deltu, souš horská sedla, moře pobřežní uzly.
 
 ## Měřítko prvního běhu
 
@@ -50,7 +52,7 @@ Každá rodina má také zadanou **tradici osobních jmen** (`person_names`) pod
 
 Tradice se mohou měnit: dceřiné jazyky je dědí, liturgie, spisovná norma a dlouhá vláda cizího jazyka je mohou nahradit. Osadníci si tradici nesou s sebou.
 
-Dceřiné jazyky jméno zdědí, nebo se pojmenují po kraji, státu, dřívějším národě či zakladateli. Mohou převzít i jméno, kterým jim říkají sousedé. Celý přehled jmen jazyků, míst a států s časovými osami je v exportu běhu pod `names`. Jméno celého subkontinentu (*Talvera*) je zatím autorské, generátor ho nevyrábí.
+Dceřiné jazyky jméno zdědí, nebo se pojmenují po kraji, státu, dřívějším národě či zakladateli. Mohou převzít i jméno, kterým jim říkají sousedé. Celý přehled jmen jazyků, míst a států s časovými osami je v exportu běhu pod `names`. Jméno celého subkontinentu (*Imini*) vzniklo stejným mechanismem, viz úvod.
 
 Serenové vycházejí z hustě osídlených niv a dělby práce kolem vody. Talmurové z pasteveckých a průsmykových obcí s větším sezónním pohybem. Veretové z pobřežních sítí rybářů, loďařů a překupníků soli. Idaři mají úvalová zemědělská sídla i horské komunity s vlastními pravidly užívání lesů. Časem vzniknou města, vrstvy i smíšené kultury napříč rodinami. Jazyk a politická příslušnost se mohou rozejít.
 

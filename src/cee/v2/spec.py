@@ -353,6 +353,8 @@ class WorldSpec(_Model):
 
     format: Literal["cee-v2-world/1"] = FORMAT
     name: str | None = None
+    #: Uzamčené vlastní jméno světa (IPA); ``name`` zůstává popiskem pro čtenáře (dok. 34).
+    name_form: str | None = None
     seed: int = 1
     start_year: float = 0.0
     end_year: float

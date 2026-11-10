@@ -61,6 +61,9 @@ pub struct SocietyState {
     /// Zadané tradice osobních jmen prajazyků (paradigma katalogu), jen pro modul jmen.
     #[serde(default)]
     pub person_traditions: BTreeMap<LanguageId, String>,
+    /// Uzamčené vlastní jméno světa (IPA), jen pro modul jmen.
+    #[serde(default)]
+    pub world_name_form: Option<String>,
     /// Vazby oslabené hranicí států: (zdroj, cíl) → použitý násobek.
     pub border_factors: BTreeMap<(GroupId, GroupId), f64>,
     /// Základní prestiž skupin před vlivem států a spisovných jazyků.

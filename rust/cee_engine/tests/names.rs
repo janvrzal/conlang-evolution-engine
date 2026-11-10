@@ -451,3 +451,50 @@ fn zadana_tradice_osobnich_jmen() {
     let issues = spec::check(&WorldSpec::from_json(&bad.to_string()).unwrap());
     assert!(issues.iter().any(|i| i.path == "languages.0.person_names"));
 }
+
+#[test]
+fn svet_se_jmenuje_po_nejstarsi_risi() {
+    let simulation = run("kingdom", 1000.0, true);
+    let state = names(&simulation);
+    let world = state.current_of("world").expect("jméno světa");
+    assert_eq!(world.motivation, "oldest_empire_exonym");
+    let source = world.source.as_ref().expect("zdroj");
+    let exonym = state
+        .records
+        .iter()
+        .find(|r| r.id == source.record)
+        .unwrap();
+    assert_eq!(exonym.object, "state:kingdom", "exonymum nejstarší říše");
+    assert_eq!(exonym.role, Role::Exonym);
+    assert_eq!(exonym.ipa_at(world.founded_year), Some(source.ipa.as_str()));
+    assert_eq!(
+        world.lineage, exonym.lineage,
+        "jméno nese jazyk, který říši pojmenoval"
+    );
+    // Zámek ze zadání: stejný okamžik vzniku, zadaný tvar.
+    assert!(export::export(&simulation, true)["world_name"]["name"].is_string());
+}
+
+#[test]
+fn uzamcene_jmeno_sveta_ze_zadani() {
+    let spec_json = json!({
+        "end_year": 300,
+        "name_form": "talvera",
+        "languages": [{"id": "a"}, {"id": "b"}],
+        "regions": [
+            {"id": "c", "position": [0, 0], "neighbours": ["x"], "language": "a", "villages": 3},
+            {"id": "x", "position": [60, 0], "neighbours": ["c"], "language": "b", "villages": 3},
+        ],
+        "semantics": false,
+    });
+    let world_spec = WorldSpec::from_json(&spec_json.to_string()).unwrap();
+    assert!(spec::check(&world_spec)
+        .iter()
+        .all(|i| i.path != "name_form"));
+    let (world, _) = spec::build(&world_spec).expect("svět");
+    assert_eq!(world.society.world_name_form.as_deref(), Some("talvera"));
+    let mut bad = spec_json.clone();
+    bad["name_form"] = json!("tal§vera");
+    let issues = spec::check(&WorldSpec::from_json(&bad.to_string()).unwrap());
+    assert!(issues.iter().any(|i| i.path == "name_form"));
+}
