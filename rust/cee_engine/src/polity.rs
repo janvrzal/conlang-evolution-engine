@@ -76,6 +76,8 @@ pub enum PolityAction {
     Standard {
         of: String,
         literacy: String,
+        /// Kraje národa bez vlastního státu (dok. 38); prázdné = stát či kraj `of`.
+        regions: Vec<String>,
     },
     Schools {
         of: String,
@@ -172,6 +174,7 @@ pub fn parse(kind: &str, p: &Params<'_>) -> Result<Option<PolityAction>, String>
             literacy: p
                 .opt_string(&["literacy"])?
                 .unwrap_or_else(|| "elite".into()),
+            regions: p.strings(&["regions"])?,
         },
         "schools" => PolityAction::Schools {
             of: p.string(&["of"])?,
@@ -279,9 +282,11 @@ pub fn apply(
             language.as_deref(),
             strength,
         ),
-        PolityAction::Standard { of, literacy } => {
-            standard(world, history, tick, year, of, literacy)
-        }
+        PolityAction::Standard {
+            of,
+            literacy,
+            regions,
+        } => standard(world, history, tick, year, of, literacy, regions),
         PolityAction::Schools {
             of,
             coverage,
@@ -1492,6 +1497,12 @@ fn scope(world: &World, of: &str) -> Result<(Vec<TerritoryId>, GroupId, bool), S
     if let Some(polity) = world.society.states.get(of) {
         return Ok((polity.regions.clone(), polity.seat, true));
     }
+    // Národ bez státu (dok. 38): sídlem normy je první kraj, dosah slábne se vzdáleností.
+    if let Some(names) = world.society.nations.get(of) {
+        let regions = check_regions(world, names)?;
+        let seat = seat_of(world, regions[0])?;
+        return Ok((regions, seat, true));
+    }
     let region = check_regions(world, &[of.to_owned()])
         .map_err(|_| format!("'{of}' není stát ani region světa."))?[0];
     Ok((vec![region], seat_of(world, region)?, false))
@@ -1504,7 +1515,22 @@ fn standard(
     year: f64,
     of: &str,
     literacy: &str,
+    nation: &[String],
 ) -> Result<(), String> {
+    if !nation.is_empty() {
+        // Norma národa přes víc krajů (česká pro Čechy, Moravu a Slezsko): rozsah si svět
+        // pamatuje pod `of`, aby na něj mohla odkázat událost Schools.
+        if world.society.states.contains_key(of)
+            || world.society.nations.contains_key(of)
+            || check_regions(world, &[of.to_owned()]).is_ok()
+        {
+            return Err(format!(
+                "norma národa '{of}': jméno už patří státu, kraji či jinému národu."
+            ));
+        }
+        check_regions(world, nation)?;
+        world.society.nations.insert(of.to_owned(), nation.to_vec());
+    }
     let (regions, seat, is_state) = scope(world, of)?;
     let share = level_of(
         &world.params.literacy_levels,

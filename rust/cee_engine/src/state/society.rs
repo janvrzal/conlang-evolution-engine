@@ -53,6 +53,9 @@ pub struct SocietyState {
     pub states: BTreeMap<String, Polity>,
     /// Spisovné jazyky států a regionů: ID státu či regionu → psaný kód (skupina).
     pub standards: BTreeMap<String, GroupId>,
+    /// Národy bez státu se spisovnou normou: jméno → kraje (dok. 38).
+    #[serde(default)]
+    pub nations: BTreeMap<String, Vec<String>>,
     /// Pojmy, ze kterých se skládá vlastní jméno jazyka (jen pro export).
     pub endonyms: BTreeMap<LanguageId, Vec<ConceptId>>,
     /// Vazby oslabené hranicí států: (zdroj, cíl) → použitý násobek.

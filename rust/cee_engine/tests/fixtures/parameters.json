@@ -162,7 +162,7 @@
  "paradigm_merge_weight": 1.0,
  "policy_levels": {
   "enforced": {
-   "pull": 1.0,
+   "pull": 0.15,
    "share": 0.6
   },
   "promoted": {

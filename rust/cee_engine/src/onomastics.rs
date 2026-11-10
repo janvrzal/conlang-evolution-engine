@@ -923,6 +923,7 @@ pub fn export_world_onomastics(world: &World) -> Value {
             .groups
             .get(base_name)
             .map(GroupId)
+            .filter(|&g| world.groups.contains(g))
             .unwrap_or(std_group);
         let tid = world.groups.territory[spoken_group.index()];
         let city_toponym = (!tid.is_none())

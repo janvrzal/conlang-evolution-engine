@@ -684,7 +684,7 @@
    "kind": "level_table2",
    "default": {
     "enforced": {
-     "pull": 1.0,
+     "pull": 0.15,
      "share": 0.6
     },
     "promoted": {
@@ -696,7 +696,7 @@
      "share": 0.1
     }
    },
-   "description": "Jazyková politika vůči regionům jiného jazyka: ``share`` = podíl dospělých, kteří úřední jazyk užívají mimo domov (veřejná doména), ``pull`` = jak silně ho tlačí i domů (škola v úředním jazyce, úřady, smíšená manželství). ``tolerant`` nechá stabilní dvojjazyčnost (diglosie, Fishman 1967).",
+   "description": "Jazyková politika vůči regionům jiného jazyka: ``share`` = podíl dospělých, kteří úřední jazyk užívají mimo domov (veřejná doména), ``pull`` = jak silně ho tlačí i domů (škola v úředním jazyce, úřady, smíšená manželství). ``tolerant`` nechá stabilní dvojjazyčnost (diglosie, Fishman 1967). ``enforced`` ``pull`` 0,15 (dříve 1,0) z kalibrace tempa přechodu `m10::politika` (dok. 38): s hromadnou školou ve státním jazyce zůstanou po 80 letech asi dvě třetiny mluvčích menšiny, po 200 letech čtvrtina (velština, irština, bretonština); s 1,0 přešly celé regiony za 80 let. Tah je stejný jako u ``romanization``, rychlejší přechod dělá škola ve státním jazyce.",
    "group": "society",
    "role": "world"
   },

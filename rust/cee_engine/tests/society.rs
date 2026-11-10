@@ -87,6 +87,69 @@ fn kralovstvi_ma_stat_normy_a_skoly() {
     }
 }
 
+/// Norma národa bez státu (dok. 38): česká pro dva kraje uvnitř německého státu; škola
+/// národa na ni odkáže jménem a oba kraje ji čtou.
+#[test]
+fn norma_naroda_pres_vic_kraju() {
+    let evropa: serde_json::Value =
+        serde_json::from_str(include_str!("../../../src/cee/data/scenarios/evropa.json")).unwrap();
+    let language = |id: &str| {
+        evropa["languages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|l| l["id"] == id)
+            .unwrap()
+            .clone()
+    };
+    let region = |id: &str, x: i64, lang: &str, neighbours: &[&str]| {
+        serde_json::json!({"id": id, "name": id, "position": [x, 0], "neighbours": neighbours,
+            "language": lang, "villages": 2})
+    };
+    let text = serde_json::json!({
+        "format": evropa["format"], "name": "národ", "seed": 1, "start_year": 0, "end_year": 300,
+        "languages": [language("germanic"), language("slavic")],
+        "regions": [region("a", 0, "germanic", &["b"]), region("b", 7, "slavic", &["a", "c"]),
+            region("c", 14, "slavic", &["b"])],
+        "events": [
+            {"kind": "state", "year": 0, "id": "st", "capital": "a", "regions": ["a", "b", "c"]},
+            {"kind": "standard", "year": 100, "of": "st"},
+            {"kind": "standard", "year": 150, "of": "cestina", "regions": ["b", "c"],
+                "literacy": "towns"},
+            {"kind": "schools", "year": 200, "of": "cestina"}
+        ]
+    })
+    .to_string();
+    let spec = WorldSpec::from_json(&text).unwrap();
+    let (world, events) = spec::build(&spec).unwrap();
+    let mut simulation = Simulation::new(world, SimulationConfig::default(), events).unwrap();
+    simulation.run(300.0).unwrap();
+    let world = &simulation.world;
+    let czech = world.society.standards["cestina"];
+    for name in ["b-v0", "b-v1", "c-v0", "c-v1"] {
+        let group = cee_engine::ids::GroupId(world.registry.groups.get(name).unwrap());
+        assert_eq!(
+            world.groups.standard[group.index()],
+            czech,
+            "{name} čte českou normu"
+        );
+        assert!(
+            world.groups.schooling[group.index()] > 0.0,
+            "{name} chodí do české školy"
+        );
+    }
+    let state = world.society.standards["st"];
+    let german = cee_engine::ids::GroupId(world.registry.groups.get("a-v0").unwrap());
+    assert_eq!(world.groups.standard[german.index()], state);
+    // Jméno národa nesmí kolidovat se státem ani krajem.
+    let clash = text.replace("\"of\":\"cestina\",\"regions\"", "\"of\":\"b\",\"regions\"");
+    assert_ne!(clash, text);
+    let spec = WorldSpec::from_json(&clash).unwrap();
+    let (world, events) = spec::build(&spec).unwrap();
+    let mut simulation = Simulation::new(world, SimulationConfig::default(), events).unwrap();
+    assert!(simulation.run(300.0).is_err());
+}
+
 #[test]
 fn hranice_a_strom_jazyku() {
     let simulation = run("tree", 2000.0, SimulationConfig::default());
