@@ -381,6 +381,17 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
     let history = &simulation.history;
     let observed = observed_languages(simulation);
     let mut onomastics = crate::onomastics::export_world_onomastics(world);
+    // S modulem jmen platí jména ze záznamů: toponyma i státy (jméno, výslovnost, hlavní město).
+    if let Some(Value::Object(toponyms)) = onomastics.get_mut("toponyms") {
+        for (territory, entry) in toponyms.iter_mut() {
+            *entry = named_toponym(simulation, territory, entry.take());
+        }
+    }
+    let capitals: Map<String, Value> = onomastics
+        .get("toponyms")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
     if let (Some(names), Some(Value::Object(states))) = (&simulation.names, onomastics.get_mut("states")) {
         for (id, entry) in states.iter_mut() {
             if let (Some(record), Value::Object(entry)) = (names.current_of(&format!("state:{id}")), entry) {
@@ -390,6 +401,17 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
                 entry.insert("meaning".into(), record.meaning.clone().into());
                 entry.insert("motivation".into(), record.motivation.clone().into());
                 entry.insert("record".into(), record.id.clone().into());
+                if let Some(polity) = world.society.states.get(id) {
+                    let capital = world.registry.territories.name(polity.capital.0);
+                    let city = format!("{capital}-v0");
+                    if let Some(name) = capitals
+                        .get(&city)
+                        .or_else(|| capitals.get(capital))
+                        .and_then(|t| t.get("name"))
+                    {
+                        entry.insert("capital_name".into(), name.clone());
+                    }
+                }
             }
         }
     }

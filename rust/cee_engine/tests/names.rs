@@ -498,3 +498,31 @@ fn uzamcene_jmeno_sveta_ze_zadani() {
     let issues = spec::check(&WorldSpec::from_json(&bad.to_string()).unwrap());
     assert!(issues.iter().any(|i| i.path == "name_form"));
 }
+
+#[test]
+fn export_bere_jmena_mist_a_statu_ze_zaznamu() {
+    let simulation = run("kingdom", 600.0, true);
+    let state = names(&simulation);
+    let value = export::export(&simulation, true);
+    let toponyms = value["onomastics"]["toponyms"].as_object().unwrap();
+    assert!(!toponyms.is_empty());
+    for (territory, top) in toponyms {
+        let Some(record) = state.current_of(&format!("territory:{territory}")) else {
+            continue;
+        };
+        let ipa = record.timeline.last().unwrap().ipa.as_str();
+        assert_eq!(top["ipa"].as_str(), Some(ipa), "onomastics.toponyms.{territory}");
+        assert_eq!(top["record"].as_str(), Some(record.id.as_str()));
+        let listed = value["territories"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["id"] == json!(territory))
+            .unwrap();
+        assert_eq!(listed["name"], top["name"], "territories[].name = onomastics.toponyms");
+    }
+    for (id, entry) in value["onomastics"]["states"].as_object().unwrap() {
+        let record = state.current_of(&format!("state:{id}")).unwrap();
+        assert_eq!(entry["ipa"].as_str(), Some(record.timeline.last().unwrap().ipa.as_str()));
+    }
+}

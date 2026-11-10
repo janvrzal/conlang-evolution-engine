@@ -257,5 +257,5 @@ skupin.
 - `objects`: pro každý objekt současné endonymum, všechny jeho záznamy a exonyma podle linií.
 
 `lineages[].endonym` (IPA) a nové `lineages[].name` (romanizace), `frame.endonyms`, `territories[].name`,
-`territories[].toponym` a `onomastics.states` berou jméno ze záznamů, když modul běží. Bez něj
+`territories[].toponym`, `onomastics.toponyms` a `onomastics.states` (i `capital_name`) berou jméno ze záznamů, když modul běží. Bez něj
 platí dřívější výpočet z dnešních slov.
