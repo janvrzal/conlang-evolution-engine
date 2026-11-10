@@ -9,8 +9,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const sample = (file: string) => JSON.parse(readFileSync(join(here, '..', '..', '..', 'static', 'projects', file), 'utf8')) as WorldSpec;
 
 describe('souhrn světa', () => {
-	it('Talvera: 96 krajů, 16 měst, 4 protojazyky, 59 událostí, −700–1950', () => {
-		expect(summarize(sample('talvera.cee.json'))).toEqual({ name: 'Talvera', start: -700, end: 1950, regions: 96, cities: 16, languages: 4, events: 59 });
+	it('Talvera (svět Imini): 96 krajů, 16 měst, 4 protojazyky, 59 událostí, −700–1950', () => {
+		expect(summarize(sample('talvera.cee.json'))).toEqual({ name: 'Imini', start: -700, end: 1950, regions: 96, cities: 16, languages: 4, events: 59 });
 	});
 
 	it('Poloostrov bez začátku dějin počítá od roku 0', () => {

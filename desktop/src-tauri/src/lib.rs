@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use serde_json::{json, Value};
 use tauri::{Manager, State};
 
-use engine::{Runs, StartRun};
+use engine::{NamesCache, Runs, StartRun};
 use project::Recent;
 
 /// Stav enginu pro UI (místo `/api/health`).
@@ -139,6 +139,14 @@ async fn run_word_history(id: String, language: String, concept: String) -> Resu
         .map_err(|e| e.to_string())?
 }
 
+/// Generátor jmen sídel a osob podle kraje a epochy (modul jmen, dok. 34): dotaz
+/// `{region, year, count, until, urban, attempt, kind}`.
+#[tauri::command]
+async fn run_names(id: String, query: Value, runs: State<'_, Runs>, cache: State<'_, NamesCache>) -> Result<Value, String> {
+    let (run, cache) = (runs.get(&id), cache.inner().clone());
+    tauri::async_runtime::spawn_blocking(move || cache.generate(run, &id, &query)).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 fn run_rename(id: String, name: Option<String>) -> Result<(), String> {
     cee_store::rename(&PathBuf::from(id), name.as_deref())
@@ -218,6 +226,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Runs::default())
+        .manage(NamesCache::default())
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
             app.manage(Recent { file: dir.join("recent.json") });
@@ -237,6 +246,7 @@ pub fn run() {
             run_lexicon,
             run_lexicon_years,
             run_word_history,
+            run_names,
             run_rename,
             run_delete,
             run_drop_checkpoints,

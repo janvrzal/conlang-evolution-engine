@@ -14,6 +14,8 @@ use std::time::Instant;
 
 use cee_engine::parameters::{parameter_file, LEVEL_TABLES};
 use cee_engine::spec::{self, WorldSpec};
+use cee_engine::checkpoint::Checkpoint;
+use cee_engine::names::generate::Query;
 use cee_engine::{export, Simulation, SimulationConfig};
 use cee_store::recorder::{RecordOptions, Recorder};
 use cee_store::{NewRun, RunWriter};
@@ -142,6 +144,8 @@ struct RunState {
     error: Option<String>,
     frames: Vec<Value>,
     result: Option<Arc<Value>>,
+    /// Svět a jména na konci běhu pro generátor jmen (jen u dokončeného běhu).
+    names: Option<Arc<Checkpoint>>,
 }
 
 /// Běh v paměti aplikace; zároveň se zapisuje do své složky (`cee_store`).
@@ -185,6 +189,15 @@ impl Run {
         self.cancelled.store(true, Ordering::Relaxed);
     }
 
+    /// Stav jmen dokončeného běhu; běžící běh generátor zatím nemá.
+    fn names_point(&self) -> Result<Option<Arc<Checkpoint>>, String> {
+        let s = self.state.lock().expect("stav běhu");
+        match s.status {
+            Status::Running => Err("Generátor jmen bude k dispozici po doběhnutí běhu.".into()),
+            _ => Ok(s.names.clone()),
+        }
+    }
+
     fn execute(&self, mut simulation: Simulation, mut writer: RunWriter, mut recorder: Recorder) {
         let outcome = (|| -> Result<bool, String> {
             loop {
@@ -219,13 +232,67 @@ impl Run {
             Ok(false) => (Status::Cancelled, None, None),
             Err(e) => (Status::Failed, Some(e), None),
         };
+        // stav jmen pro generátor: v paměti a ve složce běhu (po novém spuštění aplikace)
+        let names = if status == Status::Done { names_point(&simulation).map(Arc::new) } else { None };
+        let names_saved = names.as_ref().map_or(Ok(()), |point| writer.add_names(point));
         // zápis do složky běhu; selhání zápisu se ukáže jako chyba běhu
-        let saved = writer.finish(status, error.as_deref(), seconds, result.as_deref());
+        let saved = writer.finish(status, error.as_deref(), seconds, result.as_deref()).and(names_saved);
         let mut s = self.state.lock().expect("stav běhu");
         s.seconds = seconds;
         s.status = status;
         s.error = error.or(saved.err().map(|e| format!("Běh se nepodařilo uložit: {e}")));
         s.result = result;
+        s.names = names;
+    }
+}
+
+/// Kontrolní bod jen se světem a jmény (bez historie), nebo `None` bez modulu jmen.
+fn names_point(simulation: &Simulation) -> Option<Checkpoint> {
+    simulation.names.as_ref()?;
+    let mut point = simulation.checkpoint_without_events();
+    point.history = Default::default();
+    Some(point)
+}
+
+/// Nastavení simulace v aplikaci: s modulem jmen (jména s historií a generátor jmen).
+fn config() -> SimulationConfig {
+    SimulationConfig { names: true, ..SimulationConfig::default() }
+}
+
+/// Stav jmen běhů přečtených z disku (poslední dva, ať se při generování nečte znovu).
+#[derive(Clone, Default)]
+pub struct NamesCache {
+    loaded: Arc<Mutex<Vec<(String, Arc<Checkpoint>)>>>,
+}
+
+const KEEP_NAMES: usize = 2;
+const NO_NAMES: &str = "Tento běh vznikl bez modulu jmen; spusť ho znovu.";
+
+impl NamesCache {
+    /// Návrhy jmen (`names::generate::Query` jako JSON) nad během v paměti (`run`), jinak nad
+    /// stavem jmen ze složky běhu `id`.
+    pub fn generate(&self, run: Option<Arc<Run>>, id: &str, query: &Value) -> Result<Value, String> {
+        let query: Query = serde_json::from_value(query.clone()).map_err(|e| format!("dotaz na jména: {e}"))?;
+        let point = match run {
+            Some(run) => run.names_point()?,
+            None => self.load(id)?,
+        };
+        let point = point.ok_or(NO_NAMES)?;
+        point.names.as_ref().ok_or(NO_NAMES)?.generate(&point.world, &query)
+    }
+
+    fn load(&self, id: &str) -> Result<Option<Arc<Checkpoint>>, String> {
+        if let Some((_, point)) = self.loaded.lock().expect("jména").iter().find(|(i, _)| i == id) {
+            return Ok(Some(point.clone()));
+        }
+        let Some(point) = cee_store::names_state(Path::new(id))? else { return Ok(None) };
+        let point = Arc::new(point);
+        let mut loaded = self.loaded.lock().expect("jména");
+        if loaded.len() >= KEEP_NAMES {
+            loaded.remove(0);
+        }
+        loaded.push((id.to_owned(), point.clone()));
+        Ok(Some(point))
     }
 }
 
@@ -315,13 +382,13 @@ impl Runs {
                 // snímky, slovník a záznam událostí rodiče do kontrolního bodu; bod může ležet i u prarodiče
                 writer.branch_from(&point).map_err(|e| issue("(svět)", e, "world_failed"))?;
                 let checkpoint = cee_store::load_checkpoint(&point).map_err(|e| issue("(svět)", e, "world_failed"))?;
-                let simulation = spec::resume(&world_spec, checkpoint, SimulationConfig::default()).map_err(|e| issue("(svět)", e, "world_failed"))?;
+                let simulation = spec::resume(&world_spec, checkpoint, config()).map_err(|e| issue("(svět)", e, "world_failed"))?;
                 let recorder = Recorder::new(&simulation, RecordOptions::default());
                 (simulation, writer, recorder, world_spec.start_year)
             }
             None => {
                 let (world, events) = spec::build(&world_spec).map_err(|e| issue("(svět)", e, "world_failed"))?;
-                let simulation = Simulation::new(world, SimulationConfig::default(), events).map_err(|e| issue("(svět)", e, "world_failed"))?;
+                let simulation = Simulation::new(world, config(), events).map_err(|e| issue("(svět)", e, "world_failed"))?;
                 let parent_name = new.parent.and_then(parent_id);
                 let mut writer = RunWriter::create(
                     new.dir,
@@ -341,7 +408,7 @@ impl Runs {
             end_year: world_spec.end_year,
             started: Instant::now(),
             cancelled: AtomicBool::new(false),
-            state: Mutex::new(RunState { status: Status::Running, year: simulation.year(), seconds: 0.0, error: None, frames, result: None }),
+            state: Mutex::new(RunState { status: Status::Running, year: simulation.year(), seconds: 0.0, error: None, frames, result: None, names: None }),
         });
         {
             let mut runs = self.runs.lock().expect("seznam běhů");
@@ -456,8 +523,43 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    #[test]
+    fn generator_jmen_z_pameti_i_ze_slozky_behu() {
+        let mut world = talvera();
+        world["end_year"] = json!(-400);
+        let events: Vec<Value> = world["events"].as_array().unwrap().iter().filter(|e| e["year"].as_f64().unwrap() <= -400.0).cloned().collect();
+        world["events"] = json!(events);
+        let dir = temp("jmena");
+        let runs = Runs::default();
+        let run = runs.start(StartRun { spec: &world, dir: &dir, name: None, parent: None }).expect("běh");
+        wait(&run);
+        assert_eq!(run.status(0)["status"], "done");
+        // export nese jména s historií
+        let result = run.result().unwrap();
+        assert!(result["names"]["records"].as_array().is_some_and(|r| !r.is_empty()));
+        let region = world["regions"][0]["id"].as_str().unwrap().to_owned();
+        let query = json!({ "region": region, "year": -600, "count": 4, "until": -400, "urban": true });
+        let cache = NamesCache::default();
+        let places = cache.generate(runs.get(&run.id()), &run.id(), &query).expect("jména z paměti");
+        let names = places["names"].as_array().unwrap();
+        assert_eq!(names.len(), 4, "{places}");
+        assert_eq!(names[0]["founded"]["year"], -600.0);
+        assert!(names[0]["timeline"].as_array().is_some_and(|t| !t.is_empty()));
+        // po novém spuštění aplikace (běh jen na disku) dá stejný dotaz stejná jména
+        let from_disk = NamesCache::default().generate(None, &run.id(), &query).expect("jména ze složky");
+        assert_eq!(from_disk, places);
+        assert!(cee_store::size(&run.dir)["names"] > 0);
+        let people = cache.generate(None, &run.id(), &json!({ "region": region, "year": -500, "count": 3, "kind": "person" })).expect("osoby");
+        assert_eq!(people["kind"], "person");
+        assert_eq!(people["names"].as_array().unwrap().len(), 3, "{people}");
+        // neznámý kraj a špatný dotaz jsou chyby, ne pád
+        assert!(cache.generate(None, &run.id(), &json!({ "region": "nic", "year": -600 })).is_err());
+        assert!(cache.generate(None, &run.id(), &json!({ "kraj": region })).is_err());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     fn temp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("cee-engine-test-{name}-{}", std::process::id()));
+        let d =std::env::temp_dir().join(format!("cee-engine-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         d
     }

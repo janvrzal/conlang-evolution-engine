@@ -204,8 +204,8 @@ export interface ExportV2 {
 	event_counts?: Record<string, number>;
 	/** Jména s historií (modul jmen, dok. 34); bez modulu chybí. */
 	names?: NamesExport | null;
-	/** Jméno světa z modulu jmen. */
-	world_name?: string | null;
+	/** Jméno světa z modulu jmen (objekt `world`). */
+	world_name?: { name: string; ipa: string; record: string; meaning: string; since: number } | null;
 	links?: { kind: string; source: string; target: string; strength: number }[];
 }
 

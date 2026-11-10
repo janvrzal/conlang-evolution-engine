@@ -46,6 +46,8 @@ const LEXICON: &str = "slovnik.jsonl.gz";
 const RESULT: &str = "vysledek.json.gz";
 const EVENTS: &str = "udalosti.jsonl.gz";
 const CHECKPOINTS: &str = "body";
+/// Stav modulu jmen na konci běhu (svět a jména) pro generátor jmen v aplikaci.
+const NAMES: &str = "jmena.bin.gz";
 
 /// Stav běhu.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -461,6 +463,16 @@ pub fn load_checkpoint(
     Ok(checkpoint)
 }
 
+/// Stav modulu jmen na konci běhu (`RunWriter::add_names`), nebo `None`, když ho běh nemá
+/// (vznikl bez modulu jmen nebo před ním).
+pub fn names_state(run: &Path) -> Result<Option<cee_engine::checkpoint::Checkpoint>, String> {
+    let path = run.join(NAMES);
+    if !path.is_file() {
+        return Ok(None);
+    }
+    cee_engine::checkpoint::Checkpoint::from_bytes(&gunzip(&path)?).map(Some)
+}
+
 /// Smaže kontrolní body běhu (zabírají nejvíc místa); běh zůstane čitelný, jen se z něj
 /// nedá větvit bez přepočtu od začátku.
 pub fn drop_checkpoints(run: &Path) -> Result<(), String> {
@@ -500,6 +512,7 @@ pub fn size(run: &Path) -> BTreeMap<&'static str, u64> {
         ("lexicon", len(run.join(LEXICON))),
         ("result", len(run.join(RESULT))),
         ("checkpoints", checkpoints),
+        ("names", len(run.join(NAMES))),
     ])
 }
 
@@ -703,6 +716,12 @@ impl RunWriter {
         self.add_events(&events)?;
         self.info.year = until_year;
         write_info(&self.dir, &self.info)
+    }
+
+    /// Stav modulu jmen na konci běhu: kontrolní bod se světem a jmény (bez historie), ze kterého
+    /// generátor jmen skládá jména i po novém spuštění aplikace. Kontrolní body ho nemažou.
+    pub fn add_names(&mut self, point: &cee_engine::checkpoint::Checkpoint) -> Result<(), String> {
+        write_atomic(&self.dir.join(NAMES), &gzip_level(&point.to_bytes()?, 1))
     }
 
     /// Konec běhu: stav, chyba, doba a (u hotového) výsledek.
