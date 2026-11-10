@@ -615,6 +615,10 @@ pub struct ProtoLanguage {
     pub stress_strength: StressStrength,
     pub words: HashMap<String, String>,
     pub endonym: Vec<String>,
+    /// Uzamčené vlastní jméno (IPA), jen pro modul jmen.
+    pub endonym_form: Option<String>,
+    /// Zadaná tradice osobních jmen, jen pro modul jmen.
+    pub person_names: Option<String>,
     pub tones: Vec<String>,
     /// Vlastní koncovky jazyka (`None` = výchozí `syntax_endings`).
     pub endings: Option<Endings>,
@@ -641,6 +645,8 @@ impl ProtoLanguage {
             stress_strength: StressStrength::Weak,
             words: HashMap::new(),
             endonym: Vec::new(),
+            endonym_form: None,
+            person_names: None,
             tones: Vec::new(),
             endings: None,
             suffixes: Vec::new(),
@@ -917,6 +923,14 @@ pub fn region_world(
                     .map(|c| world.registry.concept(c))
                     .collect();
                 world.society.endonyms.insert(lang, ids);
+            }
+            if let Some(form) = &language.endonym_form {
+                let lang = world.language(&language.id);
+                world.society.endonym_forms.insert(lang, form.clone());
+            }
+            if let Some(paradigm) = &language.person_names {
+                let lang = world.language(&language.id);
+                world.society.person_traditions.insert(lang, paradigm.clone());
             }
         }
         if options.semantics {

@@ -213,6 +213,26 @@
       "kind": "fictional",
       "label_cs": "Dvorská diglosie (vysoké dvorské jméno v úředním kódu + domácí krbové jméno)",
       "slots": ["high_court_name", "vernacular_hearth_name"]
+    },
+    "house_surety": {
+      "kind": "talvera",
+      "label_cs": "Jméno při narození a dům, který za člověka ručí (hrázové obce dolního Erenu)",
+      "slots": ["given_at_birth", "surety_house"]
+    },
+    "journey_name": {
+      "kind": "talvera",
+      "label_cs": "Rodinné jméno a jméno po první samostatné cestě (pastevecké obce v sedlech)",
+      "slots": ["family_given", "journey_name"]
+    },
+    "crew_byname": {
+      "kind": "talvera",
+      "label_cs": "Domácí jméno a palubní přezdívka posádky (lodnické obce západních zátok)",
+      "slots": ["home_given", "crew_byname"]
+    },
+    "birth_rite": {
+      "kind": "talvera",
+      "label_cs": "Jméno podle události při narození a obřadní jméno (pramenné obce Deštných hor)",
+      "slots": ["birth_event_given", "rite_name"]
     }
   }
 }

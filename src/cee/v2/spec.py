@@ -85,6 +85,10 @@ class LanguageSpec(_Model):
     words: dict[str, str] = Field(default_factory=dict)
     #: Pojmy, ze kterých se skládá vlastní jméno jazyka (např. ``["person", "language"]``).
     endonym: list[str] = Field(default_factory=list)
+    #: Uzamčené vlastní jméno prajazyka (IPA); hláskový vývoj jména pokračuje (dok. 34).
+    endonym_form: str | None = None
+    #: Tradice osobních jmen (paradigma katalogu ``v2_onomastics.json``, např. ``house_surety``).
+    person_names: str | None = None
     #: Tóny tónového jazyka jako tónové značky (``["˥", "˧", "˩"]``); prázdné = bez tónů.
     tones: list[str] = Field(default_factory=list)
     #: Přepisy konstrukcí profilu podle funkce: ``{"FUTURE": {"kind": "synthetic"}}``.
@@ -367,6 +371,8 @@ class WorldSpec(_Model):
 
     format: Literal["cee-v2-world/1"] = FORMAT
     name: str | None = None
+    #: Uzamčené vlastní jméno světa (IPA); ``name`` zůstává popiskem pro čtenáře (dok. 34).
+    name_form: str | None = None
     seed: int = 1
     start_year: float = 0.0
     end_year: float

@@ -1,6 +1,8 @@
-# Talvera
+# Imini (pracovně Talvera)
 
-Talvera je subkontinent mezi severní vrchovinou a dvěma moři. Řeka Eren teče ze severu k jihu a v rovinách se větví do splavných ramen. Západ má chráněné přístavy a Solné ostrovy, jih deště a sezónní plavbu, východ široký úval za deštnými horami. Mezi řekou a západem leží odtoková jezera a staré průsmyky. Východní oceán uzavírají Vnější ostrovy. Dlouhodobě soupeří tři cesty pro dopravu lidí a zboží. Říční cesta zvýhodňuje deltu, souš horská sedla, moře pobřežní uzly.
+Svět se vlastním jménem jmenuje **Imini** (IPA *imini*). Jméno vygeneroval modul jmen ([dok. 34](../engine-v2/34-jmena-s-historii.md)) jako exonymum nejstarší říše. Varadské říši (serensky *Emeni*, „dům zakladatele Ely Ame“) říkali idarsky *imini*. V roce −400, kdy jméno vzniklo, měla idarština ze všech jazyků, které říši jmenovaly, nejvíc mluvčích. Odtud jméno přešlo na celou zemi, jako *Asie* nebo *Řecko*. V idarštině se dnes vyslovuje *ɨmnɨ* (Ymny), serensky *Imi* nebo *Emene*, veretsky *Umi*. Ve [world.json](talvera.world.json) je uzamčené v poli `name_form`. Pracovní název Talvera zůstává v názvech souborů a starších rozborech.
+
+Imini je subkontinent mezi severní vrchovinou a dvěma moři. Řeka Eren teče ze severu k jihu a v rovinách se větví do splavných ramen. Západ má chráněné přístavy a Solné ostrovy, jih deště a sezónní plavbu, východ široký úval za deštnými horami. Mezi řekou a západem leží odtoková jezera a staré průsmyky. Východní oceán uzavírají Vnější ostrovy. Dlouhodobě soupeří tři cesty pro dopravu lidí a zboží. Říční cesta zvýhodňuje deltu, souš horská sedla, moře pobřežní uzly.
 
 ## Měřítko prvního běhu
 
@@ -27,6 +29,30 @@ ID `m01-01` až `m12-08` jsou pracovní označení jednotlivých regionů. Tabul
 | M10 · Východní úval | Údolní osy a široká východní zátoka | idarská | M03, M09, M11, M12 |
 | M11 · Deštné hory | Izolovaná údolí, horní hřebeny a prameny | idarská | M06, M10 |
 | M12 · Vnější ostrovy | Oceánské ostrovy s rozptýlenými kotvišti | idarská / veretská | M09, M10 |
+
+### Vlastní jména jazyků
+
+Prajazyky nesou vlastní jména z generátoru jmen ([dok. 34](../engine-v2/34-jmena-s-historii.md)). Složil je z tehdejších slov receptu v roce −700. Ve [world.json](talvera.world.json) jsou uzamčená v poli `endonym_form`, takže je další běh nevylosuje znovu. Hláskový vývoj jména pokračuje se změnami jeho mluvčích. České názvy (Serenština, serenská rodina…) zůstávají jako popisky pro čtenáře. Přepis do latinky je stejný jako u ostatních jmen (`onomastics::romanize`).
+
+| Popisek | ID | Vlastní jméno | IPA | Složení | Hlavní linie v roce 1950 (seed 1) |
+|---|---|---|---|---|---|
+| Serenština | `seren` | **Lanokum** | lanokum | „člověk“ + „řeč“ | Lenvogem (lenwoɡəm) |
+| Talmurština | `talmur` | **Ngasimon** | ŋasimon | „hora“ + „řeč“ | Ngeze (ŋəzə) |
+| Veretština | `veret` | **Omo** | omo | „moře“ + „řeč“ | Vu (wu) |
+| Idarština | `idar` | **Anejin** | anəjin | „voda“ + „řeč“ | Anajyn (anajɨn) |
+
+Každá rodina má také zadanou **tradici osobních jmen** (`person_names`) podle tabulky „Výchozí tradice Talvery“ v [návrhu jmen](generovani-jmen.md):
+
+| Rodina | `person_names` | Jméno osoby | Příklad ze seedu 1 |
+|---|---|---|---|
+| serenská | `house_surety` | jméno při narození + dům, který za člověka ručí | Janbaja Ame („slunce-přítel“, ručí dům „hora“) |
+| talmurská | `journey_name` | rodinné jméno + jméno po první samostatné cestě | Korming, Qiatngim („hvězda“, po cestě „žár-slunce“) |
+| veretská | `crew_byname` | domácí jméno + palubní přezdívka | Akonole „Neke“ (domácí jméno „sláva“ • na palubě „dlouhý loď“) |
+| idarská | `birth_rite` | jméno podle události při narození + obřadní jméno | Usa / Tiahi (narozen při „brod“, obřadní jméno „zákon-člověk“) |
+
+Tradice se mohou měnit: dceřiné jazyky je dědí, liturgie, spisovná norma a dlouhá vláda cizího jazyka je mohou nahradit. Osadníci si tradici nesou s sebou.
+
+Dceřiné jazyky jméno zdědí, nebo se pojmenují po kraji, státu, dřívějším národě či zakladateli. Mohou převzít i jméno, kterým jim říkají sousedé. Celý přehled jmen jazyků, míst a států s časovými osami je v exportu běhu pod `names`. Jméno celého subkontinentu (*Imini*) vzniklo stejným mechanismem, viz úvod.
 
 Serenové vycházejí z hustě osídlených niv a dělby práce kolem vody. Talmurové z pasteveckých a průsmykových obcí s větším sezónním pohybem. Veretové z pobřežních sítí rybářů, loďařů a překupníků soli. Idaři mají úvalová zemědělská sídla i horské komunity s vlastními pravidly užívání lesů. Časem vzniknou města, vrstvy i smíšené kultury napříč rodinami. Jazyk a politická příslušnost se mohou rozejít.
 
@@ -174,7 +200,7 @@ Spustitelný scénář je v [talvera.world.json](talvera.world.json). Převod m�
 
 Seed 1, Rust M11 z commitu `05e27e5`, výchozí dynamika a vypnuté náhodné historické pozadí. Běh došel do roku 1950. V posledním pravidelném snímku z roku 1900 měl **123 domácích jazyků** a **211 nářečních shluků**. Padesát jazyků tvořila jediná skupina. Pouze šest jazyků mělo domácí skupiny ve více než jednom regionu. Výsledek se proti cíli 45–55 rozpadá hlavně na malé místní kódy. Tento běh sám neurčuje, nakolik se na výsledku podílí síť, výchozí rozložení center a pravidla pozorování.
 
-Na konci běhu měl Naret 2 033 domácích mluvčích idarského kódu a 690 veřejných uživatelů veretštiny. Veřejní uživatelé jsou podmnožina obyvatel. Vlastní jména domácí řeči z exportu zahrnují `ŋɛ̃nʃem` v Taremu, `t͡somwu` v Selvě a `mɪ` v Naretu. Poslední příklad je zároveň aktuální slovo pro „řeč“ v Naretu a pochází z veretštiny. [Návrh generování jmen](generovani-jmen.md) rozlišuje tento způsob sestavování názvu a historicky uložené vlastní jméno.
+Na konci běhu měl Naret 2 033 domácích mluvčích idarského kódu a 690 veřejných uživatelů veretštiny. Veřejní uživatelé jsou podmnožina obyvatel. Vlastní jména domácí řeči z exportu zahrnují `ŋɛ̃nʃem` v Taremu, `t͡somwu` v Selvě a `mɪ` v Naretu. Poslední příklad je zároveň aktuální slovo pro „řeč“ v Naretu a pochází z veretštiny. [Návrh generování jmen](generovani-jmen.md) rozlišuje tento způsob sestavování názvu a historicky uložené vlastní jméno. Od 9. 11. 2026 vede jména modul jmen ([dok. 34](../engine-v2/34-jmena-s-historii.md)). Jméno vznikne jednou, dál se vyvíjí hláskově a výměna obecného slova ho nezmění.
 
 ## Rozbor na M12 a study cases (8. 11. 2026)
 

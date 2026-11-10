@@ -45,6 +45,8 @@ pub struct SimulationConfig {
     pub record_trajectories: bool,
     /// Po kolika letech se automaticky uloží kontrolní bod (`None` = nikdy).
     pub checkpoint_every: Option<f64>,
+    /// Modul jmen (`names`): jména s vlastní historií. Jen čte svět, dynamiku nemění.
+    pub names: bool,
 }
 
 impl Default for SimulationConfig {
@@ -68,6 +70,7 @@ impl Default for SimulationConfig {
             keep_distances: false,
             record_trajectories: false,
             checkpoint_every: None,
+            names: false,
         }
     }
 }
@@ -82,6 +85,8 @@ pub struct Simulation {
     pub history: History,
     pub tick: u32,
     pub checkpoints: BTreeMap<u32, Checkpoint>,
+    /// Jména s historií (jen s `SimulationConfig::names`).
+    pub names: Option<crate::names::NameState>,
 }
 
 impl Simulation {
@@ -127,7 +132,11 @@ impl Simulation {
             proto: crate::export::code_language_lexicons(&world),
             ..History::default()
         };
+        let names = config
+            .names
+            .then(|| crate::names::NameState::new(&world, config.dt));
         Ok(Simulation {
+            names,
             world,
             config,
             changes,
@@ -174,8 +183,40 @@ impl Simulation {
             tick: self.tick,
             year,
         };
-        let _t = crate::timing::scope("observe");
-        phases::observe::run(&mut ctx)
+        let first_event = ctx.history.events.len();
+        {
+            let _t = crate::timing::scope("observe");
+            phases::observe::run(&mut ctx)?;
+        }
+        if self.names.is_some() {
+            let events = self.name_events(first_event);
+            if let Some(names) = &mut self.names {
+                names.observe_only(&self.world, &events, self.tick, year);
+            }
+        }
+        Ok(())
+    }
+
+    /// Záznamy historie od `first`, které modul jmen čte (`names::EVENT_KINDS`).
+    fn name_events(&self, first: usize) -> Vec<serde_json::Map<String, serde_json::Value>> {
+        let log = &self.history.events;
+        (first..log.len())
+            .filter(|&i| log.kind_of(i).is_some_and(|k| crate::names::EVENT_KINDS.contains(&k)))
+            .filter_map(|i| log.get(i))
+            .collect()
+    }
+
+    /// Modul jmen po kroku: přečte svět a záznamy historie z tohoto kroku (nic nezapisuje).
+    fn follow_names(&mut self, first_event: usize, observed: bool) {
+        if self.names.is_none() {
+            return;
+        }
+        let _t = crate::timing::scope("names");
+        let year = self.year();
+        let events = self.name_events(first_event);
+        if let Some(names) = &mut self.names {
+            names.step(&self.world, &events, self.tick, year, observed);
+        }
     }
 
     /// Jeden krok: fáze v pořadí specifikace.
@@ -183,6 +224,8 @@ impl Simulation {
         self.tick += 1;
         let year = self.year();
         let (tick, observe_every) = (self.tick, self.config.observe_every);
+        let first_event = self.history.events.len();
+        let observed = observe_every > 0 && tick % observe_every == 0;
         {
             let mut ctx = StepContext {
                 world: &mut self.world,
@@ -213,11 +256,12 @@ impl Simulation {
                     ctx.world.sync_live_groups()?;
                 }
             }
-            if observe_every > 0 && tick % observe_every == 0 {
+            if observed {
                 let _t = crate::timing::scope("observe");
                 phases::observe::run(&mut ctx)?;
             }
         }
+        self.follow_names(first_event, observed);
         if crate::views::verifying() {
             crate::views::verify(&self.world)
                 .map_err(|e| format!("krok {}: průběžný pohled: {e}", self.tick))?;
@@ -238,6 +282,7 @@ impl Simulation {
             year: self.year(),
             world: self.world.clone(),
             history: self.history.clone(),
+            names: self.names.clone(),
         }
     }
 
@@ -255,6 +300,7 @@ impl Simulation {
                 trajectories: self.history.trajectories.clone(),
                 proto: self.history.proto.clone(),
             },
+            names: self.names.clone(),
         }
     }
 
@@ -269,6 +315,11 @@ impl Simulation {
             Simulation::with_changes(checkpoint.world, config, Vec::new(), changes)?;
         simulation.history = checkpoint.history;
         simulation.tick = checkpoint.tick;
+        if simulation.config.names {
+            simulation.names = checkpoint.names;
+        } else {
+            simulation.names = None;
+        }
         simulation.events = events.iter().map(|e| e.describe()).collect();
         let mut later: Vec<Box<dyn WorldEvent>> = events
             .into_iter()

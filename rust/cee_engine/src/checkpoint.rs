@@ -21,6 +21,8 @@ pub struct Checkpoint {
     pub year: f64,
     pub world: World,
     pub history: History,
+    /// Jména s historií (modul jmen), pokud byl zapnutý.
+    pub names: Option<crate::names::NameState>,
 }
 
 impl Checkpoint {
