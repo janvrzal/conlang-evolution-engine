@@ -264,7 +264,11 @@ fn models() -> Vec<Model> {
                 opt("nativize", Ty::Bool, || json!(false)),
             ],
         },
-        Model { name: "StandardSpec", doc: None, fields: vec![year(), kind("standard"), req("of", STR), opt("literacy", STR, || json!("elite"))] },
+        Model {
+            name: "StandardSpec",
+            doc: None,
+            fields: vec![year(), kind("standard"), req("of", STR), opt("literacy", STR, || json!("elite")), null("regions", STR_LIST)],
+        },
         Model {
             name: "SchoolsSpec",
             doc: None,

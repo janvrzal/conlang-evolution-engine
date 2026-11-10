@@ -1516,9 +1516,86 @@ fn tempo(seed: i64) -> Result<Report, String> {
     Ok(report)
 }
 
+/// Roky vynucené politiky, po kterých `politika` odečte podíl jazyka menšiny.
+pub const POLICY_YEARS: [f64; 2] = [80.0, 200.0];
+
+/// Tempo přechodu pod vynucenou politikou (dok. 38): germánský stát se slovanskou menšinou ve
+/// třech regionech (7, 14 a 21 od sídla), snášenlivý 1 000 let, s normou od roku 500; v roce
+/// 1 000 vynucená politika a hromadná škola ve státním jazyce. Odečte podíl domácích mluvčích
+/// slovanštiny v regionech menšiny po 80 a 200 letech.
+fn policy(seed: i64) -> Result<Report, String> {
+    let evropa: Value = serde_json::from_str(EVROPA_JSON).map_err(|e| e.to_string())?;
+    let language = |id: &str| -> Result<Value, String> {
+        evropa["languages"]
+            .as_array()
+            .and_then(|l| l.iter().find(|x| x["id"] == id))
+            .cloned()
+            .ok_or_else(|| format!("jazyk '{id}' ve scénáři Evropy chybí"))
+    };
+    let layout = [
+        ("a1", 0_i64, "germanic", 2.0),
+        ("a2", -7, "germanic", 1.1),
+        ("b1", 7, "slavic", 1.1),
+        ("b2", 14, "slavic", 1.1),
+        ("b3", 21, "slavic", 1.1),
+    ];
+    let regions: Vec<Value> = layout
+        .iter()
+        .map(|&(id, x, lang, density)| {
+            let neighbours: Vec<&str> = layout
+                .iter()
+                .filter(|o| (o.1 - x).abs() == 7)
+                .map(|o| o.0)
+                .collect();
+            json!({"id": id, "name": id, "position": [x, 0], "neighbours": neighbours,
+                "language": lang, "density": density, "villages": 4, "city": 0})
+        })
+        .collect();
+    let ids: Vec<&str> = layout.iter().map(|r| r.0).collect();
+    let start = 1_000.0;
+    let end = start + POLICY_YEARS[POLICY_YEARS.len() - 1];
+    let events = json!([
+        {"kind": "state", "year": 0, "id": "st", "name": "Stát", "capital": "a1", "regions": ids,
+            "policy": "tolerant"},
+        {"kind": "standard", "year": 500, "of": "st", "literacy": "elite"},
+        {"kind": "language_policy", "year": start, "state": "st", "policy": "enforced"},
+        {"kind": "schools", "year": start, "of": "st", "coverage": "mass", "diglossic": false,
+            "printing": true}
+    ]);
+    let text = json!({"format": evropa["format"], "name": "politika", "seed": seed,
+        "start_year": 0, "end_year": end, "village_spacing": 2.5,
+        "languages": [language("germanic")?, language("slavic")?], "regions": regions,
+        "events": events})
+    .to_string();
+    let spec = crate::spec::WorldSpec::from_json(&text)?;
+    let (world, events) = crate::spec::build(&spec)?;
+    let mut simulation = Simulation::new(world, SimulationConfig::default(), events)?;
+    let mut report = Report::new();
+    for years in POLICY_YEARS {
+        simulation.run(start + years)?;
+        let census = crate::polity::language_census(&simulation.world);
+        let shares: Vec<f64> = ["b1", "b2", "b3"]
+            .iter()
+            .map(|r| census[*r]["home"]["slavic"].as_f64().unwrap_or(0.0))
+            .collect();
+        info(
+            &mut report,
+            &format!("jazyk menšiny po {years} letech vynucené politiky"),
+            mean(&shares),
+        );
+    }
+    Ok(report)
+}
+
 /// Všechny kalibrační běhy.
 pub fn runs() -> Vec<Run> {
     vec![
+        Run {
+            id: "politika",
+            description: "tempo přechodu pod vynucenou politikou a školou: germánský stát, slovanská menšina, 200 let",
+            measure: policy,
+            memory_gb: 0.4,
+        },
         Run {
             id: "prah",
             description: "práh jazyka: dva regiony staroslověnštiny bez kontaktu, 1 500 let",

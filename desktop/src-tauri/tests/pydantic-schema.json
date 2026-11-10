@@ -1451,6 +1451,21 @@
       "default": "elite",
       "title": "Literacy",
       "type": "string"
+     },
+     "regions": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Regions"
      }
     },
     "required": [

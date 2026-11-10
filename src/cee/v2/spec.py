@@ -253,9 +253,11 @@ class LinguaFrancaSpec(_Event):
 
 class StandardSpec(_Event):
     kind: Literal["standard"]
-    #: ID státu nebo regionu.
+    #: ID státu nebo regionu; s `regions` nové jméno národa (dok. 38).
     of: str
     literacy: str = "elite"
+    #: Kraje národa bez vlastního státu; sídlo normy je v prvním z nich.
+    regions: list[str] | None = None
 
 
 

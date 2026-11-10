@@ -47,7 +47,7 @@ fn vychozi_hodnoty_jsou_ze_souboru() {
     assert_eq!(params.functional_load_scale, 5.0);
     assert_eq!(params.shift_exponent, 1.31);
     assert_eq!(params.centralization_levels["strong"], 2.0);
-    assert_eq!(params.policy_levels["enforced"]["pull"], 1.0);
+    assert_eq!(params.policy_levels["enforced"]["pull"], 0.15);
     assert_eq!(params.channel_domains["elite"]["power"], 3.0);
     assert_eq!(params.channel_domains["neighbor"]["power"], 1.0);
     assert!(params.pressure_weights.is_empty() && params.grammar.is_empty());
