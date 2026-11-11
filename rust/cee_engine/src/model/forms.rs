@@ -121,7 +121,11 @@ pub struct UnitForm {
 }
 
 /// Podkladové tvary kódu v polích podle čísla morfému.
+///
+/// Do kontrolního bodu jde řídce (`FormStoreRepr`): vlastní tvar má jen malá část morfémů,
+/// husté pole přes všechny morfémy by dalo kolem 100 kB na kód.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(into = "FormStoreRepr", from = "FormStoreRepr")]
 pub struct FormStore {
     form: Vec<i32>,
     boundary: Vec<i32>,
@@ -130,6 +134,56 @@ pub struct FormStore {
     pub version: u64,
     /// Deník přepsaných morfémů v pořadí zápisů.
     pub log: Vec<MorphemeId>,
+}
+
+/// Řídká podoba [`FormStore`]: délka polí a jen morfémy s vlastním tvarem
+/// (číslo, tvar, hranice, koncovka). `set` zapisuje všechna tři pole najednou, takže morfém
+/// bez vlastního tvaru má ve všech `UNSET` a husté pole se obnoví přesně.
+#[derive(Serialize, Deserialize)]
+struct FormStoreRepr {
+    len: u32,
+    entries: Vec<(u32, i32, i32, i32)>,
+    version: u64,
+    log: Vec<MorphemeId>,
+}
+
+impl From<FormStore> for FormStoreRepr {
+    fn from(store: FormStore) -> Self {
+        let entries = store
+            .form
+            .iter()
+            .enumerate()
+            .filter(|&(_, &form)| form != UNSET)
+            .map(|(at, &form)| (at as u32, form, store.boundary[at], store.exponent[at]))
+            .collect();
+        FormStoreRepr {
+            len: store.form.len() as u32,
+            entries,
+            version: store.version,
+            log: store.log,
+        }
+    }
+}
+
+impl From<FormStoreRepr> for FormStore {
+    fn from(repr: FormStoreRepr) -> Self {
+        let len = repr.len as usize;
+        let (mut form, mut boundary, mut exponent) =
+            (vec![UNSET; len], vec![UNSET; len], vec![UNSET; len]);
+        for (at, f, b, e) in repr.entries {
+            let at = at as usize;
+            form[at] = f;
+            boundary[at] = b;
+            exponent[at] = e;
+        }
+        FormStore {
+            form,
+            boundary,
+            exponent,
+            version: repr.version,
+            log: repr.log,
+        }
+    }
 }
 
 impl FormStore {

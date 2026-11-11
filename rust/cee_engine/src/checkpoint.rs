@@ -12,8 +12,9 @@ use serde::{Deserialize, Serialize};
 use crate::history::History;
 use crate::world::World;
 
-/// Verze formátu kontrolního bodu; mění se s rozložením hlavičky.
-pub const CHECKPOINT_VERSION: u32 = 3;
+/// Verze formátu kontrolního bodu; mění se s rozložením hlavičky nebo obsahu (4: fronty
+/// procesů jako čísla morfémů místo bajtu na morfém).
+pub const CHECKPOINT_VERSION: u32 = 4;
 
 /// Otisk sestavení enginu (zdroj enginu a jádra, vložená data; `build.rs`). Kontrolní bod
 /// z jiného sestavení se nenačte: struktury nebo dynamika se mohly změnit.
@@ -71,15 +72,19 @@ pub fn bytes_without_events(
             proto: &history.proto,
         },
     };
-    postcard::to_stdvec(&(CHECKPOINT_VERSION, ENGINE_BUILD, &point))
-        .map_err(|e| format!("kontrolní bod: {e}"))
+    crate::model::repertoire::shared_bases(|| {
+        postcard::to_stdvec(&(CHECKPOINT_VERSION, ENGINE_BUILD, &point))
+    })
+    .map_err(|e| format!("kontrolní bod: {e}"))
 }
 
 impl Checkpoint {
     /// Uloží kontrolní bod do bajtů (verze, otisk sestavení, obsah).
     pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
-        postcard::to_stdvec(&(CHECKPOINT_VERSION, ENGINE_BUILD, self))
-            .map_err(|e| format!("kontrolní bod: {e}"))
+        crate::model::repertoire::shared_bases(|| {
+            postcard::to_stdvec(&(CHECKPOINT_VERSION, ENGINE_BUILD, self))
+        })
+        .map_err(|e| format!("kontrolní bod: {e}"))
     }
 
     /// Načte kontrolní bod. Bod z jiné verze formátu nebo jiného sestavení vrátí chybu, která
@@ -97,6 +102,7 @@ impl Checkpoint {
         if build != ENGINE_BUILD {
             return Err(format!("{STALE} (sestavení {build}, teď {ENGINE_BUILD})"));
         }
-        postcard::from_bytes(rest).map_err(|e| format!("kontrolní bod: {e}"))
+        crate::model::repertoire::shared_bases(|| postcard::from_bytes(rest))
+            .map_err(|e| format!("kontrolní bod: {e}"))
     }
 }

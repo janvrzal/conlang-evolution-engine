@@ -265,10 +265,166 @@ impl Distribution {
 /// Skupiny z jednoho protojazyka sdílejí zmrazenou základní vrstvu (`Arc`)
 /// a ukládají jen to, v čem se od ní liší. Pořadí průchodu je podle čísla proměnné;
 /// kdo potřebuje pořadí jmen, použije [`Repertoire::variable_ids_by_name`].
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
 pub struct Repertoire {
     base: Option<Arc<Repertoire>>,
     own: BTreeMap<VariableId, Distribution>,
+}
+
+// --- sdílené základy v kontrolním bodu ---------------------------------------------------
+//
+// V paměti skupiny jednoho protojazyka sdílejí základní vrstvu (`Arc`). Prostá serializace by
+// ji zapsala u každé skupiny znovu (v Talveře 48 MB na bod) a po načtení by každá skupina měla
+// vlastní kopii. Uvnitř `shared_bases` se základ zapíše jen poprvé, další výskyty jsou číslo
+// a načtení je zase sdílí. Mimo `shared_bases` (JSON) je formát stejný jako dřív.
+
+#[derive(Default)]
+struct SharedBases {
+    /// Zapsané základy: adresa → pořadí (číslují se po dokončení zápisu, i vnořené).
+    seen: std::collections::HashMap<*const Repertoire, u32>,
+    /// Načtené základy v pořadí čísel.
+    loaded: Vec<Arc<Repertoire>>,
+}
+
+thread_local! {
+    static SHARED: std::cell::RefCell<Option<SharedBases>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Spustí `f` se sdílenými základy repertoárů (serializace i načtení kontrolního bodu).
+pub fn shared_bases<R>(f: impl FnOnce() -> R) -> R {
+    struct Reset(Option<SharedBases>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            let previous = self.0.take();
+            SHARED.with(|cell| *cell.borrow_mut() = previous);
+        }
+    }
+    let previous = SHARED.with(|cell| cell.borrow_mut().replace(SharedBases::default()));
+    let _reset = Reset(previous);
+    f()
+}
+
+fn sharing() -> bool {
+    SHARED.with(|cell| cell.borrow().is_some())
+}
+
+#[derive(Serialize)]
+struct PlainOut<'a> {
+    base: Option<&'a Repertoire>,
+    own: &'a BTreeMap<VariableId, Distribution>,
+}
+
+#[derive(Deserialize)]
+struct PlainIn {
+    base: Option<Repertoire>,
+    own: BTreeMap<VariableId, Distribution>,
+}
+
+/// Nový základ: zapíše obsah a teprve potom si ho očísluje (stejně jako načtení).
+struct NewBase<'a>(&'a Arc<Repertoire>);
+
+impl Serialize for NewBase<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let out = (**self.0).serialize(serializer)?;
+        SHARED.with(|cell| {
+            if let Some(shared) = cell.borrow_mut().as_mut() {
+                let next = shared.seen.len() as u32;
+                shared.seen.insert(Arc::as_ptr(self.0), next);
+            }
+        });
+        Ok(out)
+    }
+}
+
+#[derive(Serialize)]
+enum BaseOut<'a> {
+    New(NewBase<'a>),
+    Seen(u32),
+}
+
+#[derive(Serialize)]
+struct SharedOut<'a> {
+    base: Option<BaseOut<'a>>,
+    own: &'a BTreeMap<VariableId, Distribution>,
+}
+
+#[derive(Deserialize)]
+enum BaseIn {
+    New(Repertoire),
+    Seen(u32),
+}
+
+#[derive(Deserialize)]
+struct SharedIn {
+    base: Option<BaseIn>,
+    own: BTreeMap<VariableId, Distribution>,
+}
+
+impl Serialize for Repertoire {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if !sharing() {
+            return PlainOut {
+                base: self.base.as_deref(),
+                own: &self.own,
+            }
+            .serialize(serializer);
+        }
+        let base = self.base.as_ref().map(|base| {
+            let seen = SHARED.with(|cell| {
+                cell.borrow()
+                    .as_ref()
+                    .and_then(|shared| shared.seen.get(&Arc::as_ptr(base)).copied())
+            });
+            match seen {
+                Some(index) => BaseOut::Seen(index),
+                None => BaseOut::New(NewBase(base)),
+            }
+        });
+        SharedOut {
+            base,
+            own: &self.own,
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Repertoire {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        if !sharing() {
+            let plain = PlainIn::deserialize(deserializer)?;
+            return Ok(Repertoire {
+                base: plain.base.map(Arc::new),
+                own: plain.own,
+            });
+        }
+        let shared = SharedIn::deserialize(deserializer)?;
+        let base = match shared.base {
+            None => None,
+            Some(BaseIn::New(repertoire)) => {
+                let base = Arc::new(repertoire);
+                SHARED.with(|cell| {
+                    if let Some(shared) = cell.borrow_mut().as_mut() {
+                        shared.loaded.push(base.clone());
+                    }
+                });
+                Some(base)
+            }
+            Some(BaseIn::Seen(index)) => {
+                let found = SHARED.with(|cell| {
+                    cell.borrow()
+                        .as_ref()
+                        .and_then(|shared| shared.loaded.get(index as usize).cloned())
+                });
+                Some(found.ok_or_else(|| {
+                    serde::de::Error::custom(format!("sdílený základ repertoáru č. {index} chybí"))
+                })?)
+            }
+        };
+        Ok(Repertoire {
+            base,
+            own: shared.own,
+        })
+    }
 }
 
 impl Repertoire {

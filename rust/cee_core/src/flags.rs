@@ -71,6 +71,30 @@ impl Flags {
         }
     }
 
+    /// Čísla nastavených příznaků vzestupně (podoba kontrolního bodu: proces změní desítky
+    /// slov z desítek tisíc morfémů, bajt na morfém by v Talveře dal 336 MB na bod).
+    pub fn indices(&self) -> Vec<u32> {
+        let mut out = Vec::with_capacity(self.count());
+        for (at, &word) in self.words.iter().enumerate() {
+            let mut rest = word;
+            while rest != 0 {
+                let bit = rest.trailing_zeros() as usize;
+                out.push((at * 64 + bit) as u32);
+                rest &= rest - 1;
+            }
+        }
+        out
+    }
+
+    /// Z čísel nastavených příznaků (opak [`Flags::indices`]).
+    pub fn from_indices(indices: &[u32]) -> Flags {
+        let mut flags = Flags::default();
+        for &index in indices {
+            flags.set(index as usize, true);
+        }
+        flags
+    }
+
     /// Bajty v paměti.
     pub fn nbytes(&self) -> usize {
         self.words.capacity() * 8
@@ -106,6 +130,7 @@ mod tests {
         assert_eq!(Flags::from_bytes(&bytes), flags);
         flags.set(130, false);
         assert_eq!(flags, Flags::from_bytes(&[0, 0, 0, 1]));
+        assert_eq!(Flags::from_indices(&flags.indices()), flags);
         assert!(flags.any() && !EMPTY.any());
     }
 }
