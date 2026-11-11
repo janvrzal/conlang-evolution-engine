@@ -229,8 +229,10 @@ fn needed(
 /// tabulky (ty o ni žádají každý morfém). Staví se jednou na dávku zařazení, ne na morfém.
 #[derive(Default)]
 pub struct RowIndex {
-    /// Řádek změny → čísla front s touto tabulkou (vzestupně).
-    by_row: BTreeMap<usize, Vec<usize>>,
+    /// Řádek změny → čísla front s touto tabulkou (vzestupně): fronty řádku `r` jsou
+    /// `at[start[r]..start[r + 1]]` (husté pole podle řádku, bez hledání ve stromu).
+    start: Vec<u32>,
+    at: Vec<usize>,
     /// Fronty, jejichž tabulka v bance ještě není (`NO_TABLE`), vzestupně.
     no_table: Vec<usize>,
 }
@@ -239,14 +241,37 @@ impl RowIndex {
     /// Index front `0..count`, `row(i)` je `Target::row` fronty `i`.
     pub fn new(count: usize, row: impl Fn(usize) -> i64) -> RowIndex {
         let mut index = RowIndex::default();
+        let mut pairs: Vec<(usize, usize)> = Vec::with_capacity(count);
         for at in 0..count {
             match row(at) {
                 SKIP => {}
                 NO_TABLE => index.no_table.push(at),
-                found => index.by_row.entry(found as usize).or_default().push(at),
+                found => pairs.push((found as usize, at)),
             }
         }
+        if pairs.is_empty() {
+            return index;
+        }
+        // Stabilní řazení podle řádku nechá fronty jednoho řádku vzestupně.
+        pairs.sort_by_key(|&(row, _)| row);
+        let rows = pairs[pairs.len() - 1].0 + 1;
+        index.start = vec![0; rows + 1];
+        for &(row, _) in &pairs {
+            index.start[row + 1] += 1;
+        }
+        for row in 0..rows {
+            index.start[row + 1] += index.start[row];
+        }
+        index.at = pairs.into_iter().map(|(_, at)| at).collect();
         index
+    }
+
+    /// Fronty s tabulkou na řádku `row` (vzestupně).
+    fn on_row(&self, row: usize) -> &[usize] {
+        match (self.start.get(row), self.start.get(row + 1)) {
+            (Some(&from), Some(&to)) => &self.at[from as usize..to as usize],
+            _ => &[],
+        }
     }
 
     /// Index nad polem front.
@@ -276,16 +301,14 @@ fn queue_into<'t>(
     let lexeme = units.lexeme_of(morpheme)?;
     // Kandidáti: fronty bez tabulky a fronty, jejichž změna může tvar zasáhnout.
     let mut candidates: Vec<usize> = index.no_table.clone();
-    if !index.by_row.is_empty() {
+    if !index.at.is_empty() {
         let bits = bank.rows_of(form_id)?;
         for (word, &value) in bits.iter().enumerate() {
             let mut rest = value;
             while rest != 0 {
                 let row = word * 64 + rest.trailing_zeros() as usize;
                 rest &= rest - 1;
-                if let Some(list) = index.by_row.get(&row) {
-                    candidates.extend_from_slice(list);
-                }
+                candidates.extend_from_slice(index.on_row(row));
             }
         }
         candidates.sort_unstable();
@@ -390,7 +413,8 @@ pub struct StepOut {
 /// Cyklus `while queue and queue.needed[0] < level` z `restructure` pro proces
 /// na řádku `row`: odebírá z čela fronty, přepisuje tvar a zařazuje přepsaný
 /// morfém do front ostatních procesů (`targets` bez `skip`). Když něco chybí,
-/// skončí **před** dalším odebráním a vrátí, co se do té doby stalo.
+/// skončí **před** dalším odebráním a vrátí, co se do té doby stalo. `index` musí být
+/// [`RowIndex::of`]`(targets)`; volající ho staví jednou pro víc kroků nad stejnými frontami.
 #[allow(clippy::too_many_arguments)]
 pub fn step(
     bank: &mut Bank,
@@ -401,12 +425,12 @@ pub fn step(
     queue_morphemes: &[i32],
     level: f64,
     targets: &[Target],
+    index: &RowIndex,
     skip: usize,
     no_feed: &[usize],
     freq: &dyn Frequency,
 ) -> Result<StepOut, String> {
     let mut out = StepOut::default();
-    let index = RowIndex::of(targets);
     while out.popped < queue_needed.len() && queue_needed[out.popped] < level {
         let morpheme = queue_morphemes[out.popped] as usize;
         let mut needs = Needs::default();
@@ -437,7 +461,7 @@ pub fn step(
             bank,
             params,
             units,
-            &index,
+            index,
             &|at| targets[at],
             &skips,
             morpheme,
@@ -635,6 +659,7 @@ mod tests {
             &[0],
             0.0,
             &targets,
+            &RowIndex::of(&targets),
             0,
             &[],
             &Frequencies::new(),
@@ -685,6 +710,7 @@ mod tests {
             &[0],
             0.0,
             &targets,
+            &RowIndex::of(&targets),
             0,
             &[],
             &Frequencies::new(),
@@ -713,6 +739,7 @@ mod tests {
             &[0],
             0.0,
             &targets,
+            &RowIndex::of(&targets),
             0,
             &[],
             &Frequencies::new(),
@@ -729,6 +756,7 @@ mod tests {
             &[0],
             0.0,
             &targets,
+            &RowIndex::of(&targets),
             0,
             &[],
             &freq,

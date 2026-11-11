@@ -490,6 +490,9 @@ impl CodeState {
                     .position(|&index| self.procs[index].number == number)
             })
             .unwrap_or(0);
+        // Index řádků front závisí jen na množině živých procesů a jejich řádcích, které se během
+        // volání nemění; staví se znovu jen po uzavření procesu (dřív při každém kroku procesu).
+        let mut row_index: Option<(Vec<usize>, phonology::RowIndex)> = None;
         for (k, &index) in live0.iter().enumerate().skip(start) {
             let level = round.levels[k];
             let proc = &self.procs[index];
@@ -510,6 +513,13 @@ impl CodeState {
                             target_of(&self.procs[live0[other]], round.biases[other], true)
                         })
                         .collect();
+                    if row_index
+                        .as_ref()
+                        .is_none_or(|(cached, _)| *cached != alive)
+                    {
+                        row_index = Some((alive.clone(), phonology::RowIndex::of(&targets)));
+                    }
+                    let (_, rows) = row_index.as_ref().expect("index řádků front");
                     let skip = alive
                         .iter()
                         .position(|&other| other == k)
@@ -543,6 +553,7 @@ impl CodeState {
                         &proc.morphemes,
                         level,
                         &targets,
+                        rows,
                         skip,
                         &no_feed,
                         &source,
