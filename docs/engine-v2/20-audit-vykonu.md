@@ -154,3 +154,34 @@ zhruba 2,2× (dřívější měření v dokumentu 19: 10,25 → 4,6 s). Podstatn
   (editační vzdálenosti) je 3–5 % času a už se počítá souběžně.
 - Nebylo měřeno `grid-5x5` do hloubky ani příklad `WorldSpec` (oba jsou menší než valley-50; profil po fázích
   se podobá valley-50) a kontrolní body v běhu (výchozí vypnuté).
+
+## Měření 11. 11. 2026 (po M17 a sloučení `engine-tempo`)
+
+`cargo run --release --example tempo -- docs/scenare/talvera.world.json 1950 export.json` na větvi
+`engine-v2-dynamika`, Talvera −700 až 1950 (104 kroků po 25 letech), Apple Silicon, celý stroj.
+
+| | před (`a797214`) | po (`engine-tempo`) |
+|---|---|---|
+| celý běh | 62,4 s | 51,3 s (−18 %) |
+| export a otisk logu | | bajtově shodné (`721a8970…`) |
+| nejvyšší paměť (RSS) | | 2,76 GB |
+
+Krok se během běhu zpomaluje asi 23×: 0,05 s v roce −700, 0,23 s v roce 0, 0,51 s v 800, 1,19 s v 1800.
+Fáze celého běhu: přenos 44 % (bloky 23 %, zápis 15 %), přestavba fonologie 18 %, události 12 %,
+inovace 10 %, komunity 11 %.
+
+Co roste (rok −700 → 1800):
+
+| | −700 | 0 | 1800 |
+|---|---|---|---|
+| tvary v bance | 2,7 tis. | 41 tis. | 716 tis. |
+| hláskové procesy na kód (živé) | 0,4 | | 253 (190) |
+| položky ve frontách na kód | 15 | | 8 115 |
+| záznamy historie | 4,7 tis. | 135 tis. | 1,95 mil. |
+
+Kódy mají kolem 260 slov, ale v roce 1800 kolem 190 živých hláskových procesů a 8 tisíc položek ve frontách. Živé
+procesy podle podílu změněné varianty (všechny kódy): 0 → 5 792, ≤ 0,01 → 3 539, ≤ 0,05 → 6 813, ≤ 0,2 → 9 751,
+≤ 0,5 → 8 366, < 1 → 21 191, dokončené 2 939. Procesy se tedy hromadí na obou koncích: skoro dokončené, které
+nikdy nedoběhnou, a neujaté, které nikdy nezaniknou. Dokončování a zánik neúspěšných inovací
+(`engine-dokonceni`, Blythe a Croft 2012) je proto hlavní páka na čas i paměť, ale mění model a vyžaduje
+rekalibraci.
