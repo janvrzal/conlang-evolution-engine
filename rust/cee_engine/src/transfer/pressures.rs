@@ -1070,7 +1070,8 @@ impl<'a> Pressures<'a> {
         if length <= 2 && length < world.bank.form(default).len() {
             value = ERODED;
         }
-        let graph = world.semantics.clone();
+        // Bez klonu `Arc`: počítadlo odkazů sdílené všemi vlákny přenosu by se přetahovalo.
+        let graph = world.semantics.as_deref();
         let owners = self.owners_of(column);
         let begin = owners.partition_point(|owner| owner.0 < form);
         for &(owner_form, owner_concept, owner_root) in &owners[begin..] {
@@ -1079,9 +1080,7 @@ impl<'a> Pressures<'a> {
             }
             if owner_root != morpheme.0
                 && owner_concept != concept.0
-                && !graph
-                    .as_ref()
-                    .is_some_and(|g| g.related(ConceptId(owner_concept), concept))
+                && !graph.is_some_and(|g| g.related(ConceptId(owner_concept), concept))
             {
                 value += HOMOPHONE;
                 break;
@@ -1242,10 +1241,10 @@ impl<'a> Pressures<'a> {
     /// Míra, do jaké roli funkce přebírají jiné dominantní konstrukce (`syntax.compensation`).
     fn compensation(&self, column: usize, function: usize) -> f64 {
         let mut found: f64 = 0.0;
-        for &other in self.catalog.compensated_by[function].clone().iter() {
+        for &other in &self.catalog.compensated_by[function] {
             let coverage = self.catalog.functions[other].coverage;
-            if let Some(current) = self.dominant_construction(column, other).cloned() {
-                if self.carries_role(&current) {
+            if let Some(current) = self.dominant_construction(column, other) {
+                if self.carries_role(current) {
                     found = found.max(coverage);
                 }
             }
@@ -1380,8 +1379,7 @@ impl<'a> Pressures<'a> {
                     _ => {
                         // Nejednoznačnost: funkce, kterou jazyk přestal vyjadřovat.
                         let mut score = 0.0;
-                        let compensated = self.catalog.compensates[function].clone();
-                        for target in compensated {
+                        for &target in &self.catalog.compensates[function] {
                             let lost = self.weakness(g, target);
                             if self.carries_role(construction) {
                                 score -= params.order_rigidity * (1.0 - lost);
