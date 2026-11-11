@@ -487,7 +487,9 @@ impl CodeState {
             .find(number)
             .ok_or_else(|| format!("proces č. {number} v kódu není"))?;
         if self.procs[index].live {
-            return Err(format!("proces č. {number} je živý, nejde ho znovu otevřít"));
+            return Err(format!(
+                "proces č. {number} je živý, nejde ho znovu otevřít"
+            ));
         }
         let names = std::mem::take(&mut bank.names);
         let result = {

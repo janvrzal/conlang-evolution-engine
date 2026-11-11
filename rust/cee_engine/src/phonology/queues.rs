@@ -211,9 +211,7 @@ pub fn requeue_all(world: &mut World, group: GroupId, morpheme: MorphemeId) -> R
 pub fn activate(world: &mut World, group: GroupId, process: ProcessId) -> Result<(), String> {
     let known = {
         let state = &world.groups.main_code(group).phonology.sound.queues.state;
-        state
-            .find(process.index())
-            .map(|at| state.procs[at].live)
+        state.find(process.index()).map(|at| state.procs[at].live)
     };
     let reopen = match known {
         Some(true) => return Ok(()),
@@ -363,12 +361,15 @@ fn inputs_of(world: &mut World, group: GroupId) -> Result<Inputs, String> {
     for &number in &numbers {
         let (variable, changed) = info_of(world, ProcessId::new(number))?;
         let share = changed_share(world, group, variable, changed);
+        let complete = share >= 1.0 - margin;
+        // Dokončená změna dojde do všech slov ve frontě (jako při podílu 100 %): zbytek, který
+        // drží kontakt se sousedy, nenechává relikty v půlce slovníku.
         levels.push(if share > 0.0 {
             logit(share)
         } else {
             f64::NEG_INFINITY
         });
-        full.push(share >= 1.0 - margin);
+        full.push(complete);
         faded.push(share < margin);
     }
     let no_feed = numbers

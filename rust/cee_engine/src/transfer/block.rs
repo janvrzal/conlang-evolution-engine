@@ -219,6 +219,11 @@ pub fn transmit_rows(
         forget_share: world.params.activation_share,
     };
     let forgotten = forgotten_mask(world, inputs, block, start, count);
+    // Dokončování a zapomínání jen u hláskových změn: synonyma, tvary a konstrukce mohou žít
+    // vedle sebe dlouho (doublety, rejstříky), proto si ponechávají dosavadní dynamiku.
+    let completing: Vec<bool> = (start..start + count)
+        .map(|row| world.variables.kind[block.variables[row].index()] == VariableKind::Process)
+        .collect();
     let state = State {
         current: &current,
         previous: &previous,
@@ -227,6 +232,7 @@ pub fn transmit_rows(
         fitness: Some(&fitness),
         slot_keys: &slot_keys,
         forgotten: forgotten.as_deref(),
+        completing: Some(&completing),
     };
     let mut updated = vec![0.0; count * stride];
     let mut baseline = vec![0.0; count * stride];
@@ -312,11 +318,29 @@ fn forgotten_mask(
             let Some(slot) = block.slots[row].iter().position(|v| v.0 == variant) else {
                 continue;
             };
+            if taught(world, group, block.variables[row], VariantId(variant)) {
+                continue;
+            }
             mask.get_or_insert_with(|| vec![false; count * stride])
                 [local * stride + column * slots + slot] = true;
         }
     }
     mask
+}
+
+/// Učí škola skupiny tuto variantu jako spisovnou (kodifikovaná varianta standardu)? Takovou
+/// se děti naučí ve škole, i když ji skupina doma zapomněla.
+fn taught(world: &World, group: GroupId, variable: VariableId, variant: VariantId) -> bool {
+    let (schooling, standard) = (
+        world.groups.schooling[group.index()],
+        world.groups.standard[group.index()],
+    );
+    schooling > 0.0
+        && !standard.is_none()
+        && world.groups.contains(standard)
+        && world
+            .dominant(standard, variable)
+            .is_some_and(|(codified, _)| codified == variant)
 }
 
 /// Události řádku z podílů před krokem a po něm (buňky `skupina × slot`).
@@ -404,10 +428,32 @@ fn events(
             }
         }
         if let Some(slot) = tracked_slot(world, block, row) {
+            let process = match world.variables.kind[variable.index()] {
+                VariableKind::Process => Some(world.variables.process[variable.index()].index()),
+                _ => None,
+            };
             for g in 0..groups {
-                if after[g * slots + slot] >= activation_share {
-                    outcome.activations.push((inputs.axis[g], variable));
+                let share = after[g * slots + slot];
+                if share < activation_share {
+                    continue;
                 }
+                // Aktivace, kterou `phonology::activate` hned zahodí (proces živý, nebo uzavřený
+                // a změna dokončená), se nezapisuje: zápis běží po řadě, tady souběžně.
+                if let Some(number) = process {
+                    let state = &world
+                        .groups
+                        .main_code(inputs.axis[g])
+                        .phonology
+                        .sound
+                        .queues
+                        .state;
+                    if let Some(at) = state.find(number) {
+                        if state.procs[at].live || share >= 1.0 - activation_share {
+                            continue;
+                        }
+                    }
+                }
+                outcome.activations.push((inputs.axis[g], variable));
             }
         }
     }

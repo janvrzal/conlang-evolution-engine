@@ -439,6 +439,8 @@ pub struct State<'a> {
     pub slot_keys: &'a [u64],
     /// Varianty, které skupina zapomněla (`proměnné × skupiny × sloty`); `None` = žádné.
     pub forgotten: Option<&'a [bool]>,
+    /// Proměnné, u kterých se změna dokončuje a zapomíná (délka = počet proměnných); `None` = všechny.
+    pub completing: Option<&'a [bool]>,
 }
 
 /// Změna paměti zapomenutých variant v buňce a slotu (výstup `settle`).
@@ -501,7 +503,10 @@ pub fn settle_range(
                     heard: &state.heard[from..from + slots],
                     fitness: state.fitness.map(|fitness| &fitness[from..from + slots]),
                     slot_keys: &state.slot_keys[variable * slots..(variable + 1) * slots],
-                    forgotten: state.forgotten.map(|forgotten| &forgotten[from..from + slots]),
+                    forgotten: state
+                        .forgotten
+                        .map(|forgotten| &forgotten[from..from + slots]),
+                    completing: state.completing.is_none_or(|rows| rows[variable]),
                     present: state.present[cell],
                     group,
                 },
@@ -522,6 +527,7 @@ struct CellIn<'a> {
     fitness: Option<&'a [f64]>,
     slot_keys: &'a [u64],
     forgotten: Option<&'a [bool]>,
+    completing: bool,
     present: bool,
     group: usize,
 }
@@ -590,10 +596,11 @@ fn settle_cell(
         let trend = cohorts.kappa * (cell.current[slot] - cell.previous[slot]);
         grown[at] = (share + trend + drift).max(0.0);
     }
-    // Dokončení: při většinové variantě skupina zapomene variantu, která většinu ztratila,
-    // a inovaci, která spadla zpátky pod `forget_share`;
-    // zapomenutou se děti neučí a dospělí ji nepřebírají, dokud ji skupina neslyší většinově.
-    let dominant = (0..n).any(|at| current[at] >= cohorts.completion_share);
+    // Dokončení (konec křivky S): když jedna varianta drží aspoň `1 − forget_share`, skupina
+    // zapomene variantu, která právě klesla pod `forget_share` (stará varianta dožívá se
+    // starší generací, inovace, která se neuchytila, odumře). Zapomenutou se děti neučí
+    // a dospělí ji jen opouštějí, dokud ji skupina neslyší aspoň s `completion_share`.
+    let dominant = (0..n).any(|at| current[at] >= 1.0 - cohorts.forget_share);
     let forgotten_at = |slot: usize| cell.forgotten.is_some_and(|forgotten| forgotten[slot]);
     for (at, &slot) in support.iter().enumerate() {
         let forget = if forgotten_at(slot) {
@@ -603,11 +610,10 @@ fn settle_cell(
             } else {
                 true
             }
-        } else if dominant
-            && current[at] < cohorts.completion_share
-            && (cell.previous[slot] >= cohorts.completion_share
-                || (cell.previous[slot] >= cohorts.forget_share
-                    && current[at] < cohorts.forget_share))
+        } else if cell.completing
+            && dominant
+            && current[at] < cohorts.forget_share
+            && cell.previous[slot] >= cohorts.forget_share
         {
             marks[slot] = FORGET;
             true
@@ -775,6 +781,7 @@ mod tests {
             fitness: Some(&fitness),
             slot_keys: &slot_keys,
             forgotten: None,
+            completing: None,
         };
         let cohorts = Cohorts {
             drift_scale: &drift,
