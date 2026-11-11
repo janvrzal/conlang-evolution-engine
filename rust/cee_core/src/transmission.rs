@@ -144,7 +144,8 @@ pub struct Flow<'a> {
 }
 
 /// Vstup mimo vazby sítě (interference, čtení, škola, liturgie): učící se skupina
-/// `learners[i]` přebírá podíl `factor[v] × weights[i]` (nejvýš celý) od `sources[i]`.
+/// `learners[i]` slyší od `sources[i]` podíl `factor[v] × weights[i]` (nejvýš celý), který
+/// ubírá jen domácímu vstupu, ne ostatním kanálům.
 pub struct Channel<'a> {
     pub factor: &'a [f64],
     pub learners: &'a [usize],
@@ -175,6 +176,8 @@ pub struct HearScratch {
     mixed_weight: Vec<f64>,
     weight: Vec<f64>,
     present_weight: Vec<f64>,
+    foreign: Vec<f64>,
+    shares: Vec<f64>,
 }
 
 /// Co skupiny slyší (`phases_transmission.hear`) pro proměnné `[first, last)`; `heard`
@@ -201,6 +204,8 @@ pub fn hear_range(
         mixed_weight,
         weight,
         present_weight,
+        foreign,
+        shares,
     } = scratch;
     present_weight.clear();
     present_weight.extend(present.iter().map(|&flag| f64::from(flag)));
@@ -221,28 +226,7 @@ pub fn hear_range(
         mix_component(heard, current, count, groups, slots, component);
         mix_component(weight, present_weight, count, groups, 1, component);
     }
-    for flow in flows {
-        // Vazby mezi jazyky: jen tolik, kolik filtr přenositelnosti propustí.
-        mixed.clear();
-        mixed.resize(heard.len(), 0.0);
-        mixed_weight.clear();
-        mixed_weight.resize(weight.len(), 0.0);
-        for component in flow.components {
-            mix_component(mixed, current, count, groups, slots, component);
-            mix_component(mixed_weight, present_weight, count, groups, 1, component);
-        }
-        for variable in 0..count {
-            let factor = flow.factor[first + variable];
-            let cells = variable * groups * slots..(variable + 1) * groups * slots;
-            for (target, add) in heard[cells.clone()].iter_mut().zip(&mixed[cells]) {
-                *target += factor * add;
-            }
-            let cells = variable * groups..(variable + 1) * groups;
-            for (target, add) in weight[cells.clone()].iter_mut().zip(&mixed_weight[cells]) {
-                *target += factor * add;
-            }
-        }
-    }
+    // Domácí vstup: vlastní skupina a sousedé téhož jazyka, normalizovaný jejich vahou.
     for (cell, &total) in weight.iter().enumerate() {
         let chunk = &mut heard[cell * slots..(cell + 1) * slots];
         if total > 0.0 {
@@ -253,8 +237,46 @@ pub fn hear_range(
             chunk.fill(0.0);
         }
     }
+    if flows.is_empty() && channels.is_empty() {
+        return;
+    }
+    // Cizí vstupy (vazby mezi jazyky po kanálech, interference, čtení, škola, liturgie) berou
+    // svůj podíl jen z domácího vstupu, ne jeden druhému: podíl kanálu nezávisí na ostatních
+    // kanálech ani na pořadí. Vazba kanálu váhy `w` má podíl `w / (domácí váha + w)` (jako by
+    // byla jediná); vedlejší kanál podíl `faktor × váha` (nejvýš celý). Přesáhne-li součet
+    // podílů celek, zmenší se všechny úměrně (vstup mluvčího je konečný).
+    foreign.clear();
+    foreign.resize(heard.len(), 0.0);
+    shares.clear();
+    shares.resize(weight.len(), 0.0);
+    for flow in flows {
+        mixed.clear();
+        mixed.resize(heard.len(), 0.0);
+        mixed_weight.clear();
+        mixed_weight.resize(weight.len(), 0.0);
+        for component in flow.components {
+            mix_component(mixed, current, count, groups, slots, component);
+            mix_component(mixed_weight, present_weight, count, groups, 1, component);
+        }
+        for variable in 0..count {
+            let factor = flow.factor[first + variable];
+            for group in 0..groups {
+                let cell = variable * groups + group;
+                let link = factor * mixed_weight[cell];
+                let total = weight[cell] + link;
+                if link <= 0.0 || total <= 0.0 {
+                    continue;
+                }
+                shares[cell] += link / total;
+                let scale = factor / total;
+                let at = cell * slots;
+                for slot in 0..slots {
+                    foreign[at + slot] += scale * mixed[at + slot];
+                }
+            }
+        }
+    }
     for channel in channels {
-        // Váha domény nad 1 smí podíl zvýšit nejvýš na celý vstup.
         for variable in 0..count {
             let factor = channel.factor[first + variable];
             for ((&learner, &source), &weight) in channel
@@ -263,18 +285,34 @@ pub fn hear_range(
                 .zip(channel.sources)
                 .zip(channel.weights)
             {
-                let share = if present[variable * groups + source] {
-                    (factor * weight).min(1.0)
-                } else {
-                    0.0
-                };
+                if !present[variable * groups + source] {
+                    continue;
+                }
+                let share = (factor * weight).min(1.0);
+                if share <= 0.0 {
+                    continue;
+                }
+                shares[variable * groups + learner] += share;
                 let at = (variable * groups + learner) * slots;
                 let from = (variable * groups + source) * slots;
                 for slot in 0..slots {
-                    heard[at + slot] =
-                        (1.0 - share) * heard[at + slot] + share * current[from + slot];
+                    foreign[at + slot] += share * current[from + slot];
                 }
             }
+        }
+    }
+    for (cell, &total) in shares.iter().enumerate() {
+        if total <= 0.0 {
+            continue;
+        }
+        let (home, scale) = if total > 1.0 {
+            (0.0, 1.0 / total)
+        } else {
+            (1.0 - total, 1.0)
+        };
+        let at = cell * slots;
+        for slot in 0..slots {
+            heard[at + slot] = home * heard[at + slot] + scale * foreign[at + slot];
         }
     }
 }
