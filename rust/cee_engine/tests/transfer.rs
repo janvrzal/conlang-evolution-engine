@@ -199,6 +199,25 @@ fn vysledek_je_deterministicky_a_nezavisi_na_vlaknech() {
     assert_eq!(one, digest_with_threads(4));
 }
 
+/// Každá skupina slyší všechny varianty řádku (tlak se počítá jen tam, kde skupina slyší
+/// aspoň dvě varianty; s jedinou na výběr nemá vliv).
+fn heard_everything(
+    block: &cee_engine::model::pools::PoolBlock,
+    row: usize,
+    groups: usize,
+) -> Vec<f64> {
+    let slots = block.capacity;
+    let mut heard = vec![0.0; groups * slots];
+    for g in 0..groups {
+        for (slot, variant) in block.slots[row].iter().enumerate() {
+            if !variant.is_none() {
+                heard[g * slots + slot] = 0.5;
+            }
+        }
+    }
+    heard
+}
+
 #[test]
 fn norm_zvyhodni_kodifikovanou_variantu_uumerne_skolni_docazce() {
     use cee_engine::transfer::network::{prepare, TransmissionParams};
@@ -220,6 +239,7 @@ fn norm_zvyhodni_kodifikovanou_variantu_uumerne_skolni_docazce() {
         adult_rate: config.adult_rate,
         loss_threshold: config.loss_threshold,
         establish_threshold: config.establish_threshold,
+        completion_share: config.completion_share,
     };
     let compute = |world: &World, block: &cee_engine::model::pools::PoolBlock, row: usize| {
         let inputs = prepare(world, &params, 1);
@@ -229,7 +249,7 @@ fn norm_zvyhodni_kodifikovanou_variantu_uumerne_skolni_docazce() {
         let mut current = vec![0.0; cells];
         let mut previous = vec![0.0; cells];
         block.cells.row_dense(row, &mut current, &mut previous);
-        let heard = vec![0.0; cells];
+        let heard = heard_everything(block, row, axis.len());
         let mut out = vec![0.0; cells];
         pressures.fitness(block, row, 1, &current, &heard, &mut out);
         out
@@ -295,6 +315,7 @@ fn tabu_opotrebuje_inovovane_slovo_po_deseti_generacich() {
         adult_rate: config.adult_rate,
         loss_threshold: config.loss_threshold,
         establish_threshold: config.establish_threshold,
+        completion_share: config.completion_share,
     };
     let compute = |world: &World, tick: u32, block: &cee_engine::model::pools::PoolBlock, row| {
         let inputs = prepare(world, &params, tick);
@@ -305,7 +326,8 @@ fn tabu_opotrebuje_inovovane_slovo_po_deseti_generacich() {
         let mut previous = vec![0.0; cells];
         block.cells.row_dense(row, &mut current, &mut previous);
         let mut out = vec![0.0; cells];
-        pressures.fitness(block, row, 1, &current, &vec![0.0; cells], &mut out);
+        let heard = heard_everything(block, row, axis.len());
+        pressures.fitness(block, row, 1, &current, &heard, &mut out);
         out
     };
     let mut checked = false;
@@ -397,6 +419,7 @@ fn ekonomie_tresta_volny_opis_a_nic_jineho_nedela() {
         adult_rate: config.adult_rate,
         loss_threshold: config.loss_threshold,
         establish_threshold: config.establish_threshold,
+        completion_share: config.completion_share,
     };
     let inputs = prepare(&world, &params, 1);
     let pressure_plan = plan(&world.params).unwrap();

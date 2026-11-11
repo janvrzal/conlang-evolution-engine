@@ -82,6 +82,7 @@ pub fn run(
         adult_rate: ctx.config.adult_rate,
         loss_threshold: ctx.config.loss_threshold,
         establish_threshold: ctx.config.establish_threshold,
+        completion_share: ctx.config.completion_share,
     };
     // Dvouprůchodový návrh: nejdřív hodnocení procesů (mění banku tvarů), potom přenos nad `&World`.
     let t = crate::timing::scope("transmission/prepare");
@@ -173,6 +174,20 @@ pub fn run(
                 variable,
                 variant: Some(variant),
             });
+        }
+        for &(variable, group, variant, forget) in &outcome.forgotten {
+            let memory = &mut ctx.world.transfer.forgotten;
+            if forget {
+                memory
+                    .entry(variable.0)
+                    .or_default()
+                    .insert((group.0, variant.0));
+            } else if let Some(entries) = memory.get_mut(&variable.0) {
+                entries.remove(&(group.0, variant.0));
+                if entries.is_empty() {
+                    memory.remove(&variable.0);
+                }
+            }
         }
         for &(variant, group, share) in &outcome.trace {
             ctx.history

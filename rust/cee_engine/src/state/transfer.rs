@@ -90,6 +90,10 @@ pub struct TransferState {
     /// Uložená hodnocení zvukových procesů podle skupin (platí nejvýš osm ticků, proto se ukládají).
     #[serde(default)]
     pub assessments: crate::transfer::assess::Assessments,
+    /// Paměť zapomenutých variant: proměnná → (skupina, varianta), které skupina zapomněla
+    /// (`cee_core::transmission::Cohorts::completion_share`). Čísla, aby šla i do JSON.
+    #[serde(default)]
+    pub forgotten: std::collections::BTreeMap<u32, std::collections::BTreeSet<(u32, u32)>>,
     /// Odvozený stav; neukládá se.
     #[serde(skip)]
     pub derived: Derived,

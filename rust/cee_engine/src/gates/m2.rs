@@ -244,7 +244,13 @@ pub fn check_zvukove_zmeny_se_siri(run: &PhonologyRun) -> Report {
         2.0,
     );
     let (mut relics, mut rewritten) = (0.0, 0.0);
-    for event in history.of_kind("process_closed") {
+    // Relikty jsou výjimky z proběhlé změny; odumřelá změna (`faded`) slova nezasáhla.
+    for event in history.of_kind("process_closed").filter(|event| {
+        !event
+            .get("faded")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }) {
         relics += event.get("relics").and_then(|v| v.as_f64()).unwrap_or(0.0);
         rewritten += event
             .get("restructured")

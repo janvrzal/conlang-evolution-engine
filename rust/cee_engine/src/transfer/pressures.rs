@@ -581,13 +581,19 @@ impl<'a> Pressures<'a> {
             let now = &current[local * stride..(local + 1) * stride];
             let heard = &heard[local * stride..(local + 1) * stride];
             let variants = &block.slots[row];
-            let assessed = self.assess_row(kind, variable, variants, now, heard);
             // Skupiny, které proměnnou nemají a neslyší (v žádném slotu), settle nečte: tlak
             // se počítá jen pro živé skupiny a ostatní buňky zůstanou nulové.
             // Stejně se přeskočí sloty skupiny, které nemají a neslyší (buňky `(skupina, slot)`).
+            // Výběr váží jen slyšené sloty (`slyšené × exp(výběr × tlak)`, pak dělení součtem):
+            // slyší-li skupina nejvýš jednu variantu, výsledek na tlaku nezávisí, a tlak se proto
+            // nepočítá (ustálené buňky jsou většina).
             let mut live: Vec<usize> = Vec::new();
             let mut live_cells: Vec<(usize, usize)> = Vec::new();
             for g in 0..groups {
+                let cell = &heard[g * slots..(g + 1) * slots];
+                if cell.iter().filter(|&&value| value != 0.0).count() < 2 {
+                    continue;
+                }
                 let before = live_cells.len();
                 for slot in 0..slots {
                     let at = g * slots + slot;
@@ -602,6 +608,7 @@ impl<'a> Pressures<'a> {
             if live.is_empty() {
                 continue;
             }
+            let assessed = self.assess_row(kind, variable, variants, now, heard);
             let live = Live {
                 groups: &live,
                 cells: &live_cells,

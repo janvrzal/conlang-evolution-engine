@@ -23,6 +23,8 @@ pub struct TransmissionParams {
     pub adult_rate: f64,
     pub loss_threshold: f64,
     pub establish_threshold: f64,
+    /// Viz `cee_core::transmission::Cohorts::completion_share`.
+    pub completion_share: f64,
 }
 
 /// Kanál vazeb mezi jazyky (filtr přenositelnosti se liší podle domén pojmů).
@@ -90,8 +92,9 @@ pub type Mixing = Vec<Vec<(usize, f64)>>;
 
 /// Od koho se která skupina učí (`mixing_matrix`): vlastní skupina s vahou `1 − otevřenost`,
 /// zbytek mezi sousedy úměrně síle vazby a prestiži zdroje (`prestiž ** alpha`). Sousedé
-/// vlastního jazyka si otevřenost dělí mezi sebou; cizí zdroje mají podíl ze všech vazeb
-/// navíc (řádek pak může dát víc než 1, `hear` normalizuje podle vah).
+/// vlastního jazyka si otevřenost dělí mezi sebou; cizí zdroje mají vazby navíc (řádek pak
+/// může dát víc než 1). `hear` z vazeb vlastního jazyka skládá domácí vstup a každý cizí
+/// kanál bere podíl jen z něj (`cee_core::transmission::hear_range`).
 pub fn mixing(world: &World, axis: &[GroupId], alpha: f64) -> Mixing {
     let n = axis.len();
     let mut place = vec![usize::MAX; world.groups.len()];

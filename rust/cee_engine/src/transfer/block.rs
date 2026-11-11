@@ -10,7 +10,7 @@
 
 use cee_core::pools::Row;
 use cee_core::transmission::{
-    hear, settle, Channel, Cohorts, Flow, HearScratch, Network, Shape, State,
+    hear, settle, Channel, Cohorts, Flow, HearScratch, Network, Shape, State, FORGET, REMEMBER,
 };
 
 use crate::ids::{GroupId, MorphemeId, VariableId, VariantId};
@@ -49,6 +49,8 @@ pub struct BlockOutcome {
     pub activations: Vec<(GroupId, VariableId)>,
     /// Dráhy inovací: (varianta, skupina, podíl).
     pub trace: Vec<(VariantId, GroupId, f64)>,
+    /// Změny paměti zapomenutých variant: (proměnná, skupina, varianta, zapomenuta?).
+    pub forgotten: Vec<(VariableId, GroupId, VariantId, bool)>,
 }
 
 /// Počet hladin `levels`, které nepřevyšují `value` (`numpy.searchsorted(levels, value, "right")`).
@@ -120,6 +122,7 @@ impl BlockOutcome {
         self.crossings.append(&mut other.crossings);
         self.activations.append(&mut other.activations);
         self.trace.append(&mut other.trace);
+        self.forgotten.append(&mut other.forgotten);
     }
 }
 
@@ -212,7 +215,15 @@ pub fn transmit_rows(
         kappa: params.kappa,
         adult_rate: params.adult_rate,
         establish_threshold: params.establish_threshold,
+        completion_share: params.completion_share,
+        forget_share: world.params.activation_share,
     };
+    let forgotten = forgotten_mask(world, inputs, block, start, count);
+    // Dokončování a zapomínání jen u hláskových změn: synonyma, tvary a konstrukce mohou žít
+    // vedle sebe dlouho (doublety, rejstříky), proto si ponechávají dosavadní dynamiku.
+    let completing: Vec<bool> = (start..start + count)
+        .map(|row| world.variables.kind[block.variables[row].index()] == VariableKind::Process)
+        .collect();
     let state = State {
         current: &current,
         previous: &previous,
@@ -220,10 +231,33 @@ pub fn transmit_rows(
         heard: &heard,
         fitness: Some(&fitness),
         slot_keys: &slot_keys,
+        forgotten: forgotten.as_deref(),
+        completing: Some(&completing),
     };
     let mut updated = vec![0.0; count * stride];
     let mut baseline = vec![0.0; count * stride];
-    settle(shape, &state, &cohorts, 1, &mut updated, &mut baseline);
+    let mut marks = vec![0_i8; count * stride];
+    settle(
+        shape,
+        &state,
+        &cohorts,
+        1,
+        &mut updated,
+        &mut baseline,
+        &mut marks,
+    );
+    for (cell, &mark) in marks.iter().enumerate().filter(|(_, &mark)| mark != 0) {
+        let (local, rest) = (cell / stride, cell % stride);
+        let (column, slot) = (rest / slots, rest % slots);
+        let row = start + local;
+        outcome.forgotten.push((
+            block.variables[row],
+            inputs.axis[column],
+            block.slots[row][slot],
+            mark == FORGET,
+        ));
+        debug_assert!(mark == FORGET || mark == REMEMBER);
+    }
     for local in 0..count {
         let row = start + local;
         let before = &current[local * stride..(local + 1) * stride];
@@ -249,6 +283,64 @@ pub fn transmit_rows(
         ));
     }
     outcome
+}
+
+/// Zapomenuté varianty řádků `[start, start + count)` jako pole `řádky × skupiny × sloty`;
+/// `None`, když žádný z řádků nic zapomenutého nemá.
+fn forgotten_mask(
+    world: &World,
+    inputs: &StepInputs,
+    block: &PoolBlock,
+    start: usize,
+    count: usize,
+) -> Option<Vec<bool>> {
+    let memory = &world.transfer.forgotten;
+    if memory.is_empty() {
+        return None;
+    }
+    let (groups, slots) = (inputs.axis.len(), block.capacity);
+    let stride = groups * slots;
+    let mut mask: Option<Vec<bool>> = None;
+    for local in 0..count {
+        let row = start + local;
+        let Some(entries) = memory.get(&block.variables[row].0) else {
+            continue;
+        };
+        for &(group, variant) in entries {
+            let group = GroupId(group);
+            let column = match world.live.column(group) {
+                Some(column) if inputs.axis.get(column) == Some(&group) => column,
+                _ => match inputs.axis.iter().position(|&g| g == group) {
+                    Some(column) => column,
+                    None => continue,
+                },
+            };
+            let Some(slot) = block.slots[row].iter().position(|v| v.0 == variant) else {
+                continue;
+            };
+            if taught(world, group, block.variables[row], VariantId(variant)) {
+                continue;
+            }
+            mask.get_or_insert_with(|| vec![false; count * stride])
+                [local * stride + column * slots + slot] = true;
+        }
+    }
+    mask
+}
+
+/// Učí škola skupiny tuto variantu jako spisovnou (kodifikovaná varianta standardu)? Takovou
+/// se děti naučí ve škole, i když ji skupina doma zapomněla.
+fn taught(world: &World, group: GroupId, variable: VariableId, variant: VariantId) -> bool {
+    let (schooling, standard) = (
+        world.groups.schooling[group.index()],
+        world.groups.standard[group.index()],
+    );
+    schooling > 0.0
+        && !standard.is_none()
+        && world.groups.contains(standard)
+        && world
+            .dominant(standard, variable)
+            .is_some_and(|(codified, _)| codified == variant)
 }
 
 /// Události řádku z podílů před krokem a po něm (buňky `skupina × slot`).
@@ -336,10 +428,32 @@ fn events(
             }
         }
         if let Some(slot) = tracked_slot(world, block, row) {
+            let process = match world.variables.kind[variable.index()] {
+                VariableKind::Process => Some(world.variables.process[variable.index()].index()),
+                _ => None,
+            };
             for g in 0..groups {
-                if after[g * slots + slot] >= activation_share {
-                    outcome.activations.push((inputs.axis[g], variable));
+                let share = after[g * slots + slot];
+                if share < activation_share {
+                    continue;
                 }
+                // Aktivace, kterou `phonology::activate` hned zahodí (proces živý, nebo uzavřený
+                // a změna dokončená), se nezapisuje: zápis běží po řadě, tady souběžně.
+                if let Some(number) = process {
+                    let state = &world
+                        .groups
+                        .main_code(inputs.axis[g])
+                        .phonology
+                        .sound
+                        .queues
+                        .state;
+                    if let Some(at) = state.find(number) {
+                        if state.procs[at].live || share >= 1.0 - activation_share {
+                            continue;
+                        }
+                    }
+                }
+                outcome.activations.push((inputs.axis[g], variable));
             }
         }
     }

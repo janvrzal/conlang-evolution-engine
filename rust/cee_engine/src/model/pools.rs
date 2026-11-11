@@ -34,6 +34,16 @@ pub struct Row {
     pub keys: Vec<u64>,
 }
 
+/// Řádek připravený k načtení do fondů: varianty seřazené podle jmen, podíly a základny
+/// `skupiny × varianty`, přítomnost po skupinách.
+struct Prepared {
+    variable: VariableId,
+    variants: Vec<VariantId>,
+    freqs: Vec<f64>,
+    previous: Vec<f64>,
+    present: Vec<bool>,
+}
+
 /// Proměnné se stejnou kapacitou slotů.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PoolBlock {
@@ -426,6 +436,18 @@ impl LivePools {
         if self.block_of.contains_key(&variable) {
             return Err(format!("Proměnná {} už je živá.", names.name(variable.0)));
         }
+        let prepared = self.prepare(variable, distributions, names);
+        self.load_prepared(prepared, names);
+        Ok(())
+    }
+
+    /// Řádek k načtení z rozdělení skupin v pořadí osy (varianty seřazené podle jmen).
+    fn prepare(
+        &self,
+        variable: VariableId,
+        distributions: &[Option<Distribution>],
+        names: &Numbering,
+    ) -> Prepared {
         let mut variants: Vec<VariantId> = distributions
             .iter()
             .flatten()
@@ -451,6 +473,25 @@ impl LivePools {
                 previous[column * width + slot] = before;
             }
         }
+        Prepared {
+            variable,
+            variants,
+            freqs,
+            previous,
+            present,
+        }
+    }
+
+    /// Načte připravený řádek (klíče variant, kapacita s rezervou, umístění do bloku).
+    fn load_prepared(&mut self, prepared: Prepared, names: &Numbering) {
+        let Prepared {
+            variable,
+            variants,
+            freqs,
+            previous,
+            present,
+        } = prepared;
+        let width = variants.len();
         let keys: Vec<u64> = variants.iter().map(|&v| self.key(v, names)).collect();
         // Rezerva jednoho slotu: proměnná se načítá kvůli nové inovaci.
         let capacity = capacity_for(width + 1);
@@ -465,7 +506,125 @@ impl LivePools {
                 keys,
             },
         );
-        Ok(())
+    }
+
+    /// Přestaví živé fondy na novou osu `axis` (`World::sync_live_groups`). Skupina s živým
+    /// sloupcem `kept[c]` převezme rozdělení z fondu, ostatní (a skupina, která proměnnou ve
+    /// fondu nemá) z `stored`. Výsledek je stejný jako `get` (nebo `stored`) pro každou skupinu,
+    /// `set_axis` a `load` každé proměnné v pořadí čísel, ale řádek se čte z fondu jednou hustě,
+    /// ne po skupinách (přestavba byla při častých změnách osy osminou kroku).
+    pub fn reaxis(
+        &mut self,
+        axis: Vec<GroupId>,
+        kept: &[Option<usize>],
+        stored: impl Fn(usize, VariableId) -> Option<Distribution>,
+        names: &Numbering,
+    ) {
+        let variables = self.variable_ids();
+        let prepared: Vec<Prepared> = variables
+            .iter()
+            .map(|&variable| self.reaxis_row(variable, kept, &stored, names))
+            .collect();
+        self.set_axis(axis);
+        for row in prepared {
+            self.load_prepared(row, names);
+        }
+    }
+
+    fn reaxis_row(
+        &self,
+        variable: VariableId,
+        kept: &[Option<usize>],
+        stored: &impl Fn(usize, VariableId) -> Option<Distribution>,
+        names: &Numbering,
+    ) -> Prepared {
+        let block = &self.blocks[&self.block_of[&variable]];
+        let row = block.row_of(variable).expect("řádek živé proměnné");
+        let capacity = block.capacity;
+        let size = block.groups * capacity;
+        let (mut freqs_old, mut previous_old) = (vec![0.0; size], vec![0.0; size]);
+        block
+            .cells
+            .row_dense(row, &mut freqs_old, &mut previous_old);
+        let slots = &block.slots[row];
+        let present_old = &block.present[row];
+        // Rozdělení sloupců, které se čtou z repertoáru (jako `stored`).
+        let from_store: Vec<Option<Distribution>> = kept
+            .iter()
+            .enumerate()
+            .map(|(column, &old)| match old {
+                Some(old) if present_old[old] => None,
+                _ => stored(column, variable),
+            })
+            .collect();
+        // Varianty jako v `prepare`: sjednocení přes skupiny, seřazené podle jmen.
+        let mut variants: Vec<VariantId> = Vec::new();
+        for (slot, &variant) in slots.iter().enumerate() {
+            if variant.is_none() {
+                continue;
+            }
+            let used = kept.iter().any(|&old| {
+                old.is_some_and(|old| present_old[old] && freqs_old[old * capacity + slot] > 0.0)
+            });
+            if used {
+                variants.push(variant);
+            }
+        }
+        for item in from_store.iter().flatten() {
+            variants.extend(item.variants.iter().copied());
+        }
+        variants.sort_by(|a, b| names.name(a.0).cmp(names.name(b.0)));
+        variants.dedup();
+        let groups = kept.len();
+        let width = variants.len();
+        let position = |variant: VariantId| {
+            variants
+                .iter()
+                .position(|&v| v == variant)
+                .expect("varianta")
+        };
+        let at_slot: Vec<Option<usize>> = slots
+            .iter()
+            .map(|&variant| {
+                (!variant.is_none())
+                    .then(|| variants.iter().position(|&v| v == variant))
+                    .flatten()
+            })
+            .collect();
+        let (mut freqs, mut previous) = (vec![0.0; groups * width], vec![0.0; groups * width]);
+        let mut present = vec![false; groups];
+        for column in 0..groups {
+            if let Some(item) = &from_store[column] {
+                present[column] = true;
+                for ((&variant, &freq), &before) in
+                    item.variants.iter().zip(&item.freqs).zip(&item.previous)
+                {
+                    let slot = position(variant);
+                    freqs[column * width + slot] = freq;
+                    previous[column * width + slot] = before;
+                }
+                continue;
+            }
+            let Some(old) = kept[column].filter(|&old| present_old[old]) else {
+                continue;
+            };
+            present[column] = true;
+            for (slot, target) in at_slot.iter().enumerate() {
+                let Some(target) = *target else { continue };
+                let freq = freqs_old[old * capacity + slot];
+                if freq > 0.0 {
+                    freqs[column * width + target] = freq;
+                    previous[column * width + target] = previous_old[old * capacity + slot];
+                }
+            }
+        }
+        Prepared {
+            variable,
+            variants,
+            freqs,
+            previous,
+            present,
+        }
     }
 
     fn place(&mut self, capacity: usize, row: Row) {

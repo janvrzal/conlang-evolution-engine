@@ -37,6 +37,9 @@ pub struct SimulationConfig {
     /// Spodní mez frekvence; pod ní varianta zaniká.
     pub loss_threshold: f64,
     pub establish_threshold: f64,
+    /// Dokončení změny: má-li skupina variantu aspoň s tímto podílem, nová generace se neučí
+    /// ustupující menšinové varianty (dožijí se starší generací). Nad 1 vypnuto.
+    pub completion_share: f64,
     /// Po kolika krocích se počítají dialekty a jazyky.
     pub observe_every: u32,
     pub dialect_threshold: f64,
@@ -62,6 +65,7 @@ impl Default for SimulationConfig {
             adult_rate: 0.05,
             loss_threshold: 0.001,
             establish_threshold: 0.999,
+            completion_share: 0.5,
             observe_every: 4,
             dialect_threshold: 0.05,
             language_threshold: 0.25,

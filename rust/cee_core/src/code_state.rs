@@ -304,10 +304,12 @@ pub enum Event {
     /// Fáze se zastavila kvůli chybějícím údajům; kolik slov se do té doby přepsalo.
     Partial { proc: usize, words: usize },
     /// Proces se uzavřel (po ustálení): kolik morfémů si ho zapsalo a kolik reliktů ve frontě zůstalo.
+    /// `faded` = změna ve skupině odumřela (podíl zůstal pod prahem), ne dokončila se.
     Closed {
         proc: usize,
         restructured: usize,
         relics: usize,
+        faded: bool,
     },
 }
 
@@ -320,8 +322,11 @@ pub struct Round<'a> {
     pub reductive: Vec<bool>,
     /// Logit sdíleného podílu změny v každém živém procesu (−∞ = podíl nekladný).
     pub levels: Vec<f64>,
-    /// Podíl změny dosáhl 100 %.
+    /// Změna je ve skupině dokončená (podíl blízko 100 %).
     pub full: Vec<bool>,
+    /// Změna ve skupině odumřela (podíl pod prahem aktivace); proces se uzavře stejně jako
+    /// po dokončení a znovu se otevře, když podíl prah zase překročí.
+    pub faded: Vec<bool>,
     /// Čísla procesů, které živý proces (v pořadí `live`) nesmí krmit: zaplňuje mezeru po nich
     /// (řetězový posun). Krmení se zastaví, až má takový proces podíl aspoň ½.
     pub no_feed: Vec<Vec<usize>>,
@@ -465,6 +470,68 @@ impl CodeState {
         Ok(CodeNeeds::default())
     }
 
+    /// Znovuotevření uzavřeného procesu `number` (změna se do skupiny vrátila): fronta vznikne
+    /// ze slovní zásoby bez morfémů, které si změnu už zapsaly. Chybí-li něco, nezmění se nic.
+    #[allow(clippy::too_many_arguments)]
+    pub fn reopen(
+        &mut self,
+        bank: &mut Bank,
+        ctx: &Ctx,
+        number: usize,
+        row: usize,
+        reductive: bool,
+        bias: &[f64],
+        vocabulary: &[u8],
+    ) -> Result<CodeNeeds, String> {
+        let index = self
+            .find(number)
+            .ok_or_else(|| format!("proces č. {number} v kódu není"))?;
+        if self.procs[index].live {
+            return Err(format!(
+                "proces č. {number} je živý, nejde ho znovu otevřít"
+            ));
+        }
+        let names = std::mem::take(&mut bank.names);
+        let result = {
+            let target = Target {
+                row: row as i64,
+                queued: &EMPTY,
+                restructured: &self.procs[index].done,
+                bias,
+                reductive,
+            };
+            let source = LiveUsage::new(&mut self.usage, &ctx.usage);
+            phonology::activate(
+                bank,
+                &ctx.params,
+                &ctx.units,
+                row,
+                vocabulary,
+                &target,
+                &source,
+                Some(&names),
+            )
+        };
+        bank.names = names;
+        let out = result?;
+        if !out.needs.is_empty() {
+            return Ok(needs_with(out.needs, |_| number));
+        }
+        let proc = &mut self.procs[index];
+        proc.live = true;
+        proc.reductive = reductive;
+        proc.row = Some(row);
+        proc.own_row = Some(row);
+        proc.fixed_since = None;
+        proc.needed = out.needed;
+        proc.morphemes = out.morphemes.iter().map(|&item| item as i32).collect();
+        proc.queued = Flags::default();
+        for &morpheme in &out.morphemes {
+            set_flag(&mut proc.queued, morpheme, 1);
+        }
+        Ok(CodeNeeds::default())
+    }
+
     /// Fonologizace jedné skupiny (`phonology.restructure`) pro živé procesy
     /// v pořadí vzniku. Chybí-li údaj, vrátí ho; Python ho doplní a zavolá znovu
     /// (hotová práce se nezopakuje, protože stav je tady).
@@ -600,7 +667,8 @@ impl CodeState {
                     words,
                 });
             }
-            if round.full[k] {
+            let faded = round.faded.get(k).copied().unwrap_or(false);
+            if round.full[k] || faded {
                 let since = *proc.fixed_since.get_or_insert(round.tick);
                 if ((round.tick - since) as f64) * round.dt >= round.threshold {
                     let restructured = proc.done.count();
@@ -613,6 +681,7 @@ impl CodeState {
                         proc: proc.number,
                         restructured,
                         relics,
+                        faded,
                     });
                 }
             } else {

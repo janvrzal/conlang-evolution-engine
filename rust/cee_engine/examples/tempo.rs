@@ -33,7 +33,7 @@ fn main() {
         if c != century {
             let w = &sim.world;
             println!(
-                "## {:>6} s/krok {:.3} skupin {}/{} tvarů {} morfémů {} procesů {}/{} proměnných {} variant {} živých {} záznamů {}",
+                "## {:>6} s/krok {:.3} skupin {}/{} tvarů {} morfémů {} procesů {}/{} proměnných {} variant {} živých {} zapomenutých {} záznamů {}",
                 century * 100.0,
                 t.elapsed().as_secs_f64() / steps as f64,
                 w.group_ids().len(),
@@ -45,6 +45,7 @@ fn main() {
                 w.variables.len(),
                 w.variants.len(),
                 w.live.len(),
+                w.transfer.forgotten.values().map(|set| set.len()).sum::<usize>(),
                 sim.history.events.len()
             );
             let (mut vocab, mut procs, mut live, mut queued, mut codes) = (0, 0, 0, 0, 0);
@@ -98,6 +99,35 @@ fn main() {
                 procs as f64 / codes as f64,
                 live as f64 / codes as f64,
                 queued as f64 / codes as f64
+            );
+            // Živé proměnné: kolik je všude ustálených (každá skupina jednu variantu) a kolik buněk
+            // (proměnná × skupina) má víc variant; druhé číslo také bez podílů pod 5 %.
+            let (mut settled, mut cells, mut mixed, mut mixed5) = (0, 0, 0, 0);
+            for block in sim.world.live.iter_blocks() {
+                for row in 0..block.len() {
+                    let mut all = true;
+                    for column in 0..block.groups {
+                        if !block.present[row][column] {
+                            continue;
+                        }
+                        let found = block.cell(row, column);
+                        cells += 1;
+                        if found.len() > 1 {
+                            mixed += 1;
+                            all = false;
+                            if found.iter().filter(|(_, share, _)| *share >= 0.05).count() > 1 {
+                                mixed5 += 1;
+                            }
+                        }
+                    }
+                    if all {
+                        settled += 1;
+                    }
+                }
+            }
+            println!(
+                "#  živé proměnné: všude ustálených {settled} z {}, buněk s víc variantami {mixed} ({mixed5} nad 5 %) z {cells}",
+                sim.world.live.len()
             );
             print!("{}", cee_engine::timing::report());
             t = Instant::now();

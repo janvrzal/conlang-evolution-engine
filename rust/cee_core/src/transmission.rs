@@ -144,7 +144,8 @@ pub struct Flow<'a> {
 }
 
 /// Vstup mimo vazby sítě (interference, čtení, škola, liturgie): učící se skupina
-/// `learners[i]` přebírá podíl `factor[v] × weights[i]` (nejvýš celý) od `sources[i]`.
+/// `learners[i]` slyší od `sources[i]` podíl `factor[v] × weights[i]` (nejvýš celý), který
+/// ubírá jen domácímu vstupu, ne ostatním kanálům.
 pub struct Channel<'a> {
     pub factor: &'a [f64],
     pub learners: &'a [usize],
@@ -175,6 +176,8 @@ pub struct HearScratch {
     mixed_weight: Vec<f64>,
     weight: Vec<f64>,
     present_weight: Vec<f64>,
+    foreign: Vec<f64>,
+    shares: Vec<f64>,
 }
 
 /// Co skupiny slyší (`phases_transmission.hear`) pro proměnné `[first, last)`; `heard`
@@ -201,6 +204,8 @@ pub fn hear_range(
         mixed_weight,
         weight,
         present_weight,
+        foreign,
+        shares,
     } = scratch;
     present_weight.clear();
     present_weight.extend(present.iter().map(|&flag| f64::from(flag)));
@@ -221,28 +226,7 @@ pub fn hear_range(
         mix_component(heard, current, count, groups, slots, component);
         mix_component(weight, present_weight, count, groups, 1, component);
     }
-    for flow in flows {
-        // Vazby mezi jazyky: jen tolik, kolik filtr přenositelnosti propustí.
-        mixed.clear();
-        mixed.resize(heard.len(), 0.0);
-        mixed_weight.clear();
-        mixed_weight.resize(weight.len(), 0.0);
-        for component in flow.components {
-            mix_component(mixed, current, count, groups, slots, component);
-            mix_component(mixed_weight, present_weight, count, groups, 1, component);
-        }
-        for variable in 0..count {
-            let factor = flow.factor[first + variable];
-            let cells = variable * groups * slots..(variable + 1) * groups * slots;
-            for (target, add) in heard[cells.clone()].iter_mut().zip(&mixed[cells]) {
-                *target += factor * add;
-            }
-            let cells = variable * groups..(variable + 1) * groups;
-            for (target, add) in weight[cells.clone()].iter_mut().zip(&mixed_weight[cells]) {
-                *target += factor * add;
-            }
-        }
-    }
+    // Domácí vstup: vlastní skupina a sousedé téhož jazyka, normalizovaný jejich vahou.
     for (cell, &total) in weight.iter().enumerate() {
         let chunk = &mut heard[cell * slots..(cell + 1) * slots];
         if total > 0.0 {
@@ -253,8 +237,46 @@ pub fn hear_range(
             chunk.fill(0.0);
         }
     }
+    if flows.is_empty() && channels.is_empty() {
+        return;
+    }
+    // Cizí vstupy (vazby mezi jazyky po kanálech, interference, čtení, škola, liturgie) berou
+    // svůj podíl jen z domácího vstupu, ne jeden druhému: podíl kanálu nezávisí na ostatních
+    // kanálech ani na pořadí. Vazba kanálu váhy `w` má podíl `w / (domácí váha + w)` (jako by
+    // byla jediná); vedlejší kanál podíl `faktor × váha` (nejvýš celý). Přesáhne-li součet
+    // podílů celek, zmenší se všechny úměrně (vstup mluvčího je konečný).
+    foreign.clear();
+    foreign.resize(heard.len(), 0.0);
+    shares.clear();
+    shares.resize(weight.len(), 0.0);
+    for flow in flows {
+        mixed.clear();
+        mixed.resize(heard.len(), 0.0);
+        mixed_weight.clear();
+        mixed_weight.resize(weight.len(), 0.0);
+        for component in flow.components {
+            mix_component(mixed, current, count, groups, slots, component);
+            mix_component(mixed_weight, present_weight, count, groups, 1, component);
+        }
+        for variable in 0..count {
+            let factor = flow.factor[first + variable];
+            for group in 0..groups {
+                let cell = variable * groups + group;
+                let link = factor * mixed_weight[cell];
+                let total = weight[cell] + link;
+                if link <= 0.0 || total <= 0.0 {
+                    continue;
+                }
+                shares[cell] += link / total;
+                let scale = factor / total;
+                let at = cell * slots;
+                for slot in 0..slots {
+                    foreign[at + slot] += scale * mixed[at + slot];
+                }
+            }
+        }
+    }
     for channel in channels {
-        // Váha domény nad 1 smí podíl zvýšit nejvýš na celý vstup.
         for variable in 0..count {
             let factor = channel.factor[first + variable];
             for ((&learner, &source), &weight) in channel
@@ -263,18 +285,34 @@ pub fn hear_range(
                 .zip(channel.sources)
                 .zip(channel.weights)
             {
-                let share = if present[variable * groups + source] {
-                    (factor * weight).min(1.0)
-                } else {
-                    0.0
-                };
+                if !present[variable * groups + source] {
+                    continue;
+                }
+                let share = (factor * weight).min(1.0);
+                if share <= 0.0 {
+                    continue;
+                }
+                shares[variable * groups + learner] += share;
                 let at = (variable * groups + learner) * slots;
                 let from = (variable * groups + source) * slots;
                 for slot in 0..slots {
-                    heard[at + slot] =
-                        (1.0 - share) * heard[at + slot] + share * current[from + slot];
+                    foreign[at + slot] += share * current[from + slot];
                 }
             }
+        }
+    }
+    for (cell, &total) in shares.iter().enumerate() {
+        if total <= 0.0 {
+            continue;
+        }
+        let (home, scale) = if total > 1.0 {
+            (0.0, 1.0 / total)
+        } else {
+            (1.0 - total, 1.0)
+        };
+        let at = cell * slots;
+        for slot in 0..slots {
+            heard[at + slot] = home * heard[at + slot] + scale * foreign[at + slot];
         }
     }
 }
@@ -417,6 +455,14 @@ pub struct Cohorts<'a> {
     pub kappa: f64,
     pub adult_rate: f64,
     pub establish_threshold: f64,
+    /// Dokončení změny: má-li buňka variantu aspoň s tímto podílem, skupina zapomene variantu,
+    /// která většinu ztratila (trendová základna aspoň tento podíl, podíl pod ním), a inovaci,
+    /// která se neuchytila (základna aspoň `forget_share`, podíl pod ním). Zapomenutou variantu
+    /// se nová generace neučí a dospělí ji nepřebírají, dokud ji skupina neslyší aspoň s tímto
+    /// podílem: dožije se starší generací, i když ji sousedé dál používají. Nad 1 vypnuto.
+    pub completion_share: f64,
+    /// Práh, pod který když inovace spadne zpátky, se zapomene (`activation_share`).
+    pub forget_share: f64,
 }
 
 /// Stav bloku, který `settle` čte (celé bloky).
@@ -429,7 +475,15 @@ pub struct State<'a> {
     pub fitness: Option<&'a [f64]>,
     /// Klíče variant ve slotech, `proměnné × sloty`.
     pub slot_keys: &'a [u64],
+    /// Varianty, které skupina zapomněla (`proměnné × skupiny × sloty`); `None` = žádné.
+    pub forgotten: Option<&'a [bool]>,
+    /// Proměnné, u kterých se změna dokončuje a zapomíná (délka = počet proměnných); `None` = všechny.
+    pub completing: Option<&'a [bool]>,
 }
+
+/// Změna paměti zapomenutých variant v buňce a slotu (výstup `settle`).
+pub const FORGET: i8 = 1;
+pub const REMEMBER: i8 = -1;
 
 /// Pracovní pole jedné buňky `settle` (délka = počet slotů).
 #[derive(Default)]
@@ -457,6 +511,7 @@ pub fn settle_range(
     cohorts: &Cohorts<'_>,
     updated: &mut [f64],
     baseline: &mut [f64],
+    marks: &mut [i8],
 ) {
     let Shape { groups, slots, .. } = shape;
     let mut scratch = CellScratch::default();
@@ -486,6 +541,10 @@ pub fn settle_range(
                     heard: &state.heard[from..from + slots],
                     fitness: state.fitness.map(|fitness| &fitness[from..from + slots]),
                     slot_keys: &state.slot_keys[variable * slots..(variable + 1) * slots],
+                    forgotten: state
+                        .forgotten
+                        .map(|forgotten| &forgotten[from..from + slots]),
+                    completing: state.completing.is_none_or(|rows| rows[variable]),
                     present: state.present[cell],
                     group,
                 },
@@ -493,6 +552,7 @@ pub fn settle_range(
                 &mut scratch,
                 &mut updated[to..to + slots],
                 &mut baseline[to..to + slots],
+                &mut marks[to..to + slots],
             );
         }
     }
@@ -504,6 +564,8 @@ struct CellIn<'a> {
     heard: &'a [f64],
     fitness: Option<&'a [f64]>,
     slot_keys: &'a [u64],
+    forgotten: Option<&'a [bool]>,
+    completing: bool,
     present: bool,
     group: usize,
 }
@@ -514,11 +576,13 @@ fn settle_cell(
     scratch: &mut CellScratch,
     updated: &mut [f64],
     baseline: &mut [f64],
+    marks: &mut [i8],
 ) {
     let slots = cell.current.len();
     let group = cell.group;
     updated.fill(0.0);
     baseline.fill(0.0);
+    marks.fill(0);
     let CellScratch {
         selected,
         weighted,
@@ -570,6 +634,36 @@ fn settle_cell(
         let trend = cohorts.kappa * (cell.current[slot] - cell.previous[slot]);
         grown[at] = (share + trend + drift).max(0.0);
     }
+    // Dokončení (konec křivky S): když jedna varianta drží aspoň `1 − forget_share`, skupina
+    // zapomene variantu, která právě klesla pod `forget_share` (stará varianta dožívá se
+    // starší generací, inovace, která se neuchytila, odumře). Zapomenutou se děti neučí
+    // a dospělí ji jen opouštějí, dokud ji skupina neslyší aspoň s `completion_share`.
+    let dominant = (0..n).any(|at| current[at] >= 1.0 - cohorts.forget_share);
+    let forgotten_at = |slot: usize| cell.forgotten.is_some_and(|forgotten| forgotten[slot]);
+    for (at, &slot) in support.iter().enumerate() {
+        let forget = if forgotten_at(slot) {
+            if heard[at] >= cohorts.completion_share {
+                marks[slot] = REMEMBER;
+                false
+            } else {
+                true
+            }
+        } else if cell.completing
+            && dominant
+            && current[at] < cohorts.forget_share
+            && cell.previous[slot] >= cohorts.forget_share
+        {
+            marks[slot] = FORGET;
+            true
+        } else {
+            false
+        };
+        if forget {
+            grown[at] = 0.0;
+            // Dospělí zapomenutou variantu jen opouštějí (záporný člen `adult_rate` zůstane).
+            heard[at] = heard[at].min(current[at]);
+        }
+    }
     normalize_cell(&grown[..n], &selected[..n], &mut children[..n], sorted);
     let renewed = cohorts.renewal[group];
     let floor = cohorts.loss_floor[group];
@@ -619,22 +713,32 @@ pub fn settle(
     threads: usize,
     updated: &mut [f64],
     baseline: &mut [f64],
+    marks: &mut [i8],
 ) {
     let parts = ranges(shape.variables, threads);
     let stride = shape.groups * shape.slots;
     if parts.len() == 1 {
-        settle_range(shape, parts[0], state, cohorts, updated, baseline);
+        settle_range(shape, parts[0], state, cohorts, updated, baseline, marks);
         return;
     }
     std::thread::scope(|scope| {
-        let (mut rest_updated, mut rest_baseline) = (updated, baseline);
+        let (mut rest_updated, mut rest_baseline, mut rest_marks) = (updated, baseline, marks);
         for &range in &parts {
             let size = (range.1 - range.0) * stride;
             let (mine_updated, tail_updated) = rest_updated.split_at_mut(size);
             let (mine_baseline, tail_baseline) = rest_baseline.split_at_mut(size);
-            (rest_updated, rest_baseline) = (tail_updated, tail_baseline);
+            let (mine_marks, tail_marks) = rest_marks.split_at_mut(size);
+            (rest_updated, rest_baseline, rest_marks) = (tail_updated, tail_baseline, tail_marks);
             scope.spawn(move || {
-                settle_range(shape, range, state, cohorts, mine_updated, mine_baseline);
+                settle_range(
+                    shape,
+                    range,
+                    state,
+                    cohorts,
+                    mine_updated,
+                    mine_baseline,
+                    mine_marks,
+                );
             });
         }
     });
@@ -714,6 +818,8 @@ mod tests {
             heard: &heard,
             fitness: Some(&fitness),
             slot_keys: &slot_keys,
+            forgotten: None,
+            completing: None,
         };
         let cohorts = Cohorts {
             drift_scale: &drift,
@@ -724,6 +830,8 @@ mod tests {
             kappa: 0.3,
             adult_rate: 0.05,
             establish_threshold: 0.9,
+            completion_share: 0.5,
+            forget_share: 0.05,
         };
         let mut reference = (vec![0.0; cells], vec![0.0; cells]);
         settle(
@@ -733,10 +841,19 @@ mod tests {
             1,
             &mut reference.0,
             &mut reference.1,
+            &mut vec![0; cells],
         );
         for threads in [2, 3, 7, 20] {
             let mut found = (vec![0.0; cells], vec![0.0; cells]);
-            settle(shape, &state, &cohorts, threads, &mut found.0, &mut found.1);
+            settle(
+                shape,
+                &state,
+                &cohorts,
+                threads,
+                &mut found.0,
+                &mut found.1,
+                &mut vec![0; cells],
+            );
             assert_eq!(found, reference, "vlákna: {threads}");
         }
     }
