@@ -1,0 +1,55 @@
+# Brány a kalibrace enginu jednou týdně (pondělí 3:00 UTC) a na vyžádání (Actions → Run workflow).
+# Trvají desítky minut, proto nejsou v CI u každého pushe. Brány musí projít (jinak běh selže);
+# kalibrace je zpráva (některé veličiny jsou známě mimo pásmo, viz docs/engine-v2).
+name: Brány a kalibrace
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  measure:
+    name: Brány a kalibrace
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+      - name: Překladač (rust-toolchain.toml)
+        run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Sestavení
+        run: cargo build --release --bin cee
+      - name: Brány
+        run: |
+          set -o pipefail
+          ./target/release/cee gates | tee brany.txt
+      - name: Kalibrace
+        if: always()
+        run: |
+          set -o pipefail
+          ./target/release/cee calibrate | tee kalibrace.txt
+      - name: Souhrn
+        if: always()
+        run: |
+          {
+            echo "## Brány"
+            tail -n 1 brany.txt 2>/dev/null || echo "neproběhly"
+            grep -E "neprošla" brany.txt 2>/dev/null | sed 's/^/    /' || true
+            echo
+            echo "## Kalibrace"
+            grep -E "Splněno" kalibrace.txt 2>/dev/null || echo "neproběhla"
+            grep -E "\| ne \|" kalibrace.txt 2>/dev/null | cut -d'|' -f2-4,7,10 | sed 's/^/    /' || true
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: brany-a-kalibrace
+          path: |
+            rust/brany.txt
+            rust/kalibrace.txt

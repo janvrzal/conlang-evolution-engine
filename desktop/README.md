@@ -58,6 +58,20 @@ npm run tauri build -- --bundles app,dmg
 
 Tauri pak aplikaci podepíše, odešle k notarizaci a výsledek připojí (staple).
 
+## Vydání ke stažení
+
+Balíčky pro macOS (`.dmg`, Apple Silicon i Intel), Windows (`.msi`, `-setup.exe`) a Linux
+(`.AppImage`, `.deb`) sestaví GitHub Actions (`.github/workflows/vydani.yml`):
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+Balíčky se připojí ke konceptu vydání na stránce Releases; po kontrole ho zveřejníš tlačítkem
+Publish release a ostatní stahují z `…/releases/latest`. Verze má sedět s `version`
+v `src-tauri/tauri.conf.json`. Bez tagu jde workflow spustit ručně (Actions → Vydání → Run
+workflow); balíčky pak jsou jen jako artefakty běhu.
+
 ## Vývoj UI v prohlížeči
 
 ```bash
