@@ -76,6 +76,9 @@ Vstup mluvčího je konečný, takže úměrné zmenšení zůstává jen jako s
   výběr váží jen slyšené sloty, takže s jedinou na výsledek nemá vliv. Stejný otisk.
 - Aktivace, kterou `phonology::activate` hned zahodí (proces živý, nebo uzavřený s dokončenou
   změnou), se při souběžném přenosu nezapisuje. Stejný otisk.
+- Lexikální jasnost klonovala v každé buňce `Arc` sémantického grafu a osm vláken přenosu se
+  přetahovalo o jeho počítadlo odkazů: 39,5 s strojového času za Talveru, nově 11,4 s (celý běh
+  asi o 8 s kratší). Kompenzace konstrukcí si seznamy z katalogu půjčuje místo klonu. Stejný otisk.
 - `LivePools::reaxis` (z `engine-dokonceni`, 501f7b7): nová osa skupin z hustých řádků. Stejný
   otisk, fáze událostí 13,1 s → 4,5 s.
 
