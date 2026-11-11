@@ -245,6 +245,12 @@ impl Simulation {
         }
     }
 
+    /// Bajty kontrolního bodu bez záznamu událostí rovnou ze stavu, bez kopie světa
+    /// (stejné jako `checkpoint_without_events().to_bytes()`).
+    pub fn checkpoint_bytes_without_events(&self) -> Result<Vec<u8>, String> {
+        crate::checkpoint::bytes_without_events(self.tick, self.year(), &self.world, &self.history)
+    }
+
     /// Kontrolní bod bez záznamu událostí (dynamika ho nečte; ukládá se jednou za běh zvlášť
     /// a při pokračování se doplní `EventLog::push_line`). Šetří místo: záznam roste s během
     /// a v každém úplném bodu by se opakoval.

@@ -120,12 +120,13 @@ impl Recorder {
         if let Some(every) = self.options.checkpoint_every {
             if year - self.last_checkpoint >= every - 1e-9 {
                 self.last_checkpoint = year;
-                let checkpoint = simulation.checkpoint_without_events();
+                // Bajty rovnou ze stavu: kopie celého světa jen kvůli serializaci by stála čas
+                // a dočasně zdvojnásobila paměť.
                 batch.checkpoint = Some((
-                    checkpoint.tick,
-                    checkpoint.year,
+                    simulation.tick,
+                    year,
                     self.logged,
-                    checkpoint.to_bytes()?,
+                    simulation.checkpoint_bytes_without_events()?,
                 ));
             }
         }

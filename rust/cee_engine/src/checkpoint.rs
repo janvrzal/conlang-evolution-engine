@@ -30,6 +30,51 @@ pub struct Checkpoint {
 /// Bod z jiné verze nebo jiného sestavení enginu (ne poškozený soubor).
 pub const STALE: &str = "kontrolní bod je z jiné verze enginu";
 
+/// Kontrolní bod bez záznamu událostí přímo z odkazů na svět a historii: stejné bajty jako
+/// `Simulation::checkpoint_without_events().to_bytes()`, ale bez kopie celého světa.
+#[derive(Serialize)]
+struct CheckpointRef<'a> {
+    tick: u32,
+    year: f64,
+    world: &'a World,
+    history: HistoryRef<'a>,
+}
+
+/// Pole [`History`] ve stejném pořadí, záznam událostí prázdný.
+#[derive(Serialize)]
+struct HistoryRef<'a> {
+    events: &'a crate::history::EventLog,
+    snapshots: &'a Vec<crate::history::Snapshot>,
+    trajectories: &'a std::collections::BTreeMap<
+        (crate::ids::VariantId, crate::ids::GroupId),
+        Vec<(u32, f64)>,
+    >,
+    proto: &'a std::collections::BTreeMap<String, crate::export::LanguageLexicon>,
+}
+
+/// Bajty kontrolního bodu po kroku `tick` bez záznamu událostí (viz [`CheckpointRef`]).
+pub fn bytes_without_events(
+    tick: u32,
+    year: f64,
+    world: &World,
+    history: &History,
+) -> Result<Vec<u8>, String> {
+    let empty = crate::history::EventLog::default();
+    let point = CheckpointRef {
+        tick,
+        year,
+        world,
+        history: HistoryRef {
+            events: &empty,
+            snapshots: &history.snapshots,
+            trajectories: &history.trajectories,
+            proto: &history.proto,
+        },
+    };
+    postcard::to_stdvec(&(CHECKPOINT_VERSION, ENGINE_BUILD, &point))
+        .map_err(|e| format!("kontrolní bod: {e}"))
+}
+
 impl Checkpoint {
     /// Uloží kontrolní bod do bajtů (verze, otisk sestavení, obsah).
     pub fn to_bytes(&self) -> Result<Vec<u8>, String> {

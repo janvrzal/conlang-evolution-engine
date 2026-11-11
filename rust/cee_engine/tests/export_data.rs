@@ -148,3 +148,12 @@ fn hlasky_maji_kod_a_hodnoty() {
         "{issues:?}"
     );
 }
+
+#[test]
+fn bajty_kontrolniho_bodu_bez_kopie_jsou_stejne() {
+    let world = example();
+    let (simulation, _) = run_with_checkpoint(&world, 200.0);
+    let copied = simulation.checkpoint_without_events().to_bytes().unwrap();
+    let direct = simulation.checkpoint_bytes_without_events().unwrap();
+    assert_eq!(copied, direct);
+}
