@@ -162,7 +162,7 @@ impl Run {
 
     /// Stav pro UI; `since` = kolik snímků už klient má (jako `GET /api/v2/runs/{id}`).
     pub fn status(&self, since: usize) -> Value {
-        let s = self.state.lock().expect("stav běhu");
+        let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         let span = (self.end_year - self.start_year).max(1e-9);
         json!({
             "id": self.id(), "status": s.status, "year": s.year,
@@ -174,11 +174,20 @@ impl Run {
     }
 
     pub fn result(&self) -> Result<Arc<Value>, String> {
-        let s = self.state.lock().expect("stav běhu");
+        let s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         match (&s.result, s.status) {
             (Some(r), Status::Done) => Ok(r.clone()),
             (_, status) => Err(format!("Běh není dokončený (stav {status:?}).")),
         }
+    }
+
+    /// Běh skončil pádem výpočtu: stav `failed` v paměti i v `beh.json`.
+    fn fail(&self, error: String) {
+        let _ = cee_store::mark_failed(&self.dir, &error);
+        let mut s = self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        s.seconds = self.started.elapsed().as_secs_f64();
+        s.status = Status::Failed;
+        s.error = Some(error);
     }
 
     pub fn cancel(&self) {
@@ -202,7 +211,7 @@ impl Run {
                 let batch = recorder.collect(&simulation)?;
                 let frame = batch.frame.clone();
                 batch.write(&mut writer, seconds)?;
-                let mut s = self.state.lock().expect("stav běhu");
+                let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
                 s.year = simulation.year();
                 s.seconds = seconds;
                 if let Some(f) = frame {
@@ -221,7 +230,7 @@ impl Run {
         };
         // zápis do složky běhu; selhání zápisu se ukáže jako chyba běhu
         let saved = writer.finish(status, error.as_deref(), seconds, result.as_deref());
-        let mut s = self.state.lock().expect("stav běhu");
+        let mut s = self.state.lock().unwrap_or_else(|p| p.into_inner());
         s.seconds = seconds;
         s.status = status;
         s.error = error.or(saved.err().map(|e| format!("Běh se nepodařilo uložit: {e}")));
@@ -293,7 +302,8 @@ impl Runs {
         let resume = match new.parent {
             None => None,
             Some(parent) => {
-                let parent_spec = cee_store::spec(parent).and_then(|v| WorldSpec::from_json(&v.to_string())).map_err(|e| issue("(svět)", e, "world_invalid"))?;
+                let parent_spec =
+                    cee_store::spec(parent).and_then(|v| WorldSpec::from_json(&v.to_string())).map_err(|e| issue("(svět)", e, "world_invalid"))?;
                 match spec::branch_year(&parent_spec, &world_spec) {
                     None => None,
                     Some(year) => {
@@ -355,7 +365,19 @@ impl Runs {
         std::thread::Builder::new()
             .name("cee-run".into())
             .stack_size(64 * 1024 * 1024)
-            .spawn(move || worker.execute(simulation, writer, recorder))
+            .spawn(move || {
+                // pád výpočtu (panika) nesmí nechat běh navždy „počítat“: běh skončí jako
+                // `failed` s hláškou v paměti i ve složce běhu
+                let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| worker.execute(simulation, writer, recorder)));
+                if let Err(panic) = caught {
+                    let reason = panic
+                        .downcast_ref::<&str>()
+                        .map(|s| s.to_string())
+                        .or_else(|| panic.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "neznámá chyba".into());
+                    worker.fail(format!("Výpočet spadl: {reason}"));
+                }
+            })
             .map_err(|e| issue("(svět)", e.to_string(), "world_failed"))?;
         Ok(run)
     }
@@ -525,7 +547,14 @@ mod tempo {
             let c = (sim.year() / 100.0).floor();
             if c != century {
                 let langs = sim.history.snapshots.last().map_or(0, |s| s.languages.len());
-                println!("{:>6}  {:>6.2}  {:>6}  {:>6}  {:>10}", century * 100.0, t.elapsed().as_secs_f64() / steps as f64, sim.world.groups.len(), langs, sim.history.events.len());
+                println!(
+                    "{:>6}  {:>6.2}  {:>6}  {:>6}  {:>10}",
+                    century * 100.0,
+                    t.elapsed().as_secs_f64() / steps as f64,
+                    sim.world.groups.len(),
+                    langs,
+                    sim.history.events.len()
+                );
                 t = Instant::now();
                 steps = 0;
                 century = c;
@@ -568,7 +597,13 @@ mod fixture {
         wait(&a);
         println!("A {:.0} s", t.elapsed().as_secs_f64());
         let mut b_world = world.clone();
-        b_world["events"] = json!(world["events"].as_array().unwrap().iter().filter(|e| !(e["kind"] == "language_policy" && e["policy"] == "enforced" && e["year"] == 1875.0)).cloned().collect::<Vec<_>>());
+        b_world["events"] = json!(world["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| !(e["kind"] == "language_policy" && e["policy"] == "enforced" && e["year"] == 1875.0))
+            .cloned()
+            .collect::<Vec<_>>());
         let t = Instant::now();
         let b = runs.start(StartRun { spec: &b_world, dir: &dir, name: Some("bez tvrdé politiky 1875"), parent: Some(&a.dir) }).unwrap();
         wait(&b);
@@ -580,7 +615,9 @@ mod fixture {
                 .map(|(year, languages)| {
                     let langs: Map<String, Value> = languages
                         .iter()
-                        .filter_map(|l| cee_store::lexicon(&run.dir, l, year).ok().flatten().map(|x| (l.clone(), json!({ "group": x.group, "forms": x.forms }))))
+                        .filter_map(|l| {
+                            cee_store::lexicon(&run.dir, l, year).ok().flatten().map(|x| (l.clone(), json!({ "group": x.group, "forms": x.forms })))
+                        })
                         .collect();
                     json!({ "year": year, "languages": langs })
                 })

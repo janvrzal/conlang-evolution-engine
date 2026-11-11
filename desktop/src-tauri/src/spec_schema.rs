@@ -91,13 +91,40 @@ pub const PRESET_SIZES: [u64; 4] = [149, 200, 500, 1000];
 
 /// Pořadí druhů událostí jako v pydanticu (`EVENT_KINDS`).
 pub const EVENT_KINDS: [&str; 16] = [
-    "state", "language_policy", "annexation", "secession", "collapse", "border_policy", "lingua_franca", "standard",
-    "schools", "revival", "preserve", "identity", "immigration", "settlement", "elite", "sound_shift",
+    "state",
+    "language_policy",
+    "annexation",
+    "secession",
+    "collapse",
+    "border_policy",
+    "lingua_franca",
+    "standard",
+    "schools",
+    "revival",
+    "preserve",
+    "identity",
+    "immigration",
+    "settlement",
+    "elite",
+    "sound_shift",
 ];
 const EVENT_MODELS: [&str; 16] = [
-    "StateSpec", "LanguagePolicySpec", "AnnexationSpec", "SecessionSpec", "CollapseSpec", "BorderPolicySpec", "LinguaFrancaSpec",
-    "StandardSpec", "SchoolsSpec", "RevivalSpec", "PreserveSpec", "IdentitySpec", "ImmigrationSpec", "SettlementSpec",
-    "EliteSpec", "SoundShiftSpec",
+    "StateSpec",
+    "LanguagePolicySpec",
+    "AnnexationSpec",
+    "SecessionSpec",
+    "CollapseSpec",
+    "BorderPolicySpec",
+    "LinguaFrancaSpec",
+    "StandardSpec",
+    "SchoolsSpec",
+    "RevivalSpec",
+    "PreserveSpec",
+    "IdentitySpec",
+    "ImmigrationSpec",
+    "SettlementSpec",
+    "EliteSpec",
+    "SoundShiftSpec",
 ];
 
 fn req(name: &'static str, ty: Ty) -> Field {
@@ -478,8 +505,7 @@ fn type_schema(ty: Ty, bounds: &Bounds) -> Map<String, Value> {
             s.insert("$ref".into(), json!(format!("#/$defs/{name}")));
         }
         Ty::Events => {
-            let mapping: Map<String, Value> =
-                EVENT_KINDS.iter().zip(EVENT_MODELS).map(|(k, m)| (k.to_string(), json!(format!("#/$defs/{m}")))).collect();
+            let mapping: Map<String, Value> = EVENT_KINDS.iter().zip(EVENT_MODELS).map(|(k, m)| (k.to_string(), json!(format!("#/$defs/{m}")))).collect();
             s.insert(
                 "items".into(),
                 json!({
@@ -563,7 +589,11 @@ pub fn vocabulary_options() -> Value {
 // ---------- ověření tvaru s českými hláškami ----------
 
 fn number_text(v: f64) -> String {
-    if v.fract() == 0.0 { format!("{v:.0}") } else { v.to_string() }
+    if v.fract() == 0.0 {
+        format!("{v:.0}")
+    } else {
+        v.to_string()
+    }
 }
 
 fn options_text(options: &[&str]) -> String {
@@ -736,7 +766,11 @@ fn code_of(message: &str) -> &'static str {
         ("musí být aspoň", "field_range"),
         ("smí být nejvýš", "field_range"),
     ];
-    CODES.iter().find(|(start, _)| message.starts_with(start)).map(|(_, code)| *code).unwrap_or(if message.starts_with("musí být menší") { "field_range" } else { "field_type" })
+    CODES.iter().find(|(start, _)| message.starts_with(start)).map(|(_, code)| *code).unwrap_or(if message.starts_with("musí být menší") {
+        "field_range"
+    } else {
+        "field_type"
+    })
 }
 
 fn valid_id(s: &str) -> bool {
@@ -828,12 +862,9 @@ mod tests {
             // porovnává se jen to, co UI a ověření potřebují (bez titulků a popisů)
             fn strip(v: &Value) -> Value {
                 match v {
-                    Value::Object(o) => Value::Object(
-                        o.iter()
-                            .filter(|(k, _)| !matches!(k.as_str(), "title" | "description"))
-                            .map(|(k, v)| (k.clone(), strip(v)))
-                            .collect(),
-                    ),
+                    Value::Object(o) => {
+                        Value::Object(o.iter().filter(|(k, _)| !matches!(k.as_str(), "title" | "description")).map(|(k, v)| (k.clone(), strip(v))).collect())
+                    }
                     Value::Array(a) => Value::Array(a.iter().map(strip).collect()),
                     other => other.clone(),
                 }

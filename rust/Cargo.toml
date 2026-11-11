@@ -1,8 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["cee_core", "cee_engine", "cee_py", "cee_store"]
-# Výchozí je čistý Rust (bez PyO3); vazba pro server `cee_py` se staví přes maturin z `rust/cee_py`.
-default-members = ["cee_engine"]
+# Výchozí (`cargo test`, `cargo build`) je celý čistý Rust bez PyO3; vazba pro server `cee_py`
+# se staví přes maturin z `rust/cee_py`.
+default-members = ["cee_core", "cee_engine", "cee_store"]
 
 [profile.release]
 opt-level = 3

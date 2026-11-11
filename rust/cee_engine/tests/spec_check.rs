@@ -249,7 +249,7 @@ fn scenare_evropa_a_romania_nemaji_chyby() {
         ),
         (
             include_str!("../../../src/cee/data/scenarios/romania.json"),
-            "events.2.language",
+            "events.3.language",
         ),
     ] {
         let issues = spec::check(&WorldSpec::from_json(text).unwrap());

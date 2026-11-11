@@ -110,7 +110,12 @@ impl Recent {
             .into_iter()
             .map(|mut item| {
                 let exists = item["path"].as_str().is_some_and(|p| Path::new(p).is_file());
-                let runs = item["path"].as_str().map(|p| cee_store::runs_dir(Path::new(p))).filter(|d| d.is_dir()).and_then(|d| cee_store::list(&d).ok()).map_or(0, |l| l.len());
+                let runs = item["path"]
+                    .as_str()
+                    .map(|p| cee_store::runs_dir(Path::new(p)))
+                    .filter(|d| d.is_dir())
+                    .and_then(|d| cee_store::list(&d).ok())
+                    .map_or(0, |l| l.len());
                 item["exists"] = json!(exists);
                 item["runs"] = json!(runs);
                 item

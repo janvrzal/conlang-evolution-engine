@@ -994,7 +994,6 @@ fn compute_families(
 }
 
 impl SoundIndex {
-
     // --- čtení --------------------------------------------------------------
 
     fn find(&self, token: i64) -> Option<&Group> {

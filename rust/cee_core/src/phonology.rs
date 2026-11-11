@@ -644,10 +644,7 @@ mod tests {
         assert!(out.needs.is_empty());
         // Vznikl jen „kada“ (posouzení cílem používá has_site bez zápisu do banky).
         let (first, flat, lengths) = bank.take_created();
-        assert_eq!(
-            (first, flat, lengths),
-            (1, vec![1, 0, 3, 0], vec![4])
-        );
+        assert_eq!((first, flat, lengths), (1, vec![1, 0, 3, 0], vec![4]));
         assert_eq!(
             out.rewrites,
             vec![Rewrite {

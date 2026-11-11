@@ -96,6 +96,10 @@ pub struct RunInfo {
     pub frames: usize,
     /// Proces, který běh zapisuje (pozná přerušený běh).
     pub pid: u32,
+    /// Otisk sestavení enginu, který běh počítal (`checkpoint::ENGINE_BUILD`); kontrolní body
+    /// z jiného sestavení se pro „co kdyby“ nepoužijí (počítá se od začátku).
+    #[serde(default)]
+    pub engine_build: Option<String>,
     /// Doplní se při čtení.
     #[serde(default)]
     pub checkpoints: usize,
@@ -422,7 +426,13 @@ fn checkpoint_files(run: &Path) -> Result<Vec<StoredCheckpoint>, String> {
 
 /// Nejpozdější kontrolní bod ostře před rokem `year` (pro „co kdyby“ od roku větvení). Když ho
 /// běh nemá (větev „co kdyby“ má vlastní body až od roku větvení), hledá u rodiče.
+/// Body z jiného sestavení enginu se přeskočí (`None` = počítat od začátku).
 pub fn checkpoint_before(run: &Path, year: f64) -> Result<Option<StoredCheckpoint>, String> {
+    let about = info(run)?;
+    let current = about.engine_build.as_deref() == Some(cee_engine::checkpoint::ENGINE_BUILD);
+    if !current {
+        return Ok(None);
+    }
     if let Some(found) = checkpoint_files(run)?
         .into_iter()
         .rev()
@@ -430,7 +440,6 @@ pub fn checkpoint_before(run: &Path, year: f64) -> Result<Option<StoredCheckpoin
     {
         return Ok(Some(found));
     }
-    let about = info(run)?;
     match (about.parent, run.parent()) {
         (Some(parent), Some(dir)) if dir.join(&parent).join(INFO).is_file() => {
             let limit = about.branch_year.map_or(year, |b| b.min(year));
@@ -471,12 +480,27 @@ pub fn drop_checkpoints(run: &Path) -> Result<(), String> {
     }
 }
 
-/// Smaže běh se vším, co k němu patří.
+/// Smaže běh se vším, co k němu patří. Smaže jen složku s `beh.json` uvnitř složky běhů
+/// (`*.behy`), nic jiného.
 pub fn delete(run: &Path) -> Result<(), String> {
-    if !run.join(INFO).is_file() {
+    let in_runs = run
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.ends_with(".behy"));
+    if !in_runs || !run.join(INFO).is_file() {
         return Err(format!("{} není složka běhu", run.display()));
     }
     fs::remove_dir_all(run).map_err(|e| err(run, e))
+}
+
+/// Označí běh jako selhaný (např. po pádu výpočtu, kdy `RunWriter::finish` neproběhl).
+pub fn mark_failed(run: &Path, error: &str) -> Result<(), String> {
+    let mut current = info(run)?;
+    current.status = Status::Failed;
+    current.error = Some(error.to_owned());
+    current.finished = Some(now());
+    write_info(run, &current)
 }
 
 /// Přejmenuje běh v seznamu.
@@ -557,6 +581,7 @@ impl RunWriter {
             engine: new.engine.map(str::to_owned),
             frames: 0,
             pid: std::process::id(),
+            engine_build: Some(cee_engine::checkpoint::ENGINE_BUILD.to_owned()),
             checkpoints: 0,
             has_result: false,
         };

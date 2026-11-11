@@ -927,8 +927,7 @@ pub fn continua(
     }
     // 1) střecha: skupiny pod stejnou normou dohromady
     let mut first_of: std::collections::BTreeMap<i64, usize> = std::collections::BTreeMap::new();
-    for index in 0..count {
-        let r = roof[index];
+    for (index, &r) in roof.iter().enumerate().take(count) {
         if r < 0 {
             continue;
         }

@@ -94,9 +94,7 @@ async fn run_result(id: String, runs: State<'_, Runs>) -> Result<Value, String> 
         return Ok((*run.result()?).clone());
     }
     let dir = PathBuf::from(&id);
-    tauri::async_runtime::spawn_blocking(move || cee_store::result(&dir)?.ok_or_else(|| "Běh nemá výsledek.".to_string()))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || cee_store::result(&dir)?.ok_or_else(|| "Běh nemá výsledek.".to_string())).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -126,9 +124,11 @@ async fn run_lexicon(id: String, language: String, year: f64) -> Result<Value, S
 /// Roky, ve kterých má běh slovník, a jazyky v nich.
 #[tauri::command]
 async fn run_lexicon_years(id: String) -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(move || Ok(json!(cee_store::lexicon_years(&PathBuf::from(id))?.into_iter().map(|(y, l)| json!({ "year": y, "languages": l })).collect::<Vec<_>>())))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(json!(cee_store::lexicon_years(&PathBuf::from(id))?.into_iter().map(|(y, l)| json!({ "year": y, "languages": l })).collect::<Vec<_>>()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Historie slova v jazyce: `[{year, form|null}]`.

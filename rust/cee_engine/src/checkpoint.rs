@@ -12,8 +12,12 @@ use serde::{Deserialize, Serialize};
 use crate::history::History;
 use crate::world::World;
 
-/// Verze formátu kontrolního bodu; mění se s rozložením uložených struktur.
-pub const CHECKPOINT_VERSION: u32 = 2;
+/// Verze formátu kontrolního bodu; mění se s rozložením hlavičky.
+pub const CHECKPOINT_VERSION: u32 = 3;
+
+/// Otisk sestavení enginu (zdroj enginu a jádra, vložená data; `build.rs`). Kontrolní bod
+/// z jiného sestavení se nenačte: struktury nebo dynamika se mohly změnit.
+pub const ENGINE_BUILD: &str = env!("CEE_ENGINE_BUILD");
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint {
@@ -23,20 +27,31 @@ pub struct Checkpoint {
     pub history: History,
 }
 
+/// Bod z jiné verze nebo jiného sestavení enginu (ne poškozený soubor).
+pub const STALE: &str = "kontrolní bod je z jiné verze enginu";
+
 impl Checkpoint {
-    /// Uloží kontrolní bod do bajtů (verze + obsah).
+    /// Uloží kontrolní bod do bajtů (verze, otisk sestavení, obsah).
     pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
-        postcard::to_stdvec(&(CHECKPOINT_VERSION, self)).map_err(|e| format!("kontrolní bod: {e}"))
+        postcard::to_stdvec(&(CHECKPOINT_VERSION, ENGINE_BUILD, self))
+            .map_err(|e| format!("kontrolní bod: {e}"))
     }
 
+    /// Načte kontrolní bod. Bod z jiné verze formátu nebo jiného sestavení vrátí chybu, která
+    /// začíná [`STALE`] (volající pak počítá od začátku).
     pub fn from_bytes(bytes: &[u8]) -> Result<Checkpoint, String> {
-        let (version, checkpoint): (u32, Checkpoint) =
-            postcard::from_bytes(bytes).map_err(|e| format!("kontrolní bod: {e}"))?;
+        let (version, rest): (u32, &[u8]) =
+            postcard::take_from_bytes(bytes).map_err(|e| format!("kontrolní bod: {e}"))?;
         if version != CHECKPOINT_VERSION {
             return Err(format!(
-                "kontrolní bod verze {version}, čekám {CHECKPOINT_VERSION}"
+                "{STALE} (formát {version}, čekám {CHECKPOINT_VERSION})"
             ));
         }
-        Ok(checkpoint)
+        let (build, rest): (&str, &[u8]) =
+            postcard::take_from_bytes(rest).map_err(|e| format!("kontrolní bod: {e}"))?;
+        if build != ENGINE_BUILD {
+            return Err(format!("{STALE} (sestavení {build}, teď {ENGINE_BUILD})"));
+        }
+        postcard::from_bytes(rest).map_err(|e| format!("kontrolní bod: {e}"))
     }
 }

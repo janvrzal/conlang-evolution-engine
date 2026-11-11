@@ -1,0 +1,4 @@
+# Připnutý překladač pro engine (rust/) i desktop (desktop/src-tauri); CI ho používá taky.
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]

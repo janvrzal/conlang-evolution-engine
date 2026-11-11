@@ -601,10 +601,10 @@ pub fn branch_year(original: &WorldSpec, changed: &WorldSpec) -> Option<f64> {
     let key = |e: &EventSpec| serde_json::to_string(e).unwrap_or_default();
     let mut left: Vec<(f64, String)> = original.events.iter().map(|e| (e.year, key(e))).collect();
     let mut right: Vec<(f64, String)> = changed.events.iter().map(|e| (e.year, key(e))).collect();
+    // Pořadí jako při stavbě běhu: podle roku, ve stejném roce podle pořadí v zadání (stabilní
+    // řazení). Přehození dvou událostí téhož roku tak je změna od toho roku.
     let order = |a: &(f64, String), b: &(f64, String)| {
-        a.0.partial_cmp(&b.0)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then(a.1.cmp(&b.1))
+        a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
     };
     left.sort_by(order);
     right.sort_by(order);

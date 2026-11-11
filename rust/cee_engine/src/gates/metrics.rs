@@ -338,7 +338,8 @@ pub fn is_inherited_root(
     if origin.change.is_none() {
         return true;
     }
-    let Some(Payload::Lexical { morpheme, .. }) = world.variants.payload.get(variant.index()) else {
+    let Some(Payload::Lexical { morpheme, .. }) = world.variants.payload.get(variant.index())
+    else {
         return false;
     };
     if morpheme.is_none() {
@@ -366,7 +367,7 @@ pub fn is_inherited_root(
             .morphemes
             .meta
             .get(ancestor.index())
-            .map_or(false, |m| m.meaning == world.registry.concepts.name(concept.0))
+            .is_some_and(|m| m.meaning == world.registry.concepts.name(concept.0))
 }
 
 /// Podíl pojmů, které skupina vyjadřuje zděděným slovem nebo slovem odvozeným z jeho kořene.

@@ -206,7 +206,8 @@ impl EventLog {
         }
     }
 
-    /// Připíše text v paměti do dočasného souboru; když soubor nejde založit, zůstane v paměti.
+    /// Připíše text v paměti do dočasného souboru; když soubor nejde založit nebo do něj zapsat,
+    /// zůstane v paměti.
     fn spill_text(&mut self) {
         if self.spill.is_none() {
             match Spill::create() {
@@ -214,10 +215,15 @@ impl EventLog {
                 Err(_) => return,
             }
         }
-        let spill = self.spill.as_mut().expect("soubor historie");
-        spill
-            .append(&self.text)
-            .expect("zápis historie do dočasného souboru");
+        let Some(spill) = self.spill.as_mut() else {
+            return;
+        };
+        if spill.append(&self.text).is_err() {
+            // Plný nebo nedostupný disk: záznam zůstane v paměti a dál se neodkládá (soubor
+            // může mít useknutý konec; čte se jen do `spill.bytes`, které se nezměnily).
+            self.limit = usize::MAX;
+            return;
+        }
         self.text.clear();
     }
 

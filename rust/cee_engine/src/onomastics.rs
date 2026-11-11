@@ -48,18 +48,13 @@ pub struct AnthroponymParadigmSpec {
 
 pub fn catalog() -> &'static OnomasticsCatalog {
     static CATALOG: OnceLock<OnomasticsCatalog> = OnceLock::new();
-    CATALOG.get_or_init(|| {
-        serde_json::from_str(ONOMASTICS_JSON).expect("platný v2_onomastics.json")
-    })
+    CATALOG
+        .get_or_init(|| serde_json::from_str(ONOMASTICS_JSON).expect("platný v2_onomastics.json"))
 }
 
 /// Vyhladí šev mezi dvěma částmi složeniny: zabrání nahromadění 3+ souhlásek
 /// na hranici morfémů (např. `pʒn` → `ʒn`, `ʃjm` → `ʃm`) a zdvojení totožné hlásky.
-pub fn smooth_seam(
-    first: &[i32],
-    second: &[i32],
-    is_vowel: &dyn Fn(i32) -> bool,
-) -> Vec<i32> {
+pub fn smooth_seam(first: &[i32], second: &[i32], is_vowel: &dyn Fn(i32) -> bool) -> Vec<i32> {
     if first.is_empty() {
         return second.to_vec();
     }
@@ -197,21 +192,22 @@ pub fn romanize(ipa: &str) -> String {
     for ch in s.chars() {
         if matches!(
             ch,
-            '\u{0300}'..='\u{036F}'
-                | 'ː'
-                | 'ˑ'
-                | 'ˈ'
-                | 'ˌ'
-                | 'ʰ'
-                | 'ʷ'
-                | 'ʲ'
-                | 'ˠ'
-                | 'ˤ'
-                | '˥'
-                | '˦'
-                | '˧'
-                | '˨'
-                | '˩'
+            '\u{0300}'
+                ..='\u{036F}'
+                    | 'ː'
+                    | 'ˑ'
+                    | 'ˈ'
+                    | 'ˌ'
+                    | 'ʰ'
+                    | 'ʷ'
+                    | 'ʲ'
+                    | 'ˠ'
+                    | 'ˤ'
+                    | '˥'
+                    | '˦'
+                    | '˧'
+                    | '˨'
+                    | '˩'
         ) {
             continue;
         }
@@ -301,7 +297,7 @@ fn first_syllable(segments: &[i32], is_vowel: &dyn Fn(i32) -> bool) -> Vec<i32> 
         .unwrap_or_else(|| segments.to_vec())
 }
 
-fn pick<'a>(pool: &'a [String], hash: u64, salt: u64) -> &'a str {
+fn pick(pool: &[String], hash: u64, salt: u64) -> &str {
     if pool.is_empty() {
         return "stone";
     }
@@ -583,10 +579,10 @@ pub fn select_paradigm(world: &World, group: GroupId) -> &'static str {
         Part::Str(lang_name),
     ]);
 
-    if has_liturgy_or_std && (h % 5 == 0) {
+    if has_liturgy_or_std && h.is_multiple_of(5) {
         return "liturgical_vernacular";
     }
-    if is_urban && (h % 7 == 0) {
+    if is_urban && h.is_multiple_of(7) {
         return "caste_guild_matrix";
     }
     const PARADIGMS: [&str; 8] = [
@@ -641,7 +637,8 @@ pub fn personal_names_for_group(
                 let fam_c = "family";
                 let cog_c = pick(&cat.semantic_pools["modifiers"], h, 3);
 
-                let prae_s = first_syllable(&form_for_concept(world, group, None, prae_c), &is_vowel);
+                let prae_s =
+                    first_syllable(&form_for_concept(world, group, None, prae_c), &is_vowel);
                 let nomen_s = smooth_compound(
                     &[
                         form_for_concept(world, group, None, clan_c),
@@ -654,7 +651,12 @@ pub fn personal_names_for_group(
                 let p_ipa = table.render(&prae_s);
                 let n_ipa = table.render(&nomen_s);
                 let c_ipa = table.render(&cog_s);
-                let full_name = format!("{} {} {}", romanize(&p_ipa), romanize(&n_ipa), romanize(&c_ipa));
+                let full_name = format!(
+                    "{} {} {}",
+                    romanize(&p_ipa),
+                    romanize(&n_ipa),
+                    romanize(&c_ipa)
+                );
                 json!({
                     "full_name": full_name,
                     "ipa": format!("{p_ipa} {n_ipa} {c_ipa}"),
@@ -670,7 +672,8 @@ pub fn personal_names_for_group(
                 let child_c = "child";
 
                 let given_s = form_for_concept(world, group, None, given_c);
-                let child_s = first_syllable(&form_for_concept(world, group, None, child_c), &is_vowel);
+                let child_s =
+                    first_syllable(&form_for_concept(world, group, None, child_c), &is_vowel);
                 let parent_s = form_for_concept(world, group, None, parent_c);
                 let filiation_s = smooth_seam(&child_s, &parent_s, &is_vowel);
 
@@ -692,9 +695,11 @@ pub fn personal_names_for_group(
                 let gen_c = pick(&cat.semantic_pools["generational_markers"], h, 2);
                 let pers_c = pick(&cat.semantic_pools["heroic_second"], h, 3);
 
-                let clan_s = first_syllable(&form_for_concept(world, group, None, clan_c), &is_vowel);
+                let clan_s =
+                    first_syllable(&form_for_concept(world, group, None, clan_c), &is_vowel);
                 let gen_s = first_syllable(&form_for_concept(world, group, None, gen_c), &is_vowel);
-                let pers_s = first_syllable(&form_for_concept(world, group, None, pers_c), &is_vowel);
+                let pers_s =
+                    first_syllable(&form_for_concept(world, group, None, pers_c), &is_vowel);
                 let given_s = smooth_seam(&gen_s, &pers_s, &is_vowel);
 
                 let c_ipa = table.render(&clan_s);
@@ -740,7 +745,8 @@ pub fn personal_names_for_group(
                 let stem_c = pick(&cat.semantic_pools["heroic_second"], h, 2);
                 let house_c = pick(&cat.semantic_pools["urban_heads"], h, 3);
 
-                let caste_s = first_syllable(&form_for_concept(world, group, None, caste_c), &is_vowel);
+                let caste_s =
+                    first_syllable(&form_for_concept(world, group, None, caste_c), &is_vowel);
                 let stem_s = form_for_concept(world, group, None, stem_c);
                 let given_s = smooth_seam(&caste_s, &stem_s, &is_vowel);
                 let house_s = smooth_compound(
@@ -912,7 +918,11 @@ pub fn export_world_onomastics(world: &World) -> Value {
 
     // Osobní jména podle spisovných norem a jednotlivých paradigmat.
     let mut by_standard = Map::new();
-    let all_paradigms: Vec<&str> = cat.anthroponym_paradigms.keys().map(String::as_str).collect();
+    let all_paradigms: Vec<&str> = cat
+        .anthroponym_paradigms
+        .keys()
+        .map(String::as_str)
+        .collect();
     for (idx, (sid, &std_group)) in world.society.standards.iter().enumerate() {
         if !world.groups.contains(std_group) {
             continue;
@@ -938,7 +948,8 @@ pub fn export_world_onomastics(world: &World) -> Value {
             select_paradigm(world, spoken_group)
         };
         let p_spec = cat.anthroponym_paradigms.get(primary_paradigm);
-        let roster = personal_names_for_group(world, spoken_group, primary_paradigm, city_toponym, 5);
+        let roster =
+            personal_names_for_group(world, spoken_group, primary_paradigm, city_toponym, 5);
         by_standard.insert(
             sid.clone(),
             json!({
@@ -956,7 +967,9 @@ pub fn export_world_onomastics(world: &World) -> Value {
     if let Some(rep_group) = world
         .group_ids()
         .into_iter()
-        .filter(|&g| !world.groups.written[g.index()] && world.groups.domain[g.index()] == Domain::Home)
+        .filter(|&g| {
+            !world.groups.written[g.index()] && world.groups.domain[g.index()] == Domain::Home
+        })
         .max_by_key(|&g| world.groups.population[g.index()])
     {
         for (p_id, p_spec) in &cat.anthroponym_paradigms {

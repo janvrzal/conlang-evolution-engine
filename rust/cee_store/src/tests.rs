@@ -225,6 +225,8 @@ fn co_kdyby_navaze_na_rodice() {
         );
     }
     assert_eq!(list(&runs).unwrap().len(), 2);
+    // mazání jen složky běhu ve složce běhů
+    assert!(delete(&root).is_err());
     delete(&child.dir).unwrap();
     assert_eq!(list(&runs).unwrap().len(), 1);
     fs::remove_dir_all(&root).unwrap();
@@ -250,6 +252,15 @@ fn preruseny_beh_a_useknuty_soubor() {
         assert!(!read.is_empty() && read.len() <= 2, "{cut}");
         assert_eq!(read[0], json!({"year": 100}));
     }
+    mark_failed(&writer.dir, "spadlo").unwrap();
+    assert_eq!(info(&writer.dir).unwrap().status, Status::Failed);
+    // běh z jiného sestavení enginu: kontrolní body se pro „co kdyby“ nepoužijí
+    writer.info.engine_build = Some("jine".into());
+    write_info(&writer.dir, &writer.info).unwrap();
+    writer.events = 1;
+    writer.add_checkpoint(1, 10.0, 0, b"x").unwrap();
+    writer.wait().unwrap();
+    assert!(checkpoint_before(&writer.dir, 100.0).unwrap().is_none());
     assert_eq!(stamp(0), "19700101-000000");
     assert_eq!(stamp(1_794_240_000), "20261109-160000");
     fs::remove_dir_all(&root).unwrap();

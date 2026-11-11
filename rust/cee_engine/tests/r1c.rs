@@ -724,7 +724,10 @@ fn retence_podle_korene_zahrnuje_obnovu_a_zkraceni() {
     let group_name = world.group_name(group).to_owned();
 
     // Ověříme i export
-    assert_eq!(cee_engine::export::root_retention(&simulation.world, group), 1.0);
+    assert_eq!(
+        cee_engine::export::root_retention(&simulation.world, group),
+        1.0
+    );
     let exported = cee_engine::export::export(&simulation, true);
     let groups_exported = exported["groups"].as_array().unwrap();
     let group_exported = groups_exported

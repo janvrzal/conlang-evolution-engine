@@ -23,7 +23,10 @@ fn soubor_pokryva_vsechna_pole_a_hodnoty_sedi() {
     assert_eq!(world_count, 12);
     assert_eq!(active_count, 27);
     assert_eq!(fixed_count, 50);
-    assert_eq!(world_count + active_count + fixed_count, file.parameters.len());
+    assert_eq!(
+        world_count + active_count + fixed_count,
+        file.parameters.len()
+    );
     for spec in &file.parameters {
         assert_eq!(fields[&spec.name], spec.default, "{}", spec.name);
         assert!(

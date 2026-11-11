@@ -1,0 +1,3 @@
+# Styl desktopové části: široké řádky (stávající kód).
+max_width = 160
+use_small_heuristics = "Max"

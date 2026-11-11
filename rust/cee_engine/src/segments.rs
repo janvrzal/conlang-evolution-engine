@@ -21,6 +21,10 @@ use unicode_normalization::UnicodeNormalization;
 use crate::ids::Form;
 
 const TONE_LETTERS: &str = "˥˦˧˨˩";
+
+/// Diakritika za hláskou: rysy, které nastaví, a znaky, které spotřebuje.
+type Diacritic = (&'static [(&'static str, &'static str)], &'static [char]);
+
 /// Značky, které se při změně rysů dědí jako sekundární artikulace (jen pro popis).
 const PLAIN_MARKS: [char; 2] = ['\u{0361}', 'ː'];
 
@@ -400,7 +404,7 @@ impl SegmentTable {
                 }
                 None => {
                     if let Some(&last) = out.last() {
-                        let diacritic: Option<(&[(&str, &str)], &[char])> = match chars[index] {
+                        let diacritic: Option<Diacritic> = match chars[index] {
                             'ʰ' => Some((&[("sg", "+")][..], &['ʰ'])),
                             'ʱ' => Some((&[("sg", "+"), ("voi", "+")][..], &['ʱ'])),
                             '\u{0303}' => Some((&[("nas", "+")][..], &['\u{0303}'])),

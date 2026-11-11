@@ -110,6 +110,16 @@ fn co_kdyby_z_kontrolniho_bodu() {
     assert_eq!(resumed.history.digest(), fresh.history.digest());
     assert_ne!(resumed.history.digest(), full.history.digest());
 
+    // přehození dvou událostí téhož roku je změna od toho roku
+    // (příklad má v roce 300 dvě různé události `standard`)
+    let same: Vec<usize> = (0..world.events.len())
+        .filter(|&i| world.events[i].year == 300.0)
+        .collect();
+    assert_eq!(same.len(), 2);
+    let mut swapped = world.clone();
+    swapped.events.swap(same[0], same[1]);
+    assert_eq!(spec::branch_year(&world, &swapped), Some(300.0));
+
     // změna mimo události se musí počítat od začátku
     let mut other = world.clone();
     other.seed += 1;
