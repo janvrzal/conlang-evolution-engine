@@ -102,3 +102,28 @@ Brány 47 ze 47. Kalibrace 38 ze 40 (dosud také 38): nově prochází `m7::typo
 a dál `m8::romanske_pady` (0,25, dosud 0,42; intervaly se překrývají).
 
 Časy kolísají o ±15 % podle zátěže stroje; počty stavu jsou přesné.
+
+## Kolik změn probíhá uvnitř nářečí a na hranicích
+
+`cargo run --release --example zmeny_vesnic -- docs/scenare/talvera.world.json 500,1000,1500,1800`
+dělí skupiny podle vazeb míšení: jen s vlastním jazykem (třetiny podle izoglos se sousedy, tedy
+změn v jedné skupině dokončených a ve druhé nezačatých), s vazbou na jiný jazyk a osamocené.
+Probíhající změna má ve skupině podíl 5–95 %.
+
+| Talvera, průměr probíhajících změn na skupinu | 500 | 1000 | 1500 | 1800 |
+|---|---|---|---|---|
+| vlastní jazyk, málo izoglos | 25,5 | 17,0 | 24,0 | 18,4 |
+| vlastní jazyk, středně izoglos | 24,1 | 21,8 | 33,2 | 24,6 |
+| vlastní jazyk, hodně izoglos | 31,2 | 34,2 | 41,7 | 29,3 |
+| hranice jazyka (< 10 % vazeb) | 32,1 | 44,3 | 45,6 | 51,1 |
+| hranice jazyka (≥ 10 % vazeb) | 28,6 | 31,2 | 39,7 | 37,0 |
+
+Vnitřní skupiny mají kolem 17–25 probíhajících změn, u horní hranice Labovových 10–20 změn
+v jedné komunitě (Filadelfie, hlavně samohlásky; engine počítá všechny hláskové procesy).
+Průměr 35–40 táhnou nahoru přechodová pásma: na hranici jazyka a v pásmech izoglos skupina drží
+změny sousedů napůl. V Talveře má vazbu na jiný jazyk 56 % skupin (164 z 292 v roce 1800). Větší
+skupiny mají změn méně (nejmenší třetina 36, největší 28).
+
+Osamocené jsou jen psané normy (`written:…`): jazyk se nemění, ale drží 42–56 živých procesů
+zděděných při vzniku, které se nikdy neuzavřou (skupina se nepřestavuje). Na čas to má malý vliv
+(2–4 skupiny); uzavřít je přímo by změnilo chování aktivací, proto zůstávají.
