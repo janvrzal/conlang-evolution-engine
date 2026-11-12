@@ -1,7 +1,19 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/svg/readme-header-dark.svg">
+  <img src="docs/brand/svg/readme-header-light.svg" alt="CEE – Conlang Evolution Engine">
+</picture>
+
 # Conlang Evolution Engine (CEE)
 
 Generative simulator of language evolution based on feature matrices, absolute
 chronologies, and historical phonology modeling.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/splash-dark.gif">
+    <img src="docs/brand/splash-light.gif" width="360" alt="Značka CEE vyrůstá do rodokmenu jazyků">
+  </picture>
+</p>
 
 Technický whitepaper: [`docs/CEE_master.md`](docs/CEE_master.md).
 Konvence a pravidla pro práci v repu: [`AGENT.md`](AGENT.md).

@@ -1,0 +1,9 @@
+<!doctype html><html lang="cs"><head><meta charset="utf-8"><title>CEE – čekání na dosimulování</title><style>:root{--bg:#fbfbf9;--ink:#1b2830;--ink2:#56656e}@media (prefers-color-scheme:dark){:root{--bg:#17202a;--ink:#ecdfc5;--ink2:#9aa5ae}}
+html,body{margin:0;height:100%;background:var(--bg)}body{display:flex;align-items:center;justify-content:center}
+.i{fill:var(--ink)}.s{fill:var(--ink2)}
+.ld{display:flex;align-items:center;gap:12px;color:var(--ink);font:14px system-ui}
+.ld circle{fill:var(--ink);transform-box:fill-box;transform-origin:center;animation:p 1.6s ease-in-out infinite}
+@keyframes p{0%,100%{transform:scale(.35)}40%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.ld circle{animation:none;transform:scale(.7)}}</style></head><body>
+<div class="ld"><svg width="36" height="36" viewBox="0 0 32 32"><circle cx="7" cy="7" r="3.6" style="animation-delay:0.36s"/><circle cx="16" cy="7" r="3.6" style="animation-delay:0.54s"/><circle cx="25" cy="7" r="3.6" style="animation-delay:0.72s"/><circle cx="7" cy="16" r="3.6" style="animation-delay:0.18s"/><circle cx="16" cy="16" r="3.6" style="animation-delay:0.36s"/><circle cx="25" cy="16" r="3.6" style="animation-delay:0.54s"/><circle cx="7" cy="25" r="3.6" style="animation-delay:0.00s"/><circle cx="16" cy="25" r="3.6" style="animation-delay:0.18s"/><circle cx="25" cy="25" r="3.6" style="animation-delay:0.36s"/></svg><span>Simuluji generaci <b id="g">412</b>…</span></div>
+<script>let g=412;setInterval(()=>document.getElementById("g").textContent=++g,700)</script></body></html>
