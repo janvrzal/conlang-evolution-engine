@@ -25,6 +25,8 @@
 		background: var(--panel);
 	}
 	.main {
+		/* přechod mezi obrazovkami (motion.ts, screenTransition) */
+		view-transition-name: screen;
 		min-height: 0;
 		overflow: auto;
 		display: flex;

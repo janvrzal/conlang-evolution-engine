@@ -1,34 +1,42 @@
 <!-- Kostra aplikace: lišta Zadání | Výsledek, stav běhu, pruhy hlášení, pata zadání s ověřením
      a společná časová osa obrazovek Výsledku. Skládá se jen z komponent $lib/ds. -->
 <script lang="ts">
+	import { goto, onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import {
 		AppBar,
+		BrandMark,
 		Banner,
 		ConfirmDialog,
 		Button,
 		CheckBadge,
+		CommandPalette,
 		FilePicker,
 		Footer,
 		IssueList,
 		Popover,
 		Shell,
 		Spacer,
+		Splash,
 		Text,
 		TimeAxis,
 		Toast,
 		Working,
 		formatYear,
+		screenTransition,
 		type AxisMarker,
+		type Command,
 		type IssueItem,
 		type NavItem
 	} from '$lib/ds';
 	import { API_REVISION } from '$lib/engine';
 	import { inApp } from '$lib/files';
 	import { i18n, number, t, type MessageKey } from '$lib/i18n.svelte';
-	import { frameAt, speakers, varietiesAt } from '$lib/model/languages';
+	import { geography } from '$lib/model/geography';
+	import { frameAt, lineageNames, speakers, varietiesAt } from '$lib/model/languages';
 	import { app } from '$lib/state.svelte';
+	import { dockProgress } from '$lib/dock';
 
 	let { children } = $props();
 
@@ -66,8 +74,40 @@
 		if (q.has('all')) app.view.allLanguages = q.get('all') === '1';
 	});
 
+	onNavigate(screenTransition);
+
+	// Úvodní animace jednou za otevření okna (obnovení stránky ji nepřehraje znovu).
+	let splashing = $state(false);
+	function splashDone() {
+		splashing = false;
+		try {
+			sessionStorage.setItem('cee.splash', '1');
+		} catch {
+			// úložiště nedostupné: animace se příště přehraje znovu
+		}
+	}
+	// Konec běhu: značka v liště přehraje vlnu (hotovo) nebo uschne (selhal).
+	let wasRunning = false;
+	let finished = $state(0);
+	$effect(() => {
+		if (app.running) wasRunning = true;
+		else if (wasRunning) {
+			wasRunning = false;
+			finished = Date.now();
+		}
+	});
+	// Postup běhu i v Docku (macOS) a na hlavním panelu (Windows).
+	$effect(() => {
+		if (inApp()) dockProgress(app.running ? (app.run?.progress ?? 0) : null);
+	});
+
 	onMount(async () => {
 		document.documentElement.lang = i18n.locale;
+		try {
+			splashing = !sessionStorage.getItem('cee.splash');
+		} catch {
+			splashing = true;
+		}
 		// vývoj: ?fixture=talvera&branch=talvera-bez-politiky načte vzorek skutečného běhu
 		const fixture = import.meta.env.DEV ? page.url.searchParams.get('fixture') : null;
 		if (fixture) await app.loadFixture(fixture, page.url.searchParams.get('branch') ?? undefined);
@@ -87,11 +127,59 @@
 	});
 
 	// ⌘Z / ⇧⌘Z zpět a znovu (mimo textová pole), ⌘S uložit, ⇧⌘S uložit jako, ⌘O otevřít
+	// Paleta příkazů (⌘K): skok na obrazovku, jazyk, kraj nebo rok.
+	let paletteOpen = $state(false);
+	const paletteItems = $derived.by((): Command[] => {
+		if (!paletteOpen) return [];
+		const out: Command[] = [...SPEC, ...RESULTS].map((id) => ({ id: `screen:${id}`, label: t(`shell.nav.${id}` as MessageKey), group: t('shell.palette.screens') }));
+		if (app.world && !app.running && errors === 0 && app.engineState.phase === 'ready')
+			out.unshift({ id: 'run', label: app.result ? t('shell.rerun', { from, to }) : t('shell.run', { from, to }), group: t('shell.palette.actions') });
+		if (app.world && app.result) {
+			const geo = geography(app.world, app.result);
+			const names = lineageNames(app.result, geo.name, i18n.locale, app.frames);
+			const alive = new Set(Object.keys(frameAt(app.frames, app.result.year)?.languages ?? {}));
+			for (const l of app.result.lineages)
+				out.push({
+					id: `lineage:${l.id}`,
+					label: names.get(l.id) ?? l.id,
+					group: t('shell.palette.languages'),
+					hint: alive.has(l.id) || l.end_year == null ? undefined : `† ${formatYear(l.end_year)}`,
+					keywords: l.endonym ?? ''
+				});
+			for (const r of app.world.regions) out.push({ id: `region:${r.id}`, label: geo.name(r.id), group: t('shell.palette.regions'), keywords: r.id });
+		} else if (app.world) for (const r of app.world.regions) out.push({ id: `region:${r.id}`, label: r.name ?? r.id, group: t('shell.palette.regions'), keywords: r.id });
+		return out;
+	});
+	function paletteExtra(q: string): Command[] {
+		const m = q.replace('−', '-').match(/^-?\d{1,4}$/);
+		if (!m || !app.world) return [];
+		const y = Number(m[0]);
+		return y >= (app.world.start_year ?? 0) && y <= app.world.end_year ? [{ id: `year:${y}`, label: t('shell.palette.year', { year: formatYear(y) }), group: t('shell.palette.time') }] : [];
+	}
+	function palettePick(c: Command) {
+		const [kind, ...rest] = c.id.split(':'), id = rest.join(':');
+		if (kind === 'screen') void goto(href(id));
+		else if (kind === 'run') void app.start();
+		else if (kind === 'lineage') {
+			app.view.lineage = id;
+			void goto('/jazyky');
+		} else if (kind === 'region') {
+			app.view.region = id;
+			if (!inResults && route !== 'svet') void goto(app.result ? '/atlas' : '/svet');
+		} else if (kind === 'year') {
+			app.view.year = Number(id);
+			if (!inResults) void goto('/atlas');
+		}
+	}
+
 	function key(event: KeyboardEvent) {
 		const mod = event.metaKey || event.ctrlKey;
 		if (!mod) return;
 		const k = event.key.toLowerCase();
-		if (k === 's') {
+		if (k === 'k') {
+			event.preventDefault();
+			paletteOpen = !paletteOpen;
+		} else if (k === 's') {
 			event.preventDefault();
 			void save(event.shiftKey);
 		} else if (k === 'o') {
@@ -200,6 +288,17 @@
 
 <svelte:window onkeydown={key} />
 
+<CommandPalette
+	bind:open={paletteOpen}
+	label={t('shell.palette.label')}
+	placeholder={t('shell.palette.placeholder')}
+	empty={t('shell.palette.empty')}
+	items={paletteItems}
+	extra={paletteExtra}
+	onpick={palettePick}
+/>
+{#if splashing}<Splash generation={(n) => t('shell.splash_generation', { n })} subtitle="Conlang Evolution Engine" onend={splashDone} />{/if}
+
 <Shell>
 	{#snippet bar()}
 		<AppBar
@@ -213,15 +312,17 @@
 			{#snippet status()}
 				{#if app.running && app.run}
 					<Working />
-					<span>{t('shell.running', { year: formatYear(app.run.year), from, to, pct: Math.round(app.run.progress * 100) })}</span>
+					<span>{t('shell.running', { gen: Math.max(0, Math.round((app.run.year - app.run.start_year) / ((app.world?.generation_years as number | undefined) ?? 25))), year: formatYear(app.run.year), from, to, pct: Math.round(app.run.progress * 100) })}</span>
 					<Button onclick={() => app.cancel()}>{t('shell.stop')}</Button>
 				{:else if app.run?.status === 'failed'}
+					<BrandMark mode="wither" size={18} />
 					<Text tone="red" as="span">{t('shell.failed', { error: app.run.error ?? '' })}</Text>
 					<Button variant="primary" disabled={errors > 0} onclick={() => app.start()}>{t('shell.rerun', { from, to })}</Button>
 				{:else if app.stale}
 					<Text tone="red" as="span">{t('shell.stale')}</Text>
 					<Button variant="primary" disabled={errors > 0} onclick={() => app.start()}>{t('shell.rerun', { from, to })}</Button>
 				{:else if app.result}
+					{#key finished}<BrandMark mode={finished ? 'wave' : 'mark'} size={18} />{/key}
 					<span>{t('shell.fresh', { from, to, seconds: Math.round(app.run?.seconds ?? 0) })}</span>
 				{:else}
 					<span>{app.run?.status === 'cancelled' ? t('shell.cancelled') : t('shell.no_run')}</span>
@@ -231,6 +332,7 @@
 				{/if}
 			{/snippet}
 			{#snippet tools()}
+				<Button icon="search" label={t('shell.palette.label')} title="{t('shell.palette.label')} (⌘K)" onclick={() => (paletteOpen = true)} />
 				{#if inApp()}
 					<Button icon="open" label={t('shell.open')} title="{t('shell.open')} (⌘O)" onclick={openDialog} />
 				{:else}
