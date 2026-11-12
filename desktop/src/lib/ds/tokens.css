@@ -73,14 +73,18 @@
 	color-scheme: light;
 }
 
-/* Přechod mezi obrazovkami (motion.ts, screenTransition): obsah se odkryje zleva doprava, lišta stojí. */
+/* Přechod mezi obrazovkami (motion.ts, screenTransition): stará obrazovka zmizí hned, nová se odkryje
+   zleva doprava na prázdném podkladu (nikdy nejsou vidět obě naráz). Lišta stojí. */
 ::view-transition-old(root),
-::view-transition-new(root),
-::view-transition-old(screen) {
+::view-transition-new(root) {
 	animation: none;
 }
+::view-transition-old(screen) {
+	animation: none;
+	opacity: 0;
+}
 ::view-transition-new(screen) {
-	animation: screen-in calc(var(--t-unfold) * 1.5) var(--e-arrive) both;
+	animation: screen-in var(--t-unfold) var(--e-arrive) both;
 }
 @keyframes screen-in {
 	from {

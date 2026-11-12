@@ -405,7 +405,9 @@
 		if (fill) {
 			const now = performance.now();
 			const next = L.vil.map((v) => fill(v));
-			if (wavesOf !== L || prevFill.length !== next.length || still()) waves.clear();
+			// stejné vsi ve stejném pořadí (třeba jen jiná velikost mapy) = vlna jde dál; jiný svět nebo přiblížení = bez vlny
+			const sameWorld = !!wavesOf && wavesOf.vil.length === L.vil.length && wavesOf.vil.every((v, i) => v.id === L.vil[i].id);
+			if (!sameWorld || prevFill.length !== next.length || still()) waves.clear();
 			else spread(L, prevFill, next, now);
 			wavesOf = L;
 			prevFill = next;
@@ -474,7 +476,7 @@
 				if (prevEdges && !prevEdges.has(key) && !edgeDraw.has(key) && (waves.has(e.a) || waves.has(e.b)))
 					edgeDraw.set(key, Math.max(waves.get(e.a)?.t0 ?? 0, waves.get(e.b)?.t0 ?? 0) + T.flow * 0.5);
 			}
-			prevEdges = wavesOf === L && !still() ? keys : null;
+			prevEdges = !still() ? keys : null;
 			for (const { e, s } of styled) {
 				const key = `${e.a}-${e.b}:${s!.color ?? ''}:${s!.dash ?? ''}`, start = edgeDraw.get(key);
 				let part = 1;
