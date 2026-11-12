@@ -73,6 +73,11 @@
 		text-decoration: none;
 		white-space: nowrap;
 		color: var(--ink);
+		transition:
+			border-color var(--t-tick),
+			background var(--t-tick),
+			color var(--t-tick),
+			box-shadow var(--t-snap) var(--e-change);
 	}
 	.btn:hover {
 		border-color: var(--ink-2);

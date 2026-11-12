@@ -1,7 +1,9 @@
 <!-- Kronika zadání: pruhy (Státy, Jazyk ve společnosti, Lidé a místa, Hlásky) s událostmi na ose let.
      Rámeček = studijní případ, červeně = vybraná nebo chybná. ←/→ přechází mezi událostmi pruhu. -->
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { formatYear } from './format';
+	import { T, still } from './motion';
 	export interface LaneEvent {
 		id: string | number;
 		year: number;
@@ -24,6 +26,24 @@
 		label,
 		onselect
 	}: { start: number; end: number; lanes: Lane[]; cursor?: number; label: string; onselect?: (event: LaneEvent, lane: Lane) => void } = $props();
+
+	// Událost, přes kterou při přehrávání přejde ukazatel, krátce vyraší (velké skoky ukazatele ne).
+	let prev: number | undefined;
+	let passing = $state(new Set<string>());
+	$effect(() => {
+		const c = cursor, p = prev;
+		prev = c;
+		if (c == null || p == null || still() || c <= p || c - p > (end - start) * 0.1) return;
+		const hit: string[] = [];
+		for (const lane of untrack(() => lanes)) for (const ev of lane.events) if (ev.year > p && ev.year <= c) hit.push(`${lane.id}:${ev.id}`);
+		if (!hit.length) return;
+		passing = new Set([...untrack(() => passing), ...hit]);
+		setTimeout(() => {
+			const next = new Set(passing);
+			hit.forEach((k) => next.delete(k));
+			passing = next;
+		}, T.flow);
+	});
 
 	const pct = (y: number) => ((y - start) / (end - start || 1)) * 100;
 	const ticks = $derived.by(() => {
@@ -53,6 +73,7 @@
 						<button
 							type="button"
 							class="ev {ev.state ?? ''}"
+							class:pass={passing.has(`${lane.id}:${ev.id}`)}
 							style:left="{pct(ev.year)}%"
 							aria-label="{formatYear(ev.year)} {ev.label}"
 							title="{formatYear(ev.year)} {ev.label}"
@@ -136,6 +157,15 @@
 		height: 13px;
 		background: var(--ink);
 		border-radius: 1px;
+		transform-origin: 50% 100%;
+	}
+	.ev.pass i {
+		animation: sprout var(--t-flow) var(--e-arrive);
+	}
+	@keyframes sprout {
+		25% {
+			transform: scale(1.35, 1.6);
+		}
 	}
 	.ev.case i {
 		background: none;

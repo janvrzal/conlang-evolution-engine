@@ -13,6 +13,7 @@
 		children: Snippet;
 	} = $props();
 	const uid = $props.id();
+	import { unfold } from './motion';
 </script>
 
 <div class="disclosure">
@@ -20,7 +21,7 @@
 		<span class="arrow" class:open aria-hidden="true">▸</span>
 		<span class="summary">{@render summary()}</span>
 	</button>
-	{#if open}<div class="body" id="{uid}-body">{@render children()}</div>{/if}
+	{#if open}<div class="body" id="{uid}-body" transition:unfold>{@render children()}</div>{/if}
 </div>
 
 <style>
@@ -41,6 +42,7 @@
 		text-align: left;
 		color: inherit;
 		font: inherit;
+		transition: background var(--t-tick);
 	}
 	.toggle:hover {
 		background: var(--field);
@@ -48,7 +50,7 @@
 	.arrow {
 		font-size: 11px;
 		color: var(--ink-2);
-		transition: transform 0.12s;
+		transition: transform var(--t-unfold) var(--e-change);
 	}
 	.arrow.open {
 		transform: rotate(90deg);

@@ -18,6 +18,7 @@
 		Text,
 		TimeAxis,
 		Toast,
+		Working,
 		formatYear,
 		type AxisMarker,
 		type IssueItem,
@@ -211,6 +212,7 @@
 		>
 			{#snippet status()}
 				{#if app.running && app.run}
+					<Working />
 					<span>{t('shell.running', { year: formatYear(app.run.year), from, to, pct: Math.round(app.run.progress * 100) })}</span>
 					<Button onclick={() => app.cancel()}>{t('shell.stop')}</Button>
 				{:else if app.run?.status === 'failed'}

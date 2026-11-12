@@ -1,9 +1,10 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { unfold } from './motion';
 	let { term, children }: { term: string; children: Snippet } = $props();
 </script>
 
-<div class="row">
+<div class="row" transition:unfold>
 	<dt>{term}</dt>
 	<dd>{@render children()}</dd>
 </div>

@@ -1,11 +1,12 @@
 <!-- Vyskakovací panel nad prvkem (seznam hlášení nad patou). Rodič musí být <Footer> nebo jiný relativní kontejner z ds. -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { narrow, rise } from './motion';
 	let { label, open = true, width = 560, children }: { label: string; open?: boolean; width?: number; children: Snippet } = $props();
 </script>
 
 {#if open}
-	<div class="pop" role="dialog" aria-label={label} style:width="{width}px">{@render children()}</div>
+	<div class="pop" role="dialog" in:rise out:narrow aria-label={label} style:width="{width}px">{@render children()}</div>
 {/if}
 
 <style>

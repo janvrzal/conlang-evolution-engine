@@ -1,10 +1,11 @@
 <!-- Pruh pod lištou: zastaralé výsledky, engine offline. Akce vpravo. -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { unfold } from './motion';
 	let { tone = 'stale', actions, children }: { tone?: 'stale' | 'error' | 'info'; actions?: Snippet; children: Snippet } = $props();
 </script>
 
-<div class="banner {tone}" role={tone === 'error' ? 'alert' : 'status'}>
+<div class="banner {tone}" role={tone === 'error' ? 'alert' : 'status'} transition:unfold>
 	<span class="mark" aria-hidden="true"></span>
 	<span class="text">{@render children()}</span>
 	{#if actions}<span class="actions">{@render actions()}</span>{/if}

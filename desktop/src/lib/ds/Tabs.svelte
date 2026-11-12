@@ -1,5 +1,7 @@
 <!-- Karty uvnitř panelu. Šipky vlevo/vpravo přepínají. -->
 <script lang="ts" generics="V extends string">
+	import { underline } from './motion';
+
 	let {
 		tabs,
 		value = $bindable(),
@@ -18,10 +20,11 @@
 	}
 </script>
 
-<div class="tabs" role="tablist" aria-label={label} tabindex="-1" onkeydown={key}>
+<div class="tabs" role="tablist" aria-label={label} tabindex="-1" onkeydown={key} use:underline={{ selector: '[aria-selected="true"]', key: value, thickness: 2.5 }}>
 	{#each tabs as tab (tab.id)}
 		<button type="button" role="tab" aria-selected={tab.id === value} tabindex={tab.id === value ? 0 : -1} onclick={() => pick(tab.id)}>{tab.label}</button>
 	{/each}
+	<span data-underline aria-hidden="true"></span>
 </div>
 
 <style>
@@ -41,10 +44,10 @@
 		color: var(--ink-2);
 		border-bottom: 2.5px solid transparent;
 		margin-bottom: -1px;
+		transition: color var(--t-tick);
 	}
 	button[aria-selected='true'] {
 		color: var(--ink);
 		font-weight: 500;
-		border-bottom-color: var(--ink);
 	}
 </style>

@@ -60,7 +60,29 @@
 	--gap-4: 16px;
 	--gap-5: 24px;
 	--radius: 2px;
+	/* Pohyb (docs/brand/README.md, Pohyb). Hodnoty zrcadlí motion.ts pro animace v JS.
+	   Změna stavu jde po křivce S, příchod se rozvine a zpomalí, odchod se zúží. */
+	--e-change: cubic-bezier(0.65, 0, 0.35, 1);
+	--e-arrive: cubic-bezier(0.16, 1, 0.3, 1);
+	--e-leave: cubic-bezier(0.32, 0, 0.67, 0);
+	--t-tick: 90ms;
+	--t-snap: 160ms;
+	--t-unfold: 280ms;
+	--t-flow: 600ms;
+	--t-epoch: 1200ms;
 	color-scheme: light;
+}
+
+/* Omezený pohyb: všechno rovnou v konečném stavu. Animace v JS se řídí motion.ts. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		transition-duration: 0s !important;
+		transition-delay: 0s !important;
+		animation-duration: 0s !important;
+		animation-iteration-count: 1 !important;
+	}
 }
 
 @media (prefers-color-scheme: dark) {
