@@ -1,6 +1,7 @@
 <!-- Kostra aplikace: lišta Zadání | Výsledek, stav běhu, pruhy hlášení, pata zadání s ověřením
      a společná časová osa obrazovek Výsledku. Skládá se jen z komponent $lib/ds. -->
 <script lang="ts">
+	import { onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import {
@@ -22,6 +23,7 @@
 		Toast,
 		Working,
 		formatYear,
+		screenTransition,
 		type AxisMarker,
 		type IssueItem,
 		type NavItem
@@ -68,6 +70,8 @@
 		if (q.has('event')) app.view.event = Number(q.get('event'));
 		if (q.has('all')) app.view.allLanguages = q.get('all') === '1';
 	});
+
+	onNavigate(screenTransition);
 
 	// Úvodní animace jednou za otevření okna (obnovení stránky ji nepřehraje znovu).
 	let splashing = $state(false);
@@ -248,7 +252,7 @@
 			{#snippet status()}
 				{#if app.running && app.run}
 					<Working />
-					<span>{t('shell.running', { year: formatYear(app.run.year), from, to, pct: Math.round(app.run.progress * 100) })}</span>
+					<span>{t('shell.running', { gen: Math.max(0, Math.round((app.run.year - app.run.start_year) / ((app.world?.generation_years as number | undefined) ?? 25))), year: formatYear(app.run.year), from, to, pct: Math.round(app.run.progress * 100) })}</span>
 					<Button onclick={() => app.cancel()}>{t('shell.stop')}</Button>
 				{:else if app.run?.status === 'failed'}
 					<BrandMark mode="wither" size={18} />

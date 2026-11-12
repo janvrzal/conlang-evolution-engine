@@ -169,3 +169,17 @@ export function underline(
     },
   };
 }
+
+/** Přechod mezi obrazovkami (SvelteKit onNavigate): nová obrazovka se odkryje zleva doprava přes starou.
+ *  Lišta a pata stojí. Bez podpory View Transitions nebo při omezeném pohybu se přepne hned. */
+export function screenTransition(navigation: { from: { url: URL } | null; to: { url: URL } | null; complete: Promise<void> }) {
+	const doc = document as Document & { startViewTransition?: (cb: () => Promise<void>) => unknown };
+	if (!doc.startViewTransition || still()) return;
+	if (!navigation.from || !navigation.to || navigation.from.url.pathname === navigation.to.url.pathname) return;
+	return new Promise<void>((resolve) => {
+		doc.startViewTransition!(async () => {
+			resolve();
+			await navigation.complete;
+		});
+	});
+}

@@ -61,6 +61,7 @@ export { default as EmptyState } from './EmptyState.svelte';
 // značka
 export { default as BrandMark } from './BrandMark.svelte';
 export { default as Splash } from './Splash.svelte';
+export { screenTransition } from './motion';
 export { default as ConfirmDialog } from './ConfirmDialog.svelte';
 
 // čas, mapy a grafy

@@ -73,6 +73,21 @@
 	color-scheme: light;
 }
 
+/* Přechod mezi obrazovkami (motion.ts, screenTransition): obsah se odkryje zleva doprava, lišta stojí. */
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-old(screen) {
+	animation: none;
+}
+::view-transition-new(screen) {
+	animation: screen-in calc(var(--t-unfold) * 1.5) var(--e-arrive) both;
+}
+@keyframes screen-in {
+	from {
+		clip-path: inset(0 100% 0 0);
+	}
+}
+
 /* Omezený pohyb: všechno rovnou v konečném stavu. Animace v JS se řídí motion.ts. */
 @media (prefers-reduced-motion: reduce) {
 	*,

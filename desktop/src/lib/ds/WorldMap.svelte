@@ -272,8 +272,15 @@
 		c.stroke();
 		c.restore();
 	}
-	function strokeEdge(c: CanvasRenderingContext2D, e: { x1: number; y1: number; x2: number; y2: number }) {
-		const p = wobble(e.x1, e.y1, e.x2, e.y2);
+	function strokeEdge(c: CanvasRenderingContext2D, e: { x1: number; y1: number; x2: number; y2: number }, part = 1) {
+		let p = wobble(e.x1, e.y1, e.x2, e.y2);
+		if (part < 1) {
+			// jen začátek hrany (dokreslování): poslední bod se dopočítá mezi sousedními
+			const at = part * (p.length - 1), i = Math.floor(at), f = at - i;
+			p = p.slice(0, i + 1);
+			const a = p[i], b = wobble(e.x1, e.y1, e.x2, e.y2)[i + 1];
+			if (b) p.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+		}
 		c.beginPath();
 		p.forEach(([x, y], n) => (n ? c.lineTo(x, y) : c.moveTo(x, y)));
 		c.stroke();
@@ -312,6 +319,10 @@
 	let prevFill: (string | null)[] = [];
 	const waves = new Map<number, Wave>();
 	let waveFrame = 0;
+	// Nové hranice (izoglosy) u vsí, kterými prochází vlna, se dokreslí tahem, až vlna dorazí.
+	let prevEdges: Set<string> | null = null;
+	const edgeDraw = new Map<string, number>();
+	const EDGE_MS = 450;
 	function spread(L: Layout, prev: (string | null)[], next: (string | null)[], now: number) {
 		const n = next.length, changed: number[] = [];
 		for (let i = 0; i < n; i++) if (prev[i] !== next[i]) changed.push(i);
@@ -456,13 +467,29 @@
 			// nejdřív slabé, pak výrazné, aby červené čáry ležely nahoře
 			const styled = L.edges.map((e) => ({ e, s: edge(L.vil[e.a], L.vil[e.b]) })).filter((x) => x.s);
 			styled.sort((p, q) => (p.s!.color === 'red' ? 1 : 0) - (q.s!.color === 'red' ? 1 : 0) || (p.s!.width ?? 1) - (q.s!.width ?? 1));
+			const now = performance.now(), keys = new Set<string>();
 			for (const { e, s } of styled) {
+				const key = `${e.a}-${e.b}:${s!.color ?? ''}:${s!.dash ?? ''}`;
+				keys.add(key);
+				if (prevEdges && !prevEdges.has(key) && !edgeDraw.has(key) && (waves.has(e.a) || waves.has(e.b)))
+					edgeDraw.set(key, Math.max(waves.get(e.a)?.t0 ?? 0, waves.get(e.b)?.t0 ?? 0) + T.flow * 0.5);
+			}
+			prevEdges = wavesOf === L && !still() ? keys : null;
+			for (const { e, s } of styled) {
+				const key = `${e.a}-${e.b}:${s!.color ?? ''}:${s!.dash ?? ''}`, start = edgeDraw.get(key);
+				let part = 1;
+				if (start != null) {
+					const p = (now - start) / EDGE_MS;
+					if (p >= 1) edgeDraw.delete(key);
+					else if (p <= 0) continue;
+					else part = change(p);
+				}
 				c.strokeStyle = color(s!.color);
 				c.lineWidth = s!.width ?? 1;
 				c.globalAlpha = s!.alpha ?? 1;
 				c.lineCap = 'round';
 				c.setLineDash(s!.dash === 'state' ? [8, 3, 1.5, 3] : s!.dash === 'dotted' ? [1.5, 3] : s!.dash === 'dashed' ? [5, 4] : []);
-				strokeEdge(c, e);
+				strokeEdge(c, e, part);
 			}
 			c.setLineDash([]);
 			c.globalAlpha = 1;
@@ -629,6 +656,10 @@
 				text(c, t, x, y, st.font, st.spacing, st.color);
 				break;
 			}
+		}
+		if (edgeDraw.size && !waves.size) {
+			cancelAnimationFrame(waveFrame);
+			waveFrame = requestAnimationFrame(() => render());
 		}
 	}
 
