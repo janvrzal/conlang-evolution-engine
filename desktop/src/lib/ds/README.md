@@ -23,7 +23,7 @@ obrazovka ji nepíše sama: řekne správci ds, co potřebuje.
 | Text | `Text` (`h1 h2 h3 body caps why small big strong`, `tone`, `num`), `Ipa`, `Term`, `Kbd`, `Swatch`, `Icon` |
 | Ovládání | `Button` (`primary`, `quiet`, `href`, `icon`, `disabled` = aria-disabled), `Segmented`, `Tabs`, `Field`, `TextInput`, `Checkbox`, `Range`, `Select`, `FilePicker`, `Chip` |
 | Data | `Ledger` + `LedgerRow`, `Bars`, `Table` + `Tr` + `Td`, `List` + `ListItem`, `Legend`, `Strata` (vrt), `MiniBars` |
-| Hlášení | `IssueList`, `CheckBadge`, `Banner`, `Toast`, `Popover` |
+| Hlášení | `IssueList`, `CheckBadge`, `Banner`, `Toast`, `Popover`, `Working` (čekání na běh) |
 | Čas a mapy | `TimeAxis`, `EventLanes` (kronika zadání), `WorldMap` (kartografie), `LanguageRiver` (řeka jazyků) |
 | Funkce | `languagePalette`, `familyColor`, `shadeOf`, `cssVar`, `formatYear` (−700) |
 
@@ -31,6 +31,15 @@ obrazovka ji nepíše sama: řekne správci ds, co potřebuje.
 `regionFill`, `hatch`, `regionHatch`, `edge` (styl hrany mezi sousedními vesmi: hranice kraje, státu, izoglosa,
 rozdíl), `highlight`, `selected`, `labels` (bez překryvů), `markers` (města), `arrows`, `focus` (přiblížení).
 Šipky a Enter mezi kraji umí sama.
+
+## Pohyb
+
+Pohyb je jen uvnitř ds (obrazovky styly psát nesmí). Tokeny `--e-*` a `--t-*` jsou v `tokens.css`, stejné hodnoty
+a přechody pro Svelte (`unfold`, `narrow`, `sprout`, `rise`, akce `underline`) v `motion.ts`. Řeka jazyků roste po ose
+času, mapa šíří změnu barvy vlnou od sousedních vsí, kronika nechá událost vyrašit, když přes ni přejde ukazatel,
+přepínač a karty mají posuvnou značku, zaškrtnutí se dokreslí, `Disclosure`, `Banner` a `LedgerRow` se rozvinou
+a zúží, `Popover` se rozevře od kotvy, `Toast` se odkryje zleva. `Working` je čekání na dosimulování.
+Při `prefers-reduced-motion` je vše hned v konečném stavu.
 
 ## Barvy a text
 

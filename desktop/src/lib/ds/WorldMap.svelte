@@ -6,6 +6,7 @@
 	import { contours } from 'd3-contour';
 	import { onMount, untrack } from 'svelte';
 	import { cssVar } from './color';
+	import { T, change, still } from './motion';
 	import { buildGeo, wobble, type MapRegion, type MapVillage } from './map/geometry';
 
 	/** Barva v mapě: token ('ink' | 'muted' | 'red') nebo konkrétní barva. */
@@ -137,6 +138,8 @@
 		rings: Path2D[];
 		shade: HTMLCanvasElement | null;
 		vcells: Path2D[];
+		/** poloměr buňky vsi (nejvzdálenější roh od vsi) */
+		vrad: number[];
 		rcells: Map<string, Path2D>;
 		vpts: [number, number][];
 		rpts: Map<string, [number, number]>;
@@ -231,6 +234,12 @@
 		const vdel = Delaunay.from(vpts);
 		const vvor: Voronoi<[number, number]> = vdel.voronoi([0, 0, W, H]);
 		const vcells = villages_.map((_, i) => polyPath(vvor.cellPolygon(i) as [number, number][]));
+		const vrad = villages_.map((_, i) => {
+			const pg = vvor.cellPolygon(i) ?? [];
+			let r = 0;
+			for (const [x, y] of pg) r = Math.max(r, Math.hypot(x - vpts[i][0], y - vpts[i][1]));
+			return r;
+		});
 		const rcells = new Map<string, Path2D>();
 		villages_.forEach((v, i) => {
 			if (!rcells.has(v.region)) rcells.set(v.region, new Path2D());
@@ -246,7 +255,7 @@
 			edges.push({ a, b, x1: cc[2 * t1], y1: cc[2 * t1 + 1], x2: cc[2 * t2], y2: cc[2 * t2 + 1] });
 		}
 		const inv = (px: number, py: number): [number, number] => [(px - ox) / k, (py - oy) / k];
-		layout = { W, H, dpr, P, inv, land, rings, shade, vcells, rcells, vpts, rpts, vdel, edges, vil: villages_ };
+		layout = { W, H, dpr, P, inv, land, rings, shade, vcells, vrad, rcells, vpts, rpts, vdel, edges, vil: villages_ };
 	}
 
 	function hatchPath(c: CanvasRenderingContext2D, path: Path2D, h: Hatch) {
@@ -289,6 +298,74 @@
 		c.letterSpacing = '0px';
 	}
 
+	// Vlna změny: když se barva vsí změní, nová barva se šíří od vsí, které ji už měly (soused po sousedovi),
+	// a do každé buňky vteče kruhem ze strany, odkud přišla. Nová inovace začne ve vsi uprostřed změny.
+	interface Wave {
+		from: string | null;
+		cx: number;
+		cy: number;
+		r0: number;
+		r1: number;
+		t0: number;
+	}
+	let wavesOf: Layout | null = null;
+	let prevFill: (string | null)[] = [];
+	const waves = new Map<number, Wave>();
+	let waveFrame = 0;
+	function spread(L: Layout, prev: (string | null)[], next: (string | null)[], now: number) {
+		const n = next.length, changed: number[] = [];
+		for (let i = 0; i < n; i++) if (prev[i] !== next[i]) changed.push(i);
+		// přebarvení skoro celé mapy (jiná vrstva, jiný jazyk) není šíření: bez vlny
+		if (!changed.length) return;
+		if (changed.length > n * 0.6) {
+			waves.clear();
+			return;
+		}
+		const isCh = new Uint8Array(n), hop = new Int32Array(n).fill(-1), src = new Int32Array(n).fill(-1);
+		for (const i of changed) isCh[i] = 1;
+		const queue: number[] = [];
+		for (const i of changed)
+			for (const j of L.vdel.neighbors(i))
+				if (!isCh[j] && next[i] != null && prev[j] === next[i]) {
+					hop[i] = 0;
+					src[i] = j;
+					queue.push(i);
+					break;
+				}
+		const bfs = () => {
+			for (let q = 0; q < queue.length; q++) {
+				const i = queue[q];
+				for (const j of L.vdel.neighbors(i))
+					if (isCh[j] && hop[j] < 0) {
+						hop[j] = hop[i] + 1;
+						src[j] = i;
+						queue.push(j);
+					}
+			}
+		};
+		bfs();
+		const deg = (i: number) => {
+			let d = 0;
+			for (const j of L.vdel.neighbors(i)) d += isCh[j];
+			return d;
+		};
+		for (;;) {
+			let seed = -1, best = -1;
+			for (const i of changed) if (hop[i] < 0 && deg(i) > best) [seed, best] = [i, deg(i)];
+			if (seed < 0) break;
+			hop[seed] = 0;
+			queue.push(seed);
+			bfs();
+		}
+		let maxHop = 0;
+		for (const i of changed) maxHop = Math.max(maxHop, hop[i]);
+		const step = Math.min(70, (T.epoch * 0.75) / Math.max(1, maxHop));
+		for (const i of changed) {
+			const [cx, cy] = L.vpts[src[i] >= 0 ? src[i] : i], d = Math.hypot(cx - L.vpts[i][0], cy - L.vpts[i][1]);
+			waves.set(i, { from: prev[i], cx, cy, r0: Math.max(0, d - L.vrad[i]), r1: d + L.vrad[i], t0: now + hop[i] * step });
+		}
+	}
+
 	function render() {
 		const L = layout;
 		if (!L || !canvas) return;
@@ -314,15 +391,53 @@
 				c.fill(cell);
 				c.globalAlpha = 1;
 			}
-		if (fill)
-			L.vil.forEach((v, i) => {
-				const f = fill(v);
-				if (!f) return;
+		if (fill) {
+			const now = performance.now();
+			const next = L.vil.map((v) => fill(v));
+			if (wavesOf !== L || prevFill.length !== next.length || still()) waves.clear();
+			else spread(L, prevFill, next, now);
+			wavesOf = L;
+			prevFill = next;
+			const paint = (f: string, i: number) => {
 				c.globalAlpha = fillAlpha;
 				c.fillStyle = f;
 				c.fill(L.vcells[i]);
 				c.globalAlpha = 1;
+			};
+			next.forEach((f, i) => {
+				const w = waves.get(i);
+				if (w) {
+					const p = (now - w.t0) / T.flow;
+					if (p < 1) {
+						const r = p <= 0 ? 0 : w.r0 + (w.r1 - w.r0) * change(p);
+						if (w.from) {
+							c.save();
+							if (r > 0) {
+								const out = new Path2D();
+								out.rect(0, 0, L.W, L.H);
+								out.arc(w.cx, w.cy, r, 0, Math.PI * 2);
+								c.clip(out, 'evenodd');
+							}
+							paint(w.from, i);
+							c.restore();
+						}
+						if (f && r > 0) {
+							c.save();
+							const disk = new Path2D();
+							disk.arc(w.cx, w.cy, r, 0, Math.PI * 2);
+							c.clip(disk);
+							paint(f, i);
+							c.restore();
+						}
+						return;
+					}
+					waves.delete(i);
+				}
+				if (f) paint(f, i);
 			});
+			cancelAnimationFrame(waveFrame);
+			if (waves.size) waveFrame = requestAnimationFrame(() => render());
+		}
 		if (regionHatch)
 			for (const r of regions) {
 				const h = regionHatch(r), cell = L.rcells.get(r.id);
@@ -617,6 +732,7 @@
 		return () => {
 			ro.disconnect();
 			cancelAnimationFrame(pending);
+			cancelAnimationFrame(waveFrame);
 		};
 	});
 	// Geometrie se přepočítá při změně světa nebo přiblížení…

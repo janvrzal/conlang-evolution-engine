@@ -168,5 +168,6 @@
 		bottom: -1px;
 		height: 3px;
 		background: var(--ink);
+		transition: width var(--t-flow) linear;
 	}
 </style>

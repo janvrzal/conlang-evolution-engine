@@ -3,6 +3,8 @@
 <script lang="ts">
 	import { area, curveMonotoneX, stack, stackOffsetSilhouette, stackOrderNone } from 'd3-shape';
 	import { onMount } from 'svelte';
+	import { Tween } from 'svelte/motion';
+	import { T, arrive, still } from './motion';
 
 	export interface RiverStream {
 		id: string;
@@ -31,6 +33,18 @@
 		dimmed?: Set<string> | null;
 		onselect?: (id: string) => void;
 	} = $props();
+
+	const uid = $props.id();
+	// Řeka roste po ose času zleva doprava: při prvním vykreslení a při novém souboru proudů (nový běh).
+	const reveal = new Tween(0, { easing: arrive });
+	let grown = '';
+	$effect(() => {
+		const key = streams.map((s) => s.id).join('|') + '@' + years[0] + '-' + years[years.length - 1];
+		if (!w || !streams.length || key === grown) return;
+		grown = key;
+		reveal.set(0, { duration: 0 });
+		reveal.set(1, { duration: still() ? 0 : T.epoch * 1.5 });
+	});
 
 	let box: HTMLDivElement;
 	let w = $state(0);
@@ -96,6 +110,8 @@
 				<line x1={model.x(t)} x2={model.x(t)} y1="10" y2={h - 24} class="grid" />
 				<text x={model.x(t)} y={h - 8} class="tick">{t}</text>
 			{/each}
+			<clipPath id="{uid}-grow"><rect x="0" y="0" width={model.x(years[0]) + reveal.current * (w - model.x(years[0]))} height={h} /></clipPath>
+			<g clip-path="url(#{uid}-grow)">
 			{#each model.paths as p (p.id)}
 				<path
 					d={p.d}
@@ -112,6 +128,7 @@
 			{#each model.shown as l (l.id)}
 				<text x={model.xEnd + 8} y={l.y + 4} class="name" class:sel={l.id === selected}>{model.byId.get(l.id)?.label}</text>
 			{/each}
+			</g>
 			{#if cursor != null}<line x1={model.x(cursor)} x2={model.x(cursor)} y1="8" y2={h - 26} class="cursor" />{/if}
 		</svg>
 	{/if}
@@ -139,6 +156,9 @@
 		stroke: var(--land);
 		stroke-width: 0.8;
 		cursor: pointer;
+		transition:
+			fill-opacity var(--t-flow) var(--e-change),
+			stroke-width var(--t-snap) var(--e-change);
 	}
 	path.sel {
 		fill-opacity: 0.95;

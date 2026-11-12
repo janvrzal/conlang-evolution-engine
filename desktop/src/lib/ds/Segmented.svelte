@@ -1,5 +1,7 @@
 <!-- Přepínač jedné z možností (vrstva mapy, rodina, pozadí dějin). -->
 <script lang="ts" generics="V extends string | number">
+	import { underline } from './motion';
+
 	let {
 		options,
 		value = $bindable(),
@@ -21,7 +23,7 @@
 	}
 </script>
 
-<div class="seg" class:vertical role="group" aria-label={label}>
+<div class="seg" class:vertical role="group" aria-label={label} use:underline={{ selector: '[aria-pressed="true"]', key: value }}>
 	{#each options as option (option.value)}
 		<button
 			type="button"
@@ -31,6 +33,7 @@
 			onclick={() => pick(option.value, option.disabled)}>{option.label}</button
 		>
 	{/each}
+	<span data-underline aria-hidden="true"></span>
 </div>
 
 <style>
@@ -51,11 +54,11 @@
 		font-size: 14px;
 		color: var(--ink-2);
 		border-bottom: 2px solid transparent;
+		transition: color var(--t-tick);
 	}
 	button[aria-pressed='true'] {
 		color: var(--ink);
 		font-weight: 500;
-		border-bottom-color: var(--ink);
 	}
 	button:hover {
 		color: var(--ink);

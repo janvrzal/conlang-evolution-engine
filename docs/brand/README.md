@@ -33,6 +33,10 @@
 - Úvodní animace: nádech → růst rodokmenu, kamera se oddaluje a předbíhá růst → část větví vymře (zúžením) → vlna → nápis. ~4,5 s.
 - Čekání na dosimulování: mřížka 3×3 teček pulzující vlnou + „Simuluji generaci N…“.
 - Strom = jeden <path> přepočítaný v každém snímku. Žádná průhlednost. prefers-reduced-motion → rovnou konečný stav.
+- Pohyb v aplikaci: tokeny `--e-change` (křivka S, změna stavu), `--e-arrive` (příchod), `--e-leave` (odchod) a délky
+  `--t-tick` 90 ms, `--t-snap` 160, `--t-unfold` 280, `--t-flow` 600, `--t-epoch` 1200 v `$lib/ds/tokens.css`, pro JS v `$lib/ds/motion.ts`.
+- Zásady: čas teče zleva doprava (věci rostou od levého okraje), změna stavu jde po křivce S, co odchází, se zúží
+  (nevybledne), šíření má zdroj (vlna na mapě jde od vsí, které změnu už mají), nic se nehýbe bez důvodu.
 
 ## V aplikaci ($lib/ds)
 - Značku vkládat z `svg/cee-mark-currentColor.svg` (barva z `color`).

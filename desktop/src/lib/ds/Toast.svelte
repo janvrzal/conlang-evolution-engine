@@ -1,5 +1,6 @@
 <!-- Krátká hláška vpravo dole s volitelnou akcí Vrátit (smazání se nepotvrzuje dialogem). -->
 <script lang="ts">
+	import { narrow, sprout } from './motion';
 	let {
 		message,
 		actionLabel,
@@ -8,7 +9,7 @@
 	}: { message: string; actionLabel?: string; onaction?: () => void; shortcut?: string } = $props();
 </script>
 
-<div class="toast" role="status">
+<div class="toast" role="status" in:sprout out:narrow>
 	<span>{message}</span>
 	{#if actionLabel && onaction}<button type="button" onclick={onaction}>{actionLabel}</button>{/if}
 	{#if shortcut}<kbd>{shortcut}</kbd>{/if}
