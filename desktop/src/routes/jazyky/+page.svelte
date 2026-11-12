@@ -12,6 +12,7 @@
 		FamilyTree,
 		Ipa,
 		LanguageRiver,
+		LanguageSigil,
 		Ledger,
 		LedgerRow,
 		List,
@@ -101,9 +102,10 @@
 		if (!result || view !== 'tree') return [];
 		const last = app.frames[app.frames.length - 1];
 		const now = last ? speakers(last.groups, domainOf) : new Map<string, number>();
+		const said = last?.endonyms ?? {};
 		return result.lineages
 			.filter((l) => familyFilter == null || families.get(l.id) === familyFilter)
-			.map((l) => ({ id: l.id, parent: l.parent, start: l.start_year, end: l.end_year, speakers: now.get(l.id) ?? 0, label: nameOf(l.id), color: palette.get(l.id) ?? 'var(--ink-3)' }));
+			.map((l) => ({ id: l.id, parent: l.parent, start: l.start_year, end: l.end_year, speakers: now.get(l.id) ?? 0, label: nameOf(l.id), color: palette.get(l.id) ?? 'var(--ink-3)', ipa: said[l.id] ?? l.endonym ?? undefined }));
 	});
 
 	// karta jazyka
@@ -224,7 +226,12 @@
 						<Text variant="caps">{t(lineage.parent ? 'jazyky.caps_daughter' : 'jazyky.caps_proto')}</Text>
 						<Button variant="quiet" href="/protojazyky">*{familyName}</Button>
 					</Cluster>
-					<Text variant="h1"><Swatch color={palette.get(lineage.id) ?? 'var(--ink-3)'} /> {nameOf(lineage.id)}</Text>
+					<Text variant="h1"
+						>{#if endonyms.length}<LanguageSigil ipa={endonyms[endonyms.length - 1].ipa} color={palette.get(lineage.id) ?? 'var(--ink-3)'} size={34} />{:else}<Swatch
+								color={palette.get(lineage.id) ?? 'var(--ink-3)'}
+							/>{/if}
+						{nameOf(lineage.id)}</Text
+					>
 					{#if endonyms.length}
 						{@const last = endonyms[endonyms.length - 1]}
 						<Text>{t('jazyky.says')} <i>{romanize(last.ipa)}</i> <Ipa text={last.ipa} slashes /> <Text variant="why" as="span">{t('jazyky.since', { year: formatYear(last.year) })}</Text></Text>

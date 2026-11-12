@@ -5,12 +5,15 @@
 	import { onMount } from 'svelte';
 	import { Tween } from 'svelte/motion';
 	import { familyTree, type TreeLineage } from './familyTree';
+	import { sigil } from './sigil';
 	import { formatYear } from './format';
 	import { T, arrive, still } from './motion';
 
 	export interface TreeItem extends TreeLineage {
 		label: string;
 		color: string;
+		/** vlastní jméno v IPA: u konce větve se ukáže značka jazyka */
+		ipa?: string;
 	}
 	let {
 		items,
@@ -33,7 +36,7 @@
 		return () => ro.disconnect();
 	});
 
-	const LEFT = 24, RIGHT = 170, TOP = 32, BOTTOM = 34;
+	const LEFT = 24, RIGHT = 190, TOP = 32, BOTTOM = 34;
 	const model = $derived.by(() => {
 		if (!w || !h || !items.length) return null;
 		const rows = items.length + 1;
@@ -71,13 +74,23 @@
 				<line x1={LEFT + model.x(t)} x2={LEFT + model.x(t)} y1="4" y2={svgH - 24} class="grid" />
 				<text x={LEFT + model.x(t)} y={svgH - 8} class="tick">{formatYear(t)}</text>
 			{/each}
-			<clipPath id="{uid}-grow"><rect x="0" y="0" width={LEFT + reveal.current * (w - LEFT)} height={svgH} /></clipPath>
+			<!-- maska je v souřadnicích posunuté skupiny -->
+			<clipPath id="{uid}-grow"><rect x={-LEFT} y={-TOP} width={LEFT + reveal.current * (w - LEFT)} height={svgH} /></clipPath>
 			<g clip-path="url(#{uid}-grow)" transform="translate({LEFT} {TOP})">
-				{#each model.branches as b (b.id)}
+				{#each model.branches as b, i (b.id)}
 					{@const it = model.byId.get(b.id)}
+					{@const own = it?.color ?? 'var(--ink-2)'}
+					{@const from = b.parent ? model.byId.get(b.parent)?.color : null}
+					{#if b.blend && from && from !== own}
+						<!-- potomek začíná v barvě rodiče a plynule přejde do své -->
+						<linearGradient id="{uid}-b{i}" gradientUnits="userSpaceOnUse" x1={b.blend[0]} x2={b.blend[1]} y1="0" y2="0">
+							<stop offset="0" stop-color={from} />
+							<stop offset="1" stop-color={own} />
+						</linearGradient>
+					{/if}
 					<path
 						d={b.d}
-						fill={it?.color ?? 'var(--ink-2)'}
+						fill={b.blend && from && from !== own ? `url(#${uid}-b${i})` : own}
 						class:sel={b.id === selected}
 						role="button"
 						tabindex="0"
@@ -85,8 +98,10 @@
 						onclick={() => onselect?.(b.id)}
 						onkeydown={(e) => key(e, b.id)}><title>{it?.label}{it?.end != null ? ` † ${formatYear(it.end)}` : ''}</title></path
 					>
+					{@const sg = it?.ipa && !b.extinct ? sigil(it.ipa) : null}
+					{#if sg}<svg x={b.x + 5} y={b.y - 10} width="20" height="20" viewBox={sg.view.join(' ') + ' ' + sg.view[2]} aria-hidden="true"><path d={sg.d} fill={own} /></svg>{/if}
 					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-					<text x={b.x + 8} y={b.y + 4} class="name" class:sel={b.id === selected} class:gone={b.extinct} onclick={() => onselect?.(b.id)}
+					<text x={b.x + (sg ? 29 : 8)} y={b.y + 4} class="name" class:sel={b.id === selected} class:gone={b.extinct} onclick={() => onselect?.(b.id)}
 						>{#if b.extinct}{`† ${formatYear(it?.end ?? 0)} · `}{/if}{it?.label}</text
 					>
 				{/each}

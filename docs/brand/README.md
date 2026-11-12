@@ -43,6 +43,9 @@
 - Živá značka je komponenta `BrandMark` (stavy mark, idle, wave, done, wither, progress; geometrie v `$lib/ds/brand.ts`).
   Úvodní animace je `Splash` (jednou za otevření okna, klik nebo klávesa ji přeskočí), prázdné obrazovky `EmptyState`.
   Postup běhu jde i do Docku a hlavního panelu (`$lib/dock.ts`).
+- Značka jazyka (`LanguageSigil`, `$lib/ds/sigil.ts`): vlastní jméno jazyka v IPA vyroste jako malá značka CEE
+  (slabika = dělení křivkou S, souhlásky ohnou kmen, samohláska vyžene výhonek), v barvě jazyka. Se jménem se mění i značka.
+- Rodokmen (`FamilyTree`): potomek začíná v barvě rodiče a během odbočení plynule přejde do své.
 - Ikony pojmů enginu jsou v `$lib/ds/Icon.svelte` (zdroj `ikony/icon-paths.ts`, sprite `ikony/icons-sprite.svg`).
 - Referenční kód animací: `animace/splash.html` (úvodní), `animace/loader.html` (čekání) a `animace/states.html`
   (dosimulováno, chyba, prázdný projekt, ikona v Docku); jádro je v `nastroje/tree-core.js` a `nastroje/states-core.js`.

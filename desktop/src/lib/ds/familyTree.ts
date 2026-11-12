@@ -20,6 +20,9 @@ export interface TreeBranch {
 	x: number;
 	y: number;
 	extinct: boolean;
+	parent: string | null;
+	/** úsek osy x, na kterém barva větve plynule přejde z barvy rodiče do vlastní (u kořene null) */
+	blend: [number, number] | null;
 }
 export interface TreeLayout {
 	branches: TreeBranch[];
@@ -91,6 +94,7 @@ export function familyTree(lineages: TreeLineage[], now: number, width: number, 
 		let xe = X(n.end ?? now);
 		const wAt = (x: number) => w0 + (w1 - w0) * Math.max(0, Math.min(1, (x - xs) / Math.max(1e-6, xe - xs)));
 		const segs: Seg[] = [];
+		let blend: [number, number] | null = null;
 		n.rowX = xs;
 		const p = n.parent ? byId.get(n.parent) : undefined;
 		if (p) {
@@ -99,8 +103,10 @@ export function familyTree(lineages: TreeLineage[], now: number, width: number, 
 			segs.push({ x0: a, y0: yp, x1: a + dx, y1: yc, w: wAt });
 			if (b > a + dx) segs.push({ x0: a + dx, y0: yc, x1: b, y1: yc, w: wAt });
 			xe = b;
+			// barva se mění během odbočení a ještě kus za ním (třetina zbytku větve, aspoň dva řádky)
+			blend = [a, Math.min(xe, a + dx + Math.max(rowH * 2, (xe - a - dx) * 0.35))];
 		} else segs.push({ x0: xs, y0: Y(n.row), x1: xe, y1: Y(n.row), w: wAt });
-		out.push({ id: n.id, d: segs.map(outline).join(''), x: xe, y: Y(n.row), extinct: n.end != null });
+		out.push({ id: n.id, d: segs.map(outline).join(''), x: xe, y: Y(n.row), extinct: n.end != null, parent: p ? p.id : null, blend });
 		for (const k of n.kids) walk(k, Math.min(wAt(X(k.start)), wmax) * 0.85);
 	};
 	for (const root of roots) walk(root, null);
