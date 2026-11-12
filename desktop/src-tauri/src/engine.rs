@@ -76,6 +76,18 @@ pub fn validate(spec: &Value) -> Vec<Issue> {
         .collect()
 }
 
+/// Náhled protojazyků bez běhu (`spec::preview`): hlásky, slabiky, přípony a slova na startu.
+/// Neplatné zadání vrátí chyby jako `validate`.
+pub fn preview(spec: &Value) -> Result<Value, Vec<Issue>> {
+    let issues = validate(spec);
+    if issues.iter().any(|i| i.severity == "error") {
+        return Err(issues);
+    }
+    let world_spec = WorldSpec::from_json(&spec.to_string()).map_err(|m| issue("(svět)", m, "world_invalid"))?;
+    let languages = spec::preview(&world_spec).map_err(|m| issue("(svět)", m, "world_failed"))?;
+    Ok(json!({ "languages": languages }))
+}
+
 /// Přepisy parametrů podle `v2_parameters.json`: neznámé jméno, druh a meze.
 fn check_parameters(spec: &Value) -> Vec<Issue> {
     let Some(overrides) = spec.get("parameters").and_then(Value::as_object) else { return Vec::new() };
@@ -482,6 +494,18 @@ mod tests {
         let mut param = world;
         param["parameters"]["neexistuje"] = json!(1);
         assert_eq!(validate(&param)[0].message, "neznámý parametr");
+    }
+
+    #[test]
+    fn nahled_protojazyku_a_chyba_zadani() {
+        let world = talvera();
+        let out = preview(&world).unwrap();
+        let languages = out["languages"].as_array().unwrap();
+        assert_eq!(languages.len(), world["languages"].as_array().unwrap().len());
+        assert!(languages[0]["forms"].as_object().unwrap().len() > 100);
+        let mut broken = world;
+        broken["languages"][0]["variant"] = json!(-1);
+        assert!(preview(&broken).is_err());
     }
 
     #[test]

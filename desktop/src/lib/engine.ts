@@ -56,6 +56,20 @@ export interface StoredRun {
 	size?: Record<string, number>;
 }
 
+/** Protojazyk, jak s ním běh začne (náhled bez běhu, `spec::preview`). */
+export interface LanguagePreview {
+	id: string;
+	consonants: string[];
+	vowels: string[];
+	/** inventář vygeneroval engine (autor nezadal souhlásky ani samohlásky) */
+	generated_inventory: boolean;
+	/** zadaná nebo vylosovaná slabičná stavba */
+	syllables: 'simple' | 'moderate' | 'complex';
+	suffixes: string[];
+	/** pojem → tvar (IPA) na startu */
+	forms: Record<string, string>;
+}
+
 export interface StartOptions {
 	/** cesta k projektu (běh se uloží vedle něj); null = dočasná složka neuloženého projektu */
 	project?: string | null;
@@ -192,6 +206,12 @@ export class Engine {
 	result(runId: string): Promise<ExportV2> {
 		if (this.native) return this.call('run_result', { id: runId });
 		return this.request(`/runs/${runId}/result`);
+	}
+
+	/** Náhled protojazyků zadání bez běhu (jen v aplikaci; v prohlížeči null). */
+	preview(spec: unknown): Promise<{ languages: LanguagePreview[] } | null> {
+		if (!this.native) return Promise.resolve(null);
+		return this.call('engine_preview', { spec });
 	}
 
 	/** Běhy projektu (jen v aplikaci). */

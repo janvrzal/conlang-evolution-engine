@@ -631,6 +631,8 @@ pub struct ProtoLanguage {
     pub generated_morphemes: bool,
     /// Inventář se vygeneruje z PHOIBLE (`protoform::inventory`) místo `consonants`/`vowels`.
     pub generated_inventory: bool,
+    /// Pořadí varianty generátoru (0 = jazyk podle semínka světa a ID, jako dřív).
+    pub variant: u32,
 }
 
 impl ProtoLanguage {
@@ -653,6 +655,7 @@ impl ProtoLanguage {
             syllables: None,
             generated_morphemes: false,
             generated_inventory: false,
+            variant: 0,
         }
     }
 
@@ -679,6 +682,20 @@ impl ProtoLanguage {
 /// Semínko protojazyka linie: odvozené ze semínka světa a ID jazyka.
 pub fn language_seed(seed: i64, id: &str) -> u64 {
     stable_int(&[Part::Int(seed), Part::Str("language"), Part::Str(id)]) % (1 << 31)
+}
+
+/// Semínko protojazyka s variantou generátoru: varianta 0 je [`language_seed`] (zadání beze
+/// změny), další varianty dají jiný jazyk se stejným ID ve stejném světě.
+pub fn variant_seed(seed: i64, id: &str, variant: u32) -> u64 {
+    if variant == 0 {
+        return language_seed(seed, id);
+    }
+    stable_int(&[
+        Part::Int(seed),
+        Part::Str("language"),
+        Part::Str(id),
+        Part::Int(i64::from(variant)),
+    ]) % (1 << 31)
 }
 
 /// Počet odvozovacích přípon jazyka, který je nemá zadané.
@@ -775,7 +792,7 @@ pub fn seed_lineages(
     let used = syntax_endings();
     let mut bases = HashMap::new();
     for language in languages {
-        let language_seed = language_seed(seed, &language.id);
+        let language_seed = variant_seed(seed, &language.id, language.variant);
         let (consonants, vowels) = language.inventory(language_seed);
         let spec = ProtoSpec {
             concepts: &concepts,

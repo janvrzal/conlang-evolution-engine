@@ -38,6 +38,15 @@ async fn engine_validate(spec: Value) -> Value {
     json!({ "ok": issues.iter().all(|i| i.severity != "error"), "issues": issues })
 }
 
+/// Náhled protojazyků zadání bez běhu; neplatný popis vrátí `{ detail: { issues } }`.
+#[tauri::command]
+async fn engine_preview(spec: Value) -> Result<Value, Value> {
+    tauri::async_runtime::spawn_blocking(move || engine::preview(&spec))
+        .await
+        .map_err(|e| json!({ "detail": e.to_string() }))?
+        .map_err(|issues| json!({ "detail": { "issues": issues } }))
+}
+
 /// Složka běhů: u uloženého projektu `svet.cee.behy` vedle něj, jinak dočasná v datech aplikace.
 fn runs_dir(app: &tauri::AppHandle, project: Option<&PathBuf>) -> Result<PathBuf, String> {
     match project {
@@ -238,6 +247,7 @@ pub fn run() {
             engine_health,
             engine_schema,
             engine_validate,
+            engine_preview,
             run_start,
             run_status,
             run_result,

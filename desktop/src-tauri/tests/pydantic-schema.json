@@ -770,6 +770,12 @@
       ],
       "default": null,
       "title": "Syllables"
+     },
+     "variant": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Variant",
+      "type": "integer"
      }
     },
     "required": [

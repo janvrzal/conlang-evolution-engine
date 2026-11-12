@@ -185,6 +185,10 @@ pub struct LanguageSpec {
     /// `None` = vylosuje se podle podílů typů ve WALS.
     #[serde(default)]
     pub syllables: Option<String>,
+    /// Varianta generátoru: 0 = jazyk ze semínka světa a ID; jiné číslo dá jiný vygenerovaný
+    /// jazyk (hlásky, slabiky, slova, koncovky), aniž by se měnil zbytek světa.
+    #[serde(default)]
+    pub variant: u32,
 }
 
 /// Zvuková změna rozběhnutá na startu: rodina, popis kandidáta (`m → ∅ /V_#`) a podíl
@@ -352,6 +356,7 @@ fn proto_language(spec: &LanguageSpec, table: &SegmentTable) -> Result<ProtoLang
             )
         })?);
     }
+    language.variant = spec.variant;
     language.endonym = spec.endonym.clone();
     if let Some(form) = &spec.endonym_form {
         table
@@ -527,8 +532,9 @@ fn make_world(spec: &WorldSpec, params: Parameters) -> Result<World, String> {
                 ));
             }
             let mut inventory: Vec<u32> = Vec::new();
-            let (consonants, vowels) = proto_language(language, &table)?
-                .inventory(crate::scenarios::language_seed(spec.seed, &language.id));
+            let (consonants, vowels) = proto_language(language, &table)?.inventory(
+                crate::scenarios::variant_seed(spec.seed, &language.id, language.variant),
+            );
             for segment in consonants.iter().chain(vowels.iter()) {
                 inventory.extend(table.parse(segment)?.into_iter().map(|s| s as u32));
             }
@@ -1298,4 +1304,72 @@ fn defer_language(world: &World, kind: &str, mut params: Value) -> (Value, Optio
 
 fn custom_related(custom: &[CustomConcept]) -> bool {
     custom.iter().any(|c| !c.related.is_empty())
+}
+
+/// Protojazyk, jak s ním běh začne: hlásky, slabičná stavba, odvozovací přípony a slova.
+#[derive(Clone, Debug, Serialize)]
+pub struct LanguagePreview {
+    pub id: String,
+    pub consonants: Vec<String>,
+    pub vowels: Vec<String>,
+    /// Inventář vygeneroval engine (autor nezadal souhlásky ani samohlásky).
+    pub generated_inventory: bool,
+    /// Slabičná stavba (`simple`, `moderate`, `complex`), zadaná nebo vylosovaná.
+    pub syllables: String,
+    pub suffixes: Vec<String>,
+    /// Pojem → tvar (IPA) na startu.
+    pub forms: std::collections::BTreeMap<String, String>,
+}
+
+/// Náhled protojazyků zadání bez běhu: postaví svět (bez kroků) a vrátí jazyky přesně tak,
+/// jak s nimi běh začne. Talvera asi 0,3 s.
+pub fn preview(spec: &WorldSpec) -> Result<Vec<LanguagePreview>, String> {
+    let table = SegmentTable::default_table();
+    let (world, events) = build(spec)?;
+    let simulation = Simulation::new(world, SimulationConfig::default(), events)?;
+    let world = &simulation.world;
+    let mut out = Vec::new();
+    for item in &spec.languages {
+        let language = proto_language(item, &table)?;
+        let seed = crate::scenarios::variant_seed(spec.seed, &item.id, item.variant);
+        let (consonants, vowels) = language.inventory(seed);
+        let fixed = HashMap::new();
+        let syllables = crate::protoform::syllable_type(&crate::protoform::ProtoSpec {
+            concepts: &[],
+            seed,
+            consonants: &consonants,
+            vowels: &vowels,
+            fixed: &fixed,
+            tones: &language.tones,
+            known_frequencies: None,
+            syllables: language.syllables,
+        });
+        let suffixes = world
+            .registry
+            .languages
+            .get(&item.id)
+            .and_then(|number| {
+                world
+                    .derivational_suffixes
+                    .get(&crate::ids::LanguageId(number))
+            })
+            .map(|forms| forms.iter().map(|f| table.render(f)).collect())
+            .unwrap_or_default();
+        let forms = simulation
+            .history
+            .proto
+            .get(&item.id)
+            .map(|lexicon| lexicon.forms.clone())
+            .unwrap_or_default();
+        out.push(LanguagePreview {
+            id: item.id.clone(),
+            consonants,
+            vowels,
+            generated_inventory: language.generated_inventory,
+            syllables: syllables.name().to_owned(),
+            suffixes,
+            forms,
+        });
+    }
+    Ok(out)
 }

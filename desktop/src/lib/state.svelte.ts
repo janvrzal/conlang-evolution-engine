@@ -1,5 +1,5 @@
 // Stav aplikace: otevřený svět (popis cee-v2-world/1), spojení s enginem, běh a výběr ve Výsledku.
-import { API_REVISION, Engine, EngineError, connect, type EngineSchema, type Health, type Issue, type RunStatus, type StoredRun } from './engine';
+import { API_REVISION, Engine, EngineError, connect, type EngineSchema, type Health, type Issue, type LanguagePreview, type RunStatus, type StoredRun } from './engine';
 import { baseName, forgetRecent, inApp, openProject, pickOpen, pickSave, recentProjects, saveProject, type RecentProject } from './files';
 import type { ExportV2, FrameV2 } from './model/export';
 import type { NamesQuery, NamesResult } from './model/jmena';
@@ -32,6 +32,8 @@ export interface WorldSpec {
 		endonym_form?: string | null;
 		/** tradice osobních jmen (`schema.person_names`); null = vylosuje se */
 		person_names?: string | null;
+		/** varianta generátoru: 0 = jazyk ze semínka světa a ID, další čísla jiné jazyky */
+		variant?: number;
 		[key: string]: unknown;
 	}[];
 	regions: {
@@ -297,6 +299,13 @@ class App {
 	}
 
 	/** Slovník jazyka (linie nebo protojazyka) v roce: z běhu A, nebo z větve B. */
+	/** Protojazyky zadání, jak s nimi běh začne (bez běhu); bez enginu nebo s chybou zadání null. */
+	async previewLanguages(spec: WorldSpec): Promise<LanguagePreview[] | null> {
+		if (!this.engine) return null;
+		const out = await this.engine.preview(spec).catch(() => null);
+		return out?.languages ?? null;
+	}
+
 	async lexicon(language: string, year: number, side: 'A' | 'B' = 'A'): Promise<{ group: string; forms: Record<string, string> } | null> {
 		const id = side === 'A' ? this.run?.id : this.branch?.run?.id;
 		if (!id) return null;

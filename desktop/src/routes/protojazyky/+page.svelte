@@ -58,6 +58,7 @@
 		type ProtoLanguage
 	} from '$lib/model/protojazyky';
 	import { app } from '$lib/state.svelte';
+	import type { LanguagePreview } from '$lib/engine';
 
 	type Tab = 'sounds' | 'stress' | 'grammar' | 'changes' | 'words';
 	const TABS: Tab[] = ['sounds', 'stress', 'grammar', 'changes', 'words'];
@@ -103,11 +104,47 @@
 	}
 	const proto = (name: string | undefined, id: string) => t('protojazyky.proto', { name: name ?? id });
 
+	// ---------- náhled generátoru ----------
+	// Protojazyky aktuálního zadání, jak s nimi běh začne; přepočítá se krátce po každé úpravě.
+	let preview = $state<LanguagePreview[] | null>(null);
+	let previewAsked = 0;
+	$effect(() => {
+		if (!world) return;
+		const spec = $state.snapshot(world);
+		const ask = ++previewAsked;
+		const timer = setTimeout(async () => {
+			const out = await app.previewLanguages(spec);
+			if (ask === previewAsked) preview = out;
+		}, 250);
+		return () => clearTimeout(timer);
+	});
+	const previewed = $derived(preview?.find((p) => p.id === lang?.id) ?? null);
+	/** Hlásky generuje engine: autor nezadal souhlásky ani samohlásky. */
+	const generated = $derived(!!lang && lang.consonants == null && lang.vowels == null);
+	const variant = $derived(Number(lang?.variant ?? 0));
+	const setVariant = (next: number) =>
+		change('protojazyky.edit.variant', (l) => {
+			if (next > 0) l.variant = next;
+			else delete l.variant;
+		});
+	/** Vygenerovaný inventář do zadání, aby úprava jedné hlásky nezahodila ostatní. */
+	function adopt(l: ProtoLanguage) {
+		if (l.consonants == null && l.vowels == null && previewed) {
+			l.consonants = [...previewed.consonants];
+			l.vowels = [...previewed.vowels];
+		}
+	}
+	const regenerate = () =>
+		change('protojazyky.edit.generate', (l) => {
+			delete l.consonants;
+			delete l.vowels;
+		});
+
 	// ---------- hlásky ----------
 	let newConsonant = $state<string | number>('');
 	let newVowel = $state<string | number>('');
-	const consonants = $derived(lang?.consonants ?? []);
-	const vowels = $derived(lang?.vowels ?? []);
+	const consonants = $derived(lang?.consonants ?? (generated ? previewed?.consonants : null) ?? []);
+	const vowels = $derived(lang?.vowels ?? (generated ? previewed?.vowels : null) ?? []);
 	const extraConsonants = $derived(extraSegments(consonants, KNOWN_CONSONANTS));
 	const vowelChips = $derived([...VOWELS, ...extraSegments(vowels, VOWELS)]);
 	function addSegment(kind: 'consonants' | 'vowels') {
@@ -115,8 +152,11 @@
 		if (!seg) return;
 		if (kind === 'consonants') newConsonant = '';
 		else newVowel = '';
-		if ((lang?.[kind] ?? []).includes(seg)) return;
-		change(kind === 'consonants' ? 'protojazyky.edit.consonant' : 'protojazyky.edit.vowel', (l) => (l[kind] = [...(l[kind] ?? []), seg]));
+		if ((kind === 'consonants' ? consonants : vowels).includes(seg)) return;
+		change(kind === 'consonants' ? 'protojazyky.edit.consonant' : 'protojazyky.edit.vowel', (l) => {
+			adopt(l);
+			l[kind] = [...(l[kind] ?? []), seg];
+		});
 	}
 	const syllableValue = $derived(lang?.syllables ?? 'random');
 
@@ -154,9 +194,10 @@
 	let endonymAdd = $state('');
 	const concepts = $derived(lang ? wordConcepts(lang, result) : []);
 	// tvary z běhu (proto_lexicon) a zdroj každého slova: autor, nebo engine
-	const forms = $derived(protoForms(result, lang?.id));
-	const formsStale = $derived(!!result && app.stale);
-	const startYear = $derived(result ? formatYear(result.start_year) : '');
+	// tvary z náhledu (aktuální zadání), bez enginu z posledního běhu (proto_lexicon)
+	const forms = $derived(previewed?.forms ?? protoForms(result, lang?.id));
+	const formsStale = $derived(!previewed && !!result && app.stale);
+	const startYear = $derived(previewed && world ? formatYear(world.start_year ?? 0) : result ? formatYear(result.start_year) : '');
 	const basic = $derived(lang ? formRows(lang, forms, BASIC_CONCEPTS).filter((r): r is FormRow & { form: string } => r.form !== null) : []);
 	const basicOf = (origin: FormRow['origin']) => basic.filter((r) => r.origin === origin).map((r) => `‘${conceptLabel(r.concept, i18n.locale)}’`).join(', ');
 	const rows = $derived.by(() => {
@@ -259,6 +300,16 @@
 							<Text variant="why">{t('protojazyky.endonym_made')} {endonym.map((c) => `‘${conceptLabel(c, i18n.locale)}’`).join(' + ')}</Text>
 						{/if}
 					</Cluster>
+					<Cluster gap={2} align="center">
+						<Text variant="why">{generated ? t('protojazyky.gen_all', { n: variant + 1 }) : t('protojazyky.gen_words', { n: variant + 1 })}</Text>
+						<Button onclick={() => setVariant(variant + 1)}>{t('protojazyky.variant_next')}</Button>
+						{#if variant > 0}<Button variant="quiet" onclick={() => setVariant(variant - 1)}>{t('protojazyky.variant_prev')}</Button>{/if}
+						{#if generated && previewed}
+							<Button variant="quiet" onclick={() => change('protojazyky.edit.adopt', adopt)}>{t('protojazyky.inventory_adopt')}</Button>
+						{:else if !generated}
+							<Button variant="quiet" onclick={regenerate}>{t('protojazyky.inventory_generate')}</Button>
+						{/if}
+					</Cluster>
 					<Tabs label={t('protojazyky.tabs')} bind:value={tab} tabs={TABS.map((id) => ({ id, label: t(`protojazyky.tab.${id}` as MessageKey) }))} />
 
 					{#if tab === 'sounds'}
@@ -275,7 +326,7 @@
 													<Td>
 														<Cluster gap={1} wrap={false}>
 															{#each cell(p, m) as seg (seg)}
-																<Chip state={consonants.includes(seg) ? 'on' : 'off'} onclick={() => change('protojazyky.edit.consonant', (l) => (l.consonants = toggleSegment(l.consonants, seg)))}><Ipa text={seg} size="m" /></Chip>
+																<Chip state={consonants.includes(seg) ? 'on' : 'off'} onclick={() => change('protojazyky.edit.consonant', (l) => (adopt(l), (l.consonants = toggleSegment(l.consonants, seg))))}><Ipa text={seg} size="m" /></Chip>
 															{/each}
 														</Cluster>
 													</Td>
@@ -288,7 +339,7 @@
 									<Cluster gap={2} align="center">
 										<Text variant="caps">{t('protojazyky.extra')}</Text>
 										{#each extraConsonants as seg (seg)}
-											<Chip state="on" onclick={() => change('protojazyky.edit.consonant', (l) => (l.consonants = toggleSegment(l.consonants, seg)))}><Ipa text={seg} size="m" /></Chip>
+											<Chip state="on" onclick={() => change('protojazyky.edit.consonant', (l) => (adopt(l), (l.consonants = toggleSegment(l.consonants, seg))))}><Ipa text={seg} size="m" /></Chip>
 										{:else}
 											<Text variant="why">{t('protojazyky.extra_none')}</Text>
 										{/each}
@@ -302,6 +353,9 @@
 											options={SYLLABLES.map((s) => ({ value: s, label: t(`protojazyky.syllables.${s}` as MessageKey) }))}
 											onchange={(v) => change('protojazyky.edit.syllables', (l) => (l.syllables = v === 'random' ? null : v))}
 										/>
+										{#if syllableValue === 'random' && previewed}
+											<Text variant="why">{t('protojazyky.syllables_drawn', { type: t(`protojazyky.syllables.${previewed.syllables}` as MessageKey) })}</Text>
+										{/if}
 									</Field>
 								</Stack>
 							</Area>
@@ -311,7 +365,7 @@
 										<Text variant="h2">{t('protojazyky.vowels')} <Text variant="why" as="span">{vowels.length}</Text></Text>
 										<Cluster gap={1}>
 											{#each vowelChips as seg (seg)}
-												<Chip state={vowels.includes(seg) ? 'on' : 'off'} onclick={() => change('protojazyky.edit.vowel', (l) => (l.vowels = toggleSegment(l.vowels, seg)))}><Ipa text={seg} size="m" /></Chip>
+												<Chip state={vowels.includes(seg) ? 'on' : 'off'} onclick={() => change('protojazyky.edit.vowel', (l) => (adopt(l), (l.vowels = toggleSegment(l.vowels, seg))))}><Ipa text={seg} size="m" /></Chip>
 											{/each}
 										</Cluster>
 										<Cluster gap={2}>

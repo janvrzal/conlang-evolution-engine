@@ -103,6 +103,9 @@ class LanguageSpec(_Model):
     #: Slabičná stavba generovaných slov (WALS 12A); ``None`` = engine ji vylosuje podle
     #: podílů typů ve WALS (dok. 25).
     syllables: Literal["simple", "moderate", "complex"] | None = None
+    #: Varianta generátoru: 0 = jazyk ze semínka světa a ID; jiné číslo dá jiný vygenerovaný
+    #: jazyk, aniž by se měnil zbytek světa.
+    variant: int = Field(default=0, ge=0)
 
 
 #: Počet vesnic regionu (1–12).

@@ -204,6 +204,7 @@ fn models() -> Vec<Model> {
                 opt("processes", Ty::List(&PROCESS), || json!([])),
                 opt("suffixes", STR_LIST, || json!([])),
                 null("syllables", Ty::Lit(SYLLABLES)),
+                opt("variant", INT, || json!(0)).b(|b| b.ge = Some(0.0)),
             ],
         },
         Model {
