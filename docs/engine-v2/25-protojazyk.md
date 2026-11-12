@@ -321,3 +321,15 @@ koncovky zadané, mění se jen substráty).
 - Tvary jsou kořeny bez morfologie; ASJP obsahuje citační tvary (někdy s afixy), proto je cíl
   délky jen orientační.
 - Tóny a délka samohlásek nemají data (tóny zipfovsky podle pořadí jako dřív).
+
+## V aplikaci: náhled a varianty (12. 11. 2026)
+
+- `spec::preview` postaví svět bez kroků (Talvera asi 0,3 s) a vrátí protojazyky tak, jak s nimi
+  běh začne: inventář, slabičnou stavbu (zadanou nebo vylosovanou), odvozovací přípony a slova.
+  Aplikace ho volá příkazem `engine_preview` a obrazovka Protojazyky ho přepočítá po každé úpravě
+  zadání, takže hlásky a slova jsou vidět bez spuštění běhu.
+- `languages[].variant` (výchozí 0) vybere jinou variantu generátoru: semínko jazyka je
+  `scenarios::variant_seed(semínko světa, ID, varianta)`; varianta 0 je dosavadní semínko, takže
+  stávající zadání se nemění. Varianta mění jen svůj jazyk (test `tests/preview.rs`).
+- Úprava jedné hlásky u vygenerovaného inventáře nejdřív převezme celý vygenerovaný inventář
+  do zadání; dřív zbyla jen upravená hláska a výchozí samohlásky *a e i o u*.
