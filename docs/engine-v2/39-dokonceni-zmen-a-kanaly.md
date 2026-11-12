@@ -127,3 +127,19 @@ skupiny mají změn méně (nejmenší třetina 36, největší 28).
 Osamocené jsou jen psané normy (`written:…`): jazyk se nemění, ale drží 42–56 živých procesů
 zděděných při vzniku, které se nikdy neuzavřou (skupina se nepřestavuje). Na čas to má malý vliv
 (2–4 skupiny); uzavřít je přímo by změnilo chování aktivací, proto zůstávají.
+
+## Pokračování z kontrolního bodu (oprava 12. 11. 2026)
+
+Pokračování Talvery z bodu v roce 1500 se od nepřerušeného běhu rozešlo už ve druhém kroku: fáze
+inovací navrhla jiné hláskové změny (např. `vowel_shift` bez podmínky přízvuku). Stav po načtení
+byl shodný; lišil se jen odvozený index prostředí hlásek (`cee_core::index::SoundIndex`), který
+pokračování staví znovu, kdežto běh ho dorovnává diferenčně. Dorovnání přepočítalo jen morfémy se
+změněným tvarem, takže po změně pravidla přízvuku kódu zůstala prostředí (přízvučná, nepřízvučná
+slabika) spočítaná podle starého pravidla; v roce 1500 tak měla zastaralé opory kandidátů asi
+třetina skupin. Chybný byl tedy nepřerušený běh. Nově se morfém přepočítá i při změně pravidla
+(test `zmena_prizvuku_prepocita_prostredi_beze_zmeny_tvaru`).
+
+Pokračování z 1500 do 1650 dává teď stejný export jako běh bez přerušení. Brány 47 ze 47,
+kalibrace 38 ze 40 (stejné dvě veličiny); posuny v pásmu: `m9::tempo` zrychlení kontaktem
+2,543 → 2,636, `latina_retence` 0,726 → 0,722, `latina_rozmanitost` 0,566 → 0,569.
+Jádro sdílí i engine v1 přes `cee_py`, oprava se tedy týká i jeho.

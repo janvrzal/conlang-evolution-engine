@@ -603,7 +603,9 @@ impl SoundIndex {
         for number in 0..size {
             let new = effective(number);
             let old = group.counted_form[number];
-            if new == old {
+            // Stejný tvar se přepočítá i tehdy, když se změnilo pravidlo přízvuku kódu: prostředí
+            // (přízvučná, nepřízvučná slabika) závisí na obou.
+            if new == old && (new < 0 || group.counted_rule[number] == input.rule) {
                 continue;
             }
             if old >= 0 {
@@ -1423,6 +1425,39 @@ mod tests {
         other.set_defaults(&[0, 1], &[vec![0, 1, 2, 1], vec![2, 3]]);
         other.import(&bank, 7, cf, cr).unwrap();
         assert_eq!(other.inventory(7), index.inventory(7));
+    }
+
+    #[test]
+    fn zmena_prizvuku_prepocita_prostredi_beze_zmeny_tvaru() {
+        // Kód změní pravidlo přízvuku (předposlední → poslední), tvary zůstanou: dorovnaný index
+        // musí počítat stejně jako index postavený rovnou s novým pravidlem.
+        let bank = bank();
+        let flags = [1_u8, 1];
+        let forms = [0_i32, 1];
+        let input = |rule: u8| {
+            [GroupInput {
+                token: 7,
+                rule,
+                flags: &flags,
+                forms: &forms,
+            }]
+        };
+        let mut index = SoundIndex::new(vec![0.5]);
+        let _ = index.sync(&bank, &input(crate::process::RULE_PENULT)).unwrap();
+        let _ = index.sync(&bank, &input(crate::process::RULE_FINAL)).unwrap();
+        let mut fresh = SoundIndex::new(vec![0.5]);
+        let _ = fresh.sync(&bank, &input(crate::process::RULE_FINAL)).unwrap();
+        // Prostředí jako množina (čísla prostředí závisí na pořadí, v jakém je index poznal).
+        let sorted = |index: &mut SoundIndex| {
+            let (p, s, f, st, f2, n) = index.context_counts(&bank, 7);
+            let mut rows: Vec<_> = (0..n.len())
+                .map(|k| (p[k], s[k], f[k], st[k], f2[k], n[k]))
+                .collect();
+            rows.sort_unstable();
+            rows
+        };
+        assert_eq!(sorted(&mut index), sorted(&mut fresh));
+        assert_eq!(index.export(7), fresh.export(7));
     }
 
     #[test]
