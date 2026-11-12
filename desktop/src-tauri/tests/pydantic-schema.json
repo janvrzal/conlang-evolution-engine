@@ -682,6 +682,30 @@
       "title": "Endonym",
       "type": "array"
      },
+     "endonym_form": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Endonym Form"
+     },
+     "person_names": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Person Names"
+     },
      "tones": {
       "items": {
        "type": "string"
@@ -1588,6 +1612,18 @@
     ],
     "default": null,
     "title": "Name"
+   },
+   "name_form": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Name Form"
    },
    "seed": {
     "default": 1,

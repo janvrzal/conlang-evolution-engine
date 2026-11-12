@@ -11,6 +11,7 @@ import * as s_jazyky from './screens/jazyky';
 import * as s_slova from './screens/slova';
 import * as s_kronika from './screens/kronika';
 import * as s_cokdyby from './screens/cokdyby';
+import * as s_jmena from './screens/jmena';
 import * as s_shell from './screens/shell';
 
 const s = (n: number | string, one: string, many: string) => (Number(n) === 1 ? one : many);
@@ -145,6 +146,7 @@ const en: Record<keyof typeof cs, string | ((p: Record<string, string | number>)
 	...s_slova.en,
 	...s_kronika.en,
 	...s_cokdyby.en,
+	...s_jmena.en,
 	...s_shell.en,
 };
 

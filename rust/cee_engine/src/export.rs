@@ -545,14 +545,18 @@ pub fn lineages(simulation: &Simulation) -> Vec<Value> {
                     .collect()
             })
             .unwrap_or_default();
+        let endonym = if groups.is_empty() {
+            None
+        } else {
+            lineage_endonym(simulation, &id, &groups)
+        };
         item.insert(
-            "endonym".into(),
-            if groups.is_empty() {
-                Value::Null
-            } else {
-                naming::endonym(world, &groups).map_or(Value::Null, Value::from)
-            },
+            "name".into(),
+            endonym
+                .as_deref()
+                .map_or(Value::Null, |e| crate::onomastics::romanize(e).into()),
         );
+        item.insert("endonym".into(), endonym.map_or(Value::Null, Value::from));
         item.insert(
             "origin_region".into(),
             naming::origin_region(world, &at_start).map_or(Value::Null, Value::from),
@@ -567,6 +571,61 @@ pub fn lineages(simulation: &Simulation) -> Vec<Value> {
             .then(a["id"].as_str().cmp(&b["id"].as_str()))
     });
     out.into_iter().map(Value::Object).collect()
+}
+
+/// Vlastní jméno linie (IPA): záznam modulu jmen, bez něj složenina dnešních slov.
+pub fn lineage_endonym(
+    simulation: &Simulation,
+    lineage: &str,
+    groups: &[String],
+) -> Option<String> {
+    simulation
+        .names
+        .as_ref()
+        .and_then(|n| n.lineage_endonym(lineage))
+        .or_else(|| naming::endonym(&simulation.world, groups))
+}
+
+/// Toponymum území ze záznamu modulu jmen (stejná pole jako `onomastics::territory_toponym`).
+fn named_toponym(simulation: &Simulation, territory: &str, fallback: Value) -> Value {
+    let Some(names) = &simulation.names else {
+        return fallback;
+    };
+    let Some(record) = names.current_of(&format!("territory:{territory}")) else {
+        return fallback;
+    };
+    let mut top = match fallback {
+        Value::Object(map) => map,
+        _ => Map::new(),
+    };
+    let ipa = record.timeline.last().map_or("", |s| s.ipa.as_str());
+    top.insert("name".into(), crate::onomastics::romanize(ipa).into());
+    top.insert("ipa".into(), ipa.into());
+    top.insert("meaning".into(), record.meaning.clone().into());
+    top.insert("pattern".into(), record.motivation.clone().into());
+    top.insert(
+        "substrate".into(),
+        (record.motivation == "substrate").into(),
+    );
+    top.insert("current_language".into(), record.language.clone().into());
+    top.insert("founded".into(), record.founded_year.into());
+    top.insert("record".into(), record.id.clone().into());
+    let mut exonyms = Map::new();
+    let prefix = format!("territory:{territory}|");
+    for (key, &index) in &names.exonyms {
+        if let Some(lineage) = key.strip_prefix(&prefix) {
+            let found = &names.records[index];
+            if found.ended.is_none() {
+                let ipa = names.ipa(index);
+                exonyms.insert(
+                    lineage.to_owned(),
+                    json!({"name": crate::onomastics::romanize(ipa), "ipa": ipa, "language": found.language, "record": found.id}),
+                );
+            }
+        }
+    }
+    top.insert("exonyms".into(), Value::Object(exonyms));
+    Value::Object(top)
 }
 
 /// Nářečí posledního pozorování s fakty pro jméno (`naming::dialects`).
@@ -601,7 +660,45 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
     let world = &simulation.world;
     let history = &simulation.history;
     let observed = observed_languages(simulation);
-    let onomastics = crate::onomastics::export_world_onomastics(world);
+    let mut onomastics = crate::onomastics::export_world_onomastics(world);
+    // S modulem jmen platí jména ze záznamů: toponyma i státy (jméno, výslovnost, hlavní město).
+    if let Some(Value::Object(toponyms)) = onomastics.get_mut("toponyms") {
+        for (territory, entry) in toponyms.iter_mut() {
+            *entry = named_toponym(simulation, territory, entry.take());
+        }
+    }
+    let capitals: Map<String, Value> = onomastics
+        .get("toponyms")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    if let (Some(names), Some(Value::Object(states))) =
+        (&simulation.names, onomastics.get_mut("states"))
+    {
+        for (id, entry) in states.iter_mut() {
+            if let (Some(record), Value::Object(entry)) =
+                (names.current_of(&format!("state:{id}")), entry)
+            {
+                let ipa = record.timeline.last().map_or("", |s| s.ipa.as_str());
+                entry.insert("endonym".into(), crate::onomastics::romanize(ipa).into());
+                entry.insert("ipa".into(), ipa.into());
+                entry.insert("meaning".into(), record.meaning.clone().into());
+                entry.insert("motivation".into(), record.motivation.clone().into());
+                entry.insert("record".into(), record.id.clone().into());
+                if let Some(polity) = world.society.states.get(id) {
+                    let capital = world.registry.territories.name(polity.capital.0);
+                    let city = format!("{capital}-v0");
+                    if let Some(name) = capitals
+                        .get(&city)
+                        .or_else(|| capitals.get(capital))
+                        .and_then(|t| t.get("name"))
+                    {
+                        entry.insert("capital_name".into(), name.clone());
+                    }
+                }
+            }
+        }
+    }
     let mut territories: Vec<(&str, usize)> = (0..world.territories.len())
         .map(|i| (world.registry.territories.name(i as u32), i))
         .collect();
@@ -610,11 +707,15 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
         .into_iter()
         .map(|(name, i)| {
             let node = &world.territories[i];
-            let top = onomastics
-                .get("toponyms")
-                .and_then(|t| t.get(name))
-                .cloned()
-                .unwrap_or(Value::Null);
+            let top = named_toponym(
+                simulation,
+                name,
+                onomastics
+                    .get("toponyms")
+                    .and_then(|t| t.get(name))
+                    .cloned()
+                    .unwrap_or(Value::Null),
+            );
             let place_name = top.get("name").cloned().unwrap_or(Value::Null);
             json!({
                 "id": name, "name": place_name, "level": node.level.name(),
@@ -669,6 +770,11 @@ pub fn export(simulation: &Simulation, only_timeline: bool) -> Value {
         "standards": Value::Object(standards),
         "dialect_facts": dialect_facts(simulation),
         "onomastics": onomastics,
+        "names": simulation.names.as_ref().map_or(Value::Null, |n| n.export()),
+        "world_name": simulation.names.as_ref().and_then(|n| n.current_of("world")).map_or(Value::Null, |r| {
+            let ipa = r.timeline.last().map_or("", |s| s.ipa.as_str());
+            json!({"name": crate::onomastics::romanize(ipa), "ipa": ipa, "record": r.id, "meaning": r.meaning, "since": r.founded_year})
+        }),
         "census": polity::language_census(world),
         "events": events,
         "proto_lexicon": history.proto,
@@ -697,7 +803,7 @@ pub fn frame(simulation: &Simulation) -> Value {
         })).collect::<Vec<_>>(),
         "endonyms": Value::Object(
             snapshot.map_or_else(Default::default, |s| s.languages.iter()
-                .map(|(l, groups)| (l.clone(), naming::endonym(world, groups).map_or(Value::Null, Value::from)))
+                .map(|(l, groups)| (l.clone(), lineage_endonym(simulation, l, groups).map_or(Value::Null, Value::from)))
                 .collect())
         ),
         "dialect_facts": dialect_facts(simulation),

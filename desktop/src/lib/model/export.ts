@@ -1,5 +1,6 @@
 // Typy exportu enginu v2 (formát cee-v2/1, GET /api/v2/runs/{id}/result) a průběžného snímku
 // (GET /api/v2/runs/{id} → frames). Pole odpovídají rust/cee_engine (export.rs, frame).
+import type { NamesExport } from './jmena';
 
 export interface Toponym {
 	name: string;
@@ -201,6 +202,10 @@ export interface ExportV2 {
 	event_summary?: Record<string, Record<string, number>>;
 	/** Počet událostí podle druhu za celý běh. */
 	event_counts?: Record<string, number>;
+	/** Jména s historií (modul jmen, dok. 34); bez modulu chybí. */
+	names?: NamesExport | null;
+	/** Jméno světa z modulu jmen (objekt `world`). */
+	world_name?: { name: string; ipa: string; record: string; meaning: string; since: number } | null;
 	links?: { kind: string; source: string; target: string; strength: number }[];
 }
 

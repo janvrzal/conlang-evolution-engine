@@ -130,7 +130,7 @@ def check(data: dict[str, Any] | WorldSpec) -> list[Issue]:
     issues = check_parameters(spec)
     if issues:
         return issues
-    found = native().check_spec(json.dumps(spec.model_dump(mode="json")))
+    found = native().check_spec(json.dumps(spec.model_dump(mode="json", by_alias=True)))
     return [Issue(item["path"], item["message"], item["severity"]) for item in found]
 
 
@@ -144,7 +144,7 @@ def prepare(run_id: str, data: dict[str, Any] | WorldSpec) -> Run:
     if spec is None:
         raise SpecError(issues)
     try:
-        handle = native().Run(json.dumps(spec.model_dump(mode="json")))
+        handle = native().Run(json.dumps(spec.model_dump(mode="json", by_alias=True)))
     except ValueError as error:
         raise SpecError(errors([Issue("(svět)", str(error))])) from error
     return Run(run_id, spec, year=spec.start_year, native=handle)

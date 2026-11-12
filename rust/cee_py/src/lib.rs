@@ -19,7 +19,11 @@ use pyo3::prelude::*;
 fn simulation(spec_json: &str) -> Result<(Simulation, WorldSpec), String> {
     let world_spec = WorldSpec::from_json(spec_json)?;
     let (world, events) = spec::build(&world_spec)?;
-    let simulation = Simulation::new(world, SimulationConfig::default(), events)?;
+    let config = SimulationConfig {
+        names: true,
+        ..SimulationConfig::default()
+    };
+    let simulation = Simulation::new(world, config, events)?;
     Ok((simulation, world_spec))
 }
 
@@ -131,6 +135,24 @@ impl Run {
         py.detach(|| {
             let simulation = self.lock()?;
             Ok(export::frame(&simulation).to_string())
+        })
+    }
+
+    /// Generátor jmen sídel podle kraje a epochy (dotaz `names::generate::Query` jako text JSON):
+    /// návrhy jmen založených v kraji v daném roce a jejich vývoj do pozdějšího roku.
+    fn names(&self, py: Python<'_>, query_json: &str) -> PyResult<String> {
+        let query: cee_engine::names::generate::Query = serde_json::from_str(query_json)
+            .map_err(|e| PyValueError::new_err(format!("dotaz na jména: {e}")))?;
+        py.detach(|| {
+            let simulation = self.lock()?;
+            let names = simulation
+                .names
+                .as_ref()
+                .ok_or_else(|| PyRuntimeError::new_err("modul jmen neběží"))?;
+            names
+                .generate(&simulation.world, &query)
+                .map(|v| v.to_string())
+                .map_err(PyValueError::new_err)
         })
     }
 

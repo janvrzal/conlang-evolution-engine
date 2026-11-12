@@ -60,7 +60,7 @@ fn analogical(world: &World, group: GroupId, morpheme: MorphemeId) -> Vec<i32> {
 }
 
 /// Proměnná a varianta „změna“ procesu z registru (čistě ze jmen, bez paměti).
-fn info_pure(world: &World, process: ProcessId) -> Option<(VariableId, VariantId)> {
+pub(crate) fn info_pure(world: &World, process: ProcessId) -> Option<(VariableId, VariantId)> {
     let name = world.registry.processes.name(process.0);
     let variable = world.registry.variables.get(name)?;
     let changed = world
@@ -74,7 +74,7 @@ fn info_pure(world: &World, process: ProcessId) -> Option<(VariableId, VariantId
 /// se nemění, proto jde povrch počítat ze `&World` (metriky bran čtou svět jen pro čtení).
 pub type ProcCache = Vec<Option<Proc>>;
 
-fn apply_local(
+pub(crate) fn apply_local(
     world: &World,
     cache: &mut ProcCache,
     process: ProcessId,
@@ -137,6 +137,34 @@ fn surface_cached(
     morpheme: MorphemeId,
     cache: &mut ProcCache,
 ) -> Result<Vec<i32>, String> {
+    surface_with(world, group, morpheme, cache, &mut None)
+}
+
+/// Součty četností pojmů skupiny, spočítané jen jednou pro víc slov.
+type Totals<'a> = Option<std::borrow::Cow<'a, std::collections::HashMap<MorphemeId, f64>>>;
+
+/// Povrchové tvary víc morfémů jedné skupiny (stejné jako [`surface`] pro každý zvlášť, jen
+/// součty četností a masky procesů se spočítají jednou).
+pub fn surface_many(
+    world: &World,
+    group: GroupId,
+    morphemes: &[MorphemeId],
+) -> Result<Vec<Vec<i32>>, String> {
+    let mut cache = Vec::new();
+    let mut totals: Totals<'_> = None;
+    morphemes
+        .iter()
+        .map(|&m| surface_with(world, group, m, &mut cache, &mut totals))
+        .collect()
+}
+
+fn surface_with<'a>(
+    world: &'a World,
+    group: GroupId,
+    morpheme: MorphemeId,
+    cache: &mut ProcCache,
+    totals: &mut Totals<'a>,
+) -> Result<Vec<i32>, String> {
     if world.table.is_none() {
         return Err("svět nemá tabulku hlásek".into());
     }
@@ -157,8 +185,8 @@ fn surface_cached(
     }
     let lexeme = world.morphemes.lexeme_id(morpheme);
     let frequency = {
-        let totals = concept_totals(world, group);
-        usage_frequency(world, &totals, lexeme)
+        let totals = totals.get_or_insert_with(|| concept_totals(world, group));
+        usage_frequency(world, totals, lexeme)
     };
     for (number, reductive) in live {
         let process = ProcessId::new(number);

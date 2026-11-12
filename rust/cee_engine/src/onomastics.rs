@@ -598,7 +598,8 @@ pub fn select_paradigm(world: &World, group: GroupId) -> &'static str {
     PARADIGMS[(h as usize) % PARADIGMS.len()]
 }
 
-/// Vygeneruje sadu vlastních osobních jmen pro danou skupinu a zadané paradigma.
+/// Vygeneruje sadu vlastních osobních jmen pro danou skupinu a zadané paradigma
+/// (skládá `names::persons::person_name` z dnešních slov skupiny; jen vzorník pro export).
 pub fn personal_names_for_group(
     world: &World,
     group: GroupId,
@@ -606,11 +607,12 @@ pub fn personal_names_for_group(
     settlement_toponym: Option<&str>,
     count: usize,
 ) -> Vec<Value> {
+    use crate::names::compose::{Adapted, Live};
     let Some(table) = world.segments() else {
         return Vec::new();
     };
-    let cat = catalog();
     let is_vowel = |s: i32| table.is_vowel(s);
+    let render = |f: &[i32]| table.render(f);
     let g_name = world.group_name(group);
     let at = group.index();
     let prestige_donor = if !world.groups.liturgy[at].is_none() {
@@ -620,242 +622,52 @@ pub fn personal_names_for_group(
     } else {
         None
     };
-
-    let mut out = Vec::with_capacity(count);
-    for idx in 0..count {
-        let h = stable_int(&[
-            Part::Str("anthroponym"),
-            Part::Int(world.seed),
-            Part::Str(g_name),
-            Part::Str(paradigm),
-            Part::Uint(idx as u64),
-        ]);
-        let entry = match paradigm {
-            "tria_nomina" => {
-                let prae_c = pick(&cat.semantic_pools["generational_markers"], h, 1);
-                let clan_c = pick(&cat.semantic_pools["heroic_first"], h, 2);
-                let fam_c = "family";
-                let cog_c = pick(&cat.semantic_pools["modifiers"], h, 3);
-
-                let prae_s =
-                    first_syllable(&form_for_concept(world, group, None, prae_c), &is_vowel);
-                let nomen_s = smooth_compound(
-                    &[
-                        form_for_concept(world, group, None, clan_c),
-                        first_syllable(&form_for_concept(world, group, None, fam_c), &is_vowel),
-                    ],
-                    &is_vowel,
-                );
-                let cog_s = form_for_concept(world, group, None, cog_c);
-
-                let p_ipa = table.render(&prae_s);
-                let n_ipa = table.render(&nomen_s);
-                let c_ipa = table.render(&cog_s);
-                let full_name = format!(
-                    "{} {} {}",
-                    romanize(&p_ipa),
-                    romanize(&n_ipa),
-                    romanize(&c_ipa)
-                );
-                json!({
-                    "full_name": full_name,
-                    "ipa": format!("{p_ipa} {n_ipa} {c_ipa}"),
-                    "given": romanize(&p_ipa),
-                    "byname": format!("{} {}", romanize(&n_ipa), romanize(&c_ipa)),
-                    "meaning": format!("{}, rod {}, přezdívka „{}“", gloss_cs(prae_c), gloss_cs(clan_c), gloss_cs(cog_c)),
-                    "paradigm": paradigm,
-                })
-            }
-            "genealogical_nisba" => {
-                let given_c = pick(&cat.semantic_pools["heroic_second"], h, 1);
-                let parent_c = pick(&cat.semantic_pools["heroic_first"], h, 2);
-                let child_c = "child";
-
-                let given_s = form_for_concept(world, group, None, given_c);
-                let child_s =
-                    first_syllable(&form_for_concept(world, group, None, child_c), &is_vowel);
-                let parent_s = form_for_concept(world, group, None, parent_c);
-                let filiation_s = smooth_seam(&child_s, &parent_s, &is_vowel);
-
-                let g_ipa = table.render(&given_s);
-                let f_ipa = table.render(&filiation_s);
-                let nisba = settlement_toponym.unwrap_or("Varad");
-                let full_name = format!("{} {} ({})", romanize(&g_ipa), romanize(&f_ipa), nisba);
-                json!({
-                    "full_name": full_name,
-                    "ipa": format!("{g_ipa} {f_ipa}"),
-                    "given": romanize(&g_ipa),
-                    "byname": romanize(&f_ipa),
-                    "meaning": format!("{} • potomek {} • původem z {}", gloss_cs(given_c), gloss_cs(parent_c), nisba),
-                    "paradigm": paradigm,
-                })
-            }
-            "clan_generational" => {
-                let clan_c = pick(&cat.semantic_pools["clan_emblems"], h, 1);
-                let gen_c = pick(&cat.semantic_pools["generational_markers"], h, 2);
-                let pers_c = pick(&cat.semantic_pools["heroic_second"], h, 3);
-
-                let clan_s =
-                    first_syllable(&form_for_concept(world, group, None, clan_c), &is_vowel);
-                let gen_s = first_syllable(&form_for_concept(world, group, None, gen_c), &is_vowel);
-                let pers_s =
-                    first_syllable(&form_for_concept(world, group, None, pers_c), &is_vowel);
-                let given_s = smooth_seam(&gen_s, &pers_s, &is_vowel);
-
-                let c_ipa = table.render(&clan_s);
-                let g_ipa = table.render(&given_s);
-                let full_name = format!("{} {}", romanize(&c_ipa), romanize(&g_ipa));
-                json!({
-                    "full_name": full_name,
-                    "ipa": format!("{c_ipa} {g_ipa}"),
-                    "given": romanize(&g_ipa),
-                    "byname": romanize(&c_ipa),
-                    "meaning": format!("klan {} • generace {} + {}", gloss_cs(clan_c), gloss_cs(gen_c), gloss_cs(pers_c)),
-                    "paradigm": paradigm,
-                })
-            }
-            "liturgical_vernacular" => {
-                let sac_c1 = pick(&cat.semantic_pools["sacred_civic"], h, 1);
-                let sac_c2 = pick(&cat.semantic_pools["heroic_second"], h, 2);
-                let pat_c = pick(&cat.semantic_pools["nature_stems"], h, 3);
-
-                let s1 = form_for_concept(world, group, prestige_donor, sac_c1);
-                let s2 = form_for_concept(world, group, prestige_donor, sac_c2);
-                let given_s = smooth_compound(&[s1, s2], &is_vowel);
-                let sur_s = smooth_compound(
-                    &[
-                        form_for_concept(world, group, None, pat_c),
-                        first_syllable(&form_for_concept(world, group, None, "child"), &is_vowel),
-                    ],
-                    &is_vowel,
-                );
-                let g_ipa = table.render(&given_s);
-                let s_ipa = table.render(&sur_s);
-                json!({
-                    "full_name": format!("{} {}", romanize(&g_ipa), romanize(&s_ipa)),
-                    "ipa": format!("{g_ipa} {s_ipa}"),
-                    "given": romanize(&g_ipa),
-                    "byname": romanize(&s_ipa),
-                    "meaning": format!("kalendářní „{}-{}“, domácí rod „{}“", gloss_cs(sac_c1), gloss_cs(sac_c2), gloss_cs(pat_c)),
-                    "paradigm": paradigm,
-                })
-            }
-            "caste_guild_matrix" => {
-                let caste_c = pick(&cat.semantic_pools["caste_markers"], h, 1);
-                let stem_c = pick(&cat.semantic_pools["heroic_second"], h, 2);
-                let house_c = pick(&cat.semantic_pools["urban_heads"], h, 3);
-
-                let caste_s =
-                    first_syllable(&form_for_concept(world, group, None, caste_c), &is_vowel);
-                let stem_s = form_for_concept(world, group, None, stem_c);
-                let given_s = smooth_seam(&caste_s, &stem_s, &is_vowel);
-                let house_s = smooth_compound(
-                    &[
-                        form_for_concept(world, group, None, house_c),
-                        first_syllable(&form_for_concept(world, group, None, "house"), &is_vowel),
-                    ],
-                    &is_vowel,
-                );
-                let g_ipa = table.render(&given_s);
-                let h_ipa = table.render(&house_s);
-                json!({
-                    "full_name": format!("{}-{}", romanize(&g_ipa), romanize(&h_ipa)),
-                    "ipa": format!("{g_ipa} {h_ipa}"),
-                    "given": romanize(&g_ipa),
-                    "byname": romanize(&h_ipa),
-                    "meaning": format!("cech/živel [{}] + {} • dům {}", gloss_cs(caste_c), gloss_cs(stem_c), gloss_cs(house_c)),
-                    "paradigm": paradigm,
-                })
-            }
-            "chrononymic_deed" => {
-                let verb_c = pick(&cat.semantic_pools["deed_verbs"], h, 1);
-                let obj_c = pick(&cat.semantic_pools["deed_objects"], h, 2);
-                let milk_c = pick(&cat.semantic_pools["nature_stems"], h, 3);
-
-                let deed_s = smooth_compound(
-                    &[
-                        form_for_concept(world, group, None, verb_c),
-                        form_for_concept(world, group, None, obj_c),
-                    ],
-                    &is_vowel,
-                );
-                let milk_s = smooth_compound(
-                    &[
-                        first_syllable(&form_for_concept(world, group, None, "small"), &is_vowel),
-                        form_for_concept(world, group, None, milk_c),
-                    ],
-                    &is_vowel,
-                );
-                let d_ipa = table.render(&deed_s);
-                let m_ipa = table.render(&milk_s);
-                json!({
-                    "full_name": format!("{} ({})", romanize(&d_ipa), romanize(&m_ipa)),
-                    "ipa": format!("{d_ipa} ({m_ipa})"),
-                    "given": romanize(&d_ipa),
-                    "byname": romanize(&m_ipa),
-                    "meaning": format!("jméno činu „{}-{}“ (dětské jméno „malý {}“)", gloss_cs(verb_c), gloss_cs(obj_c), gloss_cs(milk_c)),
-                    "paradigm": paradigm,
-                })
-            }
-            "polyglossic_court" => {
-                let c1 = pick(&cat.semantic_pools["heroic_first"], h, 1);
-                let c2 = pick(&cat.semantic_pools["heroic_second"], h, 2);
-                let low_c = pick(&cat.semantic_pools["nature_stems"], h, 3);
-
-                let high_s = smooth_compound(
-                    &[
-                        form_for_concept(world, group, prestige_donor, c1),
-                        form_for_concept(world, group, prestige_donor, c2),
-                    ],
-                    &is_vowel,
-                );
-                let low_s = first_syllable(&form_for_concept(world, group, None, low_c), &is_vowel);
-                let hi_ipa = table.render(&high_s);
-                let lo_ipa = table.render(&low_s);
-                json!({
-                    "full_name": format!("{} / {}", romanize(&hi_ipa), romanize(&lo_ipa)),
-                    "ipa": format!("{hi_ipa} / {lo_ipa}"),
-                    "given": romanize(&hi_ipa),
-                    "byname": romanize(&lo_ipa),
-                    "meaning": format!("dvorské „{}-{}“ / domácí „{}“", gloss_cs(c1), gloss_cs(c2), gloss_cs(low_c)),
-                    "paradigm": paradigm,
-                })
-            }
-            _ => {
-                // Výchozí `dithematic_ie`: dvojčlenné složené jméno + patronymum/přízvisko.
-                let first_c = pick(&cat.semantic_pools["heroic_first"], h, 1);
-                let second_c = pick(&cat.semantic_pools["heroic_second"], h, 2);
-                let father_c = pick(&cat.semantic_pools["heroic_first"], h, 3);
-
-                let given_s = smooth_compound(
-                    &[
-                        form_for_concept(world, group, None, first_c),
-                        form_for_concept(world, group, None, second_c),
-                    ],
-                    &is_vowel,
-                );
-                let pat_s = smooth_compound(
-                    &[
-                        form_for_concept(world, group, None, father_c),
-                        first_syllable(&form_for_concept(world, group, None, "child"), &is_vowel),
-                    ],
-                    &is_vowel,
-                );
-                let g_ipa = table.render(&given_s);
-                let p_ipa = table.render(&pat_s);
-                json!({
-                    "full_name": format!("{} {}", romanize(&g_ipa), romanize(&p_ipa)),
-                    "ipa": format!("{g_ipa} {p_ipa}"),
-                    "given": romanize(&g_ipa),
-                    "byname": romanize(&p_ipa),
-                    "meaning": format!("{}-{}, potomek {}", gloss_cs(first_c), gloss_cs(second_c), gloss_cs(father_c)),
-                    "paradigm": "dithematic_ie",
-                })
-            }
-        };
-        out.push(entry);
-    }
-    out
+    let lexicon = Live { world, group };
+    let donor = prestige_donor.map(|g| Live { world, group: g });
+    let adapted = donor.as_ref().map(|d| Adapted {
+        inner: d,
+        world,
+        inventory: crate::contact::inventory(world, group),
+    });
+    let origin = settlement_toponym.unwrap_or("Varad");
+    (0..count)
+        .map(|idx| {
+            let h = stable_int(&[
+                Part::Str("anthroponym"),
+                Part::Int(world.seed),
+                Part::Str(g_name),
+                Part::Str(paradigm),
+                Part::Uint(idx as u64),
+            ]);
+            let name = crate::names::persons::person_name(
+                paradigm,
+                &lexicon,
+                adapted
+                    .as_ref()
+                    .map(|a| a as &dyn crate::names::compose::Lexicon),
+                Some(origin),
+                h,
+                &is_vowel,
+                &render,
+            );
+            let given = name
+                .parts
+                .first()
+                .map_or(String::new(), |p| romanize(&render(&p.form)));
+            let byname: Vec<String> = name.parts[1..]
+                .iter()
+                .map(|p| p.text.clone().unwrap_or_else(|| romanize(&render(&p.form))))
+                .collect();
+            json!({
+                "full_name": name.full(&render),
+                "ipa": name.ipa(&render),
+                "given": given,
+                "byname": byname.join(" "),
+                "meaning": name.meaning,
+                "paradigm": name.paradigm,
+            })
+        })
+        .collect()
 }
 
 /// Vygeneruje kompletní onomastický přehled světa pro export:

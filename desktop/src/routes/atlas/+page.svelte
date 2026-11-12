@@ -7,6 +7,7 @@
 		Card,
 		Checkbox,
 		Cluster,
+		Disclosure,
 		EmptyState,
 		Floating,
 		Ipa,
@@ -32,6 +33,7 @@
 		type LegendItem,
 		type MapVillage
 	} from '$lib/ds';
+	import { causeMessage, nameHistory, type NameHistory } from '$lib/model/jmena';
 	import { i18n, number, t, type MessageKey } from '$lib/i18n.svelte';
 	import { languageLabels, regionGroups } from '$lib/model/atlas';
 	import { conceptLabel } from '$lib/model/concepts';
@@ -174,6 +176,17 @@
 	// karta kraje
 	const region = $derived(app.view.region && geo ? geo.regions.find((r) => r.id === app.view.region) : null);
 	const toponym = $derived(region ? result?.onomastics?.toponyms?.[region.id] : undefined);
+	const history = $derived(region ? nameHistory(result?.names, `territory:${region.id}`) : null);
+	// historie jména z modulu jmen (export `names`)
+	const motivation = (key: string) => {
+		const label = t(`name.mot.${key}` as MessageKey);
+		return label === `name.mot.${key}` ? key : label;
+	};
+	const causeText = (cause: string) => {
+		const m = causeMessage(cause);
+		return 'text' in m ? m.text : t(m.key as MessageKey, m.params);
+	};
+	const exonymSpeaker = (id: string) => nameOf(id);
 	const census = $derived(region && frame ? frame.census[region.id] : undefined);
 	const censusBars: BarRow[] = $derived.by(() => {
 		if (!census) return [];
@@ -216,6 +229,43 @@
 	);
 	const pick = (r: string) => (app.view.region = r);
 </script>
+
+{#snippet nameHistoryBlock(h: NameHistory | null)}
+	{#if h?.current}
+		{@const cur = h.current}
+		<Disclosure>
+			{#snippet summary()}{t('name.history')} · {t('name.current', { name: cur.name, year: formatYear(cur.founded) })}{/snippet}
+			<Stack gap={2}>
+				<Ledger termWidth={110}>
+					<LedgerRow term={t('name.motivation')}
+						>{motivation(cur.motivation)}{#if cur.meaning}{' '}<Text variant="why" as="span">{t('jmena.meaning', { meaning: cur.meaning })}</Text>{/if}</LedgerRow
+					>
+					{#each cur.timeline as step, i (i)}
+						<LedgerRow term={formatYear(step.year)}><Ipa text={step.ipa} />{' '}{step.name}{' '}<Text variant="why" as="span">{causeText(step.cause)}</Text></LedgerRow>
+					{/each}
+				</Ledger>
+				{#if h.earlier.length}
+					<Text variant="caps">{t('name.earlier')}</Text>
+					<Ledger termWidth={110}>
+						{#each h.earlier as r (r.id)}
+							<LedgerRow term={t('name.ended', { from: formatYear(r.founded), to: r.ended != null ? formatYear(r.ended) : '…' })}
+								>{r.name}{' '}<Ipa text={r.ipa} />{' '}<Text variant="why" as="span">{motivation(r.motivation)}</Text></LedgerRow
+							>
+						{/each}
+					</Ledger>
+				{/if}
+				{#if h.exonyms.length}
+					<Text variant="caps">{t('name.exonyms')}</Text>
+					<Ledger termWidth={110}>
+						{#each h.exonyms as e (e.lineage)}
+							<LedgerRow term={exonymSpeaker(e.lineage)}>{e.record.name}{' '}<Ipa text={e.record.ipa} /></LedgerRow>
+						{/each}
+					</Ledger>
+				{/if}
+			</Stack>
+		</Disclosure>
+	{/if}
+{/snippet}
 
 {#if !world || !geo}
 	<Screen><Text variant="why">{t('check.running')}</Text></Screen>
@@ -294,8 +344,12 @@
 						<Button variant="quiet" onclick={() => (app.view.region = null)}>{t('atlas.clear')}</Button>
 					</Cluster>
 					<Text variant="h1">{region.name}</Text>
-					{#if toponym}<Text><Ipa text={toponym.ipa} slashes /> <Text variant="why" as="span">{t('atlas.meaning', { meaning: toponym.meaning })}</Text></Text>{/if}
+					{#if history?.current}
+						<Text>{history.current.name}{' '}<Ipa text={history.current.ipa} slashes />{' '}<Text variant="why" as="span">{t('jmena.meaning', { meaning: history.current.meaning })}</Text></Text>
+					{:else if toponym}<Text><Ipa text={toponym.ipa} slashes /> <Text variant="why" as="span">{t('atlas.meaning', { meaning: toponym.meaning })}</Text></Text>{/if}
 				</Stack>
+				{@render nameHistoryBlock(history)}
+				<Button variant="quiet" href="/jmena">{t('name.generate_here')}</Button>
 				{#if censusBars.length}
 					<Stack gap={2}>
 						<Text variant="caps">{t('atlas.census')}</Text>

@@ -1443,10 +1443,16 @@ mod tests {
             }]
         };
         let mut index = SoundIndex::new(vec![0.5]);
-        let _ = index.sync(&bank, &input(crate::process::RULE_PENULT)).unwrap();
-        let _ = index.sync(&bank, &input(crate::process::RULE_FINAL)).unwrap();
+        let _ = index
+            .sync(&bank, &input(crate::process::RULE_PENULT))
+            .unwrap();
+        let _ = index
+            .sync(&bank, &input(crate::process::RULE_FINAL))
+            .unwrap();
         let mut fresh = SoundIndex::new(vec![0.5]);
-        let _ = fresh.sync(&bank, &input(crate::process::RULE_FINAL)).unwrap();
+        let _ = fresh
+            .sync(&bank, &input(crate::process::RULE_FINAL))
+            .unwrap();
         // Prostředí jako množina (čísla prostředí závisí na pořadí, v jakém je index poznal).
         let sorted = |index: &mut SoundIndex| {
             let (p, s, f, st, f2, n) = index.context_counts(&bank, 7);

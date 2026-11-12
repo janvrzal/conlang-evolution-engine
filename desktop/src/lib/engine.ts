@@ -1,10 +1,11 @@
 import type { ExportV2, FrameV2 } from './model/export';
+import type { NamesQuery, NamesResult } from './model/jmena';
 
 // Spojení s enginem. V aplikaci (Tauri) běží engine v2 přímo v procesu a volá se příkazy
 // (src-tauri/src/lib.rs); v prohlížeči (vývoj UI) se hledá Python server /api/v2 na obvyklých portech.
 // Tvary odpovědí jsou v obou případech stejné.
 
-export const API_REVISION = 10;
+export const API_REVISION = 11;
 const SIGNATURE = 'Conlang Evolution Engine';
 const PORTS = Array.from({ length: 20 }, (_, i) => 8000 + i);
 
@@ -211,6 +212,12 @@ export class Engine {
 	wordHistory(runId: string, language: string, concept: string): Promise<{ year: number; form: string | null }[]> {
 		if (!this.native) return Promise.resolve([]);
 		return this.call('run_word_history', { id: runId, language, concept });
+	}
+
+	/** Generátor jmen sídel a osob podle kraje a epochy (modul jmen, dok. 34). */
+	names(runId: string, query: NamesQuery): Promise<NamesResult> {
+		if (this.native) return this.call('run_names', { id: runId, query });
+		return this.request(`/runs/${runId}/names`, { method: 'POST', body: JSON.stringify(query) });
 	}
 
 	renameRun(runId: string, name: string | null): Promise<void> {

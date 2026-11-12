@@ -13,8 +13,8 @@ use crate::history::History;
 use crate::world::World;
 
 /// Verze formátu kontrolního bodu; mění se s rozložením hlavičky nebo obsahu (4: fronty
-/// procesů jako čísla morfémů místo bajtu na morfém).
-pub const CHECKPOINT_VERSION: u32 = 4;
+/// procesů jako čísla morfémů místo bajtu na morfém; 5: stav modulu jmen).
+pub const CHECKPOINT_VERSION: u32 = 5;
 
 /// Otisk sestavení enginu (zdroj enginu a jádra, vložená data; `build.rs`). Kontrolní bod
 /// z jiného sestavení se nenačte: struktury nebo dynamika se mohly změnit.
@@ -26,6 +26,8 @@ pub struct Checkpoint {
     pub year: f64,
     pub world: World,
     pub history: History,
+    /// Jména s historií (modul jmen), pokud byl zapnutý.
+    pub names: Option<crate::names::NameState>,
 }
 
 /// Bod z jiné verze nebo jiného sestavení enginu (ne poškozený soubor).
@@ -39,6 +41,7 @@ struct CheckpointRef<'a> {
     year: f64,
     world: &'a World,
     history: HistoryRef<'a>,
+    names: Option<&'a crate::names::NameState>,
 }
 
 /// Pole [`History`] ve stejném pořadí, záznam událostí prázdný.
@@ -59,6 +62,7 @@ pub fn bytes_without_events(
     year: f64,
     world: &World,
     history: &History,
+    names: Option<&crate::names::NameState>,
 ) -> Result<Vec<u8>, String> {
     let empty = crate::history::EventLog::default();
     let point = CheckpointRef {
@@ -71,6 +75,7 @@ pub fn bytes_without_events(
             trajectories: &history.trajectories,
             proto: &history.proto,
         },
+        names,
     };
     crate::model::repertoire::shared_bases(|| {
         postcard::to_stdvec(&(CHECKPOINT_VERSION, ENGINE_BUILD, &point))

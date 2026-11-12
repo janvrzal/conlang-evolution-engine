@@ -36,7 +36,7 @@ def wait(run_id):
 
 def test_router_je_v_aplikaci():
     paths = set(app.openapi()["paths"])
-    assert {"/api/v2/schema", "/api/v2/validate", "/api/v2/runs", "/api/v2/runs/{run_id}"} <= paths
+    assert {"/api/v2/schema", "/api/v2/validate", "/api/v2/runs", "/api/v2/runs/{run_id}", "/api/v2/runs/{run_id}/names"} <= paths
 
 
 def test_schema_a_overeni():
@@ -70,6 +70,36 @@ def test_beh_s_prubehem_a_vysledkem():
     with pytest.raises(HTTPException) as missing:
         v2.run_status("nic")
     assert missing.value.status_code == 404
+
+
+def test_generator_jmen_sidel_a_osob():
+    run_id = v2.start_run(SPEC)["run_id"]
+    assert wait(run_id)["status"] == "done"
+    places = v2.run_names(run_id, {"region": "c", "year": 0, "count": 3, "urban": True})
+    assert places["region"] == "c" and places["tradition"] and len(places["names"]) == 3
+    first = places["names"][0]
+    assert first["name"] and first["founded"]["year"] == 0 and first["founded"]["meaning"]
+    assert first["timeline"][0]["cause"] == "founded"
+    # stejný dotaz dá stejná jména, jiný pokus jiná
+    assert v2.run_names(run_id, {"region": "c", "year": 0, "count": 3})["names"] == places["names"]
+    other = v2.run_names(run_id, {"region": "c", "year": 0, "count": 3, "attempt": 1})["names"]
+    assert [n["name"] for n in other] != [n["name"] for n in places["names"]]
+    people = v2.run_names(run_id, {"region": "x", "year": 100, "count": 2, "kind": "person"})
+    assert people["kind"] == "person" and len(people["names"]) == 2 and people["tradition"]
+    with pytest.raises(HTTPException) as unknown:
+        v2.run_names(run_id, {"region": "nic", "year": 0})
+    assert unknown.value.status_code == 422
+    with pytest.raises(HTTPException) as missing:
+        v2.run_names("nic", {"region": "c", "year": 0})
+    assert missing.value.status_code == 404
+
+
+def test_udalost_s_polem_from_dojde_do_enginu():
+    # pydantic má pole jako ``from_`` s aliasem ``from``; engine dostane ``from``
+    spec = {**SPEC, "events": [*SPEC["events"], {"kind": "settlement", "year": 50, "from": "x", "to": "c", "share": 0.1}]}
+    assert v2.validate(spec)["ok"] is True
+    run_id = v2.start_run(spec)["run_id"]
+    assert wait(run_id)["status"] == "done"
 
 
 def test_nedokonceny_beh_nema_vysledek_a_jde_zrusit():

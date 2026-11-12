@@ -223,6 +223,27 @@ def run_result(run_id: str):
     raise HTTPException(status_code=404, detail="Běh nebyl nalezen (server ho nedrží nebo byl restartován).")
 
 
+@router.post("/runs/{run_id}/names")
+def run_names(run_id: str, query: dict[str, Any]):
+    """Generátor jmen sídel a osob (modul jmen, dok. 34) nad během, který server drží v paměti.
+
+    Dotaz: ``{"region", "year", "count", "until", "urban", "attempt", "kind": "place"|"person"}``.
+    Běh načtený jen z disku generátor nemá (stav jmen je v paměti vazby): 409.
+    """
+    with _lock:
+        run = _runs.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Běh nebyl nalezen (server ho nedrží nebo byl restartován).")
+    if run.native is None:
+        raise HTTPException(status_code=409, detail="Běh nemá engine v paměti.")
+    try:
+        return json.loads(run.native.names(json.dumps(query)))
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
 @router.delete("/runs/{run_id}")
 def cancel_run(run_id: str):
     """Zruší běh; projeví se po dokončení rozpracovaného kroku."""

@@ -196,6 +196,8 @@ fn models() -> Vec<Model> {
                 opt("stress_strength", Ty::Lit(STRENGTH), || json!("weak")),
                 opt("words", STR_MAP, || json!({})),
                 opt("endonym", STR_LIST, || json!([])),
+                null("endonym_form", STR),
+                null("person_names", STR),
                 opt("tones", STR_LIST, || json!([])),
                 opt("constructions", Ty::Map(&CONSTRUCTION), || json!({})),
                 opt("endings", Ty::Map(&ENDINGS), || json!({})),
@@ -387,6 +389,7 @@ fn models() -> Vec<Model> {
             fields: vec![
                 opt("format", Ty::Const("cee-v2-world/1"), || json!("cee-v2-world/1")),
                 null("name", STR),
+                null("name_form", STR),
                 opt("seed", INT, || json!(1)),
                 opt("start_year", NUM, || json!(0.0)),
                 req("end_year", NUM),
