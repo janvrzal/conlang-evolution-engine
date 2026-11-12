@@ -88,6 +88,8 @@ export interface EngineSchema {
 	parameters_by_role: { world: ParameterSchema; active: ParameterSchema; fixed: ParameterSchema };
 	event_kinds: string[];
 	vocabulary: { default: number; max: number; presets: number[]; domains: string[]; word_classes: string[]; relation_kinds: string[]; relation_directions: string[]; [key: string]: unknown };
+	/** tradice osobních jmen pro `languages[].person_names` (kind: real_world, fictional, talvera; label česky) */
+	person_names?: { id: string; kind: string; label: string }[];
 }
 export interface ParameterSchema {
 	groups: { id: string; title: string }[];

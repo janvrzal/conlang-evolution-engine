@@ -30,6 +30,7 @@
 	import { i18n, number, t, type MessageKey } from '$lib/i18n.svelte';
 	import { conceptLabel } from '$lib/model/concepts';
 	import { geography } from '$lib/model/geography';
+	import { foundingForm } from '$lib/model/jmena';
 	import { frameAt, lineageFamilies, lineageNames, lineagePalette } from '$lib/model/languages';
 	import {
 		BASIC_CONCEPTS,
@@ -70,6 +71,20 @@
 	const languages = $derived(world?.languages ?? []);
 	const index = $derived(Math.max(0, languages.findIndex((l) => l.id === selected)));
 	const lang = $derived((languages[index] ?? null) as ProtoLanguage | null);
+
+	// Vlastní jméno prajazyka z posledního běhu (tvar při vzniku), aby šlo uzamknout.
+	const endonymFounding = $derived(lang ? foundingForm(result?.names, `language:${lang.id}`) : null);
+	const setEndonymForm = (value: string | null) =>
+		change('protojazyky.edit.endonym_form', (l) => {
+			const form = (value ?? '').trim();
+			if (form) l.endonym_form = form;
+			else delete l.endonym_form;
+		});
+	// Tradice osobních jmen ze schématu enginu, po druzích (skutečné, smyšlené, z Talvery).
+	const traditionOptions = $derived([
+		{ value: '', label: t('protojazyky.person_names_random') },
+		...(app.schema?.person_names ?? []).map((p) => ({ value: p.id, label: p.label, group: t(`protojazyky.person_names_kind.${p.kind}` as MessageKey) }))
+	]);
 
 	/** Úprava vybraného protojazyka: zapíše se do zadání a kostra z toho udělá Zpět. */
 	function change(label: MessageKey, fn: (l: ProtoLanguage) => void) {
@@ -451,6 +466,28 @@
 											/>
 										</Cluster>
 										<Text variant="why">{t('protojazyky.endonym_hint')}</Text>
+										<Field label={t('protojazyky.endonym_form')} hint={t('protojazyky.endonym_form_hint')}>
+											<Stack gap={1}>
+												<TextInput ipa width="m" label={t('protojazyky.endonym_form')} placeholder={t('protojazyky.endonym_form_none')} value={lang.endonym_form ?? ''} onchange={(v) => setEndonymForm(String(v))} />
+												{#if endonymFounding && endonymFounding !== lang.endonym_form}
+													<Button variant="quiet" onclick={() => setEndonymForm(endonymFounding)}>{t('protojazyky.endonym_form_lock', { form: endonymFounding })}</Button>
+												{:else if lang.endonym_form}
+													<Button variant="quiet" onclick={() => setEndonymForm(null)}>{t('protojazyky.endonym_form_unlock')}</Button>
+												{/if}
+											</Stack>
+										</Field>
+										<Field label={t('protojazyky.person_names')} hint={t('protojazyky.person_names_hint')}>
+											<Select
+												label={t('protojazyky.person_names')}
+												value={lang.person_names ?? ''}
+												options={traditionOptions}
+												onchange={(v) =>
+													change('protojazyky.edit.person_names', (l) => {
+														if (v) l.person_names = v;
+														else delete l.person_names;
+													})}
+											/>
+										</Field>
 									</Stack>
 								</Area>
 								<Area>

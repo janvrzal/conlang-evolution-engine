@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { causeMessage, epochOf, isPersons, lineageObject, nameHistory, namesAsText, soundChanges, stepCause, type NameRecord, type NamesExport, type PlaceNames } from './jmena';
+import { causeMessage, epochOf, foundingForm, isPersons, lineageObject, nameHistory, namesAsText, soundChanges, stepCause, type NameRecord, type NamesExport, type PlaceNames } from './jmena';
 
 const record = (id: string, over: Partial<NameRecord> = {}): NameRecord => ({
 	id,
@@ -100,5 +100,21 @@ describe('text ke zkopírování', () => {
 		};
 		expect(isPersons(result)).toBe(false);
 		expect(namesAsText(result)).toBe('Ävegä ← Avika (dlouhý kámen)');
+	});
+});
+
+describe('tvar k uzamčení', () => {
+	it('nejstarší vlastní jméno objektu, první krok vývoje', () => {
+		const names: NamesExport = {
+			records: [
+				record('mladší', { object: 'world', founded: 900, ipa: 'imini', timeline: [{ year: 900, ipa: 'imene', name: 'Imene', cause: 'founded' }] }),
+				record('starší', { object: 'world', founded: 600, ipa: 'imin', timeline: [{ year: 600, ipa: 'iminu', name: 'Iminu', cause: 'founded' }] }),
+				record('cizí', { object: 'world', role: 'exonym', founded: 100, ipa: 'xx' })
+			],
+			objects: {}
+		};
+		expect(foundingForm(names, 'world')).toBe('iminu');
+		expect(foundingForm(names, 'language:seren')).toBeNull();
+		expect(foundingForm(null, 'world')).toBeNull();
 	});
 });

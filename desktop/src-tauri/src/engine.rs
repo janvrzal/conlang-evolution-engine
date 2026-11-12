@@ -100,6 +100,10 @@ pub fn schema() -> Value {
     out.insert("json_schema".into(), crate::spec_schema::json_schema());
     out.insert("event_kinds".into(), json!(crate::spec_schema::EVENT_KINDS));
     out.insert("vocabulary".into(), crate::spec_schema::vocabulary_options());
+    // Tradice osobních jmen pro `languages[].person_names` (katalog `v2_onomastics.json`).
+    let traditions: Vec<Value> =
+        cee_engine::onomastics::catalog().anthroponym_paradigms.iter().map(|(id, p)| json!({ "id": id, "kind": p.kind, "label": p.label_cs })).collect();
+    out.insert("person_names".into(), json!(traditions));
     let file: Value = serde_json::from_str(cee_engine::data::PARAMETERS_JSON).expect("v2_parameters.json");
     let items: Vec<Value> = file["parameters"]
         .as_array()
@@ -493,6 +497,14 @@ mod tests {
         kinds.sort();
         engine_kinds.sort();
         assert_eq!(kinds, engine_kinds);
+        // tradice osobních jmen: každou zadání přijme
+        let traditions = s["person_names"].as_array().unwrap();
+        assert!(traditions.iter().any(|p| p["id"] == "house_surety" && p["kind"] == "talvera"));
+        for p in traditions {
+            let mut w = talvera();
+            w["languages"][0]["person_names"] = p["id"].clone();
+            assert!(validate(&w).iter().all(|i| i.severity != "error"), "{}", p["id"]);
+        }
     }
 
     #[test]

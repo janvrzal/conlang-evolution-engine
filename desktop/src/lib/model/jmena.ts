@@ -180,3 +180,12 @@ export function namesAsText(result: NamesResult): string {
 	if (isPersons(result)) return result.names.map((n) => (n.meaning ? `${n.name} (${n.meaning})` : n.name)).join('\n');
 	return result.names.map((n) => `${n.name} ← ${n.founded.name} (${n.founded.meaning})`).join('\n');
 }
+
+/** Tvar, se kterým jméno objektu vzniklo (IPA), k uzamčení v zadání: `world` (jméno světa),
+ *  `language:<id>` (vlastní jméno prajazyka). Nejstarší záznam vlastního jména, první krok jeho vývoje. */
+export function foundingForm(names: NamesExport | null | undefined, object: string): string | null {
+	const records = (names?.records ?? []).filter((r) => r.object === object && r.role === 'endonym');
+	if (!records.length) return null;
+	const first = records.reduce((a, b) => (b.founded < a.founded ? b : a));
+	return first.timeline?.[0]?.ipa ?? first.ipa ?? null;
+}

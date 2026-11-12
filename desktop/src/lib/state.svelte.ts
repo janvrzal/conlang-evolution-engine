@@ -7,6 +7,8 @@ import type { NamesQuery, NamesResult } from './model/jmena';
 export interface WorldSpec {
 	format: 'cee-v2-world/1';
 	name?: string;
+	/** uzamčené vlastní jméno světa (IPA); modul jmen ho použije, až svět pojmenuje */
+	name_form?: string | null;
 	seed?: number;
 	start_year?: number;
 	end_year: number;
@@ -26,6 +28,10 @@ export interface WorldSpec {
 		stress?: string;
 		words?: Record<string, string>;
 		endonym?: string[];
+		/** uzamčené vlastní jméno prajazyka (IPA); generátor ho nevylosuje znovu */
+		endonym_form?: string | null;
+		/** tradice osobních jmen (`schema.person_names`); null = vylosuje se */
+		person_names?: string | null;
 		[key: string]: unknown;
 	}[];
 	regions: {
@@ -43,6 +49,10 @@ export interface WorldSpec {
 		identity?: string;
 		city?: number | null;
 		prestige?: number;
+		/** kraj chrání svou řeč od začátku (jako událost `preserve`) */
+		preserve?: boolean;
+		/** přistěhovalectví od začátku, 0–1 (jako událost `immigration`) */
+		immigration?: number;
 		[key: string]: unknown;
 	}[];
 	events: { kind: string; year: number; [key: string]: unknown }[];

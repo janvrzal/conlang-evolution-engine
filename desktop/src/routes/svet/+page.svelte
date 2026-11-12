@@ -29,6 +29,7 @@
 		type MapVillage
 	} from '$lib/ds';
 	import { t, type MessageKey } from '$lib/i18n.svelte';
+	import { foundingForm } from '$lib/model/jmena';
 	import { geography } from '$lib/model/geography';
 	import {
 		addRegion,
@@ -120,7 +121,15 @@
 			w[key] = next;
 		});
 	};
-	const setRegion = <K extends 'language' | 'terrain' | 'identity' | 'city'>(id: string, key: K, label: string, value: string | number) => {
+	// Jméno světa z posledního běhu (tvar při vzniku), aby šlo uzamknout.
+	const worldFounding = $derived(foundingForm(app.result?.names, 'world'));
+	const setNameForm = (value: string | null) =>
+		app.edit(t('svet.edit.name_form'), (w) => {
+			const form = (value ?? '').trim();
+			if (form) w.name_form = form;
+			else delete w.name_form;
+		});
+	const setRegion = <K extends 'language' | 'terrain' | 'identity' | 'city' | 'preserve' | 'immigration'>(id: string, key: K, label: string, value: string | number | boolean) => {
 		app.edit(label, (w) => {
 			const r = w.regions.find((x) => x.id === id);
 			if (r) (r as Record<string, unknown>)[key] = value;
@@ -322,6 +331,16 @@
 				<Field hint={t('svet.semantics_note')}>
 					<Checkbox checked={world.semantics !== false} onchange={(c) => app.edit(t('svet.edit.semantics'), (w) => (w.semantics = c))}>{t('svet.semantics')}</Checkbox>
 				</Field>
+				<Field label={t('svet.name_form')} hint={t('svet.name_form_note')}>
+					<Stack gap={1}>
+						<TextInput ipa width="m" label={t('svet.edit.name_form')} placeholder={t('svet.name_form_none')} value={world.name_form ?? ''} onchange={(v) => setNameForm(String(v))} />
+						{#if worldFounding && worldFounding !== world.name_form}
+							<Button variant="quiet" onclick={() => setNameForm(worldFounding)}>{t('svet.name_form_lock', { form: worldFounding })}</Button>
+						{:else if world.name_form}
+							<Button variant="quiet" onclick={() => setNameForm(null)}>{t('svet.name_form_unlock')}</Button>
+						{/if}
+					</Stack>
+				</Field>
 			</Stack>
 
 			<Stack gap={2}>
@@ -431,6 +450,15 @@
 						options={identities.map((x) => ({ value: x, label: t(`identity.${x}` as MessageKey) }))}
 						onchange={(v) => setRegion(region.id, 'identity', t('svet.edit.identity', { name }), v)}
 					/>
+				</Field>
+				<Field label={t('svet.preserve')} hint={t('svet.preserve_note')}>
+					<Checkbox checked={region.preserve === true} onchange={(c) => setRegion(region.id, 'preserve', t('svet.edit.preserve', { name }), c)}>{t('svet.preserve_on')}</Checkbox>
+				</Field>
+				<Field label={t('svet.immigration')} hint={t('svet.immigration_note')}>
+					<Cluster gap={2} wrap={false}>
+						<Range min={0} max={1} step={0.05} label={t('svet.edit.immigration', { name })} value={region.immigration ?? 0} onchange={(v) => setRegion(region.id, 'immigration', t('svet.edit.immigration', { name }), v)} />
+						<Text as="span" tone="muted">{Math.round((region.immigration ?? 0) * 100)} %</Text>
+					</Cluster>
 				</Field>
 				<Field label={t('svet.settlement')} hint={t('svet.settlement_note')} error={villagesError ?? numberError}>
 					<Segmented
