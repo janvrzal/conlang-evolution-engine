@@ -160,7 +160,13 @@
 </script>
 
 {#if !world || !result || !geo}
-	<Screen><EmptyState title={t('shell.nav.jazyky')} text={t('jazyky.empty')} /></Screen>
+	<Screen><EmptyState title={t('shell.nav.jazyky')} text={t('jazyky.empty')}
+			>{#snippet actions()}<Button
+					variant="primary"
+					disabled={!app.world || app.running || app.errors.length > 0 || app.engineState.phase !== 'ready'}
+					onclick={() => app.start()}>{t('shell.run', { from: formatYear(app.world?.start_year ?? 0), to: formatYear(app.world?.end_year ?? 0) })}</Button
+				>{/snippet}</EmptyState
+		></Screen>
 {:else}
 	<Screen columns={['fill', 400]} label={t('jazyky.title', { year: formatYear(year) })}>
 		<Area>

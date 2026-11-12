@@ -1,7 +1,7 @@
 <!-- Kostra aplikace: lišta Zadání | Výsledek, stav běhu, pruhy hlášení, pata zadání s ověřením
      a společná časová osa obrazovek Výsledku. Skládá se jen z komponent $lib/ds. -->
 <script lang="ts">
-	import { onNavigate } from '$app/navigation';
+	import { goto, onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import {
@@ -11,6 +11,7 @@
 		ConfirmDialog,
 		Button,
 		CheckBadge,
+		CommandPalette,
 		FilePicker,
 		Footer,
 		IssueList,
@@ -25,13 +26,15 @@
 		formatYear,
 		screenTransition,
 		type AxisMarker,
+		type Command,
 		type IssueItem,
 		type NavItem
 	} from '$lib/ds';
 	import { API_REVISION } from '$lib/engine';
 	import { inApp } from '$lib/files';
 	import { i18n, number, t, type MessageKey } from '$lib/i18n.svelte';
-	import { frameAt, speakers, varietiesAt } from '$lib/model/languages';
+	import { geography } from '$lib/model/geography';
+	import { frameAt, lineageNames, speakers, varietiesAt } from '$lib/model/languages';
 	import { app } from '$lib/state.svelte';
 	import { dockProgress } from '$lib/dock';
 
@@ -124,11 +127,59 @@
 	});
 
 	// ⌘Z / ⇧⌘Z zpět a znovu (mimo textová pole), ⌘S uložit, ⇧⌘S uložit jako, ⌘O otevřít
+	// Paleta příkazů (⌘K): skok na obrazovku, jazyk, kraj nebo rok.
+	let paletteOpen = $state(false);
+	const paletteItems = $derived.by((): Command[] => {
+		if (!paletteOpen) return [];
+		const out: Command[] = [...SPEC, ...RESULTS].map((id) => ({ id: `screen:${id}`, label: t(`shell.nav.${id}` as MessageKey), group: t('shell.palette.screens') }));
+		if (app.world && !app.running && errors === 0 && app.engineState.phase === 'ready')
+			out.unshift({ id: 'run', label: app.result ? t('shell.rerun', { from, to }) : t('shell.run', { from, to }), group: t('shell.palette.actions') });
+		if (app.world && app.result) {
+			const geo = geography(app.world, app.result);
+			const names = lineageNames(app.result, geo.name, i18n.locale, app.frames);
+			const alive = new Set(Object.keys(frameAt(app.frames, app.result.year)?.languages ?? {}));
+			for (const l of app.result.lineages)
+				out.push({
+					id: `lineage:${l.id}`,
+					label: names.get(l.id) ?? l.id,
+					group: t('shell.palette.languages'),
+					hint: alive.has(l.id) || l.end_year == null ? undefined : `† ${formatYear(l.end_year)}`,
+					keywords: l.endonym ?? ''
+				});
+			for (const r of app.world.regions) out.push({ id: `region:${r.id}`, label: geo.name(r.id), group: t('shell.palette.regions'), keywords: r.id });
+		} else if (app.world) for (const r of app.world.regions) out.push({ id: `region:${r.id}`, label: r.name ?? r.id, group: t('shell.palette.regions'), keywords: r.id });
+		return out;
+	});
+	function paletteExtra(q: string): Command[] {
+		const m = q.replace('−', '-').match(/^-?\d{1,4}$/);
+		if (!m || !app.world) return [];
+		const y = Number(m[0]);
+		return y >= (app.world.start_year ?? 0) && y <= app.world.end_year ? [{ id: `year:${y}`, label: t('shell.palette.year', { year: formatYear(y) }), group: t('shell.palette.time') }] : [];
+	}
+	function palettePick(c: Command) {
+		const [kind, ...rest] = c.id.split(':'), id = rest.join(':');
+		if (kind === 'screen') void goto(href(id));
+		else if (kind === 'run') void app.start();
+		else if (kind === 'lineage') {
+			app.view.lineage = id;
+			void goto('/jazyky');
+		} else if (kind === 'region') {
+			app.view.region = id;
+			if (!inResults && route !== 'svet') void goto(app.result ? '/atlas' : '/svet');
+		} else if (kind === 'year') {
+			app.view.year = Number(id);
+			if (!inResults) void goto('/atlas');
+		}
+	}
+
 	function key(event: KeyboardEvent) {
 		const mod = event.metaKey || event.ctrlKey;
 		if (!mod) return;
 		const k = event.key.toLowerCase();
-		if (k === 's') {
+		if (k === 'k') {
+			event.preventDefault();
+			paletteOpen = !paletteOpen;
+		} else if (k === 's') {
 			event.preventDefault();
 			void save(event.shiftKey);
 		} else if (k === 'o') {
@@ -237,6 +288,15 @@
 
 <svelte:window onkeydown={key} />
 
+<CommandPalette
+	bind:open={paletteOpen}
+	label={t('shell.palette.label')}
+	placeholder={t('shell.palette.placeholder')}
+	empty={t('shell.palette.empty')}
+	items={paletteItems}
+	extra={paletteExtra}
+	onpick={palettePick}
+/>
 {#if splashing}<Splash generation={(n) => t('shell.splash_generation', { n })} subtitle="Conlang Evolution Engine" onend={splashDone} />{/if}
 
 <Shell>
@@ -272,6 +332,7 @@
 				{/if}
 			{/snippet}
 			{#snippet tools()}
+				<Button icon="search" label={t('shell.palette.label')} title="{t('shell.palette.label')} (⌘K)" onclick={() => (paletteOpen = true)} />
 				{#if inApp()}
 					<Button icon="open" label={t('shell.open')} title="{t('shell.open')} (⌘O)" onclick={openDialog} />
 				{:else}

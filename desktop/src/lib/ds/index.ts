@@ -57,6 +57,7 @@ export { default as Popover } from './Popover.svelte';
 export { default as Disclosure } from './Disclosure.svelte';
 export { default as Working } from './Working.svelte';
 export { default as EmptyState } from './EmptyState.svelte';
+export { default as CommandPalette, type Command } from './CommandPalette.svelte';
 
 // značka
 export { default as BrandMark } from './BrandMark.svelte';

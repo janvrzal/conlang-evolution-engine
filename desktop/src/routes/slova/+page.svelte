@@ -182,7 +182,13 @@
 {#if !world || !geo}
 	<Screen><Text variant="why">{t('check.running')}</Text></Screen>
 {:else if !result || !frame || !concepts.length}
-	<Screen><EmptyState title={t('shell.nav.slova')} text={t('slova.empty')} /></Screen>
+	<Screen><EmptyState title={t('shell.nav.slova')} text={t('slova.empty')}
+			>{#snippet actions()}<Button
+					variant="primary"
+					disabled={!app.world || app.running || app.errors.length > 0 || app.engineState.phase !== 'ready'}
+					onclick={() => app.start()}>{t('shell.run', { from: formatYear(app.world?.start_year ?? 0), to: formatYear(app.world?.end_year ?? 0) })}</Button
+				>{/snippet}</EmptyState
+		></Screen>
 {:else}
 	<Screen columns={['fill', 380]} label={t('slova.title', { concept: word })}>
 		<Stage label={t('slova.map', { concept: word, year: formatYear(year) })}>
