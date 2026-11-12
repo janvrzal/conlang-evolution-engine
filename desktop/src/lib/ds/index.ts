@@ -79,6 +79,7 @@ export {
 	type MapEdit
 } from './WorldMap.svelte';
 export type { MapRegion, MapVillage } from './map/geometry';
+export { default as FamilyTree, type TreeItem } from './FamilyTree.svelte';
 export { default as LanguageRiver, type RiverStream } from './LanguageRiver.svelte';
 
 // barvy

@@ -9,6 +9,7 @@
 		Cluster,
 		Disclosure,
 		EmptyState,
+		FamilyTree,
 		Ipa,
 		LanguageRiver,
 		Ledger,
@@ -27,7 +28,8 @@
 		Text,
 		TextInput,
 		Tr,
-		formatYear
+		formatYear,
+		type TreeItem
 	} from '$lib/ds';
 	import { i18n, number, t, type MessageKey } from '$lib/i18n.svelte';
 	import { conceptLabel } from '$lib/model/concepts';
@@ -58,6 +60,7 @@
 	type Tab = 'dialects' | 'grammar' | 'sounds' | 'analogy';
 	let tab = $state<Tab>('sounds');
 	let family = $state<string>('all');
+	let view = $state<'river' | 'tree'>('river');
 	let query = $state('');
 
 	const world = $derived(app.world);
@@ -93,6 +96,15 @@
 		...(world?.languages ?? []).map((l, i) => ({ value: String(i), label: l.name ?? l.id }))
 	]);
 	const pick = (id: string) => (app.view.lineage = id);
+	// rodokmen: jazyky vybrané rodiny (nebo všech), tloušťka podle mluvčích v posledním snímku
+	const tree = $derived.by((): TreeItem[] => {
+		if (!result || view !== 'tree') return [];
+		const last = app.frames[app.frames.length - 1];
+		const now = last ? speakers(last.groups, domainOf) : new Map<string, number>();
+		return result.lineages
+			.filter((l) => familyFilter == null || families.get(l.id) === familyFilter)
+			.map((l) => ({ id: l.id, parent: l.parent, start: l.start_year, end: l.end_year, speakers: now.get(l.id) ?? 0, label: nameOf(l.id), color: palette.get(l.id) ?? 'var(--ink-3)' }));
+	});
 
 	// karta jazyka
 	const familyName = $derived(world && lineage ? (world.languages[families.get(lineage.id) ?? 0]?.name ?? '') : '');
@@ -171,6 +183,14 @@
 	<Screen columns={['fill', 400]} label={t('jazyky.title', { year: formatYear(year) })}>
 		<Area>
 			<Cluster gap={3}>
+				<Segmented
+					label={t('jazyky.view')}
+					bind:value={view}
+					options={[
+						{ value: 'river', label: t('jazyky.view.river') },
+						{ value: 'tree', label: t('jazyky.view.tree') }
+					]}
+				/>
 				<Segmented label={t('jazyky.family')} bind:value={family} options={familyOptions} />
 				<TextInput type="search" label={t('jazyky.search')} placeholder={t('jazyky.search')} bind:value={query} width="l" />
 				{#if varieties}
@@ -178,18 +198,22 @@
 				{/if}
 			</Cluster>
 			<Stage tone="land" label={t('jazyky.river', { from: formatYear(app.frames[0]?.year ?? 0), to: formatYear(endYear) })}>
-				<LanguageRiver
-					years={river.years}
-					streams={river.streams}
-					{selected}
-					cursor={year}
-					label={t('jazyky.river', { from: formatYear(river.years[0] ?? 0), to: formatYear(endYear) })}
-					onselect={pick}
-				/>
+				{#if view === 'tree'}
+					<FamilyTree items={tree} now={endYear} cursor={year} {selected} label={t('jazyky.tree', { from: formatYear(app.frames[0]?.year ?? 0), to: formatYear(endYear) })} onselect={pick} />
+				{:else}
+					<LanguageRiver
+						years={river.years}
+						streams={river.streams}
+						{selected}
+						cursor={year}
+						label={t('jazyky.river', { from: formatYear(river.years[0] ?? 0), to: formatYear(endYear) })}
+						onselect={pick}
+					/>
+				{/if}
 			</Stage>
 			<Text variant="why">
-				{t('jazyky.why', { n: result.lineages.length })}
-				{#if river.streams.length === 0}{t('jazyky.none')}{:else if river.streams.length < result.lineages.length}{t('jazyky.shown', { shown: river.streams.length, n: result.lineages.length })}{/if}
+				{#if view === 'tree'}{t('jazyky.tree_why', { n: tree.length })}{:else}{t('jazyky.why', { n: result.lineages.length })}
+				{#if river.streams.length === 0}{t('jazyky.none')}{:else if river.streams.length < result.lineages.length}{t('jazyky.shown', { shown: river.streams.length, n: result.lineages.length })}{/if}{/if}
 			</Text>
 		</Area>
 
