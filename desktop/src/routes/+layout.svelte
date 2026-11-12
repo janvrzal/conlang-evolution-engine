@@ -5,6 +5,7 @@
 	import { onMount } from 'svelte';
 	import {
 		AppBar,
+		BrandMark,
 		Banner,
 		ConfirmDialog,
 		Button,
@@ -15,6 +16,7 @@
 		Popover,
 		Shell,
 		Spacer,
+		Splash,
 		Text,
 		TimeAxis,
 		Toast,
@@ -29,6 +31,7 @@
 	import { i18n, number, t, type MessageKey } from '$lib/i18n.svelte';
 	import { frameAt, speakers, varietiesAt } from '$lib/model/languages';
 	import { app } from '$lib/state.svelte';
+	import { dockProgress } from '$lib/dock';
 
 	let { children } = $props();
 
@@ -66,8 +69,38 @@
 		if (q.has('all')) app.view.allLanguages = q.get('all') === '1';
 	});
 
+	// Úvodní animace jednou za otevření okna (obnovení stránky ji nepřehraje znovu).
+	let splashing = $state(false);
+	function splashDone() {
+		splashing = false;
+		try {
+			sessionStorage.setItem('cee.splash', '1');
+		} catch {
+			// úložiště nedostupné: animace se příště přehraje znovu
+		}
+	}
+	// Konec běhu: značka v liště přehraje vlnu (hotovo) nebo uschne (selhal).
+	let wasRunning = false;
+	let finished = $state(0);
+	$effect(() => {
+		if (app.running) wasRunning = true;
+		else if (wasRunning) {
+			wasRunning = false;
+			finished = Date.now();
+		}
+	});
+	// Postup běhu i v Docku (macOS) a na hlavním panelu (Windows).
+	$effect(() => {
+		if (inApp()) dockProgress(app.running ? (app.run?.progress ?? 0) : null);
+	});
+
 	onMount(async () => {
 		document.documentElement.lang = i18n.locale;
+		try {
+			splashing = !sessionStorage.getItem('cee.splash');
+		} catch {
+			splashing = true;
+		}
 		// vývoj: ?fixture=talvera&branch=talvera-bez-politiky načte vzorek skutečného běhu
 		const fixture = import.meta.env.DEV ? page.url.searchParams.get('fixture') : null;
 		if (fixture) await app.loadFixture(fixture, page.url.searchParams.get('branch') ?? undefined);
@@ -200,6 +233,8 @@
 
 <svelte:window onkeydown={key} />
 
+{#if splashing}<Splash generation={(n) => t('shell.splash_generation', { n })} subtitle="Conlang Evolution Engine" onend={splashDone} />{/if}
+
 <Shell>
 	{#snippet bar()}
 		<AppBar
@@ -216,12 +251,14 @@
 					<span>{t('shell.running', { year: formatYear(app.run.year), from, to, pct: Math.round(app.run.progress * 100) })}</span>
 					<Button onclick={() => app.cancel()}>{t('shell.stop')}</Button>
 				{:else if app.run?.status === 'failed'}
+					<BrandMark mode="wither" size={18} />
 					<Text tone="red" as="span">{t('shell.failed', { error: app.run.error ?? '' })}</Text>
 					<Button variant="primary" disabled={errors > 0} onclick={() => app.start()}>{t('shell.rerun', { from, to })}</Button>
 				{:else if app.stale}
 					<Text tone="red" as="span">{t('shell.stale')}</Text>
 					<Button variant="primary" disabled={errors > 0} onclick={() => app.start()}>{t('shell.rerun', { from, to })}</Button>
 				{:else if app.result}
+					{#key finished}<BrandMark mode={finished ? 'wave' : 'mark'} size={18} />{/key}
 					<span>{t('shell.fresh', { from, to, seconds: Math.round(app.run?.seconds ?? 0) })}</span>
 				{:else}
 					<span>{app.run?.status === 'cancelled' ? t('shell.cancelled') : t('shell.no_run')}</span>

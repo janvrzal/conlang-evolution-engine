@@ -40,6 +40,9 @@
 
 ## V aplikaci ($lib/ds)
 - Značku vkládat z `svg/cee-mark-currentColor.svg` (barva z `color`).
+- Živá značka je komponenta `BrandMark` (stavy mark, idle, wave, done, wither, progress; geometrie v `$lib/ds/brand.ts`).
+  Úvodní animace je `Splash` (jednou za otevření okna, klik nebo klávesa ji přeskočí), prázdné obrazovky `EmptyState`.
+  Postup běhu jde i do Docku a hlavního panelu (`$lib/dock.ts`).
 - Ikony pojmů enginu jsou v `$lib/ds/Icon.svelte` (zdroj `ikony/icon-paths.ts`, sprite `ikony/icons-sprite.svg`).
 - Referenční kód animací: `animace/splash.html` (úvodní), `animace/loader.html` (čekání) a `animace/states.html`
   (dosimulováno, chyba, prázdný projekt, ikona v Docku); jádro je v `nastroje/tree-core.js` a `nastroje/states-core.js`.

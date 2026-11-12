@@ -3,7 +3,10 @@
      v dřívějších ze slovníku jazyka v roce (`app.lexicon`), uloženého do cache po rocích a liniích. -->
 <script lang="ts">
 	import {
+		Button,
 		Card,
+		Cluster,
+		EmptyState,
 		Floating,
 		Ipa,
 		Kbd,
@@ -18,8 +21,6 @@
 		Td,
 		Text,
 		Tr,
-		Button,
-		Cluster,
 		WorldMap,
 		formatYear,
 		type EdgeStyle,
@@ -181,7 +182,7 @@
 {#if !world || !geo}
 	<Screen><Text variant="why">{t('check.running')}</Text></Screen>
 {:else if !result || !frame || !concepts.length}
-	<Screen><Stack gap={3}><Text variant="h1">{t('shell.nav.slova')}</Text><Text variant="why">{t('slova.empty')}</Text></Stack></Screen>
+	<Screen><EmptyState title={t('shell.nav.slova')} text={t('slova.empty')} /></Screen>
 {:else}
 	<Screen columns={['fill', 380]} label={t('slova.title', { concept: word })}>
 		<Stage label={t('slova.map', { concept: word, year: formatYear(year) })}>

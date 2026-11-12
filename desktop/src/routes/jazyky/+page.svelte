@@ -2,11 +2,13 @@
      s původem, vlastním jménem, nářečími, mluvnicí a souhrnem zvukových změn a analogií. -->
 <script lang="ts">
 	import {
+		Area,
 		Button,
 		Card,
 		Checkbox,
 		Cluster,
-		Area,
+		Disclosure,
+		EmptyState,
 		Ipa,
 		LanguageRiver,
 		Ledger,
@@ -14,15 +16,14 @@
 		List,
 		ListItem,
 		Screen,
-		Disclosure,
 		Segmented,
 		Stack,
 		Stage,
 		Swatch,
 		Table,
-		Term,
 		Tabs,
 		Td,
+		Term,
 		Text,
 		TextInput,
 		Tr,
@@ -159,7 +160,7 @@
 </script>
 
 {#if !world || !result || !geo}
-	<Screen><Stack gap={3}><Text variant="h1">{t('shell.nav.jazyky')}</Text><Text variant="why">{t('jazyky.empty')}</Text></Stack></Screen>
+	<Screen><EmptyState title={t('shell.nav.jazyky')} text={t('jazyky.empty')} /></Screen>
 {:else}
 	<Screen columns={['fill', 400]} label={t('jazyky.title', { year: formatYear(year) })}>
 		<Area>
